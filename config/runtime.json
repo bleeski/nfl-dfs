@@ -1,0 +1,23 @@
+{
+  "schema_version": "runtime_v1",
+  "classic": {
+    "design_scenarios": 10000,
+    "select_scenarios": 20000,
+    "referee_scenarios": 20000,
+    "full_refresh_seconds": 600,
+    "late_swap_seconds": 300,
+    "certification_seconds": 120
+  },
+  "showdown": {
+    "design_scenarios": 20000,
+    "select_scenarios": 50000,
+    "referee_scenarios": 50000,
+    "full_refresh_seconds": 600,
+    "certification_seconds": 120
+  },
+  "candidate_generation_min": 20000,
+  "candidate_generation_max": 50000,
+  "candidate_vector_shortlist_max": 5000,
+  "memory_limit_bytes": 4294967296,
+  "stop_discretionary_optimization_minutes_before_lock": 10
+}

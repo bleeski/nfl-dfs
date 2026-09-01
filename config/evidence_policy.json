@@ -1,0 +1,16 @@
+{
+  "schema_version": "evidence_policy_v1",
+  "hard_fields": [
+    "salary_pool",
+    "entry_authorization",
+    "payout_contract",
+    "official_inactive_status",
+    "weather_if_required",
+    "market_line",
+    "final_bytes"
+  ],
+  "inactive_primary": "OPERATOR_OFFICIAL_PASTE",
+  "inactive_secondary": "SLEEPER_DAILY",
+  "route_participation_default": "UNKNOWN",
+  "certification_rule": "ALL_DUE_HARD_EVIDENCE_PASS"
+}

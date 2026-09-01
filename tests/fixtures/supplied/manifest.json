@@ -1,0 +1,10 @@
+{
+  "schema_version": "supplied_fixture_manifest_v1",
+  "artifacts": [
+    {"file": "DKEntries CSV.csv", "sha256": "bae82934a9620ff67ee879db25f7fb43325204c4f26f6b9f331ea0838fb23ffc", "bytes": 83852},
+    {"file": "DKSalaries Salary CSV Showdown.csv", "sha256": "86a837c50eb36130a4e2bf2642a9457f08c6487dde8a4c2bccd793c91a7f6309", "bytes": 12441},
+    {"file": "DKSalaries Salary CSV Classic.csv", "sha256": "d8ce5c1dd643ec419a0c4bc99b05a5f619f99dd23bc8369f70b795d8ac6132fb", "bytes": 73441},
+    {"file": "NFL Classic.txt", "sha256": "352d630204ad05a2c86240615d5144ca8cba4b629ddb922a67a34d79f12f54c1", "bytes": 9758},
+    {"file": "NFL Showdown Captain Mode.txt", "sha256": "2c92ae07bf41abd98254431ffce99e276edbe566afbbc2ecf4c33e8d5b3f09cd", "bytes": 8662}
+  ]
+}

@@ -1,0 +1,490 @@
+from __future__ import annotations
+
+import shutil
+from copy import copy
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable, Mapping
+
+from openpyxl import Workbook, load_workbook
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.table import Table, TableStyleInfo
+
+from .contracts import CertificationManifest, Lineup
+from .qa import QAFinding
+from .system import workbook_is_closed
+
+
+NAVY = "17324D"
+BLUE = "2F75B5"
+PALE_BLUE = "DDEBF7"
+PALE_GREEN = "E2F0D9"
+PALE_YELLOW = "FFF2CC"
+PALE_RED = "FCE4D6"
+WHITE = "FFFFFF"
+GRAY = "E7E6E6"
+
+
+class WorkbookLockedError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class OperatorInput:
+    values: dict[str, str | float | int | None]
+    official_status_rows: tuple[tuple[object, ...], ...]
+    payout_rows: tuple[tuple[object, ...], ...]
+    ownership_rows: tuple[tuple[object, ...], ...]
+
+
+def _title(ws, title: str, subtitle: str, columns: int = 10) -> None:
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=columns)
+    cell = ws.cell(1, 1, title)
+    cell.fill = PatternFill("solid", fgColor=NAVY)
+    cell.font = Font(name="Aptos Display", size=18, bold=True, color=WHITE)
+    cell.alignment = Alignment(vertical="center")
+    ws.row_dimensions[1].height = 30
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=columns)
+    sub = ws.cell(2, 1, subtitle)
+    sub.font = Font(name="Aptos", size=10, italic=True, color="666666")
+    sub.alignment = Alignment(wrap_text=True, vertical="top")
+    ws.row_dimensions[2].height = 30
+    ws.sheet_view.showGridLines = False
+
+
+def _section_header(ws, row: int, start_col: int, end_col: int, value: str) -> None:
+    ws.merge_cells(start_row=row, start_column=start_col, end_row=row, end_column=end_col)
+    cell = ws.cell(row, start_col, value)
+    cell.fill = PatternFill("solid", fgColor=BLUE)
+    cell.font = Font(name="Aptos", bold=True, color=WHITE)
+    cell.alignment = Alignment(vertical="center")
+
+
+def _table(ws, reference: str, name: str) -> None:
+    table = Table(displayName=name, ref=reference)
+    table.tableStyleInfo = TableStyleInfo(
+        name="TableStyleMedium2",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False,
+    )
+    ws.add_table(table)
+
+
+def create_operator_input_workbook(path: str | Path) -> Path:
+    target = Path(path).resolve()
+    if target.exists() and not workbook_is_closed(target):
+        raise WorkbookLockedError(
+            f"Close {target.name} in Excel, then run the command again. No data was changed."
+        )
+    workbook = Workbook()
+    default = workbook.active
+    workbook.remove(default)
+    run_control = workbook.create_sheet("Run Control")
+    evidence = workbook.create_sheet("Evidence Paste")
+    portfolio = workbook.create_sheet("Portfolio")
+    qa = workbook.create_sheet("QA")
+    upload = workbook.create_sheet("Upload")
+
+    _title(
+        run_control,
+        "NFL DFS Run Control",
+        "Edit only pale-yellow cells in this staged input workbook. Close Excel before running the engine.",
+        8,
+    )
+    headers = ("KEY", "VALUE", "REQUIRED", "OPERATOR GUIDANCE")
+    run_control.append([])
+    run_control.append(headers)
+    rows = [
+        ("RUN_LABEL", "", "YES", "Short label such as 2026-W02-MAIN"),
+        ("SALARY_CSV", "", "YES", "Full path to the DraftKings salary CSV"),
+        ("ENTRY_CSV", "", "YES", "Full path to the reserved-entry CSV"),
+        ("PAYOUT_CSV", "", "YES", "Strict payout CSV path"),
+        ("ASSIGNMENT_CSV", "", "MANUAL", "Hand-created lineup assignment CSV, if used"),
+        ("TEAM_PROJECTION_CSV", "", "MODEL", "Required only for model-assisted builds"),
+        ("PLAYER_OPPORTUNITY_CSV", "", "MODEL", "Required only for model-assisted builds"),
+        ("OFFICIAL_STATUS_CSV", "", "UPLOAD", "Exact-ID official active/inactive evidence"),
+        ("FIELD_SIZE", "", "YES", "Total contest entries"),
+        ("MAX_ENTRIES", "", "YES", "Contest maximum entries per person"),
+        ("ADVERTISED_PRIZE_VALUE", "", "YES", "Cash plus ticket face value"),
+        ("TICKET_FACE_VALUE", "", "SATELLITE", "Face value of each awarded ticket, if applicable"),
+        ("CONTEST_OBJECTIVE", "LARGE_GPP", "YES", "LARGE_GPP, SMALL_GPP, CASH, WTA, or SATELLITE"),
+        ("MANUAL_GUARDRAIL_MODE", "YES", "YES", "YES allows legality-only workflow; it does not certify model quality"),
+    ]
+    for row in rows:
+        run_control.append(row)
+    _table(run_control, f"A4:D{3 + len(rows)}", "RunControlTable")
+    for row in range(5, 5 + len(rows)):
+        run_control.cell(row, 2).fill = PatternFill("solid", fgColor=PALE_YELLOW)
+    objective_validation = DataValidation(
+        type="list", formula1='"LARGE_GPP,SMALL_GPP,CASH,WTA,SATELLITE"', allow_blank=False
+    )
+    yes_no_validation = DataValidation(type="list", formula1='"YES,NO"', allow_blank=False)
+    run_control.add_data_validation(objective_validation)
+    run_control.add_data_validation(yes_no_validation)
+    objective_validation.add(run_control["B17"])
+    yes_no_validation.add(run_control["B18"])
+    run_control.freeze_panes = "A4"
+    run_control.column_dimensions["A"].width = 28
+    run_control.column_dimensions["B"].width = 58
+    run_control.column_dimensions["C"].width = 14
+    run_control.column_dimensions["D"].width = 68
+
+    _title(
+        evidence,
+        "Evidence Paste",
+        "Paste source-bound values only. Natural-language notes cannot write numerical projections.",
+        24,
+    )
+    _section_header(evidence, 4, 1, 5, "Official activity evidence")
+    inactive_headers = ("TEAM", "PLAYER_OR_GSIS_ID", "STATUS", "SOURCE_URL", "OBSERVED_AT")
+    for column, value in enumerate(inactive_headers, start=1):
+        evidence.cell(5, column, value)
+    for row in range(6, 106):
+        for column in range(1, 6):
+            evidence.cell(row, column).fill = PatternFill("solid", fgColor=PALE_YELLOW)
+    _table(evidence, "A5:E105", "OfficialStatusTable")
+    status_validation = DataValidation(type="list", formula1='"ACTIVE,INACTIVE"', allow_blank=True)
+    evidence.add_data_validation(status_validation)
+    status_validation.add("C6:C105")
+
+    _section_header(evidence, 4, 7, 10, "Payout tiers")
+    payout_headers = ("rank_start", "rank_end", "prize_type", "value")
+    for column, value in enumerate(payout_headers, start=7):
+        evidence.cell(5, column, value)
+    for row in range(6, 106):
+        for column in range(7, 11):
+            evidence.cell(row, column).fill = PatternFill("solid", fgColor=PALE_YELLOW)
+    _table(evidence, "G5:J105", "PayoutInputTable")
+    prize_validation = DataValidation(type="list", formula1='"CASH,TICKET"', allow_blank=True)
+    evidence.add_data_validation(prize_validation)
+    prize_validation.add("I6:I105")
+    evidence["G108"] = "Entered payout value"
+    evidence["J108"] = "=SUMPRODUCT((H6:H105-G6:G105+1)*J6:J105)"
+    evidence["J108"].number_format = '"$"#,##0.00'
+
+    _section_header(evidence, 4, 12, 15, "Ownership brackets")
+    ownership_headers = ("DK_ID", "LOW", "BASE", "HIGH")
+    for column, value in enumerate(ownership_headers, start=12):
+        evidence.cell(5, column, value)
+    for row in range(6, 106):
+        for column in range(12, 16):
+            evidence.cell(row, column).fill = PatternFill("solid", fgColor=PALE_YELLOW)
+            if column >= 13:
+                evidence.cell(row, column).number_format = "0.0%"
+    _table(evidence, "L5:O105", "OwnershipBracketTable")
+
+    _section_header(evidence, 4, 17, 23, "Manual market and weather evidence")
+    market_headers = (
+        "TEAM",
+        "BOOK",
+        "SPREAD",
+        "TOTAL",
+        "OBSERVED_AT",
+        "WEATHER_STATE",
+        "SOURCE_URL",
+    )
+    for column, value in enumerate(market_headers, start=17):
+        evidence.cell(5, column, value)
+    for row in range(6, 38):
+        for column in range(17, 24):
+            evidence.cell(row, column).fill = PatternFill("solid", fgColor=PALE_YELLOW)
+    _table(evidence, "Q5:W37", "MarketWeatherTable")
+    evidence.freeze_panes = "A5"
+    for column, width in {
+        "A": 10,
+        "B": 24,
+        "C": 14,
+        "D": 48,
+        "E": 24,
+        "G": 12,
+        "H": 12,
+        "I": 14,
+        "J": 14,
+        "L": 14,
+        "M": 12,
+        "N": 12,
+        "O": 12,
+        "Q": 10,
+        "R": 18,
+        "S": 12,
+        "T": 12,
+        "U": 24,
+        "V": 20,
+        "W": 48,
+    }.items():
+        evidence.column_dimensions[column].width = width
+
+    _title(portfolio, "Portfolio", "Generated output only. Do not edit this sheet.", 16)
+    portfolio_headers = (
+        "Entry ID",
+        "Mode",
+        "Slot 1",
+        "Slot 2",
+        "Slot 3",
+        "Slot 4",
+        "Slot 5",
+        "Slot 6",
+        "Slot 7",
+        "Slot 8",
+        "Slot 9",
+        "Salary",
+        "Canonical Key",
+        "Worst State",
+        "Robust Net LCB",
+        "Elite Probability",
+    )
+    for column, value in enumerate(portfolio_headers, start=1):
+        portfolio.cell(4, column, value)
+    for row in range(5, 25):
+        for column in range(1, 17):
+            portfolio.cell(row, column).fill = PatternFill("solid", fgColor="F2F2F2")
+    _table(portfolio, "A4:P24", "PortfolioOutputTable")
+    portfolio.freeze_panes = "C5"
+    portfolio.column_dimensions["A"].width = 16
+    portfolio.column_dimensions["B"].width = 12
+    portfolio.column_dimensions["M"].width = 50
+    portfolio.column_dimensions["N"].width = 18
+    portfolio.column_dimensions["O"].width = 20
+    portfolio.column_dimensions["P"].width = 18
+    for column in range(3, 12):
+        portfolio.column_dimensions[chr(64 + column)].width = 14
+
+    _title(qa, "QA", "Registered quantitative triggers and binding blockers.", 7)
+    qa_headers = ("Code", "Severity", "Trigger", "Threshold", "Blocking", "Message", "Disposition")
+    for column, value in enumerate(qa_headers, start=1):
+        qa.cell(4, column, value)
+    for row in range(5, 45):
+        for column in range(1, 8):
+            qa.cell(row, column).fill = PatternFill("solid", fgColor="F2F2F2")
+    _table(qa, "A4:G44", "QAFindingTable")
+    qa.column_dimensions["A"].width = 34
+    qa.column_dimensions["B"].width = 14
+    qa.column_dimensions["C"].width = 24
+    qa.column_dimensions["D"].width = 20
+    qa.column_dimensions["E"].width = 12
+    qa.column_dimensions["F"].width = 90
+    qa.column_dimensions["G"].width = 18
+    qa.conditional_formatting.add(
+        "E5:E44",
+        FormulaRule(formula=["E5=TRUE"], fill=PatternFill("solid", fgColor=PALE_RED)),
+    )
+    qa.freeze_panes = "A5"
+
+    _title(upload, "Upload", "Only a green CERTIFIED status may be manually uploaded to DraftKings.", 6)
+    upload_rows = [
+        ("Status", "DO_NOT_UPLOAD"),
+        ("Output CSV", ""),
+        ("SHA-256", ""),
+        ("Manifest", ""),
+        ("Created at", ""),
+        ("Operator action", "Resolve every blocker, rerun, review, then upload manually."),
+    ]
+    for row_number, (label, value) in enumerate(upload_rows, start=4):
+        upload.cell(row_number, 1, label).font = Font(bold=True)
+        upload.cell(row_number, 2, value)
+    upload["B4"].fill = PatternFill("solid", fgColor=PALE_RED)
+    upload["B4"].font = Font(bold=True, color="9C0006")
+    upload.column_dimensions["A"].width = 22
+    upload.column_dimensions["B"].width = 100
+
+    for ws in workbook.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                font = copy(cell.font)
+                font.name = font.name or "Aptos"
+                cell.font = font
+                alignment = copy(cell.alignment)
+                alignment.vertical = alignment.vertical or "top"
+                cell.alignment = alignment
+        ws.auto_filter.ref = None
+    target.parent.mkdir(parents=True, exist_ok=True)
+    workbook.save(target)
+    return target
+
+
+def populate_operator_run_control(
+    path: str | Path, values: Mapping[str, str | float | int | bool | None]
+) -> Path:
+    target = Path(path).resolve()
+    if not target.exists():
+        create_operator_input_workbook(target)
+    if not workbook_is_closed(target):
+        raise WorkbookLockedError(
+            f"Close {target.name} in Excel, then rerun. No workbook values were changed."
+        )
+    workbook = load_workbook(target)
+    if workbook.sheetnames != ["Run Control", "Evidence Paste", "Portfolio", "QA", "Upload"]:
+        raise ValueError("operator workbook sheet contract does not match the engine")
+    run_control = workbook["Run Control"]
+    rows_by_key = {
+        str(run_control.cell(row, 1).value): row
+        for row in range(5, 19)
+        if run_control.cell(row, 1).value
+    }
+    unknown = sorted(set(values).difference(rows_by_key))
+    if unknown:
+        raise ValueError(f"unknown Run Control keys: {unknown}")
+    for key, value in values.items():
+        run_control.cell(rows_by_key[key], 2, value)
+    workbook.save(target)
+    return target
+
+
+def create_cowork_status_workbook(
+    *,
+    output_path: str | Path,
+    run_values: Mapping[str, str | float | int | bool | None],
+    blockers: Iterable[str],
+    report_path: str | Path,
+) -> Path:
+    target = create_operator_input_workbook(output_path)
+    populate_operator_run_control(target, run_values)
+    workbook = load_workbook(target)
+    run_control = workbook["Run Control"]
+    run_control["A2"] = (
+        "Generated by the Cowork workflow. This is a review artifact; "
+        "use the machine-readable run request for reruns."
+    )
+    for row in range(5, 19):
+        run_control.cell(row, 2).fill = PatternFill("solid", fgColor="F2F2F2")
+    qa = workbook["QA"]
+    blocker_values = tuple(blockers)
+    for row_number, blocker in enumerate(blocker_values, start=5):
+        code, _, message = blocker.partition(":")
+        values = (
+            code,
+            "CRITICAL",
+            "MISSING",
+            "PASS",
+            True,
+            message.strip() or blocker,
+            "BLOCK",
+        )
+        for column, value in enumerate(values, start=1):
+            qa.cell(row_number, column, value)
+    upload = workbook["Upload"]
+    upload["B4"] = "DO_NOT_UPLOAD"
+    upload["B4"].fill = PatternFill("solid", fgColor=PALE_RED)
+    upload["B4"].font = Font(bold=True, color="9C0006")
+    upload["B7"] = str(Path(report_path).resolve())
+    upload["B8"] = datetime.now(timezone.utc).isoformat()
+    upload["B9"] = "DO NOT UPLOAD. Resolve the QA blockers and rerun the Cowork request."
+    workbook.save(target)
+    return target
+
+
+def create_review_workbook(
+    *,
+    staged_input: str | Path,
+    output_path: str | Path,
+    lineups: Mapping[str, Lineup],
+    qa_findings: Iterable[QAFinding],
+    manifest: CertificationManifest,
+    portfolio_metrics: Mapping[str, float | str] | None = None,
+) -> Path:
+    source = Path(staged_input).resolve()
+    target = Path(output_path).resolve()
+    if not workbook_is_closed(source):
+        raise WorkbookLockedError(
+            f"Close {source.name} in Excel, then rerun. No review workbook was written."
+        )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+    workbook = load_workbook(target)
+    portfolio = workbook["Portfolio"]
+    metrics = portfolio_metrics or {}
+    for row_number, (entry_id, lineup) in enumerate(sorted(lineups.items()), start=5):
+        roster = list(lineup.roster) + [""] * (9 - len(lineup.roster))
+        values = [
+            entry_id,
+            lineup.mode.value,
+            *roster,
+            lineup.salary,
+            lineup.canonical_key,
+            metrics.get("worst_state", ""),
+            metrics.get("robust_net_payout_lcb", ""),
+            metrics.get("elite_probability", ""),
+        ]
+        for column, value in enumerate(values, start=1):
+            portfolio.cell(row_number, column, value)
+        portfolio.cell(row_number, 12).number_format = '"$"#,##0'
+        portfolio.cell(row_number, 15).number_format = '"$"#,##0.00'
+        portfolio.cell(row_number, 16).number_format = "0.00%"
+    qa_sheet = workbook["QA"]
+    for row_number, finding in enumerate(qa_findings, start=5):
+        values = (
+            finding.code,
+            finding.severity,
+            str(finding.trigger_value),
+            str(finding.threshold),
+            finding.blocking,
+            finding.message,
+            "BLOCK" if finding.blocking else "REVIEW",
+        )
+        for column, value in enumerate(values, start=1):
+            qa_sheet.cell(row_number, column, value)
+    upload = workbook["Upload"]
+    upload["B4"] = manifest.status
+    upload["B5"] = manifest.output_path or ""
+    upload["B6"] = manifest.output_sha256 or ""
+    upload["B7"] = str(Path(manifest.output_path).with_suffix(".manifest.json")) if manifest.output_path else ""
+    upload["B8"] = manifest.created_at.astimezone(timezone.utc).isoformat()
+    if manifest.status == "CERTIFIED":
+        upload["B4"].fill = PatternFill("solid", fgColor=PALE_GREEN)
+        upload["B4"].font = Font(bold=True, color="006100")
+        upload["B9"] = "Review exact Entry IDs and lineups, then upload manually in DraftKings."
+    else:
+        upload["B4"].fill = PatternFill("solid", fgColor=PALE_RED)
+        upload["B9"] = "DO NOT UPLOAD. Resolve blockers shown on QA and rerun."
+    workbook.calculation.fullCalcOnLoad = True
+    workbook.calculation.forceFullCalc = True
+    workbook.save(target)
+    return target
+
+
+def timestamped_review_path(output_dir: str | Path, run_id: str) -> Path:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return Path(output_dir).resolve() / f"NFL_DFS_Review_{run_id}_{stamp}.xlsx"
+
+
+def read_operator_input(path: str | Path) -> OperatorInput:
+    source = Path(path).resolve()
+    if not source.exists():
+        raise FileNotFoundError(source)
+    if not workbook_is_closed(source):
+        raise WorkbookLockedError(
+            f"Close {source.name} in Excel, then run again. The engine will not read a changing workbook."
+        )
+    workbook = load_workbook(source, read_only=True, data_only=False)
+    if workbook.sheetnames != ["Run Control", "Evidence Paste", "Portfolio", "QA", "Upload"]:
+        raise ValueError("operator workbook sheet contract does not match the engine")
+    run_control = workbook["Run Control"]
+    values: dict[str, str | float | int | None] = {}
+    for row in range(5, 19):
+        key = run_control.cell(row, 1).value
+        if key:
+            values[str(key)] = run_control.cell(row, 2).value
+    evidence = workbook["Evidence Paste"]
+
+    def populated_rows(start_col: int, width: int, start_row: int, end_row: int):
+        rows: list[tuple[object, ...]] = []
+        for row in range(start_row, end_row + 1):
+            values_row = tuple(
+                evidence.cell(row, column).value
+                for column in range(start_col, start_col + width)
+            )
+            if any(value not in (None, "") for value in values_row):
+                rows.append(values_row)
+        return tuple(rows)
+
+    return OperatorInput(
+        values=values,
+        official_status_rows=populated_rows(1, 5, 6, 105),
+        payout_rows=populated_rows(7, 4, 6, 105),
+        ownership_rows=populated_rows(12, 4, 6, 105),
+    )

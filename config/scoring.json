@@ -1,0 +1,10 @@
+{
+  "schema_version": "draftkings_nfl_scoring_2026_fixture_v1",
+  "source_rule_hashes": {
+    "classic": "352d630204ad05a2c86240615d5144ca8cba4b629ddb922a67a34d79f12f54c1",
+    "showdown": "2c92ae07bf41abd98254431ffce99e276edbe566afbbc2ecf4c33e8d5b3f09cd"
+  },
+  "salary_cap": 50000,
+  "captain_salary_multiplier": 1.5,
+  "captain_scoring_multiplier": 1.5
+}
