@@ -9,6 +9,11 @@
     "market_line",
     "final_bytes"
   ],
+  "model_assisted_hard_fields": [
+    "player_opportunity_evidence",
+    "quantitative_qa",
+    "referee_review"
+  ],
   "inactive_primary": "OPERATOR_OFFICIAL_PASTE",
   "inactive_secondary": "SLEEPER_DAILY",
   "route_participation_default": "UNKNOWN",

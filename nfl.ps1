@@ -17,7 +17,7 @@ $env:UV_CACHE_DIR = $TaskCache
 Push-Location $ProjectRoot
 try {
     if ($Command -eq 'setup') {
-        uv sync --all-groups
+        uv sync --all-groups --locked --python 3.13.7
         if ($LASTEXITCODE -ne 0) { throw 'Setup could not install the pinned free packages.' }
     }
     if (-not (Test-Path -LiteralPath $PythonExe)) {

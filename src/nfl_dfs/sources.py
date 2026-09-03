@@ -80,6 +80,10 @@ def fetch_public_artifact(
         data = response.content
     digest = sha256_bytes(data)
     suffix = Path(urlparse(url).path).suffix or ".bin"
+    if len(suffix) > 10 or any(
+        not (character.isalnum() or character == ".") for character in suffix
+    ):
+        suffix = ".bin"
     destination = Path(destination_dir).resolve() / f"{digest}{suffix}"
     destination.parent.mkdir(parents=True, exist_ok=True)
     if not destination.exists():
@@ -119,8 +123,9 @@ def sleeper_daily_player_snapshot(destination_dir: str | Path, as_of_date: str) 
         license_decision="SECONDARY_STATUS_ONLY",
         parser_version="sleeper_players_v1",
     )
-    payload = json.loads(Path(artifact.path).read_text(encoding="utf-8"))
-    marker.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    raw = Path(artifact.path).read_bytes()
+    payload = json.loads(raw.decode("utf-8"))
+    marker.write_bytes(raw)
     return capture_local_artifact(
         marker,
         source="SLEEPER_DAILY_SECONDARY",

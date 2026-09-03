@@ -56,3 +56,31 @@ def test_weekly_ridge_uses_rolling_origin_and_rejects_leakage() -> None:
             minimum_train=100,
             validation_size=20,
         )
+
+
+def test_validation_and_training_reject_nonfinite_numbers() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        rolling_origin_splits(
+            [datetime(2025, 1, 1, tzinfo=timezone.utc)],
+            minimum_train=1,
+            validation_size=0,
+        )
+    with pytest.raises(ValueError, match="finite"):
+        validate_simulation_draws(
+            actual=np.array([float("nan")]),
+            model_draws=np.zeros((2, 1)),
+            baseline_draws=np.zeros((2, 1)),
+            positions=np.array(["WR"]),
+            model_dependencies={"pair": 0.0},
+            dependency_bands={"pair": (-1.0, 1.0)},
+        )
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="finite"):
+        fit_weekly_ridge_challenger(
+            features=np.array([[float("inf")], [1.0]]),
+            target=np.array([1.0, 2.0]),
+            feature_as_of=[now, now + timedelta(days=1)],
+            outcome_at=[now, now + timedelta(days=1)],
+            minimum_train=1,
+            validation_size=1,
+        )

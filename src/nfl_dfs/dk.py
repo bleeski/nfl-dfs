@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ from .contracts import (
     SalaryPlayer,
     SlateContract,
 )
-from .hashing import sha256_file
+from .hashing import sha256_bytes
 
 PARSER_VERSION = "dk_csv_v1"
 _GAME_RE = re.compile(
@@ -49,15 +50,45 @@ class EntryTemplate:
             return EngineMode.SHOWDOWN
         raise DraftKingsParseError(f"unsupported roster columns: {self.roster_columns}")
 
+    @property
+    def roster_start_index(self) -> int:
+        try:
+            return self.header.index("Entry Fee") + 1
+        except ValueError as exc:
+            raise DraftKingsParseError("entry template header lacks Entry Fee") from exc
 
-def _read_text_csv(path: Path) -> tuple[str, list[list[str]]]:
+
+def single_contest_problems(template: EntryTemplate) -> tuple[str, ...]:
+    """Return fail-closed reasons when one entry file spans contest economics."""
+    contest_ids = {entry.contest_id for entry in template.authorizations}
+    entry_fees = {entry.entry_fee for entry in template.authorizations}
+    problems: list[str] = []
+    if len(contest_ids) != 1:
+        problems.append(
+            "MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED: reserved entries must share one Contest ID"
+        )
+    if len(entry_fees) != 1:
+        problems.append(
+            "MIXED_ENTRY_FEES_UNSUPPORTED: reserved entries must share one entry fee"
+        )
+    return tuple(problems)
+
+
+def require_single_contest(template: EntryTemplate) -> None:
+    problems = single_contest_problems(template)
+    if problems:
+        raise DraftKingsParseError("; ".join(problems))
+
+
+def _read_text_csv(path: Path) -> tuple[str, list[list[str]], str]:
     raw = path.read_bytes()
+    digest = sha256_bytes(raw)
     encodings = ("utf-8-sig",) if raw.startswith(b"\xef\xbb\xbf") else ("utf-8", "cp1252")
     last_error: UnicodeDecodeError | None = None
     for encoding in encodings:
         try:
             text = raw.decode(encoding)
-            return encoding, list(csv.reader(io.StringIO(text, newline="")))
+            return encoding, list(csv.reader(io.StringIO(text, newline=""))), digest
         except UnicodeDecodeError as exc:
             last_error = exc
     raise DraftKingsParseError(f"unsupported CSV encoding: {path}") from last_error
@@ -68,17 +99,25 @@ def _parse_fee(raw: str) -> float:
     if not cleaned:
         raise DraftKingsParseError("entry fee is blank")
     try:
-        return float(cleaned)
+        value = float(cleaned)
     except ValueError as exc:
         raise DraftKingsParseError(f"invalid entry fee: {raw!r}") from exc
+    if not math.isfinite(value) or value < 0:
+        raise DraftKingsParseError(f"invalid entry fee: {raw!r}")
+    return value
 
 
 def parse_entries(path: str | Path) -> EntryTemplate:
     csv_path = Path(path).resolve()
-    encoding, rows = _read_text_csv(csv_path)
+    encoding, rows, raw_hash = _read_text_csv(csv_path)
     if not rows or len(rows[0]) < 10:
         raise DraftKingsParseError("entry CSV has no usable header")
     header = tuple(rows[0])
+    expected_prefix = ("Entry ID", "Contest Name", "Contest ID", "Entry Fee")
+    if header[: len(expected_prefix)] != expected_prefix:
+        raise DraftKingsParseError(
+            f"entry CSV must begin with the exact columns {expected_prefix}"
+        )
     try:
         fee_index = header.index("Entry Fee")
     except ValueError as exc:
@@ -98,6 +137,10 @@ def parse_entries(path: str | Path) -> EntryTemplate:
         entry_id = padded[0].strip()
         if not entry_id:
             continue
+        if len(row) > len(header):
+            raise DraftKingsParseError(
+                f"entry row for {entry_id!r} has more cells than the header"
+            )
         if not entry_id.isdigit():
             raise DraftKingsParseError(f"non-numeric Entry ID: {entry_id!r}")
         if entry_id in seen_entries:
@@ -111,7 +154,7 @@ def parse_entries(path: str | Path) -> EntryTemplate:
                 entry_id=entry_id,
                 contest_id=contest_id,
                 contest_name=padded[1].strip(),
-                entry_fee=_parse_fee(padded[3]),
+                entry_fee=_parse_fee(padded[fee_index]),
                 existing_cells=cells,
             )
         )
@@ -120,7 +163,7 @@ def parse_entries(path: str | Path) -> EntryTemplate:
         raise DraftKingsParseError("entry CSV contains no authorized entries")
     return EntryTemplate(
         path=csv_path,
-        raw_hash=sha256_file(csv_path),
+        raw_hash=raw_hash,
         header=header,
         roster_columns=roster_columns,
         authorizations=tuple(authorizations),
@@ -142,7 +185,7 @@ def _parse_game_info(raw: str) -> tuple[str, str, str, datetime]:
 
 def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateContract:
     csv_path = Path(path).resolve()
-    encoding, rows = _read_text_csv(csv_path)
+    encoding, rows, raw_hash = _read_text_csv(csv_path)
     del encoding
     if len(rows) < 2:
         raise DraftKingsParseError("salary CSV is empty")
@@ -161,8 +204,20 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
     missing = required.difference(header)
     if missing:
         raise DraftKingsParseError(f"salary CSV missing columns: {sorted(missing)}")
+    duplicated = sorted(name for name in required if header.count(name) != 1)
+    if duplicated:
+        raise DraftKingsParseError(
+            f"salary CSV required columns must appear exactly once: {duplicated}"
+        )
     index = {name: header.index(name) for name in required}
-    roster_values = {row[index["Roster Position"]].strip() for row in rows[1:] if row}
+    data_rows: list[tuple[int, list[str]]] = []
+    for row_number, row in enumerate(rows[1:], start=2):
+        if not row or not any(cell.strip() for cell in row):
+            continue
+        if len(row) < len(header):
+            raise DraftKingsParseError(f"short salary row {row_number}")
+        data_rows.append((row_number, row))
+    roster_values = {row[index["Roster Position"]].strip() for _, row in data_rows}
     if roster_values == {"CPT", "FLEX"}:
         mode = EngineMode.SHOWDOWN
     elif roster_values.issubset({"QB", "RB/FLEX", "WR/FLEX", "TE/FLEX", "DST"}):
@@ -173,11 +228,7 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
     players: list[SalaryPlayer] = []
     games: dict[str, GameContract] = {}
     seen_ids: set[str] = set()
-    for row_number, row in enumerate(rows[1:], start=2):
-        if not row or not any(cell.strip() for cell in row):
-            continue
-        if len(row) < len(header):
-            raise DraftKingsParseError(f"short salary row {row_number}")
+    for row_number, row in data_rows:
         dk_id = row[index["ID"]].strip()
         if not dk_id.isdigit() or dk_id in seen_ids:
             raise DraftKingsParseError(f"invalid or duplicate DK ID at row {row_number}: {dk_id!r}")
@@ -194,11 +245,15 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
         roster_positions = tuple(roster_raw.split("/"))
         position = row[index["Position"]].strip()
         role = roster_raw if mode is EngineMode.SHOWDOWN else None
-        underlying = f"{team}|{position}|{row[index['Name']].strip()}"
+        name = row[index["Name"]].strip()
+        if not name or not position or not team:
+            raise DraftKingsParseError(
+                f"blank name, position, or team at salary row {row_number}"
+            )
         players.append(
             SalaryPlayer(
                 dk_id=dk_id,
-                name=row[index["Name"]].strip(),
+                name=name,
                 position=position,
                 roster_positions=roster_positions,
                 salary=salary,
@@ -207,17 +262,21 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
                 game_id=game_id,
                 lock_at=lock_at,
                 status_raw=row[index["Status"]].strip(),
-                underlying_id=underlying,
+                underlying_id=f"{team}|{position}|{name}",
                 role=role,
             )
         )
-        games[game_id] = GameContract(
+        game = GameContract(
             game_id=game_id, away_team=away, home_team=home, lock_at=lock_at
         )
+        if game_id in games and games[game_id] != game:
+            raise DraftKingsParseError(
+                f"conflicting lock metadata for game {game_id} at row {row_number}"
+            )
+        games[game_id] = game
         seen_ids.add(dk_id)
 
     _validate_salary_pool(players, mode)
-    raw_hash = sha256_file(csv_path)
     return SlateContract(
         mode=mode,
         draft_group=draft_group or raw_hash[:16],
@@ -232,12 +291,35 @@ def _validate_salary_pool(players: Iterable[SalaryPlayer], mode: EngineMode) -> 
     pool = list(players)
     if not pool:
         raise DraftKingsParseError("salary pool has no players")
+    if mode is EngineMode.CLASSIC:
+        if len({player.game_id for player in pool}) < 2:
+            raise DraftKingsParseError("Classic salary pool must contain at least two games")
+        identity_counts: dict[str, int] = defaultdict(int)
+        for player in pool:
+            identity_counts[player.underlying_id] += 1
+        collisions = sorted(
+            identity for identity, count in identity_counts.items() if count > 1
+        )
+        if collisions:
+            raise DraftKingsParseError(
+                "ambiguous same-name/team/position identity collision; exact disambiguation "
+                f"is required: {collisions}"
+            )
     if mode is EngineMode.SHOWDOWN:
+        if len({player.game_id for player in pool}) != 1 or len(
+            {player.team for player in pool}
+        ) != 2:
+            raise DraftKingsParseError(
+                "Showdown salary pool must contain exactly one game and two teams"
+            )
         by_person: dict[str, dict[str, SalaryPlayer]] = defaultdict(dict)
+        duplicate_roles: list[str] = []
         for player in pool:
             assert player.role is not None
+            if player.role in by_person[player.underlying_id]:
+                duplicate_roles.append(f"{player.underlying_id}:{player.role}")
             by_person[player.underlying_id][player.role] = player
-        anomalies: list[str] = []
+        anomalies: list[str] = duplicate_roles
         for person, roles in by_person.items():
             if set(roles) != {"CPT", "FLEX"}:
                 anomalies.append(f"{person}: missing role")
@@ -250,11 +332,20 @@ def _validate_salary_pool(players: Iterable[SalaryPlayer], mode: EngineMode) -> 
             raise DraftKingsParseError("; ".join(anomalies[:10]))
         if len(pool) != 2 * len(by_person):
             raise DraftKingsParseError("Showdown role row count does not reconcile")
+        if len(by_person) < 6:
+            raise DraftKingsParseError("Showdown pool needs at least six underlying players")
     else:
         counts = Counter(player.position for player in pool)
-        for required in ("QB", "RB", "WR", "TE", "DST"):
-            if not counts[required]:
-                raise DraftKingsParseError(f"Classic pool has no {required}")
+        minimum_counts = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
+        for required, minimum in minimum_counts.items():
+            if counts[required] < minimum:
+                raise DraftKingsParseError(
+                    f"Classic pool needs at least {minimum} {required} rows"
+                )
+        if counts["RB"] + counts["WR"] + counts["TE"] < 7:
+            raise DraftKingsParseError(
+                "Classic pool lacks enough RB/WR/TE rows to fill FLEX"
+            )
 
 
 def reconcile_template(template: EntryTemplate, slate: SlateContract) -> None:

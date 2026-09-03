@@ -22,6 +22,10 @@ def quantile_pinball_score(actual: np.ndarray, draws: np.ndarray) -> float:
     scenarios = np.asarray(draws, dtype=float)
     if scenarios.ndim != 2 or scenarios.shape[1] != len(actual_values):
         raise ValueError("draws must be scenarios by observations")
+    if not len(actual_values) or not len(scenarios):
+        raise ValueError("actual outcomes and scenario draws must not be empty")
+    if not np.isfinite(actual_values).all() or not np.isfinite(scenarios).all():
+        raise ValueError("actual outcomes and scenario draws must be finite")
     losses: list[float] = []
     for quantile in (0.1, 0.25, 0.5, 0.75, 0.9):
         prediction = np.quantile(scenarios, quantile, axis=0)
@@ -45,6 +49,15 @@ def validate_simulation_draws(
     positions_array = np.asarray(positions)
     if len(actual_values) != len(positions_array):
         raise ValueError("position labels must align with actual outcomes")
+    if not dependency_bands:
+        raise ValueError("at least one registered dependency band is required")
+    if any(
+        not np.isfinite((lower, upper)).all() or lower > upper
+        for lower, upper in dependency_bands.values()
+    ):
+        raise ValueError("dependency bands must be finite ordered ranges")
+    if any(not np.isfinite(value) for value in model_dependencies.values()):
+        raise ValueError("model dependency values must be finite")
     model_score = quantile_pinball_score(actual_values, model_draws)
     baseline_score = quantile_pinball_score(actual_values, baseline_draws)
     proper_improvement = baseline_score - model_score

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 import time
@@ -54,6 +55,9 @@ def certify_upload(
     manifest_path: str | Path,
     config_hashes: Mapping[str, str] | None = None,
     model_hashes: Mapping[str, str] | None = None,
+    additional_input_hashes: Mapping[str, str] | None = None,
+    solver_proof: Mapping[str, object] | None = None,
+    additional_blockers: Iterable[str] = (),
     deadline_seconds: float = 120.0,
     required_hard_fields: tuple[str, ...] = (
         "salary_pool",
@@ -67,8 +71,16 @@ def certify_upload(
     started = time.perf_counter()
     output = Path(output_path).resolve()
     manifest_file = Path(manifest_path).resolve()
+    if output == manifest_file:
+        raise CertificationError("output CSV and manifest paths must be different")
+    if not math.isfinite(deadline_seconds) or deadline_seconds <= 0:
+        raise CertificationError("certification deadline must be positive and finite")
+    if output.exists() or manifest_file.exists():
+        raise CertificationError(
+            "certification artifacts already exist; use a new immutable run_id"
+        )
     evidence_tuple = tuple(evidence)
-    blockers: list[str] = []
+    blockers: list[str] = list(additional_blockers)
     evidence_fields = {record.field for record in evidence_tuple if record.hard_gate}
     for required_field in required_hard_fields:
         if required_field not in evidence_fields:
@@ -78,7 +90,19 @@ def certify_upload(
         reconcile_template(template, slate)
     except ValueError as exc:
         blockers.append(f"TEMPLATE_MISMATCH:{exc}")
+    if sha256_file(template.path) != template.raw_hash:
+        blockers.append("ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE")
     authorized = {entry.entry_id for entry in template.authorizations}
+    contest_ids = {entry.contest_id for entry in template.authorizations}
+    entry_fees = {entry.entry_fee for entry in template.authorizations}
+    if len(contest_ids) != 1:
+        blockers.append(
+            "MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED:reserved entries must share one Contest ID"
+        )
+    if len(entry_fees) != 1:
+        blockers.append(
+            "MIXED_ENTRY_FEES_UNSUPPORTED:reserved entries must share one entry fee"
+        )
     if set(assignments) != authorized:
         blockers.append("ENTRY_AUTHORIZATION_MISMATCH")
     for entry_id, roster in assignments.items():
@@ -107,8 +131,6 @@ def certify_upload(
         blockers.append(f"CERTIFICATION_DEADLINE_EXCEEDED:{elapsed:.3f}s")
 
     if blockers:
-        if output.exists():
-            output.unlink()
         status = "DO_NOT_UPLOAD"
         output_path_value = None
         output_hash = None
@@ -134,11 +156,12 @@ def certify_upload(
                     reason="independent reparse and post-write SHA-256 matched",
                 ),
             )
-    evidence_hashes = {
-        f"evidence:{record.field}": record.source_artifact_id
-        for record in evidence_tuple
-        if record.source_artifact_id
-    }
+    evidence_hashes: dict[str, str] = {}
+    for index, record in enumerate(evidence_tuple, start=1):
+        if record.source_artifact_id:
+            evidence_hashes[
+                f"evidence:{record.subject}:{record.field}:{index}"
+            ] = record.source_artifact_id
     manifest = CertificationManifest(
         run_id=run_id,
         status=status,
@@ -146,6 +169,7 @@ def certify_upload(
         input_hashes={
             "salary": slate.salary_hash,
             "entries": template.raw_hash,
+            **dict(additional_input_hashes or {}),
             **evidence_hashes,
         },
         config_hashes=dict(config_hashes or {}),
@@ -153,7 +177,7 @@ def certify_upload(
         output_path=output_path_value,
         output_sha256=output_hash,
         evidence=evidence_tuple,
-        solver_proof={},
+        solver_proof=dict(solver_proof or {}),
         runtime={"certification_seconds": elapsed},
         blockers=tuple(blockers),
     )

@@ -93,19 +93,39 @@ PLAYER_COLUMNS = (
     "EVIDENCE_STATE",
 )
 
+WEATHER_STATES = frozenset(
+    {
+        "CLEAR",
+        "INDOOR",
+        "INDOOR_OR_CLEAR",
+        "MIXED",
+        "RAIN",
+        "ROOF_CLOSED",
+        "ROOF_OPEN",
+        "SNOW",
+        "WIND",
+    }
+)
+
 
 def _strict_dict_rows(path: Path, columns: tuple[str, ...]) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         if tuple(reader.fieldnames or ()) != columns:
             raise OpportunityError(f"{path.name} header must be exactly {columns}")
-        return [dict(row) for row in reader if any(value.strip() for value in row.values())]
+        rows: list[dict[str, str]] = []
+        for row_number, row in enumerate(reader, start=2):
+            if None in row or any(value is None for value in row.values()):
+                raise OpportunityError(f"{path.name} row {row_number} has missing or extra cells")
+            if any(value.strip() for value in row.values()):
+                rows.append(dict(row))
+        return rows
 
 
 def _number(row: Mapping[str, str], field: str, row_number: int) -> float:
     try:
         value = float(row[field])
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
         raise OpportunityError(f"row {row_number}: {field} is not numeric") from exc
     if not np.isfinite(value):
         raise OpportunityError(f"row {row_number}: {field} must be finite")
@@ -133,6 +153,21 @@ def load_opportunity_model(
             raise OpportunityError(f"row {row_number}: PASS_RATE outside [0.2,0.85]")
         if not 0 <= numeric["UNCERTAINTY"] <= 1:
             raise OpportunityError(f"row {row_number}: UNCERTAINTY outside [0,1]")
+        numeric_bounds = {
+            "PASS_YARDS_PER_ATTEMPT": (2.0, 15.0),
+            "RUSH_YARDS_PER_ATTEMPT": (1.0, 10.0),
+            "TOUCHDOWNS_MEAN": (0.0, 10.0),
+            "FIELD_GOALS_MEAN": (0.0, 8.0),
+            "TURNOVERS_MEAN": (0.0, 6.0),
+            "SACKS_ALLOWED_MEAN": (0.0, 10.0),
+            "MARKET_TOTAL": (20.0, 100.0),
+            "MARKET_SPREAD": (-40.0, 40.0),
+        }
+        for field, (minimum, maximum) in numeric_bounds.items():
+            if not minimum <= numeric[field] <= maximum:
+                raise OpportunityError(
+                    f"row {row_number}: {field} outside [{minimum:g},{maximum:g}]"
+                )
         observed_at = row["MARKET_OBSERVED_AT"].strip()
         try:
             observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
@@ -147,6 +182,14 @@ def load_opportunity_model(
         }
         if row["GAME_ID"].strip() not in matching_games:
             raise OpportunityError(f"row {row_number}: TEAM/GAME_ID mismatch")
+        weather_state = row["WEATHER_STATE"].strip().upper()
+        if weather_state not in WEATHER_STATES:
+            raise OpportunityError(
+                f"row {row_number}: WEATHER_STATE must be one of {sorted(WEATHER_STATES)}"
+            )
+        era = row["ERA"].strip()
+        if not era:
+            raise OpportunityError(f"row {row_number}: ERA must not be blank")
         teams.append(
             TeamProjection(
                 team=team,
@@ -163,8 +206,8 @@ def load_opportunity_model(
                 market_total=numeric["MARKET_TOTAL"],
                 market_spread=numeric["MARKET_SPREAD"],
                 market_observed_at=observed_at,
-                weather_state=row["WEATHER_STATE"].strip().upper(),
-                era=row["ERA"].strip(),
+                weather_state=weather_state,
+                era=era,
             )
         )
         seen_teams.add(team)
@@ -231,7 +274,7 @@ def _normalize(values: np.ndarray, mask: np.ndarray) -> np.ndarray:
     result = np.zeros_like(values, dtype=float)
     total = float(values[mask].sum())
     if mask.any() and total <= 0:
-        result[mask] = 1.0 / int(mask.sum())
+        raise OpportunityError("eligible opportunity shares cannot all be zero")
     elif total > 0:
         result[mask] = values[mask] / total
     return result
@@ -286,6 +329,8 @@ def remove_inactive_and_redistribute(
 
 
 def appg_is_absent_from_model_contract() -> bool:
-    return "avg" + "points" not in "|".join(
-        field.lower() for field in TeamProjection.__dataclass_fields__ | PlayerOpportunity.__dataclass_fields__
+    normalized = "|".join(
+        field.lower().replace("_", "")
+        for field in TeamProjection.__dataclass_fields__ | PlayerOpportunity.__dataclass_fields__
     )
+    return "avg" + "points" not in normalized

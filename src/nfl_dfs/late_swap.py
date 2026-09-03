@@ -40,6 +40,14 @@ def audit_late_swap(
                 continue
             if player.lock_at <= now:
                 locked[slot] = dk_id
+        for slot, (before_id, after_id) in enumerate(zip(before, after, strict=True)):
+            if before_id == after_id:
+                continue
+            replacement = by_id.get(after_id)
+            if replacement is not None and replacement.lock_at <= now:
+                problems.append(
+                    f"{entry_id}: slot {slot} cannot add already-locked player {after_id}"
+                )
         validation = validate_lineup(slate, after, locked_slots=locked)
         problems.extend(f"{entry_id}: {problem}" for problem in validation.errors)
     return LateSwapAudit(not problems, tuple(problems))

@@ -36,13 +36,21 @@ class LineupOptimizer:
         self.slate = slate
         self.players = list(slate.players)
         self.player_count = len(self.players)
+        if not np.isfinite(time_limit_seconds) or time_limit_seconds <= 0:
+            raise ValueError("time limit must be positive and finite")
+        if not np.isfinite(mip_gap) or not 0 <= mip_gap <= 1:
+            raise ValueError("MIP gap must be finite and inside [0,1]")
+        excluded = set(excluded_ids)
+        unknown_excluded = excluded.difference(player.dk_id for player in self.players)
+        if unknown_excluded:
+            raise ValueError(f"excluded IDs are outside the salary pool: {sorted(unknown_excluded)}")
         self._highs = highspy.Highs()
         self._highs.setOptionValue("output_flag", False)
         self._highs.setOptionValue("time_limit", float(time_limit_seconds))
         self._highs.setOptionValue("mip_rel_gap", float(mip_gap))
         self._highs.setOptionValue("random_seed", 0)
         self._last_selected: np.ndarray | None = None
-        self._build(set(excluded_ids))
+        self._build(excluded)
 
     def _add_row(self, lower: float, upper: float, coefficients: Mapping[int, float]) -> None:
         indices = np.array(list(coefficients), dtype=np.int32)
@@ -144,12 +152,20 @@ class LineupOptimizer:
             )
 
     def update_objective(self, scores: Mapping[str, float]) -> None:
+        unknown = set(scores).difference(player.dk_id for player in self.players)
+        if unknown:
+            raise ValueError(f"objective IDs are outside the salary pool: {sorted(unknown)[:10]}")
         costs = np.array([float(scores.get(player.dk_id, 0.0)) for player in self.players])
+        if not np.isfinite(costs).all():
+            raise ValueError("objective scores must be finite")
         indices = np.arange(self.player_count, dtype=np.int32)
         self._highs.changeColsCost(self.player_count, indices, costs)
 
     def add_no_good(self, roster: Iterable[str]) -> None:
         selected = {str(dk_id) for dk_id in roster}
+        unknown = selected.difference(player.dk_id for player in self.players)
+        if unknown:
+            raise ValueError(f"no-good roster IDs are outside the salary pool: {sorted(unknown)}")
         indices = [i for i, player in enumerate(self.players) if player.dk_id in selected]
         if indices:
             self._add_row(-highspy.kHighsInf, float(len(indices) - 1), {i: 1.0 for i in indices})
@@ -166,7 +182,6 @@ class LineupOptimizer:
         self._highs.run()
         elapsed = time.perf_counter() - started
         model_status = self._highs.getModelStatus()
-        status_name = str(model_status).split(".")[-1]
         info = self._highs.getInfo()
         solution = self._highs.getSolution()
         feasible = bool(solution.value_valid) and model_status not in {

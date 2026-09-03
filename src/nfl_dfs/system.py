@@ -111,7 +111,13 @@ def doctor(workspace: str | Path) -> DoctorReport:
     staged_workbook = root / "operator_input.xlsx"
     lock_probe = "CLOSED_OR_ABSENT" if workbook_is_closed(staged_workbook) else "LOCKED_BY_EXCEL"
     long_paths = _long_paths_enabled()
-    passed = integrity == "ok" and lock_probe != "LOCKED_BY_EXCEL"
+    pinned_python = sys.version_info[:3] == (3, 13, 7)
+    passed = (
+        pinned_python
+        and integrity == "ok"
+        and lock_probe != "LOCKED_BY_EXCEL"
+        and available_memory_bytes() > 0
+    )
     return DoctorReport(
         python=sys.version.split()[0],
         processors=os.cpu_count() or 1,

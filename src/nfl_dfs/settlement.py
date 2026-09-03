@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,6 +38,10 @@ def parse_standings(path: str | Path) -> StandingsSnapshot:
         rows: list[StandingRow] = []
         seen: set[str] = set()
         for row_number, row in enumerate(reader, start=2):
+            if None in row or any(value is None for value in row.values()):
+                raise SettlementError(
+                    f"standings row {row_number} has missing or extra cells"
+                )
             entry_id = row["EntryId"].strip()
             if not entry_id:
                 continue
@@ -48,6 +53,8 @@ def parse_standings(path: str | Path) -> StandingsSnapshot:
                 prize = float(row["Prize"].replace("$", "").replace(",", "") or 0)
             except ValueError as exc:
                 raise SettlementError(f"invalid numeric value at row {row_number}") from exc
+            if rank < 1 or not math.isfinite(points) or not math.isfinite(prize) or prize < 0:
+                raise SettlementError(f"out-of-range numeric value at row {row_number}")
             rows.append(StandingRow(entry_id, rank, points, prize, row["Lineup"]))
             seen.add(entry_id)
     if not rows:

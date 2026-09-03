@@ -39,10 +39,24 @@ def generate_opponent_field(
     seed: int,
     maximum_attempt_factor: int = 200,
 ) -> tuple[FieldLineup, ...]:
-    if field_size < 1:
+    if isinstance(field_size, bool) or not isinstance(field_size, int) or field_size < 1:
         raise ValueError("field_size must be positive")
+    if maximum_attempt_factor < 1:
+        raise ValueError("maximum_attempt_factor must be positive")
     rng = np.random.default_rng(seed)
     players = list(slate.players)
+    missing_ownership = sorted(
+        player.dk_id for player in players if player.dk_id not in ownership.ownership
+    )
+    if missing_ownership:
+        raise ValueError(
+            f"ownership state does not cover salary IDs: {missing_ownership[:10]}"
+        )
+    ownership_values = np.array(
+        [ownership.ownership[player.dk_id] for player in players], dtype=float
+    )
+    if not np.isfinite(ownership_values).all() or np.any(ownership_values < 0):
+        raise ValueError("ownership values must be finite and non-negative")
     by_id = {player.dk_id: player for player in players}
     if slate.mode is EngineMode.CLASSIC:
         classic_pools = {

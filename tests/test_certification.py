@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from nfl_dfs.certification import certify_upload
+import pytest
+
+from nfl_dfs.certification import CertificationError, certify_upload
 from nfl_dfs.contracts import EvidenceRecord, EvidenceState
+from nfl_dfs.dk import parse_entries
 from nfl_dfs.hashing import sha256_file
 from nfl_dfs.optimizer import LineupOptimizer
 from nfl_dfs.payouts import parse_payout_csv
@@ -63,19 +67,86 @@ def test_certification_is_fail_closed_then_exact_byte_certified(
     )
     assert blocked.status == "DO_NOT_UPLOAD"
     assert not output.exists()
+    with pytest.raises(CertificationError, match="already exist"):
+        certify_upload(
+            run_id="blocked-retry",
+            slate=classic_slate,
+            template=classic_entries,
+            assignments=assignments,
+            evidence=evidence,
+            output_path=output,
+            manifest_path=manifest_path,
+        )
     _, pass_evidence = _evidence(tmp_path, classic_slate, classic_entries)
+    certified_output = tmp_path / "certified-upload.csv"
     certified = certify_upload(
         run_id="certified",
         slate=classic_slate,
         template=classic_entries,
         assignments=assignments,
         evidence=pass_evidence,
-        output_path=output,
-        manifest_path=manifest_path,
+        output_path=certified_output,
+        manifest_path=tmp_path / "certified-manifest.json",
     )
     assert certified.status == "CERTIFIED"
-    assert output.exists()
-    assert sha256_file(output) == certified.output_sha256
-    assert not output.read_bytes().startswith(b"\xef\xbb\xbf")
-    audit = audit_output_bytes(classic_entries.path, output.read_bytes(), classic_entries, assignments)
+    assert certified_output.exists()
+    assert sha256_file(certified_output) == certified.output_sha256
+    assert not certified_output.read_bytes().startswith(b"\xef\xbb\xbf")
+    audit = audit_output_bytes(
+        classic_entries.path,
+        certified_output.read_bytes(),
+        classic_entries,
+        assignments,
+    )
     assert audit.valid
+
+
+def test_certification_rejects_mixed_contests(
+    tmp_path: Path, classic_slate, classic_entries
+) -> None:
+    assignments = _assignments(classic_slate, classic_entries)
+    _, evidence = _evidence(tmp_path, classic_slate, classic_entries)
+    mixed = replace(
+        classic_entries,
+        authorizations=(
+            classic_entries.authorizations[0],
+            classic_entries.authorizations[1].model_copy(
+                update={"contest_id": "999999999"}
+            ),
+        ),
+    )
+    output = tmp_path / "mixed-upload.csv"
+    manifest = certify_upload(
+        run_id="mixed",
+        slate=classic_slate,
+        template=mixed,
+        assignments=assignments,
+        evidence=evidence,
+        output_path=output,
+        manifest_path=tmp_path / "mixed-manifest.json",
+    )
+    assert manifest.status == "DO_NOT_UPLOAD"
+    assert any("MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED" in item for item in manifest.blockers)
+    assert not output.exists()
+
+
+def test_certification_rejects_entry_bytes_changed_after_parse(
+    tmp_path: Path, classic_slate, classic_entries
+) -> None:
+    copied = tmp_path / "entries.csv"
+    copied.write_bytes(classic_entries.path.read_bytes())
+    parsed = parse_entries(copied)
+    copied.write_bytes(copied.read_bytes() + b"\r\n")
+    assignments = _assignments(classic_slate, parsed)
+    _, evidence = _evidence(tmp_path, classic_slate, parsed)
+    manifest = certify_upload(
+        run_id="mutated-template",
+        slate=classic_slate,
+        template=parsed,
+        assignments=assignments,
+        evidence=evidence,
+        output_path=tmp_path / "mutated-upload.csv",
+        manifest_path=tmp_path / "mutated-manifest.json",
+    )
+    assert manifest.status == "DO_NOT_UPLOAD"
+    assert "ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE" in manifest.blockers

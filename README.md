@@ -33,7 +33,7 @@ the system will label field and simulation output diagnostic and will emit
 - Python 3.13.7 and pinned `uv.lock` environment.
 - A cross-platform Cowork launcher and schema-driven `cowork-run` command; the
   PowerShell workflow remains available as a fallback.
-- 49 conventional, property, metamorphic, integration, and reduced performance tests.
+- 65 conventional, property, metamorphic, integration, and reduced performance tests.
 - Supplied acceptance fixtures: 719 Classic IDs, 24 teams, 12 games, two
   reserved entries, and 63 Showdown people represented by 126 CPT/FLEX rows.
 - Five-sheet operator workbook rendered and inspected with no visible formula errors.

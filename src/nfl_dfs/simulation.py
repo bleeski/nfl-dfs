@@ -24,6 +24,16 @@ class SimulationResult:
             raise ValueError("scenario outcomes must use float32")
         if self.outcomes.shape != (len(self.weights), len(self.person_ids)):
             raise ValueError("scenario matrix shape mismatch")
+        if len(set(self.person_ids)) != len(self.person_ids):
+            raise ValueError("scenario person IDs must be unique")
+        if not np.isfinite(self.outcomes).all():
+            raise ValueError("scenario outcomes must be finite")
+        if (
+            not np.isfinite(self.weights).all()
+            or np.any(self.weights < 0)
+            or float(self.weights.sum()) <= 0
+        ):
+            raise ValueError("scenario weights must be finite, non-negative, and non-zero")
 
 
 def _softmax_perturb(
@@ -94,6 +104,7 @@ def simulate_factor_bank(
     team_totals: dict[str, np.ndarray] = {}
     team_turnovers: dict[str, np.ndarray] = {}
     team_sacks_allowed: dict[str, np.ndarray] = {}
+    passing_receiving_max_abs_error = 0.0
     for game in slate.games:
         game_factor = game_factors[game.game_id]
         for team_name in (game.away_team, game.home_team):
@@ -184,6 +195,10 @@ def simulate_factor_bank(
                     rng, receiving_td_base, scenarios, 0.35 + team.uncertainty * 0.2
                 )
                 receiving_tds = _allocate_integer_counts(rng, passing_tds, receiving_td_share)
+                passing_receiving_max_abs_error = max(
+                    passing_receiving_max_abs_error,
+                    float(np.max(np.abs(receiving_tds.sum(axis=1) - passing_tds))),
+                )
                 yards_weights = target_share * np.array(
                     [max(team_players[i].yards_per_target, 0.1) for i in receivers]
                 )[None, :]
@@ -202,6 +217,11 @@ def simulate_factor_bank(
                         + 6 * receiving_tds[:, local]
                     )
                     outcomes[:, global_index] += 3 * (receiver_yards[:, local] >= 100)
+            elif np.any(passing_tds):
+                passing_receiving_max_abs_error = max(
+                    passing_receiving_max_abs_error,
+                    float(np.max(passing_tds)),
+                )
 
             if len(rushers):
                 carry_base = np.array([team_players[i].carry_share for i in rushers])
@@ -274,13 +294,32 @@ def simulate_factor_bank(
             for index in dst_indices:
                 outcomes[:, index] += dst_points * share
 
+    share_conservation_max_abs_error = 0.0
+    for team_name in {player.team for player in people}:
+        team_players = [player for player in people if player.team == team_name]
+        for field, positions in (
+            ("qb_attempt_share", {"QB"}),
+            ("carry_share", {"QB", "RB", "WR", "TE"}),
+            ("target_share", {"RB", "WR", "TE"}),
+            ("rushing_td_share", {"QB", "RB", "WR", "TE"}),
+            ("receiving_td_share", {"RB", "WR", "TE"}),
+        ):
+            eligible = [player for player in team_players if player.position in positions]
+            if eligible:
+                share_conservation_max_abs_error = max(
+                    share_conservation_max_abs_error,
+                    abs(sum(getattr(player, field) for player in eligible) - 1.0),
+                )
+
     weights /= weights.sum()
     diagnostics = {
         "scenario_count": float(scenarios),
         "mean_weight": float(weights.mean()),
         "max_weight": float(weights.max()),
-        "passing_receiving_accounting": 1.0,
-        "share_conservation": 1.0,
+        "passing_receiving_accounting": float(passing_receiving_max_abs_error <= 1e-9),
+        "passing_receiving_max_abs_error": passing_receiving_max_abs_error,
+        "share_conservation": float(share_conservation_max_abs_error <= 1e-9),
+        "share_conservation_max_abs_error": share_conservation_max_abs_error,
         "route_participation_known": float(model.route_participation_state == "PASS"),
     }
     return SimulationResult(
@@ -300,10 +339,19 @@ def lineup_score_matrix(
 ) -> np.ndarray:
     person_index = {person: i for i, person in enumerate(simulations.person_ids)}
     by_dk = {player.dk_id: player for player in slate.players}
-    matrix = np.zeros((simulations.outcomes.shape[0], len(rosters)), dtype=np.float32)
+    # Ranking and exact-tie settlement require every roster to follow one
+    # float64 gather-and-sum path. The scenario bank remains compact float32.
+    matrix = np.zeros((simulations.outcomes.shape[0], len(rosters)), dtype=np.float64)
     for column, roster in enumerate(rosters):
-        for slot, dk_id in enumerate(roster):
-            player = by_dk[dk_id]
-            multiplier = 1.5 if slate.mode.value == "SHOWDOWN" and slot == 0 else 1.0
-            matrix[:, column] += multiplier * simulations.outcomes[:, person_index[player.underlying_id]]
+        indices = [person_index[by_dk[dk_id].underlying_id] for dk_id in roster]
+        multipliers = np.array(
+            [
+                1.5 if slate.mode.value == "SHOWDOWN" and slot == 0 else 1.0
+                for slot in range(len(roster))
+            ],
+            dtype=np.float64,
+        )
+        matrix[:, column] = (
+            simulations.outcomes[:, indices].astype(np.float64) * multipliers
+        ).sum(axis=1, dtype=np.float64)
     return matrix

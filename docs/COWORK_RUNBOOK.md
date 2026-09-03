@@ -97,17 +97,19 @@ Populate only source-backed values:
   `docs/DATA_CONTRACTS.md`.
 - `advertised_prize_value`: exact advertised cash plus ticket face value.
 - `ticket_face_value`: required for a satellite.
-- `field_size`: exact total contest entries.
+- `field_size`: exact total contest entries; required for manual and
+  model-assisted certification.
 - `objective`: `LARGE_GPP`, `SMALL_GPP`, `CASH`, `WTA`, or `SATELLITE`.
 - `team_projection_csv` and `player_opportunity_csv`: both are required for a
   model-assisted build. They must be produced by validated deterministic
   transformations of frozen evidence, never by freehand LLM estimates.
 - `ownership_brackets_csv`: optional uncertainty brackets, explicitly treated
   as cold-start priors until calibrated.
-- `source_ledger_json`: required for a Cowork model-assisted build. Its SHA-256
-  is bound into the certification manifest with both model-input files. Binding
-  proves which ledger was used; Claude must still validate and report the
-  ledger's sources, timestamps, coverage, transformations, and limitations.
+- `source_ledger_json`: required for a Cowork model-assisted build. It must use
+  schema `nfl_source_ledger_v1`; unknown fields, unapproved source URIs,
+  invalid timestamps/license decisions/parser versions, missing or tampered
+  artifacts, and missing or mismatched hashes for either model-input CSV fail
+  certification closed.
 - `official_status_csv`: current, source-bound, exact-ID activity evidence.
 - `assignment_csv`: optional manual lineup path. When present, the workflow
   validates/certifies it instead of running the model-assisted build.
@@ -115,8 +117,10 @@ Populate only source-backed values:
   `registered` requests the larger registered banks and may take materially
   longer. Neither setting changes evidence gates.
 
-Unknown request keys, missing files, invalid enum values, and partial
-team/player model pairs fail closed.
+Unknown request keys, missing files, invalid enum values, partial team/player
+model pairs, traversal, external absolute paths, and symlink/reparse escapes
+fail closed. Request paths are limited to the explicitly supplied attachment
+directory, managed project data, and that run's immutable directory.
 
 ## Research and evidence rules
 
@@ -147,13 +151,16 @@ sh ./nfl.sh cowork-run --request '/full/path/to/run_request.json'
 If the request supplies a manual assignment, the workflow validates it and
 attempts certification. If it supplies both model-input files plus contest
 economics, it builds diagnostic or registered candidate/scenario banks,
-selects exact Entry-ID assignments, runs REFEREE QA, and then attempts
-certification.
+selects exact Entry-ID assignments, runs quantitative and REFEREE QA, and then
+attempts certification. One run supports exactly one Contest ID and one entry
+fee; split a multi-contest DraftKings export into separate immutable runs.
 
 The result folder contains, as applicable:
 
 - `cowork_run.json`: top-level status and artifact index.
-- `build_<run_id>.json`: diagnostic build and REFEREE report.
+- `build_<run_id>.json`: diagnostic build, solver proof, quantitative QA, and
+  binding REFEREE report. Its assignment hash, exact build-input hashes, and
+  contest parameters are checked during model-assisted certification.
 - `assignments_<run_id>.csv`: generated exact-ID assignments.
 - `NFL_DFS_Review_*.xlsx`: versioned human review workbook.
 - `DK_UPLOAD_<run_id>.manifest.json`: certification record.

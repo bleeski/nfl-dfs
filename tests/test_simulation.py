@@ -78,6 +78,8 @@ def test_simulation_reproducible_float32_and_separate_purpose(classic_slate) -> 
     assert np.isfinite(first.outcomes).all()
     assert np.isclose(first.weights.sum(), 1)
     assert first.diagnostics["passing_receiving_accounting"] == 1.0
+    assert first.diagnostics["passing_receiving_max_abs_error"] == 0.0
+    assert first.diagnostics["share_conservation_max_abs_error"] == 0.0
 
 
 def test_showdown_simulates_one_outcome_per_person(showdown_slate) -> None:

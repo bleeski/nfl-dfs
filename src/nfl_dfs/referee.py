@@ -6,6 +6,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Mapping
 
+from .byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 from .dk import EntryTemplate
 
 
@@ -22,22 +23,24 @@ def audit_output_bytes(
     assignments: Mapping[str, tuple[str, ...]],
 ) -> ByteAudit:
     source_bytes = Path(source_path).read_bytes()
-    source_text = source_bytes.decode(template.encoding)
-    output_text = output_bytes.decode(template.encoding)
-    source_lines = source_text.splitlines(keepends=True)
-    output_lines = output_text.splitlines(keepends=True)
+    source_lines = split_byte_lines(source_bytes)
+    output_lines = split_byte_lines(output_bytes)
     problems: list[str] = []
     if len(source_lines) != len(output_lines):
         return ByteAudit(False, ("line count changed",))
-    roster_start = 4
+    roster_start = template.roster_start_index
     roster_end = roster_start + len(template.roster_columns)
     authorized = set(assignments)
     seen: set[str] = set()
     for line_number, (source_line, output_line) in enumerate(
         zip(source_lines, output_lines, strict=True), start=1
     ):
-        source_row = next(csv.reader(StringIO(source_line)))
-        output_row = next(csv.reader(StringIO(output_line)))
+        source_body, source_ending = split_line_ending(source_line)
+        output_body, output_ending = split_line_ending(output_line)
+        if source_ending != output_ending:
+            problems.append(f"line {line_number}: line ending changed")
+        source_row = next(csv.reader(StringIO(source_line.decode(template.encoding))))
+        output_row = next(csv.reader(StringIO(output_line.decode(template.encoding))))
         source_id = source_row[0].strip() if source_row else ""
         output_id = output_row[0].strip() if output_row else ""
         if source_id != output_id:
@@ -48,6 +51,23 @@ def audit_output_bytes(
                 problems.append(f"line {line_number}: unauthorized bytes changed")
             continue
         seen.add(source_id)
+        try:
+            source_spans = csv_field_spans(source_body)
+            output_spans = csv_field_spans(output_body)
+        except ValueError as exc:
+            problems.append(f"line {line_number}: invalid physical CSV bytes: {exc}")
+            continue
+        if len(source_spans) != len(output_spans):
+            problems.append(f"line {line_number}: CSV field count changed")
+            continue
+        for index, ((source_start, source_end), (output_start, output_end)) in enumerate(
+            zip(source_spans, output_spans, strict=True)
+        ):
+            if roster_start <= index < roster_end:
+                continue
+            if source_body[source_start:source_end] != output_body[output_start:output_end]:
+                problems.append(f"line {line_number}: untouched field bytes changed")
+                break
         if source_row[:roster_start] != output_row[:roster_start]:
             problems.append(f"line {line_number}: entry metadata changed")
         if source_row[roster_end:] != output_row[roster_end:]:

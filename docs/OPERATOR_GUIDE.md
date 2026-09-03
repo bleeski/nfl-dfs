@@ -60,7 +60,8 @@ folder. The engine checks this every time setup runs.
 The command chooses the next safe action:
 
 - Salary and entry paths only: intake and reconcile.
-- Hand-created assignment CSV plus payouts: validate and attempt certification.
+- Hand-created assignment CSV plus payouts and field size: validate and attempt
+  certification.
 - Team/player model inputs plus payouts and field size: build a diagnostic
   portfolio, then stop for official-status evidence and certification.
 
@@ -104,6 +105,8 @@ TEAM,PLAYER_OR_GSIS_ID,STATUS,SOURCE_URL,OBSERVED_AT
 - `SOURCE_URL` must be an HTTPS official source reviewed by the operator.
 - `OBSERVED_AT` must include a timezone, for example
   `2026-09-13T11:35:00-04:00`.
+- The oldest selected-player observation must be no more than three hours old
+  and inside the three-hour window before the earliest selected-player lock.
 - Names are not accepted as automatic identity joins.
 - Sleeper or another corroborating source cannot independently clear this gate.
 
@@ -120,8 +123,10 @@ rank_start,rank_end,prize_type,value
 
 Ranks must be contiguous from first place through the final paid rank, and prize
 values must not increase as rank worsens. `prize_type` is `CASH` or `TICKET`.
-For satellites, enter ticket face value on `Run Control`. The payout total must
-match the advertised contest value to the cent.
+For `TICKET`, `value` is the ticket count. For satellites, enter one ticket's
+face value on `Run Control`. The payout total must match the advertised contest
+value to the cent. The final paid rank cannot exceed the supplied field size,
+which is required for both manual and model-assisted certification.
 
 ## Model-assisted build inputs
 

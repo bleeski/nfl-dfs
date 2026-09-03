@@ -71,6 +71,54 @@ class SourceArtifact(FrozenModel):
         return value
 
 
+class LedgerEntry(FrozenModel):
+    artifact_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    path: str = Field(min_length=1)
+    source_uri: str = Field(min_length=1)
+    captured_at: datetime
+    observed_at: datetime | None = None
+    license_decision: Literal[
+        "OPERATOR_SUPPLIED",
+        "PUBLIC_DOMAIN",
+        "PERMITTED_PUBLIC_API",
+        "PERMITTED_REPOSITORY_LICENSE",
+        "SECONDARY_STATUS_ONLY",
+    ]
+    parser_version: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
+
+    @field_validator("captured_at", "observed_at")
+    @classmethod
+    def ledger_timezone_required(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("ledger timestamps must be timezone-aware")
+        return value
+
+
+class SourceLedger(FrozenModel):
+    schema_version: Literal["nfl_source_ledger_v1"]
+    entries: tuple[LedgerEntry, ...] = Field(min_length=1)
+    derived: dict[str, str]
+
+    @field_validator("derived")
+    @classmethod
+    def valid_derived_hashes(cls, value: dict[str, str]) -> dict[str, str]:
+        if not value:
+            raise ValueError("derived hashes must not be empty")
+        for name, digest in value.items():
+            if not name or not isinstance(digest, str) or len(digest) != 64:
+                raise ValueError("derived hashes must use named lowercase SHA-256 values")
+            if any(character not in "0123456789abcdef" for character in digest):
+                raise ValueError("derived hashes must use named lowercase SHA-256 values")
+        return value
+
+    @model_validator(mode="after")
+    def unique_entries(self) -> "SourceLedger":
+        artifact_ids = [entry.artifact_id for entry in self.entries]
+        if len(set(artifact_ids)) != len(artifact_ids):
+            raise ValueError("source ledger artifact IDs must be unique")
+        return self
+
+
 class EvidenceRecord(FrozenModel):
     subject: str
     field: str

@@ -4,7 +4,9 @@
 
 - The red-team revision has replaced the prior `plan.md`.
 - All five supplied DraftKings/rules artifacts are preserved byte-for-byte with
-  a checked SHA-256 manifest. Both critiques remain preserved.
+  a checked SHA-256 manifest. Repository attributes now disable text conversion
+  for byte-sensitive CSV, workbook, and supplied-fixture paths. Both critiques
+  remain preserved.
 - `nfl.ps1` provides setup, guided run, intake, validation, build,
   certification, audit, late-swap audit, settlement capture, learning gates,
   and tests through one Windows launcher.
@@ -23,28 +25,50 @@
 - Classic and Showdown salary contracts enforce exact IDs, geometry, salary
   cap, underlying-person identity, distinct CPT/FLEX IDs, and exact 1.5x Captain
   salary/scoring behavior.
+- One build/certification package is deliberately limited to one Contest ID and
+  one entry fee. Mixed-contest exports fail closed until per-contest economics
+  and allocation are implemented.
 - Payouts enforce contiguous paid ranks, monotonic tiers, advertised-value
-  reconciliation, cash/ticket distinction, and exact tied-rank division.
+  reconciliation, finite values, field-size bounds, cash/ticket distinction,
+  and exact tied-rank division.
 - Manual assignments can be independently validated and exported into only the
   blank, authorized Entry-ID rows. Untouched lines preserve their exact bytes,
   including original BOM state. The final CSV is reparsed and SHA-256 bound.
 - Hard evidence is typed and fail-closed. Current official status uses exact IDs
-  and operator-controlled source evidence; fuzzy names cannot certify.
+  and operator-controlled source evidence; fuzzy names cannot certify. Official
+  activity rows retain their real observation times and expire after the
+  registered three-hour lock window. Market/weather rows are bounded,
+  enumerated, source-ledger-bound, and expire after six hours.
+- Model-assisted certification requires `PASS` opportunity evidence for every
+  modeled salary-pool player, because all of them can affect the simulated
+  field and ranks. The build report is bound to the exact salary, entry,
+  payout, team, and player input hashes plus the contest parameters; a report
+  from a different build cannot clear certification.
 - The live model path uses explicit opportunity inputs, deterministic team-share
   conservation, a vectorized heavy-tailed simulator, separate DESIGN/SELECT/
   REFEREE banks, direct persistent HiGHS MILPs, candidate-family coverage,
   cold ownership stress states, complete legal opponent lineups with
   multiplicities, exact duplication/ties, and contest-aware portfolio metrics.
+  Multiple reserved entries are settled against one another as well as against
+  the simulated opponent field.
 - The field evaluator retains no field-by-scenario matrix. Full candidate banks
-  are reduced before scenario/economics arrays are retained.
-- REFEREE is report-only and can block on a sign or safety disagreement; it does
-  not tune or reselect.
+  are reduced before scenario/economics arrays are retained. Candidate and field
+  scores use the same float64 gather/sum path, ranks are vectorized, and divided
+  payouts use a vectorized cumulative prize table.
+- Quantitative QA is executed after selection, persisted in the build report,
+  and hash-bound into certification. REFEREE remains report-only in the sense
+  that it cannot tune or reselect, but its independent confidence-aware sign or
+  safety disagreement is a binding promotion blocker. Solver proof is persisted.
+- Exact one-to-three-entry search is exhaustive only inside an explicit bounded
+  shortlist (maximum 50,000 combinations); combinations are evaluated in
+  vectorized batches and the effective search size is reported.
 - The five-sheet workbook is a generated Cowork review artifact and remains a
   separate staged-input/timestamped-output design for the manual fallback; it
   detects Excel locks and renders cleanly.
-- SQLite registry, Parquet scenario storage, rolling-origin challenger fitting,
-  model promotion tiers, multi-slate rollback rules, standings capture, and
-  locked-cell late-swap audit are implemented.
+- Parquet scenario storage, rolling-origin challenger fitting, model promotion
+  tiers, multi-slate rollback rules, standings capture, and locked-cell late-swap
+  audit are implemented. The SQLite registry and lifecycle transition guard are
+  library components exercised by tests but are not yet wired into live runs.
 
 ## Deliberately diagnostic or externally gated
 
@@ -71,6 +95,13 @@
 - Late swap currently provides exact locked-cell reachability/audit. A calibrated
   joint conditional contest-state reoptimizer remains gated on live standings,
   ownership, scores, and validated remaining-game models.
+- Runtime scenario defaults and certification deadlines come from
+  `config/runtime.json`; hard-evidence requirements come from
+  `config/evidence_policy.json`; `config/scoring.json` is validated against the
+  executable salary-cap and Captain rules before a build or certification.
+- Exposure envelopes, historical pair-dependence bands, and material
+  ownership/market sensitivity thresholds are not yet registered inputs. The
+  active QA pass leaves those triggers unasserted instead of inventing limits.
 - Weekly rolling-origin fitting, promotion, influence caps, and rollback logic
   are implemented, but automatic deployment correctly has nothing eligible to
   promote before settled-slate history accumulates.

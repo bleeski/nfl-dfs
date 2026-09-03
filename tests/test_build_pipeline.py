@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
-from nfl_dfs.cli import command_build
+import pytest
+
+from nfl_dfs.cli import _certify, command_build
+from nfl_dfs.hashing import sha256_file
+from nfl_dfs.lineups import read_assignment_csv
+from nfl_dfs.workbook import create_operator_input_workbook
 
 from .conftest import FIXTURE_ROOT
 
@@ -88,7 +95,7 @@ def test_reduced_end_to_end_design_select_referee_build(
     team_path, player_path = _write_model_inputs(tmp_path, classic_slate)
     payout = tmp_path / "payouts.csv"
     payout.write_text(
-        "rank_start,rank_end,prize_type,value\n1,1,CASH,10\n2,100,CASH,1\n",
+        "rank_start,rank_end,prize_type,value\n1,1,TICKET,2\n2,100,CASH,1\n",
         encoding="utf-8",
     )
     args = argparse.Namespace(
@@ -99,10 +106,10 @@ def test_reduced_end_to_end_design_select_referee_build(
         team_projections=str(team_path),
         player_opportunities=str(player_path),
         payouts=str(payout),
-        advertised_prize_value=109.0,
-        ticket_face_value=None,
+        advertised_prize_value=199.0,
+        ticket_face_value=50.0,
         field_size=100,
-        objective="SMALL_GPP",
+        objective="SATELLITE",
         ownership_brackets=None,
         design_scenarios=20,
         select_scenarios=25,
@@ -118,6 +125,8 @@ def test_reduced_end_to_end_design_select_referee_build(
         output_dir=str(tmp_path / "outputs"),
     )
     assert command_build(args) == 0
+    with pytest.raises(RuntimeError, match="immutable run_id"):
+        command_build(args)
     output = tmp_path / "outputs" / "reduced-build"
     report = output / "build_reduced-build.json"
     assert report.exists()
@@ -125,5 +134,122 @@ def test_reduced_end_to_end_design_select_referee_build(
     assert '"DESIGN": 20' in text
     assert '"SELECT": 25' in text
     assert '"REFEREE": 25' in text
-    assert '"report_only": true' in text
+    assert '"binding": true' in text
+    assert '"quantitative_qa"' in text
+    assert '"solver_proof"' in text
     assert (output / "assignments_reduced-build.csv").exists()
+
+    assignments_path = output / "assignments_reduced-build.csv"
+    assignments = read_assignment_csv(assignments_path, classic_slate.mode)
+    by_id = {player.dk_id: player for player in classic_slate.players}
+    statuses = tmp_path / "official.csv"
+    with statuses.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["TEAM", "PLAYER_OR_GSIS_ID", "STATUS", "SOURCE_URL", "OBSERVED_AT"])
+        for dk_id in sorted({dk_id for roster in assignments.values() for dk_id in roster}):
+            writer.writerow(
+                [
+                    by_id[dk_id].team,
+                    dk_id,
+                    "ACTIVE",
+                    "https://official.example/status",
+                    datetime.now(timezone.utc).isoformat(),
+                ]
+            )
+    source_ledger = tmp_path / "source-ledger.json"
+    source_ledger.write_text('{"schema":"test"}\n', encoding="utf-8")
+    staged = create_operator_input_workbook(tmp_path / "staged.xlsx")
+    certify_args = argparse.Namespace(
+        salaries=str(FIXTURE_ROOT / "DKSalaries Salary CSV Classic.csv"),
+        entries=str(classic_entries.path),
+        run_id="reduced-build",
+        label="test",
+        assignments=str(assignments_path),
+        payouts=str(payout),
+        advertised_prize_value=199.0,
+        ticket_face_value=50.0,
+        field_size=100,
+        objective="SATELLITE",
+        official_statuses=str(statuses),
+        team_projections=str(team_path),
+        player_opportunities=str(player_path),
+        source_ledger=str(source_ledger),
+        build_report=str(report),
+        manual_guardrail=False,
+        output_dir=str(tmp_path / "outputs"),
+        staged_workbook=str(staged),
+    )
+    code, certification = _certify(certify_args)
+    assert code == 2 and certification["status"] == "DO_NOT_UPLOAD"
+    assert any(
+        blocker.startswith("SOURCE_LEDGER_INVALID:")
+        for blocker in certification["blockers"]
+    )
+    manifest = json.loads(Path(certification["manifest"]).read_text(encoding="utf-8"))
+    assert manifest["solver_proof"]["milp_candidate_count"] == 8
+    assert manifest["input_hashes"]["assignments"] == json.loads(text)["assignment_sha256"]
+    assert {item["field"] for item in manifest["evidence"]} >= {
+        "player_opportunity_evidence",
+        "quantitative_qa",
+        "referee_review",
+    }
+
+    source_artifact = tmp_path / "frozen-source.json"
+    source_artifact.write_text('{"players": []}\n', encoding="utf-8")
+    valid_ledger = tmp_path / "valid-source-ledger.json"
+    valid_ledger.write_text(
+        json.dumps(
+            {
+                "schema_version": "nfl_source_ledger_v1",
+                "entries": [
+                    {
+                        "artifact_id": sha256_file(source_artifact),
+                        "path": source_artifact.name,
+                        "source_uri": "https://api.sleeper.app/v1/players/nfl",
+                        "captured_at": datetime.now(timezone.utc).isoformat(),
+                        "observed_at": datetime.now(timezone.utc).isoformat(),
+                        "license_decision": "SECONDARY_STATUS_ONLY",
+                        "parser_version": "sleeper_players_v1",
+                    }
+                ],
+                "derived": {
+                    "team_projections": sha256_file(team_path),
+                    "player_opportunities": sha256_file(player_path),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    valid_report = json.loads(report.read_text(encoding="utf-8"))
+    valid_report["run_id"] = "valid-ledger"
+    valid_report_path = tmp_path / "valid-ledger-build.json"
+    valid_report_path.write_text(json.dumps(valid_report), encoding="utf-8")
+    valid_args = argparse.Namespace(
+        **{
+            **vars(certify_args),
+            "run_id": "valid-ledger",
+            "source_ledger": str(valid_ledger),
+            "build_report": str(valid_report_path),
+        }
+    )
+    _, valid_certification = _certify(valid_args)
+    assert not any(
+        blocker.startswith("SOURCE_LEDGER_")
+        for blocker in valid_certification["blockers"]
+    )
+
+    tampered_report = json.loads(report.read_text(encoding="utf-8"))
+    tampered_report["run_id"] = "tampered-build"
+    tampered_report["input_hashes"]["salary"] = "0" * 64
+    tampered_path = tmp_path / "tampered-build.json"
+    tampered_path.write_text(json.dumps(tampered_report), encoding="utf-8")
+    tampered_args = argparse.Namespace(
+        **{
+            **vars(certify_args),
+            "run_id": "tampered-build",
+            "build_report": str(tampered_path),
+        }
+    )
+    tampered_code, tampered = _certify(tampered_args)
+    assert tampered_code == 2
+    assert "BUILD_INPUT_HASH_MISMATCH" in tampered["blockers"]

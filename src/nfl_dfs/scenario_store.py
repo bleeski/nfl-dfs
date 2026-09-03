@@ -27,6 +27,8 @@ def save_scenario_bank(result: SimulationResult, directory: str | Path) -> dict[
     }
     table = table.replace_schema_metadata(metadata)
     path = target_dir / f"{result.purpose.lower()}_{result.seed}_{len(result.weights)}.parquet"
+    if path.exists():
+        raise FileExistsError(f"scenario bank already exists and is immutable: {path}")
     pq.write_table(table, path, compression="zstd", use_dictionary=False)
     return {
         "path": str(path),

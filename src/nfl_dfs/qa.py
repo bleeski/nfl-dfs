@@ -39,8 +39,9 @@ def audit_selected_portfolio(
     robust_supported_keys: Iterable[str] = (),
     sensitivity_changed: bool = False,
     solver_gap: float | None = None,
+    solver_gap_required: bool = True,
     maximum_solver_gap: float = 0.01,
-    final_byte_match: bool = True,
+    final_byte_match: bool | None = None,
 ) -> tuple[QAFinding, ...]:
     selected = tuple(lineups)
     findings: list[QAFinding] = []
@@ -66,7 +67,8 @@ def audit_selected_portfolio(
                     )
                 )
     for record in evidence:
-        if record.hard_gate and record.state not in {
+        current_state = record.state_at()
+        if record.hard_gate and current_state not in {
             EvidenceState.PASS,
             EvidenceState.NOT_APPLICABLE,
             EvidenceState.NOT_YET_DUE,
@@ -75,7 +77,7 @@ def audit_selected_portfolio(
                 QAFinding(
                     "HARD_EVIDENCE_NOT_PASS",
                     "CRITICAL",
-                    record.state.value,
+                    current_state.value,
                     EvidenceState.PASS.value,
                     f"{record.subject}.{record.field}: {record.reason}",
                     True,
@@ -160,7 +162,7 @@ def audit_selected_portfolio(
                 True,
             )
         )
-    if solver_gap is None or solver_gap > maximum_solver_gap:
+    if solver_gap_required and (solver_gap is None or solver_gap > maximum_solver_gap):
         findings.append(
             QAFinding(
                 "SOLVER_PROOF_OUTSIDE_LIMIT",
@@ -171,7 +173,7 @@ def audit_selected_portfolio(
                 True,
             )
         )
-    if not final_byte_match:
+    if final_byte_match is False:
         findings.append(
             QAFinding(
                 "FINAL_BYTE_MISMATCH",

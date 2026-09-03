@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from nfl_dfs.contracts import EngineMode
-from nfl_dfs.dk import DraftKingsParseError, reconcile_template
+from nfl_dfs.dk import DraftKingsParseError, parse_salaries, reconcile_template
 from nfl_dfs.hashing import sha256_file
 
 from .conftest import FIXTURE_ROOT
@@ -48,3 +49,13 @@ def test_supplied_showdown_contract(showdown_slate) -> None:
 def test_classic_template_rejected_for_showdown(showdown_slate, classic_entries) -> None:
     with pytest.raises(DraftKingsParseError, match="template is CLASSIC"):
         reconcile_template(classic_entries, showdown_slate)
+
+
+def test_short_salary_row_fails_with_a_contract_error(tmp_path: Path) -> None:
+    path = tmp_path / "short.csv"
+    path.write_text(
+        "Position,Name,ID,Roster Position,Salary,Game Info,TeamAbbrev,AvgPointsPerGame,Status\nQB\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(DraftKingsParseError, match="short salary row 2"):
+        parse_salaries(path)

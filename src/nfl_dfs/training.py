@@ -31,6 +31,8 @@ def rolling_origin_splits(
     validation_size: int,
 ) -> tuple[tuple[np.ndarray, np.ndarray], ...]:
     values = list(timestamps)
+    if minimum_train < 1 or validation_size < 1:
+        raise ValueError("rolling-origin train and validation sizes must be positive")
     if any(value.tzinfo is None for value in values):
         raise ValueError("rolling-origin timestamps must be timezone-aware")
     order = np.argsort(np.array([value.timestamp() for value in values]))
@@ -62,6 +64,12 @@ def fit_weekly_ridge_challenger(
     outcome_times = list(outcome_at)
     if x.ndim != 2 or len(x) != len(y) or len(y) != len(feature_times) or len(y) != len(outcome_times):
         raise ValueError("training arrays are not aligned")
+    if not np.isfinite(x).all() or not np.isfinite(y).all():
+        raise ValueError("training features and targets must be finite")
+    if not alpha_grid or any(not np.isfinite(alpha) or alpha <= 0 for alpha in alpha_grid):
+        raise ValueError("alpha_grid must contain positive finite values")
+    if any(value.tzinfo is None for value in feature_times + outcome_times):
+        raise ValueError("training timestamps must be timezone-aware")
     leakage_free = all(feature <= outcome for feature, outcome in zip(feature_times, outcome_times, strict=True))
     if not leakage_free:
         raise ValueError("feature timestamp occurs after its outcome")

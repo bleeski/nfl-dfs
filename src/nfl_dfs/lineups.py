@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from .byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 from .contracts import EngineMode, Lineup, SalaryPlayer, SlateContract
 from .dk import CLASSIC_COLUMNS, SHOWDOWN_COLUMNS, EntryTemplate
 from .hashing import content_hash
@@ -131,13 +132,12 @@ def write_upload_bytes(
         extra = sorted(set(assignments).difference(authorized))
         raise LineupValidationError(f"assignment authorization mismatch: missing={missing}, extra={extra}")
     raw = template.path.read_bytes()
-    text = raw.decode(template.encoding)
-    lines = text.splitlines(keepends=True)
-    output: list[str] = []
+    lines = split_byte_lines(raw)
+    output: list[bytes] = []
     found: set[str] = set()
     for line_number, line in enumerate(lines, start=1):
-        ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
-        body = line[: -len(ending)] if ending else line
+        body_bytes, ending_bytes = split_line_ending(line)
+        body = body_bytes.decode(template.encoding)
         row = next(csv.reader([body]))
         entry_id = row[0].strip() if row else ""
         if entry_id not in assignments:
@@ -150,17 +150,32 @@ def write_upload_bytes(
             raise LineupValidationError(
                 f"Entry {entry_id} has prefilled cells; automatic replacement is not authorized"
             )
-        needed = 4 + len(template.roster_columns)
-        if len(row) < needed:
-            row.extend([""] * (needed - len(row)))
-        row[4:needed] = list(assignments[entry_id])
-        buffer = io.StringIO(newline="")
-        csv.writer(buffer, lineterminator=ending or "\r\n").writerow(row)
-        output.append(buffer.getvalue())
+        roster_start = template.roster_start_index
+        needed = roster_start + len(template.roster_columns)
+        spans = csv_field_spans(body_bytes)
+        if len(row) < needed or len(spans) < needed:
+            raise LineupValidationError(
+                f"Entry {entry_id} source row is narrower than the roster geometry"
+            )
+        output_encoding = "utf-8" if template.encoding == "utf-8-sig" else template.encoding
+        replacements: dict[int, bytes] = {}
+        for index, value in enumerate(assignments[entry_id], start=roster_start):
+            buffer = io.StringIO(newline="")
+            csv.writer(buffer, lineterminator="").writerow([value])
+            replacements[index] = buffer.getvalue().encode(output_encoding)
+        rewritten: list[bytes] = []
+        cursor = 0
+        for index, (start, end) in enumerate(spans):
+            rewritten.append(body_bytes[cursor:start])
+            rewritten.append(replacements.get(index, body_bytes[start:end]))
+            cursor = end
+        rewritten.append(body_bytes[cursor:])
+        rewritten.append(ending_bytes)
+        output.append(b"".join(rewritten))
         found.add(entry_id)
     if found != set(assignments):
         raise LineupValidationError("not all authorized Entry IDs were found in source bytes")
-    return "".join(output).encode(template.encoding)
+    return b"".join(output)
 
 
 def assignment_hash(assignments: Mapping[str, tuple[str, ...]]) -> str:

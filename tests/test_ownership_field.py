@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from nfl_dfs.field import generate_opponent_field, scale_field_multiplicities
-from nfl_dfs.ownership import cold_start_states, ownership_roster_total
+from nfl_dfs.ownership import OwnershipBracket, cold_start_states, ownership_roster_total
 
 
 def test_cold_ownership_normalizes_to_roster_and_field_is_legal(classic_slate) -> None:
@@ -22,3 +22,12 @@ def test_cold_ownership_normalizes_to_roster_and_field_is_legal(classic_slate) -
     assert sum(lineup.multiplicity for lineup in field) == 20
     scaled = scale_field_multiplicities(field, 1_000)
     assert sum(lineup.multiplicity for lineup in scaled) == 1_000
+
+
+@pytest.mark.parametrize(
+    "values",
+    [(-0.1, 0.1, 0.2), (0.2, 0.1, 0.3), (0.1, 0.2, 1.1)],
+)
+def test_ownership_brackets_are_ordered_decimal_percentages(values) -> None:
+    with pytest.raises(ValueError, match="0 <= LOW"):
+        OwnershipBracket(*values)

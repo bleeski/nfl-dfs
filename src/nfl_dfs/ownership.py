@@ -14,6 +14,15 @@ class OwnershipBracket:
     base: float
     high: float
 
+    def __post_init__(self) -> None:
+        values = (self.low, self.base, self.high)
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("ownership bracket values must be finite")
+        if not 0.0 <= self.low <= self.base <= self.high <= 1.0:
+            raise ValueError(
+                "ownership bracket must satisfy 0 <= LOW <= BASE <= HIGH <= 1"
+            )
+
 
 @dataclass(frozen=True)
 class OwnershipState:

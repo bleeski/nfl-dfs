@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+# DraftKings inputs, frozen evidence, and Office artifacts are byte-sensitive.
+*.csv -text
+*.xlsx -text
+tests/fixtures/supplied/** -text whitespace=cr-at-eol

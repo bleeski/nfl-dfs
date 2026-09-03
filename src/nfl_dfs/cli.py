@@ -4,11 +4,13 @@ import argparse
 import csv
 import json
 import os
+import re
 import shutil
 import sys
 import time
+import traceback
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -26,12 +28,20 @@ from .contracts import (
 from .cowork import (
     CoworkRunRequest,
     PATH_FIELDS,
+    confine_request_path,
     required_next_inputs,
     resolve_request_inputs,
 )
-from .dk import EntryTemplate, parse_entries, parse_salaries, reconcile_template
+from .dk import (
+    EntryTemplate,
+    parse_entries,
+    parse_salaries,
+    reconcile_template,
+    require_single_contest,
+    single_contest_problems,
+)
 from .economics import evaluate_candidates_against_field
-from .evidence import parse_official_inactives
+from .evidence import EvidenceError, parse_official_inactive_snapshot, validate_source_ledger
 from .field import generate_opponent_field, scale_field_multiplicities
 from .hashing import content_hash, sha256_file
 from .late_swap import audit_late_swap
@@ -41,9 +51,8 @@ from .opportunity import load_opportunity_model
 from .optimizer import generate_candidates
 from .ownership import OwnershipBracket, cold_start_states
 from .payouts import parse_payout_csv, validate_payout_tiers
-from .portfolio import select_portfolio
-from .portfolio import evaluate_portfolio
-from .qa import QAFinding, referee_blocks
+from .portfolio import evaluate_portfolio, portfolio_net_samples, select_portfolio
+from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .scenario_store import save_scenario_bank
 from .settlement import parse_standings, require_entry_coverage
 from .simulation import lineup_score_matrix, simulate_factor_bank
@@ -63,10 +72,102 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_STAGED_WORKBOOK = PROJECT_ROOT / "operator_input.xlsx"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs"
 DEFAULT_RUNS_DIR = PROJECT_ROOT / "data" / "runs"
+RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
 
 
 def _print_json(value: object) -> None:
     print(json.dumps(value, indent=2, sort_keys=True, default=str))
+
+
+def _load_config(name: str) -> dict[str, object]:
+    path = PROJECT_ROOT / "config" / name
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must contain a JSON object")
+    return value
+
+
+def _validate_scoring_config(slate) -> None:
+    config = _load_config("scoring.json")
+    expected = {
+        "schema_version": slate.scoring_version,
+        "salary_cap": slate.salary_cap,
+        "captain_salary_multiplier": 1.5,
+        "captain_scoring_multiplier": 1.5,
+    }
+    for key, value in expected.items():
+        if config.get(key) != value:
+            raise ValueError(
+                f"scoring.json {key}={config.get(key)!r} conflicts with runtime {value!r}"
+            )
+
+
+def _certification_policy(slate, manual_guardrail: bool) -> tuple[tuple[str, ...], float]:
+    evidence = _load_config("evidence_policy.json")
+    hard_fields = evidence.get("hard_fields")
+    model_fields = evidence.get("model_assisted_hard_fields", [])
+    if not isinstance(hard_fields, list) or not all(
+        isinstance(value, str) for value in hard_fields
+    ):
+        raise ValueError("evidence_policy.json hard_fields must be a string list")
+    if not isinstance(model_fields, list) or not all(
+        isinstance(value, str) for value in model_fields
+    ):
+        raise ValueError(
+            "evidence_policy.json model_assisted_hard_fields must be a string list"
+        )
+    baseline_minimum = {
+        "salary_pool",
+        "entry_authorization",
+        "payout_contract",
+        "official_inactive_status",
+        "weather_if_required",
+        "market_line",
+        "final_bytes",
+    }
+    model_minimum = {
+        "player_opportunity_evidence",
+        "quantitative_qa",
+        "referee_review",
+    }
+    if not baseline_minimum.issubset(hard_fields):
+        raise ValueError("evidence policy cannot remove baseline hard fields")
+    if not model_minimum.issubset(model_fields):
+        raise ValueError("evidence policy cannot remove model-assisted hard fields")
+    required = [value for value in hard_fields if value != "final_bytes"]
+    if not manual_guardrail:
+        required.extend(model_fields)
+    if len(set(required)) != len(required):
+        raise ValueError("evidence policy contains duplicate hard fields")
+    runtime = _load_config("runtime.json")
+    runtime_key = "showdown" if slate.mode is EngineMode.SHOWDOWN else "classic"
+    profile = runtime.get(runtime_key)
+    if not isinstance(profile, dict):
+        raise ValueError(f"runtime.json {runtime_key} profile is missing")
+    deadline = profile.get("certification_seconds")
+    if (
+        isinstance(deadline, bool)
+        or not isinstance(deadline, (int, float))
+        or not np.isfinite(deadline)
+        or not 0 < deadline <= 120
+    ):
+        raise ValueError("runtime.json certification_seconds must be in (0,120]")
+    return tuple(required), float(deadline)
+
+
+def _runtime_scenario_defaults(slate) -> tuple[int, int, int]:
+    runtime = _load_config("runtime.json")
+    key = "showdown" if slate.mode is EngineMode.SHOWDOWN else "classic"
+    profile = runtime.get(key)
+    if not isinstance(profile, dict):
+        raise ValueError(f"runtime.json {key} profile is missing")
+    values = tuple(
+        profile.get(name)
+        for name in ("design_scenarios", "select_scenarios", "referee_scenarios")
+    )
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 1 for value in values):
+        raise ValueError(f"runtime.json {key} scenario counts must be positive integers")
+    return values
 
 
 def _run_id(label: str = "run") -> str:
@@ -75,24 +176,53 @@ def _run_id(label: str = "run") -> str:
     return f"{stamp}-{cleaned[:40] or 'run'}"
 
 
-def _snapshot_basename(path: str | Path) -> str:
-    name = Path(path).name
-    prefix, separator, remainder = name.partition("_")
-    if separator and len(prefix) == 64 and all(character in "0123456789abcdef" for character in prefix):
-        return remainder
-    return name
+def _resolved_run_id(value: str | None, label: str) -> str:
+    run_id = value or _run_id(label)
+    if not RUN_ID_PATTERN.fullmatch(run_id):
+        raise ValueError(
+            "run_id must be 1-80 ASCII letters, digits, hyphens, or underscores "
+            "and must begin with a letter or digit"
+        )
+    return run_id
 
 
-def _snapshot_inputs(run_id: str, paths: Iterable[str | Path]) -> dict[str, str]:
+def _snapshot_filename(path: str | Path, digest: str) -> str:
+    """Keep full content identity without inheriting unsafe attachment-name length."""
+    suffix = Path(path).suffix.lower()
+    if len(suffix) > 10 or any(not (character.isalnum() or character == ".") for character in suffix):
+        suffix = ""
+    return f"{digest}{suffix}"
+
+
+def _snapshot_inputs(
+    run_id: str,
+    paths: Iterable[str | Path],
+    *,
+    allowed_roots: Iterable[str | Path] | None = None,
+    allowed_files: Iterable[str | Path] = (),
+) -> dict[str, str]:
     input_dir = DEFAULT_RUNS_DIR / run_id / "inputs"
+    if input_dir.exists():
+        raise ValueError(
+            f"run_id already exists and immutable snapshots will not be overwritten: {run_id}"
+        )
     input_dir.mkdir(parents=True, exist_ok=False)
     hashes: dict[str, str] = {}
     for path_value in dict.fromkeys(str(Path(path).resolve()) for path in paths):
-        source = Path(path_value).resolve()
+        source = (
+            confine_request_path(
+                path_value,
+                allowed_roots=allowed_roots,
+                allowed_files=allowed_files,
+                field_name="snapshot input",
+            )
+            if allowed_roots is not None
+            else Path(path_value).resolve()
+        )
         if not source.is_file():
             raise FileNotFoundError(source)
         digest = sha256_file(source)
-        target = input_dir / f"{digest}_{_snapshot_basename(source)}"
+        target = input_dir / _snapshot_filename(source, digest)
         shutil.copyfile(source, target)
         if sha256_file(target) != digest:
             raise RuntimeError(f"snapshot hash mismatch for {source}")
@@ -101,7 +231,7 @@ def _snapshot_inputs(run_id: str, paths: Iterable[str | Path]) -> dict[str, str]
 
 
 def _snapshot_path(run_id: str, source: str | Path, digest: str) -> Path:
-    return DEFAULT_RUNS_DIR / run_id / "inputs" / f"{digest}_{_snapshot_basename(source)}"
+    return DEFAULT_RUNS_DIR / run_id / "inputs" / _snapshot_filename(source, digest)
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -125,10 +255,53 @@ def _base_evidence(
     slate_hash: str,
     entries_hash: str,
     payout_path: str | Path,
+    payout_hash: str | None = None,
     manual_guardrail: bool,
     model_input_hash: str | None,
+    model=None,
+    source_ledger_validated: bool = False,
+    market_freshness_window: timedelta = timedelta(hours=6),
 ) -> list[EvidenceRecord]:
     now = datetime.now(timezone.utc)
+    market_observed_at: datetime | None = None
+    market_expires_at: datetime | None = None
+    model_state = EvidenceState.NOT_APPLICABLE if manual_guardrail else EvidenceState.UNKNOWN
+    market_reason = "manual legality guardrail makes no projection or market claim"
+    weather_reason = "manual legality guardrail makes no model or weather claim"
+    market_value = None
+    weather_value = None
+    if not manual_guardrail and model is not None and model_input_hash:
+        observations = [
+            datetime.fromisoformat(team.market_observed_at.replace("Z", "+00:00"))
+            for team in model.teams
+        ]
+        market_observed_at = min(observations)
+        market_expires_at = market_observed_at + market_freshness_window
+        if any(observed > now + timedelta(minutes=5) for observed in observations):
+            model_state = EvidenceState.CONFLICTED
+            reason_prefix = "market/weather observations include a future timestamp"
+        elif now > market_expires_at:
+            model_state = EvidenceState.STALE
+            reason_prefix = "market/weather observations exceed the registered freshness window"
+        else:
+            model_state = EvidenceState.PASS
+            reason_prefix = "bounded timestamped model inputs passed deterministic validation"
+        market_value = {
+            team.team: {
+                "total": team.market_total,
+                "spread": team.market_spread,
+                "observed_at": team.market_observed_at,
+            }
+            for team in model.teams
+        }
+        weather_value = {team.team: team.weather_state for team in model.teams}
+        ledger_reason = (
+            "strict source ledger contract and derived hashes validated"
+            if source_ledger_validated
+            else "source ledger is missing or invalid"
+        )
+        market_reason = f"{reason_prefix}; {ledger_reason}"
+        weather_reason = f"{reason_prefix}; weather states use model inputs whose {ledger_reason}"
     return [
         EvidenceRecord(
             subject="slate",
@@ -153,8 +326,8 @@ def _base_evidence(
         EvidenceRecord(
             subject="contest",
             field="payout_contract",
-            value=sha256_file(payout_path),
-            source_artifact_id=sha256_file(payout_path),
+            value=payout_hash or sha256_file(payout_path),
+            source_artifact_id=payout_hash or sha256_file(payout_path),
             observed_at=now,
             hard_gate=True,
             state=EvidenceState.PASS,
@@ -163,30 +336,24 @@ def _base_evidence(
         EvidenceRecord(
             subject="slate",
             field="weather_if_required",
-            value=None if manual_guardrail else model_input_hash,
+            value=weather_value,
             source_artifact_id=model_input_hash if not manual_guardrail else None,
-            observed_at=now,
+            observed_at=market_observed_at,
+            expires_at=market_expires_at,
             hard_gate=True,
-            state=EvidenceState.NOT_APPLICABLE if manual_guardrail else EvidenceState.PASS,
-            reason=(
-                "manual legality guardrail makes no model or weather claim"
-                if manual_guardrail
-                else "model input contains explicit weather state"
-            ),
+            state=model_state,
+            reason=weather_reason,
         ),
         EvidenceRecord(
             subject="slate",
             field="market_line",
-            value=None if manual_guardrail else model_input_hash,
+            value=market_value,
             source_artifact_id=model_input_hash if not manual_guardrail else None,
-            observed_at=now,
+            observed_at=market_observed_at,
+            expires_at=market_expires_at,
             hard_gate=True,
-            state=EvidenceState.NOT_APPLICABLE if manual_guardrail else EvidenceState.PASS,
-            reason=(
-                "manual legality guardrail makes no projection or market claim"
-                if manual_guardrail
-                else "team model input contains timestamped manual market lines"
-            ),
+            state=model_state,
+            reason=market_reason,
         ),
     ]
 
@@ -196,8 +363,10 @@ def _official_status_evidence(
     status_path: str | Path | None,
     slate,
     assignments: Mapping[str, tuple[str, ...]],
+    now: datetime | None = None,
+    freshness_window: timedelta = timedelta(hours=3),
 ) -> EvidenceRecord:
-    now = datetime.now(timezone.utc)
+    when = now or datetime.now(timezone.utc)
     selected = {dk_id for roster in assignments.values() for dk_id in roster}
     if not status_path:
         return EvidenceRecord(
@@ -208,27 +377,131 @@ def _official_status_evidence(
             reason="official exact-ID activity evidence was not supplied",
         )
     digest = sha256_file(status_path)
-    statuses, problems = parse_official_inactives(status_path, slate.players)
+    snapshot = parse_official_inactive_snapshot(status_path, slate.players)
+    statuses = snapshot.statuses
+    problems = list(snapshot.problems)
+    if sha256_file(status_path) != digest:
+        problems.append("official status CSV changed while it was being validated")
     missing = sorted(selected.difference(statuses))
     selected_inactive = sorted(dk_id for dk_id in selected if statuses.get(dk_id) == "INACTIVE")
+    observations = [snapshot.observed_at_by_id[dk_id] for dk_id in selected if dk_id in snapshot.observed_at_by_id]
+    oldest_observation = min(observations) if observations else None
+    expires_at = oldest_observation + freshness_window if oldest_observation else None
+    future_ids = sorted(
+        dk_id
+        for dk_id in selected
+        if dk_id in snapshot.observed_at_by_id
+        and snapshot.observed_at_by_id[dk_id] > when + timedelta(minutes=5)
+    )
+    by_id = {player.dk_id: player for player in slate.players}
+    earliest_selected_lock = min(
+        (by_id[dk_id].lock_at for dk_id in selected if dk_id in by_id),
+        default=None,
+    )
+    locked_ids = sorted(
+        dk_id for dk_id in selected if dk_id in by_id and by_id[dk_id].lock_at <= when
+    )
+    post_lock_observations = sorted(
+        dk_id
+        for dk_id in selected
+        if dk_id in by_id
+        and dk_id in snapshot.observed_at_by_id
+        and snapshot.observed_at_by_id[dk_id] > by_id[dk_id].lock_at
+    )
+    lock_window_start = (
+        earliest_selected_lock - freshness_window if earliest_selected_lock else None
+    )
+    stale = bool(
+        oldest_observation
+        and (
+            when > oldest_observation + freshness_window
+            or (lock_window_start is not None and oldest_observation < lock_window_start)
+        )
+    )
     if problems:
         state = EvidenceState.CONFLICTED
         reason = "; ".join(problems)
+    elif future_ids:
+        state = EvidenceState.CONFLICTED
+        reason = f"official status observations are in the future: {future_ids}"
     elif selected_inactive:
         state = EvidenceState.FAIL
         reason = f"selected players are officially inactive: {selected_inactive}"
     elif missing:
         state = EvidenceState.UNKNOWN
         reason = f"selected exact IDs lack current activity evidence: {missing}"
+    elif locked_ids:
+        state = EvidenceState.FAIL
+        reason = f"selected players have already locked: {locked_ids}"
+    elif post_lock_observations:
+        state = EvidenceState.CONFLICTED
+        reason = (
+            "official status observations occur after player lock: "
+            f"{post_lock_observations}"
+        )
+    elif stale:
+        state = EvidenceState.STALE
+        reason = (
+            "official exact-ID activity evidence falls outside the registered "
+            f"{freshness_window.total_seconds() / 3600:g}-hour lock window"
+        )
     else:
         state = EvidenceState.PASS
-        reason = "every selected exact DK ID is source-bound and ACTIVE"
+        reason = "every selected exact DK ID is source-bound, ACTIVE, and current"
     return EvidenceRecord(
         subject="selected_portfolio",
         field="official_inactive_status",
         value={dk_id: statuses.get(dk_id) for dk_id in sorted(selected)},
         source_artifact_id=digest,
-        observed_at=now,
+        observed_at=oldest_observation,
+        expires_at=expires_at,
+        hard_gate=True,
+        state=state,
+        reason=reason,
+    )
+
+
+def _selected_opportunity_evidence(
+    *,
+    model,
+    slate,
+    assignments: Mapping[str, tuple[str, ...]],
+    source_artifact_id: str,
+) -> EvidenceRecord:
+    by_dk_id = {player.dk_id: player for player in slate.players}
+    by_person = {player.underlying_id: player for player in model.players}
+    selected_ids = {
+        dk_id for roster in assignments.values() for dk_id in roster if dk_id in by_dk_id
+    }
+    required_people = {player.underlying_id for player in slate.players}
+    states = {
+        person: by_person[person].evidence_state
+        for person in sorted(required_people)
+        if person in by_person
+    }
+    missing = sorted(required_people.difference(states))
+    non_pass = {person: state for person, state in states.items() if state != "PASS"}
+    if missing:
+        state = EvidenceState.UNKNOWN
+        reason = f"salary-pool players are absent from the opportunity evidence: {missing}"
+    elif any(value == "CONFLICTED" for value in non_pass.values()):
+        state = EvidenceState.CONFLICTED
+        reason = f"modeled opportunity evidence is conflicted: {non_pass}"
+    elif any(value == "STALE" for value in non_pass.values()):
+        state = EvidenceState.STALE
+        reason = f"modeled opportunity evidence is stale: {non_pass}"
+    elif non_pass:
+        state = EvidenceState.UNKNOWN
+        reason = f"modeled opportunity evidence is unknown: {non_pass}"
+    else:
+        state = EvidenceState.PASS
+        reason = "every modeled salary-pool player has PASS opportunity evidence"
+    return EvidenceRecord(
+        subject="selected_portfolio",
+        field="player_opportunity_evidence",
+        value={"selected_dk_ids": sorted(selected_ids), "states_by_person": states},
+        source_artifact_id=source_artifact_id,
+        observed_at=datetime.now(timezone.utc),
         hard_gate=True,
         state=state,
         reason=reason,
@@ -252,8 +525,17 @@ def command_doctor(args: argparse.Namespace) -> int:
 
 def command_setup(args: argparse.Namespace) -> int:
     report = doctor(PROJECT_ROOT)
-    if report.excel_lock_probe == "LOCKED_BY_EXCEL":
-        print("Close operator_input.xlsx in Excel, then run setup again.", file=sys.stderr)
+    if not report.pass_status:
+        _print_json(
+            {
+                "status": "DO_NOT_UPLOAD",
+                "message": (
+                    "Environment doctor failed. Use the pinned Python 3.13.7 runtime, "
+                    "ensure memory and SQLite checks pass, and close operator_input.xlsx."
+                ),
+                "doctor": json.loads(report.to_json()),
+            }
+        )
         return 2
     workbook = create_operator_input_workbook(args.workbook)
     bootstrap = DEFAULT_OUTPUT_DIR / "bootstrap" / "operator_input.xlsx"
@@ -291,20 +573,30 @@ def _intake(
     entries_path: str | Path,
     run_id: str,
     snapshot_paths: Iterable[str | Path] | None = None,
+    snapshot_allowed_roots: Iterable[str | Path] | None = None,
+    snapshot_allowed_files: Iterable[str | Path] = (),
 ) -> tuple[dict[str, object], object, EntryTemplate]:
     slate = parse_salaries(salaries)
     entries = parse_entries(entries_path)
     reconcile_template(entries, slate)
-    hashes = _snapshot_inputs(run_id, snapshot_paths or [salaries, entries_path])
+    contest_problems = single_contest_problems(entries)
+    hashes = _snapshot_inputs(
+        run_id,
+        snapshot_paths or [salaries, entries_path],
+        allowed_roots=snapshot_allowed_roots,
+        allowed_files=snapshot_allowed_files,
+    )
     summary = {
         "run_id": run_id,
-        "state": "RECONCILED",
+        "state": "DO_NOT_UPLOAD" if contest_problems else "RECONCILED",
         "mode": slate.mode.value,
         "salary_players": len(slate.players),
         "underlying_people": len({player.underlying_id for player in slate.players}),
         "teams": len({player.team for player in slate.players}),
         "games": len(slate.games),
         "authorized_entries": len(entries.authorizations),
+        "contest_consistency": "PASS" if not contest_problems else "FAIL",
+        "contest_problems": contest_problems,
         "hashes": hashes,
         "next": "Supply payouts, exact-ID official statuses, and assignments or model inputs.",
     }
@@ -313,23 +605,26 @@ def _intake(
 
 
 def command_intake(args: argparse.Namespace) -> int:
-    run_id = args.run_id or _run_id(args.label)
+    run_id = _resolved_run_id(args.run_id, args.label)
     summary, _, _ = _intake(
         salaries=args.salaries,
         entries_path=args.entries,
         run_id=run_id,
     )
     _print_json(summary)
-    return 0
+    return 0 if not summary["contest_problems"] else 2
 
 
 def command_validate(args: argparse.Namespace) -> int:
     slate = parse_salaries(args.salaries)
     template = parse_entries(args.entries)
     reconcile_template(template, slate)
+    assignment_digest = sha256_file(args.assignments)
     assignments = read_assignment_csv(args.assignments, slate.mode)
+    if sha256_file(args.assignments) != assignment_digest:
+        raise RuntimeError("assignment CSV changed while it was being validated")
     authorized = {entry.entry_id for entry in template.authorizations}
-    problems: list[str] = []
+    problems: list[str] = list(single_contest_problems(template))
     if set(assignments) != authorized:
         problems.append("assignment Entry IDs do not exactly match reserved entries")
     for entry_id, roster in assignments.items():
@@ -347,17 +642,35 @@ def command_validate(args: argparse.Namespace) -> int:
 
 
 def _certify(args: argparse.Namespace) -> tuple[int, object]:
-    run_id = args.run_id or _run_id(args.label)
+    run_id = _resolved_run_id(args.run_id, args.label)
     slate = parse_salaries(args.salaries)
+    _validate_scoring_config(slate)
+    required_hard_fields, certification_deadline = _certification_policy(
+        slate, args.manual_guardrail
+    )
     template = parse_entries(args.entries)
     reconcile_template(template, slate)
+    assignment_digest = sha256_file(args.assignments)
     assignments = read_assignment_csv(args.assignments, slate.mode)
-    tiers = parse_payout_csv(args.payouts)
+    if sha256_file(args.assignments) != assignment_digest:
+        raise RuntimeError("assignment CSV changed while it was being validated")
+    field_size = getattr(args, "field_size", None)
+    if field_size is None:
+        raise ValueError("field size is required for certification")
+    objective = ContestObjective(getattr(args, "objective", ContestObjective.LARGE_GPP.value))
+    payout_digest = sha256_file(args.payouts)
+    tiers = parse_payout_csv(
+        args.payouts, ticket_face_value=getattr(args, "ticket_face_value", None)
+    )
     validate_payout_tiers(
         tiers,
         advertised_value=args.advertised_prize_value,
         ticket_face_value=args.ticket_face_value,
+        field_size=field_size,
+        reserved_entry_count=len(template.authorizations),
     )
+    if sha256_file(args.payouts) != payout_digest:
+        raise RuntimeError("payout CSV changed while it was being validated")
     model_paths = {
         "team_projection_input": getattr(args, "team_projections", None),
         "player_opportunity_input": getattr(args, "player_opportunities", None),
@@ -369,12 +682,170 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
         if path
     }
     model_hash = content_hash(model_hashes) if model_hashes else None
+    precertification_evidence: list[EvidenceRecord] = []
+    precertification_findings: tuple[QAFinding, ...] = ()
+    certification_blockers: list[str] = []
+    solver_proof: Mapping[str, object] = {}
+    portfolio_metrics: Mapping[str, float | str] | None = None
+    build_report_value = getattr(args, "build_report", None)
+    certification_model = None
+    source_ledger_validated = False
+    if not args.manual_guardrail:
+        if not getattr(args, "team_projections", None) or not getattr(
+            args, "player_opportunities", None
+        ):
+            certification_blockers.append("MODEL_INPUTS_REQUIRED_FOR_CERTIFICATION")
+        else:
+            certification_model = load_opportunity_model(
+                slate,
+                args.team_projections,
+                args.player_opportunities,
+            )
+            for name in ("team_projection_input", "player_opportunity_input"):
+                path = model_paths[name]
+                if path and sha256_file(path) != model_hashes[name]:
+                    certification_blockers.append(
+                        f"{name.upper()}_CHANGED_DURING_VALIDATION"
+                    )
+        if not getattr(args, "source_ledger", None):
+            certification_blockers.append("SOURCE_LEDGER_REQUIRED_FOR_CERTIFICATION")
+        elif model_hashes.get("team_projection_input") and model_hashes.get(
+            "player_opportunity_input"
+        ):
+            try:
+                validate_source_ledger(
+                    args.source_ledger,
+                    expected_outputs={
+                        "team_projections": model_hashes["team_projection_input"],
+                        "player_opportunities": model_hashes["player_opportunity_input"],
+                    },
+                )
+                source_ledger_validated = True
+            except EvidenceError as exc:
+                certification_blockers.append(f"SOURCE_LEDGER_INVALID:{exc}")
+    if not args.manual_guardrail:
+        if not build_report_value:
+            certification_blockers.append("MISSING_BUILD_QA_REPORT")
+        else:
+            build_report_path = Path(build_report_value).resolve()
+            build_digest = sha256_file(build_report_path)
+            build_report = json.loads(build_report_path.read_text(encoding="utf-8"))
+            if build_report.get("run_id") != run_id:
+                certification_blockers.append("BUILD_REPORT_RUN_ID_MISMATCH")
+            if build_report.get("assignment_sha256") != assignment_digest:
+                certification_blockers.append("BUILD_ASSIGNMENT_HASH_MISMATCH")
+            expected_build_hashes = {
+                "salary": slate.salary_hash,
+                "entries": template.raw_hash,
+                "payouts": payout_digest,
+                "team_projections": model_hashes.get("team_projection_input"),
+                "player_opportunities": model_hashes.get("player_opportunity_input"),
+            }
+            if build_report.get("input_hashes") != expected_build_hashes:
+                certification_blockers.append("BUILD_INPUT_HASH_MISMATCH")
+            expected_contest = {
+                "field_size": field_size,
+                "objective": objective.value,
+                "advertised_prize_value": args.advertised_prize_value,
+                "ticket_face_value": args.ticket_face_value,
+            }
+            if build_report.get("contest_parameters") != expected_contest:
+                certification_blockers.append("BUILD_CONTEST_PARAMETER_MISMATCH")
+            raw_findings = build_report.get("precertification_findings", [])
+            if not isinstance(raw_findings, list):
+                certification_blockers.append("BUILD_QA_FINDINGS_INVALID")
+                raw_findings = []
+            try:
+                precertification_findings = tuple(
+                    QAFinding(
+                        code=str(item["code"]),
+                        severity=str(item["severity"]),
+                        trigger_value=item["trigger_value"],
+                        threshold=item["threshold"],
+                        message=str(item["message"]),
+                        blocking=bool(item["blocking"]),
+                    )
+                    for item in raw_findings
+                )
+            except (KeyError, TypeError, ValueError):
+                certification_blockers.append("BUILD_QA_FINDINGS_INVALID")
+                precertification_findings = ()
+            created_raw = build_report.get("created_at")
+            try:
+                build_observed_at = datetime.fromisoformat(
+                    str(created_raw).replace("Z", "+00:00")
+                )
+                if build_observed_at.tzinfo is None:
+                    raise ValueError
+            except ValueError:
+                build_observed_at = datetime.now(timezone.utc)
+                certification_blockers.append("BUILD_REPORT_TIMESTAMP_INVALID")
+            quantitative = build_report.get("quantitative_qa", {})
+            qa_blocked = bool(quantitative.get("blocked", True))
+            parsed_qa_blocked = any(
+                finding.blocking and not finding.code.startswith("REFEREE_")
+                for finding in precertification_findings
+            )
+            if qa_blocked != parsed_qa_blocked:
+                certification_blockers.append("BUILD_QA_SUMMARY_MISMATCH")
+                qa_blocked = True
+            referee = build_report.get("referee", {})
+            referee_blocked = bool(referee.get("blocked", True))
+            parsed_referee_blocked = any(
+                finding.blocking and finding.code.startswith("REFEREE_")
+                for finding in precertification_findings
+            )
+            if (
+                referee.get("binding") is not True
+                or referee_blocked != parsed_referee_blocked
+            ):
+                certification_blockers.append("BUILD_REFEREE_SUMMARY_MISMATCH")
+                referee_blocked = True
+            precertification_evidence.extend(
+                (
+                    EvidenceRecord(
+                        subject=run_id,
+                        field="quantitative_qa",
+                        value=quantitative,
+                        source_artifact_id=build_digest,
+                        observed_at=build_observed_at,
+                        hard_gate=True,
+                        state=EvidenceState.FAIL if qa_blocked else EvidenceState.PASS,
+                        reason=(
+                            "registered quantitative QA has blocking findings"
+                            if qa_blocked
+                            else "registered quantitative QA completed without blocking findings"
+                        ),
+                    ),
+                    EvidenceRecord(
+                        subject=run_id,
+                        field="referee_review",
+                        value=referee,
+                        source_artifact_id=build_digest,
+                        observed_at=build_observed_at,
+                        hard_gate=True,
+                        state=EvidenceState.FAIL if referee_blocked else EvidenceState.PASS,
+                        reason=str(referee.get("reason", "REFEREE_REPORT_MISSING")),
+                    ),
+                )
+            )
+            solver_value = build_report.get("solver_proof", {})
+            if isinstance(solver_value, dict):
+                solver_proof = solver_value
+            else:
+                certification_blockers.append("BUILD_SOLVER_PROOF_INVALID")
+            portfolio_value = build_report.get("portfolio")
+            if isinstance(portfolio_value, dict):
+                portfolio_metrics = portfolio_value
     evidence = _base_evidence(
         slate_hash=slate.salary_hash,
         entries_hash=template.raw_hash,
         payout_path=args.payouts,
+        payout_hash=payout_digest,
         manual_guardrail=args.manual_guardrail,
         model_input_hash=model_hash,
+        model=certification_model,
+        source_ledger_validated=source_ledger_validated,
     )
     evidence.append(
         _official_status_evidence(
@@ -383,6 +854,25 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
             assignments=assignments,
         )
     )
+    if certification_model is not None and model_hashes.get("player_opportunity_input"):
+        evidence.append(
+            _selected_opportunity_evidence(
+                model=certification_model,
+                slate=slate,
+                assignments=assignments,
+                source_artifact_id=model_hashes["player_opportunity_input"],
+            )
+        )
+    evidence.extend(precertification_evidence)
+    if sha256_file(args.salaries) != slate.salary_hash:
+        certification_blockers.append("SALARY_INPUT_CHANGED_DURING_CERTIFICATION")
+    if sha256_file(args.entries) != template.raw_hash:
+        certification_blockers.append("ENTRY_INPUT_CHANGED_DURING_CERTIFICATION")
+    if sha256_file(args.assignments) != assignment_digest:
+        certification_blockers.append("ASSIGNMENT_INPUT_CHANGED_DURING_CERTIFICATION")
+    for name, path in model_paths.items():
+        if path and sha256_file(path) != model_hashes[name]:
+            certification_blockers.append(f"{name.upper()}_CHANGED_DURING_CERTIFICATION")
     output_dir = Path(args.output_dir).resolve() / run_id
     output_csv = output_dir / f"DK_UPLOAD_{run_id}.csv"
     manifest_path = output_dir / f"DK_UPLOAD_{run_id}.manifest.json"
@@ -399,9 +889,14 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
             for path in (PROJECT_ROOT / "config").glob("*.json")
         },
         model_hashes=model_hashes,
+        additional_input_hashes={"assignments": assignment_digest},
+        solver_proof=solver_proof,
+        additional_blockers=certification_blockers,
+        deadline_seconds=certification_deadline,
+        required_hard_fields=required_hard_fields,
     )
     lineups = _validated_lineups(slate, assignments)
-    findings = tuple(
+    findings = precertification_findings + tuple(
         QAFinding(
             code=blocker.split(":", 1)[0],
             severity="CRITICAL",
@@ -422,6 +917,7 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
         lineups=lineups,
         qa_findings=findings,
         manifest=manifest,
+        portfolio_metrics=portfolio_metrics,
     )
     result = {
         "run_id": run_id,
@@ -431,13 +927,37 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
         "manifest": str(manifest_path),
         "review_workbook": str(review),
         "blockers": list(manifest.blockers),
+        "qa_findings": [_finding_dict(finding) for finding in findings],
         "meaning": "Certification covers legality, current evidence, authorization, and exact bytes; it is not an EV claim.",
     }
     return (0 if manifest.status == "CERTIFIED" else 2), result
 
 
 def command_certify(args: argparse.Namespace) -> int:
-    code, result = _certify(args)
+    try:
+        code, result = _certify(args)
+    except Exception as exc:
+        run_id = _resolved_run_id(args.run_id, args.label)
+        output_root = Path(args.output_dir).resolve() / run_id
+        upload_path = output_root / f"DK_UPLOAD_{run_id}.csv"
+        upload_path.unlink(missing_ok=True)
+        diagnostic_path = output_root / "certification_diagnostic.json"
+        try:
+            _write_json(
+                diagnostic_path,
+                {
+                    "run_id": run_id,
+                    "status": "DO_NOT_UPLOAD",
+                    "stage": "CERTIFICATION_FAILED",
+                    "error": type(exc).__name__,
+                    "message": str(exc),
+                    "traceback": traceback.format_exc(),
+                    "upload_csv": None,
+                },
+            )
+        except OSError:
+            pass
+        raise
     _print_json(result)
     return code
 
@@ -456,38 +976,163 @@ def _projection_scores(slate, simulations) -> tuple[dict[str, float], dict[str, 
     return mean_by_id, p90_by_id
 
 
-def _read_brackets(path: str | Path | None) -> dict[str, OwnershipBracket]:
+def _read_brackets(
+    path: str | Path | None,
+    *,
+    valid_ids: Iterable[str] | None = None,
+) -> dict[str, OwnershipBracket]:
     if not path:
         return {}
     with Path(path).open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         if tuple(reader.fieldnames or ()) != ("DK_ID", "LOW", "BASE", "HIGH"):
             raise ValueError("ownership bracket CSV must be DK_ID,LOW,BASE,HIGH")
-        return {
-            row["DK_ID"].strip(): OwnershipBracket(
-                float(row["LOW"]), float(row["BASE"]), float(row["HIGH"])
-            )
-            for row in reader
-            if row["DK_ID"].strip()
-        }
+        allowed = set(valid_ids) if valid_ids is not None else None
+        brackets: dict[str, OwnershipBracket] = {}
+        for row_number, row in enumerate(reader, start=2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f"ownership bracket row {row_number} has missing or extra cells")
+            dk_id = row["DK_ID"].strip()
+            if not dk_id:
+                continue
+            if dk_id in brackets:
+                raise ValueError(f"duplicate ownership bracket DK_ID: {dk_id}")
+            if allowed is not None and dk_id not in allowed:
+                raise ValueError(f"ownership bracket DK_ID is not in the salary pool: {dk_id}")
+            try:
+                brackets[dk_id] = OwnershipBracket(
+                    float(row["LOW"]), float(row["BASE"]), float(row["HIGH"])
+                )
+            except ValueError as exc:
+                raise ValueError(f"ownership bracket row {row_number}: {exc}") from exc
+        return brackets
+
+
+def _finding_dict(finding: QAFinding) -> dict[str, object]:
+    return {
+        "code": finding.code,
+        "severity": finding.severity,
+        "trigger_value": finding.trigger_value,
+        "threshold": finding.threshold,
+        "message": finding.message,
+        "blocking": finding.blocking,
+    }
+
+
+def _weighted_salary_left_range(slate, fields_by_state) -> tuple[float, float] | None:
+    values: list[int] = []
+    weights: list[int] = []
+    for field in fields_by_state.values():
+        for field_lineup in field:
+            validation = validate_lineup(slate, field_lineup.roster)
+            if validation.valid and validation.lineup is not None:
+                values.append(slate.salary_cap - validation.lineup.salary)
+                weights.append(field_lineup.multiplicity)
+    if not values:
+        return None
+    expanded = np.repeat(np.asarray(values, dtype=np.int32), np.asarray(weights, dtype=np.int32))
+    return float(np.quantile(expanded, 0.05)), float(np.quantile(expanded, 0.95))
+
+
+def _referee_uncertainty(
+    *,
+    select_economics,
+    select_indices: tuple[int, ...],
+    referee_economics,
+    referee_indices: tuple[int, ...],
+    entry_fee: float,
+) -> float:
+    select_net = portfolio_net_samples(
+        select_economics,
+        select_indices,
+        entry_fee=entry_fee,
+    )
+    referee_net = portfolio_net_samples(
+        referee_economics,
+        referee_indices,
+        entry_fee=entry_fee,
+    )
+    select_variance = float(select_net.var(ddof=1)) if len(select_net) > 1 else 0.0
+    referee_variance = float(referee_net.var(ddof=1)) if len(referee_net) > 1 else 0.0
+    standard_error = np.sqrt(
+        select_variance / max(len(select_net), 1)
+        + referee_variance / max(len(referee_net), 1)
+    )
+    return float(1.96 * standard_error)
 
 
 def command_build(args: argparse.Namespace) -> int:
     started = time.perf_counter()
-    run_id = args.run_id or _run_id(args.label)
+    run_id = _resolved_run_id(args.run_id, args.label)
+    output_dir = Path(args.output_dir).resolve() / run_id
+    immutable_targets = (
+        output_dir / f"assignments_{run_id}.csv",
+        output_dir / f"build_{run_id}.json",
+        output_dir / "scenarios",
+    )
+    if any(path.exists() for path in immutable_targets):
+        raise RuntimeError(
+            f"build outputs already exist for immutable run_id {run_id}; use a new run_id"
+        )
     slate = parse_salaries(args.salaries)
+    _validate_scoring_config(slate)
     entries = parse_entries(args.entries)
     reconcile_template(entries, slate)
+    require_single_contest(entries)
+    if args.field_size <= len(entries.authorizations):
+        raise ValueError(
+            "field size must exceed the reserved entry count for opponent-field modeling"
+        )
+    for name in (
+        "design_objectives",
+        "candidates",
+        "milp_seed_candidates",
+        "field_sample_size",
+        "field_chunk_size",
+        "shortlist_limit",
+    ):
+        if getattr(args, name) < 1:
+            raise ValueError(f"{name} must be positive")
+    for name in ("design_scenarios", "select_scenarios", "referee_scenarios"):
+        value = getattr(args, name)
+        if value is not None and value < 1:
+            raise ValueError(f"{name} must be positive when supplied")
+    if not np.isfinite(args.per_solve_seconds) or args.per_solve_seconds <= 0:
+        raise ValueError("per_solve_seconds must be positive")
+    input_hashes = {
+        "salary": slate.salary_hash,
+        "entries": entries.raw_hash,
+        "payouts": sha256_file(args.payouts),
+        "team_projections": sha256_file(args.team_projections),
+        "player_opportunities": sha256_file(args.player_opportunities),
+    }
     model = load_opportunity_model(slate, args.team_projections, args.player_opportunities)
-    tiers = parse_payout_csv(args.payouts)
+    for name, path in (
+        ("salary", args.salaries),
+        ("entries", args.entries),
+        ("team_projections", args.team_projections),
+        ("player_opportunities", args.player_opportunities),
+    ):
+        if sha256_file(path) != input_hashes[name]:
+            raise RuntimeError(f"{name} input changed while it was being validated")
+    tiers = parse_payout_csv(
+        args.payouts, ticket_face_value=getattr(args, "ticket_face_value", None)
+    )
     validate_payout_tiers(
         tiers,
         advertised_value=args.advertised_prize_value,
         ticket_face_value=args.ticket_face_value,
+        field_size=args.field_size,
+        reserved_entry_count=len(entries.authorizations),
     )
-    design_count = args.design_scenarios or (20_000 if slate.mode is EngineMode.SHOWDOWN else 10_000)
-    select_count = args.select_scenarios or (50_000 if slate.mode is EngineMode.SHOWDOWN else 20_000)
-    referee_count = args.referee_scenarios or (50_000 if slate.mode is EngineMode.SHOWDOWN else 20_000)
+    if sha256_file(args.payouts) != input_hashes["payouts"]:
+        raise RuntimeError("payout input changed while it was being validated")
+    default_design, default_select, default_referee = _runtime_scenario_defaults(slate)
+    design_count = args.design_scenarios if args.design_scenarios is not None else default_design
+    select_count = args.select_scenarios if args.select_scenarios is not None else default_select
+    referee_count = (
+        args.referee_scenarios if args.referee_scenarios is not None else default_referee
+    )
     design_simulations = simulate_factor_bank(
         slate,
         model,
@@ -540,7 +1185,10 @@ def command_build(args: argparse.Namespace) -> int:
     candidate_rosters = [result.roster for result in solved if result.roster is not None]
     if len(candidate_rosters) < len(entries.authorizations):
         raise RuntimeError("candidate bank is too small for the reserved entries")
-    brackets = _read_brackets(args.ownership_brackets)
+    brackets = _read_brackets(
+        args.ownership_brackets,
+        valid_ids=(player.dk_id for player in slate.players),
+    )
     team_total = {team.team: team.market_total for team in model.teams}
     states = cold_start_states(slate, select_mean_scores, team_total, brackets)
     seen_rosters = set(candidate_rosters)
@@ -619,7 +1267,6 @@ def command_build(args: argparse.Namespace) -> int:
             strict=True,
         )
     }
-    output_dir = Path(args.output_dir).resolve() / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
     scenario_artifacts = {
         result.purpose: save_scenario_bank(result, output_dir / "scenarios")
@@ -645,13 +1292,118 @@ def command_build(args: argparse.Namespace) -> int:
         field_size=actual_field_size,
         objective=ContestObjective(args.objective),
     )
+    referee_uncertainty = _referee_uncertainty(
+        select_economics=state_economics[metrics.worst_state],
+        select_indices=metrics.candidate_indices,
+        referee_economics=referee_economics[referee_metrics.worst_state],
+        referee_indices=tuple(range(len(selected_rosters))),
+        entry_fee=entries.authorizations[0].entry_fee,
+    )
+
+    selected_lineups_by_entry = _validated_lineups(slate, assignments)
+    selected_lineups = tuple(selected_lineups_by_entry.values())
+    duplicate_p95: dict[str, float] = {}
+    divided_payout_p95: dict[str, float] = {}
+    for lineup, candidate_index in zip(
+        selected_lineups,
+        metrics.candidate_indices,
+        strict=True,
+    ):
+        duplicate_p95[lineup.canonical_key] = float(
+            np.quantile(
+                [
+                    float(economics.duplicate_counts[candidate_index])
+                    for economics in state_economics.values()
+                ],
+                0.95,
+            )
+        )
+        divided_payout_p95[lineup.canonical_key] = min(
+            float(np.quantile(economics.gross_payout[:, candidate_index], 0.95))
+            for economics in state_economics.values()
+        )
+
+    solved_by_roster = {
+        result.roster: result for result in solved if result.roster is not None
+    }
+    selected_solver_results = [
+        solved_by_roster[roster] for roster in selected_rosters if roster in solved_by_roster
+    ]
+    selected_solver_gap = (
+        max(
+            (result.mip_gap for result in selected_solver_results if result.mip_gap is not None),
+            default=None,
+        )
+        if selected_solver_results
+        else None
+    )
+    selected_solver_gap_complete = all(
+        result.mip_gap is not None for result in selected_solver_results
+    )
+    if selected_solver_results and not selected_solver_gap_complete:
+        selected_solver_gap = None
+
+    def run_registered_audit() -> tuple[QAFinding, ...]:
+        return audit_selected_portfolio(
+            slate=slate,
+            lineups=selected_lineups,
+            evidence=(),
+            duplicate_p95=duplicate_p95,
+            divided_payout_p95=divided_payout_p95,
+            entry_fee=entries.authorizations[0].entry_fee,
+            salary_left_field_range=_weighted_salary_left_range(slate, fields_by_state),
+            solver_gap=selected_solver_gap,
+            solver_gap_required=bool(selected_solver_results),
+            final_byte_match=None,
+        )
+
+    qa_history = run_three_pass_audit(run_registered_audit, lambda _findings: False)
+    generated_findings: list[QAFinding] = []
+    if not coverage.pass_status:
+        generated_findings.append(
+            QAFinding(
+                code="CANDIDATE_FAMILY_COVERAGE_INCOMPLETE",
+                severity="CRITICAL",
+                trigger_value=", ".join(coverage.missing_registered_families),
+                threshold="all registered candidate families represented",
+                message="candidate generation omitted one or more registered construction families",
+                blocking=True,
+            )
+        )
+    for simulations in (design_simulations, select_simulations, referee_simulations):
+        for diagnostic in ("passing_receiving_accounting", "share_conservation"):
+            value = simulations.diagnostics.get(diagnostic)
+            if value != 1.0:
+                generated_findings.append(
+                    QAFinding(
+                        code=f"{simulations.purpose}_{diagnostic.upper()}_FAILED",
+                        severity="CRITICAL",
+                        trigger_value="MISSING" if value is None else value,
+                        threshold=1.0,
+                        message="scenario-bank accounting diagnostics did not pass",
+                        blocking=True,
+                    )
+                )
+    qa_findings = tuple(qa_history[-1] if qa_history else ()) + tuple(generated_findings)
+    qa_blocked = any(finding.blocking for finding in qa_findings)
     referee_blocked, referee_reason = referee_blocks(
-        select_net_delta=metrics.robust_net_payout_lcb,
-        referee_net_delta=referee_metrics.robust_net_payout_lcb,
-        uncertainty=0.0,
-        safety_failure=False,
+        select_net_delta=metrics.expected_net_payout,
+        referee_net_delta=referee_metrics.expected_net_payout,
+        uncertainty=referee_uncertainty,
+        safety_failure=qa_blocked,
         hard_constraint_failure=False,
     )
+    referee_finding = (
+        QAFinding(
+            code=referee_reason,
+            severity="CRITICAL",
+            trigger_value=referee_metrics.expected_net_payout,
+            threshold=f"same sign as SELECT outside +/-{referee_uncertainty:.6f}",
+            message="independent REFEREE bank blocks promotion",
+            blocking=True,
+        ),
+    ) if referee_blocked else ()
+    precertification_findings = tuple(qa_findings) + referee_finding
     assignment_path = output_dir / f"assignments_{run_id}.csv"
     headers = ("Entry ID",) + (
         ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
@@ -663,12 +1415,58 @@ def command_build(args: argparse.Namespace) -> int:
         writer.writerow(headers)
         for entry_id in sorted(assignments):
             writer.writerow((entry_id, *assignments[entry_id]))
+    solver_proof = {
+        "milp_candidate_count": len(solved),
+        "milp_statuses": {
+            status: sum(result.status == status for result in solved)
+            for status in sorted({result.status for result in solved})
+        },
+        "maximum_mip_gap": max(
+            (result.mip_gap for result in solved if result.mip_gap is not None),
+            default=None,
+        ),
+        "maximum_node_count": max(
+            (result.node_count for result in solved if result.node_count is not None),
+            default=None,
+        ),
+        "selected_candidate_sources": [
+            "MILP" if roster in solved_by_roster else "LEGAL_FIELD_SAMPLER"
+            for roster in selected_rosters
+        ],
+        "selected_mip_gaps": [
+            solved_by_roster[roster].mip_gap if roster in solved_by_roster else None
+            for roster in selected_rosters
+        ],
+    }
+    bracket_normalization_deltas = {
+        dk_id: {
+            state.name: state.ownership[dk_id]
+            - {
+                "CHALK_FADE": bracket.low,
+                "BASE": bracket.base,
+                "CHALK_SURGE": bracket.high,
+                "LATE_VALUE_SURGE": bracket.high,
+                "SHARP_FIELD": bracket.base,
+            }[state.name]
+            for state in states
+        }
+        for dk_id, bracket in brackets.items()
+    }
     elapsed = time.perf_counter() - started
     report = {
         "run_id": run_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "DIAGNOSTIC_ASSIGNMENTS_READY_DO_NOT_UPLOAD",
         "label": "COLD_START_FIELD_MODEL",
         "assignments": str(assignment_path),
+        "assignment_sha256": sha256_file(assignment_path),
+        "input_hashes": input_hashes,
+        "contest_parameters": {
+            "field_size": args.field_size,
+            "objective": ContestObjective(args.objective).value,
+            "advertised_prize_value": args.advertised_prize_value,
+            "ticket_face_value": args.ticket_face_value,
+        },
         "candidate_count": len(candidate_rosters),
         "milp_seed_candidate_count": len(solved),
         "economics_shortlist_count": len(economics_rosters),
@@ -688,13 +1486,26 @@ def command_build(args: argparse.Namespace) -> int:
             for key, value in metrics.__dict__.items()
             if key != "candidate_indices"
         },
+        "quantitative_qa": {
+            "pass_count": len(qa_history),
+            "repair_attempted": False,
+            "blocked": qa_blocked,
+            "findings": [_finding_dict(finding) for finding in qa_findings],
+        },
         "referee": {
             "blocked": referee_blocked,
             "reason": referee_reason,
             "robust_net_payout_lcb": referee_metrics.robust_net_payout_lcb,
+            "expected_net_payout": referee_metrics.expected_net_payout,
             "elite_probability": referee_metrics.elite_probability,
-            "report_only": True,
+            "uncertainty_95": referee_uncertainty,
+            "binding": True,
         },
+        "precertification_findings": [
+            _finding_dict(finding) for finding in precertification_findings
+        ],
+        "solver_proof": solver_proof,
+        "ownership_bracket_normalization_deltas": bracket_normalization_deltas,
         "candidate_indices": list(metrics.candidate_indices),
         "elapsed_seconds": elapsed,
         "memory_limit_bytes": live_memory_limit(),
@@ -833,22 +1644,43 @@ def _cowork_core_blockers(request: CoworkRunRequest) -> tuple[str, ...]:
     )
 
 
-def command_cowork_run(args: argparse.Namespace) -> int:
+def _command_cowork_run(args: argparse.Namespace) -> int:
+    request_roots: list[Path] = [(PROJECT_ROOT / "data").resolve()]
+    if args.input_dir:
+        request_roots.append(Path(args.input_dir).resolve())
+    if args.request:
+        request_source = Path(args.request).resolve()
+        possible_run_root = request_source.parent
+        if (
+            possible_run_root.parent == DEFAULT_RUNS_DIR.resolve()
+            and RUN_ID_PATTERN.fullmatch(possible_run_root.name)
+        ):
+            request_roots.append(possible_run_root)
+        confine_request_path(
+            request_source,
+            allowed_roots=request_roots,
+            field_name="request",
+        )
     requested = (
-        CoworkRunRequest.from_json(args.request)
+        CoworkRunRequest.from_json(args.request, allowed_roots=request_roots)
         if args.request
         else CoworkRunRequest(label=args.label or "slate")
     )
     if args.label:
         requested = replace(requested, label=args.label)
+    run_id = _resolved_run_id(args.run_id, requested.label)
+    args._resolved_cowork_run_id = run_id
+    request_roots.append((DEFAULT_RUNS_DIR / run_id).resolve())
+    if requested.input_dir:
+        request_roots.append(Path(requested.input_dir).resolve())
     request, unclassified = resolve_request_inputs(
         requested,
         input_dir=args.input_dir,
         salary_csv=args.salaries,
         entry_csv=args.entries,
+        allowed_roots=request_roots,
     )
     ContestObjective(request.objective)
-    run_id = args.run_id or _run_id(request.label)
     source_paths = [
         value
         for name in PATH_FIELDS
@@ -859,6 +1691,12 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         entries_path=request.entry_csv or "",
         run_id=run_id,
         snapshot_paths=source_paths,
+        snapshot_allowed_roots=request_roots,
+        snapshot_allowed_files=tuple(
+            Path(path).resolve()
+            for path in (args.salaries, args.entries)
+            if path
+        ),
     )
     snapshotted = _snapshot_cowork_request(request, run_id, intake["hashes"])
     request_path = DEFAULT_RUNS_DIR / run_id / "run_request.json"
@@ -871,6 +1709,8 @@ def command_cowork_run(args: argparse.Namespace) -> int:
     )
     doctor_report = doctor(PROJECT_ROOT)
     blockers = list(required_next_inputs(snapshotted))
+    contest_problems = list(single_contest_problems(entries))
+    blockers[0:0] = contest_problems
     if not doctor_report.pass_status:
         blockers.insert(
             0,
@@ -880,7 +1720,7 @@ def command_cowork_run(args: argparse.Namespace) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     report_path = output_root / "cowork_run.json"
 
-    if not doctor_report.pass_status or _cowork_core_blockers(snapshotted):
+    if not doctor_report.pass_status or contest_problems or _cowork_core_blockers(snapshotted):
         review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
         create_cowork_status_workbook(
             output_path=review_path,
@@ -958,10 +1798,13 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         payouts=snapshotted.payout_csv,
         advertised_prize_value=snapshotted.advertised_prize_value,
         ticket_face_value=snapshotted.ticket_face_value,
+        field_size=snapshotted.field_size,
+        objective=snapshotted.objective,
         official_statuses=snapshotted.official_status_csv,
         team_projections=snapshotted.team_projection_csv,
         player_opportunities=snapshotted.player_opportunity_csv,
         source_ledger=snapshotted.source_ledger_json,
+        build_report=str(build_report_path) if build_report_path else None,
         manual_guardrail=False if model_assisted else snapshotted.manual_guardrail,
         output_dir=str(Path(args.output_dir).resolve()),
         staged_workbook=str(staged_workbook),
@@ -988,6 +1831,75 @@ def command_cowork_run(args: argparse.Namespace) -> int:
     _write_json(report_path, result)
     _print_json(result)
     return code
+
+
+def command_cowork_run(args: argparse.Namespace) -> int:
+    try:
+        return _command_cowork_run(args)
+    except Exception as exc:
+        label = args.label or "slate"
+        if args.request:
+            try:
+                raw_request = json.loads(Path(args.request).read_text(encoding="utf-8"))
+                if isinstance(raw_request, dict) and isinstance(raw_request.get("label"), str):
+                    label = raw_request["label"]
+            except (OSError, json.JSONDecodeError):
+                pass
+        run_id = getattr(args, "_resolved_cowork_run_id", None) or _resolved_run_id(
+            args.run_id, label
+        )
+        intake_path = DEFAULT_RUNS_DIR / run_id / "intake.json"
+        if not intake_path.is_file():
+            raise
+        try:
+            intake = json.loads(intake_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            intake = {"run_id": run_id, "hashes": {}}
+
+        output_base = Path(args.output_dir).resolve()
+        output_root = (output_base / run_id).resolve()
+        if not output_root.is_relative_to(output_base):
+            raise RuntimeError("Cowork output run path escaped the supplied output directory") from exc
+        removed_uploads: list[str] = []
+        if output_root.is_dir():
+            for upload_path in output_root.glob("DK_UPLOAD_*.csv"):
+                upload_path.unlink(missing_ok=True)
+                removed_uploads.append(str(upload_path))
+
+        diagnostic = {
+            "run_id": run_id,
+            "stage": "BUILD_OR_CERTIFY_FAILED",
+            "error": type(exc).__name__,
+            "message": str(exc),
+            "traceback": traceback.format_exc(),
+            "input_hashes": intake.get("hashes", {}),
+            "removed_uploads": removed_uploads,
+        }
+        diagnostic_path = output_root / "cowork_diagnostic.json"
+        report_path = output_root / "cowork_run.json"
+        result = {
+            "run_id": run_id,
+            "status": "DO_NOT_UPLOAD",
+            "stage": "BUILD_OR_CERTIFY_FAILED",
+            "error": type(exc).__name__,
+            "message": str(exc),
+            "diagnostic": str(diagnostic_path),
+            "request": str(DEFAULT_RUNS_DIR / run_id / "run_request.json"),
+            "input_hashes": intake.get("hashes", {}),
+            "upload_csv": None,
+        }
+        try:
+            _write_json(diagnostic_path, diagnostic)
+            _write_json(report_path, result)
+        except OSError:
+            fallback = DEFAULT_RUNS_DIR / run_id / "cowork_diagnostic.json"
+            try:
+                _write_json(fallback, diagnostic)
+                result["diagnostic"] = str(fallback)
+            except OSError:
+                result["diagnostic"] = None
+        _print_json(result)
+        return 2
 
 
 def command_run(args: argparse.Namespace) -> int:
@@ -1049,7 +1961,13 @@ def command_run(args: argparse.Namespace) -> int:
     field_size = values.get("FIELD_SIZE")
     objective = str(values.get("CONTEST_OBJECTIVE") or "LARGE_GPP")
     manual = str(values.get("MANUAL_GUARDRAIL_MODE") or "YES").upper() == "YES"
-    if assignment_path and payout_path and advertised not in (None, ""):
+    if (
+        assignment_path
+        and payout_path
+        and advertised not in (None, "")
+        and field_size not in (None, "")
+    ):
+        inferred_build_report = Path(assignment_path).resolve().parent / f"build_{run_id}.json"
         certify_args = argparse.Namespace(
             salaries=salaries,
             entries=entries,
@@ -1059,10 +1977,13 @@ def command_run(args: argparse.Namespace) -> int:
             payouts=payout_path,
             advertised_prize_value=float(advertised),
             ticket_face_value=float(ticket_face) if ticket_face not in (None, "") else None,
+            field_size=int(field_size),
+            objective=objective,
             official_statuses=status_path or None,
             team_projections=team_path or None,
             player_opportunities=player_path or None,
             source_ledger=None,
+            build_report=str(inferred_build_report) if inferred_build_report.exists() else None,
             manual_guardrail=manual,
             output_dir=str(DEFAULT_OUTPUT_DIR),
             staged_workbook=str(DEFAULT_STAGED_WORKBOOK),
@@ -1098,7 +2019,12 @@ def command_run(args: argparse.Namespace) -> int:
         return command_build(build_args)
     intake_args = argparse.Namespace(salaries=salaries, entries=entries, run_id=run_id, label=label)
     code = command_intake(intake_args)
-    print("\nIntake passed. Add either ASSIGNMENT_CSV plus payout evidence, or both model-input CSVs plus payout and field-size evidence, then rerun .\\nfl.ps1 run.")
+    if code == 0:
+        print(
+            "\nIntake passed. Add either ASSIGNMENT_CSV plus payout and field-size "
+            "evidence, or both model-input CSVs plus payout and field-size evidence, "
+            "then rerun .\\nfl.ps1 run."
+        )
     return code
 
 
@@ -1115,10 +2041,17 @@ def _add_certify_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--payouts", required=True)
     parser.add_argument("--advertised-prize-value", type=float, required=True)
     parser.add_argument("--ticket-face-value", type=float)
+    parser.add_argument("--field-size", type=int, required=True)
+    parser.add_argument(
+        "--objective",
+        choices=[value.value for value in ContestObjective],
+        default=ContestObjective.LARGE_GPP.value,
+    )
     parser.add_argument("--official-statuses")
     parser.add_argument("--team-projections")
     parser.add_argument("--player-opportunities")
     parser.add_argument("--source-ledger")
+    parser.add_argument("--build-report")
     parser.add_argument("--manual-guardrail", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--staged-workbook", default=str(DEFAULT_STAGED_WORKBOOK))
@@ -1229,10 +2162,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
-    except (ValueError, RuntimeError, FileNotFoundError, WorkbookLockedError) as exc:
+    except Exception as exc:
         _print_json(
             {
                 "status": "DO_NOT_UPLOAD",
+                "stage": "CLI_FAILED",
                 "error": type(exc).__name__,
                 "message": str(exc),
             }
