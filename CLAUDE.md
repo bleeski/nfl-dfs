@@ -15,8 +15,11 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 - Preserve uploaded bytes. Classify files by schema rather than filename,
   hash them, and operate only on immutable snapshots under `data/runs/`.
 - Never overwrite an uploaded file, a filled entry, or an earlier output.
-- Fill only blank roster cells belonging to the exact Entry IDs authorized by
-  the supplied entry template. A Classic/Showdown mismatch is a hard stop.
+- Before lock, fill only blank roster cells belonging to the exact Entry IDs
+  authorized by the supplied entry template. Governed late swap uses its
+  dedicated command and may change only cells independently proven replaceable
+  in a fully prefilled current template. A Classic/Showdown mismatch is a hard
+  stop in either path.
 - DraftKings `AvgPointsPerGame` remains confined to untouched raw bytes. It may
   not influence normalized inputs, projections, candidates, or selection.
 - Numerical projections, joins, simulation, optimization, allocation, QA, and
@@ -74,9 +77,11 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
   contest data, credentials, cookies, or account state.
 - Automated retrieval must obey `src/nfl_dfs/sources.py`. Do not bypass its
   allowlist or prohibited-host rules with a different client.
-- Official activity evidence must include an HTTPS source, timezone-aware
-  observation time, and an exact current-slate DraftKings ID for every selected
-  player. Corroborating sources cannot independently clear this gate.
+- Official activity evidence must include an HTTPS source and timezone-aware
+  observation time. The pre-lock compatibility path uses exact current-slate
+  DraftKings-ID rows; governed late swap requires versioned team-scoped
+  official inactive negative lists. Corroborating sources cannot independently
+  clear either gate.
 - Preserve raw response bytes, hashes, source URLs, observed/captured times,
   parser versions, license decisions, and coverage. A link without captured
   evidence does not become a numerical model input.

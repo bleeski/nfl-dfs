@@ -10,8 +10,16 @@ from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
-from .contracts import EvidenceRecord, EvidenceState, SalaryPlayer, SourceLedger
-from .hashing import sha256_file
+from .contracts import (
+    EvidenceRecord,
+    EvidenceState,
+    LateSwapEligibility,
+    SalaryPlayer,
+    SlateContract,
+    SourceLedger,
+    TeamInactiveReportBundle,
+)
+from .hashing import sha256_bytes, sha256_file
 from .sources import SourcePolicyError, validate_url_policy
 
 
@@ -28,7 +36,10 @@ class InactiveStatusSnapshot:
 
 
 def evaluate_hard_gates(
-    evidence: Iterable[EvidenceRecord], now: datetime | None = None
+    evidence: Iterable[EvidenceRecord],
+    now: datetime | None = None,
+    *,
+    final_release: bool = False,
 ) -> tuple[bool, tuple[str, ...]]:
     when = now or datetime.now(timezone.utc)
     blockers: list[str] = []
@@ -36,11 +47,265 @@ def evaluate_hard_gates(
         if not record.hard_gate:
             continue
         state = record.state_at(when)
-        if state in {EvidenceState.NOT_APPLICABLE, EvidenceState.NOT_YET_DUE}:
+        if state is EvidenceState.NOT_APPLICABLE:
+            continue
+        if state is EvidenceState.NOT_YET_DUE and not final_release:
             continue
         if state is not EvidenceState.PASS:
             blockers.append(f"{record.subject}.{record.field}:{state.value}:{record.reason}")
     return not blockers, tuple(blockers)
+
+
+def _valid_https_source(value: str) -> bool:
+    parsed = urlparse(value)
+    return (
+        parsed.scheme.lower() == "https"
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+    )
+
+
+def late_swap_eligibility_evidence(
+    path: str | Path | None,
+    *,
+    contest_id: str,
+    as_of: datetime,
+) -> EvidenceRecord:
+    if as_of.tzinfo is None:
+        raise EvidenceError("late-swap as_of must be timezone-aware")
+    if not path:
+        return EvidenceRecord(
+            subject=contest_id,
+            field="contest_late_swap_eligibility",
+            hard_gate=True,
+            state=EvidenceState.UNKNOWN,
+            reason="contest-bound late-swap eligibility evidence was not supplied",
+        )
+    evidence_path = Path(path)
+    try:
+        raw = evidence_path.read_bytes()
+        digest = sha256_bytes(raw)
+        contract = LateSwapEligibility.model_validate(json.loads(raw.decode("utf-8-sig")))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
+        return EvidenceRecord(
+            subject=contest_id,
+            field="contest_late_swap_eligibility",
+            hard_gate=True,
+            state=EvidenceState.CONFLICTED,
+            reason=f"invalid eligibility contract: {exc}",
+        )
+    problems: list[str] = []
+    if sha256_file(evidence_path) != digest:
+        problems.append("eligibility evidence changed while it was being validated")
+    if contract.contest_id != contest_id:
+        problems.append(
+            f"eligibility Contest ID {contract.contest_id} does not match {contest_id}"
+        )
+    if not _valid_https_source(contract.source_url):
+        problems.append("eligibility evidence requires a valid HTTPS source URL")
+    observed_at = contract.observed_at.astimezone(timezone.utc)
+    expires_at = contract.expires_at.astimezone(timezone.utc)
+    when = as_of.astimezone(timezone.utc)
+    if observed_at > when:
+        problems.append("eligibility observation is in the future")
+    if problems:
+        state = EvidenceState.CONFLICTED
+        reason = "; ".join(problems)
+    elif contract.evidence_state is not EvidenceState.PASS:
+        state = contract.evidence_state
+        reason = f"eligibility evidence state is {state.value}"
+    elif when > expires_at:
+        state = EvidenceState.STALE
+        reason = "contest late-swap eligibility evidence is stale"
+    elif not contract.bulk_late_swap_eligible:
+        state = EvidenceState.FAIL
+        reason = "the exact contest is not eligible for bulk late swap"
+    else:
+        state = EvidenceState.PASS
+        reason = "the exact Contest ID is source-bound as bulk-late-swap eligible"
+    return EvidenceRecord(
+        subject=contest_id,
+        field="contest_late_swap_eligibility",
+        value={
+            "bulk_late_swap_eligible": contract.bulk_late_swap_eligible,
+            "schema_version": contract.schema_version,
+        },
+        source_artifact_id=digest,
+        source_url=contract.source_url,
+        observed_at=observed_at,
+        expires_at=expires_at,
+        hard_gate=True,
+        state=state,
+        reason=reason,
+    )
+
+
+def team_inactive_report_evidence(
+    path: str | Path | None,
+    *,
+    slate: SlateContract,
+    selected_dk_ids: Iterable[str],
+    as_of: datetime,
+    release_before_lock: timedelta = timedelta(minutes=90),
+) -> EvidenceRecord:
+    if as_of.tzinfo is None:
+        raise EvidenceError("late-swap as_of must be timezone-aware")
+    selected = set(selected_dk_ids)
+    by_id = {player.dk_id: player for player in slate.players}
+    selected_teams = {by_id[dk_id].team for dk_id in selected if dk_id in by_id}
+    if not selected:
+        return EvidenceRecord(
+            subject="selected_unlocked_portfolio",
+            field="official_inactive_status",
+            hard_gate=True,
+            state=EvidenceState.NOT_APPLICABLE,
+            reason="all selected cells are locked and exactly match the certified prior",
+        )
+    if not path:
+        return EvidenceRecord(
+            subject="selected_unlocked_portfolio",
+            field="official_inactive_status",
+            hard_gate=True,
+            state=EvidenceState.UNKNOWN,
+            reason="team-scoped official inactive reports were not supplied",
+        )
+    report_path = Path(path)
+    try:
+        raw = report_path.read_bytes()
+        digest = sha256_bytes(raw)
+        bundle = TeamInactiveReportBundle.model_validate(
+            json.loads(raw.decode("utf-8-sig"))
+        )
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
+        return EvidenceRecord(
+            subject="selected_unlocked_portfolio",
+            field="official_inactive_status",
+            hard_gate=True,
+            state=EvidenceState.CONFLICTED,
+            reason=f"invalid team inactive-report contract: {exc}",
+        )
+
+    problems: list[str] = []
+    if sha256_file(report_path) != digest:
+        problems.append("inactive-report evidence changed while it was being validated")
+    teams = {player.team for player in slate.players}
+    games_by_team = {
+        team: game
+        for game in slate.games
+        for team in (game.away_team, game.home_team)
+    }
+    reports_by_team = {}
+    for report in bundle.reports:
+        if report.team in reports_by_team:
+            problems.append(f"duplicate or conflicting report for team {report.team}")
+            continue
+        reports_by_team[report.team] = report
+        if report.team not in teams:
+            problems.append(f"unknown report team {report.team}")
+            continue
+        game = games_by_team.get(report.team)
+        if game is None or report.game_id != game.game_id:
+            problems.append(f"team/game conflict for report team {report.team}")
+        if not _valid_https_source(report.source_url):
+            problems.append(f"invalid HTTPS source URL for team {report.team}")
+        observed = report.observed_at.astimezone(timezone.utc)
+        when = as_of.astimezone(timezone.utc)
+        if observed > when:
+            problems.append(f"future inactive-report observation for team {report.team}")
+        if game is not None and observed > game.lock_at.astimezone(timezone.utc):
+            problems.append(f"inactive report follows game lock for team {report.team}")
+        for dk_id in report.inactive_dk_ids:
+            player = by_id.get(dk_id)
+            if player is None:
+                problems.append(f"unknown inactive exact DK ID {dk_id}")
+            elif player.team != report.team:
+                problems.append(
+                    f"inactive player/team conflict for {dk_id}: "
+                    f"{player.team} != {report.team}"
+                )
+
+    observations: list[datetime] = []
+    expirations: list[datetime] = []
+    missing_due: list[str] = []
+    not_yet_due: list[str] = []
+    stale_teams: list[str] = []
+    nonpass: dict[str, EvidenceState] = {}
+    inactive_selected: list[str] = []
+    values: dict[str, object] = {}
+    when = as_of.astimezone(timezone.utc)
+    for team in sorted(selected_teams):
+        game = games_by_team[team]
+        due_at = game.lock_at.astimezone(timezone.utc) - release_before_lock
+        report = reports_by_team.get(team)
+        if report is None:
+            (not_yet_due if when < due_at else missing_due).append(team)
+            continue
+        observed = report.observed_at.astimezone(timezone.utc)
+        observations.append(observed)
+        expirations.append(game.lock_at.astimezone(timezone.utc))
+        values[team] = {
+            "game_id": report.game_id,
+            "inactive_dk_ids": list(report.inactive_dk_ids),
+        }
+        if report.evidence_state is not EvidenceState.PASS:
+            nonpass[team] = report.evidence_state
+            continue
+        if when < due_at:
+            not_yet_due.append(team)
+            continue
+        if observed < due_at:
+            stale_teams.append(team)
+            continue
+        inactive = set(report.inactive_dk_ids)
+        inactive_selected.extend(
+            dk_id for dk_id in selected if by_id.get(dk_id) and dk_id in inactive
+        )
+
+    if set(selected).difference(by_id):
+        problems.append(
+            f"selected exact IDs are absent from the salary pool: {sorted(set(selected).difference(by_id))}"
+        )
+    if problems:
+        state = EvidenceState.CONFLICTED
+        reason = "; ".join(problems)
+    elif inactive_selected:
+        state = EvidenceState.FAIL
+        reason = f"selected unlocked players are officially inactive: {sorted(inactive_selected)}"
+    elif any(value is EvidenceState.CONFLICTED for value in nonpass.values()):
+        state = EvidenceState.CONFLICTED
+        reason = f"team inactive reports are conflicted: {nonpass}"
+    elif any(value is EvidenceState.FAIL for value in nonpass.values()):
+        state = EvidenceState.FAIL
+        reason = f"team inactive reports failed verification: {nonpass}"
+    elif stale_teams or any(value is EvidenceState.STALE for value in nonpass.values()):
+        state = EvidenceState.STALE
+        reason = f"team inactive reports are stale: {sorted(stale_teams or nonpass)}"
+    elif missing_due or any(value is EvidenceState.UNKNOWN for value in nonpass.values()):
+        state = EvidenceState.UNKNOWN
+        reason = f"required team inactive reports are missing or unverified: {sorted(missing_due or nonpass)}"
+    elif not_yet_due or any(
+        value is EvidenceState.NOT_YET_DUE for value in nonpass.values()
+    ):
+        state = EvidenceState.NOT_YET_DUE
+        reason = f"official team inactive reports are not yet due: {sorted(not_yet_due or nonpass)}"
+    else:
+        state = EvidenceState.PASS
+        reason = (
+            "every selected unlocked player is absent from a current, verified "
+            "team-scoped official inactive negative list"
+        )
+    return EvidenceRecord(
+        subject="selected_unlocked_portfolio",
+        field="official_inactive_status",
+        value=values,
+        source_artifact_id=digest,
+        observed_at=min(observations) if observations else None,
+        expires_at=min(expirations) if expirations else None,
+        hard_gate=True,
+        state=state,
+        reason=reason,
+    )
 
 
 def validate_source_ledger(
