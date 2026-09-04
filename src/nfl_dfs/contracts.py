@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class FrozenModel(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
 
 
 class EngineMode(StrEnum):
@@ -32,6 +32,29 @@ class EvidenceState(StrEnum):
     CONFLICTED = "CONFLICTED"
     NOT_YET_DUE = "NOT_YET_DUE"
     NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class ReleaseEvidenceState(StrEnum):
+    PASS = "PASS"
+    UNKNOWN = "UNKNOWN"
+    STALE = "STALE"
+    CONFLICTED = "CONFLICTED"
+
+
+class ModelStatus(StrEnum):
+    UNVALIDATED = "UNVALIDATED"
+    PRIOR_ONLY = "PRIOR_ONLY"
+    PROSPECTIVELY_VALIDATED = "PROSPECTIVELY_VALIDATED"
+
+
+class ReleaseDecision(StrEnum):
+    CERTIFIED_UPLOAD_PACKAGE = "CERTIFIED_UPLOAD_PACKAGE"
+    DO_NOT_UPLOAD = "DO_NOT_UPLOAD"
+
+
+class CertificationBasis(StrEnum):
+    MANUAL_GUARDRAIL = "MANUAL_GUARDRAIL"
+    MODEL_ASSISTED = "MODEL_ASSISTED"
 
 
 class WorkflowState(StrEnum):
@@ -280,16 +303,73 @@ class CertificationManifest(FrozenModel):
     manifest_version: Literal["certification_manifest_v1"] = "certification_manifest_v1"
     run_id: str
     status: Literal["CERTIFIED", "DO_NOT_UPLOAD"]
+    file_valid: bool = Field(alias="FILE_VALID")
+    evidence_state: ReleaseEvidenceState = Field(alias="EVIDENCE_STATE")
+    model_status: ModelStatus = Field(alias="MODEL_STATUS")
+    release_decision: ReleaseDecision = Field(alias="RELEASE_DECISION")
+    certification_basis: CertificationBasis = CertificationBasis.MANUAL_GUARDRAIL
     created_at: datetime
     input_hashes: dict[str, str]
     config_hashes: dict[str, str]
     model_hashes: dict[str, str]
     output_path: str | None = None
     output_sha256: str | None = None
+    proposed_output_sha256: str | None = None
+    proposed_output_byte_count: int | None = Field(default=None, ge=0)
     evidence: tuple[EvidenceRecord, ...]
     solver_proof: dict[str, Any] = Field(default_factory=dict)
     runtime: dict[str, float] = Field(default_factory=dict)
+    file_blockers: tuple[str, ...] = ()
+    evidence_blockers: tuple[str, ...] = ()
+    model_blockers: tuple[str, ...] = ()
     blockers: tuple[str, ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def backfill_release_truths(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        result = dict(value)
+        status = result.get("status")
+        certified = status == "CERTIFIED"
+        if "FILE_VALID" not in result and "file_valid" not in result:
+            result["FILE_VALID"] = certified
+        if "EVIDENCE_STATE" not in result and "evidence_state" not in result:
+            result["EVIDENCE_STATE"] = "PASS" if certified else "UNKNOWN"
+        if "MODEL_STATUS" not in result and "model_status" not in result:
+            result["MODEL_STATUS"] = "UNVALIDATED"
+        if "RELEASE_DECISION" not in result and "release_decision" not in result:
+            result["RELEASE_DECISION"] = (
+                "CERTIFIED_UPLOAD_PACKAGE" if certified else "DO_NOT_UPLOAD"
+            )
+        return result
+
+    @model_validator(mode="after")
+    def legacy_status_matches_release_decision(self) -> "CertificationManifest":
+        expected = (
+            "CERTIFIED"
+            if self.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE
+            else "DO_NOT_UPLOAD"
+        )
+        if self.status != expected:
+            raise ValueError("status must be derived from RELEASE_DECISION")
+        if self.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE:
+            if not self.file_valid or self.evidence_state is not ReleaseEvidenceState.PASS:
+                raise ValueError("certified release requires valid file bytes and PASS evidence")
+            if (
+                self.certification_basis is CertificationBasis.MODEL_ASSISTED
+                and self.model_status is not ModelStatus.PROSPECTIVELY_VALIDATED
+            ):
+                raise ValueError(
+                    "model-assisted release requires prospective model validation"
+                )
+            if self.blockers:
+                raise ValueError("certified release cannot contain blockers")
+            if not self.output_path or not self.output_sha256:
+                raise ValueError("certified release requires a persisted hashed output")
+        elif self.output_path or self.output_sha256:
+            raise ValueError("DO_NOT_UPLOAD manifest cannot point to upload bytes")
+        return self
 
 
 class LateSwapEligibility(FrozenModel):
@@ -355,6 +435,11 @@ class LateSwapManifest(FrozenModel):
     run_id: str
     prior_run_id: str | None = None
     status: Literal["CERTIFIED", "DO_NOT_UPLOAD"]
+    file_valid: bool = Field(alias="FILE_VALID")
+    evidence_state: ReleaseEvidenceState = Field(alias="EVIDENCE_STATE")
+    model_status: ModelStatus = Field(alias="MODEL_STATUS")
+    release_decision: ReleaseDecision = Field(alias="RELEASE_DECISION")
+    certification_basis: CertificationBasis = CertificationBasis.MANUAL_GUARDRAIL
     created_at: datetime
     as_of: datetime
     contest_id: str | None = None
@@ -362,7 +447,12 @@ class LateSwapManifest(FrozenModel):
     replaceable_cells: dict[str, tuple[int, ...]] = Field(default_factory=dict)
     output_path: str | None = None
     output_sha256: str | None = None
+    proposed_output_sha256: str | None = None
+    proposed_output_byte_count: int | None = Field(default=None, ge=0)
     evidence: tuple[EvidenceRecord, ...] = ()
+    file_blockers: tuple[str, ...] = ()
+    evidence_blockers: tuple[str, ...] = ()
+    model_blockers: tuple[str, ...] = ()
     blockers: tuple[str, ...] = ()
     next_action: str
     runtime: dict[str, float] = Field(default_factory=dict)
@@ -373,6 +463,33 @@ class LateSwapManifest(FrozenModel):
         if value.tzinfo is None:
             raise ValueError("late-swap timestamps must be timezone-aware")
         return value
+
+    @model_validator(mode="after")
+    def legacy_status_matches_release_decision(self) -> "LateSwapManifest":
+        expected = (
+            "CERTIFIED"
+            if self.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE
+            else "DO_NOT_UPLOAD"
+        )
+        if self.status != expected:
+            raise ValueError("status must be derived from RELEASE_DECISION")
+        if self.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE:
+            if not self.file_valid or self.evidence_state is not ReleaseEvidenceState.PASS:
+                raise ValueError("certified late swap requires valid bytes and PASS evidence")
+            if (
+                self.certification_basis is CertificationBasis.MODEL_ASSISTED
+                and self.model_status is not ModelStatus.PROSPECTIVELY_VALIDATED
+            ):
+                raise ValueError(
+                    "model-assisted late swap requires prospective model validation"
+                )
+            if self.blockers:
+                raise ValueError("certified late swap cannot contain blockers")
+            if not self.output_path or not self.output_sha256:
+                raise ValueError("certified late swap requires a persisted hashed output")
+        elif self.output_path or self.output_sha256:
+            raise ValueError("DO_NOT_UPLOAD late swap cannot point to upload bytes")
+        return self
 
 
 class SettlementBundle(FrozenModel):

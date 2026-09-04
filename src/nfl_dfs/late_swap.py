@@ -13,19 +13,19 @@ from typing import Iterable, Mapping
 from pydantic import ValidationError
 
 from .contracts import (
+    CertificationBasis,
     CertificationManifest,
     EvidenceRecord,
     EvidenceState,
     LateSwapManifest,
     Lineup,
+    ModelStatus,
+    ReleaseDecision,
+    ReleaseEvidenceState,
     SlateContract,
 )
 from .dk import EntryTemplate, parse_entries, parse_entry_bytes, parse_salaries, reconcile_template
-from .evidence import (
-    evaluate_hard_gates,
-    late_swap_eligibility_evidence,
-    team_inactive_report_evidence,
-)
+from .evidence import late_swap_eligibility_evidence, team_inactive_report_evidence
 from .hashing import sha256_bytes, sha256_file
 from .lineups import (
     LateSwapAuthorization,
@@ -35,6 +35,7 @@ from .lineups import (
     write_late_swap_bytes,
 )
 from .referee import audit_late_swap_output_bytes
+from .release import aggregate_evidence_state, derive_release_policy
 
 
 @dataclass(frozen=True)
@@ -361,11 +362,18 @@ def govern_late_swap(
     }
     input_hashes: dict[str, str] = {}
     blockers: list[str] = []
+    evidence_input_blockers: list[str] = []
+    safety_blockers: list[str] = []
     for name, path in paths.items():
         try:
             input_hashes[name] = sha256_file(path)
         except OSError as exc:
-            blockers.append(f"MISSING_OR_UNREADABLE_INPUT:{name}:{exc}")
+            target = (
+                evidence_input_blockers
+                if name in {"eligibility_evidence", "inactive_reports"}
+                else blockers
+            )
+            target.append(f"MISSING_OR_UNREADABLE_INPUT:{name}:{exc}")
 
     slate: SlateContract | None = None
     current_template: EntryTemplate | None = None
@@ -591,13 +599,6 @@ def govern_late_swap(
                 reason="the selected unlocked portfolio could not be established",
             )
         evidence.append(inactive)
-        gates_pass, gate_blockers = evaluate_hard_gates(
-            evidence,
-            now=as_of,
-            final_release=True,
-        )
-        if not gates_pass:
-            blockers.extend(gate_blockers)
 
         output_bytes: bytes | None = None
         output_hash: str | None = None
@@ -643,9 +644,19 @@ def govern_late_swap(
                 continue
             try:
                 if sha256_file(path) != input_hashes[name]:
-                    blockers.append(f"INPUT_CHANGED_DURING_LATE_SWAP:{name}")
+                    target = (
+                        evidence_input_blockers
+                        if name in {"eligibility_evidence", "inactive_reports"}
+                        else blockers
+                    )
+                    target.append(f"INPUT_CHANGED_DURING_LATE_SWAP:{name}")
             except OSError as exc:
-                blockers.append(f"INPUT_CHANGED_DURING_LATE_SWAP:{name}:{exc}")
+                target = (
+                    evidence_input_blockers
+                    if name in {"eligibility_evidence", "inactive_reports"}
+                    else blockers
+                )
+                target.append(f"INPUT_CHANGED_DURING_LATE_SWAP:{name}:{exc}")
         if (
             prior_output_path is not None
             and prior_manifest is not None
@@ -658,11 +669,56 @@ def govern_late_swap(
                 blockers.append(f"PRIOR_OUTPUT_CHANGED_DURING_LATE_SWAP:{exc}")
         elapsed = time.perf_counter() - started
         if elapsed > deadline_seconds:
-            blockers.append(f"LATE_SWAP_DEADLINE_EXCEEDED:{elapsed:.3f}s")
+            safety_blockers.append(f"LATE_SWAP_DEADLINE_EXCEEDED:{elapsed:.3f}s")
         blockers = _unique(blockers)
+        evidence_input_blockers = _unique(evidence_input_blockers)
+
+        file_valid = not blockers and output_bytes is not None and output_hash is not None
+        if file_valid:
+            evidence.append(
+                EvidenceRecord(
+                    subject=run_id,
+                    field="final_bytes",
+                    value=output_hash,
+                    source_artifact_id=output_hash,
+                    hard_gate=True,
+                    state=EvidenceState.PASS,
+                    reason="in-memory late-swap byte audit, reparse, and SHA-256 matched",
+                )
+            )
+        evidence_state, gate_blockers = aggregate_evidence_state(
+            evidence,
+            now=as_of,
+            final_release=True,
+        )
+        if evidence_input_blockers and evidence_state is ReleaseEvidenceState.PASS:
+            evidence_state = ReleaseEvidenceState.CONFLICTED
+        certification_basis = (
+            prior_manifest.certification_basis
+            if prior_manifest is not None
+            else CertificationBasis.MANUAL_GUARDRAIL
+        )
+        model_status = (
+            prior_manifest.model_status
+            if prior_manifest is not None
+            else ModelStatus.UNVALIDATED
+        )
+        policy = derive_release_policy(
+            file_valid=file_valid,
+            evidence_state=evidence_state,
+            model_status=model_status,
+            certification_basis=certification_basis,
+            file_blockers=blockers,
+            evidence_blockers=(*gate_blockers, *evidence_input_blockers),
+            safety_blockers=safety_blockers,
+        )
 
         created_output = False
-        if not blockers and output_bytes is not None and output_hash is not None:
+        if (
+            policy.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE
+            and output_bytes is not None
+            and output_hash is not None
+        ):
             try:
                 _atomic_write_new(output_path, output_bytes)
                 created_output = True
@@ -672,22 +728,21 @@ def govern_late_swap(
                     blockers.append("POST_WRITE_HASH_MISMATCH")
             except Exception as exc:
                 blockers.append(f"OUTPUT_WRITE_FAILED:{exc}")
-        status = "CERTIFIED" if created_output and not blockers else "DO_NOT_UPLOAD"
-        if status == "CERTIFIED":
-            evidence.append(
-                EvidenceRecord(
-                    subject=run_id,
-                    field="final_bytes",
-                    value=output_hash,
-                    source_artifact_id=output_hash,
-                    hard_gate=True,
-                    state=EvidenceState.PASS,
-                    reason="independent late-swap byte audit, reparse, and post-write SHA-256 matched",
-                )
+        if policy.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE and not created_output:
+            policy = derive_release_policy(
+                file_valid=False,
+                evidence_state=evidence_state,
+                model_status=model_status,
+                certification_basis=certification_basis,
+                file_blockers=blockers,
+                evidence_blockers=(*gate_blockers, *evidence_input_blockers),
+                safety_blockers=safety_blockers,
             )
-        elif created_output:
+        if policy.release_decision is ReleaseDecision.DO_NOT_UPLOAD and created_output:
             output_path.unlink(missing_ok=True)
             created_output = False
+        blockers = list(policy.blockers)
+        status = policy.status
         next_action = (
             "Review the manifest and exact Entry IDs, then manually upload in DraftKings only if you choose."
             if status == "CERTIFIED"
@@ -697,6 +752,11 @@ def govern_late_swap(
             run_id=run_id,
             prior_run_id=prior_manifest.run_id if prior_manifest else None,
             status=status,
+            file_valid=policy.file_valid,
+            evidence_state=policy.evidence_state,
+            model_status=policy.model_status,
+            release_decision=policy.release_decision,
+            certification_basis=policy.certification_basis,
             created_at=datetime.now(timezone.utc),
             as_of=as_of,
             contest_id=contest_id,
@@ -711,13 +771,18 @@ def govern_late_swap(
             ),
             output_path=str(output_path) if status == "CERTIFIED" else None,
             output_sha256=output_hash if status == "CERTIFIED" else None,
+            proposed_output_sha256=output_hash,
+            proposed_output_byte_count=(len(output_bytes) if output_bytes is not None else None),
             evidence=tuple(evidence),
+            file_blockers=policy.file_blockers,
+            evidence_blockers=policy.evidence_blockers,
+            model_blockers=policy.model_blockers,
             blockers=tuple(blockers),
             next_action=next_action,
             runtime={"late_swap_seconds": time.perf_counter() - started},
         )
         manifest_bytes = json.dumps(
-            manifest.model_dump(mode="json"), indent=2, sort_keys=True
+            manifest.model_dump(mode="json", by_alias=True), indent=2, sort_keys=True
         ).encode("utf-8") + b"\n"
         try:
             _atomic_write_new(manifest_path, manifest_bytes)
@@ -732,9 +797,29 @@ def govern_late_swap(
         blockers = _unique(
             [*blockers, f"LATE_SWAP_VALIDATION_FAILED:{type(exc).__name__}:{exc}"]
         )
+        certification_basis = (
+            prior_manifest.certification_basis
+            if prior_manifest is not None
+            else CertificationBasis.MANUAL_GUARDRAIL
+        )
+        model_status = (
+            prior_manifest.model_status
+            if prior_manifest is not None
+            else ModelStatus.UNVALIDATED
+        )
+        policy = derive_release_policy(
+            file_valid=False,
+            evidence_state=ReleaseEvidenceState.UNKNOWN,
+            model_status=model_status,
+            certification_basis=certification_basis,
+            file_blockers=blockers,
+            evidence_blockers=evidence_input_blockers,
+        )
         diagnostic = {
             "run_id": run_id,
-            "status": "DO_NOT_UPLOAD",
+            "status": policy.status,
+            **policy.truth_values(),
+            "certification_basis": policy.certification_basis.value,
             "error": type(exc).__name__,
             "message": str(exc),
         }
@@ -748,18 +833,26 @@ def govern_late_swap(
         manifest = LateSwapManifest(
             run_id=run_id,
             prior_run_id=prior_manifest.run_id if prior_manifest else None,
-            status="DO_NOT_UPLOAD",
+            status=policy.status,
+            file_valid=policy.file_valid,
+            evidence_state=policy.evidence_state,
+            model_status=policy.model_status,
+            release_decision=policy.release_decision,
+            certification_basis=policy.certification_basis,
             created_at=datetime.now(timezone.utc),
             as_of=as_of,
             contest_id=contest_id,
             input_hashes=input_hashes,
             evidence=tuple(evidence),
-            blockers=tuple(blockers),
-            next_action=f"Resolve {blockers[0]} and rerun with a new run ID.",
+            file_blockers=policy.file_blockers,
+            evidence_blockers=policy.evidence_blockers,
+            model_blockers=policy.model_blockers,
+            blockers=policy.blockers,
+            next_action=f"Resolve {policy.blockers[0]} and rerun with a new run ID.",
             runtime={"late_swap_seconds": time.perf_counter() - started},
         )
         manifest_bytes = json.dumps(
-            manifest.model_dump(mode="json"), indent=2, sort_keys=True
+            manifest.model_dump(mode="json", by_alias=True), indent=2, sort_keys=True
         ).encode("utf-8") + b"\n"
         _atomic_write_new(manifest_path, manifest_bytes)
         return manifest, manifest_path

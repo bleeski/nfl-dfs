@@ -1,7 +1,8 @@
 # NFL DFS Operator Guide
 
 This engine is local and manual at the DraftKings boundary. It never signs in,
-enters contests, changes money, or uploads a lineup. A green `CERTIFIED` result
+enters contests, changes money, or uploads a lineup. A green
+`RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` result
 means that the current evidence, exact Entry IDs, roster legality, template, and
 final bytes passed. It does not promise profit and is not an EV label.
 
@@ -154,10 +155,12 @@ The versioned review workbook contains:
 - `Evidence Paste`: the pasted source evidence.
 - `Portfolio`: exact Entry-ID assignments and mode-aware roster slots.
 - `QA`: registered triggers and binding blockers.
-- `Upload`: status, exact CSV path, SHA-256, and operator action.
+- `Upload`: all four release truths, compatibility status, certification basis,
+  proposed/final SHA-256, exact CSV path, and operator action.
 
-Only a green `CERTIFIED` cell permits consideration of manual upload. Recheck the
-Entry IDs and lineups in DraftKings before clicking upload.
+Only a green `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` cell permits
+consideration of manual upload. Recheck the Entry IDs and lineups in DraftKings
+before clicking upload.
 
 ## Game-day cadence
 

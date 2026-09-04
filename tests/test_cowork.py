@@ -213,6 +213,11 @@ def test_cowork_two_file_run_snapshots_and_fails_closed(
     report = json.loads(report_path.read_text(encoding="utf-8"))
     request = json.loads(request_path.read_text(encoding="utf-8"))
     assert report["status"] == "DO_NOT_UPLOAD"
+    assert report["FILE_VALID"] is False
+    assert report["EVIDENCE_STATE"] == "UNKNOWN"
+    assert report["MODEL_STATUS"] == "UNVALIDATED"
+    assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert report["certification_basis"] == "MODEL_ASSISTED"
     assert report["stage"] == "RECONCILED"
     assert report["authorized_entries"] == 2
     assert Path(request["salary_csv"]).parent == runs / "cowork-fixture" / "inputs"
@@ -220,6 +225,11 @@ def test_cowork_two_file_run_snapshots_and_fails_closed(
     assert not list(outputs.rglob("DK_UPLOAD_*.csv"))
     workbook = load_workbook(report["review_workbook"], data_only=False)
     assert workbook["Upload"]["B4"].value == "DO_NOT_UPLOAD"
+    assert workbook["Upload"]["B5"].value is False
+    assert workbook["Upload"]["B6"].value == "UNKNOWN"
+    assert workbook["Upload"]["B7"].value == "UNVALIDATED"
+    assert workbook["Upload"]["B8"].value == "DO_NOT_UPLOAD"
+    assert workbook["Upload"]["B9"].value == "MODEL_ASSISTED"
     assert workbook["Run Control"]["B6"].value == request["salary_csv"]
     assert workbook["Run Control"]["B7"].value == request["entry_csv"]
 
@@ -326,6 +336,11 @@ def test_cli_reports_unexpected_exceptions_but_does_not_swallow_cancellation(
     assert cli.main(["doctor"]) == 2
     result = json.loads(capsys.readouterr().out)
     assert result == {
+        "EVIDENCE_STATE": "UNKNOWN",
+        "FILE_VALID": False,
+        "MODEL_STATUS": "UNVALIDATED",
+        "RELEASE_DECISION": "DO_NOT_UPLOAD",
+        "certification_basis": "MANUAL_GUARDRAIL",
         "error": "OSError",
         "message": "simulated doctor failure",
         "stage": "CLI_FAILED",

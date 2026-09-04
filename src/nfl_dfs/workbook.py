@@ -275,11 +275,22 @@ def create_operator_input_workbook(path: str | Path) -> Path:
     )
     qa.freeze_panes = "A5"
 
-    _title(upload, "Upload", "Only a green CERTIFIED status may be manually uploaded to DraftKings.", 6)
+    _title(
+        upload,
+        "Upload",
+        "Only RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE may be manually uploaded to DraftKings.",
+        6,
+    )
     upload_rows = [
         ("Status", "DO_NOT_UPLOAD"),
+        ("FILE_VALID", False),
+        ("EVIDENCE_STATE", "UNKNOWN"),
+        ("MODEL_STATUS", "UNVALIDATED"),
+        ("RELEASE_DECISION", "DO_NOT_UPLOAD"),
+        ("Certification basis", "MANUAL_GUARDRAIL"),
         ("Output CSV", ""),
         ("SHA-256", ""),
+        ("Proposed SHA-256", ""),
         ("Manifest", ""),
         ("Created at", ""),
         ("Operator action", "Resolve every blocker, rerun, review, then upload manually."),
@@ -341,6 +352,7 @@ def create_cowork_status_workbook(
     run_values: Mapping[str, str | float | int | bool | None],
     blockers: Iterable[str],
     report_path: str | Path,
+    truth_values: Mapping[str, bool | str] | None = None,
 ) -> Path:
     target = create_operator_input_workbook(output_path)
     populate_operator_run_control(target, run_values)
@@ -368,12 +380,25 @@ def create_cowork_status_workbook(
         for column, value in enumerate(values, start=1):
             qa.cell(row_number, column, value)
     upload = workbook["Upload"]
+    truths = {
+        "FILE_VALID": False,
+        "EVIDENCE_STATE": "UNKNOWN",
+        "MODEL_STATUS": "UNVALIDATED",
+        "RELEASE_DECISION": "DO_NOT_UPLOAD",
+        "certification_basis": "MANUAL_GUARDRAIL",
+        **dict(truth_values or {}),
+    }
     upload["B4"] = "DO_NOT_UPLOAD"
+    upload["B5"] = truths["FILE_VALID"]
+    upload["B6"] = truths["EVIDENCE_STATE"]
+    upload["B7"] = truths["MODEL_STATUS"]
+    upload["B8"] = truths["RELEASE_DECISION"]
+    upload["B9"] = truths["certification_basis"]
     upload["B4"].fill = PatternFill("solid", fgColor=PALE_RED)
     upload["B4"].font = Font(bold=True, color="9C0006")
-    upload["B7"] = str(Path(report_path).resolve())
-    upload["B8"] = datetime.now(timezone.utc).isoformat()
-    upload["B9"] = "DO NOT UPLOAD. Resolve the QA blockers and rerun the Cowork request."
+    upload["B13"] = str(Path(report_path).resolve())
+    upload["B14"] = datetime.now(timezone.utc).isoformat()
+    upload["B15"] = "DO NOT UPLOAD. Resolve the QA blockers and rerun the Cowork request."
     workbook.save(target)
     return target
 
@@ -385,6 +410,7 @@ def create_review_workbook(
     lineups: Mapping[str, Lineup],
     qa_findings: Iterable[QAFinding],
     manifest: CertificationManifest,
+    manifest_path: str | Path | None = None,
     portfolio_metrics: Mapping[str, float | str] | None = None,
 ) -> Path:
     source = Path(staged_input).resolve()
@@ -430,17 +456,23 @@ def create_review_workbook(
             qa_sheet.cell(row_number, column, value)
     upload = workbook["Upload"]
     upload["B4"] = manifest.status
-    upload["B5"] = manifest.output_path or ""
-    upload["B6"] = manifest.output_sha256 or ""
-    upload["B7"] = str(Path(manifest.output_path).with_suffix(".manifest.json")) if manifest.output_path else ""
-    upload["B8"] = manifest.created_at.astimezone(timezone.utc).isoformat()
-    if manifest.status == "CERTIFIED":
+    upload["B5"] = manifest.file_valid
+    upload["B6"] = manifest.evidence_state.value
+    upload["B7"] = manifest.model_status.value
+    upload["B8"] = manifest.release_decision.value
+    upload["B9"] = manifest.certification_basis.value
+    upload["B10"] = manifest.output_path or ""
+    upload["B11"] = manifest.output_sha256 or ""
+    upload["B12"] = manifest.proposed_output_sha256 or ""
+    upload["B13"] = str(Path(manifest_path).resolve()) if manifest_path else ""
+    upload["B14"] = manifest.created_at.astimezone(timezone.utc).isoformat()
+    if manifest.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE":
         upload["B4"].fill = PatternFill("solid", fgColor=PALE_GREEN)
         upload["B4"].font = Font(bold=True, color="006100")
-        upload["B9"] = "Review exact Entry IDs and lineups, then upload manually in DraftKings."
+        upload["B15"] = "Review exact Entry IDs and lineups, then upload manually in DraftKings."
     else:
         upload["B4"].fill = PatternFill("solid", fgColor=PALE_RED)
-        upload["B9"] = "DO NOT UPLOAD. Resolve blockers shown on QA and rerun."
+        upload["B15"] = "DO NOT UPLOAD. Resolve blockers shown on QA and rerun."
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True
     workbook.save(target)

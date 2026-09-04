@@ -59,11 +59,11 @@ def audit_selected_portfolio(
                 findings.append(
                     QAFinding(
                         "DST_OPPOSING_PASS_STACK",
-                        "HIGH",
+                        "MEDIUM",
                         ",".join(conflicts),
-                        "none without registered tail support",
+                        "advisory unless enforced by a registered solver policy",
                         f"{defense.dk_id} conflicts with opposing passing pieces",
-                        True,
+                        False,
                     )
                 )
     for record in evidence:

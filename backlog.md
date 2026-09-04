@@ -20,11 +20,13 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 
 - Repository: `C:\Users\benja\Documents\Claude\nfl-dfs`
 - Original tracker branch/HEAD: `main` at `e042c7bfc546`.
-- Verified clean checkpoint 2026-09-03: local `main` and `origin/main` both at
-  `1073d4345f0db79c2285fd24b0c61b3f3dcfe36d`; the supplied fixture manifest
-  passed in a clean temporary clone and the checkpoint suite reported 87
-  passed, 1 skipped.
-- Current S2 branch: `codex/s2-governed-late-swap`.
+- Verified merged baseline 2026-09-04: PR #1 merged S2 into `main` at
+  `033991452ce655923ff37f48b06c90746ab41ce3`; local `main` and `origin/main`
+  were fast-forward synchronized before the next implementation branch was
+  created. S2 verification reported 123 passed, 1 skipped on Windows.
+- Current implementation branch: `codex/s3-certification-truth-states`, created
+  from the verified merged baseline. S3 is implemented in the unstaged working
+  tree and passed 144 tests with 1 existing Windows privilege skip.
 - Still unverified: Linux/Cowork runtime, real-slate timing, live calibration, and any model-assisted certified upload.
 - Current truthful capability: validated intake, legality, evidence gating, and byte-exact export infrastructure; not a validated EV engine.
 
@@ -38,6 +40,51 @@ New work should converge on four explicit and independently reported truths:
 4. `RELEASE_DECISION`: `CERTIFIED_UPLOAD_PACKAGE` or `DO_NOT_UPLOAD`.
 
 `FILE_VALID` alone never implies `CERTIFIED_UPLOAD_PACKAGE`. No automatic grade-C or grade-D fallback is authorized. A future emergency fallback requires a separately approved, deterministic, tested policy and must never be presented as EV-certified.
+
+## Deadline delivery punch list — September 2026
+
+Operational targets:
+
+- Generate a deterministic, structurally legal, source-bound Showdown lineup
+  for human review by Wednesday, 2026-09-09.
+- Generate deterministic, structurally legal, source-bound Classic lineups for
+  human review by Sunday, 2026-09-13.
+- `Generate` does not mean prospectively validated, profitable, EV-certified,
+  or automatically uploadable. Until the evidence and model gates genuinely
+  pass, the truthful release decision remains `DO_NOT_UPLOAD`; DraftKings
+  review, entry, and upload remain manual.
+
+This deadline sequence temporarily puts the minimum S6 projection slice ahead
+of S4A through S5 after S3 is complete. It does not waive those quantitative
+repairs or mark their economics as valid.
+
+| ID | Target | Status | Required outcome |
+|---|---|---|---|
+| DL1 | S3 truth states, target 2026-09-05 | `DONE` | Report `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and `RELEASE_DECISION` independently; keep hard gates binding; make style and bank-coverage preferences advisory. |
+| DL2 | Minimum S6A projection producer, target 2026-09-07 | `READY` | Deterministically transform frozen approved source artifacts into both model-input CSVs and a validated source ledger with no freehand numerical inputs or APPG use. |
+| DL3 | Prior-only review lineup profile, target 2026-09-07 | `BLOCKED` on DL2 | Generate legal projection-led review assignments without using or relabeling the known-unvalidated field, duplication, or payout economics. It must remain `MODEL_STATUS=PRIOR_ONLY` and `DO_NOT_UPLOAD`; this does not complete S5. |
+| DL4 | Showdown exact-template acceptance, target 2026-09-08 | `BLOCKED` on DL2 and DL3 plus operator files | Rehearse with a matching Showdown salary CSV, reserved-entry CSV, contest/payout facts, and current evidence; verify exact CPT/FLEX IDs, one Captain multiplier, underlying-person uniqueness, assignments, workbook, blockers, and final bytes. |
+| DL5 | Showdown operational run, target 2026-09-09 | `BLOCKED` on DL4 | Refresh approved inputs and evidence, generate the review lineup, and make no feature changes beyond demonstrated blocker repairs. |
+| DL6 | Classic projection/selection extension, target 2026-09-11 | `BLOCKED` on DL2 and DL3 | Use the same source-bound projection contract across the multi-game Classic pool and produce exact-ID legal review assignments. |
+| DL7 | Classic full rehearsal, target 2026-09-12 | `BLOCKED` on DL6 plus operator files | Execute the complete intended operator path, record wall time and blockers, and preserve every exact input/output hash. |
+| DL8 | Classic operational run, target 2026-09-13 | `BLOCKED` on DL7 | Refresh current official evidence, generate and review the lineups, and retain manual DraftKings upload as the final boundary. |
+
+Operator-supplied deadline prerequisites:
+
+- Matching Showdown salary and reserved-entry CSVs no later than 2026-09-07.
+- Showdown payout table, advertised value, field size, entry fee, and contest ID
+  no later than 2026-09-08. Without the matching entry template, DL5 can
+  produce only a review lineup for manual transcription, not an exact-template
+  export.
+- Matching Classic salary and reserved-entry CSVs no later than 2026-09-10,
+  followed by its contest facts and current official activity evidence.
+- An actual Cowork/Linux rehearsal before DL4, or an explicit decision to use
+  the verified Windows launcher as the deadline fallback.
+
+Work deliberately deferred until after the deadline slice: S4A/S4B field-tail
+economics, full S5 candidate/portfolio repair, S7 calibration, the full S8/S9
+redesign, and dependency-complete S10. Their known blockers must not be hidden
+by the deadline profile.
 
 ## Session backlog
 
@@ -107,7 +154,7 @@ New work should converge on four explicit and independently reported truths:
 ### S3 — Certification truth states and QA policy
 
 - Priority: P0
-- Status: `READY`
+- Status: `DONE`
 - Depends on: S1 and S2.
 - Findings: D-06 and D-09; modifies the proposed `UPLOAD_SAFE / MODEL_GRADE` doctrine.
 - Scope:
@@ -120,6 +167,17 @@ New work should converge on four explicit and independently reported truths:
   - Every output reports all four truths and named blockers.
   - Legal bytes with incomplete evidence report `FILE_VALID` but still end `DO_NOT_UPLOAD`.
   - QA style preferences cannot delete an otherwise valid diagnostic file or masquerade as safety failures.
+- Completion: one centralized, truth-table-tested release policy now derives
+  the compatibility status and release decision for certification and governed
+  late swap. Decision JSON, manifests, Cowork reports, and review workbooks
+  report all four truths. Proposed bytes are independently audited, reparsed,
+  and hashed in memory before release; blocked packages persist no upload CSV.
+  Selected-player opportunity evidence remains hard, unselected pool
+  uncertainty is counted as a model limitation, and unvalidated/prior-only
+  model-assisted packages cannot certify. Construction preferences and
+  candidate-family coverage are advisory; solver, accounting, REFEREE,
+  evidence, authorization, and byte failures remain blocking. Windows
+  verification: 144 passed, 1 skipped; doctor, compileall, and diff check pass.
 
 ### S4A — Tail-economics reference model and truth tests
 
@@ -246,4 +304,7 @@ New work should converge on four explicit and independently reported truths:
 
 ## Next action
 
-Start S2 in a separate session. S1 is complete; do not begin quantitative-core work while implementing the governed late-swap writer and lock-evidence boundary.
+Implement DL2 — the minimum S6A deterministic projection producer — as the
+single next `READY` deadline item. Transform only frozen approved source
+artifacts into both model-input CSVs and the validated source ledger; do not
+freehand numerical inputs, use DraftKings APPG, or begin DL3/S4A/S4B/S5/S7.

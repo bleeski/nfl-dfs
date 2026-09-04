@@ -188,6 +188,15 @@ reconcile with the supplied artifacts. A successful manifest additionally
 binds the final CSV SHA-256 and the exact zero-based replaceable cell indexes.
 Ordinary blocked runs retain the manifest but no `DK_UPLOAD_*.csv`.
 
+Both `certification_manifest_v1` and `nfl_late_swap_manifest_v1` report the
+four independent release truths: boolean `FILE_VALID`, `EVIDENCE_STATE` as
+`PASS | UNKNOWN | STALE | CONFLICTED`, `MODEL_STATUS` as
+`UNVALIDATED | PRIOR_ONLY | PROSPECTIVELY_VALIDATED`, and `RELEASE_DECISION` as
+`CERTIFIED_UPLOAD_PACKAGE | DO_NOT_UPLOAD`. The legacy `status` field is
+derived from `RELEASE_DECISION`. Blocked manifests may retain a proposed byte
+hash and byte count, but `output_path` and `output_sha256` remain empty unless
+the release decision is `CERTIFIED_UPLOAD_PACKAGE`.
+
 ## Standings settlement
 
 The normalized standings adapter currently requires columns including:

@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+import argparse
 import csv
+import json
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+import nfl_dfs.certification as certification_module
 from nfl_dfs.certification import CertificationError, certify_upload
+from nfl_dfs.cli import command_audit
 from nfl_dfs.contracts import EvidenceRecord, EvidenceState
 from nfl_dfs.dk import parse_entries
 from nfl_dfs.hashing import sha256_file
 from nfl_dfs.optimizer import LineupOptimizer
 from nfl_dfs.payouts import parse_payout_csv
-from nfl_dfs.referee import audit_output_bytes
+from nfl_dfs.referee import ByteAudit, audit_output_bytes
 
 
 def _assignments(slate, entries):
@@ -66,7 +70,17 @@ def test_certification_is_fail_closed_then_exact_byte_certified(
         manifest_path=manifest_path,
     )
     assert blocked.status == "DO_NOT_UPLOAD"
+    assert blocked.file_valid
+    assert blocked.evidence_state.value == "UNKNOWN"
+    assert blocked.model_status.value == "UNVALIDATED"
+    assert blocked.release_decision.value == "DO_NOT_UPLOAD"
+    assert blocked.proposed_output_sha256 is not None
     assert not output.exists()
+    blocked_json = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert blocked_json["FILE_VALID"] is True
+    assert blocked_json["EVIDENCE_STATE"] == "UNKNOWN"
+    assert blocked_json["MODEL_STATUS"] == "UNVALIDATED"
+    assert blocked_json["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
     with pytest.raises(CertificationError, match="already exist"):
         certify_upload(
             run_id="blocked-retry",
@@ -89,6 +103,10 @@ def test_certification_is_fail_closed_then_exact_byte_certified(
         manifest_path=tmp_path / "certified-manifest.json",
     )
     assert certified.status == "CERTIFIED"
+    assert certified.file_valid
+    assert certified.evidence_state.value == "PASS"
+    assert certified.model_status.value == "UNVALIDATED"
+    assert certified.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE"
     assert certified_output.exists()
     assert sha256_file(certified_output) == certified.output_sha256
     assert not certified_output.read_bytes().startswith(b"\xef\xbb\xbf")
@@ -99,6 +117,13 @@ def test_certification_is_fail_closed_then_exact_byte_certified(
         assignments,
     )
     assert audit.valid
+    certified_json = json.loads(
+        (tmp_path / "certified-manifest.json").read_text(encoding="utf-8")
+    )
+    assert certified_json["FILE_VALID"] is True
+    assert certified_json["EVIDENCE_STATE"] == "PASS"
+    assert certified_json["MODEL_STATUS"] == "UNVALIDATED"
+    assert certified_json["RELEASE_DECISION"] == "CERTIFIED_UPLOAD_PACKAGE"
 
 
 def test_certification_rejects_mixed_contests(
@@ -126,6 +151,8 @@ def test_certification_rejects_mixed_contests(
         manifest_path=tmp_path / "mixed-manifest.json",
     )
     assert manifest.status == "DO_NOT_UPLOAD"
+    assert not manifest.file_valid
+    assert manifest.release_decision.value == "DO_NOT_UPLOAD"
     assert any("MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED" in item for item in manifest.blockers)
     assert not output.exists()
 
@@ -149,4 +176,80 @@ def test_certification_rejects_entry_bytes_changed_after_parse(
         manifest_path=tmp_path / "mutated-manifest.json",
     )
     assert manifest.status == "DO_NOT_UPLOAD"
+    assert not manifest.file_valid
     assert "ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE" in manifest.blockers
+
+
+def test_illegal_lineup_reports_file_failure_and_no_upload(
+    tmp_path: Path, classic_slate, classic_entries
+) -> None:
+    assignments = _assignments(classic_slate, classic_entries)
+    entry_id = sorted(assignments)[0]
+    illegal = dict(assignments)
+    illegal[entry_id] = (assignments[entry_id][0],) * len(assignments[entry_id])
+    _, evidence = _evidence(tmp_path, classic_slate, classic_entries)
+    output = tmp_path / "illegal-upload.csv"
+    manifest = certify_upload(
+        run_id="illegal",
+        slate=classic_slate,
+        template=classic_entries,
+        assignments=illegal,
+        evidence=evidence,
+        output_path=output,
+        manifest_path=tmp_path / "illegal-manifest.json",
+    )
+    assert not manifest.file_valid
+    assert manifest.release_decision.value == "DO_NOT_UPLOAD"
+    assert any(blocker.startswith(f"LINEUP_{entry_id}:") for blocker in manifest.blockers)
+    assert not output.exists()
+
+
+def test_independent_byte_audit_failure_reports_file_failure(
+    tmp_path: Path, classic_slate, classic_entries, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assignments = _assignments(classic_slate, classic_entries)
+    _, evidence = _evidence(tmp_path, classic_slate, classic_entries)
+    monkeypatch.setattr(
+        certification_module,
+        "audit_output_bytes",
+        lambda *_args, **_kwargs: ByteAudit(False, ("simulated byte mismatch",)),
+    )
+    output = tmp_path / "byte-failure-upload.csv"
+    manifest = certify_upload(
+        run_id="byte-failure",
+        slate=classic_slate,
+        template=classic_entries,
+        assignments=assignments,
+        evidence=evidence,
+        output_path=output,
+        manifest_path=tmp_path / "byte-failure-manifest.json",
+    )
+    assert not manifest.file_valid
+    assert manifest.release_decision.value == "DO_NOT_UPLOAD"
+    assert "FINAL_BYTE_AUDIT:simulated byte mismatch" in manifest.blockers
+    assert not output.exists()
+
+
+def test_manifest_audit_rederives_do_not_upload_after_output_tamper(
+    tmp_path: Path, classic_slate, classic_entries, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assignments = _assignments(classic_slate, classic_entries)
+    _, evidence = _evidence(tmp_path, classic_slate, classic_entries)
+    output = tmp_path / "audit-upload.csv"
+    manifest_path = tmp_path / "audit-manifest.json"
+    manifest = certify_upload(
+        run_id="audit-tamper",
+        slate=classic_slate,
+        template=classic_entries,
+        assignments=assignments,
+        evidence=evidence,
+        output_path=output,
+        manifest_path=manifest_path,
+    )
+    assert manifest.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE"
+    output.write_bytes(output.read_bytes() + b"\r\n")
+    assert command_audit(argparse.Namespace(manifest=str(manifest_path))) == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "FAIL"
+    assert result["FILE_VALID"] is False
+    assert result["RELEASE_DECISION"] == "DO_NOT_UPLOAD"

@@ -4,6 +4,105 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-04 — S3: certification truth states and QA policy
+
+Changed:
+
+- Added a centralized release policy for independent `FILE_VALID`,
+  `EVIDENCE_STATE`, `MODEL_STATUS`, and `RELEASE_DECISION` reporting. Legacy
+  `status` is derived from the release decision and validated for consistency.
+- Certification now constructs, independently byte-audits, reparses, and
+  hashes proposed output in memory before release. Evidence/model blockers can
+  therefore coexist with `FILE_VALID=true`, while `DO_NOT_UPLOAD` persists no
+  upload-shaped CSV. Proposed hashes and categorized file/evidence/model
+  blockers remain available in manifests and review artifacts.
+- Manual guardrail certification remains explicitly `MODEL_STATUS=UNVALIDATED`
+  without becoming a model-performance claim. Model-assisted inputs are
+  currently `PRIOR_ONLY`; both `UNVALIDATED` and `PRIOR_ONLY` are barred from
+  `CERTIFIED_UPLOAD_PACKAGE`.
+- Applied the truth model to certification and late-swap manifests, direct CLI
+  results, status/audit output, Cowork reports and diagnostics, build reports,
+  and the review workbook Upload sheet. Governed late swap inherits the prior
+  certification basis/model status and preserves all S2 authority and byte
+  guarantees.
+- Limited hard opportunity evidence to selected players. Non-PASS unselected
+  pool members are reported by count and exact underlying IDs as a prior-only
+  model limitation.
+- Downgraded `DST_OPPOSING_PASS_STACK` and incomplete candidate-family coverage
+  to advisory findings. Genuine solver proof, simulation accounting, REFEREE,
+  hard-evidence, authorization, legality, and final-byte failures remain
+  blocking.
+- Updated operator/runtime documentation to describe the four truths and the
+  manual DraftKings boundary.
+
+Verification:
+
+- Focused certification, QA, Cowork, workbook, build-pipeline, truth-table, and
+  governed-late-swap tests: pass.
+- Complete Windows suite through `nfl.ps1 test` with a project-local pytest
+  temp directory and cache disabled: 144 passed, 1 skipped in 31.93 seconds.
+  The skip is the existing Windows symlink-privilege case.
+- `nfl.ps1 doctor`: pass on Python 3.13.7; SQLite integrity `ok`, WAL mode,
+  Excel lock `CLOSED_OR_ABSENT`, and no sync/reparse detection.
+- Python `compileall` over `src` and `tests`: pass.
+- `git diff --check`: pass.
+
+Remaining blockers:
+
+- Linux/Cowork runtime, real-slate timing, live calibration, and any
+  prospectively validated model-assisted package remain unverified.
+- No deterministic projection producer exists yet; DL2/S6A is the next item.
+- Matching Showdown/Classic operator templates, contest facts, and current
+  official evidence are still required on the delivery schedule.
+
+Tracker updates:
+
+- S3: `READY` -> `DONE`.
+- DL1: `READY` -> `DONE`.
+- DL2: `BLOCKED` -> `READY`; it is the only next deadline item.
+
+Claims explicitly not made:
+
+- No EV, ROI, win probability, calibrated ownership, profitability,
+  live-slate, Linux/Cowork acceptance, or DraftKings upload-readiness claim.
+
+### 2026-09-04 — Deadline delivery punch list and S3 handoff
+
+Changed:
+
+- Updated `backlog.md` to the verified post-merge baseline at `0339914` and the
+  current `codex/s3-certification-truth-states` branch.
+- Added the living DL1-DL8 punch list for a Showdown review lineup by
+  2026-09-09 and Classic review lineups by 2026-09-13, including dependencies,
+  operator-supplied inputs, deadline fallback, and explicit deferred work.
+- Made S3 the single next implementation item. The minimum deterministic
+  projection producer remains blocked until S3 stabilizes its contracts.
+
+Verification:
+
+- Documentation-only tracker update; no production code or numerical model
+  behavior changed.
+- Before the update, the branch was clean at merged baseline
+  `033991452ce655923ff37f48b06c90746ab41ce3`.
+
+Remaining blockers:
+
+- S3 has not been implemented.
+- No autonomous deterministic projection producer exists.
+- No matching Showdown reserved-entry template or contest facts are stored in
+  the repository.
+- Linux/Cowork execution, real-slate timing, live calibration, and any
+  model-assisted certified upload remain unverified.
+
+Tracker updates:
+
+- Added DL1-DL8; DL1 is the only `READY` deadline item.
+- Corrected the stale next action from S2 to S3.
+
+Claims explicitly not made:
+
+- No live-slate, calibrated-EV, profitability, or upload-readiness claim.
+
 ### 2026-09-03 — S2: governed late-swap writer and lock evidence
 
 Changed:

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 
 from nfl_dfs.cli import _certify, command_build
 from nfl_dfs.hashing import sha256_file
@@ -137,6 +138,17 @@ def test_reduced_end_to_end_design_select_referee_build(
     assert '"binding": true' in text
     assert '"quantitative_qa"' in text
     assert '"solver_proof"' in text
+    build_payload = json.loads(text)
+    assert build_payload["FILE_VALID"] is False
+    assert build_payload["EVIDENCE_STATE"] == "UNKNOWN"
+    assert build_payload["MODEL_STATUS"] == "PRIOR_ONLY"
+    assert build_payload["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    coverage_findings = [
+        finding
+        for finding in build_payload["precertification_findings"]
+        if finding["code"] == "CANDIDATE_FAMILY_COVERAGE_INCOMPLETE"
+    ]
+    assert all(not finding["blocking"] for finding in coverage_findings)
     assert (output / "assignments_reduced-build.csv").exists()
 
     assignments_path = output / "assignments_reduced-build.csv"
@@ -237,6 +249,25 @@ def test_reduced_end_to_end_design_select_referee_build(
         blocker.startswith("SOURCE_LEDGER_")
         for blocker in valid_certification["blockers"]
     )
+    assert valid_certification["FILE_VALID"] is True
+    assert valid_certification["MODEL_STATUS"] == "PRIOR_ONLY"
+    assert valid_certification["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert any(
+        blocker == "MODEL_NOT_PROSPECTIVELY_VALIDATED:PRIOR_ONLY"
+        for blocker in valid_certification["blockers"]
+    )
+    review_workbook = load_workbook(
+        valid_certification["review_workbook"], data_only=False
+    )
+    assert review_workbook["Upload"]["B5"].value is True
+    assert review_workbook["Upload"]["B6"].value in {
+        "PASS",
+        "UNKNOWN",
+        "STALE",
+        "CONFLICTED",
+    }
+    assert review_workbook["Upload"]["B7"].value == "PRIOR_ONLY"
+    assert review_workbook["Upload"]["B8"].value == "DO_NOT_UPLOAD"
 
     tampered_report = json.loads(report.read_text(encoding="utf-8"))
     tampered_report["run_id"] = "tampered-build"

@@ -66,7 +66,11 @@ Workflow:
 
 `NEW → SNAPSHOTTED → RECONCILED → MODELLED → CANDIDATES_READY → SELECTED → QA_REVIEWED → CERTIFIED | DO_NOT_UPLOAD → LOCKED → SETTLED → GRADED`
 
-`CERTIFIED` proves legality, evidence currency, authorization, and exact output bytes—not EV.
+The serialized `CERTIFIED` compatibility state is derived only from
+`RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE`. Every decision reports
+`FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and `RELEASE_DECISION`
+independently. `FILE_VALID` proves only authorized legal exact bytes; a manual
+guardrail package is a safety result, not an EV or model-performance claim.
 
 ### Source and operator policy
 

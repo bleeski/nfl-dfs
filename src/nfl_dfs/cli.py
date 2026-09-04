@@ -19,11 +19,14 @@ import numpy as np
 from .certification import certify_upload
 from .candidate_families import coverage_report
 from .contracts import (
+    CertificationBasis,
     ContestObjective,
     EngineMode,
     EvidenceRecord,
     EvidenceState,
     Lineup,
+    ModelStatus,
+    ReleaseEvidenceState,
 )
 from .cowork import (
     CoworkRunRequest,
@@ -53,6 +56,7 @@ from .ownership import OwnershipBracket, cold_start_states
 from .payouts import parse_payout_csv, validate_payout_tiers
 from .portfolio import evaluate_portfolio, portfolio_net_samples, select_portfolio
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
+from .release import derive_release_policy
 from .scenario_store import save_scenario_bank
 from .settlement import parse_standings, require_entry_coverage
 from .simulation import lineup_score_matrix, simulate_factor_bank
@@ -77,6 +81,23 @@ RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
 
 def _print_json(value: object) -> None:
     print(json.dumps(value, indent=2, sort_keys=True, default=str))
+
+
+def _blocked_truth_values(
+    *,
+    file_valid: bool = False,
+    evidence_state: ReleaseEvidenceState = ReleaseEvidenceState.UNKNOWN,
+    model_status: ModelStatus = ModelStatus.UNVALIDATED,
+    certification_basis: CertificationBasis = CertificationBasis.MANUAL_GUARDRAIL,
+) -> dict[str, bool | str]:
+    values = derive_release_policy(
+        file_valid=file_valid,
+        evidence_state=evidence_state,
+        model_status=model_status,
+        certification_basis=certification_basis,
+    ).truth_values()
+    values["certification_basis"] = certification_basis.value
+    return values
 
 
 def _load_config(name: str) -> dict[str, object]:
@@ -473,33 +494,57 @@ def _selected_opportunity_evidence(
     selected_ids = {
         dk_id for roster in assignments.values() for dk_id in roster if dk_id in by_dk_id
     }
+    selected_people = {by_dk_id[dk_id].underlying_id for dk_id in selected_ids}
     required_people = {player.underlying_id for player in slate.players}
     states = {
         person: by_person[person].evidence_state
         for person in sorted(required_people)
         if person in by_person
     }
-    missing = sorted(required_people.difference(states))
-    non_pass = {person: state for person, state in states.items() if state != "PASS"}
-    if missing:
+    missing_selected = sorted(selected_people.difference(states))
+    non_pass_selected = {
+        person: states[person]
+        for person in sorted(selected_people.intersection(states))
+        if states[person] != "PASS"
+    }
+    unselected_people = required_people.difference(selected_people)
+    prior_only_pool = sorted(
+        person for person in unselected_people if states.get(person) != "PASS"
+    )
+    if missing_selected:
         state = EvidenceState.UNKNOWN
-        reason = f"salary-pool players are absent from the opportunity evidence: {missing}"
-    elif any(value == "CONFLICTED" for value in non_pass.values()):
+        reason = (
+            "selected players are absent from the opportunity evidence: "
+            f"{missing_selected}"
+        )
+    elif any(value == "CONFLICTED" for value in non_pass_selected.values()):
         state = EvidenceState.CONFLICTED
-        reason = f"modeled opportunity evidence is conflicted: {non_pass}"
-    elif any(value == "STALE" for value in non_pass.values()):
+        reason = f"selected opportunity evidence is conflicted: {non_pass_selected}"
+    elif any(value == "STALE" for value in non_pass_selected.values()):
         state = EvidenceState.STALE
-        reason = f"modeled opportunity evidence is stale: {non_pass}"
-    elif non_pass:
+        reason = f"selected opportunity evidence is stale: {non_pass_selected}"
+    elif non_pass_selected:
         state = EvidenceState.UNKNOWN
-        reason = f"modeled opportunity evidence is unknown: {non_pass}"
+        reason = f"selected opportunity evidence is unknown: {non_pass_selected}"
     else:
         state = EvidenceState.PASS
-        reason = "every modeled salary-pool player has PASS opportunity evidence"
+        reason = (
+            "every selected player has PASS opportunity evidence; "
+            f"{len(prior_only_pool)} unselected salary-pool players remain prior-only"
+        )
     return EvidenceRecord(
         subject="selected_portfolio",
         field="player_opportunity_evidence",
-        value={"selected_dk_ids": sorted(selected_ids), "states_by_person": states},
+        value={
+            "selected_dk_ids": sorted(selected_ids),
+            "selected_people": sorted(selected_people),
+            "selected_states_by_person": {
+                person: states.get(person, "MISSING") for person in sorted(selected_people)
+            },
+            "prior_only_unselected_pool_count": len(prior_only_pool),
+            "prior_only_unselected_people": prior_only_pool,
+            "salary_pool_people_count": len(required_people),
+        },
         source_artifact_id=source_artifact_id,
         observed_at=datetime.now(timezone.utc),
         hard_gate=True,
@@ -529,6 +574,7 @@ def command_setup(args: argparse.Namespace) -> int:
         _print_json(
             {
                 "status": "DO_NOT_UPLOAD",
+                **_blocked_truth_values(),
                 "message": (
                     "Environment doctor failed. Use the pinned Python 3.13.7 runtime, "
                     "ensure memory and SQLite checks pass, and close operator_input.xlsx."
@@ -589,6 +635,7 @@ def _intake(
     summary = {
         "run_id": run_id,
         "state": "DO_NOT_UPLOAD" if contest_problems else "RECONCILED",
+        **_blocked_truth_values(),
         "mode": slate.mode.value,
         "salary_players": len(slate.players),
         "underlying_people": len({player.underlying_id for player in slate.players}),
@@ -633,6 +680,7 @@ def command_validate(args: argparse.Namespace) -> int:
     _print_json(
         {
             "status": "PASS" if not problems else "FAIL",
+            **_blocked_truth_values(file_valid=False),
             "mode": slate.mode.value,
             "authorized_entries": len(authorized),
             "problems": problems,
@@ -685,11 +733,18 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
     precertification_evidence: list[EvidenceRecord] = []
     precertification_findings: tuple[QAFinding, ...] = ()
     certification_blockers: list[str] = []
+    certification_file_blockers: list[str] = []
     solver_proof: Mapping[str, object] = {}
     portfolio_metrics: Mapping[str, float | str] | None = None
     build_report_value = getattr(args, "build_report", None)
     certification_model = None
     source_ledger_validated = False
+    certification_basis = (
+        CertificationBasis.MANUAL_GUARDRAIL
+        if args.manual_guardrail
+        else CertificationBasis.MODEL_ASSISTED
+    )
+    model_status = ModelStatus.UNVALIDATED
     if not args.manual_guardrail:
         if not getattr(args, "team_projections", None) or not getattr(
             args, "player_opportunities", None
@@ -701,6 +756,7 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
                 args.team_projections,
                 args.player_opportunities,
             )
+            model_status = ModelStatus.PRIOR_ONLY
             for name in ("team_projection_input", "player_opportunity_input"):
                 path = model_paths[name]
                 if path and sha256_file(path) != model_hashes[name]:
@@ -865,11 +921,11 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
         )
     evidence.extend(precertification_evidence)
     if sha256_file(args.salaries) != slate.salary_hash:
-        certification_blockers.append("SALARY_INPUT_CHANGED_DURING_CERTIFICATION")
+        certification_file_blockers.append("SALARY_INPUT_CHANGED_DURING_CERTIFICATION")
     if sha256_file(args.entries) != template.raw_hash:
-        certification_blockers.append("ENTRY_INPUT_CHANGED_DURING_CERTIFICATION")
+        certification_file_blockers.append("ENTRY_INPUT_CHANGED_DURING_CERTIFICATION")
     if sha256_file(args.assignments) != assignment_digest:
-        certification_blockers.append("ASSIGNMENT_INPUT_CHANGED_DURING_CERTIFICATION")
+        certification_file_blockers.append("ASSIGNMENT_INPUT_CHANGED_DURING_CERTIFICATION")
     for name, path in model_paths.items():
         if path and sha256_file(path) != model_hashes[name]:
             certification_blockers.append(f"{name.upper()}_CHANGED_DURING_CERTIFICATION")
@@ -891,6 +947,9 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
         model_hashes=model_hashes,
         additional_input_hashes={"assignments": assignment_digest},
         solver_proof=solver_proof,
+        model_status=model_status,
+        certification_basis=certification_basis,
+        additional_file_blockers=certification_file_blockers,
         additional_blockers=certification_blockers,
         deadline_seconds=certification_deadline,
         required_hard_fields=required_hard_fields,
@@ -917,20 +976,34 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
         lineups=lineups,
         qa_findings=findings,
         manifest=manifest,
+        manifest_path=manifest_path,
         portfolio_metrics=portfolio_metrics,
     )
     result = {
         "run_id": run_id,
         "status": manifest.status,
+        "FILE_VALID": manifest.file_valid,
+        "EVIDENCE_STATE": manifest.evidence_state.value,
+        "MODEL_STATUS": manifest.model_status.value,
+        "RELEASE_DECISION": manifest.release_decision.value,
+        "certification_basis": manifest.certification_basis.value,
         "upload_csv": manifest.output_path,
         "sha256": manifest.output_sha256,
+        "proposed_sha256": manifest.proposed_output_sha256,
         "manifest": str(manifest_path),
         "review_workbook": str(review),
         "blockers": list(manifest.blockers),
         "qa_findings": [_finding_dict(finding) for finding in findings],
-        "meaning": "Certification covers legality, current evidence, authorization, and exact bytes; it is not an EV claim.",
+        "meaning": (
+            "FILE_VALID covers authorized legal bytes only. RELEASE_DECISION is derived "
+            "separately from hard evidence, model status, and safety gates; manual guardrail "
+            "certification is not a model-performance claim."
+        ),
     }
-    return (0 if manifest.status == "CERTIFIED" else 2), result
+    return (
+        0 if manifest.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE" else 2,
+        result,
+    )
 
 
 def command_certify(args: argparse.Namespace) -> int:
@@ -948,6 +1021,13 @@ def command_certify(args: argparse.Namespace) -> int:
                 {
                     "run_id": run_id,
                     "status": "DO_NOT_UPLOAD",
+                    **_blocked_truth_values(
+                        certification_basis=(
+                            CertificationBasis.MANUAL_GUARDRAIL
+                            if getattr(args, "manual_guardrail", True)
+                            else CertificationBasis.MODEL_ASSISTED
+                        )
+                    ),
                     "stage": "CERTIFICATION_FAILED",
                     "error": type(exc).__name__,
                     "message": str(exc),
@@ -1363,11 +1443,14 @@ def command_build(args: argparse.Namespace) -> int:
         generated_findings.append(
             QAFinding(
                 code="CANDIDATE_FAMILY_COVERAGE_INCOMPLETE",
-                severity="CRITICAL",
+                severity="MEDIUM",
                 trigger_value=", ".join(coverage.missing_registered_families),
                 threshold="all registered candidate families represented",
-                message="candidate generation omitted one or more registered construction families",
-                blocking=True,
+                message=(
+                    "candidate generation omitted one or more registered construction "
+                    "families; coverage is informative and is not an upload-safety rule"
+                ),
+                blocking=False,
             )
         )
     for simulations in (design_simulations, select_simulations, referee_simulations):
@@ -1453,10 +1536,26 @@ def command_build(args: argparse.Namespace) -> int:
         for dk_id, bracket in brackets.items()
     }
     elapsed = time.perf_counter() - started
+    slate_by_id = {player.dk_id: player for player in slate.players}
+    selected_people = {
+        slate_by_id[dk_id].underlying_id
+        for roster in selected_rosters
+        for dk_id in roster
+    }
+    prior_only_pool_count = sum(
+        player.underlying_id not in selected_people and player.evidence_state != "PASS"
+        for player in model.players
+    )
     report = {
         "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "DIAGNOSTIC_ASSIGNMENTS_READY_DO_NOT_UPLOAD",
+        **_blocked_truth_values(
+            file_valid=False,
+            evidence_state=ReleaseEvidenceState.UNKNOWN,
+            model_status=ModelStatus.PRIOR_ONLY,
+            certification_basis=CertificationBasis.MODEL_ASSISTED,
+        ),
         "label": "COLD_START_FIELD_MODEL",
         "assignments": str(assignment_path),
         "assignment_sha256": sha256_file(assignment_path),
@@ -1472,6 +1571,10 @@ def command_build(args: argparse.Namespace) -> int:
         "economics_shortlist_count": len(economics_rosters),
         "candidate_family_coverage": coverage.counts,
         "missing_candidate_families": coverage.missing_registered_families,
+        "model_status_limitations": {
+            "prior_only_unselected_pool_count": prior_only_pool_count,
+            "prospective_validation": "ABSENT",
+        },
         "scenario_counts": {
             "DESIGN": design_count,
             "SELECT": select_count,
@@ -1540,6 +1643,7 @@ def command_late_swap(args: argparse.Namespace) -> int:
             {
                 "run_id": run_id,
                 "status": "DO_NOT_UPLOAD",
+                **_blocked_truth_values(),
                 "blockers": [str(exc)],
                 "manifest": None,
                 "output_path": None,
@@ -1552,15 +1656,23 @@ def command_late_swap(args: argparse.Namespace) -> int:
         {
             "run_id": run_id,
             "status": manifest.status,
+            "FILE_VALID": manifest.file_valid,
+            "EVIDENCE_STATE": manifest.evidence_state.value,
+            "MODEL_STATUS": manifest.model_status.value,
+            "RELEASE_DECISION": manifest.release_decision.value,
+            "certification_basis": manifest.certification_basis.value,
             "blockers": list(manifest.blockers),
             "input_hashes": manifest.input_hashes,
             "manifest": str(manifest_path),
             "output_path": manifest.output_path,
             "output_sha256": manifest.output_sha256,
+            "proposed_output_sha256": manifest.proposed_output_sha256,
             "next_action": manifest.next_action,
         }
     )
-    return 0 if manifest.status == "CERTIFIED" else 2
+    return (
+        0 if manifest.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE" else 2
+    )
 
 
 def command_settle(args: argparse.Namespace) -> int:
@@ -1610,30 +1722,83 @@ def command_learn(args: argparse.Namespace) -> int:
 
 def command_status(args: argparse.Namespace) -> int:
     data = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    release_decision = data.get(
+        "RELEASE_DECISION",
+        "CERTIFIED_UPLOAD_PACKAGE" if data.get("status") == "CERTIFIED" else "DO_NOT_UPLOAD",
+    )
     _print_json(
         {
             "run_id": data.get("run_id"),
             "status": data.get("status"),
+            "FILE_VALID": data.get("FILE_VALID", data.get("status") == "CERTIFIED"),
+            "EVIDENCE_STATE": data.get(
+                "EVIDENCE_STATE", "PASS" if data.get("status") == "CERTIFIED" else "UNKNOWN"
+            ),
+            "MODEL_STATUS": data.get("MODEL_STATUS", "UNVALIDATED"),
+            "RELEASE_DECISION": release_decision,
+            "certification_basis": data.get(
+                "certification_basis", "MANUAL_GUARDRAIL"
+            ),
             "output_path": data.get("output_path"),
             "output_sha256": data.get("output_sha256"),
             "blockers": data.get("blockers", []),
         }
     )
-    return 0 if data.get("status") == "CERTIFIED" else 2
+    return 0 if release_decision == "CERTIFIED_UPLOAD_PACKAGE" else 2
 
 
 def command_audit(args: argparse.Namespace) -> int:
     data = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     problems: list[str] = []
     output_path = data.get("output_path")
-    if data.get("status") == "CERTIFIED":
+    release_decision = data.get(
+        "RELEASE_DECISION",
+        "CERTIFIED_UPLOAD_PACKAGE" if data.get("status") == "CERTIFIED" else "DO_NOT_UPLOAD",
+    )
+    if release_decision == "CERTIFIED_UPLOAD_PACKAGE":
         if not output_path or not Path(output_path).exists():
             problems.append("certified output is missing")
         elif sha256_file(output_path) != data.get("output_sha256"):
             problems.append("certified output hash changed")
     elif output_path:
         problems.append("DO_NOT_UPLOAD manifest must not point to an upload CSV")
-    _print_json({"status": "PASS" if not problems else "FAIL", "problems": problems})
+    try:
+        stored_evidence_state = ReleaseEvidenceState(
+            data.get("EVIDENCE_STATE", "UNKNOWN")
+        )
+    except ValueError:
+        stored_evidence_state = ReleaseEvidenceState.CONFLICTED
+        problems.append("manifest EVIDENCE_STATE is invalid")
+    try:
+        stored_model_status = ModelStatus(data.get("MODEL_STATUS", "UNVALIDATED"))
+    except ValueError:
+        stored_model_status = ModelStatus.UNVALIDATED
+        problems.append("manifest MODEL_STATUS is invalid")
+    try:
+        stored_basis = CertificationBasis(
+            data.get("certification_basis", "MANUAL_GUARDRAIL")
+        )
+    except ValueError:
+        stored_basis = CertificationBasis.MANUAL_GUARDRAIL
+        problems.append("manifest certification_basis is invalid")
+    audit_policy = derive_release_policy(
+        file_valid=bool(data.get("FILE_VALID", not problems)) and not problems,
+        evidence_state=stored_evidence_state,
+        model_status=stored_model_status,
+        certification_basis=stored_basis,
+        file_blockers=problems,
+        evidence_blockers=data.get("evidence_blockers", ()),
+        model_blockers=data.get("model_blockers", ()),
+        safety_blockers=data.get("blockers", ()),
+    )
+    _print_json(
+        {
+            "status": "PASS" if not problems else "FAIL",
+            **audit_policy.truth_values(),
+            "certification_basis": audit_policy.certification_basis.value,
+            "problems": problems,
+        }
+    )
     return 0 if not problems else 2
 
 
@@ -1755,16 +1920,25 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     report_path = output_root / "cowork_run.json"
 
     if not doctor_report.pass_status or contest_problems or _cowork_core_blockers(snapshotted):
+        blocked_truths = _blocked_truth_values(
+            certification_basis=(
+                CertificationBasis.MANUAL_GUARDRAIL
+                if snapshotted.manual_guardrail and snapshotted.assignment_csv is not None
+                else CertificationBasis.MODEL_ASSISTED
+            )
+        )
         review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
         create_cowork_status_workbook(
             output_path=review_path,
             run_values=_cowork_run_control_values(snapshotted),
             blockers=blockers,
             report_path=report_path,
+            truth_values=blocked_truths,
         )
         result = {
             "run_id": run_id,
             "status": "DO_NOT_UPLOAD",
+            **blocked_truths,
             "stage": "RECONCILED",
             "mode": slate.mode.value,
             "authorized_entries": len(entries.authorizations),
@@ -1847,7 +2021,15 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     result = {
         "run_id": run_id,
         "status": certification["status"],
-        "stage": "CERTIFIED" if certification["status"] == "CERTIFIED" else "DO_NOT_UPLOAD",
+        "FILE_VALID": certification["FILE_VALID"],
+        "EVIDENCE_STATE": certification["EVIDENCE_STATE"],
+        "MODEL_STATUS": certification["MODEL_STATUS"],
+        "RELEASE_DECISION": certification["RELEASE_DECISION"],
+        "stage": (
+            "CERTIFIED"
+            if certification["RELEASE_DECISION"] == "CERTIFIED_UPLOAD_PACKAGE"
+            else "DO_NOT_UPLOAD"
+        ),
         "mode": slate.mode.value,
         "authorized_entries": len(entries.authorizations),
         "request": str(request_path),
@@ -1902,6 +2084,8 @@ def command_cowork_run(args: argparse.Namespace) -> int:
 
         diagnostic = {
             "run_id": run_id,
+            "status": "DO_NOT_UPLOAD",
+            **_blocked_truth_values(),
             "stage": "BUILD_OR_CERTIFY_FAILED",
             "error": type(exc).__name__,
             "message": str(exc),
@@ -1914,6 +2098,7 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         result = {
             "run_id": run_id,
             "status": "DO_NOT_UPLOAD",
+            **_blocked_truth_values(),
             "stage": "BUILD_OR_CERTIFY_FAILED",
             "error": type(exc).__name__,
             "message": str(exc),
@@ -2206,6 +2391,7 @@ def main(argv: list[str] | None = None) -> int:
         _print_json(
             {
                 "status": "DO_NOT_UPLOAD",
+                **_blocked_truth_values(),
                 "stage": "CLI_FAILED",
                 "error": type(exc).__name__,
                 "message": str(exc),

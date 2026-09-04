@@ -3,7 +3,8 @@
 This is Claude's operating procedure for the two-file NFL DFS workflow. The
 operator's intended interaction is: attach a DraftKings salary CSV and
 reserved-entry CSV, ask Claude to run the slate, review the result, and upload
-manually only after `CERTIFIED`.
+manually only after `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE`. The legacy
+`CERTIFIED` status is derived from that decision for compatibility.
 
 ## What the two DraftKings files establish
 
@@ -213,7 +214,8 @@ The result folder contains, as applicable:
 
 Always report:
 
-1. `CERTIFIED` or `DO_NOT_UPLOAD`.
+1. `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and `RELEASE_DECISION`, plus
+   the derived compatibility status (`CERTIFIED` or `DO_NOT_UPLOAD`).
 2. The exact blocker list.
 3. Review workbook and manifest paths.
 4. Output SHA-256 when an upload CSV exists.
