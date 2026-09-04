@@ -34,6 +34,10 @@
 - Manual assignments can be independently validated and exported into only the
   blank, authorized Entry-ID rows. Untouched lines preserve their exact bytes,
   including original BOM state. The final CSV is reparsed and SHA-256 bound.
+- Certification reports `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and
+  `RELEASE_DECISION` independently. Legal proposed bytes are constructed,
+  audited, reparsed, and hashed in memory even when evidence or model blockers
+  require `DO_NOT_UPLOAD`; no upload-shaped CSV is persisted in that case.
 - Governed late swap has a separate fail-closed writer for fully prefilled
   DraftKings bulk-edit templates. It binds a prior `CERTIFIED` manifest and
   assignment, derives replaceable cells only from exact IDs and lock times,
@@ -51,8 +55,9 @@
   report freshness is T-90/lock-relative, and `NOT_YET_DUE` cannot clear a
   final late-swap release decision.
 - Model-assisted certification requires `PASS` opportunity evidence for every
-  modeled salary-pool player, because all of them can affect the simulated
-  field and ranks. The build report is bound to the exact salary, entry,
+  selected player. Non-PASS uncertainty elsewhere in the salary pool is
+  counted and retained as a prior-only model limitation rather than mislabeled
+  as selected-player hard evidence. The build report is bound to the exact salary, entry,
   payout, team, and player input hashes plus the contest parameters; a report
   from a different build cannot clear certification.
 - The live model path uses explicit opportunity inputs, deterministic team-share
@@ -69,7 +74,10 @@
 - Quantitative QA is executed after selection, persisted in the build report,
   and hash-bound into certification. REFEREE remains report-only in the sense
   that it cannot tune or reselect, but its independent confidence-aware sign or
-  safety disagreement is a binding promotion blocker. Solver proof is persisted.
+  genuine safety disagreement is a binding promotion blocker. Solver proof is
+  persisted. Construction preferences such as `DST_OPPOSING_PASS_STACK` and
+  candidate-family coverage are advisory unless a registered hard policy is
+  enforced by the solver and validator.
 - Exact one-to-three-entry search is exhaustive only inside an explicit bounded
   shortlist (maximum 50,000 combinations); combinations are evaluated in
   vectorized batches and the effective search size is reported.

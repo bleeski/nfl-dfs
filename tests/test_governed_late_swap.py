@@ -259,6 +259,7 @@ def _assert_blocked(manifest, manifest_path: Path) -> None:
     assert manifest_path.exists()
     assert manifest.output_path is None
     assert manifest.output_sha256 is None
+    assert manifest.release_decision.value == "DO_NOT_UPLOAD"
     assert not list(manifest_path.parent.glob("DK_UPLOAD_*.csv"))
 
 
@@ -268,6 +269,9 @@ def test_end_to_end_governed_late_swap_writes_and_audits_exact_bytes(
     case = _case(tmp_path, classic_slate, classic_entries)
     manifest, manifest_path = _govern(case, classic_slate)
     assert manifest.status == "CERTIFIED", manifest.blockers
+    assert manifest.file_valid
+    assert manifest.evidence_state.value == "PASS"
+    assert manifest.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE"
     assert manifest_path.exists()
     output = Path(manifest.output_path or "")
     assert output.exists()
@@ -288,6 +292,11 @@ def test_end_to_end_governed_late_swap_writes_and_audits_exact_bytes(
     result = output.read_bytes()
     assert source != result
     assert any(record.field == "final_bytes" for record in manifest.evidence)
+    serialized = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert serialized["FILE_VALID"] is True
+    assert serialized["EVIDENCE_STATE"] == "PASS"
+    assert serialized["MODEL_STATUS"] == "UNVALIDATED"
+    assert serialized["RELEASE_DECISION"] == "CERTIFIED_UPLOAD_PACKAGE"
 
 
 def test_locked_player_removal_addition_and_movement_fail(
@@ -401,6 +410,8 @@ def test_nonpass_and_not_yet_due_evidence_prevent_final_output(
     case["eligibility"].write_text(json.dumps(payload), encoding="utf-8")
     manifest, path = _govern(case, classic_slate, f"evidence-{state.lower()}")
     _assert_blocked(manifest, path)
+    assert manifest.file_valid
+    assert manifest.proposed_output_sha256 is not None
     assert any(f":{state}:" in blocker for blocker in manifest.blockers)
 
 
@@ -425,6 +436,8 @@ def test_missing_unverified_and_ineligible_contest_evidence_fail(
             case["eligibility"].write_text(json.dumps(payload), encoding="utf-8")
         manifest, path = _govern(case, classic_slate, f"eligibility-{suffix}")
         _assert_blocked(manifest, path)
+        assert manifest.file_valid
+        assert manifest.proposed_output_sha256 is not None
 
 
 @pytest.mark.parametrize("kind", ["expired", "invalid-url", "not-applicable"])

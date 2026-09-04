@@ -13,10 +13,16 @@ from nfl_dfs.contracts import ContestObjective
 from nfl_dfs.economics import CandidateEconomics
 from nfl_dfs.evidence import evaluate_hard_gates, parse_official_inactives
 from nfl_dfs.lifecycle import LifecycleError, invalidate_certification, transition
+from nfl_dfs.lineups import validate_lineup
 from nfl_dfs.optimizer import LineupOptimizer
 from nfl_dfs.opportunity import OpportunityModel, PlayerOpportunity
 from nfl_dfs.portfolio import evaluate_portfolio, select_portfolio
-from nfl_dfs.qa import decide_repair, referee_blocks, run_three_pass_audit
+from nfl_dfs.qa import (
+    audit_selected_portfolio,
+    decide_repair,
+    referee_blocks,
+    run_three_pass_audit,
+)
 from nfl_dfs.registry import RunRegistry
 from nfl_dfs.scenario_store import load_scenario_bank, save_scenario_bank
 from nfl_dfs.settlement import SettlementError, parse_standings, require_entry_coverage
@@ -135,6 +141,102 @@ def test_selected_unknown_opportunity_evidence_is_a_hard_blocker(
     assert record.hard_gate
     assert record.state is EvidenceState.UNKNOWN
     assert not evaluate_hard_gates((record,))[0]
+
+
+def test_unselected_pool_uncertainty_is_reported_but_does_not_fail_selected_evidence(
+    classic_slate, classic_entries
+) -> None:
+    solved = LineupOptimizer(classic_slate).solve(
+        {player.dk_id: 50_000 / max(player.salary, 1) for player in classic_slate.players}
+    )
+    assert solved.roster is not None
+    selected_people = {
+        player.underlying_id
+        for player in classic_slate.players
+        if player.dk_id in solved.roster
+    }
+    people = {}
+    for salary_player in classic_slate.players:
+        people.setdefault(
+            salary_player.underlying_id,
+            PlayerOpportunity(
+                underlying_id=salary_player.underlying_id,
+                source_dk_id=salary_player.dk_id,
+                team=salary_player.team,
+                position=salary_player.position,
+                qb_attempt_share=0,
+                carry_share=0,
+                target_share=0,
+                catch_rate=0,
+                yards_per_target=0,
+                rushing_td_share=0,
+                receiving_td_share=0,
+                role_capacity=1,
+                evidence_state=(
+                    "PASS"
+                    if salary_player.underlying_id in selected_people
+                    else "UNKNOWN"
+                ),
+            ),
+        )
+    record = _selected_opportunity_evidence(
+        model=OpportunityModel((), tuple(people.values())),
+        slate=classic_slate,
+        assignments={classic_entries.authorizations[0].entry_id: solved.roster},
+        source_artifact_id="a" * 64,
+    )
+    assert record.state is EvidenceState.PASS
+    assert record.value["prior_only_unselected_pool_count"] > 0
+    assert evaluate_hard_gates((record,))[0]
+
+
+def test_dst_opposing_pass_stack_is_advisory_without_registered_solver_policy(
+    classic_slate,
+) -> None:
+    defense = next(player for player in classic_slate.players if player.position == "DST")
+    pass_catcher = next(
+        player
+        for player in classic_slate.players
+        if player.team == defense.opponent and player.position in {"WR", "TE"}
+    )
+    scores = {player.dk_id: 1.0 for player in classic_slate.players}
+    scores[defense.dk_id] = 1_000_000.0
+    scores[pass_catcher.dk_id] = 1_000_000.0
+    solved = LineupOptimizer(classic_slate).solve(scores)
+    assert solved.roster is not None
+    assert defense.dk_id in solved.roster and pass_catcher.dk_id in solved.roster
+    lineup = validate_lineup(classic_slate, solved.roster).lineup
+    assert lineup is not None
+    findings = audit_selected_portfolio(
+        slate=classic_slate,
+        lineups=(lineup,),
+        evidence=(),
+        solver_gap_required=False,
+    )
+    dst_findings = [
+        finding for finding in findings if finding.code == "DST_OPPOSING_PASS_STACK"
+    ]
+    assert dst_findings and all(not finding.blocking for finding in dst_findings)
+
+
+def test_solver_proof_and_final_byte_failures_remain_blocking(classic_slate) -> None:
+    solved = LineupOptimizer(classic_slate).solve(
+        {player.dk_id: 50_000 / max(player.salary, 1) for player in classic_slate.players}
+    )
+    assert solved.roster is not None
+    lineup = validate_lineup(classic_slate, solved.roster).lineup
+    assert lineup is not None
+    findings = audit_selected_portfolio(
+        slate=classic_slate,
+        lineups=(lineup,),
+        evidence=(),
+        solver_gap=None,
+        solver_gap_required=True,
+        final_byte_match=False,
+    )
+    by_code = {finding.code: finding for finding in findings}
+    assert by_code["SOLVER_PROOF_OUTSIDE_LIMIT"].blocking
+    assert by_code["FINAL_BYTE_MISMATCH"].blocking
 
 
 def test_qa_repair_and_referee_semantics() -> None:

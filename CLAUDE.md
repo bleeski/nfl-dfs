@@ -67,9 +67,12 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 7. Continue through build, independent QA, and certification when the request
    is complete. If current official activity evidence is missing, still retain
    useful diagnostic assignments but finish `DO_NOT_UPLOAD`.
-8. Return the exact status, blockers, review-workbook path, manifest path,
-   output SHA-256, and the single next operator action. A `CERTIFIED` result
-   covers legality, evidence, authorization, and final bytes—not profitability.
+8. Return `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and
+   `RELEASE_DECISION`, plus the compatibility status, blockers,
+   review-workbook path, manifest path, proposed/final SHA-256, and the single
+   next operator action. `FILE_VALID` never implies release. A compatibility
+   `CERTIFIED` status is derived only from
+   `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` and is not a profitability claim.
 
 ## Source and account policy
 
@@ -106,10 +109,12 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 A Cowork slate task is complete only when it leaves a versioned review package
 and reports one of these truthful outcomes:
 
-- `CERTIFIED`: exact final bytes passed every current hard gate. Ben may review
-  and manually upload them.
-- `DO_NOT_UPLOAD`: no upload-shaped CSV survives, every blocker is named, and
-  the smallest next action is explicit.
+- `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE`: exact final bytes passed every
+  current hard gate. Ben may review and manually upload them. Manual guardrail
+  certification remains explicitly distinct from model-performance validation.
+- `RELEASE_DECISION=DO_NOT_UPLOAD`: no upload-shaped CSV survives, every
+  blocker is named, and the smallest next action is explicit. A valid proposed
+  file may still be reported and hashed in memory.
 
 Never describe `RECONCILED`, `MODELLED`, legal lineups, generated assignments,
 or a green diagnostic as upload-ready.
