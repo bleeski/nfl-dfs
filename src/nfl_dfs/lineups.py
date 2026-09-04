@@ -9,7 +9,7 @@ from typing import Iterable, Mapping
 from .byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 from .contracts import EngineMode, Lineup, SalaryPlayer, SlateContract
 from .dk import CLASSIC_COLUMNS, SHOWDOWN_COLUMNS, EntryTemplate
-from .hashing import content_hash
+from .hashing import content_hash, sha256_bytes
 
 
 class LineupValidationError(ValueError):
@@ -24,6 +24,20 @@ class ValidationResult:
     @property
     def valid(self) -> bool:
         return not self.errors and self.lineup is not None
+
+
+@dataclass(frozen=True)
+class LateSwapAuthorization:
+    current_template_sha256: str
+    prior_assignment_sha256: str
+    as_of: str
+    replaceable_cells: tuple[tuple[str, tuple[int, ...]], ...]
+
+    def by_entry(self) -> dict[str, frozenset[int]]:
+        return {
+            entry_id: frozenset(indexes)
+            for entry_id, indexes in self.replaceable_cells
+        }
 
 
 def _canonical_key(mode: EngineMode, players: list[SalaryPlayer]) -> str:
@@ -163,6 +177,99 @@ def write_upload_bytes(
             buffer = io.StringIO(newline="")
             csv.writer(buffer, lineterminator="").writerow([value])
             replacements[index] = buffer.getvalue().encode(output_encoding)
+        rewritten: list[bytes] = []
+        cursor = 0
+        for index, (start, end) in enumerate(spans):
+            rewritten.append(body_bytes[cursor:start])
+            rewritten.append(replacements.get(index, body_bytes[start:end]))
+            cursor = end
+        rewritten.append(body_bytes[cursor:])
+        rewritten.append(ending_bytes)
+        output.append(b"".join(rewritten))
+        found.add(entry_id)
+    if found != set(assignments):
+        raise LineupValidationError("not all authorized Entry IDs were found in source bytes")
+    return b"".join(output)
+
+
+def write_late_swap_bytes(
+    template: EntryTemplate,
+    assignments: Mapping[str, tuple[str, ...]],
+    authorization: LateSwapAuthorization,
+) -> bytes:
+    """Rewrite only roster cells proven replaceable by the late-swap governor."""
+    authorized = {entry.entry_id: entry for entry in template.authorizations}
+    if set(assignments) != set(authorized):
+        missing = sorted(set(authorized).difference(assignments))
+        extra = sorted(set(assignments).difference(authorized))
+        raise LineupValidationError(
+            f"assignment authorization mismatch: missing={missing}, extra={extra}"
+        )
+    raw = template.path.read_bytes()
+    if sha256_bytes(raw) != template.raw_hash:
+        raise LineupValidationError("current entry template changed after authorization")
+    if template.raw_hash != authorization.current_template_sha256:
+        raise LineupValidationError("late-swap authorization targets a different template")
+    allowed_by_entry = authorization.by_entry()
+    if set(allowed_by_entry) != set(assignments):
+        raise LineupValidationError("late-swap authorization Entry-ID coverage is incomplete")
+
+    lines = split_byte_lines(raw)
+    output: list[bytes] = []
+    found: set[str] = set()
+    for line_number, line in enumerate(lines, start=1):
+        body_bytes, ending_bytes = split_line_ending(line)
+        body = body_bytes.decode(template.encoding)
+        row = next(csv.reader([body]))
+        entry_id = row[0].strip() if row else ""
+        if entry_id not in assignments:
+            output.append(line)
+            continue
+        if entry_id in found:
+            raise LineupValidationError(f"duplicate source Entry ID at line {line_number}")
+        roster_start = template.roster_start_index
+        roster_width = len(template.roster_columns)
+        needed = roster_start + roster_width
+        spans = csv_field_spans(body_bytes)
+        if len(row) < needed or len(spans) < needed:
+            raise LineupValidationError(
+                f"Entry {entry_id} source row is narrower than the roster geometry"
+            )
+        auth = authorized[entry_id]
+        if len(auth.existing_cells) != roster_width or any(
+            not value for value in auth.existing_cells
+        ):
+            raise LineupValidationError(
+                f"Entry {entry_id} must be fully prefilled for governed late swap"
+            )
+        proposed = assignments[entry_id]
+        if len(proposed) != roster_width:
+            raise LineupValidationError(f"Entry {entry_id} roster width changed")
+        allowed = allowed_by_entry[entry_id]
+        if any(index < 0 or index >= roster_width for index in allowed):
+            raise LineupValidationError(
+                f"Entry {entry_id} authorization contains an invalid roster index"
+            )
+        changed = {
+            index
+            for index, (existing, replacement) in enumerate(
+                zip(auth.existing_cells, proposed, strict=True)
+            )
+            if existing != replacement
+        }
+        if changed != allowed:
+            raise LineupValidationError(
+                f"Entry {entry_id} changed cells {sorted(changed)} do not exactly match "
+                f"derived authorization {sorted(allowed)}"
+            )
+        output_encoding = (
+            "utf-8" if template.encoding == "utf-8-sig" else template.encoding
+        )
+        replacements: dict[int, bytes] = {}
+        for slot in sorted(changed):
+            buffer = io.StringIO(newline="")
+            csv.writer(buffer, lineterminator="").writerow([proposed[slot]])
+            replacements[roster_start + slot] = buffer.getvalue().encode(output_encoding)
         rewritten: list[bytes] = []
         cursor = 0
         for index, (start, end) in enumerate(spans):

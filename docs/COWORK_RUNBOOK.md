@@ -155,6 +155,51 @@ selects exact Entry-ID assignments, runs quantitative and REFEREE QA, and then
 attempts certification. One run supports exactly one Contest ID and one entry
 fee; split a multi-contest DraftKings export into separate immutable runs.
 
+## Governed late swap
+
+Late swap is a separate immutable release decision built on a prior `CERTIFIED`
+package. In Cowork, use the same shared launcher and logic as the Windows
+fallback:
+
+```sh
+sh ./nfl.sh late-swap \
+  --run-id '2026-W02-LATE-1' \
+  --salaries '/full/path/to/frozen-salaries.csv' \
+  --current-entries '/full/path/to/current-prefilled-bulk-edit.csv' \
+  --prior-manifest '/full/path/to/prior-certified.manifest.json' \
+  --prior-assignments '/full/path/to/prior-assignments.csv' \
+  --proposed-assignments '/full/path/to/proposed-assignments.csv' \
+  --eligibility-evidence '/full/path/to/late-swap-eligibility.json' \
+  --inactive-reports '/full/path/to/team-inactive-reports.json' \
+  --output-dir '/full/path/to/outputs' \
+  --as-of '2026-09-13T15:00:00-04:00'
+```
+
+The prior manifest must be `CERTIFIED`, its referenced output must still exist
+and match its hash, and its salary, assignment, original-template, and evidence
+bindings must reconcile. The current DraftKings bulk-edit template must be
+fully prefilled and cover exactly the same Entry IDs. Replaceable cells are
+computed from exact player IDs and lock times; neither the request nor an
+operator-provided unlocked flag can authorize a cell.
+
+The eligibility and team-report JSON contracts are defined in
+`docs/DATA_CONTRACTS.md`. Missing or non-`PASS` contest eligibility, inactive
+evidence that is `UNKNOWN`, `STALE`, `CONFLICTED`, or `NOT_YET_DUE`, a selected
+inactive player, any locked-player change, an input hash change, or a byte-audit
+failure produces exit code 2, a versioned `DO_NOT_UPLOAD` manifest, and no
+upload-shaped CSV. Stop there; fix the first named blocker and use a new run ID.
+
+A passing late-swap run contains:
+
+- `late_swap_<run_id>.manifest.json`: prior-state, evidence, allowed-cell,
+  input, and final-byte hashes.
+- `DK_UPLOAD_<run_id>.csv`: present only after lock, legality, evidence,
+  independent byte audit, reparse, and post-write hash gates pass.
+
+The status covers authorization, evidence, legality, and exact bytes. It is not
+an EV, ROI, profitability, or live-slate validation claim. DraftKings login,
+editing, and upload remain manual.
+
 The result folder contains, as applicable:
 
 - `cowork_run.json`: top-level status and artifact index.

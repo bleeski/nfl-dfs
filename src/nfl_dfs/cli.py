@@ -44,7 +44,7 @@ from .economics import evaluate_candidates_against_field
 from .evidence import EvidenceError, parse_official_inactive_snapshot, validate_source_ledger
 from .field import generate_opponent_field, scale_field_multiplicities
 from .hashing import content_hash, sha256_file
-from .late_swap import audit_late_swap
+from .late_swap import LateSwapRunError, govern_late_swap
 from .learning import evaluate_challenger, should_rollback
 from .lineups import read_assignment_csv, validate_lineup
 from .opportunity import load_opportunity_model
@@ -1518,15 +1518,49 @@ def command_build(args: argparse.Namespace) -> int:
 
 
 def command_late_swap(args: argparse.Namespace) -> int:
-    slate = parse_salaries(args.salaries)
-    original = read_assignment_csv(args.original, slate.mode)
-    proposed = read_assignment_csv(args.proposed, slate.mode)
+    run_id = _resolved_run_id(args.run_id, "late-swap")
     now = datetime.fromisoformat(args.as_of.replace("Z", "+00:00"))
     if now.tzinfo is None:
         raise ValueError("--as-of must include a timezone")
-    audit = audit_late_swap(slate=slate, original=original, proposed=proposed, now=now)
-    _print_json({"status": "PASS" if audit.valid else "FAIL", "problems": audit.problems})
-    return 0 if audit.valid else 2
+    try:
+        manifest, manifest_path = govern_late_swap(
+            run_id=run_id,
+            salaries_path=args.salaries,
+            current_entries_path=args.current_entries,
+            prior_manifest_path=args.prior_manifest,
+            prior_assignments_path=args.prior_assignments,
+            proposed_assignments_path=args.proposed_assignments,
+            eligibility_evidence_path=args.eligibility_evidence,
+            inactive_reports_path=args.inactive_reports,
+            output_directory=args.output_dir,
+            as_of=now,
+        )
+    except LateSwapRunError as exc:
+        _print_json(
+            {
+                "run_id": run_id,
+                "status": "DO_NOT_UPLOAD",
+                "blockers": [str(exc)],
+                "manifest": None,
+                "output_path": None,
+                "output_sha256": None,
+                "next_action": "Use a new unique run ID after reviewing the existing run directory.",
+            }
+        )
+        return 2
+    _print_json(
+        {
+            "run_id": run_id,
+            "status": manifest.status,
+            "blockers": list(manifest.blockers),
+            "input_hashes": manifest.input_hashes,
+            "manifest": str(manifest_path),
+            "output_path": manifest.output_path,
+            "output_sha256": manifest.output_sha256,
+            "next_action": manifest.next_action,
+        }
+    )
+    return 0 if manifest.status == "CERTIFIED" else 2
 
 
 def command_settle(args: argparse.Namespace) -> int:
@@ -2123,9 +2157,15 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     build.set_defaults(func=command_build)
     late = subparsers.add_parser("late-swap")
+    late.add_argument("--run-id", required=True)
     late.add_argument("--salaries", required=True)
-    late.add_argument("--original", required=True)
-    late.add_argument("--proposed", required=True)
+    late.add_argument("--current-entries", "--entries", dest="current_entries", required=True)
+    late.add_argument("--prior-manifest", required=True)
+    late.add_argument("--prior-assignments", required=True)
+    late.add_argument("--proposed-assignments", required=True)
+    late.add_argument("--eligibility-evidence", required=True)
+    late.add_argument("--inactive-reports", required=True)
+    late.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     late.add_argument("--as-of", required=True)
     late.set_defaults(func=command_late_swap)
     settle = subparsers.add_parser("settle")

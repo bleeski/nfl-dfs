@@ -292,6 +292,89 @@ class CertificationManifest(FrozenModel):
     blockers: tuple[str, ...] = ()
 
 
+class LateSwapEligibility(FrozenModel):
+    schema_version: Literal["nfl_late_swap_eligibility_v1"]
+    contest_id: str = Field(pattern=r"^[0-9]+$")
+    bulk_late_swap_eligible: bool
+    evidence_state: EvidenceState
+    source_url: str = Field(min_length=1)
+    observed_at: datetime
+    expires_at: datetime
+
+    @field_validator("observed_at", "expires_at")
+    @classmethod
+    def eligibility_timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("eligibility timestamps must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def eligibility_window_is_ordered(self) -> "LateSwapEligibility":
+        if self.evidence_state is EvidenceState.NOT_APPLICABLE:
+            raise ValueError("late-swap eligibility cannot be NOT_APPLICABLE")
+        if self.expires_at < self.observed_at:
+            raise ValueError("eligibility expires_at must not precede observed_at")
+        return self
+
+
+class TeamInactiveReport(FrozenModel):
+    team: str = Field(pattern=r"^[A-Z]{2,3}$")
+    game_id: str = Field(min_length=3)
+    inactive_dk_ids: tuple[str, ...]
+    evidence_state: EvidenceState
+    source_url: str = Field(min_length=1)
+    observed_at: datetime
+
+    @field_validator("observed_at")
+    @classmethod
+    def report_timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("inactive-report timestamps must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def report_ids_are_unique(self) -> "TeamInactiveReport":
+        if self.evidence_state is EvidenceState.NOT_APPLICABLE:
+            raise ValueError("a supplied team inactive report cannot be NOT_APPLICABLE")
+        if len(set(self.inactive_dk_ids)) != len(self.inactive_dk_ids):
+            raise ValueError(f"inactive IDs must be unique for team {self.team}")
+        if any(not dk_id.isdigit() for dk_id in self.inactive_dk_ids):
+            raise ValueError(f"inactive IDs must be exact numeric DK IDs for team {self.team}")
+        return self
+
+
+class TeamInactiveReportBundle(FrozenModel):
+    schema_version: Literal["nfl_team_inactive_reports_v1"]
+    reports: tuple[TeamInactiveReport, ...] = Field(min_length=1)
+
+
+class LateSwapManifest(FrozenModel):
+    manifest_version: Literal["nfl_late_swap_manifest_v1"] = (
+        "nfl_late_swap_manifest_v1"
+    )
+    run_id: str
+    prior_run_id: str | None = None
+    status: Literal["CERTIFIED", "DO_NOT_UPLOAD"]
+    created_at: datetime
+    as_of: datetime
+    contest_id: str | None = None
+    input_hashes: dict[str, str]
+    replaceable_cells: dict[str, tuple[int, ...]] = Field(default_factory=dict)
+    output_path: str | None = None
+    output_sha256: str | None = None
+    evidence: tuple[EvidenceRecord, ...] = ()
+    blockers: tuple[str, ...] = ()
+    next_action: str
+    runtime: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("created_at", "as_of")
+    @classmethod
+    def late_swap_timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("late-swap timestamps must be timezone-aware")
+        return value
+
+
 class SettlementBundle(FrozenModel):
     settlement_id: str
     contest_id: str

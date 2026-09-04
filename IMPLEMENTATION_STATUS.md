@@ -8,7 +8,7 @@
   for byte-sensitive CSV, workbook, and supplied-fixture paths. Both critiques
   remain preserved.
 - `nfl.ps1` provides setup, guided run, intake, validation, build,
-  certification, audit, late-swap audit, settlement capture, learning gates,
+  certification, audit, governed late swap, settlement capture, learning gates,
   and tests through one Windows launcher.
 - `nfl.sh` provides the pinned Linux/Cowork launcher. `cowork-run` discovers
   arbitrarily named CSV attachments by first-row schema, rejects ambiguous
@@ -34,11 +34,22 @@
 - Manual assignments can be independently validated and exported into only the
   blank, authorized Entry-ID rows. Untouched lines preserve their exact bytes,
   including original BOM state. The final CSV is reparsed and SHA-256 bound.
+- Governed late swap has a separate fail-closed writer for fully prefilled
+  DraftKings bulk-edit templates. It binds a prior `CERTIFIED` manifest and
+  assignment, derives replaceable cells only from exact IDs and lock times,
+  preserves locked and unauthorized bytes, independently audits and reparses
+  the candidate bytes, and writes a new immutable output only after every gate
+  passes. The ordinary pre-lock writer still rejects prefilled rows.
 - Hard evidence is typed and fail-closed. Current official status uses exact IDs
   and operator-controlled source evidence; fuzzy names cannot certify. Official
   activity rows retain their real observation times and expire after the
   registered three-hour lock window. Market/weather rows are bounded,
   enumerated, source-ledger-bound, and expire after six hours.
+- Late swap additionally requires source-bound eligibility for the exact
+  Contest ID and versioned team-scoped official inactive negative lists.
+  Explicitly empty team reports are supported; missing teams remain unknown,
+  report freshness is T-90/lock-relative, and `NOT_YET_DUE` cannot clear a
+  final late-swap release decision.
 - Model-assisted certification requires `PASS` opportunity evidence for every
   modeled salary-pool player, because all of them can affect the simulated
   field and ranks. The build report is bound to the exact salary, entry,
@@ -92,9 +103,10 @@
   only 50 scenarios in each DESIGN/SELECT/REFEREE bank. The complete registered
   10,000/20,000/20,000 refresh and real-data 10/5-minute gates therefore remain
   unclaimed until the operator supplies complete model inputs.
-- Late swap currently provides exact locked-cell reachability/audit. A calibrated
-  joint conditional contest-state reoptimizer remains gated on live standings,
-  ownership, scores, and validated remaining-game models.
+- Late swap can safely write an operator-proposed, evidence-cleared change to a
+  current prefilled bulk-edit template. A calibrated joint conditional
+  contest-state reoptimizer remains gated on live standings, ownership, scores,
+  and validated remaining-game models; S2 does not implement or claim one.
 - Runtime scenario defaults and certification deadlines come from
   `config/runtime.json`; hard-evidence requirements come from
   `config/evidence_policy.json`; `config/scoring.json` is validated against the

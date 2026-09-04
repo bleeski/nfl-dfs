@@ -80,8 +80,7 @@ def require_single_contest(template: EntryTemplate) -> None:
         raise DraftKingsParseError("; ".join(problems))
 
 
-def _read_text_csv(path: Path) -> tuple[str, list[list[str]], str]:
-    raw = path.read_bytes()
+def _read_csv_bytes(raw: bytes, source: Path) -> tuple[str, list[list[str]], str]:
     digest = sha256_bytes(raw)
     encodings = ("utf-8-sig",) if raw.startswith(b"\xef\xbb\xbf") else ("utf-8", "cp1252")
     last_error: UnicodeDecodeError | None = None
@@ -91,7 +90,11 @@ def _read_text_csv(path: Path) -> tuple[str, list[list[str]], str]:
             return encoding, list(csv.reader(io.StringIO(text, newline=""))), digest
         except UnicodeDecodeError as exc:
             last_error = exc
-    raise DraftKingsParseError(f"unsupported CSV encoding: {path}") from last_error
+    raise DraftKingsParseError(f"unsupported CSV encoding: {source}") from last_error
+
+
+def _read_text_csv(path: Path) -> tuple[str, list[list[str]], str]:
+    return _read_csv_bytes(path.read_bytes(), path)
 
 
 def _parse_fee(raw: str) -> float:
@@ -107,9 +110,12 @@ def _parse_fee(raw: str) -> float:
     return value
 
 
-def parse_entries(path: str | Path) -> EntryTemplate:
-    csv_path = Path(path).resolve()
-    encoding, rows, raw_hash = _read_text_csv(csv_path)
+def _parse_entries_rows(
+    csv_path: Path,
+    encoding: str,
+    rows: list[list[str]],
+    raw_hash: str,
+) -> EntryTemplate:
     if not rows or len(rows[0]) < 10:
         raise DraftKingsParseError("entry CSV has no usable header")
     header = tuple(rows[0])
@@ -169,6 +175,19 @@ def parse_entries(path: str | Path) -> EntryTemplate:
         authorizations=tuple(authorizations),
         encoding=encoding,
     )
+
+
+def parse_entries(path: str | Path) -> EntryTemplate:
+    csv_path = Path(path).resolve()
+    encoding, rows, raw_hash = _read_text_csv(csv_path)
+    return _parse_entries_rows(csv_path, encoding, rows, raw_hash)
+
+
+def parse_entry_bytes(raw: bytes, *, source_name: str = "late-swap-output.csv") -> EntryTemplate:
+    """Reparse candidate entry bytes without first persisting an upload-shaped file."""
+    source = Path(source_name)
+    encoding, rows, raw_hash = _read_csv_bytes(raw, source)
+    return _parse_entries_rows(source, encoding, rows, raw_hash)
 
 
 def _parse_game_info(raw: str) -> tuple[str, str, str, datetime]:

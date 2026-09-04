@@ -4,6 +4,78 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-03 — S2: governed late-swap writer and lock evidence
+
+Changed:
+
+- `src/nfl_dfs/late_swap.py` now runs an immutable, fail-closed late-swap
+  certification path. It validates a prior `CERTIFIED` manifest and referenced
+  output, binds prior/current/proposed artifacts, requires exact Entry-ID
+  coverage, derives every replaceable cell from the certified prior, exact
+  current-slate IDs, game lock times, and timezone-aware `as_of`, and rejects
+  locked-player removal, addition, or movement.
+- `src/nfl_dfs/contracts.py` and `src/nfl_dfs/evidence.py` add strict versioned
+  contest-eligibility, team inactive negative-list, and late-swap manifest
+  contracts. Explicitly empty team reports are distinct from missing reports;
+  unknown IDs, team/game conflicts, duplicates, invalid URLs, future/stale
+  observations, selected inactives, and non-`PASS` evidence fail closed.
+  `NOT_YET_DUE` remains nonblocking for provisional evaluation but explicitly
+  blocks a final late-swap release.
+- `src/nfl_dfs/lineups.py` adds a dedicated late-swap writer without weakening
+  the existing pre-lock writer. Only the lock-derived changed cells may be
+  rewritten; all metadata, locked cells, unauthorized rows/fields, BOM state,
+  line endings, quoted content, Unicode separators, and final-newline state are
+  preserved.
+- `src/nfl_dfs/referee.py` independently verifies the late-swap allowlist and
+  proves every unauthorized field's physical bytes are unchanged.
+  `src/nfl_dfs/dk.py` can reparse candidate entry bytes before an upload-shaped
+  file is written.
+- `src/nfl_dfs/cli.py` upgrades the shared `late-swap` command used by
+  `nfl.ps1` and `nfl.sh`. It requires a unique run ID and explicit salary,
+  current prefilled template, prior manifest/assignment, proposed assignment,
+  eligibility, inactive-report, output, and timezone-aware `as_of` inputs. It
+  returns compact status, blockers, hashes, paths, and one next action.
+- Ordinary blocked runs persist `nfl_late_swap_manifest_v1` when writable and
+  leave no `DK_UPLOAD_*.csv`; successful runs atomically publish one hash-bound
+  CSV only after writer, independent audit, reparse, input-recheck, and
+  post-write hash gates pass.
+- Added `tests/test_governed_late_swap.py`; updated `CLAUDE.md`, `docs/COWORK_RUNBOOK.md`,
+  `docs/DATA_CONTRACTS.md`, `docs/OPERATOR_GUIDE.md`,
+  `IMPLEMENTATION_STATUS.md`, and `backlog.md`.
+
+Verification:
+
+- Focused S2 suite: `36 passed in 14.81s`.
+- Full Windows suite: `123 passed, 1 skipped in 26.81s`. The existing optional
+  symbolic-link test remained skipped because this Windows account lacks
+  symlink privilege; Windows junction/reparse coverage passed in the full suite.
+- Clean temporary clone of pushed `main` at
+  `1073d4345f0db79c2285fd24b0c61b3f3dcfe36d`: supplied fixture hashes passed;
+  full checkpoint suite `87 passed, 1 skipped in 14.73s`.
+- `.\nfl.ps1 doctor`: pass on Python 3.13.7; SQLite integrity `ok`, WAL mode,
+  Excel lock `CLOSED_OR_ABSENT`, and no synchronized/reparse workspace.
+- Python compilation and `git diff --check`: pass.
+
+Remaining blockers:
+
+- None for S0 or S2.
+- Genuine Linux/Cowork execution is unverified. WSL 2 is present only through
+  Docker Desktop's internal distribution, not a usable Cowork test runtime.
+
+Tracker updates:
+
+- S0: `BLOCKED` -> `DONE` after the pushed clean-checkpoint verification.
+- S2: `READY` -> `IN_PROGRESS` -> `DONE`.
+- S3: `BLOCKED` -> `READY`; no S3 implementation was started.
+
+Claims explicitly not made:
+
+- No live slate, calibrated EV, ROI, win probability, calibrated ownership,
+  profitability, conditional contest-state reoptimization, or DraftKings
+  upload-readiness claim.
+- No DraftKings login, entry editing, upload, credential/cookie access, or
+  money action occurred.
+
 ### 2026-09-02 — S1: bounded safety and evidence foundation
 
 Changed:

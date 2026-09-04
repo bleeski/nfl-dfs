@@ -93,7 +93,7 @@ You can validate before certification:
 .\nfl.ps1 validate --salaries 'C:\full\path\DKSalaries.csv' --entries 'C:\full\path\DKEntries.csv' --assignments 'C:\full\path\assignments.csv'
 ```
 
-## Official status evidence
+## Official status evidence before lock
 
 Certification uses exact IDs only. Each selected player must have a current row:
 
@@ -112,6 +112,13 @@ TEAM,PLAYER_OR_GSIS_ID,STATUS,SOURCE_URL,OBSERVED_AT
 
 If a selected player is inactive, missing, fuzzy-matched, conflicted, or stale,
 the result is `DO_NOT_UPLOAD` and no upload-shaped CSV is left behind.
+
+Governed late swap uses a different contract matching the NFL's official
+team-scoped negative list. Do not convert the old positive-row CSV into fake
+`ACTIVE` rows. The late-swap JSON requires one explicit report per relevant
+unlocked team, and `inactive_dk_ids: []` represents a verified report with zero
+inactive players. See `docs/DATA_CONTRACTS.md` for the exact eligibility and
+team-report shapes.
 
 ## Payout evidence
 
@@ -171,12 +178,39 @@ Entry IDs and lineups in DraftKings before clicking upload.
 .\nfl.ps1 test
 ```
 
-For late swap, the original and proposed assignment CSVs must have identical
-Entry IDs. Locked roster cells are immutable:
+For governed late swap, first download the current prefilled bulk-edit template
+manually. Use the same salary snapshot and prior `CERTIFIED` manifest and
+assignment CSV, prepare a proposed assignment CSV with identical Entry IDs, and
+provide contest-bound eligibility plus team inactive-report JSON. Locked
+roster cells are immutable. Paste this in PowerShell with full paths:
 
 ```powershell
-.\nfl.ps1 late-swap --salaries 'C:\full\path\DKSalaries.csv' --original 'C:\full\path\original.csv' --proposed 'C:\full\path\proposed.csv' --as-of '2026-09-13T14:30:00-04:00'
+.\nfl.ps1 late-swap `
+  --run-id '2026-W02-LATE-1' `
+  --salaries 'C:\full\path\frozen-salaries.csv' `
+  --current-entries 'C:\full\path\current-prefilled-bulk-edit.csv' `
+  --prior-manifest 'C:\full\path\prior-certified.manifest.json' `
+  --prior-assignments 'C:\full\path\prior-assignments.csv' `
+  --proposed-assignments 'C:\full\path\proposed-assignments.csv' `
+  --eligibility-evidence 'C:\full\path\late-swap-eligibility.json' `
+  --inactive-reports 'C:\full\path\team-inactive-reports.json' `
+  --output-dir 'C:\full\path\outputs' `
+  --as-of '2026-09-13T15:00:00-04:00'
 ```
+
+Expected result:
+
+- `CERTIFIED`: the new run folder contains a late-swap manifest and one
+  `DK_UPLOAD_<run_id>.csv` with a SHA-256. Review its Entry IDs and changed
+  cells before any manual upload.
+- `DO_NOT_UPLOAD` (exit code 2): the manifest names every blocker and the run
+  folder contains no upload-shaped CSV. Stop, resolve the first blocker, and
+  rerun with a new run ID.
+
+The command never accepts an unlocked-player boolean or caller-supplied slot
+list. It derives replaceable cells from exact DraftKings IDs, the certified
+prior assignment, game lock times, the current prefilled template, and the
+timezone-aware `--as-of` value.
 
 ## Safe failure behavior
 

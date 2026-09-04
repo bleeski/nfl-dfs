@@ -19,10 +19,12 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 ## Baseline
 
 - Repository: `C:\Users\benja\Documents\Claude\nfl-dfs`
-- Branch at tracker creation: `main`
-- HEAD at tracker creation: `e042c7bfc546`
-- Current state: extensive tracked remediation changes plus untracked review artifacts; preserve all of them.
-- Verified 2026-09-01 on Windows: 65 tests passed with the project virtual environment and pytest cache disabled.
+- Original tracker branch/HEAD: `main` at `e042c7bfc546`.
+- Verified clean checkpoint 2026-09-03: local `main` and `origin/main` both at
+  `1073d4345f0db79c2285fd24b0c61b3f3dcfe36d`; the supplied fixture manifest
+  passed in a clean temporary clone and the checkpoint suite reported 87
+  passed, 1 skipped.
+- Current S2 branch: `codex/s2-governed-late-swap`.
 - Still unverified: Linux/Cowork runtime, real-slate timing, live calibration, and any model-assisted certified upload.
 - Current truthful capability: validated intake, legality, evidence gating, and byte-exact export infrastructure; not a validated EV engine.
 
@@ -42,8 +44,10 @@ New work should converge on four explicit and independently reported truths:
 ### S0 — Preserve and establish the implementation baseline
 
 - Priority: P0
-- Status: `BLOCKED`
-- Blocker: explicit user authorization is required before staging or committing the pre-existing remediation.
+- Status: `DONE`
+- Completion: the reviewed remediation/safety checkpoint is pushed on `main`;
+  a clean temporary clone reproduced all supplied fixture hashes and the full
+  87-passed, 1-skipped checkpoint suite without generated artifacts.
 - Scope:
   - Preserve the current dirty working tree and byte-sensitive fixtures.
   - Review `.gitattributes` and the supplied-fixture manifest.
@@ -80,7 +84,7 @@ New work should converge on four explicit and independently reported truths:
 ### S2 — Governed late-swap writer and lock evidence
 
 - Priority: P0
-- Status: `READY`
+- Status: `DONE`
 - Depends on: S1.
 - Findings: D-05 and the hard-evidence portion of D-08.
 - Scope:
@@ -93,11 +97,17 @@ New work should converge on four explicit and independently reported truths:
 - Acceptance:
   - End-to-end late-swap fixture writes a valid changed-entry CSV, preserves locked cells, and passes an independent byte audit.
   - Tampered prior assignments, stale templates, non-late-swap contests, and locked-player changes fail closed.
+- Completion: the shared CLI now binds prior state, derives cell authority from
+  exact lock times, requires contest eligibility and team negative-list
+  evidence, preserves unauthorized bytes, and writes only after independent
+  audit, reparse, hash, and final-release gates pass. Windows verification:
+  123 passed, 1 skipped; Linux/Cowork execution remains unverified because only
+  the Docker Desktop internal WSL distribution is installed.
 
 ### S3 — Certification truth states and QA policy
 
 - Priority: P0
-- Status: `BLOCKED`
+- Status: `READY`
 - Depends on: S1 and S2.
 - Findings: D-06 and D-09; modifies the proposed `UPLOAD_SAFE / MODEL_GRADE` doctrine.
 - Scope:
