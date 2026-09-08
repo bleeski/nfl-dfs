@@ -26,12 +26,17 @@ from .contracts import (
     EvidenceState,
     Lineup,
     ModelStatus,
+    ReleaseDecision,
     ReleaseEvidenceState,
 )
 from .cowork import (
     CoworkRunRequest,
+    OPERATOR_WEATHER_STATES,
     PATH_FIELDS,
+    SUPPORTED_PROFILES,
     confine_request_path,
+    gating_blockers,
+    prior_review_next_inputs,
     required_next_inputs,
     resolve_request_inputs,
 )
@@ -56,6 +61,8 @@ from .ownership import OwnershipBracket, cold_start_states
 from .payouts import parse_payout_csv, validate_payout_tiers
 from .portfolio import evaluate_portfolio, portfolio_net_samples, select_portfolio
 from .projection import build_projection_package
+from .prior_review import PROFILE_VERSION as PRIOR_REVIEW_PROFILE_VERSION
+from .prior_review import run_prior_review
 from .priors import freeze_prior_package, propose_prior_package
 from .participation import build_participation_contract, redistribute_opportunity
 from .prior_score import read_team_splits
@@ -2018,19 +2025,146 @@ def _snapshot_cowork_request(
     return replace(request, **updates)
 
 
-def _cowork_core_blockers(request: CoworkRunRequest) -> tuple[str, ...]:
+def _cowork_reported_blockers(request: CoworkRunRequest) -> tuple[str, ...]:
+    """Every named input this request still lacks, whatever the profile gates on."""
+
     blockers = list(required_next_inputs(request))
-    return tuple(
-        blocker
-        for blocker in blockers
-        if not blocker.startswith("OFFICIAL_STATUS_REQUIRED:")
+    if request.profile == "prior_review":
+        blockers.extend(prior_review_next_inputs(request))
+    return tuple(blockers)
+
+
+def _cowork_core_blockers(request: CoworkRunRequest) -> tuple[str, ...]:
+    """The subset the requested profile actually gates on."""
+
+    return gating_blockers(request, _cowork_reported_blockers(request))
+
+
+def _run_prior_review_profile(
+    *,
+    args: argparse.Namespace,
+    request: CoworkRunRequest,
+    run_id: str,
+    slate,
+    entries,
+    output_root: Path,
+    report_path: Path,
+    request_path: Path,
+    doctor_report,
+    unclassified,
+    intake: Mapping[str, object],
+    reported_blockers: list[str],
+) -> int:
+    """Drive the prior-only review chain from one gated Cowork command.
+
+    This path certifies nothing. `MODEL_STATUS` is pinned to `PRIOR_ONLY` and
+    `RELEASE_DECISION` to `DO_NOT_UPLOAD` here, not derived from an argument, and
+    the derived policy is re-asserted before anything is written. There is no
+    flag or profile value that can make this profile emit a certified package,
+    and a generated assignment is never routed into the manual-guardrail path.
+    """
+
+    as_of_raw = getattr(args, "as_of", None)
+    if as_of_raw:
+        as_of = datetime.fromisoformat(str(as_of_raw).replace("Z", "+00:00"))
+        if as_of.tzinfo is None:
+            raise ValueError("as_of must be timezone aware")
+        as_of = as_of.astimezone(timezone.utc)
+    else:
+        as_of = datetime.now(timezone.utc)
+
+    outcome = run_prior_review(
+        salary_csv=request.salary_csv or "",
+        entry_csv=request.entry_csv or "",
+        label=request.label,
+        as_of=as_of,
+        run_root=DEFAULT_RUNS_DIR / run_id / "prior_review",
+        output_root=output_root,
+        season=request.season,
+        prior_season=request.prior_season,
+        prior_package_dir=request.prior_package_dir,
+        build_priors=request.build_priors,
+        weather_state=request.weather_state,
+        weather_source_uri=request.weather_source_uri,
+        weather_observed_at=request.weather_observed_at,
+        lineup_count=request.lineup_count,
+        max_person_overlap=request.max_person_overlap,
+        operator_excluded_dk_ids=request.exclude_dk_ids,
+        extra_unavailable_statuses=request.unavailable_statuses,
+        extra_available_statuses=request.available_statuses,
     )
+
+    blockers = list(reported_blockers)
+    blockers[0:0] = list(outcome.blockers)
+    truths = _blocked_truth_values(
+        file_valid=outcome.file_valid,
+        evidence_state=ReleaseEvidenceState.UNKNOWN,
+        model_status=ModelStatus.PRIOR_ONLY,
+        certification_basis=CertificationBasis.MODEL_ASSISTED,
+    )
+    if (
+        truths["MODEL_STATUS"] != ModelStatus.PRIOR_ONLY.value
+        or truths["RELEASE_DECISION"] != ReleaseDecision.DO_NOT_UPLOAD.value
+    ):
+        raise RuntimeError(
+            "prior_review derived a release decision other than DO_NOT_UPLOAD; "
+            "refusing to write anything"
+        )
+
+    review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
+    create_cowork_status_workbook(
+        output_path=review_path,
+        run_values=_cowork_run_control_values(request),
+        blockers=blockers,
+        report_path=report_path,
+        truth_values=truths,
+    )
+    result = {
+        "run_id": run_id,
+        "status": "DO_NOT_UPLOAD",
+        **truths,
+        "stage": (
+            "PRIOR_ONLY_REVIEW_EXPORT"
+            if outcome.file_valid
+            else f"PRIOR_REVIEW_{outcome.stage}_BLOCKED"
+        ),
+        "mode": slate.mode.value,
+        "authorized_entries": len(entries.authorizations),
+        "contest_ids": sorted({entry.contest_id for entry in entries.authorizations}),
+        "entry_fees": sorted({entry.entry_fee for entry in entries.authorizations}),
+        "request": str(request_path),
+        "review_workbook": str(review_path),
+        "blockers": blockers,
+        "unclassified_csvs": [str(path) for path in unclassified],
+        "input_hashes": intake["hashes"],
+        "doctor": json.loads(doctor_report.to_json()),
+        **outcome.as_report(),
+        "next": (
+            "Review the lineups and the bulk-entry CSV, then decide manually. Re-run"
+            " after actives are announced, roughly ninety minutes before kickoff."
+            if outcome.file_valid
+            else "Resolve every named blocker above, then re-run the same command."
+        ),
+        "meaning": (
+            "Legal and byte-audited, never certified. This profile reads no payout"
+            " table, no field size and no activity report, and it makes no EV, ROI,"
+            " win probability, cash probability, ownership or edge claim. Uploading"
+            " to DraftKings remains a manual operator action."
+        ),
+    }
+    _write_json(report_path, result)
+    _print_json(result)
+    return 0 if outcome.file_valid else 2
 
 
 def _command_cowork_run(args: argparse.Namespace) -> int:
     request_roots: list[Path] = [(PROJECT_ROOT / "data").resolve()]
     if args.input_dir:
         request_roots.append(Path(args.input_dir).resolve())
+    # An operator who names a frozen prior package directory on the command line
+    # has authorized that exact path, the same way --salaries and --entries work.
+    if getattr(args, "prior_package_dir", None):
+        request_roots.append(Path(args.prior_package_dir).resolve())
     if args.request:
         request_source = Path(args.request).resolve()
         possible_run_root = request_source.parent
@@ -2051,6 +2185,36 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     )
     if args.label:
         requested = replace(requested, label=args.label)
+    overrides: dict[str, object] = {}
+    for flag, field_name in (
+        ("profile", "profile"),
+        ("prior_package_dir", "prior_package_dir"),
+        ("season", "season"),
+        ("prior_season", "prior_season"),
+        ("weather_state", "weather_state"),
+        ("weather_source_uri", "weather_source_uri"),
+        ("weather_observed_at", "weather_observed_at"),
+        ("lineup_count", "lineup_count"),
+        ("max_person_overlap", "max_person_overlap"),
+        ("exclude", "exclude_dk_ids"),
+        ("unavailable_status", "unavailable_statuses"),
+        ("available_status", "available_statuses"),
+    ):
+        value = getattr(args, flag, None)
+        if value not in (None, ""):
+            overrides[field_name] = value
+    if getattr(args, "build_priors", False):
+        overrides["build_priors"] = True
+    if overrides:
+        requested = CoworkRunRequest.from_mapping(
+            {**requested.to_dict(), **overrides},
+            allowed_roots=request_roots,
+            allowed_files=tuple(
+                Path(path).resolve()
+                for path in (args.salaries, args.entries)
+                if path
+            ),
+        )
     run_id = _resolved_run_id(args.run_id, requested.label)
     args._resolved_cowork_run_id = run_id
     request_roots.append((DEFAULT_RUNS_DIR / run_id).resolve())
@@ -2091,7 +2255,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         _cowork_run_control_values(snapshotted),
     )
     doctor_report = doctor(PROJECT_ROOT)
-    blockers = list(required_next_inputs(snapshotted))
+    blockers = list(_cowork_reported_blockers(snapshotted))
     contest_problems = list(single_contest_problems(entries))
     blockers[0:0] = contest_problems
     if not doctor_report.pass_status:
@@ -2143,6 +2307,22 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         _write_json(report_path, result)
         _print_json(result)
         return 2
+
+    if snapshotted.profile == "prior_review":
+        return _run_prior_review_profile(
+            args=args,
+            request=snapshotted,
+            run_id=run_id,
+            slate=slate,
+            entries=entries,
+            output_root=output_root,
+            report_path=report_path,
+            request_path=request_path,
+            doctor_report=doctor_report,
+            unclassified=unclassified,
+            intake=intake,
+            reported_blockers=blockers,
+        )
 
     assignment_path = snapshotted.assignment_csv
     build_report_path: Path | None = None
@@ -2480,6 +2660,27 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--label")
     cowork.add_argument("--run-id")
     cowork.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    cowork.add_argument(
+        "--profile",
+        choices=list(SUPPORTED_PROFILES),
+        help=(
+            "diagnostic (default) and registered run the existing build and certify"
+            " path; prior_review drives the prior-only chain and can never certify"
+        ),
+    )
+    cowork.add_argument("--prior-package-dir")
+    cowork.add_argument("--build-priors", action="store_true", default=False)
+    cowork.add_argument("--season", type=int)
+    cowork.add_argument("--prior-season", type=int)
+    cowork.add_argument("--weather-state", choices=list(OPERATOR_WEATHER_STATES))
+    cowork.add_argument("--weather-source-uri")
+    cowork.add_argument("--weather-observed-at")
+    cowork.add_argument("--lineup-count", type=int)
+    cowork.add_argument("--max-person-overlap", type=int)
+    cowork.add_argument("--as-of")
+    cowork.add_argument("--exclude", action="append")
+    cowork.add_argument("--unavailable-status", action="append")
+    cowork.add_argument("--available-status", action="append")
     cowork.set_defaults(func=command_cowork_run)
     select = subparsers.add_parser(
         "select",

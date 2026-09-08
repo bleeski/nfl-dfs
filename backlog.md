@@ -62,8 +62,8 @@ repairs or mark their economics as valid.
 |---|---|---|---|
 | DL1 | S3 truth states, target 2026-09-05 | `DONE` | Report `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and `RELEASE_DECISION` independently; keep hard gates binding; make style and bank-coverage preferences advisory. |
 | DL2 | Minimum S6A projection producer, target 2026-09-07 | `DONE` | Deterministically transform frozen approved source artifacts into both model-input CSVs and a validated source ledger with no freehand numerical inputs or APPG use. |
-| DL3 | Prior-only review lineup profile, target 2026-09-07 | `READY` (prior inputs now producible by W1) | Generate legal projection-led review assignments without using or relabeling the known-unvalidated field, duplication, or payout economics. It must remain `MODEL_STATUS=PRIOR_ONLY` and `DO_NOT_UPLOAD`; this does not complete S5. |
-| DL4 | Showdown exact-template acceptance, target 2026-09-08 | `BLOCKED` on DL2 and DL3 plus operator files | Rehearse with a matching Showdown salary CSV, reserved-entry CSV, contest/payout facts, and current evidence; verify exact CPT/FLEX IDs, one Captain multiplier, underlying-person uniqueness, assignments, workbook, blockers, and final bytes. |
+| DL3 | Prior-only review lineup profile, target 2026-09-07 | `DONE` (landed 2026-09-08 as `cowork-run --profile prior_review`) | Generate legal projection-led review assignments without using or relabeling the known-unvalidated field, duplication, or payout economics. It must remain `MODEL_STATUS=PRIOR_ONLY` and `DO_NOT_UPLOAD`; this does not complete S5. |
+| DL4 | Showdown exact-template acceptance, target 2026-09-08 | `BLOCKED` on operator contest facts only | Rehearse with a matching Showdown salary CSV, reserved-entry CSV, contest/payout facts, and current evidence; verify exact CPT/FLEX IDs, one Captain multiplier, underlying-person uniqueness, assignments, workbook, blockers, and final bytes. |
 | DL5 | Showdown operational run, target 2026-09-09 | `BLOCKED` on DL4 | Refresh approved inputs and evidence, generate the review lineup, and make no feature changes beyond demonstrated blocker repairs. |
 | DL6 | Classic projection/selection extension, target 2026-09-11 | `BLOCKED` on DL2 and DL3 | Use the same source-bound projection contract across the multi-game Classic pool and produce exact-ID legal review assignments. |
 | DL7 | Classic full rehearsal, target 2026-09-12 | `BLOCKED` on DL6 plus operator files | Execute the complete intended operator path, record wall time and blockers, and preserve every exact input/output hash. |
@@ -377,6 +377,34 @@ revised during `W1` where the earlier measurement was wrong:
   until that policy changes.
 - A session cannot invoke PowerShell or the Windows `.venv`. The device shell is
   Linux with the repo mounted, not a Windows shell.
+- **The device VM's own `$HOME` filled up on 2026-09-08.** `/sessions` was 100%
+  used with 794MB free on `/`, so the local-disk working copy went to `/tmp/w4`
+  instead of `$HOME`. A `/tmp/nfl-cowork-venv` left by an earlier session is
+  owned by a different uid and is not writable, so `sh ./nfl.sh setup` fails with
+  `Permission denied` and building a second 603MB venv would not have fit. That
+  venv's installed versions match `pyproject.toml` exactly (numpy 2.3.2, polars
+  1.32.3, pyarrow 21.0.0, pydantic 2.11.7, highspy 1.11.0, scikit-learn 1.7.1,
+  statsmodels 0.14.5, openpyxl 3.1.5, hypothesis 6.138.2, pytest 8.4.1), and its
+  editable `.pth` points at a dead prior-session path, so the suite runs against
+  it with `PYTHONPATH` set to the working copy's `src`. If a session needs a
+  clean environment, free `/` first or work in the cloud container.
+- **`git status` inside the mounted repository leaves `.git/index.lock` behind.**
+  Git writes the lock, refreshes the index, then cannot unlink it, so the next
+  git command reports a stale lock. On 2026-09-08 the leftover was renamed to
+  `.git/index.lock.stale-from-cowork`, which git ignores; delete it from Windows.
+  Prefer reading the working-tree state some other way, and if a session does run
+  `git status`, move the lock aside before finishing.
+- **nflverse retrieval works from the device shell.** Confirmed again on
+  2026-09-08: a full `priors-propose` fetched and froze all seven artifacts in
+  under a minute from `/tmp`, including the GitHub release-asset redirect.
+- **`_ROOF_WEATHER` in `priors.py` treats nflverse `roof=open` as the
+  schedule-derivable state `ROOF_OPEN`.** `prior_review` still asks for the
+  `api.weather.gov` capture for that roof, because a retractable roof left open
+  is played in the weather, but it cannot pass the operator's state to
+  `priors-freeze` without tripping `WEATHER_STATE_CONFLICT`, so the capture is
+  recorded in the run report and the artifact metadata still says
+  `DERIVED_FROM_SCHEDULE_ROOF:open`. Closing that gap means editing
+  `_ROOF_WEATHER`, which is `W1` territory and was left alone.
 - **The delete-permission constraint also leaves Windows-side residue.** Bridge
   writes can leave directories the operator's own Windows account cannot
   enumerate. On 2026-09-08 that was `%LOCALAPPDATA%\Temp\pytest-of-benja` and
@@ -396,8 +424,8 @@ revised during `W1` where the earlier measurement was wrong:
 | W1 | R01 | `DONE` (5 operator flags open) | operator DK Showdown salary CSV for the identity map | Linux runtime bootstrap check, then the nflverse-only deterministic prior adapter for one game |
 | W2 | R07, R08 | `READY` | none | Selection objective independent of scenario count; source expiry and evidence scope preserved and re-evaluated |
 | W3 | R03 | `PARTIAL` (selection side `DONE`, simulator mask open) | none | One participation/exclusion contract with a simulator availability mask |
-| W4 | R02 | `PARTIAL` (selection and export `DONE`, cowork-run profile open) | none | DL3 prior-only review profile that never calls field, payout, or duplication economics |
-| W5 | R04 | `BLOCKED` on W4 plus operator files | contest facts | Showdown exact-template rehearsal on real downloads, byte audit, repeated run, stale-source and inactive-refresh cases |
+| W4 | R02 | `DONE` | none | DL3 prior-only review profile that never calls field, payout, or duplication economics |
+| W5 | R04 | `READY` once the operator files land | contest facts | Showdown exact-template rehearsal on real downloads, byte audit, repeated run, stale-source and inactive-refresh cases |
 | W6 | R09 | `READY` | none | Split historical artifact integrity from a live pre-upload check that recomputes at the current clock |
 | W7 | R15 | `READY` | none | Version-bound settlement capture and the canonical operator run brief. Start before the first settled slate; the validation clock starts here |
 | W8 | R05 | `BLOCKED` on W2 | none | Measure the existing evaluator at true field size with cloning off, then S4A reference settlement and thresholds |
@@ -424,45 +452,53 @@ is the reason.
 
 ## Next action
 
-`W1` is `DONE`. `src/nfl_dfs/priors.py` produces the three artifacts `project`
-consumes, from seven approved nflverse artifacts, through `priors-propose` and
-`priors-freeze` on both launchers. Verified end to end on the real NE@SEA
-Showdown pool: byte-identical repeat freezes, 63 people each with one mapping and
-one record including kickers and both defences, and `project` publishing both
-model-input CSVs plus a reconciled ledger at `MODEL_STATUS=PRIOR_ONLY` /
-`DO_NOT_UPLOAD`. See `changelog.md` for hashes and counts.
+`W1` and `W4` are `DONE`. `cowork-run --profile prior_review` now takes a
+DraftKings Showdown salary CSV and a DKEntries CSV and returns the byte-audited
+bulk-entry CSV in one command, driving `priors-propose`, the identity gate,
+`priors-freeze`, `project`, `select` and `review-export` itself and stopping only
+at the three gates that are genuinely human: an identity that is unresolved and
+still selectable, a weather capture the schedule artifact cannot supply, and an
+expired prior package with no permission to rebuild. `MODEL_STATUS` stays
+`PRIOR_ONLY` and `RELEASE_DECISION` stays `DO_NOT_UPLOAD` on every path,
+including the success path, and the release policy makes any other decision
+unreachable for a `MODEL_ASSISTED` `PRIOR_ONLY` package. Verified end to end on
+the real NE@SEA opener twice, once reusing the frozen package and once rebuilding
+it from a fresh nflverse fetch; both produced the same export bytes. See
+`changelog.md` for commands, counts and hashes.
 
-**`W3` and `W4` are now partially landed.** The selection side of R03 and the
-selection and export halves of R02 are done and covered:
-`participation.py`, `prior_score.py`, `selection.py`, `review_export.py`, plus
-the `select` and `review-export` subcommands on both launchers. A prior-only
-Showdown portfolio and a byte-audited bulk-entry CSV can be produced from two
-DraftKings CSVs in under a second, with no unavailable person selectable.
+**Next `READY` tranches, all touching disjoint files, in any order:**
 
-What is still open in those two tranches:
+- `W2` (R07, R08): selection objective independent of scenario count; source
+  expiry and evidence scope preserved and re-evaluated. It owns `projection.py`,
+  `contracts.py` and `evidence.py`.
+- `W6` (R09): split historical artifact integrity from a live pre-upload check
+  that recomputes at the current clock. This is what makes `audit` trustworthy,
+  and the deadline reality check below depends on it.
+- `W7` (R15): version-bound settlement capture and the canonical operator run
+  brief. The validation clock starts here, so the sooner the better.
+- `W5` (R04) is unblocked by code and now waits only on operator contest facts:
+  a matching reserved-entry template for the contest actually entered, the payout
+  table, advertised prize value, field size, entry fee and contest ID.
+
+What is still open and must not be papered over:
 
 - **R03 simulator mask.** `simulation.py` still has no availability mask, so the
   zero-capacity scoring defect is untouched. Never route a pool through `build`
-  expecting exclusions to hold. The selection path avoids it by never simulating.
-- **R02 cowork-run profile.** `cowork.py:214` still accepts only `diagnostic` and
-  `registered`. The third prior-only profile is not wired, so the one-command
-  Cowork path goes through the new subcommands rather than `cowork-run`.
+  expecting exclusions to hold. The selection path avoids it by never simulating,
+  and `prior_review` never calls `build`.
 - **No ownership, leverage, correlation or duplication model anywhere.** The
   objective maximizes a central estimate, which in a large-field GPP is chalk.
   This is the largest gap against the stated product objective and it is R05,
-  R06, R07 and S7 work, not a selection problem.
+  R06, R07 and S7 work, not a selection problem. `prior_review` does not narrow
+  it and does not pretend to.
+- **`projection.py` still requires a prior record for every person in the salary
+  pool** (`SALARY_PERSON_IDENTITY_COVERAGE_MISMATCH`). A practice-squad elevation
+  with no honest prior fails the whole package. Unchanged by `W4`.
 
-**Original guidance retained:** The
-real NE@SEA pool makes R03 concrete rather than theoretical: 21 of 68 people are
-`OUT` or `IR`, and the highest-impact one, Zach Charbonnet, carries a 44.88%
-prior carry share at $8,200. A projection-maximizing solver rosters him, the
-simulator scores him, and his vacated carries never redistribute to Emanuel
-Wilson or George Holani. Until `W3` lands, no engine-generated Showdown or
-Classic lineup can be trusted, whatever the rest of the stack does. `W2`, `W6`
-and `W7` are also `READY` and touch disjoint files, so they can run as separate
-sessions in any order. Do not begin `W8`, `W9`, `W10`, `W11`, `W12`, or
-`W13`; do not relabel prior-only output as EV, ROI, or edge; and do not move a
-generated assignment into the manual-guardrail path to bypass the model gate.
+Do not begin `W8`, `W9`, `W10`, `W11`, `W12`, or `W13`; do not relabel prior-only
+output as EV, ROI, or edge; and do not move a generated assignment into the
+manual-guardrail path to bypass the model gate. `prior_review` refuses an
+`assignment_csv` outright for that reason.
 
 ### Operator decisions W1 left open, all now settled
 
@@ -475,7 +511,8 @@ All five were delegated to the implementer on 2026-09-08 and resolved:
    `data/runs/20260909-showdown-ne-sea/inputs/`, with the entry template.
 3. **Eight identity decisions**: all accepted. Each was a unique league-wide
    match whose nflverse roster team disagreed with DraftKings, and all eight are
-   DraftKings-flagged `OUT`.
+   DraftKings-flagged `OUT`. `W4` turned exactly that rule into the automatic
+   acceptance in `prior_review.apply_identity_gate` and reproduced all eight.
 4. **`sources.py` release-asset redirect**: retained. It is the only route to
    nflverse data, it is confined to one hop onto GitHub's own asset hosts, and
    the recorded provenance stays the canonical `github.com` URL.
@@ -500,6 +537,11 @@ redistribution addresses. `opportunity.remove_inactive_and_redistribute` enforce
 it and therefore refuses a real pool outright. It is now treated as a diagnostic
 in `participation.py`; the enforcement in `opportunity.py` remains and should be
 revisited when `W3` completes.
+
+The frozen team prior inherits `MARKET_LINE_MOVES_INTRADAY` from `games.csv` and
+expires twelve hours after capture, so a prior package built the day before a
+slate is stale by kickoff. `prior_review` detects that against `as_of` and
+rebuilds; no tranche may widen an expiry to make a run succeed.
 
 `uv` is unusable inside the cloud container: 268KB of cache in ten minutes
 before timing out, while `pip` installed the whole pinned dependency set in 39

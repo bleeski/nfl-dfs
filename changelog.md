@@ -4,6 +4,163 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-08 — One gated `cowork-run --profile prior_review` command
+
+Closes `W4` / R02. Files added: `src/nfl_dfs/prior_review.py`,
+`tests/test_prior_review_profile.py`. Files modified: `src/nfl_dfs/cowork.py`
+(third profile, prior-chain request fields, per-profile blocker gating),
+`src/nfl_dfs/cli.py` (the `prior_review` branch and its flags), `backlog.md`.
+`projection.py`, `contracts.py`, `evidence.py`, `priors.py`, `selection.py`,
+`participation.py`, `prior_score.py` and `review_export.py` untouched. Nothing
+staged or committed.
+
+#### Commands run and what they returned
+
+Runtime, from a local-disk working copy at `/tmp/w4` (see the runtime note
+below), with `NFL_DFS_VENV_DIR=/tmp/nfl-cowork-venv`,
+`NFL_DFS_UV_CACHE_DIR=/tmp/nfl-uv-cache`,
+`NFL_DFS_UV_PYTHON_DIR=/tmp/nfl-uv-python` and `PYTHONPATH=/tmp/w4/src`:
+
+```text
+sh ./nfl.sh test -p no:cacheprovider --ignore=.pytest_cache tests
+  before any change : 244 collected, 243 passed, 0 failed, 1 skipped, exit 0
+  after  every change: 279 collected, 278 passed, 0 failed, 1 skipped, exit 0
+python -m compileall -q src                                        exit 0
+```
+
+The 35 new tests are all in `tests/test_prior_review_profile.py`. No existing
+test was edited, which is the evidence that `diagnostic` and `registered` are
+unchanged.
+
+Regression baseline and acceptance, all against the frozen operator downloads in
+`data/runs/20260909-showdown-ne-sea/inputs/`
+(salary `6bc5209f6e2f9e3e44e36efe608fe28dfe3b52248c11e6325001dea73e6e4a73`,
+entries `797bb9342f0516c373195e236720a783fef9b11e7469c8a46e747a8bea45d02d`):
+
+```text
+1. cowork-run --input-dir <inputs> --label baseline                  exit 2
+   stage RECONCILED, FILE_VALID false, UNVALIDATED, DO_NOT_UPLOAD, 6 blockers.
+   Re-run after every change: byte-identical blocker list.
+
+2. cowork-run --input-dir <inputs> --profile prior_review            exit 0
+   stage PRIOR_ONLY_REVIEW_EXPORT, FILE_VALID true, problems [],
+   EVIDENCE_STATE UNKNOWN, MODEL_STATUS PRIOR_ONLY, DO_NOT_UPLOAD.
+   Export SHA-256 87156b8c108bfe1585c4dc1c689258ee3fd24f525543ae19667be2017cee359e.
+   Diff against the source template: 145 lines in, 145 out, exactly lines 2 and
+   3 changed, which are the two reserved Entry IDs 5232816721 and 5238395397.
+
+3. cowork-run --profile prior_review --build-priors
+     --as-of 2026-09-09T06:00:00Z                                    exit 2
+   The frozen package expired at 2026-09-09T04:37:46Z, so the run rebuilt rather
+   than reused, fetched and froze all seven nflverse artifacts, auto-accepted 8
+   identities and 0 blocked, then stopped on
+   WEATHER_CAPTURE_REQUIRED:roof=outdoors. No export written.
+
+4. the same command plus --weather-state CLEAR
+     --weather-source-uri https://api.weather.gov/gridpoints/SEW/125,67/forecast
+     --weather-observed-at 2026-09-08T16:37:07+00:00                 exit 0
+   Full rebuild from a fresh fetch: 2 teams, 68 people, weather_basis
+   OPERATOR_SUPPLIED:roof=outdoors|OPERATOR_CAPTURE:...  New package expires
+   2026-09-09T09:16:27Z. Export SHA-256 identical to run 2, from independently
+   re-fetched sources.
+
+5. one byte changed in a copy of team_prior.json                     exit 2
+   PRIOR_ARTIFACT_HASH_MISMATCH:team_prior.json:expected=0d1139c6...:actual=f590cd36...
+   Review workbook written, zero CSVs written under the output root.
+```
+
+Run 4 reused the `api.weather.gov` capture already recorded in this repository's
+frozen `team_prior.json` for this game. It is a test of the rebuild machinery,
+not a new weather observation.
+
+#### What the profile does
+
+`cowork-run --profile prior_review` drives `priors-propose`, the identity gate,
+`priors-freeze`, `project`, `select` and `review-export` itself. Each stage keeps
+its artifacts and hashes under `data/runs/<run_id>/prior_review/`, and a stage
+failure returns that stage's own named error with no partial export.
+
+It stops at three gates, and only three, because only these three need a human:
+
+1. **Identity.** `projection.py` accepts only `match_method="EXACT"`, so a
+   package cannot be frozen on a guess. The one automatic acceptance is a unique
+   league-wide normalized name and position match for a person DraftKings flags
+   `OUT` or `IR`, because the availability contract makes those people
+   unselectable and an accepted-but-uncertain identity then cannot reach a
+   lineup. On the real pool that is exactly the 8 rows the operator accepted by
+   hand on 2026-09-08, and 0 others. Anything unresolved and still selectable
+   stops the run and reports the candidate provider ID, the conflicting nflverse
+   team, the roster status and the first four candidates. Every auto-accept and
+   its reason is written to `identity_decisions.json` beside the
+   `identity_reviewed.csv` that `priors-freeze` consumes.
+2. **Weather.** The enum has no `UNKNOWN` member and `api.weather.gov` is
+   unreachable from a session. `roof=dome` and `roof=closed` resolve from the
+   schedule artifact alone; every other value, `outdoors` and blank and `open`
+   included, blocks for the capture URI and its `generatedAt`. Nothing defaults.
+3. **Staleness.** The team prior inherits `MARKET_LINE_MOVES_INTRADAY` from
+   `games.csv` and expires twelve hours after capture, so a same-day re-run is
+   the normal case. An expired package blocks without `build_priors` and is
+   rebuilt with it. No path widens an expiry.
+
+`--exclude`, `--unavailable-status` and `--available-status` are wired through so
+an operator fade or a DraftKings status code the vocabulary has not seen does not
+force a fall back to the six-call sequence.
+
+#### Which blockers gate, and which are only reported
+
+`required_next_inputs` raises five blocker families. Four of them exist for
+certification: payout table, advertised prize value, field size, ticket face
+value, and official activity evidence, plus the two that this profile produces
+itself, model inputs and the source ledger. `_cowork_core_blockers` already
+filtered `OFFICIAL_STATUS_REQUIRED` out of the gating set while leaving it in the
+reported list; that pattern is now a per-profile filter in
+`cowork.gating_blockers`, and `prior_review` gates on none of them. All seven
+still appear in the report's `blockers` list and in the review workbook, because
+a reader has to be able to see what this file has not been checked against.
+
+#### Why it cannot be talked into certifying
+
+`MODEL_STATUS` and `RELEASE_DECISION` are not parameters of this path.
+`_run_prior_review_profile` pins `ModelStatus.PRIOR_ONLY`,
+`ReleaseEvidenceState.UNKNOWN` and `CertificationBasis.MODEL_ASSISTED`, and
+`derive_release_policy` adds `MODEL_NOT_PROSPECTIVELY_VALIDATED` for every
+`MODEL_ASSISTED` package that is not `PROSPECTIVELY_VALIDATED`, so
+`CERTIFIED_UPLOAD_PACKAGE` is unreachable regardless of `file_valid` or evidence
+state. The function re-asserts that before writing anything and raises if it ever
+derived something else. A supplied `assignment_csv` is refused by name rather
+than routed into the manual-guardrail path.
+
+#### Runtime note for the next session
+
+The device VM's `$HOME` (`/sessions`) was 100% full, with 794MB free on `/`. The
+working copy went to `/tmp/w4`. `sh ./nfl.sh setup` could not run: the
+`/tmp/nfl-cowork-venv` left by an earlier session is owned by a different uid and
+is not writable, and a second 603MB venv would not have fit. Its installed
+versions match `pyproject.toml` pin for pin, and its editable `.pth` points at a
+dead prior-session path, so the suite ran against it with `PYTHONPATH` set to the
+working copy. `backlog.md` records this. nflverse retrieval from the device shell
+worked, including the GitHub release-asset redirect.
+
+#### Open `[BEN: ...]` flags
+
+- `[BEN: nflverse roof=open]` `priors._ROOF_WEATHER` maps `open` to the
+  schedule-derived state `ROOF_OPEN`, and `resolve_weather_state` rejects a
+  conflicting operator value. `prior_review` still demands the weather capture
+  for that roof, but it cannot attach the capture to the artifact metadata
+  without tripping `WEATHER_STATE_CONFLICT`, so the capture is recorded only in
+  the run report. Closing the gap means editing `_ROOF_WEATHER`, which is `W1`
+  territory. Say whether to open it.
+- `[BEN: chat-attachment runs]` The sibling `priors/` folder is auto-discovered
+  only when it sits inside an already allowed root, which is true for
+  `data/runs/<slate>/` and false for a Cowork attachment directory. A run started
+  from two files attached in chat therefore needs `--build-priors` plus the
+  weather capture, which is roughly ninety seconds and one paste. Confirm that is
+  the flow you want, or say where a per-slate package should be cached.
+- `[BEN: lineup count]` `--lineup-count` defaults to the number of reserved Entry
+  IDs and `assignments_for_entries` cycles when there are fewer lineups than
+  entries. Two entries gave two distinct lineups here. Say what you want above
+  about twenty entries, where `--max-person-overlap 4` will stop separating them.
+
 ### 2026-09-08 — Prior-only Showdown selection and a byte-audited review export
 
 Closes R03 on the selection side and R02's selection half. Files added:
