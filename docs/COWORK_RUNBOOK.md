@@ -123,6 +123,38 @@ model pairs, traversal, external absolute paths, and symlink/reparse escapes
 fail closed. Request paths are limited to the explicitly supplied attachment
 directory, managed project data, and that run's immutable directory.
 
+## Produce prior-only model inputs
+
+When approved team/player prior artifacts and a human-reviewed exact identity
+map have been frozen, run the local deterministic producer. Every hash argument
+is required and must be obtained independently from the frozen input bytes:
+
+```sh
+sh ./nfl.sh project \
+  --salaries '/full/path/to/frozen-salaries.csv' \
+  --salary-sha256 '<64-lowercase-hex>' \
+  --team-source '/full/path/to/frozen-team-source.json' \
+  --team-source-sha256 '<64-lowercase-hex>' \
+  --player-source '/full/path/to/frozen-player-source.json' \
+  --player-source-sha256 '<64-lowercase-hex>' \
+  --identity-map '/full/path/to/frozen-identity-map.json' \
+  --identity-map-sha256 '<64-lowercase-hex>' \
+  --as-of '2026-09-09T12:00:00-05:00' \
+  --output-dir '/full/path/to/new-projection-package'
+```
+
+The destination must not exist. Success atomically publishes exactly
+`team_projections.csv`, `player_opportunities.csv`, and `source_ledger.json`.
+Use those paths in `run_request.json`. Missing, changed, expired, future,
+conflicted, non-PASS, unapproved, incomplete, non-exact, or role-conflicted
+inputs fail with a named error and no partial package. The command performs no
+download and never reads DraftKings APPG numerically.
+
+A successful projection package still reports `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`. It supplies deterministic inputs to the
+existing build; it does not establish calibration, EV, profitability, or upload
+readiness.
+
 ## Research and evidence rules
 
 Claude should gather permitted public evidence autonomously, but this does not

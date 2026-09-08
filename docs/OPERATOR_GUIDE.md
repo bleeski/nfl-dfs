@@ -141,6 +141,35 @@ which is required for both manual and model-assisted certification.
 The strict headers are documented in `docs/DATA_CONTRACTS.md`. These files use
 opportunity and team environment, never DraftKings `AvgPointsPerGame`.
 
+Create them only from already frozen, approved artifacts with the S6A producer:
+
+```powershell
+.\nfl.ps1 project `
+  --salaries 'C:\full\path\frozen-salaries.csv' `
+  --salary-sha256 '<64-lowercase-hex>' `
+  --team-source 'C:\full\path\frozen-team-source.json' `
+  --team-source-sha256 '<64-lowercase-hex>' `
+  --player-source 'C:\full\path\frozen-player-source.json' `
+  --player-source-sha256 '<64-lowercase-hex>' `
+  --identity-map 'C:\full\path\frozen-identity-map.json' `
+  --identity-map-sha256 '<64-lowercase-hex>' `
+  --as-of '2026-09-09T12:00:00-05:00' `
+  --output-dir 'C:\full\path\new-projection-package'
+```
+
+The four input hashes are mandatory. The command does not download anything or
+fit a model. It checks approved provenance, timestamps, coverage, exact stable
+provider-to-DraftKings mappings, complete team/person coverage, numerical
+bounds, share conservation, unchanged input hashes, generated file hashes, and
+the final source ledger before atomically publishing. The destination cannot
+already exist. Any failure leaves no apparently valid partial package.
+
+The published files are always named `team_projections.csv`,
+`player_opportunities.csv`, and `source_ledger.json`. They are deterministic
+prior inputs only: `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD` remain binding. They do not establish EV, ROI,
+profitability, calibrated ownership, win/cash probability, or upload readiness.
+
 The default workbook-driven build is intentionally a smaller diagnostic run
 (2,000 scenarios, 250 candidates, and a 1,000-lineup field sample). It verifies
 the workflow quickly. Field output is labeled `COLD_START_FIELD_MODEL`, not EV,

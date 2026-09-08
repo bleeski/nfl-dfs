@@ -395,7 +395,7 @@ def required_next_inputs(request: CoworkRunRequest) -> tuple[str, ...]:
     if request.assignment_csv is None:
         if request.team_projection_csv is None or request.player_opportunity_csv is None:
             blockers.append(
-                "MODEL_INPUTS_REQUIRED: assemble both validated team-projection and player-opportunity CSVs from frozen approved evidence"
+                "MODEL_INPUTS_REQUIRED: run the deterministic project command with hash-pinned approved source artifacts and an exact frozen identity map"
             )
         if request.source_ledger_json is None:
             blockers.append(

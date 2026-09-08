@@ -51,10 +51,12 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    Linux environment isolated in `.cowork-venv`.
 3. Read the generated `cowork_run.json`, `run_request.json`, and review
    workbook. The first pass always freezes and reconciles the supplied files.
-4. Gather everything discoverable from approved public sources, freeze the
-   source artifacts or source ledger, and use only existing validated adapters
-   to create model inputs. If no approved deterministic adapter supports a
-   required field, leave it missing and report the limitation.
+4. Gather everything discoverable from approved public sources and freeze the
+   artifacts. Produce prior-only model inputs with `sh ./nfl.sh project` (or
+   `./nfl.ps1 project` on Windows), supplying the exact expected SHA-256 for
+   the salary, team-prior, player-prior, and frozen identity-map artifacts. If
+   an approved source artifact or exact frozen mapping is unavailable, stop and
+   report the named producer error; never type or infer a numerical substitute.
 5. Do not access DraftKings programmatically or through browser automation.
    The entry CSV does not contain complete payouts or field size. Ask Ben one
    concise question for the smallest unavailable contest fact, normally a

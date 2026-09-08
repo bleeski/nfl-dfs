@@ -23,10 +23,93 @@ The source ledger must use schema `nfl_source_ledger_v1` with a nonempty
 `derived.player_opportunities` SHA-256 values. Every entry requires the source
 artifact SHA-256 as `artifact_id`, a path, an allowlisted HTTPS `source_uri`,
 timezone-aware capture/observation timestamps, an approved `license_decision`,
-and a bounded `parser_version`. Unknown fields, missing/tampered artifacts, and
-partial or mismatched derived hashes fail certification closed. This validates
+and a bounded `parser_version`; producer-created entries also record exact
+coverage and the deterministic transformation name. DraftKings salary URLs are
+accepted only as non-fetching provenance references for operator-supplied bytes
+parsed by `dk_csv_v1`; the retrieval policy remains prohibited. Unknown fields,
+missing/tampered artifacts, and partial or mismatched derived hashes fail
+certification closed. This validates
 provenance structure and binding; it does not independently establish that a
 source is true, complete, current enough for every use, or commercially fit.
+
+## S6A deterministic projection sources
+
+`project` requires four existing local artifacts and the independently recorded
+lowercase SHA-256 of each artifact:
+
+1. the untouched DraftKings salary CSV;
+2. `nfl_team_projection_source_v1` JSON;
+3. `nfl_player_opportunity_source_v1` JSON; and
+4. `nfl_projection_identity_map_v1` JSON.
+
+The two source JSON files and the identity map each contain `metadata` with
+exactly `source_uri`, `captured_at`, `observed_at`, `expires_at`,
+`license_decision`, `parser_version`, `evidence_state`, and nonempty `coverage`.
+All timestamps are timezone-aware. The accepted parser versions are
+`team_projection_source_v1`, `player_opportunity_source_v1`, and
+`projection_identity_map_v1`. Metadata and every record/mapping must be `PASS`
+at the explicit `--as-of`; future, expired, unknown, stale, or conflicted input
+fails closed. The source URI/license pair must match the repository source
+policy. No network access occurs in this command.
+
+The team source has a nonempty `records` array with these exact fields:
+
+```text
+provider_team_id, game_id, plays_mean, pass_rate,
+pass_yards_per_attempt, rush_yards_per_attempt, touchdowns_mean,
+field_goals_mean, turnovers_mean, sacks_allowed_mean, uncertainty,
+market_total, market_spread, market_observed_at, weather_state, era,
+evidence_state
+```
+
+Every value is copied through the existing team bounds without fitting,
+clipping, or imputation. Provider team IDs must be unique and must resolve
+through one exact frozen team mapping to every salary-pool team/game.
+
+The player source has a nonempty `records` array with these exact fields:
+
+```text
+provider_player_id, provider_team_id, position, qb_attempt_weight,
+carry_weight, target_weight, catch_rate, yards_per_target,
+rushing_td_weight, receiving_td_weight, role_capacity, evidence_state
+```
+
+Weights must be finite JSON numbers in `[0,1]`; `yards_per_target` is in
+`[0,30]`. The producer applies the same position masks as the opportunity
+loader, then computes each eligible share as `source_weight / sum of the
+team's eligible source weights`. An all-zero or missing eligible group is an
+error; the producer never invents uniform shares. Catch rate, yards per target,
+and role capacity are direct bounded source fields. There are no runtime-fitted
+coefficients or freehand numerical parameters in S6A.
+
+The identity map contains `salary_artifact`, `team_mappings`, and
+`player_mappings`. `salary_artifact.artifact_id` must match both the supplied
+salary hash and its current bytes; its only accepted provenance combination is
+an operator-supplied DraftKings HTTPS reference with parser `dk_csv_v1`.
+Mappings bind stable provider IDs to exact current salary-pool team, position,
+underlying-person, and DraftKings IDs. `match_method` must be exactly `EXACT`.
+Normalized, fuzzy, duplicate, ambiguous, incomplete, team-conflicted, or
+position-conflicted mappings never assemble. Showdown mappings must select the
+person's distinct `FLEX` row; a CPT ID or duplicate CPT/FLEX person fails.
+
+The producer writes LF-terminated UTF-8 bytes to a run-scoped temporary
+directory, validates both CSVs through `load_opportunity_model`, validates the
+ledger through `validate_source_ledger`, rechecks every input/output hash, and
+only then atomically publishes this exact package:
+
+```text
+<output-dir>/team_projections.csv
+<output-dir>/player_opportunities.csv
+<output-dir>/source_ledger.json
+```
+
+The output directory must not already exist. Team rows use game-lock order and
+away/home order; player rows use ascending numerical FLEX/current DK ID. The
+same frozen inputs and explicit `as_of` produce byte-identical CSV and ledger
+content in different output directories. A failed build publishes none of the
+three files. The package is always `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`; it is not predictive validation or upload
+authorization.
 
 ## Team projections
 
