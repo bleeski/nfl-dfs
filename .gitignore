@@ -21,3 +21,11 @@ data/models/*
 outputs/*
 !outputs/.gitkeep
 operator_input.xlsx
+
+# doctor() probes the workspace filesystem in place and cannot remove the probe
+# directory when the workspace forbids deletion, which a Cowork bridge mount
+# does. The name is stable so the leftovers are identifiable and ignorable.
+.nfl-doctor-probe-*/
+
+# Scratch that a session could not delete itself. Safe to remove by hand.
+_to_delete/

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -20,8 +21,10 @@ class DoctorReport:
     sync_or_reparse_detected: bool
     sqlite_journal_mode: str
     sqlite_integrity: str
+    sqlite_probe_error: str
     long_paths_enabled: bool | None
     excel_lock_probe: str
+    workspace_probe_cleanup: str
     pass_status: bool
 
     def to_json(self) -> str:
@@ -97,17 +100,50 @@ def doctor(workspace: str | Path) -> DoctorReport:
         for key, value in os.environ.items()
         if key.upper().startswith("ONEDRIVE")
     )
-    with tempfile.TemporaryDirectory(dir=root) as temporary:
-        db_path = Path(temporary) / "doctor.sqlite"
-        connection = sqlite3.connect(db_path)
-        journal = connection.execute(
-            "PRAGMA journal_mode=DELETE" if sync_detected else "PRAGMA journal_mode=WAL"
-        ).fetchone()[0]
-        connection.execute("CREATE TABLE probe(value INTEGER NOT NULL)")
-        connection.execute("INSERT INTO probe VALUES(1)")
-        connection.commit()
-        integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
-        connection.close()
+    # The probe must run inside the workspace to observe that filesystem's real
+    # journal behaviour, but a workspace can forbid deletion: a Cowork session
+    # mounts the repository through a bridge that refuses unlink and rmdir. In
+    # that case tempfile.TemporaryDirectory's own cleanup handler retries rmtree
+    # on every PermissionError and recurses until RecursionError, taking doctor,
+    # setup and the whole cowork-run path down with it. ignore_cleanup_errors
+    # does not help, because the recursion happens below it. So own the
+    # lifecycle: shutil.rmtree(ignore_errors=True) never recurses, and a probe
+    # directory that survives is reported rather than raised.
+    temporary = tempfile.mkdtemp(dir=root, prefix=".nfl-doctor-probe-")
+    journal = ""
+    integrity = ""
+    probe_error = ""
+    try:
+        # WAL needs shared-memory mapping, which a bridge-mounted workspace does
+        # not provide: on a Cowork mount the WAL probe raises "disk I/O error".
+        # Reporting the mode the workspace actually supports is the point of this
+        # probe, so fall back to DELETE and record why, instead of crashing.
+        preferred = "DELETE" if sync_detected else "WAL"
+        for mode in dict.fromkeys((preferred, "DELETE")):
+            pragma = {"WAL": "PRAGMA journal_mode=WAL", "DELETE": "PRAGMA journal_mode=DELETE"}[mode]
+            db_path = Path(temporary) / f"doctor-{mode.lower()}.sqlite"
+            try:
+                connection = sqlite3.connect(db_path)
+                try:
+                    journal = connection.execute(pragma).fetchone()[0]
+                    connection.execute("CREATE TABLE probe(value INTEGER NOT NULL)")
+                    connection.execute("INSERT INTO probe VALUES(1)")
+                    connection.commit()
+                    integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+                finally:
+                    connection.close()
+            except sqlite3.Error as exc:
+                journal = ""
+                integrity = ""
+                probe_error = f"{mode}:{type(exc).__name__}:{exc}"
+                continue
+            probe_error = "" if mode == preferred else f"FELL_BACK_FROM_{preferred}:{probe_error}"
+            break
+    finally:
+        shutil.rmtree(temporary, ignore_errors=True)
+        probe_cleanup = (
+            f"RETAINED:{Path(temporary).name}" if Path(temporary).exists() else "REMOVED"
+        )
     staged_workbook = root / "operator_input.xlsx"
     lock_probe = "CLOSED_OR_ABSENT" if workbook_is_closed(staged_workbook) else "LOCKED_BY_EXCEL"
     long_paths = _long_paths_enabled()
@@ -127,8 +163,10 @@ def doctor(workspace: str | Path) -> DoctorReport:
         sync_or_reparse_detected=sync_detected,
         sqlite_journal_mode=str(journal).upper(),
         sqlite_integrity=integrity,
+        sqlite_probe_error=probe_error,
         long_paths_enabled=long_paths,
         excel_lock_probe=lock_probe,
+        workspace_probe_cleanup=probe_cleanup,
         pass_status=passed,
     )
 

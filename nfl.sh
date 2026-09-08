@@ -2,8 +2,14 @@
 set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-task_cache="$project_root/.cowork-uv-cache"
-python_exe="$project_root/.cowork-venv/bin/python"
+
+# A Cowork session may mount this repository on a filesystem that cannot host a
+# virtual environment (no symlink or hardlink support) or that has no free space
+# for a managed interpreter. These overrides relocate the runtime without
+# changing any default and without touching the Windows launcher.
+venv_root="${NFL_DFS_VENV_DIR:-$project_root/.cowork-venv}"
+task_cache="${NFL_DFS_UV_CACHE_DIR:-$project_root/.cowork-uv-cache}"
+python_exe="$venv_root/bin/python"
 command_name="${1:-run}"
 if [ "$#" -gt 0 ]; then
     shift
@@ -11,7 +17,10 @@ fi
 
 cd "$project_root"
 export UV_CACHE_DIR="$task_cache"
-export UV_PROJECT_ENVIRONMENT="$project_root/.cowork-venv"
+export UV_PROJECT_ENVIRONMENT="$venv_root"
+if [ -n "${NFL_DFS_UV_PYTHON_DIR:-}" ]; then
+    export UV_PYTHON_INSTALL_DIR="$NFL_DFS_UV_PYTHON_DIR"
+fi
 
 if [ "$command_name" = "setup" ]; then
     if ! command -v uv >/dev/null 2>&1; then

@@ -255,3 +255,40 @@ Always report:
 
 The operator manually reviews Entry IDs and lineups and performs any DraftKings
 upload. A generated file is never permission to upload by itself.
+
+## Linux/Cowork runtime, measured 2026-09-08
+
+A Cowork session mounts this repository through a bridge that refuses file
+deletion. `unlink` and `rmdir` return `EPERM`, which breaks three things that
+look unrelated: `uv` cannot extract a managed interpreter, SQLite cannot open a
+database in `WAL` or `DELETE` mode (`disk I/O error`, because `DELETE` journaling
+deletes the journal on commit), and `tempfile.TemporaryDirectory` recurses until
+`RecursionError` because its cleanup handler retries `rmtree` on every
+`PermissionError`.
+
+`nfl.sh` therefore honours three overrides, all defaulting to the previous
+in-repository paths so Windows behaviour is unchanged:
+
+```sh
+export NFL_DFS_VENV_DIR=/tmp/nfl-cowork-venv
+export NFL_DFS_UV_CACHE_DIR=/tmp/nfl-uv-cache
+export NFL_DFS_UV_PYTHON_DIR=/tmp/nfl-uv-python
+sh ./nfl.sh setup
+```
+
+With the runtime on local disk, `uv sync` completes in about 17 seconds instead
+of exceeding a 178-second shell limit unfinished.
+
+Two further constraints follow from the same cause. `.pytest_cache` in the
+mounted repository is unreadable, so the suite needs
+`--ignore=.pytest_cache tests`. And running the suite in place leaves temporary
+directories behind that the session cannot remove, so execute it from a
+local-disk working copy of `src`, `tests`, `templates`, `config`,
+`pyproject.toml` and `uv.lock`, keeping the mounted repository as the source of
+truth for edits.
+
+`nfl.sh doctor` against the mounted repository reports `pass_status: false` with
+`sqlite_probe_error`, which is correct rather than a defect: `cowork-run` gates
+on `pass_status` and `registry.py` opens a real database under `data/registry/`.
+Either grant the session delete permission on the folder, or run from a
+local-disk working copy.

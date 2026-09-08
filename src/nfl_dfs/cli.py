@@ -56,6 +56,11 @@ from .ownership import OwnershipBracket, cold_start_states
 from .payouts import parse_payout_csv, validate_payout_tiers
 from .portfolio import evaluate_portfolio, portfolio_net_samples, select_portfolio
 from .projection import build_projection_package
+from .priors import freeze_prior_package, propose_prior_package
+from .participation import build_participation_contract, redistribute_opportunity
+from .prior_score import read_team_splits
+from .review_export import export_review_entries, write_assignments_csv, write_run_record
+from .selection import assignments_for_entries, select_prior_lineups
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .release import derive_release_policy
 from .scenario_store import save_scenario_bank
@@ -1621,6 +1626,143 @@ def command_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_select(args: argparse.Namespace) -> int:
+    """Prior-only Showdown selection. Never consults field or payout economics."""
+
+    slate = parse_salaries(args.salaries)
+    if args.salary_sha256 and sha256_file(args.salaries) != args.salary_sha256.strip().lower():
+        raise ValueError("SALARY_ARTIFACT_HASH_MISMATCH")
+    template = parse_entries(args.entries)
+    reconcile_template(template, slate)
+    entry_ids = [entry.entry_id for entry in template.authorizations]
+
+    model = load_opportunity_model(
+        slate, args.team_projections, args.player_opportunities
+    )
+    contract = build_participation_contract(
+        slate,
+        operator_excluded_dk_ids=args.exclude or (),
+        extra_unavailable_statuses=args.unavailable_status or (),
+        extra_available_statuses=args.available_status or (),
+    )
+    reduced, redistribution = redistribute_opportunity(
+        model, contract, redistribute=not args.no_redistribute
+    )
+    splits = read_team_splits(
+        args.team_splits,
+        prior_season=args.prior_season,
+        teams=sorted({player.team for player in slate.players}),
+    )
+    count = args.count if args.count else len(entry_ids)
+    lineups, scores, selection = select_prior_lineups(
+        slate,
+        reduced,
+        splits,
+        contract,
+        count=count,
+        differentiate_captain=not args.allow_repeat_captain,
+        max_person_overlap=args.max_person_overlap,
+    )
+    assignments = assignments_for_entries(entry_ids, lineups)
+
+    output_dir = Path(args.output_dir).resolve()
+    assignments_path = output_dir / "assignments.csv"
+    if assignments_path.exists():
+        raise ValueError(f"OUTPUT_PACKAGE_EXISTS:{assignments_path}")
+    assignments_hash = write_assignments_csv(assignments_path, assignments)
+    names = {
+        player.dk_id: f"{player.name} ({player.position}, {player.team})"
+        for player in slate.players
+    }
+    result = {
+        "status": "DO_NOT_UPLOAD",
+        "package_status": "PRIOR_ONLY_ASSIGNMENTS_READY",
+        **_blocked_truth_values(
+            file_valid=False,
+            evidence_state=ReleaseEvidenceState.UNKNOWN,
+            model_status=ModelStatus.PRIOR_ONLY,
+            certification_basis=CertificationBasis.MODEL_ASSISTED,
+        ),
+        "assignments": str(assignments_path),
+        "assignments_sha256": assignments_hash,
+        "reserved_entries": entry_ids,
+        "lineups": [lineup.as_payload(names) for lineup in lineups],
+        "participation": contract.as_report(),
+        "redistribution": redistribution,
+        "selection": selection,
+        "prior_scores": scores.as_report(),
+        "next": (
+            "Run review-export with these assignments to write the byte-audited"
+            " bulk-entry CSV."
+        ),
+        "warning": (
+            "Prior-only selection maximizing a central estimate. Not a ceiling, not"
+            " ownership aware, and not EV, ROI, win probability or edge."
+        ),
+    }
+    write_run_record(output_dir / "selection_report.json", result)
+    _print_json(result)
+    return 0
+
+
+def command_review_export(args: argparse.Namespace) -> int:
+    """Legality plus byte audit, with no payout table and no economics."""
+
+    slate = parse_salaries(args.salaries)
+    template = parse_entries(args.entries)
+    assignments = read_assignment_csv(args.assignments, slate.mode)
+    output_dir = Path(args.output_dir).resolve()
+    export = export_review_entries(
+        slate=slate,
+        template=template,
+        assignments=assignments,
+        output_path=output_dir / f"DK_REVIEW_ENTRY_{args.label or 'showdown'}.csv",
+    )
+    report = export.as_report(
+        {
+            "salaries_sha256": sha256_file(args.salaries),
+            "entries_sha256": template.raw_hash,
+            "assignments_sha256": sha256_file(args.assignments),
+            "contest_ids": sorted({e.contest_id for e in template.authorizations}),
+            "entry_fees": sorted({e.entry_fee for e in template.authorizations}),
+        }
+    )
+    write_run_record(output_dir / "review_export_report.json", report)
+    _print_json(report)
+    return 0 if export.file_valid else 2
+
+
+def command_priors_propose(args: argparse.Namespace) -> int:
+    result = propose_prior_package(
+        salaries=args.salaries,
+        salary_sha256=args.salary_sha256,
+        season=args.season,
+        prior_season=args.prior_season,
+        as_of=args.as_of,
+        output_dir=args.output_dir,
+    )
+    _print_json(result)
+    return 0
+
+
+def command_priors_freeze(args: argparse.Namespace) -> int:
+    result = freeze_prior_package(
+        package_dir=args.package_dir,
+        reviewed=args.reviewed,
+        reviewed_sha256=args.reviewed_sha256,
+        salaries=args.salaries,
+        salary_sha256=args.salary_sha256,
+        as_of=args.as_of,
+        output_dir=args.output_dir,
+        weather_state=args.weather_state,
+        salary_observed_at=args.salary_observed_at,
+        weather_source_uri=args.weather_source_uri,
+        weather_observed_at=args.weather_observed_at,
+    )
+    _print_json(result)
+    return 0
+
+
 def command_project(args: argparse.Namespace) -> int:
     package = build_projection_package(
         salaries=args.salaries,
@@ -2339,6 +2481,67 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--run-id")
     cowork.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     cowork.set_defaults(func=command_cowork_run)
+    select = subparsers.add_parser(
+        "select",
+        help="prior-only Showdown selection; never calls field or payout economics",
+    )
+    select.add_argument("--salaries", required=True)
+    select.add_argument("--salary-sha256")
+    select.add_argument("--entries", required=True)
+    select.add_argument("--team-projections", required=True)
+    select.add_argument("--player-opportunities", required=True)
+    select.add_argument("--team-splits", required=True)
+    select.add_argument("--prior-season", type=int, required=True)
+    select.add_argument("--count", type=int)
+    select.add_argument("--max-person-overlap", type=int, default=4)
+    select.add_argument(
+        "--allow-repeat-captain", action="store_true", default=False
+    )
+    select.add_argument(
+        "--no-redistribute", action="store_true", default=False
+    )
+    select.add_argument("--exclude", action="append")
+    select.add_argument("--unavailable-status", action="append")
+    select.add_argument("--available-status", action="append")
+    select.add_argument("--output-dir", required=True)
+    select.set_defaults(func=command_select)
+    review_export = subparsers.add_parser(
+        "review-export",
+        help="write a legality-checked, byte-audited bulk-entry CSV; never certified",
+    )
+    review_export.add_argument("--salaries", required=True)
+    review_export.add_argument("--entries", required=True)
+    review_export.add_argument("--assignments", required=True)
+    review_export.add_argument("--label")
+    review_export.add_argument("--output-dir", required=True)
+    review_export.set_defaults(func=command_review_export)
+    priors_propose = subparsers.add_parser(
+        "priors-propose",
+        help="freeze approved nflverse artifacts and propose the DK identity crosswalk",
+    )
+    priors_propose.add_argument("--salaries", required=True)
+    priors_propose.add_argument("--salary-sha256", required=True)
+    priors_propose.add_argument("--season", type=int, required=True)
+    priors_propose.add_argument("--prior-season", type=int, required=True)
+    priors_propose.add_argument("--as-of", required=True)
+    priors_propose.add_argument("--output-dir", required=True)
+    priors_propose.set_defaults(func=command_priors_propose)
+    priors_freeze = subparsers.add_parser(
+        "priors-freeze",
+        help="publish prior-only team, player and identity artifacts from a reviewed crosswalk",
+    )
+    priors_freeze.add_argument("--package-dir", required=True)
+    priors_freeze.add_argument("--reviewed", required=True)
+    priors_freeze.add_argument("--reviewed-sha256", required=True)
+    priors_freeze.add_argument("--salaries", required=True)
+    priors_freeze.add_argument("--salary-sha256", required=True)
+    priors_freeze.add_argument("--as-of", required=True)
+    priors_freeze.add_argument("--output-dir", required=True)
+    priors_freeze.add_argument("--weather-state")
+    priors_freeze.add_argument("--salary-observed-at")
+    priors_freeze.add_argument("--weather-source-uri")
+    priors_freeze.add_argument("--weather-observed-at")
+    priors_freeze.set_defaults(func=command_priors_freeze)
     project = subparsers.add_parser(
         "project",
         help="build deterministic prior-only model inputs from frozen approved artifacts",

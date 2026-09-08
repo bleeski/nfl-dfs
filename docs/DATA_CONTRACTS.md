@@ -32,6 +32,77 @@ certification closed. This validates
 provenance structure and binding; it does not independently establish that a
 source is true, complete, current enough for every use, or commercially fit.
 
+## W1 nflverse prior adapter (producer of the S6A sources)
+
+`priors-propose` and `priors-freeze` produce the three JSON artifacts the next
+section consumes. Nothing else in the repository produces them. Both commands
+are prior-only: their output is not EV, ROI, win probability, cash probability,
+calibrated ownership, or edge.
+
+The adapter reads exactly seven approved public artifacts, each retrieved
+through `sources.fetch_public_artifact` and archived by content hash under
+`<package>/raw/`:
+
+```text
+raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv   12h
+raw.githubusercontent.com/nflverse/nfldata/master/data/teams.csv   30d
+github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_<prior>.csv      7d
+github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_<prior>.csv  7d
+github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_<prior>.csv         7d
+github.com/nflverse/nflverse-data/releases/download/players/players.csv                         7d
+github.com/nflverse/nflverse-data/releases/download/weekly_rosters/roster_weekly_<season>.csv  24h
+```
+
+Per-source expiry reflects real staleness, not a shared default: market lines
+move intraday, in-season rosters churn daily, a season abbreviation crosswalk is
+static, and a completed season changes only through stat corrections. An emitted
+artifact expires at the earliest expiry among its contributing sources, capped at
+the game's lock time.
+
+Transformations, all over the prior regular season and all in `Decimal` at six
+decimal places:
+
+```text
+plays_mean              (attempts + sacks_suffered + carries) / games
+pass_rate               (attempts + sacks_suffered) / plays
+pass_yards_per_attempt  passing_yards / attempts
+rush_yards_per_attempt  rushing_yards / carries
+touchdowns_mean         (passing_tds + rushing_tds) / games
+field_goals_mean        fg_made / games
+turnovers_mean          (passing_interceptions + fumbles_lost_total) / games
+sacks_allowed_mean      sacks_suffered / games
+uncertainty             stdev(weekly plays) / mean(weekly plays), capped at 1
+market_total            games.csv total_line
+market_spread           games.csv spread_line, negated for the home team
+weather_state           games.csv roof: dome/closed/open only; otherwise operator-supplied
+```
+
+Player weights are each person's share of their DraftKings pool team's eligible
+group, so the denominators match the sets `projection.py` renormalizes over:
+`qb_attempt_weight` from attempts, `carry_weight` from carries, `target_weight`
+from targets, `rushing_td_weight` and `receiving_td_weight` from those TD counts.
+`catch_rate` is receptions/targets and `yards_per_target` is
+receiving_yards/targets, both zero outside RB/WR/TE. `role_capacity` is the mean
+regular-season `offense_pct`, joined on Pro Football Reference id. Player usage
+joins on provider player id alone, never on current team, because players move.
+A group whose eligible members have no prior-season support fails closed with
+`PRIOR_SUPPORT_MISSING`; uniform filling is never applied.
+
+Identity is a two-phase gate because DraftKings and nflverse share no key.
+`priors-propose` writes `nfl_prior_identity_proposal_v1` plus a reviewable
+`identity_review.csv`, and emits only normalized match methods. `priors-freeze`
+requires that file's SHA-256, requires `DECISION=ACCEPT` on every row, refuses an
+altered row or a duplicated provider id, and only then writes
+`match_method="EXACT"`. Team identity binds the DraftKings team abbreviation to
+the nflverse code through the DST row's nickname against `teams.csv`, which is
+how `LAR` resolves to `LA` without a hand-written mapping. A Showdown pool lists
+each person twice; one person gets one mapping and one record, keyed to the FLEX
+row, and both roles are reconciled in `coverage`.
+
+A `role_capacity` of zero does not remove a person from scoring. That is R03 and
+tranche W3 owns it; the adapter reports every zero-capacity person in
+`zero_role_capacity_people` rather than working around it.
+
 ## S6A deterministic projection sources
 
 `project` requires four existing local artifacts and the independently recorded

@@ -4,6 +4,565 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-08 — Prior-only Showdown selection and a byte-audited review export
+
+Closes R03 on the selection side and R02's selection half. Files added:
+`src/nfl_dfs/participation.py`, `src/nfl_dfs/prior_score.py`,
+`src/nfl_dfs/selection.py`, `src/nfl_dfs/review_export.py`,
+`tests/test_participation.py`, `tests/test_prior_selection.py`. Files modified:
+`src/nfl_dfs/optimizer.py` (one new public method), `src/nfl_dfs/cli.py` (two
+subcommands), `nfl.ps1` (two names). `projection.py`, `contracts.py` and
+`evidence.py` untouched. Nothing staged or committed.
+
+```text
+244 collected, 243 passed, 0 failed, 1 skipped, exit 0
+```
+
+Run on the pinned 3.13.7. Note the runtime change below: the device shell died
+mid-session and the suite now runs in the cloud container.
+
+#### Availability contract, `participation.py`
+
+`dk.py` has always parsed `status_raw` onto every `SalaryPlayer` and nothing ever
+read it. On the real NE@SEA pool that leaves 21 of 68 people `OUT` or `IR` and
+fully selectable, including Zach Charbonnet at 44.88% of Seattle's prior carries
+and $8,200. The contract classifies from the salary file's own bytes, moves both
+Showdown roles of a person together, reports `Q` without excluding it, and
+**refuses an unrecognized status rather than assuming it means available**, which
+is the failure mode that puts a scratch in a lineup. `--unavailable-status` and
+`--available-status` let the operator classify a new DraftKings code explicitly.
+
+Redistribution took three iterations, each forced by a measurement:
+
+1. `opportunity.remove_inactive_and_redistribute` refuses this pool outright.
+   Renormalizing over all survivors pushes George Holani past a 0.055
+   `role_capacity` built from a 5.5% snap share.
+2. Capping at capacity and spilling the remainder gave quarterbacks the carries,
+   because their snap share leaves enormous headroom: Sam Darnold measured 0.0854
+   to 0.2891 carry share, and a tight end inherited a fifth of the rushing
+   touchdowns. Fixed by scoping absorption to the vacating position and removing
+   quarterbacks from carry absorption.
+3. The cap itself is wrong. **`role_capacity` is a mean prior-season snap share,
+   so it describes the role a person held while someone was ahead of him, which
+   makes it invalid in the one situation redistribution exists for.** Emanuel
+   Wilson's 0.3112 capacity is his share as Charbonnet's backup. Capacity is now
+   reported against, never enforced.
+
+Final rule: proportional to prior share, scoped to the vacating position,
+uncapped. On the real pool Wilson lands at 66.45% of carries and 70.59% of
+rushing touchdowns, Holani at 11.69%, Darnold unchanged, nothing unallocated.
+
+Two data-quality findings are reported rather than enforced. A share above
+capacity is usually real football: Charbonnet holds 70.6% of Seattle's rushing
+touchdowns on a 48.4% snap share, which is an ordinary goal-line back. A capacity
+of exactly zero beside a nonzero share is a snap-artifact join gap, not someone
+who never played; Cody White is one, and a false zero is treated as unknown.
+
+#### Prior score, `prior_score.py`
+
+`SCORE_VERSION = prior_points_of_expected_statline_v1`, named for what it is.
+Scoring an expected stat line is not the same quantity as an expected score,
+because `scoring.score_offense` pays flat yardage bonuses and
+`scoring.score_defense` steps between points-allowed tiers. Everyone within 20
+yards of a step is reported as threshold-sensitive instead of quietly scored: on
+this pool that is Jaxon Smith-Njigba at 103.4 receiving yards and Emanuel Wilson
+at 81.9 rushing yards.
+
+Nothing is fitted or hand-typed. Volumes come from the team prior; the three
+splits the model-input contract has no field for come from the hash-pinned
+prior-season team-week artifact inside the prior package: passing versus rushing
+touchdowns, interceptions versus lost fumbles, and the field-goal distance mix.
+Kickers score from `field_goals_mean` weighted by the team's own 2025 distance
+distribution plus PATs at the team's own conversion rate. Defences score from the
+opponent's sacks allowed and giveaways plus the implied total from the market
+line. Return touchdowns, safeties and blocked kicks are omitted and declared,
+which understates a defence.
+
+Reconciliation verified: attempts plus sacks plus carries equals `plays_mean`,
+the touchdown split sums to `touchdowns_mean`, the turnover split sums to
+`turnovers_mean`, and the two implied totals sum to `market_total`.
+
+#### Selection, `selection.py`
+
+`PROFILE_VERSION = prior_only_showdown_selection_v1`. Calls the existing MILP
+against the prior score over the permitted pool and never imports `field.py`,
+`economics.py` or the portfolio objective, which is asserted in the report.
+
+`optimizer.py` gains `add_person_overlap_limit`. `add_no_good` alone forbids only
+an exact roster, and in a six-slot pool that left the same six people available
+with a rotated captain: the first two-entry solve returned identical personnel.
+The new constraint counts people, so both salary rows of a person count once. The
+default cap is 4 of 6 plus a distinct captain per entry, which on the real pool
+gives 8 distinct people across 2 entries for 5.2 prior points.
+
+#### Review export, `review_export.py`
+
+`certify` requires the payout table, advertised value and field size, and still
+ends `DO_NOT_UPLOAD` while the model is unvalidated, so it costs the operator an
+afternoon of data entry for no change in outcome. `review-export` separates the
+questions: legality and byte fidelity need no economics and run in full (exact
+salary-row identity per slot, one captain, person uniqueness, salary cap, both
+teams, independent byte audit against the source template, reparse, SHA-256).
+Economics are declared not run, and the decision is `DO_NOT_UPLOAD` by
+construction rather than by failure.
+
+#### End-to-end rehearsal on the real contest
+
+Two CSVs in, bulk-entry CSV out, 0.48 seconds. Contest 193391013,
+`NFL Showdown $2.25M Wednesday Kickoff Millionaire`, $20, 2 reserved entries.
+
+```text
+lineup 1  49500/50000  prior 110.246  CPT Jaxon Smith-Njigba
+          Jason Myers | Drake Maye | Sam Darnold | Emanuel Wilson | Hunter Henry
+lineup 2  49200/50000  prior 105.047  CPT Emanuel Wilson
+          Jason Myers | Drake Maye | TreVeyon Henderson | A.J. Brown | Jaxon Smith-Njigba
+```
+
+`FILE_VALID: true`, `problems: []`, output SHA-256
+`87156b8c108bfe1585c4dc1c689258ee3fd24f525543ae19667be2017cee359e`. Diffed
+against the source template: exactly the two reserved entry rows changed, the
+trailing instruction column preserved, every other byte identical. No `OUT` or
+`IR` person appears in either lineup.
+
+#### Runtime constraint learned
+
+`device_bash` failed with "Failed to create bridge sockets after 5 attempts" and
+did not recover, while `get_device_info`, `device_list_dir`, `device_stage_files`
+and `device_commit_files` kept working. The documented cloud-container fallback
+was used for the rest of the session: stage the sources, build a venv on the
+pinned 3.13.7, run the suite there, commit changed files back. One correction to
+that fallback: **`uv` is unusable in the container**, managing 268KB of cache in
+ten minutes before timing out, while `pip` installed the full pinned dependency
+set in 39 seconds. Use `uv` only to fetch the interpreter, which comes from
+GitHub and is instant.
+
+
+#### Windows verification, and the launcher fix that made it possible
+
+The first Windows run of this work errored every test at setup, inside pytest's
+own temporary-directory machinery and never inside `nfl_dfs`:
+
+```text
+_pytest/pathlib.py:176 find_prefixed -> os.scandir(root)
+PermissionError: [WinError 5] Access is denied:
+  'C:\Users\benja\AppData\Local\Temp\pytest-of-benja'
+```
+
+Two directories had become unreadable to the operator's own Windows account: the
+default pytest basetemp root, and the repository's `.pytest_cache`, which is the
+same `.pytest_cache` this session had already had to skip with `--ignore` from
+the Linux side. Both are consequences of the bridge delete-permission constraint
+recorded above, not of any change in this repository. The ERROR set covered
+`test_appg`, `test_build_pipeline`, `test_certification`, `test_cowork`,
+`test_governed_late_swap`, `test_payouts`, `test_source_ledger` and
+`test_workbook_system`, none of which this session touched.
+
+Passing the repair as flags is not possible through the launcher. `nfl.ps1`
+declares `[CmdletBinding()]`, so PowerShell adds the common parameters and
+prefix-matches them before the script sees its arguments: `-p no:cacheprovider`
+binds to `-PipelineVariable` and fails validation. The `test` branch of
+`nfl.ps1` now pins both writable roots itself, `%TEMP%\nfl-dfs-pytest` for
+`--basetemp` and `%TEMP%\nfl-dfs-pytest-cache` for `cache_dir`, with
+`@RemainingArgs` passed last so an explicit operator flag still overrides.
+Earlier sessions had been passing a project-local `--basetemp` by hand for the
+same reason, visible in the 2026-09-04 entries below; this makes it the default
+and keeps the cache plugin enabled.
+
+```text
+.\nfl.ps1 test -q
+244 collected, 243 passed, 1 skipped, exit 0
+```
+
+Windows, pinned 3.13.7. The skip is the pre-existing symlink-privilege case, the
+same one in the 171-passed baseline at `f86fd9e`.
+
+
+### 2026-09-08 — Real NE@SEA Showdown prior package built; weather provenance added
+
+Operator supplied the real contest files. Ran the full W1 pipeline on them and
+delivered the package. Files touched: `src/nfl_dfs/priors.py`,
+`src/nfl_dfs/cli.py`, `tests/test_priors_adapter.py`, `backlog.md`,
+`changelog.md`. `projection.py`, `contracts.py` and `evidence.py` still
+untouched. Nothing staged or committed.
+
+Inputs, committed byte-exact to `data/runs/20260909-showdown-ne-sea/inputs/`:
+
+```text
+DKSalaries_NE_SEA.csv  6bc5209f6e2f9e3e44e36efe608fe28dfe3b52248c11e6325001dea73e6e4a73  13477 bytes
+DKEntries_NE_SEA.csv   797bb9342f0516c373195e236720a783fef9b11e7469c8a46e747a8bea45d02d  15634 bytes
+```
+
+Contest 193391013, `NFL Showdown $2.25M Wednesday Kickoff Millionaire`, $20
+entry, 2 reserved entries, both blank. 136 salary rows, 68 people.
+
+#### Weather provenance, new
+
+`api.weather.gov` is unreachable from a session but reachable from the operator
+browser, and it is already allowlisted as `PUBLIC_DOMAIN`. `priors-freeze` now
+accepts `--weather-source-uri` and `--weather-observed-at`, held to the same host
+and licence policy as every other source reference through
+`validate_source_reference_policy`. An unapproved host is refused even when the
+operator types it in, and a URI without an observation time is refused. Without a
+URI the basis records `OPERATOR_SUPPLIED_UNATTRIBUTED` rather than silently
+implying provenance.
+
+For this game the value is `CLEAR`, from gridpoint `SEW/125,67` generated
+`2026-09-08T16:37:07+00:00`: the periods spanning a 17:20 PT kickoff are
+`Mostly Sunny` (N 6 mph, precipitation 0%) into `Partly Cloudy` (N 5 mph,
+precipitation 3%). Recorded basis:
+
+```text
+OPERATOR_SUPPLIED:roof=outdoors|OPERATOR_CAPTURE:https://api.weather.gov/gridpoints/SEW/125,67/forecast:observed_at=2026-09-08T16:37:07+00:00
+```
+
+#### Identity: 60 of 68 automatic, 8 accepted on review
+
+57 matched on name/team/position, 1 through the canonical player index, 2 team
+defences. The 8 needing a decision were all cases where nflverse's week-1 2026
+roster places the person on another team, and **all 8 are DraftKings-flagged
+`OUT`**: CJ Dippre, Jack Westover, Mitch Van Vooren, Kayshon Boutte, Kobe
+Prentice, Lance Mason, Nick Vannett, Cody White. All accepted, on the reasoning
+that each league-wide match is unique, player usage joins on provider person id
+rather than current team, and the identity map takes team from DraftKings. The
+reviewed decision file is retained at
+`data/runs/20260909-showdown-ne-sea/review/identity_reviewed.csv`.
+
+#### Published package
+
+```text
+team_prior.json     0d1139c6ae9ed2a2df2f10a07b26c7d2f5b813e4bd584e9c90db4029aac654c9
+player_prior.json   04e8b4bb24f4657294a0c2e7984fe1c0c4739a8faadeadad90c445aaa5ec1618
+identity_map.json   de395d9ce3d0acee1511587f16089da51ef78b58ea62b56b503cae47a37d714b
+prior_package.json  312ee5d1dc9ce5c3d42576961417f8b0ca4596ace8594a7855ad3ae684a0ed13
+```
+
+A second freeze from the same frozen artifacts reproduced all three
+byte-identically. `project` accepted the package and published
+`team_projections.csv` (2 rows), `player_opportunities.csv` (68 rows) and a
+reconciled ledger at `MODEL_STATUS=PRIOR_ONLY` / `RELEASE_DECISION=DO_NOT_UPLOAD`.
+Derived team rows: NE 61.41 plays, 0.5268 pass rate, 8.882 Y/A, 3.12 TD, market
+44.5 / +3; SEA 59.71 plays, 0.5005 pass rate, 8.447 Y/A, 2.59 TD, market 44.5 / -3.
+
+Market cross-check against a book, through the operator browser: Action Network
+shows this game opened NE +4.5 / SEA -4.5 and currently sits NE +3 to +3.5 /
+SEA -3 to -3.5 across bet365, DraftKings, Fanatics and Caesars. The artifact's
+`spread_line` of 3 agrees with the current market. **The total of 44.5 was not
+independently verified**; the Action Network total tab did not open under
+automation and was not pursued further.
+
+#### R03 quantified on the real pool, and it is disqualifying for a generated lineup
+
+21 of the 68 people are `OUT` or `IR` and 2 are `Q`, leaving 47 selectable. The
+participation contract does not exist, so every one of those 21 remains
+selectable by the solver and scoreable by the simulator:
+
+```text
+Zach Charbonnet  SEA RB OUT  $8200  capacity 0.484  carry share 44.88%
+Kayshon Boutte   NE  WR OUT  $5600  capacity 0.675  target share  7.80%
+Terrell Jennings NE  RB OUT  $2400  capacity 0.083  carry share   4.82%
+Julian Hill      NE  TE IR    $200  capacity 0.550  target share  3.39%
+```
+
+Charbonnet carries the second-highest carry share in the Seattle pool at a
+mid-range price. A projection-maximizing solver rosters him, and the retained
+review probe shows a zero-capacity person still averaging 7.99 points across 984
+of 1,000 scenarios. Worse, his 44.88% of carries should redistribute to Emanuel
+Wilson (30.49%) and George Holani (5.37%) and does not.
+`opportunity.py:308 remove_inactive_and_redistribute` exists but is not wired to
+the DraftKings `Status` column or to any evidence contract. That wiring is `W3`.
+
+Operator-facing table joining every person's derived opportunity shares to the
+DraftKings status is retained at
+`data/runs/20260909-showdown-ne-sea/review/opportunity_review.csv`.
+
+#### Tests
+
+```text
+206 collected, 205 passed, 0 failed, 1 skipped, exit 0
+```
+
+Two added: the weather source URI held to source policy (approved host accepted,
+`actionnetwork.com` refused, missing observation time refused, future observation
+refused), and an outdoor freeze recording the capture URI in coverage.
+
+
+### 2026-09-08 — W1: R01 nflverse prior adapter, and the Linux/Cowork runtime unblocked
+
+Tranche `W1` per `docs/session-prompts/W1-priors-adapter.md`. Files touched:
+`src/nfl_dfs/priors.py` (new), `tests/test_priors_adapter.py` (new),
+`src/nfl_dfs/cli.py`, `src/nfl_dfs/sources.py`, `src/nfl_dfs/system.py`,
+`nfl.sh`, `nfl.ps1`, `docs/DATA_CONTRACTS.md`, `docs/COWORK_RUNBOOK.md`,
+`backlog.md`, `changelog.md`. `projection.py`, `contracts.py` and `evidence.py`
+were left untouched for `W2`; verified with `git diff --quiet` on each.
+
+Nothing was staged or committed.
+
+#### Step 0: the Linux runtime now works, and the cause was not disk space
+
+`sh ./nfl.sh setup` first failed with
+`failed to create directory .../.local/share/uv/python: No space left on device`
+(`/sessions` is 9.8G, 9.4G used, 0 available). Relocating the interpreter did not
+fix it either: extraction failed with `Operation not permitted` on
+`share/terminfo/2/2621a`.
+
+One root cause explains every symptom: **the Cowork device bridge refuses file
+deletion inside a mounted folder**, `unlink` and `rmdir` returning `EPERM`.
+Confirmed directly. It breaks `uv` extraction (it cleans its own `.temp`),
+SQLite in both `WAL` and `DELETE` mode (`disk I/O error`; `journal_mode=MEMORY`
+is the only mode that works there), and `tempfile.TemporaryDirectory`, whose
+cleanup handler retries `rmtree` on every `PermissionError` and recurses to
+`RecursionError`. `ignore_cleanup_errors=True` does not help, because the
+recursion happens below it.
+
+Repairs:
+
+- `nfl.sh` honours `NFL_DFS_VENV_DIR`, `NFL_DFS_UV_CACHE_DIR` and
+  `NFL_DFS_UV_PYTHON_DIR`. Every default is unchanged and `nfl.ps1` is untouched
+  apart from two new subcommand names. With the runtime on local disk `uv sync`
+  completes in 17 seconds instead of exceeding 178 seconds unfinished.
+- `system.py` `doctor()` owns its probe lifecycle with `mkdtemp` plus
+  `shutil.rmtree(ignore_errors=True)`, which never recurses, and reports a
+  surviving probe directory in a new `workspace_probe_cleanup` field.
+- `system.py` tries the preferred SQLite journal mode, falls back to `DELETE`,
+  and records the real failure in a new `sqlite_probe_error` field. Reporting
+  what the workspace supports is the purpose of that probe.
+
+**A session can now execute the suite, which unblocks every later tranche.** The
+invocation is
+`sh ./nfl.sh test -q -p no:cacheprovider --ignore=.pytest_cache tests`; the
+ignore is required because `.pytest_cache` in the mounted repository is
+unreadable.
+
+Still open: `nfl.sh doctor` against the mounted repository reports
+`pass_status: false` with `sqlite_probe_error: DELETE:OperationalError:disk I/O
+error`. That is correct, not a defect. `cowork-run` gates on `pass_status` and
+`registry.py:30` opens a real database under `data/registry/`, so the engine
+cannot run in place in a mounted folder. Either the session is granted delete
+permission on the folder (requested this session and auto-denied by the
+permission classifier before reaching the operator), or runs execute from a
+local-disk working copy with the mounted repository as the source of truth for
+edits. Running the suite in place also leaves undeletable temporary directories
+behind.
+
+#### Step 2: reachability, measured from the device VM and the cloud container
+
+| Host | Result |
+|---|---|
+| `raw.githubusercontent.com` | 200 |
+| `api.github.com` | 200 |
+| `github.com/.../releases/download/...` | 302 to `release-assets.githubusercontent.com`, which then serves 200 |
+| `api.weather.gov` | no connect |
+| `api.sleeper.app` | no connect |
+| `api.the-odds-api.com` | no connect |
+| `actionnetwork.com` | no connect |
+
+The 2026-09-08 constraint that release assets are unreachable was wrong: they
+are reachable, and the block was policy. `release-assets.githubusercontent.com`
+is not in `ALLOWED_HOSTS` and `fetch_public_artifact` set
+`follow_redirects=False`. The api.github.com octet-stream asset endpoint
+redirects to the same host, so there was no allowlisted route to the bytes.
+Confirmed code-only, no player data: `nflverse-data` (28 blobs),
+`nflverse-pbp` (123), `nflverse-players` (59), `nflverse-rosters` (46),
+`nflverse-data-archives` (1). Only `nflverse/nfldata` publishes data in a repo
+tree.
+
+`sources.py` now follows exactly one redirect hop, only from a
+`github.com/{owner}/{repo}/releases/download/...` URL, and only onto
+`release-assets.githubusercontent.com` or `objects.githubusercontent.com`. Every
+other host keeps `follow_redirects=False`. The recorded `source_uri` stays the
+canonical `github.com` URL, already approved under
+`PERMITTED_REPOSITORY_LICENSE`. A related latent defect is fixed in the same
+place: an unfollowed redirect previously passed `raise_for_status` and produced
+an empty artifact that would have been hashed as data.
+
+**This widens a security boundary and needs explicit operator sign-off before
+any certified run depends on it.**
+
+#### Step 3: the adapter
+
+`src/nfl_dfs/priors.py`, `ADAPTER_VERSION = nflverse_prior_adapter_v1`, reachable
+as `priors-propose` and `priors-freeze` from both launchers. It reads seven
+approved artifacts, archives their raw bytes content-addressed under
+`<package>/raw/`, and records hashes, source URIs, captured and observed times,
+per-source expiry with its staleness basis, license decision and parser version
+in `source_manifest.json`. The package resolves without any file outside it.
+Contracts and transformations are documented in `docs/DATA_CONTRACTS.md`.
+
+Design decisions taken and their reasons:
+
+- **Two phases, because DraftKings and nflverse share no key.**
+  `projection.py:374` accepts only `match_method="EXACT"`, and the backlog holds
+  that a normalized crosswalk match is a proposal until reviewed and frozen.
+  `priors-propose` emits only normalized match methods; `priors-freeze` requires
+  the reviewed file's SHA-256, `DECISION=ACCEPT` on every row, an unaltered row
+  and a unique provider id, and only then writes `EXACT`.
+- **Team identity from the DST nickname.** DraftKings names its DST row after the
+  team nickname and `nfldata/teams.csv` publishes that nickname per season, so
+  `LAR` resolves to nflverse `LA` from data rather than a hand-written mapping.
+  Cross-checked against a unique schedule row matched on season, the crosswalked
+  team pair and the DraftKings kickoff date.
+- **Expiry composes.** An emitted artifact expires at the earliest expiry among
+  its contributing sources, capped at the game's lock time.
+- **Zero prior support fails closed.** `PRIOR_SUPPORT_MISSING` names the team and
+  the weight group. Uniform filling and imputation are never applied.
+- **Player usage joins on person, not team**, because players move; filtering by
+  current team would silently zero someone productive elsewhere.
+- **`uncertainty` is the coefficient of variation of weekly offensive plays.** A
+  dispersion indicator over the same frozen bytes, explicitly not a calibrated
+  variance or a confidence interval.
+- **A custom canonical serializer.** `json.dumps(default=str)` quotes every
+  `Decimal` and `TeamSourceRecord` rejects a quoted number. Floats are refused
+  outright so no unstable repr reaches a derived artifact.
+- **Weather.** `roof` of `dome`, `closed` or `open` derives the enum from the
+  frozen artifact. Anything else requires `--weather-state`, because the enum has
+  no `UNKNOWN` member and `api.weather.gov` is unreachable from a session.
+
+#### Verified against the real NE@SEA Showdown pool
+
+`tests/fixtures/supplied/DKSalaries Salary CSV Showdown.csv`, SHA-256
+`86a837c50eb36130a4e2bf2642a9457f08c6487dde8a4c2bccd793c91a7f6309`, 126 rows and
+63 people, against live nflverse artifacts.
+
+`priors-propose` resolved 55 of 63 people automatically: 52 on
+name/team/position, 1 through the canonical player index, 2 team defences. The
+remaining 8 are people the DraftKings pool places on NE or SEA while the nflverse
+week-1 2026 roster places them on another team (TB, WAS, DAL, HOU, NYG, PIT, BAL,
+LV), 6 of them at `DEV` or `CUT` status. Each is reported as
+`NAME_POSITION_OTHER_TEAM` with its candidate provider id, the conflicting team
+and the roster status, so the review file is actionable rather than blank. They
+are not bound automatically; that is the gate working.
+
+A rehearsal `priors-freeze` in a scratch directory, accepting those 8 to exercise
+the path, then confirmed on real bytes:
+
+- Two freezes from the same frozen artifacts produced byte-identical JSON:
+  `team_prior.json d3cd26b5…`, `player_prior.json 1d960973…`,
+  `identity_map.json 25965a4b…`.
+- 63 people, one mapping and one record each, all keyed to FLEX ids, no captain
+  id mapped, both roles reconciled in `coverage`. Kickers and both defences
+  included.
+- `project` accepted all three artifacts and published
+  `team_projections.csv` (2 rows), `player_opportunities.csv` (63 rows) and a
+  reconciled `nfl_source_ledger_v1`, reporting `MODEL_STATUS=PRIOR_ONLY` and
+  `RELEASE_DECISION=DO_NOT_UPLOAD`.
+- The outdoor game refused to freeze without a weather state, with
+  `WEATHER_STATE_REQUIRED:roof=outdoors`.
+- Derived team values spot-checked against the raw artifact: NE 4459 passing
+  yards on 502 attempts is 8.882 Y/A, matching the emitted value exactly; plays
+  61.41, pass rate 0.5268, rush 4.435 all reconcile. Both teams sit at the high
+  end of historical Y/A, which is a property of the 2025 dataset rather than the
+  transformation, and is worth an operator sanity check.
+- Market fields came from `games.csv`: total 44.5, `spread_line` 3 emitted as NE
+  `+3` and SEA `-3`. `coverage.market_attribution` is
+  `NFLVERSE_SCHEDULE_NO_BOOK_NO_PUBLISHER_TIMESTAMP`, because that artifact
+  carries neither.
+
+#### Tests
+
+`sh ./nfl.sh test -q -p no:cacheprovider --ignore=.pytest_cache tests`, run by
+the session on the pinned Python 3.13.7 runtime, on both a local-disk working
+copy and the mounted repository:
+
+```text
+204 collected, 203 passed, 0 failed, 1 skipped, exit 0
+```
+
+The single skip is the pre-existing `test_cowork.py:115` Windows junction case.
+The Windows baseline at `f86fd9e` was 171 passed with the same skip;
+`tests/test_priors_adapter.py` adds 32. `git diff --check` and `compileall` pass.
+
+New coverage: byte-identical reproducibility; `AvgPointsPerGame` mutation leaving
+both derived artifacts unchanged; one record and one mapping per person with K
+and DST present and both Showdown roles reconciled; shares normalized over the
+pool and provably non-uniform; postseason and other seasons excluded; salary,
+review-file and frozen-artifact hash mismatches; insufficient team coverage;
+unaccepted, altered and duplicated review rows; output-directory reuse; refusal
+to uniform-fill an unsupported group; `project` consuming the package; stale
+sources refused by `project`; zero-capacity people reported; per-team spread
+sign; weather derivation and refusal; proposals never claiming `EXACT`; a
+cross-team person reported with its candidate; ambiguity left unresolved; the
+player-index fallback tier; expiry composition and the lock cap; and the
+`sources.py` redirect being confined to GitHub release downloads.
+
+#### Reported, not repaired
+
+- **R03 stands.** A `role_capacity` of zero does not remove a person from
+  scoring. On the NE@SEA pool the adapter reports 4 such people, both kickers and
+  both defences, in `zero_role_capacity_people`. Tranche `W3` owns the
+  participation mask. Not papered over here.
+- **`projection.py` requires a prior record for every person in the pool**
+  (`SALARY_PERSON_IDENTITY_COVERAGE_MISMATCH`). A DraftKings pool routinely
+  contains a practice-squad elevation or a just-signed person with no honest
+  prior. Today the whole package fails rather than publishing without them. This
+  is a real design tension between fail-closed and pool reality, and it needs a
+  decision before the Sunday run.
+
+#### Open `[BEN: ...]` flags
+
+- **[BEN: weather_state]** for NE@SEA. Lumen Field is `roof=outdoors`,
+  `games.csv` carries no weather, and `api.weather.gov` is unreachable from a
+  session though it is allowlisted and reachable from a browser. Required before a
+  real freeze.
+- **[BEN: current Showdown salary CSV]**. The repository fixture is a 2026-09-01
+  download. A real run needs the current file for the exact contest.
+- **[BEN: 8 identity decisions]** in `identity_review.csv`, listed above.
+- **[BEN: sources.py redirect sign-off]** before a certified run depends on it.
+- **[BEN: market source]**. `actionnetwork.com` cannot be an artifact source:
+  it is not in `ALLOWED_HOSTS`, and the `OPERATOR_SUPPLIED` escape at
+  `sources.py` is hardcoded to DraftKings, so even an operator-supplied number
+  fails the gate. `games.csv` is the artifact of record until that changes.
+
+
+### 2026-09-08 — Production readiness review triage, Showdown-first sequencing, backlog restructure
+
+No production source, test, or configuration file was changed. Documentation and
+tracking only.
+
+Added:
+
+- `docs/SHOWDOWN_FIRST_PRODUCTION_PLAN.md`. Splits readiness into a reachable
+  prior-only Showdown review product and a certified-upload product that cannot
+  exist before settled slates provide prospective validation evidence. Sequences
+  R01-R15 for Showdown and records four places the review's own sequencing is off.
+- `docs/session-prompts/W1-priors-adapter.md`. Paste-ready session prompt for the
+  R01 adapter.
+- A `Post-review work tranches` section in `backlog.md` mapping every open finding
+  R01-R15 onto session-sized tranches W1-W13, with dependencies, plus a dated
+  deadline reality check.
+
+Verified in this session against `codex/s6a-deterministic-projection-producer` at
+`f86fd9e`:
+
+- R05 cloning is a default, not an architecture. `cli.py:1314` takes
+  `min(opponent_count, args.field_sample_size)` and `--field-sample-size` defaults
+  to 1000 (`cli.py:2396`, hardcoded at `cli.py:2031` and `cli.py:2275`), then
+  `scale_field_multiplicities` inflates to field size. `economics.py:115` already
+  streams one scenario at a time against a chunked field and never materializes a
+  field-by-scenario matrix, so the constraint is CPU time, not memory.
+- R07 confirmed at `portfolio.py:128` (`mean - 1.96 * standard_error`) and
+  `portfolio.py:189` (worst state chosen by the same quantity).
+- R03 confirmed at `simulation.py:84`: `salary_people != model_people` raises, so an
+  unavailable person cannot be removed from the model.
+- R06 confirmed at `cli.py:1302` and `cli.py:2398`: a 20,000-lineup bank is cut to
+  250 by mean projection then summed p90, against a 5,000 ceiling at `cli.py:1308`.
+- R12 confirmed: `cli.py` sets `ModelStatus.PRIOR_ONLY` on successful model load and
+  no registry or loader exists.
+- Session egress reaches `raw.githubusercontent.com` and `github.com` only.
+  `api.sleeper.app`, `api.weather.gov`, and `api.the-odds-api.com` fail to connect
+  from both the device-side Linux VM and the cloud container.
+- The device-side Linux VM has `uv` and Python 3.10.12, no `.cowork-venv`, and a
+  `/sessions` mount at 100% capacity. The Linux runtime remains unbootstrapped and a
+  session cannot currently execute the suite or invoke the Windows launcher.
+
+Tests: none run. The 171-passed/1-skipped baseline is carried from the review, not
+re-executed here.
+
+Blockers unchanged: R01-R15 all open. Operator prerequisites for DL4 and DL5 (a
+matching Showdown reserved-entry template, contest facts, approved prior artifacts,
+current official activity evidence) are still missing, so DL4 and DL5 are retargeted
+from the 2026-09-09 opener to a Sunday 2026-09-13 single-game contest, with the
+opener run as a manual-guardrail rehearsal only.
+
 ### 2026-09-04 — DL2/S6A: deterministic prior projection producer
 
 Changed:
