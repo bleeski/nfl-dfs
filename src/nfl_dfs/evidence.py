@@ -20,7 +20,7 @@ from .contracts import (
     TeamInactiveReportBundle,
 )
 from .hashing import sha256_bytes, sha256_file
-from .sources import SourcePolicyError, validate_url_policy
+from .sources import SourcePolicyError, validate_source_reference_policy
 
 
 class EvidenceError(ValueError):
@@ -337,7 +337,11 @@ def validate_source_ledger(
     future_limit = checked_at + timedelta(minutes=5)
     for entry in ledger.entries:
         try:
-            validate_url_policy(entry.source_uri)
+            validate_source_reference_policy(
+                entry.source_uri,
+                license_decision=entry.license_decision,
+                parser_version=entry.parser_version,
+            )
         except SourcePolicyError as exc:
             raise EvidenceError(
                 f"source ledger URI is not approved: {entry.source_uri}: {exc}"

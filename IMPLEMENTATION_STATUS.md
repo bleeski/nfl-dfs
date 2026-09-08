@@ -22,6 +22,13 @@
   ledger, team projections, and player opportunities are independently hashed
   into the certification manifest. Hash binding does not by itself validate an
   external source's truth or license.
+- `nfl.ps1 project` / `nfl.sh project` now provide the minimum S6A producer.
+  Four immutable hash-pinned inputs (salary, team prior, player prior, and exact
+  frozen identity map) are validated without network access; position-eligible
+  weights are deterministically conserved to team shares; exact Classic or
+  Showdown FLEX identities are enforced; and both loader-valid CSVs plus the
+  strict source ledger are atomically published only after independent hash and
+  contract reconciliation. DraftKings APPG remains raw-only.
 - Classic and Showdown salary contracts enforce exact IDs, geometry, salary
   cap, underlying-person identity, distinct CPT/FLEX IDs, and exact 1.5x Captain
   salary/scoring behavior.
@@ -103,6 +110,10 @@
   diagnostic until prospective historical/live validation clears the registered
   sample and calibration gates. The engine does not label them EV, ROI, win
   probability, or calibrated ownership.
+- S6A creates source-bound `PRIOR_ONLY` inputs but does not implement the full
+  Section 4.4 historical ingestion, offline fitting, prospective validation, or
+  live-source refresh architecture. A successful producer run therefore
+  remains `DO_NOT_UPLOAD` until the separate evidence and model gates pass.
 - nflverse, NWS, and Sleeper are policy-bound source adapters, but a live season
   backfill and license/schema audit have not been run from the supplied files.
 - A synthetic full-width Classic benchmark built 20,000 candidates in 144

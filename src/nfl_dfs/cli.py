@@ -55,6 +55,7 @@ from .optimizer import generate_candidates
 from .ownership import OwnershipBracket, cold_start_states
 from .payouts import parse_payout_csv, validate_payout_tiers
 from .portfolio import evaluate_portfolio, portfolio_net_samples, select_portfolio
+from .projection import build_projection_package
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .release import derive_release_policy
 from .scenario_store import save_scenario_bank
@@ -1620,6 +1621,47 @@ def command_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_project(args: argparse.Namespace) -> int:
+    package = build_projection_package(
+        salaries=args.salaries,
+        salary_sha256=args.salary_sha256,
+        team_source=args.team_source,
+        team_source_sha256=args.team_source_sha256,
+        player_source=args.player_source,
+        player_source_sha256=args.player_source_sha256,
+        identity_map=args.identity_map,
+        identity_map_sha256=args.identity_map_sha256,
+        as_of=args.as_of,
+        output_dir=args.output_dir,
+    )
+    result = {
+        "status": "DO_NOT_UPLOAD",
+        "package_status": "PROJECTION_INPUTS_READY",
+        **_blocked_truth_values(
+            file_valid=False,
+            evidence_state=ReleaseEvidenceState.PASS,
+            model_status=ModelStatus.PRIOR_ONLY,
+            certification_basis=CertificationBasis.MODEL_ASSISTED,
+        ),
+        "output_dir": package.output_dir,
+        "team_projections": package.team_projections,
+        "player_opportunities": package.player_opportunities,
+        "source_ledger": package.source_ledger,
+        "hashes": package.hashes,
+        "input_hashes": package.input_hashes,
+        "next": (
+            "Use the three files as prior-only model inputs for build/certify; "
+            "they do not authorize upload."
+        ),
+        "warning": (
+            "This deterministic package is PRIOR_ONLY. It does not establish EV, ROI, "
+            "profitability, calibration, win probability, cash probability, or upload readiness."
+        ),
+    }
+    _print_json(result)
+    return 0
+
+
 def command_late_swap(args: argparse.Namespace) -> int:
     run_id = _resolved_run_id(args.run_id, "late-swap")
     now = datetime.fromisoformat(args.as_of.replace("Z", "+00:00"))
@@ -2297,6 +2339,21 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--run-id")
     cowork.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     cowork.set_defaults(func=command_cowork_run)
+    project = subparsers.add_parser(
+        "project",
+        help="build deterministic prior-only model inputs from frozen approved artifacts",
+    )
+    project.add_argument("--salaries", required=True)
+    project.add_argument("--salary-sha256", required=True)
+    project.add_argument("--team-source", required=True)
+    project.add_argument("--team-source-sha256", required=True)
+    project.add_argument("--player-source", required=True)
+    project.add_argument("--player-source-sha256", required=True)
+    project.add_argument("--identity-map", required=True)
+    project.add_argument("--identity-map-sha256", required=True)
+    project.add_argument("--as-of", required=True)
+    project.add_argument("--output-dir", required=True)
+    project.set_defaults(func=command_project)
     doctor_parser = subparsers.add_parser("doctor")
     doctor_parser.add_argument("--workspace", default=str(PROJECT_ROOT))
     doctor_parser.set_defaults(func=command_doctor)

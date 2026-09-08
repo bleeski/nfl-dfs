@@ -26,6 +26,47 @@ ALLOWED_HOSTS = {
 PROHIBITED_HOSTS = {"nfl.com", "www.nfl.com", "draftkings.com", "www.draftkings.com"}
 
 
+def validate_source_reference_policy(
+    url: str,
+    *,
+    license_decision: str,
+    parser_version: str,
+) -> None:
+    """Validate provenance references without authorizing a network retrieval."""
+
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or not host
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise SourcePolicyError("source references require an HTTPS URI without credentials")
+    if host in {"draftkings.com", "www.draftkings.com"}:
+        if license_decision != "OPERATOR_SUPPLIED" or parser_version != "dk_csv_v1":
+            raise SourcePolicyError(
+                "DraftKings references are permitted only for operator-supplied CSV bytes"
+            )
+        return
+    validate_url_policy(
+        url,
+        optional_odds_key_configured=(host == "api.the-odds-api.com"),
+    )
+    permitted_licenses = {
+        "github.com": {"PERMITTED_REPOSITORY_LICENSE"},
+        "raw.githubusercontent.com": {"PERMITTED_REPOSITORY_LICENSE"},
+        "api.github.com": {"PERMITTED_REPOSITORY_LICENSE"},
+        "api.sleeper.app": {"SECONDARY_STATUS_ONLY"},
+        "api.weather.gov": {"PUBLIC_DOMAIN", "PERMITTED_PUBLIC_API"},
+        "api.the-odds-api.com": {"PERMITTED_PUBLIC_API"},
+    }[host]
+    if license_decision not in permitted_licenses:
+        raise SourcePolicyError(
+            f"license decision {license_decision!r} is not approved for {host}"
+        )
+
+
 def capture_local_artifact(
     path: str | Path,
     *,

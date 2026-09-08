@@ -108,6 +108,7 @@ class LedgerEntry(FrozenModel):
         "SECONDARY_STATUS_ONLY",
     ]
     parser_version: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
+    coverage: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("captured_at", "observed_at")
     @classmethod

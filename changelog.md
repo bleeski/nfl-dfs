@@ -4,6 +4,83 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-04 — DL2/S6A: deterministic prior projection producer
+
+Changed:
+
+- Added a local `project` command to both launchers. It requires the untouched
+  salary CSV, versioned team-prior and player-prior JSON, an exact frozen
+  provider-to-DraftKings identity map, the independently recorded SHA-256 of
+  all four artifacts, an explicit timezone-aware `as_of`, and a new output
+  directory.
+- Added strict S6A contracts and deterministic transformation code. Approved
+  source/license/parser combinations, capture/observation/expiry times,
+  evidence states, declared and computed coverage, finite bounds, unique stable
+  provider identities, complete team/person coverage, and exact team/position/
+  underlying-person/DK-ID mappings all fail closed. Normalized/fuzzy mappings
+  never assemble. Showdown emits one FLEX ID per underlying person and rejects
+  CPT/FLEX identity conflicts.
+- Team fields are direct bounded frozen source fields. Player share outputs are
+  position-masked source weights divided by their eligible team totals; an
+  all-zero or missing group is rejected rather than filled uniformly. No
+  coefficient fitting, clipping, imputation, or LLM-authored number exists in
+  the runtime path, and DraftKings APPG is never read numerically.
+- Outputs are built in a temporary sibling directory, checked through
+  `load_opportunity_model`, hashed, bound into a four-entry
+  `nfl_source_ledger_v1`, validated through `validate_source_ledger`, and only
+  then atomically published as `team_projections.csv`,
+  `player_opportunities.csv`, and `source_ledger.json`. Existing destinations
+  and any failed build publish no package.
+- Extended ledger entries with deterministic coverage records and separated
+  non-fetching operator-supplied DraftKings provenance references from the
+  still-prohibited DraftKings retrieval path.
+- Updated Cowork/operator/data-contract/status documentation and the missing-
+  input handoff to use the new producer while preserving
+  `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+Verification:
+
+- Focused producer, source-ledger, and APPG suite: 39 passed in 2.37 seconds.
+- Producer plus existing build, Cowork, certification, governed late-swap,
+  late-swap learning, and release-truth suite: 112 passed, 1 skipped in 27.08
+  seconds. The skip is the existing Windows symbolic-link privilege case.
+- Complete Windows suite with a unique project-local `--basetemp` and pytest
+  cache disabled: 171 passed, 1 skipped in 31.33 seconds.
+- Independent Classic fixture inspection: exact headers, 24 team rows, 719
+  person rows, four ledger entries, loader success, ledger-validator success,
+  and exact reconciliation of team SHA-256
+  `f9370dbb20ce78a40ffe159f4d78a7abf76e9248858ffb08f4ef8ac6931ff279`
+  and player SHA-256
+  `603237a30367c9f8f9cba577e6fdda2414fd13e78e4cb635fe931ddcc2081f6c`.
+- A separate same-input/two-directory run produced byte-identical team, player,
+  and ledger files. Mutating every salary APPG cell left both derived CSV hashes
+  unchanged.
+- `nfl.ps1 doctor`: pass on Python 3.13.7; SQLite integrity `ok`, WAL mode,
+  Excel lock `CLOSED_OR_ABSENT`, and no sync/reparse detection.
+- Python `compileall` over `src` and `tests`: pass.
+- `git diff --check`: pass.
+
+Remaining blockers:
+
+- The broader S6 historical ingestion, offline fitting/holdout validation,
+  live-source refresh, Linux/Cowork execution, real-slate timing, and
+  prospective model calibration remain unverified.
+- Matching Showdown/Classic reserved-entry templates, contest facts, and
+  current official evidence are still required on the September 9/13 delivery
+  sequence.
+
+Tracker updates:
+
+- DL2/S6A: `READY` -> `DONE`.
+- DL3: `BLOCKED` on DL2 -> `READY`; it is the sole next action.
+- Broader S6 remains `BLOCKED`; no later quantitative tranche was started.
+
+Claims explicitly not made:
+
+- No live-slate, Linux/Cowork, calibrated-EV, ROI, profitability, ownership,
+  win/cash probability, prospectively validated model, or DraftKings upload-
+  readiness claim.
+
 ### 2026-09-04 — S3: certification truth states and QA policy
 
 Changed:

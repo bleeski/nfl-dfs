@@ -20,13 +20,13 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 
 - Repository: `C:\Users\benja\Documents\Claude\nfl-dfs`
 - Original tracker branch/HEAD: `main` at `e042c7bfc546`.
-- Verified merged baseline 2026-09-04: PR #1 merged S2 into `main` at
-  `033991452ce655923ff37f48b06c90746ab41ce3`; local `main` and `origin/main`
-  were fast-forward synchronized before the next implementation branch was
-  created. S2 verification reported 123 passed, 1 skipped on Windows.
-- Current implementation branch: `codex/s3-certification-truth-states`, created
-  from the verified merged baseline. S3 is implemented in the unstaged working
-  tree and passed 144 tests with 1 existing Windows privilege skip.
+- Verified merged baseline 2026-09-04: PR #2 merged S3 into `main` at
+  `500f73c5a098f2c6b6dfafae4b7052b8e7e3b5a3`; local `main` and `origin/main`
+  matched before the S6A implementation branch was created.
+- Current implementation branch:
+  `codex/s6a-deterministic-projection-producer`, created from that clean merged
+  baseline. DL2/S6A is implemented in the unstaged working tree and passed 171
+  tests with 1 existing Windows symlink-privilege skip.
 - Still unverified: Linux/Cowork runtime, real-slate timing, live calibration, and any model-assisted certified upload.
 - Current truthful capability: validated intake, legality, evidence gating, and byte-exact export infrastructure; not a validated EV engine.
 
@@ -61,8 +61,8 @@ repairs or mark their economics as valid.
 | ID | Target | Status | Required outcome |
 |---|---|---|---|
 | DL1 | S3 truth states, target 2026-09-05 | `DONE` | Report `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and `RELEASE_DECISION` independently; keep hard gates binding; make style and bank-coverage preferences advisory. |
-| DL2 | Minimum S6A projection producer, target 2026-09-07 | `READY` | Deterministically transform frozen approved source artifacts into both model-input CSVs and a validated source ledger with no freehand numerical inputs or APPG use. |
-| DL3 | Prior-only review lineup profile, target 2026-09-07 | `BLOCKED` on DL2 | Generate legal projection-led review assignments without using or relabeling the known-unvalidated field, duplication, or payout economics. It must remain `MODEL_STATUS=PRIOR_ONLY` and `DO_NOT_UPLOAD`; this does not complete S5. |
+| DL2 | Minimum S6A projection producer, target 2026-09-07 | `DONE` | Deterministically transform frozen approved source artifacts into both model-input CSVs and a validated source ledger with no freehand numerical inputs or APPG use. |
+| DL3 | Prior-only review lineup profile, target 2026-09-07 | `READY` | Generate legal projection-led review assignments without using or relabeling the known-unvalidated field, duplication, or payout economics. It must remain `MODEL_STATUS=PRIOR_ONLY` and `DO_NOT_UPLOAD`; this does not complete S5. |
 | DL4 | Showdown exact-template acceptance, target 2026-09-08 | `BLOCKED` on DL2 and DL3 plus operator files | Rehearse with a matching Showdown salary CSV, reserved-entry CSV, contest/payout facts, and current evidence; verify exact CPT/FLEX IDs, one Captain multiplier, underlying-person uniqueness, assignments, workbook, blockers, and final bytes. |
 | DL5 | Showdown operational run, target 2026-09-09 | `BLOCKED` on DL4 | Refresh approved inputs and evidence, generate the review lineup, and make no feature changes beyond demonstrated blocker repairs. |
 | DL6 | Classic projection/selection extension, target 2026-09-11 | `BLOCKED` on DL2 and DL3 | Use the same source-bound projection contract across the multi-game Classic pool and produce exact-ID legal review assignments. |
@@ -242,6 +242,19 @@ by the deadline profile.
   - End-to-end fixture build creates both model inputs and a valid ledger with zero freehand numeric input.
   - Missing, ambiguous, stale, conflicted, or hash-mismatched identity/source evidence fails closed.
   - `AvgPointsPerGame` remains absent from all numerical transformations.
+- Minimum S6A/DL2 completion: `nfl.ps1 project` and `nfl.sh project` now accept
+  four explicit hash-pinned frozen artifacts; validate approved provenance,
+  timestamps, coverage, bounds, and exact provider-to-current-DK identity;
+  conserve documented position-eligible team weights; and atomically publish
+  loader-valid team/player CSVs plus a reconciled `nfl_source_ledger_v1` file.
+  Classic fixture coverage is 24 teams/719 people, Showdown uses 63 distinct
+  FLEX IDs, repeat runs are byte-identical, APPG mutation leaves both derived
+  CSVs unchanged, and failures publish no partial package. Verification: 39
+  focused tests passed; 112 integration tests passed with 1 existing skip; full
+  Windows suite 171 passed with 1 existing skip; doctor and compileall passed.
+- Broader S6 remains `BLOCKED`: the full Section 4.4 historical ingestion,
+  offline fitting/holdout reports, live-source refresh, and prospective model
+  validation are not part of S6A and remain unimplemented/unverified.
 
 ### S7 — Simulator, ownership, duplication, and calibration
 
@@ -304,7 +317,8 @@ by the deadline profile.
 
 ## Next action
 
-Implement DL2 — the minimum S6A deterministic projection producer — as the
-single next `READY` deadline item. Transform only frozen approved source
-artifacts into both model-input CSVs and the validated source ledger; do not
-freehand numerical inputs, use DraftKings APPG, or begin DL3/S4A/S4B/S5/S7.
+Implement DL3 — the prior-only review lineup profile — as the sole next `READY`
+deadline item. Use the DL2 source-bound inputs to generate legal review
+assignments while retaining `MODEL_STATUS=PRIOR_ONLY` and `DO_NOT_UPLOAD`; do
+not use or relabel unvalidated field, duplication, payout, EV, or profitability
+economics, and do not begin S4A/S4B/S5/S7.
