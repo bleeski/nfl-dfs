@@ -44,8 +44,8 @@ backlog items remain separate; their statuses do not override this queue.
 | Order | ID | Priority | One-session deliverable | Status | Dependency |
 |---|---|---|---|---|---|
 | 1 | SD1 | P0 | Kicker-role evidence contract and conserved kicker scoring | `DONE` | None |
-| 2 | SD2 | P0 | Offensive-role evidence and explicit missing-history handling | `READY` | SD1 |
-| 3 | SD3 | P1 | Precise, validated portfolio-control contract | `BLOCKED` | SD2 |
+| 2 | SD2 | P0 | Offensive-role evidence and explicit missing-history handling | `DONE` | SD1 |
+| 3 | SD3 | P1 | Precise, validated portfolio-control contract | `READY` | SD2 |
 | 4 | SD4 | P1 | Enforced portfolio controls and independent assignment audit | `BLOCKED` | SD3 |
 | 5 | SD5 | P1 | Readable, artifact-bound lineup and exposure review | `BLOCKED` | SD4 |
 | 6 | SD6 | P0 acceptance | Complete Cowork/Linux rehearsal with current evidence | `BLOCKED` | SD5 and access to the actual environment and matching files |
@@ -301,6 +301,18 @@ rehearsal, not full economic/model certification. Preserve the broader backlog.
    provide copy/paste PowerShell using an explicit reviewed path list; never stage
    untracked user artifacts, raw captures, generated workbooks or entry CSVs.
 
+### 2026-09-09 — SD2 implementation session started
+
+Actual start HEAD: `09bb9bdc71359d667aa55273575c4dd14f30bba3`, branch
+`codex/s6a-deterministic-projection-producer`. SD1 is now committed, unlike
+the SD2 prompt creation snapshot. Tracked files are clean. Preserve untracked
+`Claude outputs/`, `docs/session-prompts/W2-expiry-and-selection-objective.md`
+and `docs/session-prompts/W4-cowork-prior-only-profile.md`.
+Scope: SD2 offensive-role evidence, historical-basis distinctions, deterministic
+allocation, request/review integration, regressions and mandatory documentation.
+Python 3.13.7 verified. No staging, commit, push, reset, clean, stash, dependency
+change or account action is authorized. SD3 remains blocked pending acceptance.
+
 ### Completion record template
 
 Copy and fill this section for each session; retain prior records.
@@ -439,3 +451,166 @@ widened.
 
 Next READY chunk and prompt path: SD2 is the sole `READY` item;
 `docs/session-prompts/SD2-offensive-roles-and-history.md`.
+
+### 2026-09-09 — SD2 completion record
+
+Session/date: 2026-09-09, local Windows workspace, Python 3.13.7 with the existing
+locked environment. SD2 is `DONE` for software acceptance. No live slate was run.
+
+Start HEAD / end HEAD: `09bb9bdc71359d667aa55273575c4dd14f30bba3` /
+`09bb9bdc71359d667aa55273575c4dd14f30bba3`, branch
+`codex/s6a-deterministic-projection-producer`; SD2 remains uncommitted. Unlike
+the SD2 prompt's creation snapshot, SD1 was already committed at session start.
+Tracked files were initially clean. Preserved all pre-existing untracked work:
+`Claude outputs/`, `docs/session-prompts/W2-expiry-and-selection-objective.md`
+and `docs/session-prompts/W4-cowork-prior-only-profile.md`. No staging, commit,
+push, reset, clean, stash, dependency upgrade or account action was performed.
+The existing Git global-ignore permission warning was left unchanged.
+
+Implemented behavior:
+
+- Added the adjacent `nfl_offensive_role_evidence_v1` package. It shares SD1's
+  captured-source policy, content addressing, hashes, time and confinement
+  checks, while preserving SD1 compatibility. Numerical declarations bind exact
+  salary/game/team/person/CPT/FLEX identities and all five team share groups.
+  Only matching captured JSON supplies numbers; narrow qualitative facts cannot
+  manufacture shares. The offensive excerpt bound accommodates a full team.
+- Historical counts and efficiency now use current-team rows through the frozen
+  provider crosswalk. Missing/blank counts and incompatible transfers retain
+  explicit unknown basis and `EVIDENCE_STATE=UNKNOWN` placeholders. Old-team
+  counts never enter a new-team denominator. Legacy frozen packages without SD2
+  coverage must be rebuilt. This exception is Showdown-only; Classic's previous
+  non-PASS rejection is preserved and tested.
+- Reports distinguish `OBSERVED_HISTORY_ZERO`, `MISSING_HISTORY`,
+  `CURRENT_ROLE_UNKNOWN`, `EXPLICIT_NONPARTICIPATION` and
+  `SOURCE_SUPPORTED_ADJUSTMENT`, with one finding per offensive person. They
+  retain history, exact IDs, before/after shares, assumptions, coverage, explicit
+  unallocated volume and smallest next evidence action. An unresolved after
+  basis is `null`, never an asserted adjusted zero.
+- Salary, official inactive and operator exclusions take precedence. An excluded
+  positive recipient invalidates the allocation. Unresolved missing history or
+  a material change blocks selection; observed zero is excluded from selection.
+  Unchanged positive history is only an unconfirmed diagnostic, with excluded
+  volume unallocated. No unsupported proportional redistribution or snap-cap
+  ceiling remains in prior-review/standalone prior selection. Legacy generic
+  helpers and the simulator are outside this change.
+- Cowork/CLI requests, immutable snapshots, copied-package replay, scoring and
+  selection reports carry the new artifact. Final source/manifest/expiry/history
+  checks prevent a newly written review CSV on failure; prior outputs survive.
+  The real freeze/project/select/export integration also exposed and repaired
+  `LAR`/`LA` scoring-input lookup through the existing exact frozen team map.
+
+Changed paths (reviewed, not staged):
+
+```text
+src/nfl_dfs/offensive_roles.py
+src/nfl_dfs/opportunity.py
+src/nfl_dfs/priors.py
+src/nfl_dfs/projection.py
+src/nfl_dfs/prior_score.py
+src/nfl_dfs/selection.py
+src/nfl_dfs/prior_review.py
+src/nfl_dfs/cowork.py
+src/nfl_dfs/cli.py
+src/nfl_dfs/workbook.py
+tests/test_offensive_history.py
+tests/test_offensive_roles.py
+tests/test_offensive_role_integration.py
+tests/test_priors_adapter.py
+tests/test_prior_review_profile.py
+CLAUDE.md
+IMPLEMENTATION_STATUS.md
+docs/DATA_CONTRACTS.md
+docs/COWORK_RUNBOOK.md
+docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md
+docs/session-prompts/SD3-portfolio-control-contract.md
+backlog.md
+changelog.md
+```
+
+Defect reproduction / numerical evidence:
+
+- The initial `tests/test_offensive_history.py` regressions failed 3/3 in 0.50s:
+  missing and observed-zero rows lacked distinct machine-readable basis, and a
+  transferred receiver incorrectly retained `0.535714` target weight from his
+  old team. Those same cases now pass, with the transferred record excluded
+  from current-team weights and a named current-role blocker at selection.
+- The promoted-backup fixture records before/after carry shares `0.15 -> 0.75`
+  against unchanged historical capacity `0.20`. Captured allocations conserve
+  all five team share totals, before scoring and the exactly-once 1.5x Captain
+  multiplier. An explicit 0.25 unallocated carry fraction remains unallocated.
+- Full real-code synthetic integration initially exposed
+  `TEAM_SPLIT_COVERAGE_MISSING:LAR:2025`; the exact frozen LA/LAR crosswalk repair
+  now passes original and portable replay, with identical final CSV bytes.
+- Final local diff/artifact review checked identity/position masks, exclusion
+  precedence, source-only numbers, version/Classic boundaries, unknown reporting,
+  team-sized captures, original expiry, source hashes, output preservation and
+  release truths. No unresolved SD2 software finding remains.
+
+Verification (all commands from the repository root):
+
+- Pre-fix: `& .\.venv\Scripts\python.exe -B -m pytest -o addopts='' -p
+  no:cacheprovider tests/test_offensive_history.py -q --basetemp
+  outputs/pytest-sd2-prefixed-20260909` — expected 3 failures in 0.50s.
+- Broad focused regressions: `& .\.venv\Scripts\python.exe -B -m pytest -o
+  addopts='' -p no:cacheprovider tests/test_offensive_history.py
+  tests/test_offensive_roles.py tests/test_offensive_role_integration.py
+  tests/test_prior_selection.py tests/test_prior_review_profile.py
+  tests/test_priors_adapter.py tests/test_readiness_regressions.py -q
+  --basetemp outputs/pytest-sd2-focus-final-20260909 --durations=5` —
+  177 passed in 60.59s. Log: `outputs/sd2-focus-final-20260909.log`.
+- Final review-boundary focus: history/role tests plus the unknown-group
+  projection regression — 45 passed in 1.87s. Final whole-team capture check
+  included in `tests/test_offensive_roles.py` — 40 passed in 1.77s using
+  `-o addopts='' -p no:cacheprovider -q --basetemp
+  outputs/pytest-sd2-review-final-20260909`.
+- **Final complete suite:** `& .\.venv\Scripts\python.exe -B -m pytest -p
+  no:cacheprovider --basetemp outputs/pytest-sd2-closeout-20260909 --durations=5
+  --junitxml=outputs/sd2-closeout-20260909.xml` — **416 passed, 1 skipped in
+  61.58s**. Log: `outputs/sd2-closeout-20260909.log`. The sole skip is
+  `test_request_rejects_symlink_escape_when_supported`, Windows error 1314
+  (symlink-creation privilege unavailable). No failing tests.
+- Earlier complete checks passed 408/1 in 80.23s and 414/1 in 92.44s; subsequent
+  review fixes and added cases are covered by the final result above. Interim
+  logs remain in `outputs/sd2-*.log`; they do not replace the final result.
+- `& .\nfl.ps1 doctor` — PASS; Python 3.13.7, SQLite integrity `ok`, WAL,
+  closed/absent Excel lock, cleaned workbook probe, 8 processors, no detected
+  sync/reparse. Long paths remain disabled as an environment fact. Log:
+  `outputs/sd2-doctor-20260909.log`.
+- `git diff --check` — PASS. All 15 implementation/test hashes matched the
+  pre-suite freeze in `outputs/sd2-code-closeout-hashes-20260909.json` after
+  testing; documentation-only closeout followed. Queue/prompt/link checks passed.
+
+Retained synthetic artifact evidence is under
+`outputs/pytest-sd2-closeout-20260909/test_full_frozen_prior_project0/`:
+
+| Artifact | SHA-256 |
+|---|---|
+| Salary input | `6094dedbcf06c1ae4030753194bcb5175734888dc2ae6d1655ea0a2fbfb8b6bb` |
+| Entry input | `5ab3fc4fe4985803a0d5a8f9e094d5f881e01a859f119881a067b2c397968199` |
+| Offensive role manifest | `531732bb516f9031265c09a1e5334634e1feb8e5f55073ae0627533001519316` |
+| First and portable-repeat review CSV | `d2a8b9090a8db64cc97ffc00943446f8c43b977d134b8bcc27184737cf3f9d43` |
+
+The two run reports are `outputs/prior-review-test/cowork_run.json` and
+`outputs/portable-repeat/cowork_run.json` beneath that fixture root; each retains
+all source, history, identity, projection and assignment hashes. Test captures,
+CSV/workbook files, logs and other generated outputs are not commit candidates.
+
+Four truths for the successful **synthetic** full-chain run:
+`FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`. Invalid-role integration runs assert
+`FILE_VALID=false`, the same other three truths, no new review CSV and unchanged
+earlier output bytes. No live-slate release status is claimed.
+
+Remaining blockers / limits: no SD2 software acceptance criterion remains.
+Live approved game-specific numerical offensive-role captures were not obtained;
+the deliberately narrow structured numerical source format and exact qualitative
+forms remain a live acquisition limitation. Do not synthesize a conforming
+capture, invent efficiency or widen expiry to bypass that limitation. Actual
+Claude Cowork/Linux was not executed. Live activity/evidence, full forward-role
+modeling, W3 simulator participation, ceiling/ownership/economics, portfolio
+enforcement and prospective model validation remain open. No broader tranche
+was marked done and no upload gate changed.
+
+Next READY chunk: **SD3 only**, with
+`docs/session-prompts/SD3-portfolio-control-contract.md`. SD4–SD6 remain blocked.

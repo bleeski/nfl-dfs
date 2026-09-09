@@ -4,6 +4,52 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-09 — SD2 offensive roles and explicit historical basis
+
+Added `nfl_offensive_role_evidence_v1` alongside the unchanged SD1 kicker
+contract. Exact salary/game/team/CPT/FLEX person bindings, captured approved
+source bytes/hashes, original times and the registered deterministic numerical
+transformation govern complete team opportunity allocations. Qualitative facts
+cannot invent shares. Supported allocations conserve five team share groups,
+retain deliberately unallocated volume, require missing receiving efficiency,
+and are never capped at historical snap share. Every exclusion takes precedence;
+an excluded positive recipient requires refreshed evidence.
+
+Prior adapter v2 now uses current-team historical rows for opportunity and
+efficiency. Missing/blank history and incompatible transfers remain `UNKNOWN`;
+an old-team receiver's reproduced `0.535714` target weight cannot enter his new
+team denominator. The promoted-backup regression moves from 0.15 to a supported
+0.75 carry share above an unchanged 0.20 historical capacity. One finding per
+offensive person distinguishes observed zero, missing history, unknown current
+role, explicit nonparticipation and source-supported adjustment. Missing/material
+unresolved roles block selection; unknown after values are null. Observed-zero
+people cannot become punts. Prior review retains excluded volume unallocated
+instead of automatically redistributing it. Older frozen packages without SD2
+history coverage must be rebuilt; Classic's previous gates remain unchanged.
+
+Threaded `offensive_role_evidence_json` through request/CLI parsing, confinement,
+immutable snapshots, scoring, selection, reporting and final hash/expiry checks.
+Invalid evidence leaves named blockers and no new review CSV, preserving earlier
+outputs. A real freeze/project/Cowork synthetic integration exposed and repaired
+the LA/LAR team-split lookup through the frozen exact identity map; original and
+portable replay now produce identical final CSV bytes. Review also covered the
+larger excerpt needed for a complete offensive-team declaration.
+
+Final pinned Windows suite: **416 passed, 1 skipped in 61.58s**; the skip is the
+existing Windows symlink-creation privilege case. Doctor and `git diff --check`
+passed. All 15 implementation/test files match the hashes frozen before the
+final suite. Complete commands, review findings, artifact hashes and logs are
+in the SD2 completion record in the Showdown priority tracker.
+
+Successful synthetic full-chain output retained `FILE_VALID=true`,
+`EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`. No live slate or actual Cowork/Linux run was
+performed. Compatible live numerical offensive-role captures, current official
+evidence, the full forward-role model, W3 simulator mask and model/economic
+validation remain open. SD2 is DONE; SD3 is the sole next READY priority and its
+prompt is written. SD4–SD6 remain blocked. Nothing was staged, committed or pushed;
+pre-existing untracked user artifacts and older prompts were preserved.
+
 ### 2026-09-09 — SD1 source-bound kicker roles and conserved scoring
 
 Reproduced the two-kicker scoring defect numerically: adding a second eligible

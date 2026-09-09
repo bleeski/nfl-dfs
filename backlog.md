@@ -6,13 +6,16 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 
 **Current Showdown review-workflow priority sequence (2026-09-09):** follow
 [`docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md`](docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md).
-SD1 is complete. Its sole next READY chunk is **SD2 — offensive-role evidence
-and explicit missing-history handling**; use its
-[session prompt](docs/session-prompts/SD2-offensive-roles-and-history.md).
-SD1 finished with 357 passed and 1 existing Windows symlink-permission skip;
-doctor and whitespace checks passed. Live approved kicker-role capture and the
-actual Cowork/Linux environment remain unverified, while offensive roles,
-model validation and all broader W/S blockers remain open.
+SD1 and SD2 are complete for software acceptance. The sole next READY chunk is
+**SD3 — validated portfolio-control contract**; use its
+[session prompt](docs/session-prompts/SD3-portfolio-control-contract.md).
+SD2 finished with 416 passed and 1 existing Windows symlink-permission skip in
+61.58s; doctor and whitespace checks passed. Source-bound offensive allocations,
+missing versus zero history, transfer/current-team gates and copied synthetic
+full-chain replay passed. Live compatible numerical role captures, current
+official evidence and actual Cowork/Linux remain unverified. W3 simulator/full
+role modeling, portfolio enforcement, prospective model validation and all
+broader W/S blockers remain open. Outputs stay `PRIOR_ONLY / DO_NOT_UPLOAD`.
 For this bounded sequence, that tracker supersedes the older competing next-task
 recommendations below. It does not mark the broader W/S tranches complete or
 alter release gates. Update this pointer and the priority tracker at closeout.

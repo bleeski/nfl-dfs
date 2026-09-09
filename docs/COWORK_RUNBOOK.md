@@ -29,6 +29,28 @@ exclude INACTIVE people across both Captain and Flex before selection; missing
 status rows do not imply ACTIVE. Refresh near kickoff. Never set `--as-of` to
 an earlier time for a live run: that flag is historical replay only.
 
+Offensive history is now explicit. Rebuild older frozen prior packages that
+lack SD2 coverage. A missing historical basis, incompatible transfer or material
+role change blocks selection with one named finding per person. Capture approved
+evidence through `sources.fetch_public_artifact`, prepare the narrow
+`nfl_offensive_role_evidence_v1` package in `docs/DATA_CONTRACTS.md`, and set
+`offensive_role_evidence_json` in the generated request. Keep the manifest beside
+its content-addressed `sources/` directory, inside the managed run folder. Rerun
+the generated request after resolving the named evidence action. Do not ask Ben
+to type numerical priors. If the approved source does not explicitly supply the
+required numbers, retain the blocker; qualitative starter/backup prose is not
+an opportunity forecast. Compatible live numerical captures remain unverified.
+
+Without a supported replacement, excluded players' volume remains unallocated;
+unchanged positive historical shares are visibly unconfirmed diagnostics.
+Observed-zero players are excluded without claiming inactivity. Review
+`prior_review_reports.selection.prior_scores.offensive_roles`, or
+`prior_review_reports.offensive_roles` for a selection failure. These include
+before/after shares, history coverage, assumptions, source hashes, expiry and
+the next evidence action. The same optional CLI input is
+`--offensive-role-evidence-json '<path-to-offensive_roles.json>'`.
+The main operating workflow remains two attached CSV files.
+
 Kicker roles are resolved after those exclusions. When one eligible kicker is
 listed for a team and no role artifact is supplied, the review may continue only
 with a visible prior-only sole-listed assumption; it does not prove a confirmed
@@ -132,6 +154,7 @@ the original attachment location.
   "player_opportunity_csv": null,
   "official_status_csv": null,
   "role_evidence_json": null,
+  "offensive_role_evidence_json": null,
   "ownership_brackets_csv": null,
   "source_ledger_json": null,
   "advertised_prize_value": null,

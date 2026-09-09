@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -58,6 +58,7 @@ class OpportunityModel:
     players: tuple[PlayerOpportunity, ...]
     route_participation_state: str = "UNKNOWN"
     model_label: str = "OPPORTUNITY_DIAGNOSTIC_V1"
+    offensive_history_by_person: dict[str, dict[str, object]] = field(default_factory=dict)
 
 
 TEAM_COLUMNS = (
@@ -136,6 +137,8 @@ def load_opportunity_model(
     slate: SlateContract,
     team_csv: str | Path,
     player_csv: str | Path,
+    *,
+    allow_empty_groups: bool = False,
 ) -> OpportunityModel:
     team_rows = _strict_dict_rows(Path(team_csv), TEAM_COLUMNS)
     player_rows = _strict_dict_rows(Path(player_csv), PLAYER_COLUMNS)
@@ -267,20 +270,22 @@ def load_opportunity_model(
     if seen_people != slate_people:
         missing = sorted(slate_people.difference(seen_people))
         raise OpportunityError(f"player coverage mismatch; missing {len(missing)} people")
-    return conserve_team_shares(OpportunityModel(tuple(teams), tuple(players)))
+    return conserve_team_shares(
+        OpportunityModel(tuple(teams), tuple(players)), allow_empty_groups=allow_empty_groups
+    )
 
 
-def _normalize(values: np.ndarray, mask: np.ndarray) -> np.ndarray:
+def _normalize(values: np.ndarray, mask: np.ndarray, *, allow_empty: bool = False) -> np.ndarray:
     result = np.zeros_like(values, dtype=float)
     total = float(values[mask].sum())
-    if mask.any() and total <= 0:
+    if mask.any() and total <= 0 and not allow_empty:
         raise OpportunityError("eligible opportunity shares cannot all be zero")
     elif total > 0:
         result[mask] = values[mask] / total
     return result
 
 
-def conserve_team_shares(model: OpportunityModel) -> OpportunityModel:
+def conserve_team_shares(model: OpportunityModel, *, allow_empty_groups: bool = False) -> OpportunityModel:
     players = list(model.players)
     for team in {player.team for player in players}:
         indices = np.array([i for i, player in enumerate(players) if player.team == team])
@@ -296,7 +301,7 @@ def conserve_team_shares(model: OpportunityModel) -> OpportunityModel:
         normalized: dict[str, np.ndarray] = {}
         for field, mask in share_fields.items():
             values = np.array([getattr(player, field) for player in team_players], dtype=float)
-            normalized[field] = _normalize(values, mask)
+            normalized[field] = _normalize(values, mask, allow_empty=allow_empty_groups)
         for local_index, global_index in enumerate(indices):
             players[global_index] = replace(
                 players[global_index],

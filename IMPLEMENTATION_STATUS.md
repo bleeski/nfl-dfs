@@ -2,11 +2,13 @@
 
 ## Current Showdown readiness — 2026-09-09
 
-The real NE–SEA two-entry template now completes `cowork-run --profile
+The recorded pre-SD2 real NE–SEA two-entry template completed `cowork-run --profile
 prior_review` through source acquisition, projection, selection and independent
 review export. The repeated export is byte-identical; only the two reserved
 entry rows change. See `docs/READINESS_REVIEW_2026-09-09.md` for the current
-verification, fixes and limitations. Older supplied-fixture counts below are
+verification, fixes and limitations. SD2 requires fresh history coverage and
+role evidence when roles changed; that older rehearsal does not establish
+current live SD2 readiness. Older supplied-fixture counts below are
 historical. This verifies Windows execution, not the actual Cowork/Linux VM.
 
 The generated portfolio is still `PRIOR_ONLY / DO_NOT_UPLOAD`. Its objective
@@ -23,6 +25,18 @@ explicit numerical split; ambiguous multi-kicker teams block, zero-share and
 excluded people cannot be selected, and the single-kicker compatibility path is
 reported only as an `UNKNOWN` prior assumption. This is a scoring/input-integrity
 repair, not completion of offensive roles or live current-role modeling.
+
+SD2 adds `nfl_offensive_role_evidence_v1`, strict captured numerical allocations,
+five distinct current-role states, current-team-only historical denominators,
+missing-efficiency gates and preserved unallocated volume. It removes generic
+historical redistribution from the prior-review and standalone prior-selection
+paths. Historical snap share is diagnostic only. Source-supported adjustments
+run after all existing exclusions, and expiry/hash changes block review export.
+The real freeze/project/select/export code has been exercised on portable,
+clearly labelled synthetic captures, including the frozen LA/LAR team crosswalk.
+See the Showdown priority tracker for final verification results. Live compatible
+numerical offensive-role captures and actual Cowork/Linux acceptance remain
+unverified. W3's simulator mask and full forward-role model remain incomplete.
 
 ## Working and locally verified
 

@@ -17,7 +17,7 @@ captain, which is uniqueness rather than a claim about correlated equity.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -25,6 +25,7 @@ from .contracts import EngineMode, SlateContract
 from .kicker_roles import resolve_kicker_roles
 from .lineups import validate_lineup
 from .opportunity import OpportunityModel
+from .offensive_roles import resolve_offensive_roles, verify_offensive_resolution
 from .optimizer import LineupOptimizer
 from .participation import ParticipationContract, excluded_dk_ids, selectable_pool_problems
 from .prior_score import PriorScores, TeamSplits, score_pool
@@ -75,6 +76,7 @@ def select_prior_lineups(
     max_person_overlap: int | None = 4,
     time_limit_seconds: float = 10.0,
     role_evidence_json: str | Path | None = None,
+    offensive_role_evidence_json: str | Path | None = None,
     as_of: datetime | None = None,
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
     """Solve for `count` distinct legal lineups over the permitted pool."""
@@ -93,7 +95,10 @@ def select_prior_lineups(
         evidence_path=role_evidence_json,
         as_of=as_of,
     )
-    scores = score_pool(slate, model, splits, kicker_roles=kicker_roles)
+    offense = resolve_offensive_roles(
+        slate, model, contract, evidence_path=offensive_role_evidence_json, as_of=as_of,
+    )
+    scores = score_pool(slate, offense.model, splits, kicker_roles=kicker_roles, offensive_roles=offense)
     zero_share_people = set(kicker_roles.zero_share_people)
     excluded = tuple(
         sorted(
@@ -101,7 +106,7 @@ def select_prior_lineups(
             | {
                 player.dk_id
                 for player in slate.players
-                if player.underlying_id in zero_share_people
+                if player.underlying_id in zero_share_people or player.underlying_id in offense.excluded_people
             }
         )
     )
@@ -207,6 +212,7 @@ def select_prior_lineups(
         "excluded_rows": len(excluded),
         "kicker_role_excluded_people": sorted(zero_share_people),
         "kicker_roles": kicker_roles.as_report(),
+        "offensive_roles": offense.report,
         "selectable_people": len(contract.selectable_people),
         "person_exposure": dict(
             sorted(exposure.items(), key=lambda item: (-item[1], item[0]))
@@ -216,6 +222,7 @@ def select_prior_lineups(
         "score_omissions": list(scores.omissions),
         "never_calls": ["field.py", "economics.py", "portfolio economics"],
     }
+    verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
     return tuple(selected), scores, report
 
 

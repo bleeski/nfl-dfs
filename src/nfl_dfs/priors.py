@@ -49,7 +49,7 @@ from .sources import (
 )
 
 
-ADAPTER_VERSION = "nflverse_prior_adapter_v1"
+ADAPTER_VERSION = "nflverse_prior_adapter_v2"
 PROPOSAL_SCHEMA = "nfl_prior_identity_proposal_v1"
 MANIFEST_SCHEMA = "nfl_prior_source_manifest_v1"
 PACKAGE_SCHEMA = "nfl_prior_package_v1"
@@ -1392,10 +1392,36 @@ def build_player_records(
     capacities = _role_capacities(snap_rows, prior_season=prior_season)
 
     raw: dict[str, dict[str, Decimal]] = {}
+    history: dict[str, dict[str, object]] = {}
     for underlying_id, (proposal, provider_id) in resolved.items():
-        raw[underlying_id] = dict(
-            totals.get(provider_id, {name: Decimal("0") for name in _RAW_COLUMNS})
-        )
+        flex = people[underlying_id]["FLEX"]
+        person_rows = [row for row in player_stat_rows
+                       if row.get("player_id", "").strip() == provider_id
+                       and row.get("season", "").strip() == str(prior_season)
+                       and row.get("season_type", "").strip().upper() == "REG"]
+        historical_teams = sorted({row.get("team", "").strip().upper() for row in person_rows})
+        current_rows = [row for row in person_rows if row.get("team", "").strip().upper() == crosswalk[flex.team]]
+        current_totals = _player_totals(current_rows, prior_season=prior_season)
+        raw[underlying_id] = dict(current_totals.get(provider_id, {name: Decimal("0") for name in _RAW_COLUMNS}))
+        if flex.position in {"QB", "RB", "WR", "TE"}:
+            incomplete = any((row.get(column) or "").strip() in {"", "NA", "NaN", "null"}
+                             for row in current_rows for column in _RAW_COLUMNS)
+            transfer = bool(person_rows) and not current_rows
+            state = ("MISSING_HISTORY" if not person_rows or incomplete else
+                     "CURRENT_ROLE_UNKNOWN" if transfer else
+                     "OBSERVED_HISTORY_ZERO" if not any(raw[underlying_id].values()) else
+                     "OBSERVED_HISTORY")
+            if incomplete:
+                raw[underlying_id] = {name: Decimal("0") for name in _RAW_COLUMNS}
+            history[underlying_id] = {
+                "state": state, "historical_teams": historical_teams,
+                "current_team": flex.team, "provider_current_team": crosswalk[flex.team],
+                "incompatible_transfer": transfer, "prior_rows": len(person_rows),
+                "current_team_rows": len(current_rows), "prior_season": prior_season,
+                "receiving_efficiency_observed": raw[underlying_id]["targets"] > 0,
+                "basis_version": "offensive_current_team_history_v1",
+                "denominator_basis": "CURRENT_TEAM_ROWS_ONLY_CURRENT_SALARY_POOL",
+            }
 
     # Denominators are the DraftKings pool members for each team, which is the
     # same set projection.py normalizes over, so its renormalization is an
@@ -1415,6 +1441,10 @@ def build_player_records(
             ]
             total = sum((raw[member][column] for member in eligible), Decimal("0"))
             if not eligible or total <= 0:
+                if eligible and any(history.get(member, {}).get("state") in {"MISSING_HISTORY", "CURRENT_ROLE_UNKNOWN"} for member in eligible):
+                    for member in members:
+                        shares[(member, field)] = Decimal("0")
+                    continue
                 missing_support.append(f"{dk_team}:{field}:eligible={len(eligible)}")
                 continue
             for member in members:
@@ -1479,7 +1509,10 @@ def build_player_records(
                 "role_capacity": _bounded(
                     capacity, "0", "1", label=f"{flex.dk_id}:role_capacity"
                 ),
-                "evidence_state": "PASS",
+                "evidence_state": (
+                    "UNKNOWN" if history.get(underlying_id, {}).get("state")
+                    in {"MISSING_HISTORY", "CURRENT_ROLE_UNKNOWN"} else "PASS"
+                ),
             }
         )
         mappings.append(
@@ -1497,6 +1530,7 @@ def build_player_records(
         )
 
     diagnostics = {
+        "offensive_history_by_person": history,
         # R03, which tranche W3 owns. A zero-capacity person is still scored by
         # the simulator: the retained review probe shows a zero-capacity kicker
         # averaging 7.99 points across 984 of 1,000 scenarios. Reporting it,
