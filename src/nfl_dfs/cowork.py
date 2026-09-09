@@ -8,9 +8,6 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from .portfolio_policy import ENFORCEMENT_BLOCKER
-
-
 COWORK_REQUEST_VERSION = "nfl_cowork_run_request_v1"
 
 ENTRY_HEADER_PREFIX = ("Entry ID", "Contest Name", "Contest ID", "Entry Fee")
@@ -503,8 +500,6 @@ def resolve_request_inputs(
 
 def required_next_inputs(request: CoworkRunRequest) -> tuple[str, ...]:
     blockers: list[str] = []
-    if request.portfolio_policy_json is not None:
-        blockers.append(ENFORCEMENT_BLOCKER)
     if request.payout_csv is None:
         blockers.append(
             "CONTEST_PAYOUT_REQUIRED: supply a complete payout CSV; do not infer tiers from the contest name"

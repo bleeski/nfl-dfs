@@ -44,9 +44,12 @@ identity map and full requested Entry-ID sequence; normalizes numeric fractions
 with exact-decimal floor rounding; reports declared and effective combined-person
 and Captain limits; and defines canonical lineup, uniqueness and pairwise-person
 overlap semantics. Necessary capacity findings do not claim solver infeasibility.
-SD4 still owns enforcement and independent assignment audit. Consequently a
-policy-bearing execution is explicitly blocked before selection/export with no
-new review-entry CSV, while policy-free SD1/SD2 behavior is unchanged.
+SD4 now enforces the normalized contract in the Showdown `prior_review` profile
+through a bounded legal candidate bank and one joint MILP, assigns the exact
+Entry-ID sequence without cycling, and independently re-audits every control and
+bound artifact immediately before export. Feasible results remain optimal only
+over the reported actual bank; incomplete-bank exhaustion is not called full-
+slate infeasibility. Policy-free SD1/SD2 behavior is unchanged.
 
 ## Working and locally verified
 
@@ -91,8 +94,15 @@ new review-entry CSV, while policy-free SD1/SD2 behavior is unchanged.
 - Showdown portfolio-policy inputs are path-confined, copied into immutable
   content-addressed snapshots, validated against all requested entries and exact
   role identities, and written as stable normalized bytes with source and
-  normalized SHA-256 values. Until SD4, their enforcement status is always
-  `NOT_IMPLEMENTED_SD3` and they cannot reach a review-entry writer.
+  normalized SHA-256 values. The `prior_review` selector uses the exact SD3
+  integer maxima over a default 32-candidate bank, reports generation and joint-
+  solve budgets/status/coverage, and permits Captain repetition only when the
+  effective Captain maximum allows it. Immediately before export, a separate
+  audit strictly reparses the canonical normalized-policy artifact, re-reads exact
+  assignment bytes, recomputes legality, exposure, Captain, canonical-uniqueness
+  and pairwise-overlap facts, reconciles selector summaries, and binds salary,
+  entry, source-policy, normalized-policy and assignment hashes.
+  Only `ENFORCED_AND_INDEPENDENTLY_AUDITED` can reach the review-entry writer.
 - One build/certification package is deliberately limited to one Contest ID and
   one entry fee. Mixed-contest exports fail closed until per-contest economics
   and allocation are implemented.
@@ -198,9 +208,10 @@ new review-entry CSV, while policy-free SD1/SD2 behavior is unchanged.
 - Exposure envelopes, historical pair-dependence bands, and material
   ownership/market sensitivity thresholds are not yet registered inputs. The
   active QA pass leaves those triggers unasserted instead of inventing limits.
-- The SD3 portfolio policy is a validated user-control contract only. Its caps,
-  overlap and uniqueness settings are not yet solver constraints; every request
-  that supplies it stops at `PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`.
+- The portfolio policy remains a user-control contract, not model evidence or a
+  calibrated risk claim. Its SD4 solve is bounded to the actual reported bank
+  and has not been benchmarked at 20 or 150 entries. Actual Cowork/Linux use,
+  current live policies/evidence and prospective model quality remain unverified.
 - Weekly rolling-origin fitting, promotion, influence caps, and rollback logic
   are implemented, but automatic deployment correctly has nothing eligible to
   promote before settled-slate history accumulates.

@@ -99,12 +99,23 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    invent a numerical share. Without supported replacements, excluded volume
    stays visibly unallocated. Never ask Ben to author numerical role priors.
    A versioned `portfolio_policy_json` may bind exact salary bytes, the game,
-   the complete person/CPT/FLEX map, and all requested Entry IDs. SD3 validates
-   and snapshots it but does not enforce it. Until SD4 is complete, any request
-   containing that field must stop with
-   `PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`, preserve earlier outputs, and
-   write no new `DK_REVIEW_ENTRY` CSV. A normalized policy/report is not proof
-   of enforcement. Requests without the policy retain their existing behavior.
+   the complete person/CPT/FLEX map, and all requested Entry IDs. On the
+   Showdown `prior_review` profile, SD4 snapshots and validates the source and
+   normalized bytes, generates a bounded legal candidate bank, jointly selects
+   exactly one lineup per requested Entry ID under every effective integer cap,
+   then independently reparses the canonical normalized-policy artifact and
+   recomputes legality, canonical identities, combined and Captain counts,
+   uniqueness, overlap and all bound hashes immediately before review export.
+   Only `ENFORCED_AND_INDEPENDENTLY_AUDITED` may write a new
+   `DK_REVIEW_ENTRY` CSV. Time/search limits, solver errors, incomplete-bank
+   exhaustion, modeled-bank infeasibility, assignment mismatch, audit failure
+   or input mutation preserve earlier outputs and write no new review CSV.
+   The active bank is bounded to 32 canonical candidates with a 30-second total
+   generation budget, two seconds per candidate solve and ten seconds for the
+   joint solve; its completeness is reported and is not a full-slate claim.
+   Other profiles refuse a supplied policy instead of ignoring it. Requests
+   without the policy retain their existing SD1/SD2 behavior, including the
+   legacy sequential Captain differentiation and assignment cycling.
    Kicker roles are resolved after those exclusions. If more than one kicker
    remains eligible for a team, capture approved source bytes through
    `sources.py`, prepare the versioned `role_evidence_json` package documented

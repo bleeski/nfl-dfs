@@ -20,6 +20,7 @@ class SolverResult:
     mip_gap: float | None
     node_count: int | None
     validation: ValidationResult | None
+    model_status: str
 
 
 class LineupOptimizer:
@@ -51,6 +52,13 @@ class LineupOptimizer:
         self._highs.setOptionValue("random_seed", 0)
         self._last_selected: np.ndarray | None = None
         self._build(excluded)
+
+    def set_time_limit(self, seconds: float) -> None:
+        """Tighten or refresh the next solve's explicit wall-clock budget."""
+
+        if not np.isfinite(seconds) or seconds <= 0:
+            raise ValueError("time limit must be positive and finite")
+        self._highs.setOptionValue("time_limit", float(seconds))
 
     def _add_row(self, lower: float, upper: float, coefficients: Mapping[int, float]) -> None:
         indices = np.array(list(coefficients), dtype=np.int32)
@@ -212,6 +220,7 @@ class LineupOptimizer:
         self._highs.run()
         elapsed = time.perf_counter() - started
         model_status = self._highs.getModelStatus()
+        model_status_name = model_status.name
         info = self._highs.getInfo()
         solution = self._highs.getSolution()
         feasible = bool(solution.value_valid) and model_status not in {
@@ -227,6 +236,7 @@ class LineupOptimizer:
                 None,
                 None,
                 None,
+                model_status_name,
             )
         selected = np.flatnonzero(np.asarray(solution.col_value[: self.player_count]) > 0.5).astype(
             np.int32
@@ -244,6 +254,7 @@ class LineupOptimizer:
                 float(info.mip_gap) if np.isfinite(info.mip_gap) else None,
                 int(info.mip_node_count),
                 validation,
+                model_status_name,
             )
         status = "OPTIMAL" if model_status == highspy.HighsModelStatus.kOptimal else "FEASIBLE_LIMIT"
         objective = sum(float(scores.get(player.dk_id, 0.0)) for player in chosen)
@@ -255,6 +266,7 @@ class LineupOptimizer:
             float(info.mip_gap) if np.isfinite(info.mip_gap) else None,
             int(info.mip_node_count),
             validation,
+            model_status_name,
         )
 
     def _slot_roster(self, chosen: list[SalaryPlayer]) -> tuple[str, ...]:

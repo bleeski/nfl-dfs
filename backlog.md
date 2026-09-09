@@ -6,19 +6,19 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 
 **Current Showdown review-workflow priority sequence (2026-09-09):** follow
 [`docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md`](docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md).
-SD1 through SD3 are complete for software acceptance. The sole next READY chunk
-is **SD4 — enforced portfolio controls and independent assignment audit**; use
-its [session prompt](docs/session-prompts/SD4-enforce-and-audit-portfolio-controls.md).
-SD3 finished with 440 passed and 1 existing Windows symlink-permission skip in
-57.57s; doctor and whitespace checks passed. Exact-decimal exposure rounding,
-full salary/person/Entry-ID binding, canonical uniqueness/overlap semantics,
-stable exact-byte policy hashes, confinement, snapshots and copied replay passed.
-SD3 deliberately does not enforce the policy: policy-bearing requests stop at
-`PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3` with no new review-entry CSV.
-Live compatible role/current evidence and actual Cowork/Linux remain unverified.
-W3 simulator/full role modeling, W8/W9 economics, prospective model validation
-and all broader W/S blockers remain open. Outputs stay `PRIOR_ONLY /
-DO_NOT_UPLOAD`.
+SD1 through SD4 are complete for software acceptance. The sole next READY chunk
+is **SD5 — readable, artifact-bound lineup and exposure review**; use its
+[session prompt](docs/session-prompts/SD5-readable-artifact-bound-review.md).
+SD4 finished with 475 passed and 1 existing Windows symlink-permission skip in
+71.33s; doctor and whitespace checks passed. Supplied policies now use bounded
+joint MILP selection, exact non-cycling Entry-ID assignment and an independent
+exact-byte final audit before review export. Policy-free behavior is unchanged.
+Measured fixtures covered 2 entries and 5 entries with 32-candidate incomplete
+banks and optimal selection over each reported actual bank. This does not prove
+complete-slate feasibility or 20/150-entry readiness. Actual Cowork/Linux, live
+policy use, compatible role/current evidence, W3 simulator/full role modeling,
+W8/W9 economics, prospective model validation and all broader W/S blockers
+remain unverified. Outputs stay `PRIOR_ONLY / DO_NOT_UPLOAD`.
 For this bounded sequence, that tracker supersedes the older competing next-task
 recommendations below. It does not mark the broader W/S tranches complete or
 alter release gates. Update this pointer and the priority tracker at closeout.
@@ -766,3 +766,40 @@ overstates what the gate binds. The honest description is a provenance and
 freshness gate, and the cheap repairs are to record `source_url` on the record
 and to reject hosts that cannot be real. The synthetic package built during the
 rehearsal was destroyed; no upload-shaped CSV survived it.
+
+
+### Proposed `R17`: SD2 has no live exit for Week 1 transfers and rookies
+
+Found on the first live NE@SEA run, 2026-09-09 22:18Z. Not scheduled; it needs a
+decision before it becomes a tranche.
+
+With fresh nflverse priors and a clean identity gate, `resolve_offensive_roles`
+blocked 20 of the 47 selectable people: every 2026 rookie (`MISSING_HISTORY`)
+and every player whose 2025 history sits on another team
+(`OFFENSIVE_TRANSFER_REQUIRES_CURRENT_TEAM_ROLE`), including A.J. Brown, Romeo
+Doubs, Jadarian Price and Emanuel Wilson. The gate's only non-exclusion exit is
+a `NUMERICAL_ALLOCATION` source whose excerpt is a JSON object identical to the
+declaration. No approved host publishes that for a game not yet played, and
+`docs/DATA_CONTRACTS.md` already records that a live compatible numerical
+source has not been demonstrated. The run therefore completed only after all
+20 were operator-excluded, leaving NE carry share 0.455 and SEA carry share
+0.650 unallocated, which is why both review lineups lean on two QBs and a
+kicker.
+
+The gate is behaving as designed. What is missing is a designed outcome for the
+case where the required evidence cannot exist yet. Three candidate decisions,
+none taken here:
+
+1. Keep the block and document operator exclusion as the Week 1 procedure,
+   with the unallocated volume printed in the handoff (what happened tonight).
+2. Admit a bounded, versioned "current-team history unavailable" prior for
+   transfers that carries `EVIDENCE_STATE=UNKNOWN` into the report and can
+   never clear certification, so a transferred WR1 is at least visible to the
+   objective.
+3. Add an approved numerical source. Candidates within the allowlist are
+   nflverse `depth_charts` (qualitative, so it fails today's contract) and
+   nothing else; a new host would need its own license decision and adapter.
+
+Whichever is chosen, `prior_review` should report the count and salary of
+blocked-and-excluded people next to the lineups so the pool coverage is visible
+without reading the offensive-roles report.

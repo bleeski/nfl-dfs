@@ -2093,6 +2093,12 @@ def _run_prior_review_profile(
     unclassified,
     intake: Mapping[str, object],
     reported_blockers: list[str],
+    portfolio_policy=None,
+    portfolio_policy_source_path: str | None = None,
+    portfolio_policy_source_sha256: str | None = None,
+    portfolio_policy_normalized_path: str | None = None,
+    portfolio_policy_normalized_sha256: str | None = None,
+    policy_summary: Mapping[str, object] | None = None,
 ) -> int:
     """Drive the prior-only review chain from one gated Cowork command.
 
@@ -2134,6 +2140,11 @@ def _run_prior_review_profile(
         official_status_csv=request.official_status_csv,
         role_evidence_json=request.role_evidence_json,
         offensive_role_evidence_json=request.offensive_role_evidence_json,
+        portfolio_policy=portfolio_policy,
+        portfolio_policy_source_path=portfolio_policy_source_path,
+        portfolio_policy_source_sha256=portfolio_policy_source_sha256,
+        portfolio_policy_normalized_path=portfolio_policy_normalized_path,
+        portfolio_policy_normalized_sha256=portfolio_policy_normalized_sha256,
     )
 
     blockers = list(reported_blockers)
@@ -2194,6 +2205,30 @@ def _run_prior_review_profile(
             " to DraftKings remains a manual operator action."
         ),
     }
+    if policy_summary is not None:
+        selector_policy = (
+            dict(outcome.reports.get("selection", {}))
+            .get("selection", {})
+            .get("portfolio_policy")
+        )
+        audit_report = outcome.reports.get("portfolio_policy_audit")
+        enforced_and_audited = bool(
+            outcome.file_valid
+            and isinstance(selector_policy, Mapping)
+            and selector_policy.get("enforcement_status") == "PASS"
+            and isinstance(audit_report, Mapping)
+            and audit_report.get("status") == "PASS"
+        )
+        result["portfolio_policy"] = {
+            **dict(policy_summary),
+            "enforcement_status": (
+                "ENFORCED_AND_INDEPENDENTLY_AUDITED"
+                if enforced_and_audited
+                else "NOT_ENFORCED_AND_AUDITED"
+            ),
+            "selector": selector_policy,
+            "independent_audit": audit_report,
+        }
     _write_json(report_path, result)
     _print_json(result)
     return 0 if outcome.file_valid else 2
@@ -2309,6 +2344,9 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     _write_json(request_path, snapshotted.to_dict())
     policy_summary: dict[str, object] | None = None
     policy_blockers: list[str] = []
+    validated_policy = None
+    normalized_path: Path | None = None
+    expected_policy_sha256: str | None = None
     if snapshotted.portfolio_policy_json is not None:
         by_dk_id = {player.dk_id: player for player in slate.players}
         official_exclusions: tuple[str, ...] = ()
@@ -2377,13 +2415,20 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             DEFAULT_RUNS_DIR / run_id / "portfolio_policy_validation.json"
         )
         write_portfolio_policy_validation(policy_report_path, validation)
-        normalized_path: Path | None = None
         if validation.policy is not None:
             normalized_path = (
                 DEFAULT_RUNS_DIR / run_id / "portfolio_policy.normalized.json"
             )
             write_normalized_portfolio_policy(normalized_path, validation.policy)
+        if validation.valid:
+            validated_policy = validation.policy
         policy_blockers.extend(validation.blockers())
+        if snapshotted.profile != "prior_review":
+            policy_blockers.append(
+                "PORTFOLIO_POLICY_PROFILE_UNSUPPORTED_SD4: policy enforcement and "
+                "independent audit are available only in the Showdown prior_review "
+                "profile; next action: use profile=prior_review or omit the policy"
+            )
         if (
             snapshotted.lineup_count is not None
             and snapshotted.lineup_count != len(entries.authorizations)
@@ -2401,7 +2446,11 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "validation_report": str(policy_report_path),
             "normalized_policy": str(normalized_path) if normalized_path else None,
             "entry_count_denominator": len(entries.authorizations),
-            "enforcement_status": "NOT_IMPLEMENTED_SD3",
+            "enforcement_status": (
+                "PENDING_RUNTIME_ENFORCEMENT_AND_AUDIT"
+                if validation.valid
+                else "VALIDATION_FAILED"
+            ),
         }
     staged_workbook = DEFAULT_RUNS_DIR / run_id / "staged" / "cowork_input.xlsx"
     create_operator_input_workbook(staged_workbook)
@@ -2423,7 +2472,12 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     report_path = output_root / "cowork_run.json"
 
-    if not doctor_report.pass_status or contest_problems or _cowork_core_blockers(snapshotted):
+    if (
+        not doctor_report.pass_status
+        or contest_problems
+        or policy_blockers
+        or _cowork_core_blockers(snapshotted)
+    ):
         blocked_truths = _blocked_truth_values(
             model_status=(
                 ModelStatus.PRIOR_ONLY
@@ -2473,8 +2527,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             result["portfolio_policy"] = policy_summary
             result["bulk_entry_csv"] = None
             result["next"] = (
-                "Keep the policy snapshot for review. SD4 must implement and independently "
-                "audit enforcement before this request can generate a review-entry CSV."
+                "Resolve every named policy or input blocker, then rerun from the immutable "
+                "salary, entry, source-policy and normalized-policy artifacts."
             )
         _write_json(report_path, result)
         _print_json(result)
@@ -2494,6 +2548,20 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             unclassified=unclassified,
             intake=intake,
             reported_blockers=blockers,
+            portfolio_policy=validated_policy,
+            portfolio_policy_source_path=(
+                snapshotted.portfolio_policy_json if validated_policy is not None else None
+            ),
+            portfolio_policy_source_sha256=(
+                expected_policy_sha256 if validated_policy is not None else None
+            ),
+            portfolio_policy_normalized_path=(
+                str(normalized_path) if validated_policy is not None and normalized_path else None
+            ),
+            portfolio_policy_normalized_sha256=(
+                validated_policy.normalized_sha256 if validated_policy is not None else None
+            ),
+            policy_summary=policy_summary,
         )
 
     assignment_path = snapshotted.assignment_csv
