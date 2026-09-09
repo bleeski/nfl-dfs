@@ -422,13 +422,13 @@ revised during `W1` where the earlier measurement was wrong:
 | ID | Findings | Status | Depends on | Chunk |
 |---|---|---|---|---|
 | W1 | R01 | `DONE` (5 operator flags open) | operator DK Showdown salary CSV for the identity map | Linux runtime bootstrap check, then the nflverse-only deterministic prior adapter for one game |
-| W2 | R07, R08 | `READY` | none | Selection objective independent of scenario count; source expiry and evidence scope preserved and re-evaluated |
+| W2 | R07, R08 | `DONE` | none | Selection objective independent of scenario count; source expiry and evidence scope preserved and re-evaluated |
 | W3 | R03 | `PARTIAL` (selection side `DONE`, simulator mask open) | none | One participation/exclusion contract with a simulator availability mask |
 | W4 | R02 | `DONE` | none | DL3 prior-only review profile that never calls field, payout, or duplication economics |
 | W5 | R04 | `READY` once the operator files land | contest facts | Showdown exact-template rehearsal on real downloads, byte audit, repeated run, stale-source and inactive-refresh cases |
 | W6 | R09 | `READY` | none | Split historical artifact integrity from a live pre-upload check that recomputes at the current clock |
 | W7 | R15 | `READY` | none | Version-bound settlement capture and the canonical operator run brief. Start before the first settled slate; the validation clock starts here |
-| W8 | R05 | `BLOCKED` on W2 | none | Measure the existing evaluator at true field size with cloning off, then S4A reference settlement and thresholds |
+| W8 | R05 | `READY` (W2 landed) | none | Measure the existing evaluator at true field size with cloning off, then S4A reference settlement and thresholds |
 | W9 | R06 | `BLOCKED` on W8 | none | Canonical uniqueness at every bank boundary, objective-appropriate diversity, enforced exposure and Captain-per-person caps |
 | W10 | R13 | `BLOCKED` on W8, W9 | none | Stage budgets, cancellation, measured peak memory, per-entry-count benchmarks |
 | W11 | R10 | `BLOCKED` on W3 | none | Event and scoring reconciliation, participation modeling, measured dependence, DESIGN oversampling treatment |
@@ -452,6 +452,29 @@ is the reason.
 
 ## Next action
 
+`W2` is `DONE` as of 2026-09-09, which unblocks `W8`. A frozen projection
+package now carries its own per-source expiry, evidence scope and state,
+transformation version and input dependency bindings on
+`nfl_source_ledger_v2`; it archives its consumed sources content-addressed
+inside itself, so a copied package validates with the originals deleted and
+needs no Windows-to-Linux path rewrite; freshness is re-evaluated at whichever
+clock the caller supplies, with the run's `as_of` as the replay clock and
+`evidence.release_clock()` as the live one; and a legacy `nfl_source_ledger_v1`
+package can no longer clear certification, because a shape that cannot express
+an expiry cannot be called fresh. Portfolio selection ranks on a declared,
+scenario-count-independent risk measure with Monte Carlo uncertainty reported
+separately against a declared effective sample size. `MODEL_STATUS` stays
+`PRIOR_ONLY` and `RELEASE_DECISION` stays `DO_NOT_UPLOAD` everywhere they were,
+and the NE@SEA review export is byte-identical to the pre-W2 run. See
+`changelog.md` for commands, counts and hashes.
+
+**Recommended next: `W6` (R09).** It is the deadline-critical one. The deadline
+reality check below makes the Wednesday opener a manual-guardrail rehearsal
+with a fresh certification run immediately before upload, and that plan rests
+on `audit` being trustworthy, which is exactly what R09 repairs. `W8` is newly
+`READY` and unblocks `W9` and `W10`, but it is the start of the field-economics
+rebuild, not a same-day change.
+
 `W1` and `W4` are `DONE`. `cowork-run --profile prior_review` now takes a
 DraftKings Showdown salary CSV and a DKEntries CSV and returns the byte-audited
 bulk-entry CSV in one command, driving `priors-propose`, the identity gate,
@@ -468,14 +491,18 @@ it from a fresh nflverse fetch; both produced the same export bytes. See
 
 **Next `READY` tranches, all touching disjoint files, in any order:**
 
-- `W2` (R07, R08): selection objective independent of scenario count; source
-  expiry and evidence scope preserved and re-evaluated. It owns `projection.py`,
-  `contracts.py` and `evidence.py`.
 - `W6` (R09): split historical artifact integrity from a live pre-upload check
   that recomputes at the current clock. This is what makes `audit` trustworthy,
   and the deadline reality check below depends on it.
 - `W7` (R15): version-bound settlement capture and the canonical operator run
   brief. The validation clock starts here, so the sooner the better.
+- `W8` (R05): measure the existing evaluator at true field size with cloning
+  off, then the S4A reference settlement and its promotion thresholds. Newly
+  `READY`; it unblocks `W9` and `W10`. Start from
+  `portfolio.RISK_MEASURE`/`RISK_AVERSION`, which are now a declared preference
+  rather than an artifact of the scenario count, and from
+  `portfolio.resolve_effective_sample_size`, which is where a bank declares
+  repeated or dependent draws.
 - `W5` (R04) is unblocked by code and now waits only on operator contest facts:
   a matching reserved-entry template for the contest actually entered, the payout
   table, advertised prize value, field size, entry fee and contest ID.
@@ -489,8 +516,12 @@ What is still open and must not be papered over:
 - **No ownership, leverage, correlation or duplication model anywhere.** The
   objective maximizes a central estimate, which in a large-field GPP is chalk.
   This is the largest gap against the stated product objective and it is R05,
-  R06, R07 and S7 work, not a selection problem. `prior_review` does not narrow
-  it and does not pretend to.
+  R06 and S7 work, not a selection problem. `prior_review` does not narrow it
+  and does not pretend to. `W2` removed the scenario-count dependence from the
+  objective and nothing else: the field, payout and duplication economics under
+  it are still the known-defective ones, and `RISK_AVERSION` is deliberately
+  zero because weighting a tail the current field model computes would be
+  weighting a tail R05 has not validated.
 - **`projection.py` still requires a prior record for every person in the salary
   pool** (`SALARY_PERSON_IDENTITY_COVERAGE_MISMATCH`). A practice-squad elevation
   with no honest prior fails the whole package. Unchanged by `W4`.
@@ -549,3 +580,54 @@ seconds. Use `uv` only to fetch the interpreter. The device shell
 (`device_bash`) can also fail with "Failed to create bridge sockets" while the
 other device tools keep working; the container fallback plus
 `device_commit_files` is the way through.
+
+### Constraints measured during `W2`, 2026-09-09
+
+- **The local-disk working copy needs `README.md` and `LICENSE`.** The earlier
+  list of what to copy omitted them, and `uv sync` fails on the missing readme
+  with `OSError: Readme file does not exist: README.md` from hatchling's
+  metadata validation, not with anything that names the real cause.
+- **`/tmp` had room this session.** `/` reported 3.3GB free rather than the
+  794MB measured on 2026-09-08, no `/tmp/nfl-cowork-venv` was left by another
+  uid, and `sh ./nfl.sh setup` built the pinned environment cleanly. Check
+  `df -h /` rather than assuming either measurement still holds.
+- **The device shell died mid-session** with "Failed to create bridge sockets"
+  and never recovered, while `device_list_dir`, `device_stage_files` and
+  `device_commit_files` kept working. The container fallback is viable but has
+  one trap: **the container's default interpreter is 3.11.15, not the pinned
+  3.13.7**, and on 3.11 three tests fail for environment reasons alone
+  (`ENVIRONMENT_DOCTOR_FAILED` in two `test_prior_review_profile` cases because
+  `doctor` pins the runtime, and a float32 `share_conservation_max_abs_error`
+  assertion in `test_simulation`). `uv python install 3.13.7` took 1.42 seconds
+  and `pip` installed the pinned set into that interpreter in about 40; build
+  that venv before trusting any container run.
+- **The 2026-09-08 baseline was 277 passed, not 278.**
+  `test_prior_review_profile.py::test_one_command_exports_and_reports_all_four_truths`
+  was a clock bomb: it pinned a fixed `AS_OF` while `command_cowork_run` stamps
+  `as_of` from the live clock, so six hours after `AS_OF` the fixture package
+  expired and the run correctly blocked `PRIOR_PACKAGE_EXPIRED`. `W2` made that
+  fixture's expiry follow the clock the code under test actually reads. Any
+  fixture whose freshness matters must derive from the same clock as its caller.
+- **The repository's frozen NE@SEA prior package is not self-contained.** Its
+  raw sources live at the run root, `data/runs/<id>/raw/`, not inside
+  `data/runs/<id>/priors/`, so `resolve_frozen_artifact` answers
+  `FALLBACK_SEARCH` rather than `IN_PACKAGE`. Every run report now records
+  which one answered. Making `priors.freeze_prior_package` archive raw inside
+  the frozen package would close it; that is a priors-owning tranche, not `W2`.
+- **Effective sample size must be declared, never inferred from outcomes.** An
+  earlier `W2` draft derived scenario multiplicity by collapsing identical
+  per-candidate outcome rows. Independent scenarios routinely settle a
+  portfolio at the same value, so that understates precision, and an
+  overstated standard error *widens* the REFEREE tolerance, because
+  `qa.referee_blocks` blocks only when `abs(delta) > uncertainty`. On the
+  W2 fixture bank it reported an effective size of 1.47 for 100 independent
+  draws and let a sign disagreement of 10.0 through that the old formula
+  blocked. Silence now means independent draws, which is what
+  `economics.evaluate_candidates_against_field` guarantees by refusing a
+  non-uniform bank.
+- **A ledger is a plain JSON file, so preserving an expiry inside it is half a
+  gate.** `projection.verify_projection_package` checks every declared expiry,
+  state, observation time and source URI back against the archived source's own
+  hash-bound metadata, and requires the entry set to cover all four scopes,
+  because deleting an expired entry is otherwise as effective as forging its
+  expiry.

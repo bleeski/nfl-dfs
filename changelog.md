@@ -4,6 +4,206 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-09 — W2: source expiry preserved across every boundary, and a selection objective independent of scenario count
+
+Closes `W2` / R07 and R08. Files added:
+`tests/test_w2_source_expiry_and_objective.py`. Files modified:
+`src/nfl_dfs/contracts.py`, `src/nfl_dfs/evidence.py`,
+`src/nfl_dfs/projection.py`, `src/nfl_dfs/portfolio.py`,
+`src/nfl_dfs/prior_review.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/qa.py`,
+`tests/test_projection_producer.py`, `tests/test_priors_adapter.py`,
+`tests/test_prior_review_profile.py`, `tests/test_build_pipeline.py`,
+`backlog.md`, `changelog.md`.
+
+`MODEL_STATUS` stays `PRIOR_ONLY` and `RELEASE_DECISION` stays `DO_NOT_UPLOAD`
+on every path that had them. No gate was weakened, no expiry was widened, no
+ownership, leverage, correlation or duplication model was added, and
+`AvgPointsPerGame` remains confined to untouched raw DraftKings bytes.
+
+#### The two defects, reproduced first
+
+Both were written as failing tests before anything was repaired, and both
+reproduce the review's own independent reproductions. All fourteen probes in
+`tests/test_w2_source_expiry_and_objective.py` fail on `f318882` and pass now.
+
+```text
+R08  validate_source_ledger on a package whose sources expired 2026-09-05,
+     asked at a 2026-09-08 clock          -> DID NOT RAISE
+R08  the same ledger copied to a new directory, same clock
+                                          -> DID NOT RAISE
+R08  a copied package with the original attachments deleted
+     -> EvidenceError: source ledger artifact is missing:
+        .../build/DKSalaries.csv
+R07  two candidates, one fixed 100-scenario payout distribution
+     100 rows      -> selected candidate 0, the constant 1.5
+     same rows x100 -> selected candidate 1, mean 2.0, sd 4.0
+     assert (0,) == (1,)
+```
+
+#### R08 — the consumed contract now carries its own expiry
+
+`nfl_source_ledger_v2`. A ledger entry carries `expires_at`,
+`evidence_state`, `evidence_scope`, `transformation_version` and
+`depends_on`, and addresses its bytes by a package-relative POSIX path.
+`nfl_source_ledger_v1` stays readable as the legacy shape and may not carry
+any of those fields, so a producer cannot half-migrate. One freshness rule
+lives in `contracts.SourceFreshness`; the producer, the ledger validator and
+`prior_review.resolve_prior_package` all evaluate it instead of keeping three
+copies. The declared state and the expiry verdict compose worst-first, so a
+`NOT_APPLICABLE` or `NOT_YET_DUE` label cannot suppress staleness, and the
+reported window is always the earliest expiry in the set.
+
+`build_projection_package` archives all four consumed sources
+content-addressed under `<package>/sources/<sha256><ext>` and re-verifies them
+after publish, so a copied package resolves with every original attachment
+deleted and needs no Windows-to-Linux path rewrite. `_snapshot_inputs` carries
+that subtree alongside a snapshotted ledger, which is the boundary Cowork
+crosses on every run.
+
+`validate_source_ledger` re-evaluates each entry at the clock it is given:
+`projection.py` passes the run's `as_of`, a replay clock, and anything that
+omits a clock gets `evidence.release_clock()`, the live one. Certification
+routes through the new `evidence.source_ledger_evidence`, whose hard-gate
+`EvidenceRecord` carries the earliest source expiry so `evaluate_hard_gates`
+re-derives `STALE` at final release without reopening a source. A stale
+package reports `STALE`, a tampered one `CONFLICTED`, and a legacy `v1`
+package `UNKNOWN`: a shape that cannot express an expiry cannot clear the
+gate.
+
+`projection.verify_projection_package` closes the other half. The ledger is a
+plain JSON file, so every declared expiry, state, observation time and source
+URI is checked back against the archived source's own metadata, whose bytes
+are hash-bound, and the entry set must cover all four scopes. Forging an
+expiry and deleting the inconvenient entry are both refused.
+
+`prior_review` re-evaluates the produced package's expiry before selection and
+blocks `PROJECTION_PACKAGE_NOT_FRESH` rather than selecting on stale inputs.
+`resolve_frozen_artifact` now looks inside the package first and records
+whether it answered `IN_PACKAGE` or by `FALLBACK_SEARCH`.
+
+#### R07 — a declared risk preference instead of a confidence bound
+
+`RISK_MEASURE = "MEAN_CVAR_05_CONVEX_V1"` with `RISK_AVERSION = 0.0`:
+`(1 - a) * E[net] + a * CVaR_5%(net)`, a fixed preference declared in
+`portfolio.py` rather than one emerging from `S`. At the default it is the
+expectation, which is what `mean - 1.96 * SE` was estimating all along, so the
+objective's target is unchanged and only the scenario-count dependence is
+gone. `_nondominated`, the worst-state aggregation and `_choose_nash` all rank
+on it. `robust_net_payout_lcb` is still computed and still reported, as an
+uncertainty statement rather than a ranking axis.
+
+Monte Carlo uncertainty is reported separately as
+`objective_standard_error` against `effective_scenario_count`. Effective
+sample size is **declared by the caller**, never inferred from outcomes: an
+earlier draft derived multiplicity from identical outcome rows, and on a bank
+whose scenarios collide that understates precision, which through
+`qa.referee_blocks` (it blocks only when `abs(delta) > uncertainty`) *widens*
+the REFEREE tolerance instead of tightening it. With nothing declared the
+divisor is the row count, which is exactly what production has:
+`economics.evaluate_candidates_against_field` refuses a non-uniform scenario
+bank. Verified bit-identical to the previous formula:
+
+```text
+all-distinct bank, 4000 scenarios
+  classical sd(ddof=1)/sqrt(S) = 0.066792527375
+  reported objective SE        = 0.066792527375   equal=True
+declared multiplicity
+  100 rows, one draw each      ESS 100.0  objective 2.000000  SE 0.402015
+  same rows x100, 100 each     ESS 100.0  objective 2.000000  SE 0.402015
+  4000 rows, 40 each           ESS 100.0
+```
+
+The paired comparison is preserved where uncertainty genuinely is the
+question: `qa.decide_repair` still takes a per-scenario difference and keeps
+the pairing, and now accepts a declared effective sample size, refusing as
+"paired sample is too small" at or below one effective observation rather than
+computing a zero-width interval. `_referee_uncertainty` is the unpaired case
+by construction, two banks with separate seeds and no scenario in common.
+
+#### Verification
+
+Runtime, on the pinned 3.13.7:
+
+```text
+export NFL_DFS_VENV_DIR=/tmp/nfl-cowork-venv
+export NFL_DFS_UV_CACHE_DIR=/tmp/nfl-uv-cache
+export NFL_DFS_UV_PYTHON_DIR=/tmp/nfl-uv-python
+sh ./nfl.sh setup                                                  SETUP_COMPLETE
+sh ./nfl.sh test -q -p no:cacheprovider --ignore=.pytest_cache tests
+```
+
+```text
+1. baseline on f318882, device shell, 3.13.7
+   279 collected, 277 passed, 1 failed, 1 skipped
+   The failure is pre-existing and clock-driven, not a regression: see the
+   constraint below.
+
+2. the 14 W2 probes on f318882                       14 failed
+   the same 14 probes after the repair               14 passed
+
+3. full suite after the repair
+   device shell, 3.13.7, after round one   288 collected, 287 passed, 1 skipped
+   cloud container, 3.13.7, final          293 collected, 292 passed, 1 skipped
+   The one skip is the Windows junction test. No test was deleted or disabled.
+
+4. cowork-run --input-dir <the two frozen NE@SEA CSVs>
+     --profile prior_review --prior-package-dir <the frozen package>   exit 0
+   stage PRIOR_ONLY_REVIEW_EXPORT, FILE_VALID true, problems [],
+   EVIDENCE_STATE UNKNOWN, MODEL_STATUS PRIOR_ONLY, DO_NOT_UPLOAD.
+   Export SHA-256 87156b8c108bfe1585c4dc1c689258ee3fd24f525543ae19667be2017cee359e,
+   byte-identical to the pre-W2 run recorded on 2026-09-08.
+   Diff against the source template: 145 lines in, 145 out, exactly lines 2
+   and 3 changed, the two reserved Entry IDs 5232816721 and 5238395397.
+   Run four times across the session, identical every time.
+
+5. the package that run produced, ledger schema nfl_source_ledger_v2,
+   scopes IDENTITY_MAP PLAYER_PRIOR SLATE_GEOMETRY TEAM_PRIOR,
+   binding expiry 2026-09-09T04:37:46.639672+00:00
+   basis TEAM_PRIOR:team_source:MARKET_LINE_MOVES_INTRADAY
+   verify_projection_package one minute before that expiry   verified
+   verify_projection_package one minute after                refused,
+     PACKAGE_LEDGER_INVALID:source ledger entry is stale
+   source_ledger_evidence before/after/tampered              PASS/STALE/CONFLICTED
+
+6. doctor pass_status true; compileall clean; no trailing whitespace or tabs
+   in any changed file.
+```
+
+Four existing tests changed, each because it pinned the pre-repair contract.
+Nothing was relaxed:
+
+- `test_projection_producer.py` asserted the package directory held exactly
+  three files, and validated the ledger at the game's lock time, which is past
+  the fixture's source expiry. It now asserts the `sources/` archive and its
+  four entries, validates at the production clock, and asserts that the
+  lock-time clock is refused as stale.
+- `test_priors_adapter.py` asserted `schema_version == nfl_source_ledger_v1`.
+- `test_prior_review_profile.py` `_StubProjection` mirrors the new
+  `ProjectionPackage` surface, and its expiry follows the caller's clock.
+- `test_build_pipeline.py` supplied a `v1` ledger and asserted no
+  `SOURCE_LEDGER_` blocker. The fixture is now `v2`; the assertion is unchanged.
+
+#### An independent adversarial review ran against the first round
+
+It found six real defects, all repaired before this entry: the `v1` downgrade
+that bypassed the freshness gate while two new functions had no caller; a
+deleted ledger entry evading both the expiry and the tamper check; the
+inferred-multiplicity standard error widening the REFEREE tolerance; a
+zero-width paired interval accepting a repair at one effective observation; a
+non-PASS label suppressing staleness and widening the reported window; and
+`..\..\x` and `\Windows\x` escaping the v2 package-relative path check.
+Each has a regression test.
+
+#### What this does not do
+
+R07's repair removes the scenario-count dependence and nothing else. The
+objective still maximizes a central estimate, which in a large-field GPP is
+chalk, and the field, payout and duplication economics under it are still the
+known-defective ones. R05, R06 and S7 own that. `RISK_AVERSION` is a real
+economic preference and it is set to zero deliberately: weighting a tail
+computed by the current field model would be weighting a tail that R05 has not
+validated.
+
 ### 2026-09-08 — One gated `cowork-run --profile prior_review` command
 
 Closes `W4` / R02. Files added: `src/nfl_dfs/prior_review.py`,

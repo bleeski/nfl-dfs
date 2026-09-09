@@ -12,7 +12,7 @@ through this profile can emit anything but PRIOR_ONLY and DO_NOT_UPLOAD.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -267,6 +267,21 @@ class _StubProjection:
     source_ledger: str
     hashes: dict
     input_hashes: dict
+    # W2/R08 added these to `ProjectionPackage`: a produced package carries its
+    # own expiry, its ledger schema version and its archived sources across
+    # every boundary, so this stub mirrors that surface.
+    ledger_schema_version: str = "nfl_source_ledger_v2"
+    expires_at: str = "2026-09-08T22:45:00+00:00"
+    expiry_basis: str = "TEAM_PRIOR:team_source:MARKET_LINE_MOVES_INTRADAY"
+    archived_sources: dict = field(default_factory=dict)
+
+
+def _stub_expiry(as_of: str) -> str:
+    """A projection package's expiry, six hours past the clock it was built at."""
+
+    return (
+        datetime.fromisoformat(str(as_of).replace("Z", "+00:00")) + timedelta(hours=6)
+    ).isoformat()
 
 
 def _write_package(
@@ -337,6 +352,11 @@ def _prepared_run(tmp_path: Path, *, expires_at: datetime):
             source_ledger=str(output / "source_ledger.json"),
             hashes={"team_projections": "0" * 64},
             input_hashes={},
+            # A real package's expiry is derived from its sources and is always
+            # ahead of the `as_of` it was built at, because the producer
+            # refuses an already-expired source. The stub mirrors that instead
+            # of pinning a constant that goes stale on its own.
+            expires_at=_stub_expiry(kwargs["as_of"]),
         )
 
     return salary_path, entry_path, package_dir, project
@@ -611,8 +631,11 @@ def test_one_command_exports_and_reports_all_four_truths(
     from nfl_dfs import cli
     from nfl_dfs import prior_review as prior_review_module
 
+    # `command_cowork_run` stamps `as_of` from the live clock rather than from
+    # this module's fixed `AS_OF`, so this package's expiry has to follow the
+    # same clock or the test expires on its own six hours after `AS_OF`.
     salary_path, entry_path, package_dir, project = _prepared_run(
-        tmp_path, expires_at=AS_OF + timedelta(hours=6)
+        tmp_path, expires_at=datetime.now(timezone.utc) + timedelta(hours=6)
     )
     attachments = _attachments(tmp_path, salary_path, entry_path)
     monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
@@ -833,6 +856,7 @@ def test_an_unclassified_draftkings_status_stops_the_run_by_name(tmp_path: Path)
             source_ledger=str(output / "source_ledger.json"),
             hashes={},
             input_hashes={},
+            expires_at=_stub_expiry(kwargs["as_of"]),
         )
 
     blocked = run_prior_review(

@@ -731,7 +731,9 @@ def test_project_publishes_model_inputs_from_the_frozen_prior_package(package, t
     assert len(team_csv) == 3
     assert len(player_csv) == 1 + len(priors.showdown_people(package["slate"]))
     ledger = json.loads(Path(produced.source_ledger).read_text(encoding="utf-8"))
-    assert ledger["schema_version"] == "nfl_source_ledger_v1"
+    # W2/R08 bumped the consumed contract: the entries now carry their own
+    # expiry, scope, state, transformation version and dependency bindings.
+    assert ledger["schema_version"] == "nfl_source_ledger_v2"
     assert set(ledger["derived"]) == {"team_projections", "player_opportunities"}
 
 

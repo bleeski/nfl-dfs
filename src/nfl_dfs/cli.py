@@ -49,7 +49,7 @@ from .dk import (
     single_contest_problems,
 )
 from .economics import evaluate_candidates_against_field
-from .evidence import EvidenceError, parse_official_inactive_snapshot, validate_source_ledger
+from .evidence import parse_official_inactive_snapshot, source_ledger_evidence
 from .field import generate_opponent_field, scale_field_multiplicities
 from .hashing import content_hash, sha256_file
 from .late_swap import LateSwapRunError, govern_late_swap
@@ -59,7 +59,12 @@ from .opportunity import load_opportunity_model
 from .optimizer import generate_candidates
 from .ownership import OwnershipBracket, cold_start_states
 from .payouts import parse_payout_csv, validate_payout_tiers
-from .portfolio import evaluate_portfolio, portfolio_net_samples, select_portfolio
+from .portfolio import (
+    evaluate_portfolio,
+    select_portfolio,
+    unpaired_difference_standard_error,
+)
+from .projection import SOURCES_DIRNAME as PROJECTION_SOURCES_DIRNAME
 from .projection import build_projection_package
 from .prior_review import PROFILE_VERSION as PRIOR_REVIEW_PROFILE_VERSION
 from .prior_review import run_prior_review
@@ -261,7 +266,36 @@ def _snapshot_inputs(
         if sha256_file(target) != digest:
             raise RuntimeError(f"snapshot hash mismatch for {source}")
         hashes[str(source)] = digest
+        _snapshot_archived_sources(source, input_dir)
     return hashes
+
+
+def _snapshot_archived_sources(source: Path, input_dir: Path) -> None:
+    """Bring a projection package's archived sources along with its ledger.
+
+    R08: a snapshot used to copy the ledger file on its own, which worked only
+    because the entries pointed at absolute originals. A versioned ledger
+    addresses its archived sources by package-relative path, so the snapshot
+    has to carry that subtree or the copy resolves to nothing. Hashes are
+    re-verified on arrival, and an archive that is already present is left
+    alone rather than overwritten, because snapshots are immutable.
+    """
+
+    archive = source.parent / PROJECTION_SOURCES_DIRNAME
+    if source.suffix.lower() != ".json" or not archive.is_dir():
+        return
+    destination = input_dir / PROJECTION_SOURCES_DIRNAME
+    destination.mkdir(parents=True, exist_ok=True)
+    for archived in sorted(archive.iterdir()):
+        if not archived.is_file():
+            continue
+        copy = destination / archived.name
+        if copy.exists():
+            continue
+        digest = sha256_file(archived)
+        shutil.copyfile(archived, copy)
+        if sha256_file(copy) != digest:
+            raise RuntimeError(f"snapshot hash mismatch for {archived}")
 
 
 def _snapshot_path(run_id: str, source: str | Path, digest: str) -> Path:
@@ -781,17 +815,26 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
         elif model_hashes.get("team_projection_input") and model_hashes.get(
             "player_opportunity_input"
         ):
-            try:
-                validate_source_ledger(
-                    args.source_ledger,
-                    expected_outputs={
-                        "team_projections": model_hashes["team_projection_input"],
-                        "player_opportunities": model_hashes["player_opportunity_input"],
-                    },
-                )
+            # Certification runs at the live release clock, which is what makes
+            # this the boundary where a package's real expiry bites. R08: the
+            # record carries the earliest source expiry, so `evaluate_hard_gates`
+            # re-derives STALE at final release without reopening a source, and
+            # a legacy ledger shape that cannot express an expiry cannot clear
+            # the gate at all.
+            expected_model_outputs = {
+                "team_projections": model_hashes["team_projection_input"],
+                "player_opportunities": model_hashes["player_opportunity_input"],
+            }
+            ledger_record = source_ledger_evidence(
+                args.source_ledger, expected_outputs=expected_model_outputs
+            )
+            precertification_evidence.append(ledger_record)
+            if ledger_record.state is EvidenceState.PASS:
                 source_ledger_validated = True
-            except EvidenceError as exc:
-                certification_blockers.append(f"SOURCE_LEDGER_INVALID:{exc}")
+            else:
+                certification_blockers.append(
+                    f"SOURCE_LEDGER_INVALID:{ledger_record.state.value}:{ledger_record.reason}"
+                )
     if not args.manual_guardrail:
         if not build_report_value:
             certification_blockers.append("MISSING_BUILD_QA_REPORT")
@@ -1135,21 +1178,17 @@ def _referee_uncertainty(
     referee_indices: tuple[int, ...],
     entry_fee: float,
 ) -> float:
-    select_net = portfolio_net_samples(
+    # SELECT and REFEREE are separate banks with separate seeds, so there is no
+    # scenario to pair on and the two variances add. R07: each side's variance
+    # is now divided by its effective sample size rather than its row count, so
+    # a bank with repeated scenarios cannot narrow the REFEREE tolerance and
+    # wave a disagreement through.
+    standard_error = unpaired_difference_standard_error(
         select_economics,
         select_indices,
-        entry_fee=entry_fee,
-    )
-    referee_net = portfolio_net_samples(
         referee_economics,
         referee_indices,
         entry_fee=entry_fee,
-    )
-    select_variance = float(select_net.var(ddof=1)) if len(select_net) > 1 else 0.0
-    referee_variance = float(referee_net.var(ddof=1)) if len(referee_net) > 1 else 0.0
-    standard_error = np.sqrt(
-        select_variance / max(len(select_net), 1)
-        + referee_variance / max(len(referee_net), 1)
     )
     return float(1.96 * standard_error)
 

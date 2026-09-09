@@ -34,7 +34,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
-from .contracts import EngineMode
+from .contracts import (
+    EngineMode,
+    EvidenceState,
+    SourceFreshness,
+    earliest_expiry,
+    earliest_source_freshness,
+)
 from .dk import parse_entries, parse_salaries
 from .hashing import sha256_file
 from .opportunity import load_opportunity_model
@@ -120,6 +126,7 @@ class ResolvedPriorPackage:
     expires_at: str
     expiry_basis: str
     expired: bool
+    freshness_state: str
     proposal_dir: str
 
     def as_report(self) -> dict[str, object]:
@@ -132,6 +139,7 @@ class ResolvedPriorPackage:
             "expires_at": self.expires_at,
             "expiry_basis": self.expiry_basis,
             "expired": self.expired,
+            "freshness_state": self.freshness_state,
         }
 
 
@@ -156,6 +164,32 @@ def _parse_moment(value: object, *, label: str) -> datetime:
     if moment.tzinfo is None:
         raise PriorReviewError(f"{label}_NOT_TIMEZONE_AWARE:{value!r}")
     return moment.astimezone(timezone.utc)
+
+
+def _freshness_record(
+    *,
+    label: str,
+    basis: str,
+    expires_at: datetime,
+    declared_state: object,
+    where: str,
+) -> SourceFreshness:
+    """One frozen artifact's freshness, on the shared contract."""
+
+    state = EvidenceState.PASS
+    if declared_state is not None:
+        try:
+            state = EvidenceState(str(declared_state))
+        except ValueError as exc:
+            raise PriorReviewError(
+                f"PRIOR_ARTIFACT_EVIDENCE_STATE_UNKNOWN:{where}:{declared_state!r}"
+            ) from exc
+    try:
+        return SourceFreshness(
+            label=label, basis=basis, expires_at=expires_at, declared_state=state
+        )
+    except ValueError as exc:
+        raise PriorReviewError(f"PRIOR_ARTIFACT_FRESHNESS_INVALID:{where}:{exc}") from exc
 
 
 def resolve_prior_package(
@@ -199,7 +233,11 @@ def resolve_prior_package(
             f"package={recorded_salary}:slate={salary_sha256.strip().lower()}"
         )
 
-    expiries: list[tuple[datetime, str]] = []
+    # R08: this used to be a second implementation of the freshness rule,
+    # reading `expires_at` straight out of artifact metadata. It now composes
+    # `SourceFreshness` records and lets the shared contract decide, so the
+    # producer, the ledger validator and this resolver cannot drift apart.
+    records: list[SourceFreshness] = []
     for filename in (TEAM_PRIOR_FILENAME, PLAYER_PRIOR_FILENAME, IDENTITY_MAP_FILENAME):
         payload = _read_json(root / filename, "PRIOR_ARTIFACT_UNREADABLE")
         metadata = payload.get("metadata")
@@ -209,24 +247,38 @@ def resolve_prior_package(
         basis = ""
         if isinstance(coverage, dict):
             basis = str(coverage.get("expiry_basis", ""))
-        expiries.append(
-            (
-                _parse_moment(metadata.get("expires_at"), label="PRIOR_ARTIFACT_EXPIRES_AT"),
-                f"{filename}:{basis or 'UNRECORDED'}",
+        records.append(
+            _freshness_record(
+                label=f"{filename}:{basis or 'UNRECORDED'}",
+                basis=basis or "UNRECORDED",
+                expires_at=_parse_moment(
+                    metadata.get("expires_at"), label="PRIOR_ARTIFACT_EXPIRES_AT"
+                ),
+                declared_state=metadata.get("evidence_state"),
+                where=filename,
             )
         )
         salary_artifact = payload.get("salary_artifact")
         if isinstance(salary_artifact, dict) and salary_artifact.get("expires_at"):
-            expiries.append(
-                (
-                    _parse_moment(
-                        salary_artifact["expires_at"], label="SALARY_ARTIFACT_EXPIRES_AT"
+            records.append(
+                _freshness_record(
+                    label=f"{filename}:salary_artifact:GAME_LOCK_HORIZON",
+                    basis="GAME_LOCK_HORIZON",
+                    expires_at=_parse_moment(
+                        salary_artifact["expires_at"],
+                        label="SALARY_ARTIFACT_EXPIRES_AT",
                     ),
-                    f"{filename}:salary_artifact:GAME_LOCK_HORIZON",
+                    declared_state=salary_artifact.get("evidence_state"),
+                    where=f"{filename}:salary_artifact",
                 )
             )
 
-    earliest, basis = min(expiries, key=lambda item: item[0])
+    binding = earliest_source_freshness(records, at=as_of)
+    state = binding.state_at(as_of)
+    # The state comes from the worst source, the window from the earliest
+    # expiry. They are the same record whenever every source is PASS, which is
+    # the only shape `priors.freeze_prior_package` emits.
+    earliest, basis = earliest_expiry(records), binding.label
     return ResolvedPriorPackage(
         package_dir=str(root),
         team_source=str(root / TEAM_PRIOR_FILENAME),
@@ -242,35 +294,77 @@ def resolve_prior_package(
         },
         expires_at=earliest.isoformat(),
         expiry_basis=basis,
-        expired=as_of > earliest,
+        expired=state is not EvidenceState.PASS,
+        freshness_state=state.value,
         proposal_dir=str(package.get("package_dir") or ""),
     )
 
 
+@dataclass(frozen=True)
+class ResolvedFrozenArtifact:
+    """One content-addressed frozen artifact and how it was found."""
+
+    path: Path
+    resolution: str
+    searched: tuple[str, ...]
+
+    def as_report(self) -> dict[str, object]:
+        return {
+            "path": str(self.path),
+            "resolution": self.resolution,
+            "searched": list(self.searched),
+        }
+
+
 def resolve_frozen_artifact(
-    digest: str, *, search_roots: Sequence[Path], label: str
-) -> Path:
-    """Find one content-addressed frozen artifact and re-verify its bytes."""
+    digest: str,
+    *,
+    package_dir: str | Path,
+    fallback_roots: Sequence[Path] = (),
+    label: str,
+) -> ResolvedFrozenArtifact:
+    """Find one content-addressed frozen artifact and re-verify its bytes.
+
+    R08: this searched four candidate directories because a frozen package was
+    not self-contained. A package archives its own raw sources under
+    `raw/<sha256>.csv`, so the in-package lookup is the contract and the wider
+    search is a recorded fallback for a package published before that was true.
+    Which one answered is reported rather than hidden, because resolving out of
+    a sibling directory means the package that gets copied is not the package
+    that was reviewed.
+    """
 
     expected = digest.strip().lower()
     if len(expected) != 64:
         raise PriorReviewError(f"FROZEN_ARTIFACT_HASH_UNRECORDED:{label}")
+
+    def verified(candidate: Path) -> Path | None:
+        if not candidate.is_file():
+            return None
+        actual = sha256_file(candidate)
+        if actual != expected:
+            raise PriorReviewError(
+                f"FROZEN_ARTIFACT_HASH_MISMATCH:{label}"
+                f":expected={expected}:actual={actual}:{candidate}"
+            )
+        return candidate.resolve()
+
+    root = Path(package_dir)
     seen: list[str] = []
-    for root in search_roots:
+    for candidate in (root / RAW_DIRNAME / f"{expected}.csv", root / f"{expected}.csv"):
+        seen.append(str(candidate))
+        found = verified(candidate)
+        if found is not None:
+            return ResolvedFrozenArtifact(found, "IN_PACKAGE", tuple(seen))
+    for fallback in fallback_roots:
         for candidate in (
-            Path(root) / RAW_DIRNAME / f"{expected}.csv",
-            Path(root) / f"{expected}.csv",
+            Path(fallback) / RAW_DIRNAME / f"{expected}.csv",
+            Path(fallback) / f"{expected}.csv",
         ):
             seen.append(str(candidate))
-            if not candidate.is_file():
-                continue
-            actual = sha256_file(candidate)
-            if actual != expected:
-                raise PriorReviewError(
-                    f"FROZEN_ARTIFACT_HASH_MISMATCH:{label}"
-                    f":expected={expected}:actual={actual}:{candidate}"
-                )
-            return candidate.resolve()
+            found = verified(candidate)
+            if found is not None:
+                return ResolvedFrozenArtifact(found, "FALLBACK_SEARCH", tuple(seen))
     raise PriorReviewError(
         f"FROZEN_ARTIFACT_UNRESOLVED:{label}:{expected}:searched={seen[:6]}"
     )
@@ -966,22 +1060,69 @@ def run_prior_review(
     artifacts["source_ledger"] = str(projection.source_ledger)
     for name, digest in dict(projection.hashes).items():
         hashes[f"projected:{name}"] = str(digest)
+    # The produced package carries its own expiry across this boundary now, so
+    # the run record states when these model inputs stop being usable instead
+    # of leaving a later consumer to infer it from a hash match. That expiry is
+    # re-evaluated here, before selection, against this run's clock: a run that
+    # crosses an expiry between freezing and selecting has stale inputs, and no
+    # expiry is widened to let it through. Certification re-evaluates the same
+    # expiry again at the live release clock through
+    # `evidence.source_ledger_evidence`, which is the boundary that can refuse
+    # an upload; this profile ends `DO_NOT_UPLOAD` on every path regardless.
+    projection_freshness = _freshness_record(
+        label=f"projected:{projection.ledger_schema_version}",
+        basis=str(projection.expiry_basis),
+        expires_at=_parse_moment(
+            projection.expires_at, label="PROJECTION_PACKAGE_EXPIRES_AT"
+        ),
+        declared_state=None,
+        where="projected",
+    )
+    projection_state = projection_freshness.state_at(as_of)
+    reports["projection"] = {
+        "output_dir": str(projection.output_dir),
+        "ledger_schema_version": str(projection.ledger_schema_version),
+        "expires_at": str(projection.expires_at),
+        "expiry_basis": str(projection.expiry_basis),
+        "archived_sources": dict(sorted(dict(projection.archived_sources).items())),
+        "replay_clock": as_of.isoformat(),
+        "freshness_state": projection_state.value,
+    }
+    if projection_state is not EvidenceState.PASS:
+        blocker = (
+            f"PROJECTION_PACKAGE_NOT_FRESH:{projection_state.value}"
+            f":expires_at={projection.expires_at}:as_of={as_of.isoformat()}"
+            f":basis={projection.expiry_basis}"
+            ":refresh the sources and rebuild; an expiry is never widened"
+        )
+        stages.append(_stage("PROJECT", "BLOCKED_NOT_FRESH", **reports["projection"]))
+        return PriorReviewOutcome(
+            profile_version=PROFILE_VERSION,
+            stage="PROJECT",
+            blocked=True,
+            blockers=(blocker,),
+            stages=tuple(stages),
+            artifacts=artifacts,
+            hashes=hashes,
+            reports=reports,
+        )
     stages.append(
         _stage("PROJECT", "OK", output_dir=str(projection.output_dir))
     )
 
     # ----------------------------------------------------------------- SELECT
     try:
-        splits_path = resolve_frozen_artifact(
+        resolved_splits = resolve_frozen_artifact(
             package.frozen_sources.get("team_stats", ""),
-            search_roots=[
-                Path(package.package_dir),
+            package_dir=package.package_dir,
+            fallback_roots=[
                 Path(package.package_dir).parent,
                 Path(package.package_dir).parent.parent,
-                *( [proposal_dir] if proposal_dir is not None else [] ),
+                *([proposal_dir] if proposal_dir is not None else []),
             ],
             label="team_stats",
         )
+        splits_path = resolved_splits.path
     except PriorReviewError as exc:
         stages.append(_stage("SELECT", "FAILED", error=str(exc)))
         return PriorReviewOutcome(
@@ -997,6 +1138,7 @@ def run_prior_review(
         )
     artifacts["team_splits"] = str(splits_path)
     hashes["frozen:team_stats"] = package.frozen_sources.get("team_stats", "")
+    reports["team_splits"] = resolved_splits.as_report()
 
     template = parse_entries(entry_path)
     entry_ids = [entry.entry_id for entry in template.authorizations]

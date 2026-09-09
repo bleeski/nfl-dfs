@@ -11,6 +11,28 @@ from .contracts import ContestObjective
 from .economics import CandidateEconomics
 
 
+# The declared, scenario-count-independent risk preference.
+#
+# R07: the ranking axis was `mean - 1.96 * standard_error`, whose penalty
+# shrinks with the square root of the scenario count, so the computation budget
+# was part of the economic preference. Two candidates on a fixed 100-scenario
+# payout distribution chose the constant-1.5 candidate; replicating those same
+# rows 100 times, with the empirical distribution unchanged, chose the variable
+# candidate with mean 2.0.
+#
+# The objective is now a convex combination of the expectation and a fixed
+# tail measure, with a weight declared here rather than emerging from `S`.
+# `RISK_AVERSION = 0.0` selects on the expectation, which is what the objective
+# was always trying to maximize; raising it is a deliberate, recorded decision.
+# Monte Carlo uncertainty is reported separately and never enters the
+# objective. This adds no field, ownership, leverage, correlation or
+# duplication economics: R05, R06 and S7 own those, and the objective still
+# maximizes a central estimate, which in a large-field GPP is chalk.
+RISK_MEASURE = "MEAN_CVAR_05_CONVEX_V1"
+RISK_AVERSION = 0.0
+CVAR_TAIL_FRACTION = 0.05
+
+
 @dataclass(frozen=True)
 class PortfolioMetrics:
     candidate_indices: tuple[int, ...]
@@ -28,6 +50,161 @@ class PortfolioMetrics:
     worst_state: str
     selection_candidate_count: int = 0
     evaluated_portfolio_count: int = 0
+    # The ranking axis, its reported Monte Carlo uncertainty, and the effective
+    # sample size that uncertainty was computed against. The objective is
+    # invariant to scenario count; only the uncertainty moves with precision.
+    selection_objective: float = 0.0
+    objective_standard_error: float = 0.0
+    effective_scenario_count: float = 0.0
+    risk_measure: str = RISK_MEASURE
+    risk_aversion: float = RISK_AVERSION
+
+
+def effective_sample_size(multiplicity: np.ndarray) -> float:
+    """Kish effective sample size for a bank with repeated scenarios.
+
+    `multiplicity[j]` is how many rows of the bank carry scenario `j`'s draw. A
+    bank of `m` distinct draws each repeated `c` times has the effective size
+    of the `m` draws, not of `m * c`. Every row carries unit weight, so the
+    Kish size collapses to `S**2 / sum(c_g**2)` over distinct draws `g`, and
+    `sum(c_g**2)` is the sum of this per-row vector. All-ones gives back `S`
+    exactly, so an honest bank reports exactly the uncertainty it used to.
+
+    Multiplicity is declared by the caller, never inferred from outcomes.
+    Independent scenarios routinely settle a portfolio at the same value, so
+    collapsing equal outcomes into one draw would understate real precision,
+    and an overstated standard error *widens* the REFEREE tolerance in
+    `qa.referee_blocks`. `economics.evaluate_candidates_against_field` refuses
+    any non-uniform scenario bank, so today every production bank is
+    all-distinct and this returns the row count.
+    """
+
+    total = int(np.shape(multiplicity)[0])
+    if total == 0:
+        return 0.0
+    squared = float(np.sum(multiplicity, dtype=np.float64))
+    if squared <= 0:
+        return 0.0
+    return float(total * total) / squared
+
+
+def resolve_effective_sample_size(
+    scenarios: int, multiplicity: np.ndarray | None = None
+) -> float:
+    """Effective sample size for a bank, from declared multiplicity or none."""
+
+    if multiplicity is None:
+        return float(scenarios)
+    if int(np.shape(multiplicity)[0]) != scenarios:
+        raise ValueError("scenario multiplicity must have one entry per scenario row")
+    if np.any(np.asarray(multiplicity) < 1):
+        raise ValueError("scenario multiplicity entries must be at least one")
+    return effective_sample_size(multiplicity)
+
+
+def _declared_effective(
+    economics: CandidateEconomics,
+    state: str,
+    declared: Mapping[str, np.ndarray] | None,
+) -> float:
+    scenarios = int(economics.gross_payout.shape[0])
+    return resolve_effective_sample_size(
+        scenarios, None if declared is None else declared.get(state)
+    )
+
+
+def _tail_count(size: int, fraction: float = CVAR_TAIL_FRACTION) -> int:
+    return max(1, int(math.ceil(fraction * size)))
+
+
+def portfolio_objective(
+    net: np.ndarray,
+    *,
+    risk_aversion: float = RISK_AVERSION,
+    tail_fraction: float = CVAR_TAIL_FRACTION,
+) -> float:
+    """The declared economic objective for one portfolio on one bank.
+
+    Scenario count enters only through the empirical distribution, so
+    duplicating rows cannot move it.
+    """
+
+    mean = float(np.mean(net))
+    if risk_aversion <= 0:
+        return mean
+    tail = float(np.mean(np.sort(net)[: _tail_count(net.size, tail_fraction)]))
+    return (1.0 - risk_aversion) * mean + risk_aversion * tail
+
+
+def _batched_objective(
+    net: np.ndarray,
+    *,
+    risk_aversion: float = RISK_AVERSION,
+    tail_fraction: float = CVAR_TAIL_FRACTION,
+) -> np.ndarray:
+    """`portfolio_objective` over a scenarios-by-portfolio array."""
+
+    mean = net.mean(axis=0)
+    if risk_aversion <= 0:
+        return mean
+    count = _tail_count(len(net), tail_fraction)
+    tail = np.partition(net, count - 1, axis=0)[:count].mean(axis=0)
+    return (1.0 - risk_aversion) * mean + risk_aversion * tail
+
+
+def objective_standard_error(net: np.ndarray, effective: float) -> float:
+    """Monte Carlo uncertainty of the estimate, against effective sample size.
+
+    Reported, never selected on. Uses the population second moment scaled to
+    the effective size, so an all-distinct bank returns exactly the classical
+    `sd(ddof=1) / sqrt(S)` and a bank of replicated rows returns the
+    uncertainty of the distinct rows it actually contains.
+    """
+
+    if effective <= 1.0 or np.size(net) < 2:
+        return 0.0
+    centered = np.asarray(net, dtype=np.float64) - float(np.mean(net))
+    population = float(np.dot(centered, centered)) / float(np.size(net))
+    variance = population * effective / (effective - 1.0)
+    return math.sqrt(variance / effective)
+
+
+def _batched_standard_error(net: np.ndarray, effective: float) -> np.ndarray:
+    if effective <= 1.0 or len(net) < 2:
+        return np.zeros(net.shape[1])
+    population = net.var(axis=0, ddof=0)
+    variance = population * effective / (effective - 1.0)
+    return np.sqrt(variance / effective)
+
+
+def unpaired_difference_standard_error(
+    first_economics: CandidateEconomics,
+    first_indices: tuple[int, ...],
+    second_economics: CandidateEconomics,
+    second_indices: tuple[int, ...],
+    *,
+    entry_fee: float,
+    first_multiplicity: np.ndarray | None = None,
+    second_multiplicity: np.ndarray | None = None,
+) -> float:
+    """Two independent banks cannot be paired, so their variances add.
+
+    This is the SELECT-versus-REFEREE comparison: separate seeds, separate
+    draws, no scenario in common to pair on. With no declared multiplicity
+    this reproduces the row-count divisor exactly. The paired case, where two
+    portfolios are compared on one bank, lives in `qa.decide_repair`, which
+    takes the per-scenario difference and keeps the pairing.
+    """
+
+    first = portfolio_net_samples(first_economics, first_indices, entry_fee=entry_fee)
+    second = portfolio_net_samples(second_economics, second_indices, entry_fee=entry_fee)
+    first_error = objective_standard_error(
+        first, resolve_effective_sample_size(len(first), first_multiplicity)
+    )
+    second_error = objective_standard_error(
+        second, resolve_effective_sample_size(len(second), second_multiplicity)
+    )
+    return math.sqrt(first_error**2 + second_error**2)
 
 
 def _portfolio_settlement(
@@ -111,6 +288,7 @@ def _state_metrics(
     elite_rank: int,
     top_one_percent_rank: int,
     objective: ContestObjective,
+    effective: float | None = None,
 ) -> dict[str, float]:
     gross, adjusted_ranks, entry_gross = _portfolio_settlement(economics, indices)
     net = gross - entry_fee * len(indices)
@@ -120,11 +298,18 @@ def _state_metrics(
         any_elite = (adjusted_ranks <= elite_rank).any(axis=1)
     any_top_one = (adjusted_ranks <= top_one_percent_rank).any(axis=1)
     mean = float(net.mean())
-    standard_error = float(net.std(ddof=1) / math.sqrt(len(net))) if len(net) > 1 else 0.0
+    if effective is None:
+        effective = float(len(net))
+    standard_error = objective_standard_error(net, effective)
     sorted_net = np.sort(net)
-    tail_count = max(1, int(math.ceil(0.05 * len(net))))
+    tail_count = _tail_count(len(net))
     total_fees = entry_fee * len(indices)
     return {
+        "selection_objective": portfolio_objective(net),
+        "objective_standard_error": standard_error,
+        "effective_sample_size": effective,
+        # Reported, not selected on. A confidence bound is an honest statement
+        # about the estimate and a dishonest ranking axis.
         "robust_net_lcb": mean - 1.96 * standard_error,
         "elite_probability": float(any_elite.mean()),
         "top_one_probability": float(any_top_one.mean()),
@@ -156,6 +341,7 @@ def evaluate_portfolio(
     entry_fee: float,
     field_size: int,
     objective: ContestObjective,
+    scenario_multiplicity: Mapping[str, np.ndarray] | None = None,
 ) -> PortfolioMetrics:
     if not state_economics:
         raise ValueError("at least one field state is required")
@@ -183,13 +369,27 @@ def evaluate_portfolio(
             elite_rank=elite_rank,
             top_one_percent_rank=top_one_rank,
             objective=objective,
+            effective=_declared_effective(economics, state, scenario_multiplicity),
         )
         for state, economics in state_economics.items()
     }
-    worst_state = min(results, key=lambda state: results[state]["robust_net_lcb"])
+    # The worst field state on the declared objective, not on a confidence
+    # bound whose width depends on how many scenarios were run.
+    worst_state = min(results, key=lambda state: results[state]["selection_objective"])
     worst = results[worst_state]
     return PortfolioMetrics(
         candidate_indices=indices,
+        selection_objective=min(
+            value["selection_objective"] for value in results.values()
+        ),
+        # The most uncertain state, so reported precision is never flattered by
+        # averaging a sharp state against a vague one.
+        objective_standard_error=max(
+            value["objective_standard_error"] for value in results.values()
+        ),
+        effective_scenario_count=min(
+            value["effective_sample_size"] for value in results.values()
+        ),
         robust_net_payout_lcb=min(value["robust_net_lcb"] for value in results.values()),
         elite_probability=min(value["elite_probability"] for value in results.values()),
         top_one_percent_probability=min(value["top_one_probability"] for value in results.values()),
@@ -211,7 +411,7 @@ def _nondominated(metrics: list[PortfolioMetrics]) -> list[PortfolioMetrics]:
     ordered = sorted(
         enumerate(metrics),
         key=lambda item: (
-            -item[1].robust_net_payout_lcb,
+            -item[1].selection_objective,
             -item[1].elite_probability,
             item[0],
         ),
@@ -220,11 +420,11 @@ def _nondominated(metrics: list[PortfolioMetrics]) -> list[PortfolioMetrics]:
     best_elite_at_higher_net = float("-inf")
     cursor = 0
     while cursor < len(ordered):
-        net_value = ordered[cursor][1].robust_net_payout_lcb
+        net_value = ordered[cursor][1].selection_objective
         group: list[tuple[int, PortfolioMetrics]] = []
         while (
             cursor < len(ordered)
-            and ordered[cursor][1].robust_net_payout_lcb == net_value
+            and ordered[cursor][1].selection_objective == net_value
         ):
             group.append(ordered[cursor])
             cursor += 1
@@ -247,7 +447,12 @@ def _evaluate_combinations_batched(
     field_size: int,
     objective: ContestObjective,
     batch_size: int = 256,
+    scenario_multiplicity: Mapping[str, np.ndarray] | None = None,
 ) -> list[PortfolioMetrics]:
+    effective_by_state = {
+        state: _declared_effective(economics, state, scenario_multiplicity)
+        for state, economics in state_economics.items()
+    }
     if objective is ContestObjective.LARGE_GPP:
         elite_rank = max(1, math.ceil(0.001 * field_size))
     elif objective is ContestObjective.SMALL_GPP:
@@ -261,6 +466,9 @@ def _evaluate_combinations_batched(
         indices = np.asarray(batch, dtype=np.int32)
         count = len(batch)
         robust_lcb = np.full(count, np.inf)
+        selection_objective = np.full(count, np.inf)
+        objective_error = np.full(count, -np.inf)
+        effective_count = np.full(count, np.inf)
         elite_probability = np.full(count, np.inf)
         top_one_probability = np.full(count, np.inf)
         net_loss_probability = np.full(count, -np.inf)
@@ -278,11 +486,9 @@ def _evaluate_combinations_batched(
             )
             net = gross - entry_fee * indices.shape[1]
             mean = net.mean(axis=0)
-            standard_error = (
-                net.std(axis=0, ddof=1) / math.sqrt(len(net))
-                if len(net) > 1
-                else np.zeros(count)
-            )
+            effective = effective_by_state[state_name]
+            standard_error = _batched_standard_error(net, effective)
+            state_objective = _batched_objective(net)
             state_lcb = mean - 1.96 * standard_error
             if objective in {
                 ContestObjective.CASH,
@@ -298,8 +504,11 @@ def _evaluate_combinations_batched(
             tail_count = max(1, int(math.ceil(0.05 * len(net))))
             tail = np.partition(net, tail_count - 1, axis=0)[:tail_count].mean(axis=0)
 
-            newly_worst = state_lcb < robust_lcb
+            newly_worst = state_objective < selection_objective
             worst_state[newly_worst] = state_name
+            selection_objective = np.minimum(selection_objective, state_objective)
+            objective_error = np.maximum(objective_error, standard_error)
+            effective_count = np.minimum(effective_count, np.full(count, effective))
             robust_lcb = np.minimum(robust_lcb, state_lcb)
             elite_probability = np.minimum(elite_probability, any_elite.mean(axis=0))
             top_one_probability = np.minimum(
@@ -322,6 +531,9 @@ def _evaluate_combinations_batched(
         results.extend(
             PortfolioMetrics(
                 candidate_indices=tuple(batch[index]),
+                selection_objective=float(selection_objective[index]),
+                objective_standard_error=float(objective_error[index]),
+                effective_scenario_count=float(effective_count[index]),
                 robust_net_payout_lcb=float(robust_lcb[index]),
                 elite_probability=float(elite_probability[index]),
                 top_one_percent_probability=float(top_one_probability[index]),
@@ -349,6 +561,7 @@ def select_portfolio(
     objective: ContestObjective,
     shortlist_limit: int = 250,
     maximum_exact_combinations: int = 50_000,
+    scenario_multiplicity: Mapping[str, np.ndarray] | None = None,
 ) -> PortfolioMetrics:
     if not state_economics:
         raise ValueError("at least one field state is required")
@@ -379,6 +592,7 @@ def select_portfolio(
             entry_fee=entry_fee,
             field_size=field_size,
             objective=objective,
+            scenario_multiplicity=scenario_multiplicity,
         )
 
     if entry_count <= 3:
@@ -394,6 +608,7 @@ def select_portfolio(
             entry_fee=entry_fee,
             field_size=field_size,
             objective=objective,
+            scenario_multiplicity=scenario_multiplicity,
         )
         frontier = _nondominated(evaluated)
     else:
@@ -434,7 +649,7 @@ def select_portfolio(
 def _choose_nash(frontier: list[PortfolioMetrics]) -> PortfolioMetrics:
     if not frontier:
         raise ValueError("portfolio frontier is empty")
-    net_values = np.array([item.robust_net_payout_lcb for item in frontier])
+    net_values = np.array([item.selection_objective for item in frontier])
     elite_values = np.array([item.elite_probability for item in frontier])
 
     def normalize(value: float, values: np.ndarray) -> float:
@@ -442,7 +657,7 @@ def _choose_nash(frontier: list[PortfolioMetrics]) -> PortfolioMetrics:
         return 1.0 if spread <= 1e-12 else (value - float(values.min())) / spread
 
     def key(item: PortfolioMetrics) -> tuple[float, float, float, tuple[int, ...]]:
-        nash = normalize(item.robust_net_payout_lcb, net_values) * normalize(
+        nash = normalize(item.selection_objective, net_values) * normalize(
             item.elite_probability, elite_values
         )
         return (
