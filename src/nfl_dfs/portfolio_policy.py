@@ -1,8 +1,7 @@
-"""Versioned Showdown portfolio controls, normalized but not yet enforced.
+"""Versioned Showdown portfolio controls and deterministic normalization.
 
-SD3 owns this contract and its deterministic validation.  SD4 will own solver
-enforcement and independent assignment audit.  Nothing in this module changes
-candidate generation, lineup selection, or export eligibility.
+SD3 owns this contract. SD4 consumes its exact integer maxima and canonical
+bytes in a separate bounded selector and independent final-assignment audit.
 """
 
 from __future__ import annotations
@@ -23,11 +22,6 @@ from .lineups import validate_lineup
 POLICY_SCHEMA_VERSION = "nfl_showdown_portfolio_policy_v1"
 NORMALIZED_POLICY_SCHEMA_VERSION = "nfl_showdown_portfolio_policy_normalized_v1"
 FRACTION_UNIT = "FRACTION_0_TO_1"
-ENFORCEMENT_BLOCKER = (
-    "PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3: the supplied portfolio policy "
-    "was not enforced; SD4 must implement solver enforcement and independent "
-    "assignment audit before a review-entry CSV may be generated"
-)
 
 
 @dataclass(frozen=True, order=True)
@@ -191,8 +185,8 @@ class PortfolioPolicyValidation:
             "problems": [issue.as_mapping() for issue in self.problems],
             "findings": [issue.as_mapping() for issue in self.findings],
             "normalized_policy": self.policy.as_mapping() if self.policy else None,
-            "enforcement_status": "NOT_IMPLEMENTED_SD3",
-            "enforcement_blocker": ENFORCEMENT_BLOCKER,
+            "enforcement_status": "NOT_EVALUATED_BY_CONTRACT_VALIDATION",
+            "enforcement_blocker": None,
         }
 
 

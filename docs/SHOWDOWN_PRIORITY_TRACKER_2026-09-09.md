@@ -46,8 +46,8 @@ backlog items remain separate; their statuses do not override this queue.
 | 1 | SD1 | P0 | Kicker-role evidence contract and conserved kicker scoring | `DONE` | None |
 | 2 | SD2 | P0 | Offensive-role evidence and explicit missing-history handling | `DONE` | SD1 |
 | 3 | SD3 | P1 | Precise, validated portfolio-control contract | `DONE` | SD2 |
-| 4 | SD4 | P1 | Enforced portfolio controls and independent assignment audit | `READY` | SD3 |
-| 5 | SD5 | P1 | Readable, artifact-bound lineup and exposure review | `BLOCKED` | SD4 |
+| 4 | SD4 | P1 | Enforced portfolio controls and independent assignment audit | `DONE` | SD3 |
+| 5 | SD5 | P1 | Readable, artifact-bound lineup and exposure review | `READY` | SD4 |
 | 6 | SD6 | P0 acceptance | Complete Cowork/Linux rehearsal with current evidence | `BLOCKED` | SD5 and access to the actual environment and matching files |
 
 Priority indicates consequence; order reflects dependencies. Do not attempt all
@@ -764,3 +764,126 @@ validation remain unverified. No broader tranche or upload gate was marked done.
 Next READY chunk: **SD4 only**, with
 `docs/session-prompts/SD4-enforce-and-audit-portfolio-controls.md`. SD5 and SD6
 remain blocked.
+
+### 2026-09-09 — SD4 implementation session started
+
+Actual start HEAD: `2e045d53afcc5d9f1d2363f09d8778e77f1b4284`, branch
+`codex/sd4-enforce-and-audit-portfolio-controls`, created from live verified
+`origin/main` after `git fetch --prune origin`. The verified merge commit contains
+SD3 implementation commit `e71961485dbfcdae299caaa325c35efc866427cd` and has the
+same tree as that implementation commit. Scope is limited to SD4's bounded MILP
+joint policy enforcement, exact Entry-ID assignment, named solver/bank outcomes,
+and an independent final-assignment policy audit before prior-review export.
+Policy-free behavior and every `PRIOR_ONLY` / `DO_NOT_UPLOAD` boundary remain in
+force; SD5, field/payout economics, ownership, calibrated drawdown, simulation,
+Classic expansion and upload automation are excluded.
+
+Pre-existing changes preserved: modified tracked
+`docs/session-prompts/SD4-enforce-and-audit-portfolio-controls.md` (starting
+SHA-256 `d964d2e0e79c8ee49076f39b2f8fa2142b32b34481a76e256e5d55c5e3d3a578`),
+plus untracked `Claude outputs/`,
+`docs/session-prompts/W2-expiry-and-selection-objective.md` and
+`docs/session-prompts/W4-cowork-prior-only-profile.md`. The index was empty.
+No reset, clean, stash, rebase, pull, broad formatting, dependency change,
+staging, commit, push or account action is authorized. SD5 remains blocked
+pending every SD4 software acceptance condition.
+
+### 2026-09-09 — SD4 implementation complete
+
+SD4 is `DONE` for software acceptance. Start and end HEAD remained
+`2e045d53afcc5d9f1d2363f09d8778e77f1b4284` on
+`codex/sd4-enforce-and-audit-portfolio-controls`; all SD4 changes remain
+uncommitted and the index remains empty. The refreshed SD4 prompt is preserved
+at its starting SHA-256
+`d964d2e0e79c8ee49076f39b2f8fa2142b32b34481a76e256e5d55c5e3d3a578`.
+Untracked `Claude outputs/`,
+`docs/session-prompts/W2-expiry-and-selection-objective.md` and
+`docs/session-prompts/W4-cowork-prior-only-profile.md` remain preserved.
+
+Implemented bounded, deterministic Showdown policy enforcement in new
+`src/nfl_dfs/portfolio_enforcement.py`, with integration changes in
+`src/nfl_dfs/selection.py`, `src/nfl_dfs/optimizer.py`,
+`src/nfl_dfs/prior_review.py`, `src/nfl_dfs/review_export.py`,
+`src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/cowork.py` and
+`src/nfl_dfs/cli.py`. New `tests/test_portfolio_enforcement.py` and expanded
+`tests/test_portfolio_policy.py` cover joint feasibility where greedy selection
+misses, repeated Captain permission/excess, combined CPT/FLEX caps, overlap
+zero through six, canonical duplicates, exact no-cycling assignment, complete-
+bank infeasibility versus incomplete/exhausted/time/search/error states,
+tampered summaries, byte mutation and Cowork replay. Operating changes are
+documented in `CLAUDE.md`, `IMPLEMENTATION_STATUS.md`,
+`docs/DATA_CONTRACTS.md`, `docs/COWORK_RUNBOOK.md`, `backlog.md` and
+`changelog.md`; the complete SD5 prompt is
+`docs/session-prompts/SD5-readable-artifact-bound-review.md`.
+
+Policy-bearing Showdown `prior_review` now applies SD3's exact integer maxima
+across a bounded actual candidate bank, chooses all requested assignments in one
+MILP and permits a repeated Captain only when the explicit policy permits it.
+Exact Entry IDs are assigned once each without cycling. Immediately before
+export, an independent audit reparses the normalized policy and assignment
+artifact, recomputes legality, canonical identity, combined/Captain counts,
+uniqueness and every pairwise overlap from roster IDs, and binds exact salary,
+entry, source-policy, normalized-policy and assignment bytes. Any failed or
+unknown solve/audit, changed bytes, incomplete assignment or policy on an
+unsupported profile is a named blocker and writes no new review CSV. Policy-free
+selection behavior is unchanged.
+
+Review found and repaired three material issues. A 128-candidate default exhausted
+the 30-second generation budget in the synthetic integration fixture, so the
+declared default is now 32 candidates and coverage is explicitly incomplete.
+The initial CLI integration could validate then silently ignore a policy on a
+non-`prior_review` profile; it now blocks with
+`PORTFOLIO_POLICY_PROFILE_UNSUPPORTED_SD4`. A pre-audit assignment-byte mutation
+was also exercised and correctly produced a failed audit with no review CSV.
+Final review then caught that the auditor compared normalized bytes to the
+selector's policy object without reparsing the artifact itself; the auditor now
+strictly reparses canonical normalized bytes and uses those independently read
+entry IDs, salary binding, limits, uniqueness and overlap controls.
+
+Verification on Windows with pinned Python 3.13.7 and locked dependencies:
+
+- Focused SD4 plus related selection/policy/Cowork regressions: 116 passed in
+  44.86s.
+- Broader optimizer/lineup/prior-review/CLI/Cowork regressions: 225 passed,
+  1 skipped in 111.25s. The skip is the existing Windows symlink-privilege case.
+- Post-review normalized-policy artifact-reparse focus: 59 passed in 17.95s.
+- Complete pinned-runtime suite using isolated
+  `outputs/p4-final2-8c72`: 475 passed, 1 skipped in 71.33s, with JUnit output at
+  `outputs/sd4-final2-20260909.xml`.
+- `nfl.ps1 doctor` passed: Python 3.13.7, SQLite integrity `ok`, WAL mode,
+  8 processors, 11,306,254,336 available bytes, no Excel lock or sync/reparse
+  finding; Windows long paths remain disabled.
+- Final `git diff --check` passed; no-index whitespace checks for the three new
+  SD4/SD5 source, test and prompt files emitted no whitespace errors.
+
+The representative two-entry policy run built 32 distinct canonical candidates,
+reported `CANDIDATE_LIMIT_REACHED_INCOMPLETE`, selected 2 assignments with
+`OPTIMAL` scoped to `ACTUAL_CANDIDATE_BANK`, passed the independent audit and
+replayed identical review bytes. Source-policy SHA-256 was
+`9ccebfbf27b7f20fc668e0e603ef121892381365eb716f7997b1ff02c7718e63`,
+normalized-policy SHA-256 was
+`5635b472b175c48f0a3e9f61e1bfdbc922aa79ba1f788c92f7b728718ba09d61`,
+assignment SHA-256 was
+`f192e1db2ed23027b7814a51ba523362977fea5c9b2cda97a4e35e8b41e93d7e`,
+and review CSV SHA-256 was
+`ccdda7307687335825ea71aca4f8e6ae6e38c95e0825dadc2d02899ab8a5a338`.
+Its four independent truths were `FILE_VALID=true`,
+`EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+The declared five-entry fixture also built 32 canonical candidates, truthfully
+reported `CANDIDATE_LIMIT_REACHED_INCOMPLETE`, and selected all 5 entries with
+`OPTIMAL` scoped to the actual bank. Candidate generation took 2.361s; joint
+selection took 0.013s with zero reported MIP gap and one node. Peak process
+working set was 66,797,568 bytes. These measured 2- and 5-entry fixtures do not
+establish complete-slate feasibility, 20-entry support or 150-entry support.
+
+No SD4 software acceptance criterion remains. Actual Cowork/Linux execution,
+live policy authoring, current game evidence, larger portfolios, prospective
+model quality, field/payout economics, ownership, calibrated drawdown, W3
+simulator participation, Classic expansion and upload automation remain
+unverified or out of scope. Enforced and audited output is still only
+`PRIOR_ONLY / DO_NOT_UPLOAD`; no DraftKings account action occurred.
+
+Next READY chunk: **SD5 only**, with
+`docs/session-prompts/SD5-readable-artifact-bound-review.md`. SD6 remains blocked.

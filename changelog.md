@@ -4,6 +4,100 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-09 — First live NE@SEA Showdown run through Cowork (operations record, no code change)
+
+Live run at 22:06Z against the 22:06Z DraftKings salary download and the
+2026-09-08 reserved-entry template, run in the Cowork cloud container because
+the device shell never mounted the repository this session. Full record in
+`data/runs/20260909-showdown-ne-sea-live-2206z/RUN_NOTES.md`.
+
+Changed:
+
+- No source change. Three managed run folders added under `data/runs/`:
+  `20260909T221133Z-ne-sea-live` (`PRIORS_PROPOSE_FAILED`, TLS),
+  `20260909T221851Z-ne-sea-live` (fresh priors frozen, projection OK,
+  `SELECTION_FAILED` at the SD2 gate with 20 named people) and
+  `20260909T222153Z-ne-sea-live-excl20` (same frozen package, the 20 people
+  operator-excluded, exit 0, `DK_REVIEW_ENTRY` written).
+
+Verification:
+
+- Suite on the working tree, pinned 3.13.7, pip-built venv: 475 passed,
+  1 skipped, 39.6s.
+- Export byte audit: 144 lines in and out, only lines 2 and 3 changed, SHA-256
+  `cf33f3e598270d40ea117d86ccac4ebce640b479baa8539b630f828aed585b96`, size
+  15,730 bytes identical on the container and on Ben's disk.
+- Independent legality re-check of both entries from the salary bytes: LEGAL,
+  $49,100 and $48,800, both teams, no OUT/IR, 4 shared people.
+
+Remaining blockers:
+
+- `FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`,
+  `RELEASE_DECISION=DO_NOT_UPLOAD`. No official activity evidence was supplied.
+- SD2 blocked 20 selectable people (14 NE, 6 SEA) for missing 2025 history or
+  a team transfer, and the only exit the contract offers is a
+  `NUMERICAL_ALLOCATION` source that `docs/DATA_CONTRACTS.md` itself says has
+  not been demonstrated live. See the proposed `R17` in `backlog.md`.
+
+Environment findings (not defects in this repository):
+
+- Python 3.13 `VERIFY_X509_STRICT` rejects the Cowork container's egress-proxy
+  CA (no Key Usage extension); `sources.fetch_public_artifact` fails with
+  `CERTIFICATE_VERIFY_FAILED`. Ben approved a venv-local `sitecustomize.py`
+  shim that drops only that flag; chain and hostname verification stayed on.
+- `api.weather.gov` is denied by the container proxy; the forecast was read
+  through the Claude browser pane and retained as text with its hash.
+
+Claims explicitly not made:
+
+- No live-slate, calibrated-EV, ownership, leverage, ceiling or
+  upload-readiness claim. The two lineups are the chalkiest legal build over a
+  26-person pool with the run games of both teams mostly unallocated.
+
+### 2026-09-09 — SD4 bounded portfolio enforcement and independent audit
+
+Closes SD4 for software acceptance. Added
+`src/nfl_dfs/portfolio_enforcement.py` and
+`tests/test_portfolio_enforcement.py`; connected the validated SD3 policy to
+bounded Showdown `prior_review` candidate generation, joint MILP selection,
+exact Entry-ID assignment and an independent final-assignment audit; and updated
+the CLI, optimizer, selection, prior-review/export integration, Cowork guidance,
+contract/implementation documentation, tracker and backlog.
+
+Policy-bearing runs enforce effective combined-person and Captain maxima,
+exclusions, canonical uniqueness and configured pairwise underlying-person
+overlap across the complete requested assignment. Explicit Captain maxima
+replace the policy-free forced-distinct-Captain convention only when a policy is
+supplied. Assignment cycling is prohibited. The final audit reparses the exact
+normalized policy and assignment bytes immediately before export, recomputes DK
+legality and every policy control from roster IDs, and binds salary, entry,
+source-policy, normalized-policy and assignment SHA-256 values. Failed or
+unknown selection/audit, stale or changed bytes, incomplete assignments and
+unsupported profiles write no new review CSV and preserve earlier outputs.
+
+Candidate generation defaults to a 32-lineup cap, 30-second total budget and
+2-second per-solve budget; joint selection has a 10-second budget. Reports keep
+complete-bank infeasibility distinct from candidate-limit exhaustion, incomplete
+coverage, time/search limits and solver errors. An `OPTIMAL` result applies only
+to the explicitly reported actual candidate bank. A two-entry replay produced
+32 candidates, selected 2 entries, passed the independent audit and reproduced
+identical review bytes and assignment/policy hashes. A five-entry rehearsal
+produced 32 candidates in 2.361s, solved the actual-bank MILP in 0.013s at a zero
+reported gap and one node, and measured 66,797,568 peak process working-set
+bytes. Both banks were truthfully `CANDIDATE_LIMIT_REACHED_INCOMPLETE`; neither
+run proves complete-slate feasibility or 20/150-entry readiness.
+
+Verification: focused SD4 and related regressions 116 passed in 44.86s; broader
+regressions 225 passed, 1 skipped in 111.25s; post-review artifact-reparse focus
+59 passed in 17.95s; final complete pinned-runtime suite 475 passed, 1 skipped
+in 71.33s. The skip is the existing Windows
+symlink-privilege case. Doctor and `git diff --check` passed. A representative
+synthetic success remained `FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`,
+`MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`. Actual Cowork/Linux,
+live evidence/policy use, larger portfolios and prospective model or economic
+quality remain unverified. SD5 is the sole next READY item; its prompt is
+`docs/session-prompts/SD5-readable-artifact-bound-review.md`.
+
 ### 2026-09-09 — SD3 exact-bound portfolio-policy contract
 
 Closes SD3 for software acceptance. Added

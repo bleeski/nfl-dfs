@@ -172,7 +172,10 @@ def export_review_entries(
 
 
 def write_assignments_csv(
-    path: str | Path, assignments: Mapping[str, tuple[str, ...]]
+    path: str | Path,
+    assignments: Mapping[str, tuple[str, ...]],
+    *,
+    entry_order: tuple[str, ...] | None = None,
 ) -> str:
     """Write the Entry ID,CPT,FLEX... assignments file `certify` also accepts."""
 
@@ -180,7 +183,15 @@ def write_assignments_csv(
     target.parent.mkdir(parents=True, exist_ok=True)
     header = "Entry ID,CPT,FLEX,FLEX,FLEX,FLEX,FLEX"
     lines = [header]
-    for entry_id, roster in sorted(assignments.items()):
+    if entry_order is None:
+        ordered = sorted(assignments.items())
+    else:
+        if tuple(assignments) != entry_order or set(assignments) != set(entry_order):
+            raise ReviewExportError(
+                "ASSIGNMENT_ENTRY_ORDER_MISMATCH: exact policy Entry-ID sequence required"
+            )
+        ordered = [(entry_id, assignments[entry_id]) for entry_id in entry_order]
+    for entry_id, roster in ordered:
         if len(roster) != 6:
             raise ReviewExportError(f"ASSIGNMENT_WIDTH:{entry_id}:{len(roster)}")
         lines.append(",".join((entry_id, *roster)))

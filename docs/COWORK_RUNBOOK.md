@@ -51,16 +51,21 @@ the next evidence action. The same optional CLI input is
 `--offensive-role-evidence-json '<path-to-offensive_roles.json>'`.
 The main operating workflow remains two attached CSV files.
 
-SD3 accepts an optional versioned `portfolio_policy_json` with exact salary,
+The workflow accepts an optional versioned `portfolio_policy_json` with exact salary,
 game, full person/CPT/FLEX identity, and requested Entry-ID bindings. The
 contract uses explicit fractions in `[0,1]` and exact-decimal floor rounding;
-see `docs/DATA_CONTRACTS.md`. SD3 does not enforce it. Until SD4 is complete,
-any request containing this field deliberately stops with
-`PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`, retains the normalized policy
-and both policy hashes, writes no new `DK_REVIEW_ENTRY` CSV, and remains
-`PRIOR_ONLY / DO_NOT_UPLOAD`. Do not interpret a valid policy report as an
-enforced portfolio. Requests omitting the policy continue through the existing
-SD1/SD2 behavior.
+see `docs/DATA_CONTRACTS.md`. SD4 enforces it on the Showdown `prior_review`
+profile through a bounded 32-candidate bank and one joint MILP, assigns the
+exact requested Entry IDs without cycling, and runs an independent audit that
+reparses the normalized-policy and assignment artifacts immediately before
+review export. Read the reported candidate-bank
+coverage: `CANDIDATE_LIMIT_REACHED_INCOMPLETE` can support a feasible audited
+review but is not a complete-slate search. If no portfolio is found in that
+bank, the run reports incomplete-bank exhaustion rather than full-slate
+infeasibility. A supplied policy on another profile is refused, not ignored.
+Only `ENFORCED_AND_INDEPENDENTLY_AUDITED` may create a new `DK_REVIEW_ENTRY`
+CSV, and it remains `PRIOR_ONLY / DO_NOT_UPLOAD`. Requests omitting the policy
+continue through the existing SD1/SD2 behavior.
 
 Kicker roles are resolved after those exclusions. When one eligible kicker is
 listed for a team and no role artifact is supplied, the review may continue only
@@ -203,10 +208,11 @@ Populate only source-backed values:
   rerun the request. Its salary/game/ID bindings, source bytes, hashes, times,
   expiry, and allocation must all validate; an invalid supplied package blocks.
 - `portfolio_policy_json`: optional exact-bound Showdown preference contract.
-  It is snapshotted and deterministically normalized, but SD3 always refuses
-  execution before selection/export because enforcement belongs to SD4. A
-  `valid=true` validation report is not permission to generate, certify, or
-  upload lineups.
+  It is snapshotted, deterministically normalized, jointly enforced and
+  independently audited only by the Showdown `prior_review` profile. A
+  `valid=true` validation report alone is not enforcement; require the final
+  `ENFORCED_AND_INDEPENDENTLY_AUDITED` status and audit `PASS`. Even then the
+  artifact is a prior-only review file, never a certified upload package.
 - `assignment_csv`: optional manual lineup path. When present, the workflow
   validates/certifies it instead of running the model-assisted build.
 - `profile`: `diagnostic` uses the bounded Cowork scenario/candidate sizes;
@@ -241,7 +247,11 @@ sh ./nfl.sh cowork-run \
   --portfolio-policy-json '<full-path-to/portfolio_policy.json>'
 ```
 
-The expected exit is 2 with `DO_NOT_UPLOAD`; no review-entry CSV is created.
+With valid supporting inputs and a feasible, audited policy portfolio, the
+expected exit is 0 with `FILE_VALID=true`, `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`. Exit 0 means review generation completed, not
+upload permission. A named policy, bank, solver, assignment, audit or mutation
+failure exits 2, preserves earlier outputs and creates no new review-entry CSV.
 
 ## Produce prior-only model inputs
 

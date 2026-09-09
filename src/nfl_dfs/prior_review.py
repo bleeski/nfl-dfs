@@ -67,6 +67,11 @@ from .priors import (
     propose_prior_package,
 )
 from .projection import build_projection_package
+from .portfolio_enforcement import (
+    audit_policy_assignments,
+    exact_assignments_for_entries,
+)
+from .portfolio_policy import NormalizedPortfolioPolicy
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
 from .selection import assignments_for_entries, select_prior_lineups
 
@@ -758,6 +763,11 @@ def run_prior_review(
     official_status_csv: str | Path | None = None,
     role_evidence_json: str | Path | None = None,
     offensive_role_evidence_json: str | Path | None = None,
+    portfolio_policy: NormalizedPortfolioPolicy | None = None,
+    portfolio_policy_source_path: str | Path | None = None,
+    portfolio_policy_source_sha256: str | None = None,
+    portfolio_policy_normalized_path: str | Path | None = None,
+    portfolio_policy_normalized_sha256: str | None = None,
     propose: Callable[..., dict[str, object]] = propose_prior_package,
     freeze: Callable[..., dict[str, object]] = freeze_prior_package,
     project: Callable[..., object] = build_projection_package,
@@ -796,6 +806,33 @@ def run_prior_review(
     salary_digest = sha256_file(salary_path)
     hashes["salary_csv"] = salary_digest
     hashes["entry_csv"] = sha256_file(entry_path)
+    policy_source_path: Path | None = None
+    policy_normalized_path: Path | None = None
+    if portfolio_policy is not None:
+        if (
+            portfolio_policy_source_path is None
+            or portfolio_policy_source_sha256 is None
+            or portfolio_policy_normalized_path is None
+            or portfolio_policy_normalized_sha256 is None
+        ):
+            return PriorReviewOutcome(
+                profile_version=PROFILE_VERSION,
+                stage="PORTFOLIO_POLICY",
+                blocked=True,
+                blockers=(
+                    "PORTFOLIO_POLICY_ARTIFACT_BINDING_INCOMPLETE: source and normalized "
+                    "policy paths and hashes are required for SD4 enforcement",
+                ),
+                stages=(_stage("PORTFOLIO_POLICY", "FAILED_BINDING"),),
+                artifacts=artifacts,
+                hashes=hashes,
+            )
+        policy_source_path = Path(portfolio_policy_source_path).resolve()
+        policy_normalized_path = Path(portfolio_policy_normalized_path).resolve()
+        artifacts["portfolio_policy_source"] = str(policy_source_path)
+        artifacts["portfolio_policy_normalized"] = str(policy_normalized_path)
+        hashes["portfolio_policy_source"] = str(portfolio_policy_source_sha256)
+        hashes["portfolio_policy_normalized"] = str(portfolio_policy_normalized_sha256)
 
     # A supplied current report must affect generation, including both salary
     # roles of an inactive person. Absence remains a release blocker; partial
@@ -1194,6 +1231,21 @@ def run_prior_review(
     template = parse_entries(entry_path)
     entry_ids = [entry.entry_id for entry in template.authorizations]
     try:
+        if portfolio_policy is not None:
+            assert policy_source_path is not None
+            assert policy_normalized_path is not None
+            assert portfolio_policy_source_sha256 is not None
+            assert portfolio_policy_normalized_sha256 is not None
+            if sha256_file(salary_path) != portfolio_policy.salary_sha256:
+                raise PriorReviewError("PORTFOLIO_POLICY_SALARY_CHANGED_BEFORE_SELECTION")
+            if sha256_file(entry_path) != hashes["entry_csv"]:
+                raise PriorReviewError("PORTFOLIO_POLICY_ENTRY_BYTES_CHANGED_BEFORE_SELECTION")
+            if sha256_file(policy_source_path) != portfolio_policy_source_sha256:
+                raise PriorReviewError("PORTFOLIO_POLICY_SOURCE_CHANGED_BEFORE_SELECTION")
+            if sha256_file(policy_normalized_path) != portfolio_policy_normalized_sha256:
+                raise PriorReviewError("PORTFOLIO_POLICY_NORMALIZED_CHANGED_BEFORE_SELECTION")
+            if policy_normalized_path.read_bytes() != portfolio_policy.canonical_bytes():
+                raise PriorReviewError("PORTFOLIO_POLICY_NORMALIZED_BYTES_NOT_CONSUMED_POLICY")
         model = load_opportunity_model(
             slate, str(projection.team_projections), str(projection.player_opportunities),
             allow_empty_groups=True,
@@ -1235,8 +1287,16 @@ def run_prior_review(
             role_evidence_json=role_evidence_json,
             offensive_role_evidence_json=offensive_role_evidence_json,
             as_of=as_of,
+            portfolio_policy=portfolio_policy,
         )
-        assignments = assignments_for_entries(entry_ids, lineups)
+        assignments = (
+            exact_assignments_for_entries(
+                portfolio_policy.entry_ids,
+                [lineup.roster for lineup in lineups],
+            )
+            if portfolio_policy is not None
+            else assignments_for_entries(entry_ids, lineups)
+        )
     except Exception as exc:  # noqa: BLE001 - named, never swallowed
         error = f"{type(exc).__name__}:{exc}"
         stages.append(_stage("SELECT", "FAILED", error=error))
@@ -1276,7 +1336,11 @@ def run_prior_review(
                 (role_resolution.source_hashes or {})[source_path]
             )
     assignments_path = selection_dir / "assignments.csv"
-    assignments_hash = write_assignments_csv(assignments_path, assignments)
+    assignments_hash = write_assignments_csv(
+        assignments_path,
+        assignments,
+        entry_order=portfolio_policy.entry_ids if portfolio_policy is not None else None,
+    )
     artifacts["assignments"] = str(assignments_path)
     hashes["assignments"] = assignments_hash
     selection_report = {
@@ -1327,6 +1391,48 @@ def run_prior_review(
             raise OffensiveRoleError("OFFENSIVE_HISTORY_CHANGED_DURING_SELECTION")
         if sha256_file(package.identity_map) != package.hashes[IDENTITY_MAP_FILENAME]:
             raise PriorReviewError("TEAM_SPLIT_IDENTITY_MAP_CHANGED_DURING_SELECTION")
+        if portfolio_policy is not None:
+            assert policy_source_path is not None
+            assert policy_normalized_path is not None
+            assert portfolio_policy_source_sha256 is not None
+            assert portfolio_policy_normalized_sha256 is not None
+            audit = audit_policy_assignments(
+                slate=slate,
+                policy=portfolio_policy,
+                assignments=list(assignments.items()),
+                salary_bytes=salary_path.read_bytes(),
+                entry_bytes=entry_path.read_bytes(),
+                expected_entry_sha256=hashes["entry_csv"],
+                source_policy_bytes=policy_source_path.read_bytes(),
+                expected_source_policy_sha256=portfolio_policy_source_sha256,
+                normalized_policy_bytes=policy_normalized_path.read_bytes(),
+                expected_normalized_policy_sha256=portfolio_policy_normalized_sha256,
+                assignment_artifact_bytes=assignments_path.read_bytes(),
+                expected_assignment_artifact_sha256=assignments_hash,
+                selector_summary=selection,
+            )
+            audit_report = audit.as_report()
+            reports["portfolio_policy_audit"] = audit_report
+            audit_path = selection_dir / "portfolio_policy_audit.json"
+            audit_record_hash = write_run_record(audit_path, audit_report)
+            artifacts["portfolio_policy_audit"] = str(audit_path)
+            hashes["portfolio_policy_audit"] = audit_record_hash
+            if not audit.passed:
+                raise PriorReviewError(
+                    "PORTFOLIO_POLICY_INDEPENDENT_AUDIT_FAILED:"
+                    + ";".join(audit.problems)
+                )
+            if (
+                sha256_file(salary_path) != portfolio_policy.salary_sha256
+                or sha256_file(entry_path) != hashes["entry_csv"]
+                or sha256_file(policy_source_path) != portfolio_policy_source_sha256
+                or sha256_file(policy_normalized_path)
+                != portfolio_policy_normalized_sha256
+                or sha256_file(assignments_path) != assignments_hash
+            ):
+                raise PriorReviewError(
+                    "PORTFOLIO_POLICY_INPUT_MUTATED_AFTER_AUDIT: rerun from stable immutable artifacts"
+                )
         export = export_review_entries(
             slate=slate,
             template=template,
@@ -1352,6 +1458,12 @@ def run_prior_review(
             "salaries_sha256": salary_digest,
             "entries_sha256": template.raw_hash,
             "assignments_sha256": assignments_hash,
+            "portfolio_policy_enforcement": (
+                selection.get("portfolio_policy") if portfolio_policy is not None else None
+            ),
+            "portfolio_policy_audit": (
+                reports.get("portfolio_policy_audit") if portfolio_policy is not None else None
+            ),
             "contest_ids": sorted({e.contest_id for e in template.authorizations}),
             "entry_fees": sorted({e.entry_fee for e in template.authorizations}),
         }

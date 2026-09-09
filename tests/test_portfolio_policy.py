@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,6 @@ from nfl_dfs.cowork import CoworkInputError, CoworkRunRequest, required_next_inp
 from nfl_dfs.dk import parse_entries, parse_salaries
 from nfl_dfs.hashing import sha256_bytes
 from nfl_dfs.portfolio_policy import (
-    ENFORCEMENT_BLOCKER,
     FRACTION_UNIT,
     POLICY_SCHEMA_VERSION,
     canonical_showdown_lineup_identity,
@@ -23,7 +23,6 @@ from nfl_dfs.portfolio_policy import (
 )
 
 from .test_participation import _salary_bytes, _slate
-from .test_prior_selection import _entries_bytes
 
 
 def _reference(slate, index: int = 0) -> dict[str, str]:
@@ -419,12 +418,7 @@ def test_request_round_trip_and_path_confinement_include_policy(tmp_path: Path) 
     assert CoworkRunRequest.from_mapping(
         request.to_dict(), allowed_roots=(root,)
     ) == request
-    assert required_next_inputs(CoworkRunRequest()) == tuple(
-        blocker
-        for blocker in required_next_inputs(CoworkRunRequest())
-        if blocker != ENFORCEMENT_BLOCKER
-    )
-    assert ENFORCEMENT_BLOCKER in required_next_inputs(request)
+    assert required_next_inputs(request) == required_next_inputs(CoworkRunRequest())
 
     outside = tmp_path / "outside.json"
     outside.write_text("{}", encoding="utf-8")
@@ -455,18 +449,20 @@ def test_appg_never_changes_policy_integer_math(tmp_path: Path) -> None:
     ]
 
 
-def test_cowork_policy_is_snapshotted_refused_and_replays_identically(
+def test_cowork_policy_is_enforced_audited_snapshotted_and_replays_identically(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from nfl_dfs import cli
-    from .test_prior_review_profile import _attachments, _cowork_args
+    from nfl_dfs import prior_review as prior_review_module
+    from .test_prior_review_profile import (
+        _attachments,
+        _cowork_args,
+        _prepared_run,
+    )
 
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    _slate(prepared)
-    salary_path = prepared / "DKSalaries.csv"
-    entry_path = prepared / "DKEntries.csv"
-    entry_path.write_bytes(_entries_bytes())
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=datetime.now(timezone.utc) + timedelta(hours=6)
+    )
     attachments = _attachments(tmp_path, salary_path, entry_path)
     slate = parse_salaries(salary_path)
     entries = parse_entries(entry_path)
@@ -488,45 +484,45 @@ def test_cowork_policy_is_snapshotted_refused_and_replays_identically(
     retained.parent.mkdir(parents=True)
     retained.write_bytes(b"preserve me")
     monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", runs)
+    real = prior_review_module.run_prior_review
+    monkeypatch.setattr(
+        cli, "run_prior_review", lambda **kwargs: real(**kwargs, project=project)
+    )
 
     first_code = cli.command_cowork_run(
         _cowork_args(
             tmp_path,
             attachments,
-            run_id="sd3-first",
+            run_id="sd4-first",
             output_dir=str(outputs),
             portfolio_policy_json=str(policy_path),
-            build_priors=True,
-            lineup_count=1,
+            prior_package_dir=str(package_dir),
         )
     )
-    assert first_code == 2
+    assert first_code == 0
     first_report = json.loads(
-        (outputs / "sd3-first" / "cowork_run.json").read_text(encoding="utf-8")
+        (outputs / "sd4-first" / "cowork_run.json").read_text(encoding="utf-8")
     )
-    assert first_report["FILE_VALID"] is False
+    assert first_report["FILE_VALID"] is True
     assert first_report["EVIDENCE_STATE"] == "UNKNOWN"
     assert first_report["MODEL_STATUS"] == "PRIOR_ONLY"
     assert first_report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
-    assert first_report["bulk_entry_csv"] is None
+    assert Path(first_report["bulk_entry_csv"]).is_file()
     assert first_report["portfolio_policy"]["valid"] is True
+    assert first_report["portfolio_policy"]["enforcement_status"] == (
+        "ENFORCED_AND_INDEPENDENTLY_AUDITED"
+    )
+    assert first_report["portfolio_policy"]["selector"]["enforcement_status"] == "PASS"
+    assert first_report["portfolio_policy"]["independent_audit"]["status"] == "PASS"
     assert sha256_bytes(
         Path(first_report["portfolio_policy"]["normalized_policy"]).read_bytes()
     ) == first_report["portfolio_policy"]["normalized_policy_sha256"]
-    assert any(
-        blocker.startswith("PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3:")
-        for blocker in first_report["blockers"]
-    )
-    assert any(
-        blocker.startswith("PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES:")
-        for blocker in first_report["blockers"]
-    )
     assert retained.read_bytes() == b"preserve me"
-    assert list((outputs / "sd3-first").rglob("DK_REVIEW_ENTRY_*.csv")) == []
-    snapshotted_request = runs / "sd3-first" / "run_request.json"
+    first_bytes = Path(first_report["bulk_entry_csv"]).read_bytes()
+    snapshotted_request = runs / "sd4-first" / "run_request.json"
     request = json.loads(snapshotted_request.read_text(encoding="utf-8"))
     snapshotted_policy = Path(request["portfolio_policy_json"])
-    assert snapshotted_policy.parent == runs / "sd3-first" / "inputs"
+    assert snapshotted_policy.parent == runs / "sd4-first" / "inputs"
     assert snapshotted_policy.read_bytes() == policy_path.read_bytes()
 
     policy_path.write_text(policy_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
@@ -537,15 +533,16 @@ def test_cowork_policy_is_snapshotted_refused_and_replays_identically(
             request=str(snapshotted_request),
             input_dir=None,
             profile=None,
-            run_id="sd3-replay",
+            run_id="sd4-replay",
             output_dir=str(outputs),
             portfolio_policy_json=None,
+            prior_package_dir=str(package_dir),
             build_priors=False,
         )
     )
-    assert second_code == 2
+    assert second_code == 0
     second_report = json.loads(
-        (outputs / "sd3-replay" / "cowork_run.json").read_text(encoding="utf-8")
+        (outputs / "sd4-replay" / "cowork_run.json").read_text(encoding="utf-8")
     )
     assert second_report["portfolio_policy"]["source_policy_sha256"] == (
         first_report["portfolio_policy"]["source_policy_sha256"]
@@ -553,4 +550,173 @@ def test_cowork_policy_is_snapshotted_refused_and_replays_identically(
     assert second_report["portfolio_policy"]["normalized_policy_sha256"] == (
         first_report["portfolio_policy"]["normalized_policy_sha256"]
     )
-    assert list((outputs / "sd3-replay").rglob("DK_REVIEW_ENTRY_*.csv")) == []
+    assert second_report["portfolio_policy"]["independent_audit"]["status"] == "PASS"
+    assert Path(second_report["bulk_entry_csv"]).read_bytes() == first_bytes
+
+
+def test_policy_lineup_count_mismatch_fails_before_generation_and_preserves_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import cli
+    from .test_prior_review_profile import _attachments, _cowork_args
+
+    prepared = tmp_path / "prepared"
+    prepared.mkdir()
+    slate = _slate(prepared)
+    salary_path = prepared / "DKSalaries.csv"
+    entry_path = prepared / "DKEntries.csv"
+    entry_path.write_bytes(
+        b"Entry ID,Contest Name,Contest ID,Entry Fee,CPT,FLEX,FLEX,FLEX,FLEX,FLEX\n"
+        b"900000001,Contest,1,$20,,,,,,\n"
+        b"900000002,Contest,1,$20,,,,,,\n"
+    )
+    attachments = _attachments(tmp_path, salary_path, entry_path)
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        json.dumps(portfolio_policy_template(slate, ("900000001", "900000002"))),
+        encoding="utf-8",
+    )
+    outputs = tmp_path / "outputs"
+    retained = outputs / "earlier" / "DK_REVIEW_ENTRY_keep.csv"
+    retained.parent.mkdir(parents=True)
+    retained.write_bytes(b"keep")
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+
+    code = cli.command_cowork_run(
+        _cowork_args(
+            tmp_path,
+            attachments,
+            run_id="lineup-count-mismatch",
+            output_dir=str(outputs),
+            portfolio_policy_json=str(policy_path),
+            lineup_count=1,
+            build_priors=True,
+        )
+    )
+    assert code == 2
+    report = json.loads(
+        (outputs / "lineup-count-mismatch" / "cowork_run.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert any(
+        blocker.startswith("PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES:")
+        for blocker in report["blockers"]
+    )
+    assert report["bulk_entry_csv"] is None
+    assert retained.read_bytes() == b"keep"
+    assert list((outputs / "lineup-count-mismatch").rglob("DK_REVIEW_ENTRY_*.csv")) == []
+
+
+def test_policy_is_not_silently_ignored_by_the_diagnostic_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import cli
+    from .test_prior_review_profile import _attachments, _cowork_args
+
+    prepared = tmp_path / "prepared"
+    prepared.mkdir()
+    slate = _slate(prepared)
+    salary_path = prepared / "DKSalaries.csv"
+    entry_path = prepared / "DKEntries.csv"
+    entry_path.write_bytes(
+        b"Entry ID,Contest Name,Contest ID,Entry Fee,CPT,FLEX,FLEX,FLEX,FLEX,FLEX\n"
+        b"900000001,Contest,1,$20,,,,,,\n"
+        b"900000002,Contest,1,$20,,,,,,\n"
+    )
+    attachments = _attachments(tmp_path, salary_path, entry_path)
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        json.dumps(portfolio_policy_template(slate, ("900000001", "900000002"))),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    code = cli.command_cowork_run(
+        _cowork_args(
+            tmp_path,
+            attachments,
+            profile="diagnostic",
+            run_id="wrong-profile",
+            output_dir=str(tmp_path / "outputs"),
+            portfolio_policy_json=str(policy_path),
+        )
+    )
+    assert code == 2
+    report = json.loads(
+        (tmp_path / "outputs" / "wrong-profile" / "cowork_run.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert any(
+        blocker.startswith("PORTFOLIO_POLICY_PROFILE_UNSUPPORTED_SD4:")
+        for blocker in report["blockers"]
+    )
+    assert report["bulk_entry_csv"] is None
+
+
+def test_policy_assignment_artifact_mutation_fails_independent_audit_and_writes_no_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import prior_review as prior_review_module
+    from nfl_dfs.portfolio_policy import write_normalized_portfolio_policy
+    from .test_prior_review_profile import _prepared_run
+
+    now = datetime.now(timezone.utc)
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=now + timedelta(hours=6)
+    )
+    slate = parse_salaries(salary_path)
+    entries = parse_entries(entry_path)
+    source_path = tmp_path / "policy.json"
+    source_path.write_text(
+        json.dumps(
+            portfolio_policy_template(
+                slate,
+                [entry.entry_id for entry in entries.authorizations],
+                controls={"max_pairwise_person_overlap": 4},
+            )
+        ),
+        encoding="utf-8",
+    )
+    validation = validate_portfolio_policy_file(
+        source_path,
+        slate=slate,
+        entry_ids=tuple(entry.entry_id for entry in entries.authorizations),
+    )
+    assert validation.valid and validation.policy is not None
+    normalized_path = write_normalized_portfolio_policy(
+        tmp_path / "policy.normalized.json", validation.policy
+    )
+    real_write = prior_review_module.write_assignments_csv
+
+    def tampering_write(path, assignments, **kwargs):
+        digest = real_write(path, assignments, **kwargs)
+        Path(path).write_bytes(Path(path).read_bytes() + b"tampered\n")
+        return digest
+
+    monkeypatch.setattr(prior_review_module, "write_assignments_csv", tampering_write)
+    output_root = tmp_path / "out"
+    retained = output_root / "earlier" / "DK_REVIEW_ENTRY_keep.csv"
+    retained.parent.mkdir(parents=True)
+    retained.write_bytes(b"keep")
+    outcome = prior_review_module.run_prior_review(
+        salary_csv=salary_path,
+        entry_csv=entry_path,
+        label="audit-mutation",
+        as_of=now,
+        run_root=tmp_path / "run",
+        output_root=output_root,
+        prior_package_dir=package_dir,
+        portfolio_policy=validation.policy,
+        portfolio_policy_source_path=source_path,
+        portfolio_policy_source_sha256=validation.source_sha256,
+        portfolio_policy_normalized_path=normalized_path,
+        portfolio_policy_normalized_sha256=validation.policy.normalized_sha256,
+        project=project,
+    )
+    assert outcome.blocked
+    assert outcome.stage == "EXPORT"
+    assert "PORTFOLIO_POLICY_INDEPENDENT_AUDIT_FAILED" in outcome.blockers[0]
+    assert outcome.reports["portfolio_policy_audit"]["status"] == "FAIL"
+    assert retained.read_bytes() == b"keep"
+    assert list(output_root.rglob("DK_REVIEW_ENTRY_audit-mutation.csv")) == []

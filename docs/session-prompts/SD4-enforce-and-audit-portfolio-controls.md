@@ -27,11 +27,14 @@ every supplied policy control. It does not authorize an upload.
 
 ## Actual SD3 baseline and Git safeguards
 
-SD3 was completed locally on 2026-09-09 from commit
-`7f9ae4d200baf624b63ceb001e12eb318010146a` on branch
-`codex/sd3-portfolio-control-contract`. The implementation and documentation are
-uncommitted at SD3 closeout. The final pinned Windows suite was 440 passed and
-1 skipped in 57.57s. The skip was the existing Windows symlink-creation
+SD3 implementation commit
+`e71961485dbfcdae299caaa325c35efc866427cd` was merged on 2026-09-09. A live
+read-only remote check after the merge verified GitHub `main` at
+`2e045d53afcc5d9f1d2363f09d8778e77f1b4284` and confirmed that
+`refs/heads/codex/sd3-portfolio-control-contract` no longer exists remotely.
+Treat that merge commit as the expected SD4 base, but recheck the live remote
+and ancestry before editing. The final SD3 pinned Windows suite was 440 passed
+and 1 skipped in 57.57s. The skip was the existing Windows symlink-creation
 privilege case. Doctor and `git diff --check` passed. A first full run under a
 261-character GUID-derived path failed one copied-package test at the disabled
 Windows long-path boundary; the same test passed in both subsequent short-path
@@ -46,16 +49,27 @@ blocks every policy-bearing execution at
 bytes have separate SHA-256 values; the normalized hash equals the normalized
 file's exact bytes. Requests without a policy retain SD1/SD2 behavior.
 
-Recheck actual HEAD, branch, index and working-tree state before editing; the
-user may have committed or moved the work after this prompt was written.
-Preserve **every** existing change. At SD3 closeout these included the complete
-SD3 source, tests and documentation; the refreshed tracked SD3 prompt; untracked
-`Claude outputs/`; and untracked
+Recheck actual HEAD, branch, index and working-tree state before editing. At
+this handoff the local checkout still uses the now-merged local branch
+`codex/sd3-portfolio-control-contract` at the SD3 implementation commit, its
+deleted remote branch is still present only as stale local tracking metadata,
+and local `main`/`origin/main` metadata is stale. The index is empty. Preserve
+**every** existing change, including this refreshed tracked SD4 prompt and the
+untracked `Claude outputs/`,
 `docs/session-prompts/W2-expiry-and-selection-objective.md` and
-`docs/session-prompts/W4-cowork-prior-only-profile.md`. Preserve supplied bytes,
-byte-sensitive fixtures, prior outputs and generated evidence. No reset, clean,
-stash, broad formatting, dependency upgrade, staging, commit, push or account
-action. Never use `git add .` or `git add -A`.
+`docs/session-prompts/W4-cowork-prior-only-profile.md`. Do not edit, delete or
+absorb those unrelated untracked paths into SD4.
+
+Use a fetch rather than a pull to refresh remote metadata. Verify that live
+`main` still contains `e71961485dbfcdae299caaa325c35efc866427cd`, then create
+or use local branch `codex/sd4-enforce-and-audit-portfolio-controls` from the
+verified `origin/main` while carrying the refreshed prompt and all unrelated
+dirt unchanged. If ancestry or checkout safety cannot be established, stop
+with the exact Git blocker rather than rebasing, merging, stashing or
+overwriting anything. Preserve supplied bytes, byte-sensitive fixtures, prior
+outputs and generated evidence. No reset, clean, stash, broad formatting,
+dependency upgrade, staging, commit, push or account action. Never use
+`git add .` or `git add -A`.
 
 Before code edits, mark SD4 `IN_PROGRESS` and record the date, actual starting
 HEAD/branch, scope and all existing dirt in the priority tracker. Use pinned

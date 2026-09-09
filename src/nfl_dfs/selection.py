@@ -28,6 +28,16 @@ from .opportunity import OpportunityModel
 from .offensive_roles import resolve_offensive_roles, verify_offensive_resolution
 from .optimizer import LineupOptimizer
 from .participation import ParticipationContract, excluded_dk_ids, selectable_pool_problems
+from .portfolio_enforcement import (
+    DEFAULT_CANDIDATE_LIMIT,
+    DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
+    DEFAULT_CANDIDATE_SECONDS,
+    DEFAULT_SELECTION_SECONDS,
+    ENFORCEMENT_VERSION,
+    build_policy_candidate_bank,
+    solve_policy_portfolio,
+)
+from .portfolio_policy import NormalizedPortfolioPolicy
 from .prior_score import PriorScores, TeamSplits, score_pool
 
 
@@ -78,6 +88,11 @@ def select_prior_lineups(
     role_evidence_json: str | Path | None = None,
     offensive_role_evidence_json: str | Path | None = None,
     as_of: datetime | None = None,
+    portfolio_policy: NormalizedPortfolioPolicy | None = None,
+    policy_candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
+    policy_candidate_seconds: float = DEFAULT_CANDIDATE_SECONDS,
+    policy_candidate_per_solve_seconds: float = DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
+    policy_selection_seconds: float = DEFAULT_SELECTION_SECONDS,
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
     """Solve for `count` distinct legal lineups over the permitted pool."""
 
@@ -85,6 +100,11 @@ def select_prior_lineups(
         raise SelectionError(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
     if count < 1:
         raise SelectionError(f"LINEUP_COUNT_INVALID:{count}")
+    if portfolio_policy is not None and count != portfolio_policy.entry_count:
+        raise SelectionError(
+            "PORTFOLIO_POLICY_ENTRY_COUNT_MISMATCH:"
+            f"count={count}:policy_entries={portfolio_policy.entry_count}"
+        )
     problems = selectable_pool_problems(slate, contract)
     if problems:
         raise SelectionError("SELECTABLE_POOL_INFEASIBLE:" + ";".join(problems))
@@ -100,16 +120,21 @@ def select_prior_lineups(
     )
     scores = score_pool(slate, offense.model, splits, kicker_roles=kicker_roles, offensive_roles=offense)
     zero_share_people = set(kicker_roles.zero_share_people)
-    excluded = tuple(
-        sorted(
-            set(excluded_dk_ids(slate, contract))
-            | {
+    excluded_set = (
+            sorted(
+                set(excluded_dk_ids(slate, contract))
+                | {
                 player.dk_id
                 for player in slate.players
-                if player.underlying_id in zero_share_people or player.underlying_id in offense.excluded_people
-            }
-        )
+                    if player.underlying_id in zero_share_people or player.underlying_id in offense.excluded_people
+                }
+            )
     )
+    if portfolio_policy is not None:
+        for limit in portfolio_policy.effective_limits:
+            if limit.combined_max_entries == 0:
+                excluded_set.extend((limit.person.cpt_dk_id, limit.person.flex_dk_id))
+    excluded = tuple(sorted(set(excluded_set)))
     # Every row of an unavailable person is scoreless as well as excluded, so a
     # solver bug that ignored the exclusion could not profit from it either.
     objective = {
@@ -119,12 +144,117 @@ def select_prior_lineups(
     for player in slate.players:
         objective.setdefault(player.dk_id, 0.0)
 
-    optimizer = LineupOptimizer(
-        slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
-    )
     by_id = {player.dk_id: player for player in slate.players}
     selected: list[SelectedLineup] = []
     forbidden_captains: list[str] = []
+    if portfolio_policy is not None:
+        bank = build_policy_candidate_bank(
+            slate,
+            objective,
+            excluded_ids=excluded,
+            candidate_limit=policy_candidate_limit,
+            total_time_limit_seconds=policy_candidate_seconds,
+            per_solve_time_limit_seconds=policy_candidate_per_solve_seconds,
+        )
+        if bank.blocking:
+            raise SelectionError(
+                f"{bank.status}:model_status={bank.terminal_model_status}:"
+                f"candidates={len(bank.candidates)}:budget={bank.total_time_limit_seconds}"
+            )
+        portfolio_solve = solve_policy_portfolio(
+            portfolio_policy,
+            bank,
+            time_limit_seconds=policy_selection_seconds,
+        )
+        if not portfolio_solve.passed:
+            raise SelectionError(
+                f"{portfolio_solve.status}:model_status={portfolio_solve.model_status}:"
+                f"candidate_bank={len(bank.candidates)}:complete={bank.complete}"
+            )
+        for index, candidate_index in enumerate(
+            portfolio_solve.selected_candidate_indexes, start=1
+        ):
+            candidate = bank.candidates[candidate_index]
+            validation = validate_lineup(slate, candidate.roster)
+            if validation.lineup is None:
+                raise SelectionError(
+                    f"PORTFOLIO_SOLVER_PRODUCED_ILLEGAL_LINEUP:index={index}:"
+                    f"{validation.errors}"
+                )
+            selected.append(
+                SelectedLineup(
+                    index=index,
+                    roster=candidate.roster,
+                    captain_dk_id=candidate.roster[0],
+                    salary=validation.lineup.salary,
+                    prior_points=candidate.prior_points,
+                    canonical_key=validation.lineup.canonical_key,
+                    solver_status=portfolio_solve.status,
+                    solver_seconds=portfolio_solve.elapsed_seconds,
+                )
+            )
+        exposure: dict[str, int] = {}
+        captain_exposure: dict[str, int] = {}
+        people_by_lineup: list[frozenset[str]] = []
+        for lineup in selected:
+            people = frozenset(by_id[dk_id].underlying_id for dk_id in lineup.roster)
+            people_by_lineup.append(people)
+            for person in people:
+                exposure[person] = exposure.get(person, 0) + 1
+            captain = by_id[lineup.captain_dk_id].underlying_id
+            captain_exposure[captain] = captain_exposure.get(captain, 0) + 1
+        overlaps = [
+            {
+                "entry_id_a": portfolio_policy.entry_ids[left],
+                "entry_id_b": portfolio_policy.entry_ids[right],
+                "people": len(people_by_lineup[left] & people_by_lineup[right]),
+            }
+            for left in range(len(selected))
+            for right in range(left + 1, len(selected))
+        ]
+        report = {
+            "profile_version": PROFILE_VERSION,
+            "score_version": scores.score_version,
+            "objective": "MAXIMIZE_PRIOR_POINTS_OF_THE_EXPECTED_STAT_LINE",
+            "objective_limits": [
+                "CENTRAL_ESTIMATE_NOT_A_CEILING",
+                "NO_OWNERSHIP_LEVERAGE_OR_DUPLICATION_TERM",
+                "NO_FIELD_OR_PAYOUT_ECONOMICS_CONSULTED",
+            ],
+            "differentiation": {
+                "captain": "EXPLICIT_POLICY_MAXIMUM",
+                "max_person_overlap": portfolio_policy.effective_pairwise_person_overlap,
+                "basis": "EXACT_NORMALIZED_USER_POLICY_NOT_A_CORRELATED_EQUITY_CLAIM",
+            },
+            "lineups": len(selected),
+            "selected_lineup_count": len(selected),
+            "excluded_rows": len(excluded),
+            "kicker_role_excluded_people": sorted(zero_share_people),
+            "kicker_roles": kicker_roles.as_report(),
+            "offensive_roles": offense.report,
+            "selectable_people": len(contract.selectable_people),
+            "person_exposure": dict(sorted(exposure.items())),
+            "captain_exposure": dict(sorted(captain_exposure.items())),
+            "pairwise_person_overlap": overlaps,
+            "forbidden_captain_rows": [],
+            "threshold_sensitive": list(scores.threshold_sensitive),
+            "score_omissions": list(scores.omissions),
+            "portfolio_policy": {
+                "enforcement_version": ENFORCEMENT_VERSION,
+                "enforcement_status": "PASS",
+                "normalized_policy_sha256": portfolio_policy.normalized_sha256,
+                "entry_ids": list(portfolio_policy.entry_ids),
+                "candidate_bank": bank.as_report(),
+                "solve": portfolio_solve.as_report(),
+            },
+            "never_calls": ["field.py", "economics.py", "portfolio economics"],
+        }
+        verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
+        return tuple(selected), scores, report
+
+    optimizer = LineupOptimizer(
+        slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
+    )
     for index in range(1, count + 1):
         result = optimizer.solve(objective)
         if result.roster is None:

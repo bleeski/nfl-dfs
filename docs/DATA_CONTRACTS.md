@@ -431,13 +431,44 @@ pairwise-overlap capacity checks return named findings with a smallest next
 action. These checks do not run a solver and are not proof that the full policy
 is feasible.
 
-SD3 validates and snapshots this contract only. SD4 owns enforcement and the
-independent assignment audit. Therefore every `cowork-run` request that supplies
-`portfolio_policy_json` stops with
-`PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`, writes no new
-`DK_REVIEW_ENTRY` CSV, preserves earlier outputs, and remains
-`MODEL_STATUS=PRIOR_ONLY` / `RELEASE_DECISION=DO_NOT_UPLOAD` for the
-`prior_review` profile. Requests without a policy retain their SD1/SD2 behavior.
+SD4 enforces this contract only on the Showdown `prior_review` profile. The
+selector consumes the already-normalized exact integer maxima; it never reparses
+fractions, changes the all-entry denominator or rounds a zero cap upward. It
+generates a bounded bank of legal lineups after all source, participation,
+official-inactive, operator, kicker-role and offensive-role exclusions, then
+solves one deterministic MILP over that actual bank for the exact requested
+Entry-ID count. The MILP enforces combined-person and Captain maxima, policy
+exclusions, configured pairwise overlap and canonical uniqueness. Repeated
+Captains are legal only when their explicit effective maximum permits them.
+
+The default bounded bank is 32 canonical candidates, with a 30-second total
+generation budget and two seconds per lineup solve. The joint solve has a
+ten-second budget. Reports distinguish `COMPLETE_MODELED_BANK` from
+`CANDIDATE_LIMIT_REACHED_INCOMPLETE`, candidate time/search limits and solver
+errors. An optimal result is explicitly scoped to the actual candidate bank.
+Only an infeasible joint MILP over a bank whose enumeration ended in a proven
+lineup-model `INFEASIBLE` state is `MODELED_BANK_INFEASIBLE_PROVEN`; infeasibility
+over a bounded incomplete bank is `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`, never a
+full-slate mathematical claim.
+
+Assignment never cycles for policy-bearing requests. The output must retain the
+exact policy Entry-ID order once each. Immediately before export, an independent
+audit strictly reparses the canonical normalized-policy artifact, re-reads the
+assignment artifact and recomputes DraftKings legality, canonical lineup
+identities, combined-person counts, Captain counts, uniqueness and every pairwise
+underlying-person overlap from exact roster IDs. It uses the independently read
+limits and binds the current salary, entry, source-policy, normalized-policy and
+assignment bytes to their SHA-256 values; it reconciles, but never trusts,
+selector summaries.
+
+Only `enforcement_status=ENFORCED_AND_INDEPENDENTLY_AUDITED` may write a new
+`DK_REVIEW_ENTRY` CSV. Invalid policies, the unsupported diagnostic profile,
+necessary-capacity failures, timeout/search/solver states, incomplete-bank
+exhaustion, assignment coverage/order failures, audit disagreement or artifact
+mutation preserve earlier outputs and write no new review CSV. Every outcome
+remains `MODEL_STATUS=PRIOR_ONLY` / `RELEASE_DECISION=DO_NOT_UPLOAD`; an audited
+review file is not an upload package or an economics/model-quality claim.
+Requests without a policy retain their SD1/SD2 selection and assignment behavior.
 
 ## Showdown kicker-role evidence
 
