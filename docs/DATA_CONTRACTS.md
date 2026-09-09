@@ -11,8 +11,8 @@ attachment/request directory. Absolute paths are accepted only for the exact
 supplied files, managed project data, or the current immutable run; traversal
 and symlink/reparse escapes are rejected before hashing or copying.
 The request records salary, entries, payouts, assignment or paired model inputs,
-official status, optional ownership brackets, the source ledger, exact contest
-economics, objective, guardrail mode, and diagnostic/registered profile.
+official status, optional `role_evidence_json`, optional ownership brackets, the
+source ledger, exact contest economics, objective, guardrail mode, and profile.
 
 The first pass rewrites recognized file paths to immutable content-addressed
 snapshots. A model-assisted Cowork run requires both team and player inputs, a
@@ -31,6 +31,77 @@ missing/tampered artifacts, and partial or mismatched derived hashes fail
 certification closed. This validates
 provenance structure and binding; it does not independently establish that a
 source is true, complete, current enough for every use, or commercially fit.
+
+## W1 nflverse prior adapter (producer of the S6A sources)
+
+`priors-propose` and `priors-freeze` produce the three JSON artifacts the next
+section consumes. Nothing else in the repository produces them. Both commands
+are prior-only: their output is not EV, ROI, win probability, cash probability,
+calibrated ownership, or edge.
+
+The adapter reads exactly seven approved public artifacts, each retrieved
+through `sources.fetch_public_artifact` and archived by content hash under
+`<package>/raw/`:
+
+```text
+raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv   12h
+raw.githubusercontent.com/nflverse/nfldata/master/data/teams.csv   30d
+github.com/nflverse/nflverse-data/releases/download/stats_team/stats_team_week_<prior>.csv      7d
+github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_<prior>.csv  7d
+github.com/nflverse/nflverse-data/releases/download/snap_counts/snap_counts_<prior>.csv         7d
+github.com/nflverse/nflverse-data/releases/download/players/players.csv                         7d
+github.com/nflverse/nflverse-data/releases/download/weekly_rosters/roster_weekly_<season>.csv  24h
+```
+
+Per-source expiry reflects real staleness, not a shared default: market lines
+move intraday, in-season rosters churn daily, a season abbreviation crosswalk is
+static, and a completed season changes only through stat corrections. An emitted
+artifact expires at the earliest expiry among its contributing sources, capped at
+the game's lock time.
+
+Transformations, all over the prior regular season and all in `Decimal` at six
+decimal places:
+
+```text
+plays_mean              (attempts + sacks_suffered + carries) / games
+pass_rate               (attempts + sacks_suffered) / plays
+pass_yards_per_attempt  passing_yards / attempts
+rush_yards_per_attempt  rushing_yards / carries
+touchdowns_mean         (passing_tds + rushing_tds) / games
+field_goals_mean        fg_made / games
+turnovers_mean          (passing_interceptions + fumbles_lost_total) / games
+sacks_allowed_mean      sacks_suffered / games
+uncertainty             stdev(weekly plays) / mean(weekly plays), capped at 1
+market_total            games.csv total_line
+market_spread           games.csv spread_line, negated for the home team
+weather_state           games.csv roof: dome/closed/open only; otherwise operator-supplied
+```
+
+Player weights are each person's share of their DraftKings pool team's eligible
+group, so the denominators match the sets `projection.py` renormalizes over:
+`qb_attempt_weight` from attempts, `carry_weight` from carries, `target_weight`
+from targets, `rushing_td_weight` and `receiving_td_weight` from those TD counts.
+`catch_rate` is receptions/targets and `yards_per_target` is
+receiving_yards/targets, both zero outside RB/WR/TE. `role_capacity` is the mean
+regular-season `offense_pct`, joined on Pro Football Reference id. Player usage
+joins on provider player id alone, never on current team, because players move.
+A group whose eligible members have no prior-season support fails closed with
+`PRIOR_SUPPORT_MISSING`; uniform filling is never applied.
+
+Identity is a two-phase gate because DraftKings and nflverse share no key.
+`priors-propose` writes `nfl_prior_identity_proposal_v1` plus a reviewable
+`identity_review.csv`, and emits only normalized match methods. `priors-freeze`
+requires that file's SHA-256, requires `DECISION=ACCEPT` on every row, refuses an
+altered row or a duplicated provider id, and only then writes
+`match_method="EXACT"`. Team identity binds the DraftKings team abbreviation to
+the nflverse code through the DST row's nickname against `teams.csv`, which is
+how `LAR` resolves to `LA` without a hand-written mapping. A Showdown pool lists
+each person twice; one person gets one mapping and one record, keyed to the FLEX
+row, and both roles are reconciled in `coverage`.
+
+A `role_capacity` of zero does not remove a person from scoring. That is R03 and
+tranche W3 owns it; the adapter reports every zero-capacity person in
+`zero_role_capacity_people` rather than working around it.
 
 ## S6A deterministic projection sources
 
@@ -143,6 +214,92 @@ certification because every modeled outcome can affect field ranks. An eligible
 team/role share group cannot be all zero, because the
 engine will not invent a uniform allocation. Route participation is not present
 and remains `UNKNOWN` unless a separately approved timely source is introduced.
+
+## Showdown kicker-role evidence
+
+`role_evidence_json` is an optional auxiliary package manifest using schema
+`nfl_kicker_role_evidence_v1`. It is prepared by the evidence workflow, not
+authored as a third numerical CSV by the operator. The manifest binds the exact
+current salary SHA-256 and game, then declares one complete allocation for each
+team that still has an eligible kicker after salary status, official inactive,
+and operator exclusions.
+
+```json
+{
+  "schema_version": "nfl_kicker_role_evidence_v1",
+  "allocation_version": "kicker_team_scoring_event_allocation_v1",
+  "salary_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "game_id": "NE@SEA",
+  "share_tolerance": 0.000001,
+  "sources": [
+    {
+      "path": "sources/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.txt",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source_uri": "https://raw.githubusercontent.com/example/repository/main/kicker-role.txt",
+      "observed_at": "2026-09-09T18:00:00+00:00",
+      "captured_at": "2026-09-09T18:01:00+00:00",
+      "expires_at": "2026-09-09T21:00:00+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "parser_version": "current_kicker_role_v1",
+      "transformation_version": "kicker_role_extract_v1",
+      "support_kind": "QUALITATIVE_SOLE",
+      "supporting_excerpt": "Example Player is the sole kicker for NE.",
+      "synthetic": false
+    }
+  ],
+  "declarations": [
+    {
+      "game_id": "NE@SEA",
+      "team": "NE",
+      "allocation_kind": "SOLE",
+      "recipients": [
+        {
+          "underlying_id": "NE|K|Example Player",
+          "cpt_dk_id": "12345601",
+          "flex_dk_id": "12345602",
+          "share": 1.0
+        }
+      ],
+      "source_sha256s": [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ]
+    }
+  ]
+}
+```
+
+Every source path is package-relative, content-addressed, and confined beneath
+the manifest directory. The bytes are rehashed during parsing and immediately
+before review export. Source URIs, licenses, and parser versions must pass the
+same policy used by `sources.py`; observations and captures cannot be in the
+future, and original expiry is retained through snapshot and replay. A copied
+Cowork package includes the adjacent `sources/` directory and needs no original
+external path. `--as-of` is a replay clock and never renews expired evidence.
+
+Each recipient binds the underlying person to both exact current CPT and FLEX
+DraftKings IDs. Shares must be finite and nonnegative and total one per declared
+team within the fixed `0.000001` tolerance. `SOLE` has exactly one recipient at
+one. `SPLIT` has at least two recipients, explicitly covers every currently
+eligible kicker on that team (including zero shares), and requires a
+`NUMERICAL_SPLIT` capture whose exact JSON excerpt repeats the scoped IDs and
+shares. Qualitative prose can support only a sole role when the captured excerpt
+contains that player's salary-file name plus an explicit sole/only/starting
+kicker statement; it cannot create fractional shares. Synthetic captures are
+labelled `synthetic: true` and are test-only.
+
+An invalid supplied manifest always fails. It cannot fall back to an assumption.
+Without a manifest, exactly one eligible kicker per team receives the team line
+only under the visible `PRIOR_ONLY_SOLE_LISTED_ASSUMPTION`; that is not confirmed
+role or official ACTIVE evidence. Multiple eligible kickers stop with
+`KICKER_ROLE_UNRESOLVED`. No eligible kicker receives no allocation and produces
+a coverage gap, while a legal K-free diagnostic lineup may still proceed. A
+positive-share person made inactive or excluded invalidates the allocation and
+requires refreshed role evidence; production is never transferred silently.
+
+The allocation splits the existing team kicker scoring events before DraftKings
+scoring. The team's base kicker points are conserved exactly once; the Captain
+multiplier is applied afterward to the same person's base allocation. Zero-share
+kickers are scoreless and excluded from selection.
 
 ## Ownership brackets
 

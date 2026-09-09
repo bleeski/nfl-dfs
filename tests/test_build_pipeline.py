@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -212,7 +212,11 @@ def test_reduced_end_to_end_design_select_referee_build(
     valid_ledger.write_text(
         json.dumps(
             {
-                "schema_version": "nfl_source_ledger_v1",
+                # W2/R08: certification re-evaluates freshness at the live
+                # release clock, so the ledger has to preserve a per-source
+                # expiry. `nfl_source_ledger_v1` cannot express one and is
+                # therefore named as a blocker rather than silently accepted.
+                "schema_version": "nfl_source_ledger_v2",
                 "entries": [
                     {
                         "artifact_id": sha256_file(source_artifact),
@@ -220,8 +224,15 @@ def test_reduced_end_to_end_design_select_referee_build(
                         "source_uri": "https://api.sleeper.app/v1/players/nfl",
                         "captured_at": datetime.now(timezone.utc).isoformat(),
                         "observed_at": datetime.now(timezone.utc).isoformat(),
+                        "expires_at": (
+                            datetime.now(timezone.utc) + timedelta(hours=12)
+                        ).isoformat(),
                         "license_decision": "SECONDARY_STATUS_ONLY",
                         "parser_version": "sleeper_players_v1",
+                        "evidence_state": "PASS",
+                        "evidence_scope": "PLAYER_PRIOR",
+                        "transformation_version": "sleeper_players_v1",
+                        "depends_on": {},
                     }
                 ],
                 "derived": {

@@ -1,0 +1,441 @@
+# Showdown priority work — session tracker
+
+Created: 2026-09-09. Owner: the session implementing the active item.
+
+**Use multiple sessions: five bounded implementation sessions and one acceptance
+session. Start with SD1.** This is a scope estimate, not a deadline guarantee.
+If a chunk uncovers a larger dependency, record it and split the remaining work
+instead of declaring a partial result complete.
+
+The intended workflow remains: Ben attaches a salary CSV and reserved-entry CSV
+in Cowork and requests a Showdown portfolio. Cowork obtains and freezes approved
+supporting evidence, runs deterministic code, and returns an understandable
+review package with exact entry assignments and explicit blockers.
+
+These six chunks improve the **prior-only review workflow**. They do not finish
+the full tournament engine or authorize a generated upload. Keep
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD` throughout.
+Software completion, current evidence, and model validation are separate facts.
+
+## Verified starting point
+
+| Item | Baseline |
+|---|---|
+| Repository | `C:\Users\benja\Documents\Claude\nfl-dfs` |
+| Branch | `codex/s6a-deterministic-projection-producer` |
+| HEAD verified when this tracker was created | `6b5d4625b6fa3234a07680ca27dafc819fbd05ab` — Harden Showdown review workflow and live preflight |
+| Tracked working-tree changes at inspection | None |
+| Existing untracked work to preserve | `Claude outputs/`; `docs/session-prompts/W2-expiry-and-selection-objective.md`; `docs/session-prompts/W4-cowork-prior-only-profile.md` |
+| Last recorded code verification | 332 passed, 1 skipped in 63.06 seconds; Python 3.13.7 on Windows. The skip was Windows symlink-creation permission. Tests were not rerun for this planning-only change. |
+| Last actual-file rehearsal | NE–SEA, 136 salary rows / 68 people, two entries; legal, independently audited, repeatable review bytes on Windows |
+| Rehearsal release truths | `FILE_VALID=true`; `EVIDENCE_STATE=UNKNOWN`; `MODEL_STATUS=PRIOR_ONLY`; `RELEASE_DECISION=DO_NOT_UPLOAD` |
+| Still unverified | Actual Cowork/Linux execution of the complete latest workflow, current live evidence, larger portfolios, prospective model quality |
+
+Evidence and repaired findings: [readiness review](READINESS_REVIEW_2026-09-09.md).
+The recorded September 9 forecast expired at 20:00:40 UTC that day. It is historical
+test evidence, never a reusable assertion that a future run has current weather.
+Recheck HEAD, dirt, runtime and relevant code at every session start.
+
+## Queue
+
+Only one item in **this priority sequence** is `READY` at a time. Historical W/S
+backlog items remain separate; their statuses do not override this queue.
+
+| Order | ID | Priority | One-session deliverable | Status | Dependency |
+|---|---|---|---|---|---|
+| 1 | SD1 | P0 | Kicker-role evidence contract and conserved kicker scoring | `DONE` | None |
+| 2 | SD2 | P0 | Offensive-role evidence and explicit missing-history handling | `READY` | SD1 |
+| 3 | SD3 | P1 | Precise, validated portfolio-control contract | `BLOCKED` | SD2 |
+| 4 | SD4 | P1 | Enforced portfolio controls and independent assignment audit | `BLOCKED` | SD3 |
+| 5 | SD5 | P1 | Readable, artifact-bound lineup and exposure review | `BLOCKED` | SD4 |
+| 6 | SD6 | P0 acceptance | Complete Cowork/Linux rehearsal with current evidence | `BLOCKED` | SD5 and access to the actual environment and matching files |
+
+Priority indicates consequence; order reflects dependencies. Do not attempt all
+six in one session. If there is too little time before lock, report what remains
+unverified instead of relaxing validation or promising same-day readiness.
+
+## SD1 — Resolve kicker roles and conserve projected production
+
+**Why first:** `prior_score.score_pool` gives every eligible kicker the entire
+team kicking stat line. With two selectable kickers, the scorer duplicates team
+production. Historical offensive snap share cannot identify a starting kicker.
+
+Scope:
+
+- Add a small, versioned, source-bound current-role contract for kickers. Bind
+  exact current-slate identity, team/game, salary hash, captured evidence hashes,
+  observation/expiry times, and either an evidenced sole role or an explicitly
+  supported numerical split. Cowork can prepare this auxiliary artifact from
+  approved evidence; the normal user workflow still starts with two CSVs.
+- Resolve CPT/FLEX records to the underlying person, after existing salary,
+  official inactive and operator exclusions. Role evidence cannot reactivate an
+  excluded person. A zero offensive snap share is not proof of inactivity.
+- Apply team kicking production once across supported roles. Multiple eligible
+  kickers without adequate role evidence must stop selection with a named role
+  blocker. Never fabricate an equal split or pick a starter by salary.
+- With no supplied role artifact and exactly one eligible kicker, preserve only
+  an explicit prior-only sole-listed assumption, visibly distinguished from
+  confirmed starter/activity evidence. No eligible kicker means no allocation
+  to a nonexistent person; it need not invalidate a legal roster without a K.
+- Thread the artifact through request parsing, path confinement, immutable
+  snapshotting, scoring, provenance reporting, replay and final freshness checks.
+
+Acceptance:
+
+- Reproduce the two-kicker duplication before fixing it. Deterministic tests
+  verify sole-role allocation, supported split conservation, ambiguous-role
+  blocking, zero-kicker handling and CPT exactly 1.5 times the person's score.
+- Positive-share recipients are eligible; zero-share or officially inactive
+  kickers cannot enter selection as fabricated value. Never silently renormalize
+  a stale role declaration after its named starter becomes inactive.
+- Reject unknown/wrong-team IDs, conflicting roles, duplicate declarations,
+  malformed/nonfinite shares, unbound or modified evidence, future/stale times,
+  and expiry during selection. Verify an immutable copied package can replay.
+- Integration tests reach `cowork-run --profile prior_review`; valid diagnostic
+  output retains the four independent truths. Invalid evidence leaves named
+  blockers and no newly generated review-entry CSV.
+- Relevant regressions, full pinned-runtime suite, doctor and whitespace checks
+  pass; record exact results and any environment limitations.
+
+Non-goals: offensive role forecasting, simulator repairs, ownership, portfolio
+policy, calibrated model promotion, Classic or any upload-gate change.
+This completes the kicker slice, not current-role modeling as a whole.
+
+Primary areas: `prior_score.py`, `participation.py`, `prior_review.py`,
+`cowork.py`, `cli.py`, input contracts and their tests. Full instructions:
+[next-session prompt](session-prompts/SD1-current-role-and-kicker-scoring.md).
+
+## SD2 — Apply supported offensive roles and distinguish missing history
+
+**Problem:** prior-season shares can misvalue active backups, rookies and players
+with changed teams or roles. A missing record is not observed zero production.
+
+Scope:
+
+- Extend SD1's evidence interface to the current single-game offensive pool.
+  Separate observed historical zero, missing history, current role unknown,
+  explicit nonparticipation, and a source-supported changed opportunity share.
+- Accept numerical opportunity adjustments only through a validated, versioned
+  contract tied to captured approved evidence. Qualitative reports may supply
+  bounded role flags or review blockers; prose alone cannot invent a share.
+- Apply supported adjustments before scoring and normalize/redistribute within
+  the declared team opportunity totals. Do not cap a promoted backup at his
+  historical mean snaps or transfer a player's old-team denominator silently.
+- For an unresolved material role or missing historical basis, emit a precise
+  diagnostic and required next evidence; never silently turn uncertainty into
+  a zero-valued punt, presumed starter, or a claim that the pool is complete.
+- Integrate coverage and assumption reporting into prior_review and document
+  how Cowork obtains the supporting artifact without requesting freehand model
+  values from Ben.
+
+Acceptance: fixtures for a promoted backup, rookie without history, transfer,
+missing versus observed-zero history, conflicting sources, invalid share totals,
+expired adjustments and inactive precedence; conserved team totals; exact-ID
+joins and deterministic replay; no APPG input or invented replacement values.
+Maintain one current-role finding per affected person for later review.
+
+Non-goals: a new projection model, broad depth-chart scraping, route/air-yard
+feature research, sharp-market feeds, simulator participation or calibration.
+If an approved numerical source is absent, complete and test the evidence gate
+and report that live role resolution remains blocked; do not label it solved.
+
+Primary areas: `priors.py`, `projection.py`, `participation.py`, `prior_score.py`,
+`prior_review.py`, SD1's contract and tests.
+
+## SD3 — Define portfolio controls without ambiguous percentages
+
+Scope:
+
+- Define a versioned policy for maximum combined-person exposure across CPT/FLEX,
+  maximum Captain exposure, maximum pairwise person overlap and canonical lineup
+  uniqueness. Retain supported explicit exclusions. Bind policy to the requested
+  entry set and salary identity map.
+- State percentage units, denominator (all requested entries), conversion to
+  integer maxima (`floor(fraction * entry_count)`), zero/100% behavior, override
+  precedence and validation. A small-portfolio cap that rounds to zero means
+  zero; never silently round it up or weaken it.
+- Supply deterministic normalization and necessary feasibility checks with clear
+  errors. Necessary checks are not a proof that a feasible portfolio exists.
+- Make repetition of a Captain a configurable outcome under caps, not an
+  implicit demand that every entry have a different Captain. Do not claim these
+  preferences minimize modeled drawdown.
+
+Acceptance: malformed units, unknown IDs, invalid ranges, contradictory caps,
+rounding at two/three entries, CPT/FLEX person aggregation, policy hashing and
+request round-trip tests. Document examples with exact integer limits.
+
+Boundary: SD3 delivers the contract/validator. Do not advertise active enforcement
+or silently accept a production request with unenforced controls. Until SD4 is
+complete, execution must explicitly refuse that new policy as unsupported.
+Do not alter the existing selection objective in this session.
+
+Primary areas: a focused portfolio-policy module, `cowork.py`, CLI contracts,
+`docs/DATA_CONTRACTS.md` and tests.
+
+## SD4 — Enforce and independently audit the portfolio
+
+Scope:
+
+- Connect SD3's policy to candidate generation and joint assignment/selection.
+  Enforce global person and Captain caps, exact requested-entry coverage,
+  canonical uniqueness and configured pairwise overlap. Preserve DK legality.
+- Replace default forced-distinct-Captain behavior with the explicit policy.
+  Remove silent cycling of fewer lineups across more entries. An incomplete or
+  contradictory request must produce an actionable failure, not partial success.
+- Retain deterministic projection-led review scoring. Use bounded MILP selection
+  and report solve status, budget and candidate-bank coverage. Candidate-bank
+  exhaustion or a time limit must not be reported as mathematical infeasibility
+  of the full slate.
+- Independently recompute all controls from the final assigned roster IDs before
+  review export; do not trust the selector's exposure summary or success flag.
+
+Acceptance: a case where greedy selection misses a feasible portfolio; allowed
+repeated Captain; combined CPT/FLEX cap violation; exact rounding boundaries;
+infeasible controls; bank exhaustion; timeout; duplicate/partial assignments;
+tampered summary; deterministic replay and exact exported-byte legality.
+Rehearse the two-entry case and a declared modest multi-entry fixture. Record
+measured runtime and supported size; do not assert 20/150-max readiness without
+testing those sizes. No relaxing user caps to finish.
+
+Non-goals: W8/W9 field economics, ownership/duplication estimates, probabilistic
+drawdown objectives, exhaustive bank completeness or large-field benchmarks.
+
+Primary areas: `selection.py`, `optimizer.py`, prior_review integration and
+independent review/assignment validation.
+
+## SD5 — Make the review package understandable
+
+Scope:
+
+- Extend the existing review package instead of building a new application.
+  Show each entry/contest, Captain and FLEX names, exact IDs, individual and total
+  salaries, remaining salary, projection label, and any role/activity concerns.
+- Show actual portfolio exposure as counts and percentages, separate Captain
+  exposure and combined-person exposure, policy limits, overlap and uniqueness.
+- Show source observations/expiry, unsupported role assumptions and missing
+  evidence. Keep role confidence separate from official active status.
+- Include the four release truths, named blockers, input/policy/output hashes,
+  provenance links and one next operator action. State that scores are prior-only
+  central estimates and that the exported CSV is for review.
+
+Acceptance: independently reconcile every displayed roster, salary and exposure
+against the exact exported artifact; repeated names and CPT/FLEX IDs work;
+escape untrusted text and prevent spreadsheet formula injection; inspect the
+rendered report/workbook on a two-entry and a larger fixture; stale/missing
+evidence and `DO_NOT_UPLOAD` are visible without reading raw JSON.
+
+Non-goals: new UI framework, polished product redesign, payout/EV dashboard or
+W7's settlement ingestion. Save a sample output in an ignored run directory.
+
+Primary areas: existing workbook/report writer, `review_export.py`, `cowork.py`
+and report tests; operating documentation where its output instructions change.
+
+## SD6 — Rehearse the complete Cowork workflow
+
+Scope:
+
+- In the actual Claude Cowork/Linux environment, start from matching salary and
+  reserved-entry CSVs and the documented command. Exercise setup, schema-based
+  discovery, frozen approved sources, roles/activity evidence, projection,
+  portfolio controls, review report and independently audited CSV bytes.
+- Use fresh game-specific evidence; obtain supporting data through approved
+  adapters and preserve artifacts. Never substitute old NE–SEA evidence for
+  another slate. Ask only for an essential fact unavailable through authorized
+  sources, and retain a named blocker when it cannot be established.
+- Test a portable copied frozen package and identical-input replay. Exercise
+  expired source, ambiguous role, changed inactive status, insufficient policy
+  capacity and byte tampering. Record actual commands, environment, timing,
+  memory where measurable, hashes, entry count and output paths.
+- Publish a concise readiness decision and final Cowork instruction. Keep the
+  PowerShell fallback accurate. Do not commit generated evidence or CSV outputs.
+
+Acceptance is split: (1) automated fixture mechanics; (2) actual Cowork/Linux
+execution; (3) current real-file/evidence review. Mark each independently.
+Windows tests, a launcher check or simulated Linux fixtures cannot substitute
+for actual Cowork acceptance. If that environment or essential evidence is
+unavailable, retain `BLOCKED`, state the exact missing prerequisite and hand off
+the smallest remaining check. All generated outputs remain prior-only.
+
+Non-goals: model certification, automated DraftKings account actions, a deadline
+promise or broad new feature development. Repair demonstrated scope-local
+acceptance defects; record larger defects as new bounded work.
+
+## Relationship to the full project mandate
+
+| Goal | What this sequence supplies | Work still required afterward |
+|---|---|---|
+| Volume/current-role integrity | Explicit supported roles, uncertainty handling and conserved kicker/opportunity allocation | Validated forward role/volume model, route/air-yard/high-value-touch and scheme features |
+| Reliable sources and context | Versioned, hash-bound role adjustments and current evidence gates | Broader approved telemetry, sharp-book/prop consensus, discrepancy thresholds and validated qualitative mappings |
+| True contest ceiling | More accurate inputs and explicit model limitations | W3/W11 participation/event accounting; validated joint tails, scoring bonuses and correlations; strategic stacks and exclusions |
+| Ownership and leverage | No new claims | Calibrated ownership, ceiling probabilities, field composition, duplication and W8 economics |
+| Portfolio drawdown | Enforced deterministic exposure/overlap preferences | W9 risk-aware allocation on validated joint outcomes and contest economics; measured workload W10 |
+| Model and operational readiness | Auditable review and actual environment acceptance | W7 settlement data, W12 temporal validation/registry, sufficient prospective history and all live release gates |
+
+SD1/SD2 are adjacent to W3 but do not finish its simulator mask. SD3/SD4 are a
+prior-review subset adjacent to W9, not completion of W8/W9 economics. SD5 helps
+W7's operator brief but not settlement capture. SD6 supplies a bounded W5
+rehearsal, not full economic/model certification. Preserve the broader backlog.
+
+## Required session protocol and closeout
+
+1. Read `CLAUDE.md`, this tracker, relevant contracts and the latest changelog.
+   Inspect current Git state and applicable `AGENTS.md` instructions before edits.
+2. Mark the selected row `IN_PROGRESS`; record date, starting HEAD, scope and
+   pre-existing changes. Implement only that chunk and necessary integration.
+3. Preserve all unrelated edits, raw inputs and prior outputs. No reset, clean,
+   stash, broad formatting, dependency upgrades, staging, commit or push unless
+   separately authorized. Never use `git add .` or `git add -A`.
+4. Reproduce defects where applicable, run relevant checks and the required
+   suite in the pinned runtime, and independently inspect final artifacts.
+   Report skipped or unrun checks as limitations, not successes.
+5. **Update this document before finishing**, including failed or partial work.
+   Mark `DONE` only when every acceptance condition is met. Otherwise retain
+   `IN_PROGRESS` with a bounded remainder, or `BLOCKED` with the actual external
+   dependency. Do not promote the next row while a dependency remains incomplete.
+6. Append the completion record below. Update `changelog.md` and the narrow
+   current-priority pointer in `backlog.md`; do not mark a larger W/S tranche done
+   on the strength of a subset. When done, promote the next dependency-satisfied
+   row to `READY` and write its complete prompt under `docs/session-prompts/`.
+7. Return changes, exact verification results, remaining blockers, four release
+   truths for any generated run, and the next prompt path. If Ben needs to commit,
+   provide copy/paste PowerShell using an explicit reviewed path list; never stage
+   untracked user artifacts, raw captures, generated workbooks or entry CSVs.
+
+### Completion record template
+
+Copy and fill this section for each session; retain prior records.
+
+```text
+Session/date:
+Chunk and final status:
+Start HEAD / end HEAD (or uncommitted):
+Pre-existing changes preserved:
+Implemented behavior and changed paths:
+Defect reproduction / before-and-after evidence:
+Checks: exact commands, runtime, pass/fail/skip counts, durations:
+Artifact paths / immutable input and final-output hashes, if applicable:
+FILE_VALID / EVIDENCE_STATE / MODEL_STATUS / RELEASE_DECISION, if a run exists:
+Acceptance criteria still unmet and precise blockers:
+Scope changes / follow-up items:
+Next READY chunk and prompt path:
+```
+
+### 2026-09-09 — Planning baseline
+
+Created this queue and the SD1 implementation prompt after checking HEAD, working
+tree, active scoring/selection/request code and the retained readiness report.
+Added navigation to the main backlog and a planning-only changelog entry.
+Document link, fence, whitespace and six-row queue checks passed; `git diff
+--check` passed. No runtime behavior changed, no test suite rerun, no staging or
+commit. SD1 is the next `READY` item; all implementation and live acceptance
+remain outstanding.
+
+### 2026-09-09 — SD1 implementation session started
+
+SD1 was moved to `IN_PROGRESS` before code edits. Starting branch/HEAD:
+`codex/s6a-deterministic-projection-producer` /
+`6b5d4625b6fa3234a07680ca27dafc819fbd05ab`. Scope is limited to the versioned
+kicker-role evidence contract, conserved team kicking allocation, bounded
+request/review integration, tests and documentation required by SD1.
+
+Pre-existing changes preserved: modified `backlog.md` and `changelog.md`, plus
+untracked `Claude outputs/`, this tracker, the SD1 prompt,
+`docs/session-prompts/W2-expiry-and-selection-objective.md`, and
+`docs/session-prompts/W4-cowork-prior-only-profile.md`. No staging, commit,
+push, reset, clean or stash is authorized. This start record will be replaced
+or supplemented by the mandatory completion record with actual results.
+
+### 2026-09-09 — SD1 completion record
+
+Session/date: 2026-09-09, Windows local workspace.
+
+Chunk and final status: SD1 `DONE` for its software acceptance. This does not
+establish live role evidence, calibrated model quality or upload readiness.
+
+Start HEAD / end HEAD (uncommitted):
+`6b5d4625b6fa3234a07680ca27dafc819fbd05ab` /
+`6b5d4625b6fa3234a07680ca27dafc819fbd05ab` on
+`codex/s6a-deterministic-projection-producer`.
+
+Pre-existing changes preserved: modified `backlog.md` and `changelog.md`; untracked
+`Claude outputs/`, this tracker, the SD1 prompt,
+`docs/session-prompts/W2-expiry-and-selection-objective.md`, and
+`docs/session-prompts/W4-cowork-prior-only-profile.md`. No reset, clean, stash,
+staging, commit, push, dependency change, account action or DraftKings action.
+
+Implemented behavior and changed paths: added
+`src/nfl_dfs/kicker_roles.py` and `tests/test_kicker_roles.py`; integrated the
+contract and conserved scoring through `src/nfl_dfs/prior_score.py`,
+`src/nfl_dfs/selection.py`, `src/nfl_dfs/prior_review.py`,
+`src/nfl_dfs/cowork.py`, `src/nfl_dfs/cli.py`, and
+`src/nfl_dfs/workbook.py`. Updated regression/integration coverage in
+`tests/test_prior_selection.py`, `tests/test_prior_review_profile.py`, and
+`tests/test_readiness_regressions.py`. Updated `CLAUDE.md`,
+`IMPLEMENTATION_STATUS.md`, `docs/DATA_CONTRACTS.md`,
+`docs/COWORK_RUNBOOK.md`, `backlog.md`, `changelog.md`, this tracker, and added
+`docs/session-prompts/SD2-offensive-roles-and-history.md`.
+
+The new `nfl_kicker_role_evidence_v1` manifest binds the current salary hash,
+game/team, exact underlying-person CPT/FLEX identities, content-addressed
+captured sources and hashes, approved URI/license/parser policy, observation,
+capture and expiry times, transformation version and fixed share tolerance.
+Source content must support a qualitative sole role or repeat an exact structured
+numerical split. Resolution occurs after every existing exclusion. Ambiguity,
+invalidity, staleness, tampering or a newly ineligible positive-share person
+fails closed. A one-kicker fallback is visibly `UNKNOWN`; zero-share people are
+scoreless and excluded; no eligible kicker receives no fabricated production.
+Team scoring events are allocated exactly once before DraftKings scoring and the
+Captain multiplier.
+
+Defect reproduction / before-and-after evidence: before the repair,
+`tests/test_prior_selection.py::test_two_eligible_kickers_do_not_duplicate_team_kicking_points`
+failed with 16.8 combined New England kicker points versus the one-team-line
+expectation of 8.4. After the repair, an evidenced 0.625/0.375 split yields
+5.25 + 3.15 = 8.4, and each person's CPT row is exactly 1.5 times FLEX. An
+unevidenced two-kicker team now stops with `KICKER_ROLE_UNRESOLVED`.
+
+Checks:
+
+- Pre-fix probe: `& .\.venv\Scripts\python.exe -B -m pytest -p
+  no:cacheprovider
+  tests/test_prior_selection.py::test_two_eligible_kickers_do_not_duplicate_team_kicking_points
+  -q` — expected 1 failure, measured 16.8 versus 8.4.
+- Final SD1/adjacent focus: `& .\.venv\Scripts\python.exe -B -m pytest -o
+  addopts='' -p no:cacheprovider -q tests/test_kicker_roles.py
+  tests/test_prior_selection.py tests/test_prior_review_profile.py
+  tests/test_readiness_regressions.py` — 104 passed in 15.37 seconds.
+- Complete pinned Windows suite: `& .\.venv\Scripts\python.exe -B -m pytest
+  -p no:cacheprovider --basetemp
+  .\outputs\pytest-sd1-final-60f0e081b34b4d05af7520709eaa6228 --durations=5`
+  — 357 passed, 1 skipped in 69.05 seconds. The one skip is the existing Windows
+  symlink-creation permission case.
+- `& .\nfl.ps1 doctor` — PASS on Python 3.13.7; SQLite integrity `ok`, workbook
+  probe cleaned, 8 processors, and no sync/reparse detected. Long paths remain
+  disabled as reported environment state.
+- `git diff --check` — PASS. SD2 prompt file/link/content self-check — PASS.
+
+Artifact paths / immutable input and final-output hashes: no live slate or
+user artifact was executed. Synthetic source-bound Cowork fixtures and their
+hash assertions ran inside the isolated pytest base directory above; no
+generated CSV/workbook/source capture belongs in a commit.
+
+FILE_VALID / EVIDENCE_STATE / MODEL_STATUS / RELEASE_DECISION: the synthetic
+full `cowork-run --profile prior_review` integration asserted `true` / `UNKNOWN`
+/ `PRIOR_ONLY` / `DO_NOT_UPLOAD`. It is test evidence, not a live-slate release
+decision. No live slate run was generated in this session.
+
+Acceptance criteria still unmet and precise blockers: no SD1 code acceptance
+criterion remains. Current approved game-specific kicker-role evidence was not
+retrieved, so a live multi-kicker slate still requires a captured, valid package.
+The actual Cowork/Linux environment was not run, and the Windows symlink test
+remains skipped for OS privilege. Current activity, offensive roles, prospective
+model validation, ceiling/ownership/economics and upload certification remain
+separate blockers.
+
+Scope changes / follow-up items: none outside necessary request, snapshot,
+review reporting, workbook guidance and documentation integration. W3 and all
+broad simulator/model tranches remain incomplete. The source allowlist was not
+widened.
+
+Next READY chunk and prompt path: SD2 is the sole `READY` item;
+`docs/session-prompts/SD2-offensive-roles-and-history.md`.

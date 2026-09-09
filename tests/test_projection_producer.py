@@ -4,13 +4,14 @@ import csv
 import json
 import math
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from nfl_dfs import cli
 from nfl_dfs.dk import parse_salaries
-from nfl_dfs.evidence import validate_source_ledger
+from nfl_dfs.evidence import EvidenceError, validate_source_ledger
 from nfl_dfs.hashing import sha256_file
 from nfl_dfs.opportunity import PLAYER_COLUMNS, TEAM_COLUMNS, load_opportunity_model
 from nfl_dfs.projection import ProjectionBuildError, build_projection_package
@@ -244,11 +245,18 @@ def test_end_to_end_classic_package_has_exact_schema_coverage_bounds_and_ledger(
     args = _prepare(tmp_path, CLASSIC_SALARY)
     package = build_projection_package(**args)
     output = Path(package.output_dir)
+    # W2/R08: the package archives every consumed source content-addressed
+    # under `sources/` so a copy resolves without the original attachments.
     assert {path.name for path in output.iterdir()} == {
         "team_projections.csv",
         "player_opportunities.csv",
         "source_ledger.json",
+        "sources",
     }
+    assert {path.name for path in (output / "sources").iterdir()} == {
+        Path(relative).name for relative in package.archived_sources.values()
+    }
+    assert len(package.archived_sources) == 4
     slate = parse_salaries(CLASSIC_SALARY)
     with Path(package.team_projections).open(encoding="utf-8", newline="") as handle:
         team_rows = list(csv.DictReader(handle))
@@ -303,8 +311,18 @@ def test_end_to_end_classic_package_has_exact_schema_coverage_bounds_and_ledger(
     validate_source_ledger(
         package.source_ledger,
         expected_outputs=expected_derived,
-        now=parse_salaries(CLASSIC_SALARY).games[0].lock_at,
+        now=datetime.fromisoformat(AS_OF),
     )
+    # W2/R08: the same bytes at the game's lock time are stale, because
+    # `EXPIRES` precedes it. This call used to be accepted, which is the defect
+    # the review reproduced.
+    assert datetime.fromisoformat(EXPIRES) < parse_salaries(CLASSIC_SALARY).games[0].lock_at
+    with pytest.raises(EvidenceError, match="stale"):
+        validate_source_ledger(
+            package.source_ledger,
+            expected_outputs=expected_derived,
+            now=parse_salaries(CLASSIC_SALARY).games[0].lock_at,
+        )
 
 
 def test_identical_runs_have_identical_csv_and_ledger_bytes(tmp_path: Path) -> None:

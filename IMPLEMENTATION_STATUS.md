@@ -1,5 +1,29 @@
 # Implementation Status
 
+## Current Showdown readiness — 2026-09-09
+
+The real NE–SEA two-entry template now completes `cowork-run --profile
+prior_review` through source acquisition, projection, selection and independent
+review export. The repeated export is byte-identical; only the two reserved
+entry rows change. See `docs/READINESS_REVIEW_2026-09-09.md` for the current
+verification, fixes and limitations. Older supplied-fixture counts below are
+historical. This verifies Windows execution, not the actual Cowork/Linux VM.
+
+The generated portfolio is still `PRIOR_ONLY / DO_NOT_UPLOAD`. Its objective
+maximizes points of an expected stat line, with structural differentiation;
+it is not the required calibrated ceiling/ownership/drawdown engine. Current
+official activity, prospective validation and the quantitative redesign remain
+blocking work. Supplied current official inactive rows now affect both roles
+before prior-review selection. The older simulation/build path still needs its
+own participation and economics repairs.
+
+SD1 now gives the prior-review scorer one conserved team kicker event line.
+Exact, source-bound current-role evidence can declare a sole kicker or an
+explicit numerical split; ambiguous multi-kicker teams block, zero-share and
+excluded people cannot be selected, and the single-kicker compatibility path is
+reported only as an `UNKNOWN` prior assumption. This is a scoring/input-integrity
+repair, not completion of offensive roles or live current-role modeling.
+
 ## Working and locally verified
 
 - The red-team revision has replaced the prior `plan.md`.
@@ -32,6 +56,14 @@
 - Classic and Showdown salary contracts enforce exact IDs, geometry, salary
   cap, underlying-person identity, distinct CPT/FLEX IDs, and exact 1.5x Captain
   salary/scoring behavior.
+- Showdown kicker-role evidence binds the salary hash, game/team, underlying
+  person, exact CPT/FLEX IDs, allowlisted captured source bytes and hashes,
+  observation/capture/expiry times, and transformation version. Allocation is
+  applied to team scoring events before DraftKings scoring and the Captain
+  multiplier, conserving base team kicker points exactly once. Supplied invalid,
+  stale, future, tampered, incomplete, or newly ineligible allocations fail
+  before assignments/review export; Cowork snapshots the manifest and sources
+  for path-independent replay.
 - One build/certification package is deliberately limited to one Contest ID and
   one entry fee. Mixed-contest exports fail closed until per-contest economics
   and allocation are implemented.
@@ -110,6 +142,10 @@
   diagnostic until prospective historical/live validation clears the registered
   sample and calibration gates. The engine does not label them EV, ROI, win
   probability, or calibrated ownership.
+- SD1 does not produce current offensive roles. A live slate still needs current
+  approved kicker-role captures when multiple kickers remain eligible, and
+  synthetic role fixtures prove mechanics only. A sole-listed assumption does
+  not establish official activity or model readiness.
 - S6A creates source-bound `PRIOR_ONLY` inputs but does not implement the full
   Section 4.4 historical ingestion, offline fitting, prospective validation, or
   live-source refresh architecture. A successful producer run therefore

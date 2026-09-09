@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import ipaddress
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -11,6 +12,7 @@ from urllib.parse import urlparse
 from pydantic import ValidationError
 
 from .contracts import (
+    SOURCE_LEDGER_V1,
     EvidenceRecord,
     EvidenceState,
     LateSwapEligibility,
@@ -18,6 +20,8 @@ from .contracts import (
     SlateContract,
     SourceLedger,
     TeamInactiveReportBundle,
+    earliest_source_freshness,
+    source_freshness_evidence,
 )
 from .hashing import sha256_bytes, sha256_file
 from .sources import SourcePolicyError, validate_source_reference_policy
@@ -25,6 +29,17 @@ from .sources import SourcePolicyError, validate_source_reference_policy
 
 class EvidenceError(ValueError):
     pass
+
+
+def release_clock() -> datetime:
+    """The live clock every release-time freshness check uses.
+
+    R08 requires historical replay time and the live release clock to stay
+    separate. A replay passes its recorded `as_of` explicitly; anything that
+    omits a clock is asking about right now, which is what a release is.
+    """
+
+    return datetime.now(timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -57,13 +72,25 @@ def evaluate_hard_gates(
 
 
 def _valid_https_source(value: str) -> bool:
-    parsed = urlparse(value)
-    return (
-        parsed.scheme.lower() == "https"
-        and bool(parsed.hostname)
-        and parsed.username is None
-        and parsed.password is None
-    )
+    """Check public HTTPS provenance shape; this does not verify source content."""
+    try:
+        parsed = urlparse(value)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if (parsed.scheme.lower() != "https" or not host
+                or parsed.username is not None or parsed.password is not None
+                or parsed.port not in (None, 443)):
+            return False
+    except ValueError:
+        return False
+    if "." not in host or host.rsplit(".", 1)[-1] in {
+        "invalid", "localhost", "local", "test", "example", "internal",
+    }:
+        return False
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return False
 
 
 def late_swap_eligibility_evidence(
@@ -333,7 +360,7 @@ def validate_source_ledger(
                 f"source ledger derived hash mismatch for {name}: expected {digest}"
             )
 
-    checked_at = now or datetime.now(timezone.utc)
+    checked_at = now or release_clock()
     future_limit = checked_at + timedelta(minutes=5)
     for entry in ledger.entries:
         try:
@@ -372,7 +399,128 @@ def validate_source_ledger(
             raise EvidenceError(
                 f"source ledger artifact hash mismatch: {entry.path}"
             )
+        # R08: a hash match is integrity, not freshness. The entry carries its
+        # own expiry and evidence state, and both are re-evaluated at the clock
+        # this validation is being performed at. `checked_at` is the caller's
+        # replay clock when one was supplied and the live release clock when it
+        # was not, so a package that was valid at creation goes stale at its
+        # real expiry no matter who copies it.
+        freshness = entry.freshness()
+        if freshness is None:
+            continue
+        state = freshness.state_at(checked_at)
+        if state is EvidenceState.STALE:
+            raise EvidenceError(
+                f"source ledger entry is stale: {entry.path}: "
+                f"expires_at={freshness.expires_at.astimezone(timezone.utc).isoformat()}: "
+                f"checked_at={checked_at.astimezone(timezone.utc).isoformat()}: "
+                f"basis={freshness.basis}"
+            )
+        if state is not EvidenceState.PASS:
+            raise EvidenceError(
+                f"source ledger entry evidence state is {state.value}: {entry.path}"
+            )
     return ledger
+
+
+def source_ledger_evidence(
+    path: str | Path,
+    *,
+    expected_outputs: Mapping[str, str],
+    as_of: datetime | None = None,
+) -> EvidenceRecord:
+    """Bind a produced package's per-source expiry into the hard-gate set.
+
+    Selection and certification both need the same question answered at their
+    own clock rather than at the clock the package was built on. The returned
+    record carries the binding expiry, so `evaluate_hard_gates` re-derives
+    `STALE` later without re-reading a single source byte. A legacy
+    `nfl_source_ledger_v1` package preserves no expiry at all, so it reports
+    `UNKNOWN` and cannot clear the gate.
+    """
+
+    when = as_of or release_clock()
+    ledger_path = Path(path)
+    try:
+        payload = json.loads(ledger_path.read_text(encoding="utf-8"))
+        parsed = SourceLedger.model_validate(payload)
+    except (OSError, json.JSONDecodeError, ValidationError) as exc:
+        return EvidenceRecord(
+            subject="source_ledger",
+            field="source_freshness",
+            hard_gate=True,
+            state=EvidenceState.CONFLICTED,
+            reason=f"invalid source ledger contract: {exc}",
+        )
+    try:
+        ledger = validate_source_ledger(
+            ledger_path, expected_outputs=expected_outputs, now=when
+        )
+    except EvidenceError as exc:
+        # An expired package is `STALE`, not `CONFLICTED`: the release truth
+        # model distinguishes them and both are hard blockers, so nothing is
+        # weakened by naming the condition correctly. Staleness is claimed only
+        # once the same ledger is shown to pass every other check at its own
+        # expiry, so a package that is both expired and tampered with stays
+        # `CONFLICTED`.
+        state = EvidenceState.CONFLICTED
+        expires: datetime | None = None
+        observed: datetime | None = None
+        freshness_records = parsed.freshness()
+        if freshness_records:
+            binding = earliest_source_freshness(freshness_records, at=when)
+            expires, observed = binding.expires_at, binding.observed_at
+            if binding.state_at(when) is EvidenceState.STALE:
+                try:
+                    validate_source_ledger(
+                        ledger_path,
+                        expected_outputs=expected_outputs,
+                        now=binding.expires_at,
+                    )
+                except EvidenceError:
+                    pass
+                else:
+                    state = EvidenceState.STALE
+        return EvidenceRecord(
+            subject="source_ledger",
+            field="source_freshness",
+            source_artifact_id=sha256_file(ledger_path),
+            observed_at=observed,
+            expires_at=expires,
+            hard_gate=True,
+            state=state,
+            reason=str(exc),
+        )
+    records = ledger.freshness()
+    if not records:
+        return EvidenceRecord(
+            subject="source_ledger",
+            field="source_freshness",
+            value={"schema_version": ledger.schema_version},
+            hard_gate=True,
+            state=EvidenceState.UNKNOWN,
+            reason=(
+                f"{SOURCE_LEDGER_V1} preserves no per-source expiry, so freshness"
+                " cannot be re-evaluated at the release clock; rebuild the package"
+                " with the project command to emit the versioned consumed contract"
+            ),
+        )
+    return source_freshness_evidence(
+        records,
+        subject="source_ledger",
+        field="source_freshness",
+        at=when,
+        source_artifact_id=sha256_file(ledger_path),
+        value={
+            "schema_version": ledger.schema_version,
+            "entries": len(ledger.entries),
+            "scopes": sorted(
+                entry.evidence_scope.value
+                for entry in ledger.entries
+                if entry.evidence_scope is not None
+            ),
+        },
+    )
 
 
 def parse_official_inactive_snapshot(
@@ -416,9 +564,8 @@ def parse_official_inactive_snapshot(
             if status not in {"INACTIVE", "ACTIVE"}:
                 problems.append(f"row {row_number}: status must be ACTIVE or INACTIVE")
                 continue
-            parsed_url = urlparse(source_url)
-            if parsed_url.scheme.lower() != "https" or not parsed_url.hostname:
-                problems.append(f"row {row_number}: HTTPS source URL required")
+            if not _valid_https_source(source_url):
+                problems.append(f"row {row_number}: public HTTPS source URL without credentials required")
                 continue
             try:
                 observed = datetime.fromisoformat(observed_raw.replace("Z", "+00:00"))
@@ -435,6 +582,12 @@ def parse_official_inactive_snapshot(
                 statuses[player_id] = status
                 observations[player_id] = observed.astimezone(timezone.utc)
                 source_urls[player_id] = source_url
+    by_person: dict[str, set[str]] = {}
+    for dk_id, status in statuses.items():
+        by_person.setdefault(by_id[dk_id].underlying_id, set()).add(status)
+    for person, values in by_person.items():
+        if len(values) > 1:
+            problems.append(f"conflicting status across salary roles for {person}")
     return InactiveStatusSnapshot(statuses, observations, source_urls, tuple(problems))
 
 

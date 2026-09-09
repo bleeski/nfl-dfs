@@ -1,5 +1,55 @@
 # Claude Cowork Runbook
 
+## Showdown generation: current operating path (2026-09-09)
+
+For the normal request to generate a Showdown portfolio from the two attached
+CSV files, run:
+
+```sh
+sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<slate-label>'
+```
+
+This generates prior-only review lineups. It does not implement the full
+ceiling/ownership/drawdown mandate and cannot certify generated lineups for
+upload. A successful review run exits 0 with `FILE_VALID=true`,
+`MODEL_STATUS=PRIOR_ONLY`, and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+For outdoor weather, capture the relevant NWS gridpoint forecast through
+`sources.fetch_public_artifact`, retain the original response and hash, and
+populate the request's `weather_state`, `weather_source_uri`, and
+`weather_observed_at` from that capture. NWS was reachable during the September
+9 Windows rehearsal; availability must be checked in the actual Cowork session.
+Use the forecast's `generatedAt`, never the time you typed the request. The
+six-hour weather expiry survives freezing, projection, selection and export.
+
+Rerun using the generated request with the completed weather fields. If the
+command stops for identity decisions, resolve only the named ambiguities from
+verifiable identity evidence. Current `official_status_csv` rows are used to
+exclude INACTIVE people across both Captain and Flex before selection; missing
+status rows do not imply ACTIVE. Refresh near kickoff. Never set `--as-of` to
+an earlier time for a live run: that flag is historical replay only.
+
+Kicker roles are resolved after those exclusions. When one eligible kicker is
+listed for a team and no role artifact is supplied, the review may continue only
+with a visible prior-only sole-listed assumption; it does not prove a confirmed
+role or ACTIVE status. When two or more remain, the run stops with
+`KICKER_ROLE_UNRESOLVED`. Use an approved adapter from `sources.py` to capture
+the supporting bytes, keep the content-addressed capture under `sources/`, and
+prepare `nfl_kicker_role_evidence_v1` as documented in `DATA_CONTRACTS.md`.
+Qualitative evidence may establish a sole kicker; only a source that explicitly
+publishes a numerical allocation may support a split. Never divide evenly, use
+salary as a depth chart, or use zero offensive snap share as inactivity.
+
+The resulting report names the reviewed assignments and `DK_REVIEW_ENTRY` file.
+Show its limitations alongside the lineups. `DK_REVIEW_ENTRY` is a retained
+diagnostic artifact, not a certified upload package. A separately supplied
+manual lineup can follow the manual guardrail route, subject to all its gates;
+generated prior lineups cannot be relabeled as manual to bypass validation.
+
+The older diagnostic/certification procedure below still applies to that
+explicitly selected path and to Classic. Use `preflight`, rather than historical
+`audit`, immediately before any certified manual upload.
+
 This is Claude's operating procedure for the two-file NFL DFS workflow. The
 operator's intended interaction is: attach a DraftKings salary CSV and
 reserved-entry CSV, ask Claude to run the slate, review the result, and upload
@@ -81,6 +131,7 @@ the original attachment location.
   "team_projection_csv": null,
   "player_opportunity_csv": null,
   "official_status_csv": null,
+  "role_evidence_json": null,
   "ownership_brackets_csv": null,
   "source_ledger_json": null,
   "advertised_prize_value": null,
@@ -112,6 +163,10 @@ Populate only source-backed values:
   artifacts, and missing or mismatched hashes for either model-input CSV fail
   certification closed.
 - `official_status_csv`: current, source-bound, exact-ID activity evidence.
+- `role_evidence_json`: optional source-bound Showdown kicker-role package. Add
+  it to the generated request when a team has multiple eligible kickers, then
+  rerun the request. Its salary/game/ID bindings, source bytes, hashes, times,
+  expiry, and allocation must all validate; an invalid supplied package blocks.
 - `assignment_csv`: optional manual lineup path. When present, the workflow
   validates/certifies it instead of running the model-assisted build.
 - `profile`: `diagnostic` uses the bounded Cowork scenario/candidate sizes;
@@ -122,6 +177,20 @@ Unknown request keys, missing files, invalid enum values, partial team/player
 model pairs, traversal, external absolute paths, and symlink/reparse escapes
 fail closed. Request paths are limited to the explicitly supplied attachment
 directory, managed project data, and that run's immutable directory.
+
+For a prepared role package on the command line, the equivalent rerun is:
+
+```sh
+sh ./nfl.sh cowork-run \
+  --request '<full-path-to-run_request.json>' \
+  --role-evidence-json '<full-path-to-kicker-role-package/kicker_roles.json>'
+```
+
+Cowork snapshots both the manifest and its adjacent `sources/` captures before
+selection. Review `prior_review_reports.selection.prior_scores.kicker_roles` for
+the team allocation, sole-listed assumptions, zero-share exclusions, coverage
+gaps, source hashes and expiry. A source-bound role does not change
+`MODEL_STATUS=PRIOR_ONLY` or `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
 ## Produce prior-only model inputs
 
@@ -255,3 +324,40 @@ Always report:
 
 The operator manually reviews Entry IDs and lineups and performs any DraftKings
 upload. A generated file is never permission to upload by itself.
+
+## Linux/Cowork runtime, measured 2026-09-08
+
+A Cowork session mounts this repository through a bridge that refuses file
+deletion. `unlink` and `rmdir` return `EPERM`, which breaks three things that
+look unrelated: `uv` cannot extract a managed interpreter, SQLite cannot open a
+database in `WAL` or `DELETE` mode (`disk I/O error`, because `DELETE` journaling
+deletes the journal on commit), and `tempfile.TemporaryDirectory` recurses until
+`RecursionError` because its cleanup handler retries `rmtree` on every
+`PermissionError`.
+
+`nfl.sh` therefore honours three overrides, all defaulting to the previous
+in-repository paths so Windows behaviour is unchanged:
+
+```sh
+export NFL_DFS_VENV_DIR=/tmp/nfl-cowork-venv
+export NFL_DFS_UV_CACHE_DIR=/tmp/nfl-uv-cache
+export NFL_DFS_UV_PYTHON_DIR=/tmp/nfl-uv-python
+sh ./nfl.sh setup
+```
+
+With the runtime on local disk, `uv sync` completes in about 17 seconds instead
+of exceeding a 178-second shell limit unfinished.
+
+Two further constraints follow from the same cause. `.pytest_cache` in the
+mounted repository is unreadable, so the suite needs
+`--ignore=.pytest_cache tests`. And running the suite in place leaves temporary
+directories behind that the session cannot remove, so execute it from a
+local-disk working copy of `src`, `tests`, `templates`, `config`,
+`pyproject.toml` and `uv.lock`, keeping the mounted repository as the source of
+truth for edits.
+
+`nfl.sh doctor` against the mounted repository reports `pass_status: false` with
+`sqlite_probe_error`, which is correct rather than a defect: `cowork-run` gates
+on `pass_status` and `registry.py` opens a real database under `data/registry/`.
+Either grant the session delete permission on the folder, or run from a
+local-disk working copy.

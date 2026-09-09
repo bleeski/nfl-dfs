@@ -14,7 +14,15 @@ from typing import Iterable, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
-from .contracts import EngineMode, SalaryPlayer, SlateContract
+from .contracts import (
+    SOURCE_LEDGER_SCHEMA,
+    EngineMode,
+    EvidenceScope,
+    SalaryPlayer,
+    SlateContract,
+    earliest_source_freshness,
+)
+from .contracts import SourceFreshness as SourceFreshnessContract
 from .dk import PARSER_VERSION as DK_PARSER_VERSION
 from .dk import parse_salaries
 from .evidence import validate_source_ledger
@@ -32,6 +40,18 @@ IDENTITY_MAP_PARSER = "projection_identity_map_v1"
 LEDGER_FILENAME = "source_ledger.json"
 TEAM_FILENAME = "team_projections.csv"
 PLAYER_FILENAME = "player_opportunities.csv"
+# R08: the producer referenced its inputs by absolute original path and
+# archived nothing, so moving the package, deleting the attachments or crossing
+# from Windows to Linux broke resolution. Every consumed source is now archived
+# content-addressed inside the package and addressed by a package-relative
+# POSIX path, which resolves identically on both runtimes.
+SOURCES_DIRNAME = "sources"
+INPUT_SCOPES: Mapping[str, EvidenceScope] = {
+    "salary": EvidenceScope.SLATE_GEOMETRY,
+    "team_source": EvidenceScope.TEAM_PRIOR,
+    "player_source": EvidenceScope.PLAYER_PRIOR,
+    "identity_map": EvidenceScope.IDENTITY_MAP,
+}
 
 
 class ProjectionBuildError(ValueError):
@@ -223,6 +243,12 @@ class ProjectionPackage(_FrozenModel):
     source_ledger: str
     hashes: dict[str, str]
     input_hashes: dict[str, str]
+    # The package's own expiry, carried out of the producer so a consumer never
+    # has to reopen a source to learn when this stops being usable.
+    ledger_schema_version: str
+    expires_at: str
+    expiry_basis: str
+    archived_sources: dict[str, str]
 
 
 def _json_payload(path: Path) -> object:
@@ -577,21 +603,68 @@ def _team_rows(
     return rows
 
 
+def _dependency_bindings(
+    metadata: ArtifactMetadata, extra: Mapping[str, str] | None = None
+) -> dict[str, str]:
+    """The artifact hashes this source was itself derived from.
+
+    Only what the source recorded. `priors.py` writes the contributing frozen
+    artifacts into its coverage, and the identity map binds the exact salary
+    artifact it was frozen against. Nothing is inferred: an unrecorded
+    dependency stays unrecorded rather than being invented here.
+    """
+
+    bindings: dict[str, str] = {}
+    contributing = metadata.coverage.get("contributing_artifacts")
+    if isinstance(contributing, dict):
+        for name, digest in contributing.items():
+            value = str(digest).strip().lower()
+            if len(value) == 64 and all(
+                character in "0123456789abcdef" for character in value
+            ):
+                bindings[str(name)] = value
+    for name, digest in dict(extra or {}).items():
+        bindings[name] = str(digest).strip().lower()
+    return bindings
+
+
+def _archived_relative_path(digest: str, source: Path) -> str:
+    """A package-relative POSIX path for one archived source.
+
+    The name is the content hash, so nothing of the attachment's own name
+    survives into the package. An unusual or absent extension is not an error:
+    the bytes still archive, under a neutral suffix.
+    """
+
+    suffix = source.suffix.lower()
+    if len(suffix) > 6 or not suffix[1:].isalnum():
+        suffix = ".bin"
+    return f"{SOURCES_DIRNAME}/{digest}{suffix}"
+
+
 def _ledger_entry(
     *,
-    path: Path,
+    archived_path: str,
     digest: str,
     metadata: ArtifactMetadata,
     coverage: dict[str, object],
+    scope: EvidenceScope,
+    transformation_version: str,
+    depends_on: Mapping[str, str],
 ) -> dict[str, object]:
     return {
         "artifact_id": digest,
-        "path": str(path.resolve()),
+        "path": archived_path,
         "source_uri": metadata.source_uri,
         "captured_at": metadata.captured_at.isoformat(),
         "observed_at": metadata.observed_at.isoformat(),
+        "expires_at": metadata.expires_at.isoformat(),
         "license_decision": metadata.license_decision,
         "parser_version": metadata.parser_version,
+        "evidence_state": metadata.evidence_state,
+        "evidence_scope": scope.value,
+        "transformation_version": transformation_version,
+        "depends_on": dict(sorted(depends_on.items())),
         "coverage": coverage,
     }
 
@@ -600,6 +673,139 @@ def _canonical_json_bytes(value: object) -> bytes:
     return (
         json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False, default=str) + "\n"
     ).encode("utf-8")
+
+
+_SCOPE_CONTRACTS: Mapping[EvidenceScope, tuple[type[BaseModel], str]] = {
+    EvidenceScope.TEAM_PRIOR: (TeamSource, "TEAM_SOURCE_INVALID"),
+    EvidenceScope.PLAYER_PRIOR: (PlayerSource, "PLAYER_SOURCE_INVALID"),
+    EvidenceScope.IDENTITY_MAP: (ProjectionIdentityMap, "IDENTITY_MAP_INVALID"),
+}
+
+
+def _archived_metadata(
+    package_dir: Path, ledger, scope: EvidenceScope
+) -> ArtifactMetadata:
+    """Re-read one archived source's own metadata out of the package.
+
+    The DraftKings salary CSV carries no metadata of its own; its recorded
+    provenance lives in the identity map's `salary_artifact` block, which is
+    where this reads it from.
+    """
+
+    if scope is EvidenceScope.SLATE_GEOMETRY:
+        identity_entry = next(
+            (
+                entry
+                for entry in ledger.entries
+                if entry.evidence_scope is EvidenceScope.IDENTITY_MAP
+            ),
+            None,
+        )
+        if identity_entry is None:
+            raise ProjectionBuildError("ARCHIVED_IDENTITY_MAP_MISSING:salary_provenance")
+        identities = _load_contract(
+            package_dir / identity_entry.path, ProjectionIdentityMap, "IDENTITY_MAP_INVALID"
+        )
+        return identities.salary_artifact
+    model, code = _SCOPE_CONTRACTS[scope]
+    entry = next(
+        (item for item in ledger.entries if item.evidence_scope is scope), None
+    )
+    if entry is None:
+        raise ProjectionBuildError(f"ARCHIVED_SOURCE_MISSING:{scope.value}")
+    contract = _load_contract(package_dir / entry.path, model, code)
+    return contract.metadata
+
+
+def verify_projection_package(
+    package_dir: str | Path,
+    *,
+    at: datetime,
+    expected_outputs: Mapping[str, str] | None = None,
+) -> object:
+    """Re-verify a published package at an arbitrary clock, sources and all.
+
+    R08's acceptance has two halves. `validate_source_ledger` covers the first:
+    the ledger carries each source's expiry and re-evaluates it at the clock it
+    is handed. This covers the second. The ledger is a plain JSON file, so a
+    consumer could otherwise write a newer `expires_at` into it and revalidate,
+    which is exactly "a new market timestamp renewing old player evidence".
+    Every declared expiry, evidence state and observation time is therefore
+    checked back against the archived source's own metadata, whose bytes are
+    hash-bound. A forged ledger expiry is refused by the source it claims to
+    describe.
+    """
+
+    root = Path(package_dir).resolve()
+    ledger_path = root / LEDGER_FILENAME
+    if not ledger_path.is_file():
+        raise ProjectionBuildError(f"PACKAGE_LEDGER_MISSING:{ledger_path}")
+    when = _parse_as_of(at)
+    outputs = dict(expected_outputs or {})
+    if not outputs:
+        for name, filename in (
+            ("team_projections", TEAM_FILENAME),
+            ("player_opportunities", PLAYER_FILENAME),
+        ):
+            derived_path = root / filename
+            if not derived_path.is_file():
+                raise ProjectionBuildError(f"PACKAGE_OUTPUT_MISSING:{filename}")
+            outputs[name] = sha256_file(derived_path)
+    try:
+        ledger = validate_source_ledger(
+            ledger_path, expected_outputs=outputs, now=when
+        )
+    except Exception as exc:  # noqa: BLE001 - re-raised under a named code
+        raise ProjectionBuildError(f"PACKAGE_LEDGER_INVALID:{exc}") from exc
+    if ledger.schema_version != SOURCE_LEDGER_SCHEMA:
+        raise ProjectionBuildError(
+            f"PACKAGE_LEDGER_SCHEMA_UNSUPPORTED:{ledger.schema_version}"
+        )
+    # The entry set has to be complete, not merely internally consistent.
+    # Checking only the entries that are present makes deleting an expired
+    # entry exactly as effective as forging its expiry.
+    scopes = [entry.evidence_scope for entry in ledger.entries]
+    expected_scopes = sorted(scope.value for scope in INPUT_SCOPES.values())
+    if sorted(scope.value for scope in scopes if scope is not None) != expected_scopes:
+        raise ProjectionBuildError(
+            "PACKAGE_SCOPE_COVERAGE_MISMATCH:expected="
+            f"{expected_scopes}:actual="
+            f"{sorted(scope.value for scope in scopes if scope is not None)}"
+        )
+    if sorted(ledger.derived) != sorted(outputs):
+        raise ProjectionBuildError(
+            f"PACKAGE_DERIVED_COVERAGE_MISMATCH:{sorted(ledger.derived)}"
+        )
+    for entry in ledger.entries:
+        if entry.evidence_scope is None or entry.expires_at is None:
+            raise ProjectionBuildError(f"PACKAGE_ENTRY_UNSCOPED:{entry.path}")
+        metadata = _archived_metadata(root, ledger, entry.evidence_scope)
+        declared = entry.expires_at.astimezone(timezone.utc)
+        archived = metadata.expires_at.astimezone(timezone.utc)
+        if declared != archived:
+            raise ProjectionBuildError(
+                f"LEDGER_EXPIRY_DISAGREES_WITH_ARCHIVED_SOURCE:"
+                f"{entry.evidence_scope.value}:ledger={declared.isoformat()}"
+                f":archived={archived.isoformat()}"
+            )
+        if (entry.evidence_state or "") != metadata.evidence_state:
+            raise ProjectionBuildError(
+                f"LEDGER_EVIDENCE_STATE_DISAGREES_WITH_ARCHIVED_SOURCE:"
+                f"{entry.evidence_scope.value}"
+            )
+        if entry.observed_at is not None and entry.observed_at.astimezone(
+            timezone.utc
+        ) != metadata.observed_at.astimezone(timezone.utc):
+            raise ProjectionBuildError(
+                f"LEDGER_OBSERVATION_DISAGREES_WITH_ARCHIVED_SOURCE:"
+                f"{entry.evidence_scope.value}"
+            )
+        if entry.source_uri != metadata.source_uri:
+            raise ProjectionBuildError(
+                f"LEDGER_SOURCE_URI_DISAGREES_WITH_ARCHIVED_SOURCE:"
+                f"{entry.evidence_scope.value}"
+            )
+    return ledger
 
 
 def build_projection_package(
@@ -684,63 +890,104 @@ def build_projection_package(
     }
     team_count = len(team_rows)
     person_count = len(player_rows)
+    metadata_by_input: dict[str, ArtifactMetadata] = {
+        "salary": identities.salary_artifact,
+        "team_source": teams.metadata,
+        "player_source": players.metadata,
+        "identity_map": identities.metadata,
+    }
+    archived_sources = {
+        name: _archived_relative_path(input_hashes[name], paths[name])
+        for name in paths
+    }
     ledger = {
-        "schema_version": "nfl_source_ledger_v1",
+        "schema_version": SOURCE_LEDGER_SCHEMA,
         "entries": [
             _ledger_entry(
-                path=paths["salary"],
+                archived_path=archived_sources["salary"],
                 digest=input_hashes["salary"],
                 metadata=identities.salary_artifact,
+                scope=INPUT_SCOPES["salary"],
+                transformation_version="IDENTITY_AND_SLATE_GEOMETRY_ONLY_DK_CSV_V1",
+                # The operator download is a root source. It is bound to the
+                # identity map from the other direction, below.
+                depends_on=_dependency_bindings(identities.salary_artifact),
                 coverage={
                     **identities.salary_artifact.coverage,
                     "mode": slate.mode.value,
                     "salary_rows": len(slate.players),
                     "underlying_people": len(_salary_people(slate)),
                     "appg_policy": "HASHED_RAW_ONLY_NOT_USED_NUMERICALLY",
-                    "transformation": "IDENTITY_AND_SLATE_GEOMETRY_ONLY_DK_CSV_V1",
                 },
             ),
             _ledger_entry(
-                path=paths["team_source"],
+                archived_path=archived_sources["team_source"],
                 digest=input_hashes["team_source"],
                 metadata=teams.metadata,
+                scope=INPUT_SCOPES["team_source"],
+                transformation_version="DIRECT_BOUNDED_TEAM_FIELDS_V1",
+                depends_on=_dependency_bindings(teams.metadata),
                 coverage={
                     **teams.metadata.coverage,
                     "accepted_records": team_count,
                     "expected_teams": team_count,
                     "as_of": when.isoformat(),
-                    "transformation": "DIRECT_BOUNDED_TEAM_FIELDS_V1",
                 },
             ),
             _ledger_entry(
-                path=paths["player_source"],
+                archived_path=archived_sources["player_source"],
                 digest=input_hashes["player_source"],
                 metadata=players.metadata,
+                scope=INPUT_SCOPES["player_source"],
+                transformation_version="POSITION_MASKED_TEAM_WEIGHT_NORMALIZATION_V1",
+                depends_on=_dependency_bindings(players.metadata),
                 coverage={
                     **players.metadata.coverage,
                     "accepted_records": person_count,
                     "expected_people": person_count,
                     "as_of": when.isoformat(),
-                    "transformation": "POSITION_MASKED_TEAM_WEIGHT_NORMALIZATION_V1",
                 },
             ),
             _ledger_entry(
-                path=paths["identity_map"],
+                archived_path=archived_sources["identity_map"],
                 digest=input_hashes["identity_map"],
                 metadata=identities.metadata,
+                scope=INPUT_SCOPES["identity_map"],
+                transformation_version="FROZEN_EXACT_PROVIDER_TO_DK_IDENTITY_V1",
+                depends_on=_dependency_bindings(
+                    identities.metadata,
+                    {"salary": identities.salary_artifact.artifact_id},
+                ),
                 coverage={
                     **identities.metadata.coverage,
                     "accepted_team_mappings": len(identities.team_mappings),
                     "accepted_player_mappings": len(identities.player_mappings),
                     "match_method": "EXACT_ONLY",
                     "showdown_output_role": "FLEX" if slate.mode is EngineMode.SHOWDOWN else None,
-                    "transformation": "FROZEN_EXACT_PROVIDER_TO_DK_IDENTITY_V1",
                 },
             ),
         ],
         "derived": derived_hashes,
     }
     ledger_bytes = _canonical_json_bytes(ledger)
+    # The package's binding expiry is the earliest of its consumed sources,
+    # evaluated by the one shared rule. It is never widened here: a source that
+    # has already expired at `as_of` was refused by `_validate_metadata` above.
+    binding = earliest_source_freshness(
+        (
+            SourceFreshnessContract(
+                label=f"{INPUT_SCOPES[name].value}:{name}",
+                expires_at=metadata_by_input[name].expires_at,
+                basis=str(
+                    metadata_by_input[name].coverage.get("expiry_basis", "")
+                    or "UNRECORDED"
+                ),
+                observed_at=metadata_by_input[name].observed_at,
+            )
+            for name in sorted(metadata_by_input)
+        ),
+        at=when,
+    )
 
     for name, path in paths.items():
         if sha256_file(path) != input_hashes[name]:
@@ -756,6 +1003,13 @@ def build_projection_package(
         team_path.write_bytes(team_bytes)
         player_path.write_bytes(player_bytes)
         ledger_path.write_bytes(ledger_bytes)
+        archive_root = staging / SOURCES_DIRNAME
+        archive_root.mkdir(parents=True, exist_ok=False)
+        for name, relative in sorted(archived_sources.items()):
+            archived = staging / relative
+            archived.write_bytes(paths[name].read_bytes())
+            if sha256_file(archived) != input_hashes[name]:
+                raise ProjectionBuildError(f"ARCHIVED_SOURCE_HASH_MISMATCH:{name}")
         if sha256_file(team_path) != derived_hashes["team_projections"]:
             raise ProjectionBuildError("DERIVED_HASH_MISMATCH:team_projections")
         if sha256_file(player_path) != derived_hashes["player_opportunities"]:
@@ -785,6 +1039,9 @@ def build_projection_package(
             raise ProjectionBuildError("PUBLISHED_HASH_MISMATCH:team_projections")
         if final_hashes["player_opportunities"] != derived_hashes["player_opportunities"]:
             raise ProjectionBuildError("PUBLISHED_HASH_MISMATCH:player_opportunities")
+        for name, relative in sorted(archived_sources.items()):
+            if sha256_file(final_dir / relative) != input_hashes[name]:
+                raise ProjectionBuildError(f"PUBLISHED_ARCHIVE_MISMATCH:{name}")
     except Exception:
         if final_dir.is_dir():
             shutil.rmtree(final_dir)
@@ -796,4 +1053,8 @@ def build_projection_package(
         source_ledger=str(final_dir / LEDGER_FILENAME),
         hashes=final_hashes,
         input_hashes=input_hashes,
+        ledger_schema_version=SOURCE_LEDGER_SCHEMA,
+        expires_at=binding.expires_at.astimezone(timezone.utc).isoformat(),
+        expiry_basis=f"{binding.label}:{binding.basis}",
+        archived_sources=dict(sorted(archived_sources.items())),
     )

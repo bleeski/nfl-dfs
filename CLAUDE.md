@@ -41,7 +41,16 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 1. Locate the attached salary and reserved-entry CSVs. Do not depend on their
    filenames. If both are in one attachment directory, run:
 
-   `sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --label '<short-label>'`
+   For Showdown lineup generation, use:
+
+   `sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<short-label>'`
+
+   This automatically runs the frozen prior, projection, selection, and review
+   export chain. It produces review lineups with `PRIOR_ONLY / DO_NOT_UPLOAD`.
+   It does not implement calibrated ceiling, ownership leverage, or portfolio
+   drawdown optimization. The default `diagnostic` profile is the older
+   economics workflow and normally stops on missing contest inputs. Classic
+   still uses that default; `prior_review` currently supports Showdown only.
 
    If they are in different locations, pass `--salaries` and `--entries`
    explicitly. On Windows outside Cowork, use `./nfl.ps1 cowork-run` with the
@@ -52,7 +61,15 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 3. Read the generated `cowork_run.json`, `run_request.json`, and review
    workbook. The first pass always freezes and reconciles the supplied files.
 4. Gather everything discoverable from approved public sources and freeze the
-   artifacts. Produce prior-only model inputs with `sh ./nfl.sh project` (or
+   artifacts. For an outdoor Showdown game, obtain the forecast through the
+   approved `sources.fetch_public_artifact` adapter from `api.weather.gov`;
+   retain its raw bytes and hash. Use its actual `generatedAt` observation time
+   and game-period conditions to populate `weather_state`,
+   `weather_source_uri`, and `weather_observed_at` in the request, then rerun.
+   Do not claim NWS is universally unreachable: test the current session.
+   Weather capture expires after six hours. Use a fresh run before kickoff.
+   `prior_review` already produces its model inputs; the manual fallback is
+   `sh ./nfl.sh project` (or
    `./nfl.ps1 project` on Windows), supplying the exact expected SHA-256 for
    the salary, team-prior, player-prior, and frozen identity-map artifacts. If
    an approved source artifact or exact frozen mapping is unavailable, stop and
@@ -69,6 +86,19 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 7. Continue through build, independent QA, and certification when the request
    is complete. If current official activity evidence is missing, still retain
    useful diagnostic assignments but finish `DO_NOT_UPLOAD`.
+   For `prior_review`, discover or supply `official_status_csv` when official
+   reports are available. The supplied rows must be current, and an INACTIVE
+   row excludes both CPT and FLEX identities before selection. Missing ACTIVE
+   rows remain unknown; salary status alone never establishes current activity.
+   Kicker roles are resolved after those exclusions. If more than one kicker
+   remains eligible for a team, capture approved source bytes through
+   `sources.py`, prepare the versioned `role_evidence_json` package documented
+   in `docs/DATA_CONTRACTS.md`, add it to the generated request, and rerun.
+   Never choose by salary, split evenly, or infer inactivity from zero offensive
+   snap share. A one-kicker fallback is reported only as a prior-only sole-listed
+   assumption, not confirmed role or ACTIVE evidence.
+   Never send generated prior assignments to manual-guardrail certification.
+   Use `preflight` immediately before any separately certified manual upload.
 8. Return `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and
    `RELEASE_DECISION`, plus the compatibility status, blockers,
    review-workbook path, manifest path, proposed/final SHA-256, and the single
@@ -117,6 +147,12 @@ and reports one of these truthful outcomes:
 - `RELEASE_DECISION=DO_NOT_UPLOAD`: no upload-shaped CSV survives, every
   blocker is named, and the smallest next action is explicit. A valid proposed
   file may still be reported and hashed in memory.
+
+The explicitly requested `prior_review` profile has a diagnostic exception:
+it may retain `DK_REVIEW_ENTRY_*.csv` with independent legality/byte checks.
+That review artifact is never a certified `DK_UPLOAD` package. Return its
+limitations and `DO_NOT_UPLOAD` prominently; exit code 0 means review generation
+completed, not that uploading is cleared.
 
 Never describe `RECONCILED`, `MODELLED`, legal lineups, generated assignments,
 or a green diagnostic as upload-ready.

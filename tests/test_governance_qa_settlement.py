@@ -64,7 +64,7 @@ def test_evidence_expiry_and_exact_inactive_parser(tmp_path: Path, classic_slate
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["TEAM", "PLAYER_OR_GSIS_ID", "STATUS", "SOURCE_URL", "OBSERVED_AT"])
-        writer.writerow([selected.team, selected.dk_id, "ACTIVE", "https://official.example/status", now.isoformat()])
+        writer.writerow([selected.team, selected.dk_id, "ACTIVE", "https://www.nfl.com/injuries/", now.isoformat()])
     statuses, problems = parse_official_inactives(path, classic_slate.players)
     assert statuses[selected.dk_id] == "ACTIVE"
     assert not problems
@@ -90,7 +90,7 @@ def test_official_status_evidence_uses_row_time_and_rejects_stale_snapshot(
                     by_id[dk_id].team,
                     dk_id,
                     "ACTIVE",
-                    "https://official.example/status",
+                    "https://www.nfl.com/injuries/",
                     observed_at.isoformat(),
                 ]
             )

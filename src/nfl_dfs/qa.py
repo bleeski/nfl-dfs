@@ -6,6 +6,7 @@ from typing import Iterable, Mapping
 import numpy as np
 
 from .contracts import EvidenceRecord, EvidenceState, Lineup, SlateContract
+from .portfolio import objective_standard_error
 
 
 @dataclass(frozen=True)
@@ -194,13 +195,29 @@ def decide_repair(
     elite_standard_error: float,
     state_net_deltas: Mapping[str, float],
     weakens_safety: bool,
+    effective_sample_size: float | None = None,
 ) -> RepairDecision:
+    """Accept a repair only on a paired, per-scenario improvement.
+
+    R07: the pairing here is correct and stays. What changes is the divisor.
+    `effective_sample_size` lets a caller that knows its bank contains repeated
+    or dependent scenarios say so, instead of dividing by a row count and
+    narrowing this interval with duplicates. Omitting it keeps the row count,
+    which is the right answer for a bank of distinct scenarios.
+    """
+
     reasons: list[str] = []
     delta = np.asarray(net_payout_delta, dtype=float)
-    if len(delta) < 2:
+    effective = (
+        float(len(delta)) if effective_sample_size is None else effective_sample_size
+    )
+    if len(delta) < 2 or effective < 2:
+        # `objective_standard_error` returns 0.0 at or below one effective
+        # observation, which would make any positive mean look certain. One
+        # effective observation is not a sample.
         reasons.append("paired sample is too small")
     else:
-        lower = float(delta.mean() - 1.96 * delta.std(ddof=1) / np.sqrt(len(delta)))
+        lower = float(delta.mean() - 1.96 * objective_standard_error(delta, effective))
         if lower <= 0:
             reasons.append("paired 95% confidence interval is not above zero")
     if elite_probability_delta < -elite_standard_error:

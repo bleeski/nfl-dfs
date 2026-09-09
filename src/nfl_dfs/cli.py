@@ -17,6 +17,7 @@ from typing import Iterable, Mapping
 import numpy as np
 
 from .certification import certify_upload
+from .preflight import historical_artifact_integrity, live_pre_upload_check
 from .candidate_families import coverage_report
 from .contracts import (
     CertificationBasis,
@@ -26,12 +27,17 @@ from .contracts import (
     EvidenceState,
     Lineup,
     ModelStatus,
+    ReleaseDecision,
     ReleaseEvidenceState,
 )
 from .cowork import (
     CoworkRunRequest,
+    OPERATOR_WEATHER_STATES,
     PATH_FIELDS,
+    SUPPORTED_PROFILES,
     confine_request_path,
+    gating_blockers,
+    prior_review_next_inputs,
     required_next_inputs,
     resolve_request_inputs,
 )
@@ -44,7 +50,7 @@ from .dk import (
     single_contest_problems,
 )
 from .economics import evaluate_candidates_against_field
-from .evidence import EvidenceError, parse_official_inactive_snapshot, validate_source_ledger
+from .evidence import parse_official_inactive_snapshot, source_ledger_evidence
 from .field import generate_opponent_field, scale_field_multiplicities
 from .hashing import content_hash, sha256_file
 from .late_swap import LateSwapRunError, govern_late_swap
@@ -54,8 +60,20 @@ from .opportunity import load_opportunity_model
 from .optimizer import generate_candidates
 from .ownership import OwnershipBracket, cold_start_states
 from .payouts import parse_payout_csv, validate_payout_tiers
-from .portfolio import evaluate_portfolio, portfolio_net_samples, select_portfolio
+from .portfolio import (
+    evaluate_portfolio,
+    select_portfolio,
+    unpaired_difference_standard_error,
+)
+from .projection import SOURCES_DIRNAME as PROJECTION_SOURCES_DIRNAME
 from .projection import build_projection_package
+from .prior_review import PROFILE_VERSION as PRIOR_REVIEW_PROFILE_VERSION
+from .prior_review import run_prior_review
+from .priors import freeze_prior_package, propose_prior_package
+from .participation import build_participation_contract, redistribute_opportunity
+from .prior_score import read_team_splits
+from .review_export import export_review_entries, write_assignments_csv, write_run_record
+from .selection import assignments_for_entries, select_prior_lineups
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .release import derive_release_policy
 from .scenario_store import save_scenario_bank
@@ -249,7 +267,36 @@ def _snapshot_inputs(
         if sha256_file(target) != digest:
             raise RuntimeError(f"snapshot hash mismatch for {source}")
         hashes[str(source)] = digest
+        _snapshot_archived_sources(source, input_dir)
     return hashes
+
+
+def _snapshot_archived_sources(source: Path, input_dir: Path) -> None:
+    """Bring a projection package's archived sources along with its ledger.
+
+    R08: a snapshot used to copy the ledger file on its own, which worked only
+    because the entries pointed at absolute originals. A versioned ledger
+    addresses its archived sources by package-relative path, so the snapshot
+    has to carry that subtree or the copy resolves to nothing. Hashes are
+    re-verified on arrival, and an archive that is already present is left
+    alone rather than overwritten, because snapshots are immutable.
+    """
+
+    archive = source.parent / PROJECTION_SOURCES_DIRNAME
+    if source.suffix.lower() != ".json" or not archive.is_dir():
+        return
+    destination = input_dir / PROJECTION_SOURCES_DIRNAME
+    destination.mkdir(parents=True, exist_ok=True)
+    for archived in sorted(archive.iterdir()):
+        if not archived.is_file():
+            continue
+        copy = destination / archived.name
+        if copy.exists():
+            continue
+        digest = sha256_file(archived)
+        shutil.copyfile(archived, copy)
+        if sha256_file(copy) != digest:
+            raise RuntimeError(f"snapshot hash mismatch for {archived}")
 
 
 def _snapshot_path(run_id: str, source: str | Path, digest: str) -> Path:
@@ -469,12 +516,19 @@ def _official_status_evidence(
         )
     else:
         state = EvidenceState.PASS
-        reason = "every selected exact DK ID is source-bound, ACTIVE, and current"
+        reason = "every selected exact DK ID has current operator-attested ACTIVE provenance"
+    asserted_sources = sorted({
+        snapshot.source_url_by_id[dk_id] for dk_id in selected
+        if dk_id in snapshot.source_url_by_id
+    })
+    if len(asserted_sources) > 1:
+        reason += "; asserted source URLs: " + ", ".join(asserted_sources)
     return EvidenceRecord(
         subject="selected_portfolio",
         field="official_inactive_status",
         value={dk_id: statuses.get(dk_id) for dk_id in sorted(selected)},
         source_artifact_id=digest,
+        source_url=asserted_sources[0] if len(asserted_sources) == 1 else None,
         observed_at=oldest_observation,
         expires_at=expires_at,
         hard_gate=True,
@@ -769,17 +823,26 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
         elif model_hashes.get("team_projection_input") and model_hashes.get(
             "player_opportunity_input"
         ):
-            try:
-                validate_source_ledger(
-                    args.source_ledger,
-                    expected_outputs={
-                        "team_projections": model_hashes["team_projection_input"],
-                        "player_opportunities": model_hashes["player_opportunity_input"],
-                    },
-                )
+            # Certification runs at the live release clock, which is what makes
+            # this the boundary where a package's real expiry bites. R08: the
+            # record carries the earliest source expiry, so `evaluate_hard_gates`
+            # re-derives STALE at final release without reopening a source, and
+            # a legacy ledger shape that cannot express an expiry cannot clear
+            # the gate at all.
+            expected_model_outputs = {
+                "team_projections": model_hashes["team_projection_input"],
+                "player_opportunities": model_hashes["player_opportunity_input"],
+            }
+            ledger_record = source_ledger_evidence(
+                args.source_ledger, expected_outputs=expected_model_outputs
+            )
+            precertification_evidence.append(ledger_record)
+            if ledger_record.state is EvidenceState.PASS:
                 source_ledger_validated = True
-            except EvidenceError as exc:
-                certification_blockers.append(f"SOURCE_LEDGER_INVALID:{exc}")
+            else:
+                certification_blockers.append(
+                    f"SOURCE_LEDGER_INVALID:{ledger_record.state.value}:{ledger_record.reason}"
+                )
     if not args.manual_guardrail:
         if not build_report_value:
             certification_blockers.append("MISSING_BUILD_QA_REPORT")
@@ -1123,21 +1186,17 @@ def _referee_uncertainty(
     referee_indices: tuple[int, ...],
     entry_fee: float,
 ) -> float:
-    select_net = portfolio_net_samples(
+    # SELECT and REFEREE are separate banks with separate seeds, so there is no
+    # scenario to pair on and the two variances add. R07: each side's variance
+    # is now divided by its effective sample size rather than its row count, so
+    # a bank with repeated scenarios cannot narrow the REFEREE tolerance and
+    # wave a disagreement through.
+    standard_error = unpaired_difference_standard_error(
         select_economics,
         select_indices,
-        entry_fee=entry_fee,
-    )
-    referee_net = portfolio_net_samples(
         referee_economics,
         referee_indices,
         entry_fee=entry_fee,
-    )
-    select_variance = float(select_net.var(ddof=1)) if len(select_net) > 1 else 0.0
-    referee_variance = float(referee_net.var(ddof=1)) if len(referee_net) > 1 else 0.0
-    standard_error = np.sqrt(
-        select_variance / max(len(select_net), 1)
-        + referee_variance / max(len(referee_net), 1)
     )
     return float(1.96 * standard_error)
 
@@ -1621,6 +1680,151 @@ def command_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_select(args: argparse.Namespace) -> int:
+    """Prior-only Showdown selection. Never consults field or payout economics."""
+
+    slate = parse_salaries(args.salaries)
+    if args.salary_sha256 and sha256_file(args.salaries) != args.salary_sha256.strip().lower():
+        raise ValueError("SALARY_ARTIFACT_HASH_MISMATCH")
+    template = parse_entries(args.entries)
+    reconcile_template(template, slate)
+    entry_ids = [entry.entry_id for entry in template.authorizations]
+
+    model = load_opportunity_model(
+        slate, args.team_projections, args.player_opportunities
+    )
+    contract = build_participation_contract(
+        slate,
+        operator_excluded_dk_ids=args.exclude or (),
+        extra_unavailable_statuses=args.unavailable_status or (),
+        extra_available_statuses=args.available_status or (),
+    )
+    reduced, redistribution = redistribute_opportunity(
+        model, contract, redistribute=not args.no_redistribute
+    )
+    splits = read_team_splits(
+        args.team_splits,
+        prior_season=args.prior_season,
+        teams=sorted({player.team for player in slate.players}),
+    )
+    count = args.count if args.count else len(entry_ids)
+    selection_as_of = None
+    if getattr(args, "as_of", None):
+        selection_as_of = datetime.fromisoformat(str(args.as_of).replace("Z", "+00:00"))
+        if selection_as_of.tzinfo is None:
+            raise ValueError("as_of must be timezone aware")
+        selection_as_of = selection_as_of.astimezone(timezone.utc)
+    lineups, scores, selection = select_prior_lineups(
+        slate,
+        reduced,
+        splits,
+        contract,
+        count=count,
+        differentiate_captain=not args.allow_repeat_captain,
+        max_person_overlap=args.max_person_overlap,
+        role_evidence_json=getattr(args, "role_evidence_json", None),
+        as_of=selection_as_of,
+    )
+    assignments = assignments_for_entries(entry_ids, lineups)
+
+    output_dir = Path(args.output_dir).resolve()
+    assignments_path = output_dir / "assignments.csv"
+    if assignments_path.exists():
+        raise ValueError(f"OUTPUT_PACKAGE_EXISTS:{assignments_path}")
+    assignments_hash = write_assignments_csv(assignments_path, assignments)
+    names = {
+        player.dk_id: f"{player.name} ({player.position}, {player.team})"
+        for player in slate.players
+    }
+    result = {
+        "status": "DO_NOT_UPLOAD",
+        "package_status": "PRIOR_ONLY_ASSIGNMENTS_READY",
+        **_blocked_truth_values(
+            file_valid=False,
+            evidence_state=ReleaseEvidenceState.UNKNOWN,
+            model_status=ModelStatus.PRIOR_ONLY,
+            certification_basis=CertificationBasis.MODEL_ASSISTED,
+        ),
+        "assignments": str(assignments_path),
+        "assignments_sha256": assignments_hash,
+        "reserved_entries": entry_ids,
+        "lineups": [lineup.as_payload(names) for lineup in lineups],
+        "participation": contract.as_report(),
+        "redistribution": redistribution,
+        "selection": selection,
+        "prior_scores": scores.as_report(),
+        "next": (
+            "Run review-export with these assignments to write the byte-audited"
+            " bulk-entry CSV."
+        ),
+        "warning": (
+            "Prior-only selection maximizing a central estimate. Not a ceiling, not"
+            " ownership aware, and not EV, ROI, win probability or edge."
+        ),
+    }
+    write_run_record(output_dir / "selection_report.json", result)
+    _print_json(result)
+    return 0
+
+
+def command_review_export(args: argparse.Namespace) -> int:
+    """Legality plus byte audit, with no payout table and no economics."""
+
+    slate = parse_salaries(args.salaries)
+    template = parse_entries(args.entries)
+    assignments = read_assignment_csv(args.assignments, slate.mode)
+    output_dir = Path(args.output_dir).resolve()
+    export = export_review_entries(
+        slate=slate,
+        template=template,
+        assignments=assignments,
+        output_path=output_dir / f"DK_REVIEW_ENTRY_{args.label or 'showdown'}.csv",
+    )
+    report = export.as_report(
+        {
+            "salaries_sha256": sha256_file(args.salaries),
+            "entries_sha256": template.raw_hash,
+            "assignments_sha256": sha256_file(args.assignments),
+            "contest_ids": sorted({e.contest_id for e in template.authorizations}),
+            "entry_fees": sorted({e.entry_fee for e in template.authorizations}),
+        }
+    )
+    write_run_record(output_dir / "review_export_report.json", report)
+    _print_json(report)
+    return 0 if export.file_valid else 2
+
+
+def command_priors_propose(args: argparse.Namespace) -> int:
+    result = propose_prior_package(
+        salaries=args.salaries,
+        salary_sha256=args.salary_sha256,
+        season=args.season,
+        prior_season=args.prior_season,
+        as_of=args.as_of,
+        output_dir=args.output_dir,
+    )
+    _print_json(result)
+    return 0
+
+
+def command_priors_freeze(args: argparse.Namespace) -> int:
+    result = freeze_prior_package(
+        package_dir=args.package_dir,
+        reviewed=args.reviewed,
+        reviewed_sha256=args.reviewed_sha256,
+        salaries=args.salaries,
+        salary_sha256=args.salary_sha256,
+        as_of=args.as_of,
+        output_dir=args.output_dir,
+        weather_state=args.weather_state,
+        salary_observed_at=args.salary_observed_at,
+        weather_source_uri=args.weather_source_uri,
+        weather_observed_at=args.weather_observed_at,
+    )
+    _print_json(result)
+    return 0
+
+
 def command_project(args: argparse.Namespace) -> int:
     package = build_projection_package(
         salaries=args.salaries,
@@ -1790,58 +1994,31 @@ def command_status(args: argparse.Namespace) -> int:
 
 
 def command_audit(args: argparse.Namespace) -> int:
-    data = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-    problems: list[str] = []
-    output_path = data.get("output_path")
-    release_decision = data.get(
-        "RELEASE_DECISION",
-        "CERTIFIED_UPLOAD_PACKAGE" if data.get("status") == "CERTIFIED" else "DO_NOT_UPLOAD",
+    """Historical artifact integrity. R09: this is never a current release decision.
+
+    It used to feed the manifest's stored truth fields into the release policy,
+    so a package whose evidence had expired still reported
+    `CERTIFIED_UPLOAD_PACKAGE`. It now reports what the manifest *stored*,
+    labelled as stored, and its own release decision is fixed at
+    `DO_NOT_UPLOAD`. Use `preflight` for a current pre-upload decision.
+    """
+
+    report = historical_artifact_integrity(args.manifest)
+    _print_json(report)
+    return 0 if report["ARTIFACT_INTEGRITY"] == "PASS" else 2
+
+
+def command_preflight(args: argparse.Namespace) -> int:
+    """Live pre-upload check. Re-derives every hard gate at the current clock."""
+
+    report = live_pre_upload_check(
+        args.manifest,
+        salaries=getattr(args, "salaries", None),
+        entries=getattr(args, "entries", None),
+        assignments=getattr(args, "assignments", None),
     )
-    if release_decision == "CERTIFIED_UPLOAD_PACKAGE":
-        if not output_path or not Path(output_path).exists():
-            problems.append("certified output is missing")
-        elif sha256_file(output_path) != data.get("output_sha256"):
-            problems.append("certified output hash changed")
-    elif output_path:
-        problems.append("DO_NOT_UPLOAD manifest must not point to an upload CSV")
-    try:
-        stored_evidence_state = ReleaseEvidenceState(
-            data.get("EVIDENCE_STATE", "UNKNOWN")
-        )
-    except ValueError:
-        stored_evidence_state = ReleaseEvidenceState.CONFLICTED
-        problems.append("manifest EVIDENCE_STATE is invalid")
-    try:
-        stored_model_status = ModelStatus(data.get("MODEL_STATUS", "UNVALIDATED"))
-    except ValueError:
-        stored_model_status = ModelStatus.UNVALIDATED
-        problems.append("manifest MODEL_STATUS is invalid")
-    try:
-        stored_basis = CertificationBasis(
-            data.get("certification_basis", "MANUAL_GUARDRAIL")
-        )
-    except ValueError:
-        stored_basis = CertificationBasis.MANUAL_GUARDRAIL
-        problems.append("manifest certification_basis is invalid")
-    audit_policy = derive_release_policy(
-        file_valid=bool(data.get("FILE_VALID", not problems)) and not problems,
-        evidence_state=stored_evidence_state,
-        model_status=stored_model_status,
-        certification_basis=stored_basis,
-        file_blockers=problems,
-        evidence_blockers=data.get("evidence_blockers", ()),
-        model_blockers=data.get("model_blockers", ()),
-        safety_blockers=data.get("blockers", ()),
-    )
-    _print_json(
-        {
-            "status": "PASS" if not problems else "FAIL",
-            **audit_policy.truth_values(),
-            "certification_basis": audit_policy.certification_basis.value,
-            "problems": problems,
-        }
-    )
-    return 0 if not problems else 2
+    _print_json(report)
+    return 0 if report["RELEASE_DECISION"] == "CERTIFIED_UPLOAD_PACKAGE" else 2
 
 
 def _cowork_run_control_values(request: CoworkRunRequest) -> dict[str, object]:
@@ -1854,6 +2031,7 @@ def _cowork_run_control_values(request: CoworkRunRequest) -> dict[str, object]:
         "TEAM_PROJECTION_CSV": request.team_projection_csv or "",
         "PLAYER_OPPORTUNITY_CSV": request.player_opportunity_csv or "",
         "OFFICIAL_STATUS_CSV": request.official_status_csv or "",
+        "ROLE_EVIDENCE_JSON": request.role_evidence_json or "",
         "FIELD_SIZE": request.field_size,
         "MAX_ENTRIES": None,
         "ADVERTISED_PRIZE_VALUE": request.advertised_prize_value,
@@ -1876,19 +2054,153 @@ def _snapshot_cowork_request(
     return replace(request, **updates)
 
 
-def _cowork_core_blockers(request: CoworkRunRequest) -> tuple[str, ...]:
+def _cowork_reported_blockers(request: CoworkRunRequest) -> tuple[str, ...]:
+    """Every named input this request still lacks, whatever the profile gates on."""
+
     blockers = list(required_next_inputs(request))
-    return tuple(
-        blocker
-        for blocker in blockers
-        if not blocker.startswith("OFFICIAL_STATUS_REQUIRED:")
+    if request.profile == "prior_review":
+        blockers.extend(prior_review_next_inputs(request))
+    return tuple(blockers)
+
+
+def _cowork_core_blockers(request: CoworkRunRequest) -> tuple[str, ...]:
+    """The subset the requested profile actually gates on."""
+
+    return gating_blockers(request, _cowork_reported_blockers(request))
+
+
+def _run_prior_review_profile(
+    *,
+    args: argparse.Namespace,
+    request: CoworkRunRequest,
+    run_id: str,
+    slate,
+    entries,
+    output_root: Path,
+    report_path: Path,
+    request_path: Path,
+    doctor_report,
+    unclassified,
+    intake: Mapping[str, object],
+    reported_blockers: list[str],
+) -> int:
+    """Drive the prior-only review chain from one gated Cowork command.
+
+    This path certifies nothing. `MODEL_STATUS` is pinned to `PRIOR_ONLY` and
+    `RELEASE_DECISION` to `DO_NOT_UPLOAD` here, not derived from an argument, and
+    the derived policy is re-asserted before anything is written. There is no
+    flag or profile value that can make this profile emit a certified package,
+    and a generated assignment is never routed into the manual-guardrail path.
+    """
+
+    as_of_raw = getattr(args, "as_of", None)
+    if as_of_raw:
+        as_of = datetime.fromisoformat(str(as_of_raw).replace("Z", "+00:00"))
+        if as_of.tzinfo is None:
+            raise ValueError("as_of must be timezone aware")
+        as_of = as_of.astimezone(timezone.utc)
+    else:
+        as_of = None  # live profile advances the clock after source acquisition
+
+    outcome = run_prior_review(
+        salary_csv=request.salary_csv or "",
+        entry_csv=request.entry_csv or "",
+        label=request.label,
+        as_of=as_of,
+        run_root=DEFAULT_RUNS_DIR / run_id / "prior_review",
+        output_root=output_root,
+        season=request.season,
+        prior_season=request.prior_season,
+        prior_package_dir=request.prior_package_dir,
+        build_priors=request.build_priors,
+        weather_state=request.weather_state,
+        weather_source_uri=request.weather_source_uri,
+        weather_observed_at=request.weather_observed_at,
+        lineup_count=request.lineup_count,
+        max_person_overlap=request.max_person_overlap,
+        operator_excluded_dk_ids=request.exclude_dk_ids,
+        extra_unavailable_statuses=request.unavailable_statuses,
+        extra_available_statuses=request.available_statuses,
+        official_status_csv=request.official_status_csv,
+        role_evidence_json=request.role_evidence_json,
     )
+
+    blockers = list(reported_blockers)
+    blockers[0:0] = list(outcome.blockers)
+    truths = _blocked_truth_values(
+        file_valid=outcome.file_valid,
+        evidence_state=ReleaseEvidenceState.UNKNOWN,
+        model_status=ModelStatus.PRIOR_ONLY,
+        certification_basis=CertificationBasis.MODEL_ASSISTED,
+    )
+    if (
+        truths["MODEL_STATUS"] != ModelStatus.PRIOR_ONLY.value
+        or truths["RELEASE_DECISION"] != ReleaseDecision.DO_NOT_UPLOAD.value
+    ):
+        raise RuntimeError(
+            "prior_review derived a release decision other than DO_NOT_UPLOAD; "
+            "refusing to write anything"
+        )
+
+    review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
+    create_cowork_status_workbook(
+        output_path=review_path,
+        run_values=_cowork_run_control_values(request),
+        blockers=blockers,
+        report_path=report_path,
+        truth_values=truths,
+    )
+    result = {
+        "run_id": run_id,
+        "status": "DO_NOT_UPLOAD",
+        **truths,
+        "stage": (
+            "PRIOR_ONLY_REVIEW_EXPORT"
+            if outcome.file_valid
+            else f"PRIOR_REVIEW_{outcome.stage}_BLOCKED"
+        ),
+        "mode": slate.mode.value,
+        "authorized_entries": len(entries.authorizations),
+        "contest_ids": sorted({entry.contest_id for entry in entries.authorizations}),
+        "entry_fees": sorted({entry.entry_fee for entry in entries.authorizations}),
+        "request": str(request_path),
+        "review_workbook": str(review_path),
+        "blockers": blockers,
+        "unclassified_csvs": [str(path) for path in unclassified],
+        "input_hashes": intake["hashes"],
+        "doctor": json.loads(doctor_report.to_json()),
+        **outcome.as_report(),
+        "next": (
+            "Review the lineups and the bulk-entry CSV, then decide manually. Re-run"
+            " after actives are announced, roughly ninety minutes before kickoff."
+            if outcome.file_valid
+            else "Resolve every named blocker above, then re-run the same command."
+        ),
+        "meaning": (
+            "Legal and byte-audited, never certified. This profile reads no payout"
+            " table or field size; supplied activity reports constrain selection. It makes no EV, ROI,"
+            " win probability, cash probability, ownership or edge claim. Uploading"
+            " to DraftKings remains a manual operator action."
+        ),
+    }
+    _write_json(report_path, result)
+    _print_json(result)
+    return 0 if outcome.file_valid else 2
 
 
 def _command_cowork_run(args: argparse.Namespace) -> int:
     request_roots: list[Path] = [(PROJECT_ROOT / "data").resolve()]
     if args.input_dir:
         request_roots.append(Path(args.input_dir).resolve())
+    # An operator who names a frozen prior package directory on the command line
+    # has authorized that exact path, the same way --salaries and --entries work.
+    if getattr(args, "prior_package_dir", None):
+        request_roots.append(Path(args.prior_package_dir).resolve())
+    # A role manifest is a small package: its own immutable JSON plus the
+    # adjacent content-addressed `sources/` captures it binds. Authorize only
+    # that explicitly named package directory.
+    if getattr(args, "role_evidence_json", None):
+        request_roots.append(Path(args.role_evidence_json).resolve().parent)
     if args.request:
         request_source = Path(args.request).resolve()
         possible_run_root = request_source.parent
@@ -1909,6 +2221,42 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     )
     if args.label:
         requested = replace(requested, label=args.label)
+    overrides: dict[str, object] = {}
+    for flag, field_name in (
+        ("profile", "profile"),
+        ("prior_package_dir", "prior_package_dir"),
+        ("season", "season"),
+        ("prior_season", "prior_season"),
+        ("weather_state", "weather_state"),
+        ("weather_source_uri", "weather_source_uri"),
+        ("weather_observed_at", "weather_observed_at"),
+        ("role_evidence_json", "role_evidence_json"),
+        ("lineup_count", "lineup_count"),
+        ("max_person_overlap", "max_person_overlap"),
+        ("exclude", "exclude_dk_ids"),
+        ("unavailable_status", "unavailable_statuses"),
+        ("available_status", "available_statuses"),
+    ):
+        value = getattr(args, flag, None)
+        if value not in (None, ""):
+            if flag == "prior_package_dir":
+                value = str(confine_request_path(
+                    value, base_dir=Path.cwd(), allowed_roots=request_roots,
+                    field_name=flag,
+                ))
+            overrides[field_name] = value
+    if getattr(args, "build_priors", False):
+        overrides["build_priors"] = True
+    if overrides:
+        requested = CoworkRunRequest.from_mapping(
+            {**requested.to_dict(), **overrides},
+            allowed_roots=request_roots,
+            allowed_files=tuple(
+                Path(path).resolve()
+                for path in (args.salaries, args.entries)
+                if path
+            ),
+        )
     run_id = _resolved_run_id(args.run_id, requested.label)
     args._resolved_cowork_run_id = run_id
     request_roots.append((DEFAULT_RUNS_DIR / run_id).resolve())
@@ -1949,7 +2297,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         _cowork_run_control_values(snapshotted),
     )
     doctor_report = doctor(PROJECT_ROOT)
-    blockers = list(required_next_inputs(snapshotted))
+    blockers = list(_cowork_reported_blockers(snapshotted))
     contest_problems = list(single_contest_problems(entries))
     blockers[0:0] = contest_problems
     if not doctor_report.pass_status:
@@ -2001,6 +2349,22 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         _write_json(report_path, result)
         _print_json(result)
         return 2
+
+    if snapshotted.profile == "prior_review":
+        return _run_prior_review_profile(
+            args=args,
+            request=snapshotted,
+            run_id=run_id,
+            slate=slate,
+            entries=entries,
+            output_root=output_root,
+            report_path=report_path,
+            request_path=request_path,
+            doctor_report=doctor_report,
+            unclassified=unclassified,
+            intake=intake,
+            reported_blockers=blockers,
+        )
 
     assignment_path = snapshotted.assignment_csv
     build_report_path: Path | None = None
@@ -2338,7 +2702,92 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--label")
     cowork.add_argument("--run-id")
     cowork.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    cowork.add_argument(
+        "--profile",
+        choices=list(SUPPORTED_PROFILES),
+        help=(
+            "diagnostic (default) and registered run the existing build and certify"
+            " path; prior_review drives the prior-only chain and can never certify"
+        ),
+    )
+    cowork.add_argument("--prior-package-dir")
+    cowork.add_argument("--build-priors", action="store_true", default=False)
+    cowork.add_argument("--season", type=int)
+    cowork.add_argument("--prior-season", type=int)
+    cowork.add_argument("--weather-state", choices=list(OPERATOR_WEATHER_STATES))
+    cowork.add_argument("--weather-source-uri")
+    cowork.add_argument("--weather-observed-at")
+    cowork.add_argument("--role-evidence-json")
+    cowork.add_argument("--lineup-count", type=int)
+    cowork.add_argument("--max-person-overlap", type=int)
+    cowork.add_argument("--as-of")
+    cowork.add_argument("--exclude", action="append")
+    cowork.add_argument("--unavailable-status", action="append")
+    cowork.add_argument("--available-status", action="append")
     cowork.set_defaults(func=command_cowork_run)
+    select = subparsers.add_parser(
+        "select",
+        help="prior-only Showdown selection; never calls field or payout economics",
+    )
+    select.add_argument("--salaries", required=True)
+    select.add_argument("--salary-sha256")
+    select.add_argument("--entries", required=True)
+    select.add_argument("--team-projections", required=True)
+    select.add_argument("--player-opportunities", required=True)
+    select.add_argument("--team-splits", required=True)
+    select.add_argument("--prior-season", type=int, required=True)
+    select.add_argument("--role-evidence-json")
+    select.add_argument("--as-of")
+    select.add_argument("--count", type=int)
+    select.add_argument("--max-person-overlap", type=int, default=4)
+    select.add_argument(
+        "--allow-repeat-captain", action="store_true", default=False
+    )
+    select.add_argument(
+        "--no-redistribute", action="store_true", default=False
+    )
+    select.add_argument("--exclude", action="append")
+    select.add_argument("--unavailable-status", action="append")
+    select.add_argument("--available-status", action="append")
+    select.add_argument("--output-dir", required=True)
+    select.set_defaults(func=command_select)
+    review_export = subparsers.add_parser(
+        "review-export",
+        help="write a legality-checked, byte-audited bulk-entry CSV; never certified",
+    )
+    review_export.add_argument("--salaries", required=True)
+    review_export.add_argument("--entries", required=True)
+    review_export.add_argument("--assignments", required=True)
+    review_export.add_argument("--label")
+    review_export.add_argument("--output-dir", required=True)
+    review_export.set_defaults(func=command_review_export)
+    priors_propose = subparsers.add_parser(
+        "priors-propose",
+        help="freeze approved nflverse artifacts and propose the DK identity crosswalk",
+    )
+    priors_propose.add_argument("--salaries", required=True)
+    priors_propose.add_argument("--salary-sha256", required=True)
+    priors_propose.add_argument("--season", type=int, required=True)
+    priors_propose.add_argument("--prior-season", type=int, required=True)
+    priors_propose.add_argument("--as-of", required=True)
+    priors_propose.add_argument("--output-dir", required=True)
+    priors_propose.set_defaults(func=command_priors_propose)
+    priors_freeze = subparsers.add_parser(
+        "priors-freeze",
+        help="publish prior-only team, player and identity artifacts from a reviewed crosswalk",
+    )
+    priors_freeze.add_argument("--package-dir", required=True)
+    priors_freeze.add_argument("--reviewed", required=True)
+    priors_freeze.add_argument("--reviewed-sha256", required=True)
+    priors_freeze.add_argument("--salaries", required=True)
+    priors_freeze.add_argument("--salary-sha256", required=True)
+    priors_freeze.add_argument("--as-of", required=True)
+    priors_freeze.add_argument("--output-dir", required=True)
+    priors_freeze.add_argument("--weather-state")
+    priors_freeze.add_argument("--salary-observed-at")
+    priors_freeze.add_argument("--weather-source-uri")
+    priors_freeze.add_argument("--weather-observed-at")
+    priors_freeze.set_defaults(func=command_priors_freeze)
     project = subparsers.add_parser(
         "project",
         help="build deterministic prior-only model inputs from frozen approved artifacts",
@@ -2436,6 +2885,15 @@ def build_parser() -> argparse.ArgumentParser:
     audit = subparsers.add_parser("audit")
     audit.add_argument("--manifest", required=True)
     audit.set_defaults(func=command_audit)
+    preflight = subparsers.add_parser(
+        "preflight",
+        help="live pre-upload check: re-derive every hard gate at the current clock",
+    )
+    preflight.add_argument("--manifest", required=True)
+    preflight.add_argument("--salaries")
+    preflight.add_argument("--entries")
+    preflight.add_argument("--assignments")
+    preflight.set_defaults(func=command_preflight)
     return parser
 
 

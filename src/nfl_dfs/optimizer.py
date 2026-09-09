@@ -170,6 +170,36 @@ class LineupOptimizer:
         if indices:
             self._add_row(-highspy.kHighsInf, float(len(indices) - 1), {i: 1.0 for i in indices})
 
+    def add_person_overlap_limit(self, roster: Iterable[str], max_overlap: int) -> None:
+        """Cap how many of a previous lineup's people may reappear in the next.
+
+        `add_no_good` only forbids an exact roster, which in a six-slot
+        single-game pool leaves the same six people available with a rotated
+        captain. Measured on a real Showdown pool, two mean-maximizing lineups
+        came back with identical personnel and a swapped captain, which is not
+        diversification. The limit counts *people*, so both salary rows of a
+        person count once, and it is what makes a portfolio structurally
+        distinct rather than cosmetically distinct.
+        """
+
+        selected = {str(dk_id) for dk_id in roster}
+        by_id = {player.dk_id: player for player in self.players}
+        unknown = selected.difference(by_id)
+        if unknown:
+            raise ValueError(f"overlap roster IDs are outside the salary pool: {sorted(unknown)}")
+        if max_overlap < 0:
+            raise ValueError("max overlap cannot be negative")
+        people = {by_id[dk_id].underlying_id for dk_id in selected}
+        indices = [
+            index
+            for index, player in enumerate(self.players)
+            if player.underlying_id in people
+        ]
+        if indices:
+            self._add_row(
+                -highspy.kHighsInf, float(max_overlap), {index: 1.0 for index in indices}
+            )
+
     def solve(self, scores: Mapping[str, float]) -> SolverResult:
         started = time.perf_counter()
         self.update_objective(scores)
