@@ -45,8 +45,8 @@ backlog items remain separate; their statuses do not override this queue.
 |---|---|---|---|---|---|
 | 1 | SD1 | P0 | Kicker-role evidence contract and conserved kicker scoring | `DONE` | None |
 | 2 | SD2 | P0 | Offensive-role evidence and explicit missing-history handling | `DONE` | SD1 |
-| 3 | SD3 | P1 | Precise, validated portfolio-control contract | `READY` | SD2 |
-| 4 | SD4 | P1 | Enforced portfolio controls and independent assignment audit | `BLOCKED` | SD3 |
+| 3 | SD3 | P1 | Precise, validated portfolio-control contract | `DONE` | SD2 |
+| 4 | SD4 | P1 | Enforced portfolio controls and independent assignment audit | `READY` | SD3 |
 | 5 | SD5 | P1 | Readable, artifact-bound lineup and exposure review | `BLOCKED` | SD4 |
 | 6 | SD6 | P0 acceptance | Complete Cowork/Linux rehearsal with current evidence | `BLOCKED` | SD5 and access to the actual environment and matching files |
 
@@ -614,3 +614,153 @@ was marked done and no upload gate changed.
 
 Next READY chunk: **SD3 only**, with
 `docs/session-prompts/SD3-portfolio-control-contract.md`. SD4–SD6 remain blocked.
+
+### 2026-09-09 — SD3 implementation session started
+
+Actual start HEAD: `7f9ae4d200baf624b63ceb001e12eb318010146a`, branch
+`codex/sd3-portfolio-control-contract`, created in place from the completed SD2
+checkout without changing working-tree bytes. Scope: SD3's versioned
+portfolio-policy contract, deterministic validation, exact identity and Entry-ID
+bindings, exposure rounding, canonical uniqueness/overlap semantics, request and
+immutable-snapshot integration, necessary capacity checks, and explicit refusal
+before SD4 enforcement. No selection or enforcement changes are authorized.
+
+Pre-existing changes preserved: the refreshed tracked
+`docs/session-prompts/SD3-portfolio-control-contract.md`, plus untracked
+`Claude outputs/`, `docs/session-prompts/W2-expiry-and-selection-objective.md`
+and `docs/session-prompts/W4-cowork-prior-only-profile.md`. The stale local
+remote-tracking reference for the deleted SD2 remote branch was not treated as
+remote state. No staging, commit, push, reset, clean, stash, dependency change
+or account action is authorized. SD4 remains blocked pending full SD3 acceptance.
+
+### 2026-09-09 — SD3 completion record
+
+Session/date: 2026-09-09, local Windows workspace, pinned Python 3.13.7 and
+existing locked dependencies. SD3 is `DONE` for software acceptance. No live
+slate, DraftKings action or actual Cowork/Linux run occurred.
+
+Start HEAD / end HEAD: `7f9ae4d200baf624b63ceb001e12eb318010146a` /
+`7f9ae4d200baf624b63ceb001e12eb318010146a`, branch
+`codex/sd3-portfolio-control-contract`; all SD3 work remains uncommitted and
+unstaged. The refreshed tracked SD3 prompt and the pre-existing untracked
+`Claude outputs/`, `docs/session-prompts/W2-expiry-and-selection-objective.md`
+and `docs/session-prompts/W4-cowork-prior-only-profile.md` were preserved. No
+reset, clean, stash, broad formatting, dependency upgrade, stage, commit, push
+or account action occurred. The stale local remote-tracking SD2 reference and
+the Git global-ignore permission warning were left unchanged.
+
+Implemented behavior:
+
+- Added strict `nfl_showdown_portfolio_policy_v1` parsing and
+  `nfl_showdown_portfolio_policy_normalized_v1` output. The contract binds exact
+  salary SHA-256, one game, the complete underlying-person/CPT/FLEX identity map
+  and the full requested Entry-ID sequence. Numeric fractions require the exact
+  `[0,1]` unit; Booleans, numeric strings, nonfinite/negative/out-of-range values,
+  duplicate JSON keys, entries, identities and overrides fail closed.
+- Exact-decimal `floor(fraction * all_requested_entries)` produces the tested
+  2-entry `0.49 -> 0`, `0.50 -> 1`, `1.00 -> 2` and 3-entry `0.66 -> 1`,
+  `0.67 -> 2` boundaries. Omitted/null means no added cap, zero remains zero,
+  one permits all entries, and exact overrides beat defaults. Captain maxima are
+  explicitly tightened to stricter combined-person maxima; policy and existing
+  participation/source exclusions take precedence and are reported, never
+  relaxed.
+- Defined canonical identity as Captain person plus sorted FLEX people, so FLEX
+  order is irrelevant and Captain identity matters. Pairwise overlap uses
+  underlying-person sets regardless of role; combined exposure counts once per
+  person/entry. Necessary slot, Captain, team, salary, uniqueness and pairwise
+  capacity checks have named smallest next actions and make no solver
+  infeasibility claim.
+- Added stable exact-decimal canonical serialization. The source-policy hash
+  binds original bytes; the normalized hash equals the normalized file's exact
+  bytes. Requests, CLI `--portfolio-policy-json`, path confinement, immutable
+  snapshots, generated requests, replay and the staged/status workbook carry the
+  artifact. A conflicting `lineup_count` is named rather than silently reducing
+  the denominator.
+- SD4 enforcement remains deliberately absent. Every policy-bearing production
+  request stops at `PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3` before
+  selection/export, leaves no new `DK_REVIEW_ENTRY` CSV, retains earlier outputs,
+  and records `enforcement_status=NOT_IMPLEMENTED_SD3`. Policy-free requests
+  retain SD1/SD2 behavior. No selection objective, greedy sequence, Captain rule,
+  lineup cycling, optimizer constraint or upload gate changed in SD3.
+
+Changed paths (reviewed, not staged):
+
+```text
+src/nfl_dfs/portfolio_policy.py
+src/nfl_dfs/cowork.py
+src/nfl_dfs/cli.py
+src/nfl_dfs/workbook.py
+tests/test_portfolio_policy.py
+CLAUDE.md
+IMPLEMENTATION_STATUS.md
+docs/DATA_CONTRACTS.md
+docs/COWORK_RUNBOOK.md
+docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md
+docs/session-prompts/SD4-enforce-and-audit-portfolio-controls.md
+backlog.md
+changelog.md
+```
+
+The pre-existing modified
+`docs/session-prompts/SD3-portfolio-control-contract.md` remains preserved dirt,
+not an SD3 implementation edit from this session.
+
+Verification (all commands from the repository root):
+
+- Initial contract/Cowork focus (`tests/test_portfolio_policy.py`,
+  `tests/test_cowork.py`, `tests/test_prior_review_profile.py`) with `-o
+  addopts='' -p no:cacheprovider -q` and a unique project-local base: 76 passed,
+  1 skipped in 10.04s.
+- Broad policy/request/selection/lineup/participation/workbook/APPG regressions:
+  120 passed, 1 skipped in 19.13s.
+- Review found the normalized writer had appended a byte not covered by its
+  reported semantic hash. The writer was repaired so the normalized artifact's
+  exact file hash equals `normalized_policy_sha256`, and a regression was added.
+  Post-repair contract/Cowork focus: 76 passed, 1 skipped in 10.73s.
+- First complete suite used the prompt's long GUID-derived base and recorded
+  439 passed, 1 failed, 1 skipped in 94.18s. The sole failure was the existing
+  copied-prior-package integration trying to create a 261-character temporary
+  source path while doctor reports Windows long paths disabled. The same code
+  and test passed in a new short isolated root: 440 passed, 1 skipped in 78.02s.
+- **Final complete pinned-runtime suite:** `& .\.venv\Scripts\python.exe -B -m
+  pytest -p no:cacheprovider --basetemp outputs\p3c-aade35ce --durations=10
+  --junitxml=outputs\sd3-closeout-20260909.xml` — **440 passed, 1 skipped in
+  57.57s**. No failures. The sole skip is the existing Windows symlink-creation
+  privilege case; this does not prove Linux behavior.
+- `& .\nfl.ps1 doctor` — PASS: Python 3.13.7, SQLite integrity `ok`, WAL,
+  `CLOSED_OR_ABSENT` Excel lock, cleaned probe, 8 processors, no detected
+  sync/reparse; Windows long paths remain disabled. `git diff --check` — PASS.
+- Final diff review confirmed no changes to `selection.py`, `optimizer.py`,
+  `prior_review.py`, `review_export.py`, field/economics/simulation code,
+  dependencies or upload gates. All SD3 acceptance cases and existing no-policy
+  regressions passed; no unresolved SD3 software finding remains.
+
+Representative retained synthetic policy-boundary evidence under
+`outputs/p3c-aade35ce/test_cowork_policy_is_snapshot0/`:
+
+| Artifact | SHA-256 |
+|---|---|
+| Exact source policy snapshot | `9ccebfbf27b7f20fc668e0e603ef121892381365eb716f7997b1ff02c7718e63` |
+| Exact normalized policy bytes | `5635b472b175c48f0a3e9f61e1bfdbc922aa79ba1f788c92f7b728718ba09d61` |
+| Validation report file | `6911adecca9efbc6ab923a53a0b56dce9f27490aae83f486572090f1bedf04eb` |
+| Frozen run request | `0410d7f5093a9cb24a4f0b655d0c6dd8fe899f28b921416db54363c46feded44` |
+| Cowork result | `17d8a4b2bc4eb6c5b80c04877fd1e3dd6a924ccd3703ef8ba4387214e249c7f1` |
+
+The original policy was deliberately mutated after the first snapshot; copied
+replay retained the snapshot source hash and the same normalized hash. The
+synthetic policy-bearing execution truthfully records `FILE_VALID=false`,
+`EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`, stage
+`PORTFOLIO_POLICY_ENFORCEMENT_BLOCKED`, and `bulk_entry_csv=null`. No live-run
+truths are claimed.
+
+Remaining blockers / limits: no SD3 software acceptance criterion remains.
+SD4 must implement bounded joint enforcement and independent final-assignment
+audit before a policy-bearing request may reach review export. Actual
+Cowork/Linux, live policy authoring, live evidence, modest/large multi-entry
+runtime, W3 simulator participation, W8/W9 economics and prospective model
+validation remain unverified. No broader tranche or upload gate was marked done.
+
+Next READY chunk: **SD4 only**, with
+`docs/session-prompts/SD4-enforce-and-audit-portfolio-controls.md`. SD5 and SD6
+remain blocked.

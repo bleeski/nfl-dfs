@@ -98,6 +98,13 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    the generated request and rerun. Qualitative starter/backup evidence cannot
    invent a numerical share. Without supported replacements, excluded volume
    stays visibly unallocated. Never ask Ben to author numerical role priors.
+   A versioned `portfolio_policy_json` may bind exact salary bytes, the game,
+   the complete person/CPT/FLEX map, and all requested Entry IDs. SD3 validates
+   and snapshots it but does not enforce it. Until SD4 is complete, any request
+   containing that field must stop with
+   `PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`, preserve earlier outputs, and
+   write no new `DK_REVIEW_ENTRY` CSV. A normalized policy/report is not proof
+   of enforcement. Requests without the policy retain their existing behavior.
    Kicker roles are resolved after those exclusions. If more than one kicker
    remains eligible for a team, capture approved source bytes through
    `sources.py`, prepare the versioned `role_evidence_json` package documented

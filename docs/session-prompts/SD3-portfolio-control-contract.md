@@ -24,15 +24,24 @@ are not a substitute for evidence or a claim about optimal tournament risk.
 
 ## Actual baseline and Git safeguards
 
-At prompt creation, branch was `codex/s6a-deterministic-projection-producer`,
-HEAD `09bb9bdc71359d667aa55273575c4dd14f30bba3`. SD1 was committed. SD2 changes
-are uncommitted. SD2's final Windows suite was 416 passed, 1 skipped in 61.58s;
-doctor and whitespace checks passed. The skip was Windows symlink privilege.
-Consult its completion record for exact commands, hashes and
-changed paths. Recheck actual HEAD and working-tree state before editing.
+Baseline refreshed and verified on 2026-09-09: SD2 commit
+`7f9ae4d200baf624b63ceb001e12eb318010146a` was merged through
+[PR #5](https://github.com/bleeski/nfl-dfs/pull/5). GitHub `main` is at merge
+commit `a8363de237bad78d35150b1febbd4a036a8278a7`; the remote branch
+`codex/sd2-offensive-roles-and-history` was deleted. The local checkout remains
+on that SD2 branch at `7f9ae4d200baf624b63ceb001e12eb318010146a`. Tracked files
+were clean before this prompt refresh; this refreshed prompt may itself be an
+uncommitted change. Do not assume local `main` is synchronized or recreate the
+deleted remote branch. Recheck actual HEAD, branch, index and working-tree
+state before editing, and verify the checkout contains completed SD2.
 
-Preserve **every** existing change, including SD2 source/tests/documentation,
-the tracker and prompts, `Claude outputs/`,
+SD2's final Windows suite was 416 passed, 1 skipped in 61.58s; doctor and
+whitespace checks passed. The skip was Windows symlink privilege. These are
+SD2 baseline results, not SD3 verification. Consult the SD2 completion record
+for exact commands, hashes and changed paths.
+
+Preserve **every** existing change, including this refreshed prompt, any new
+source/test/documentation edits, the tracker and prompts, `Claude outputs/`,
 `docs/session-prompts/W2-expiry-and-selection-objective.md` and
 `docs/session-prompts/W4-cowork-prior-only-profile.md`. Preserve all supplied
 bytes, byte-sensitive fixtures, source captures and prior outputs. No reset,

@@ -51,6 +51,17 @@ the next evidence action. The same optional CLI input is
 `--offensive-role-evidence-json '<path-to-offensive_roles.json>'`.
 The main operating workflow remains two attached CSV files.
 
+SD3 accepts an optional versioned `portfolio_policy_json` with exact salary,
+game, full person/CPT/FLEX identity, and requested Entry-ID bindings. The
+contract uses explicit fractions in `[0,1]` and exact-decimal floor rounding;
+see `docs/DATA_CONTRACTS.md`. SD3 does not enforce it. Until SD4 is complete,
+any request containing this field deliberately stops with
+`PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`, retains the normalized policy
+and both policy hashes, writes no new `DK_REVIEW_ENTRY` CSV, and remains
+`PRIOR_ONLY / DO_NOT_UPLOAD`. Do not interpret a valid policy report as an
+enforced portfolio. Requests omitting the policy continue through the existing
+SD1/SD2 behavior.
+
 Kicker roles are resolved after those exclusions. When one eligible kicker is
 listed for a team and no role artifact is supplied, the review may continue only
 with a visible prior-only sole-listed assumption; it does not prove a confirmed
@@ -155,6 +166,7 @@ the original attachment location.
   "official_status_csv": null,
   "role_evidence_json": null,
   "offensive_role_evidence_json": null,
+  "portfolio_policy_json": null,
   "ownership_brackets_csv": null,
   "source_ledger_json": null,
   "advertised_prize_value": null,
@@ -190,6 +202,11 @@ Populate only source-backed values:
   it to the generated request when a team has multiple eligible kickers, then
   rerun the request. Its salary/game/ID bindings, source bytes, hashes, times,
   expiry, and allocation must all validate; an invalid supplied package blocks.
+- `portfolio_policy_json`: optional exact-bound Showdown preference contract.
+  It is snapshotted and deterministically normalized, but SD3 always refuses
+  execution before selection/export because enforcement belongs to SD4. A
+  `valid=true` validation report is not permission to generate, certify, or
+  upload lineups.
 - `assignment_csv`: optional manual lineup path. When present, the workflow
   validates/certifies it instead of running the model-assisted build.
 - `profile`: `diagnostic` uses the bounded Cowork scenario/candidate sizes;
@@ -214,6 +231,17 @@ selection. Review `prior_review_reports.selection.prior_scores.kicker_roles` for
 the team allocation, sole-listed assumptions, zero-share exclusions, coverage
 gaps, source hashes and expiry. A source-bound role does not change
 `MODEL_STATUS=PRIOR_ONLY` or `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+For policy-contract validation, use the generated request or the explicit CLI
+field:
+
+```sh
+sh ./nfl.sh cowork-run \
+  --request '<full-path-to-run_request.json>' \
+  --portfolio-policy-json '<full-path-to/portfolio_policy.json>'
+```
+
+The expected exit is 2 with `DO_NOT_UPLOAD`; no review-entry CSV is created.
 
 ## Produce prior-only model inputs
 

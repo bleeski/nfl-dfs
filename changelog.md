@@ -4,6 +4,45 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-09 — SD3 exact-bound portfolio-policy contract
+
+Closes SD3 for software acceptance. Added
+`src/nfl_dfs/portfolio_policy.py` and `tests/test_portfolio_policy.py`; integrated
+the optional contract through `cowork.py`, CLI parsing/confinement/snapshots,
+generated run requests and `workbook.py`; and updated `CLAUDE.md`,
+`IMPLEMENTATION_STATUS.md`, `docs/DATA_CONTRACTS.md`,
+`docs/COWORK_RUNBOOK.md`, the Showdown tracker and backlog.
+
+`nfl_showdown_portfolio_policy_v1` binds the exact salary SHA-256, single game,
+complete underlying-person/CPT/FLEX map and all requested Entry IDs. It accepts
+only explicit numeric fractions in `[0,1]` and converts them with exact-decimal
+`floor(fraction * requested_entry_count)`. Defaults, overrides, zero/one,
+Captain-as-subset tightening, exclusions, canonical uniqueness and underlying-
+person overlap are deterministic and explicit. Necessary capacity findings do
+not claim solver infeasibility. `nfl_showdown_portfolio_policy_normalized_v1`
+has stable canonical bytes; its reported normalized hash equals the exact file
+hash, separately from the original source-policy hash.
+
+SD3 does not change selection or implement enforcement. Every policy-bearing
+execution stops before selection/export at
+`PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`, retains validation/normalized
+artifacts and both hashes, preserves earlier outputs and writes no new
+`DK_REVIEW_ENTRY` CSV. Policy-free SD1/SD2 behavior is unchanged. The retained
+synthetic boundary run reports `FILE_VALID=false`, `EVIDENCE_STATE=UNKNOWN`,
+`MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+Verification: focused contract/Cowork suite 76 passed, 1 skipped in 10.04s;
+broad regressions 120 passed, 1 skipped in 19.13s; post-review hash-binding
+focus 76 passed, 1 skipped in 10.73s. A first complete run recorded 439 passed,
+1 failed, 1 skipped in 94.18s because its GUID-derived test path reached 261
+characters while Windows long paths are disabled. The same copied-package test
+passed under short isolated roots. Final complete pinned-runtime suite: 440
+passed, 1 skipped in 57.57s; doctor and `git diff --check` passed. The skip is
+the existing Windows symlink-privilege case. Actual Cowork/Linux, live policy
+use and multi-entry enforcement remain unverified. SD4 is now the sole next
+READY item; its prompt is
+`docs/session-prompts/SD4-enforce-and-audit-portfolio-controls.md`.
+
 ### 2026-09-09 — SD2 offensive roles and explicit historical basis
 
 Added `nfl_offensive_role_evidence_v1` alongside the unchanged SD1 kicker

@@ -124,6 +124,10 @@ def create_operator_input_workbook(path: str | Path) -> Path:
             "OFFENSIVE_ROLE_EVIDENCE_JSON", "", "SHOWDOWN",
             "Generated captured-source offensive allocation or unresolved-role facts",
         ),
+        (
+            "PORTFOLIO_POLICY_JSON", "", "SHOWDOWN",
+            "Versioned exact-ID portfolio controls; SD3 validates but SD4 must enforce",
+        ),
     ]
     for row in rows:
         run_control.append(row)
