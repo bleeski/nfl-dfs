@@ -17,6 +17,7 @@ from typing import Iterable, Mapping
 import numpy as np
 
 from .certification import certify_upload
+from .preflight import historical_artifact_integrity, live_pre_upload_check
 from .candidate_families import coverage_report
 from .contracts import (
     CertificationBasis,
@@ -515,12 +516,19 @@ def _official_status_evidence(
         )
     else:
         state = EvidenceState.PASS
-        reason = "every selected exact DK ID is source-bound, ACTIVE, and current"
+        reason = "every selected exact DK ID has current operator-attested ACTIVE provenance"
+    asserted_sources = sorted({
+        snapshot.source_url_by_id[dk_id] for dk_id in selected
+        if dk_id in snapshot.source_url_by_id
+    })
+    if len(asserted_sources) > 1:
+        reason += "; asserted source URLs: " + ", ".join(asserted_sources)
     return EvidenceRecord(
         subject="selected_portfolio",
         field="official_inactive_status",
         value={dk_id: statuses.get(dk_id) for dk_id in sorted(selected)},
         source_artifact_id=digest,
+        source_url=asserted_sources[0] if len(asserted_sources) == 1 else None,
         observed_at=oldest_observation,
         expires_at=expires_at,
         hard_gate=True,
@@ -1978,58 +1986,31 @@ def command_status(args: argparse.Namespace) -> int:
 
 
 def command_audit(args: argparse.Namespace) -> int:
-    data = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-    problems: list[str] = []
-    output_path = data.get("output_path")
-    release_decision = data.get(
-        "RELEASE_DECISION",
-        "CERTIFIED_UPLOAD_PACKAGE" if data.get("status") == "CERTIFIED" else "DO_NOT_UPLOAD",
+    """Historical artifact integrity. R09: this is never a current release decision.
+
+    It used to feed the manifest's stored truth fields into the release policy,
+    so a package whose evidence had expired still reported
+    `CERTIFIED_UPLOAD_PACKAGE`. It now reports what the manifest *stored*,
+    labelled as stored, and its own release decision is fixed at
+    `DO_NOT_UPLOAD`. Use `preflight` for a current pre-upload decision.
+    """
+
+    report = historical_artifact_integrity(args.manifest)
+    _print_json(report)
+    return 0 if report["ARTIFACT_INTEGRITY"] == "PASS" else 2
+
+
+def command_preflight(args: argparse.Namespace) -> int:
+    """Live pre-upload check. Re-derives every hard gate at the current clock."""
+
+    report = live_pre_upload_check(
+        args.manifest,
+        salaries=getattr(args, "salaries", None),
+        entries=getattr(args, "entries", None),
+        assignments=getattr(args, "assignments", None),
     )
-    if release_decision == "CERTIFIED_UPLOAD_PACKAGE":
-        if not output_path or not Path(output_path).exists():
-            problems.append("certified output is missing")
-        elif sha256_file(output_path) != data.get("output_sha256"):
-            problems.append("certified output hash changed")
-    elif output_path:
-        problems.append("DO_NOT_UPLOAD manifest must not point to an upload CSV")
-    try:
-        stored_evidence_state = ReleaseEvidenceState(
-            data.get("EVIDENCE_STATE", "UNKNOWN")
-        )
-    except ValueError:
-        stored_evidence_state = ReleaseEvidenceState.CONFLICTED
-        problems.append("manifest EVIDENCE_STATE is invalid")
-    try:
-        stored_model_status = ModelStatus(data.get("MODEL_STATUS", "UNVALIDATED"))
-    except ValueError:
-        stored_model_status = ModelStatus.UNVALIDATED
-        problems.append("manifest MODEL_STATUS is invalid")
-    try:
-        stored_basis = CertificationBasis(
-            data.get("certification_basis", "MANUAL_GUARDRAIL")
-        )
-    except ValueError:
-        stored_basis = CertificationBasis.MANUAL_GUARDRAIL
-        problems.append("manifest certification_basis is invalid")
-    audit_policy = derive_release_policy(
-        file_valid=bool(data.get("FILE_VALID", not problems)) and not problems,
-        evidence_state=stored_evidence_state,
-        model_status=stored_model_status,
-        certification_basis=stored_basis,
-        file_blockers=problems,
-        evidence_blockers=data.get("evidence_blockers", ()),
-        model_blockers=data.get("model_blockers", ()),
-        safety_blockers=data.get("blockers", ()),
-    )
-    _print_json(
-        {
-            "status": "PASS" if not problems else "FAIL",
-            **audit_policy.truth_values(),
-            "certification_basis": audit_policy.certification_basis.value,
-            "problems": problems,
-        }
-    )
-    return 0 if not problems else 2
+    _print_json(report)
+    return 0 if report["RELEASE_DECISION"] == "CERTIFIED_UPLOAD_PACKAGE" else 2
 
 
 def _cowork_run_control_values(request: CoworkRunRequest) -> dict[str, object]:
@@ -2110,7 +2091,7 @@ def _run_prior_review_profile(
             raise ValueError("as_of must be timezone aware")
         as_of = as_of.astimezone(timezone.utc)
     else:
-        as_of = datetime.now(timezone.utc)
+        as_of = None  # live profile advances the clock after source acquisition
 
     outcome = run_prior_review(
         salary_csv=request.salary_csv or "",
@@ -2131,6 +2112,7 @@ def _run_prior_review_profile(
         operator_excluded_dk_ids=request.exclude_dk_ids,
         extra_unavailable_statuses=request.unavailable_statuses,
         extra_available_statuses=request.available_statuses,
+        official_status_csv=request.official_status_csv,
     )
 
     blockers = list(reported_blockers)
@@ -2186,7 +2168,7 @@ def _run_prior_review_profile(
         ),
         "meaning": (
             "Legal and byte-audited, never certified. This profile reads no payout"
-            " table, no field size and no activity report, and it makes no EV, ROI,"
+            " table or field size; supplied activity reports constrain selection. It makes no EV, ROI,"
             " win probability, cash probability, ownership or edge claim. Uploading"
             " to DraftKings remains a manual operator action."
         ),
@@ -2241,6 +2223,11 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     ):
         value = getattr(args, flag, None)
         if value not in (None, ""):
+            if flag == "prior_package_dir":
+                value = str(confine_request_path(
+                    value, base_dir=Path.cwd(), allowed_roots=request_roots,
+                    field_name=flag,
+                ))
             overrides[field_name] = value
     if getattr(args, "build_priors", False):
         overrides["build_priors"] = True
@@ -2879,6 +2866,15 @@ def build_parser() -> argparse.ArgumentParser:
     audit = subparsers.add_parser("audit")
     audit.add_argument("--manifest", required=True)
     audit.set_defaults(func=command_audit)
+    preflight = subparsers.add_parser(
+        "preflight",
+        help="live pre-upload check: re-derive every hard gate at the current clock",
+    )
+    preflight.add_argument("--manifest", required=True)
+    preflight.add_argument("--salaries")
+    preflight.add_argument("--entries")
+    preflight.add_argument("--assignments")
+    preflight.set_defaults(func=command_preflight)
     return parser
 
 

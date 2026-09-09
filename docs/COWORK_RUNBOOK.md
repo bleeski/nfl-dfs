@@ -1,5 +1,44 @@
 # Claude Cowork Runbook
 
+## Showdown generation: current operating path (2026-09-09)
+
+For the normal request to generate a Showdown portfolio from the two attached
+CSV files, run:
+
+```sh
+sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<slate-label>'
+```
+
+This generates prior-only review lineups. It does not implement the full
+ceiling/ownership/drawdown mandate and cannot certify generated lineups for
+upload. A successful review run exits 0 with `FILE_VALID=true`,
+`MODEL_STATUS=PRIOR_ONLY`, and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+For outdoor weather, capture the relevant NWS gridpoint forecast through
+`sources.fetch_public_artifact`, retain the original response and hash, and
+populate the request's `weather_state`, `weather_source_uri`, and
+`weather_observed_at` from that capture. NWS was reachable during the September
+9 Windows rehearsal; availability must be checked in the actual Cowork session.
+Use the forecast's `generatedAt`, never the time you typed the request. The
+six-hour weather expiry survives freezing, projection, selection and export.
+
+Rerun using the generated request with the completed weather fields. If the
+command stops for identity decisions, resolve only the named ambiguities from
+verifiable identity evidence. Current `official_status_csv` rows are used to
+exclude INACTIVE people across both Captain and Flex before selection; missing
+status rows do not imply ACTIVE. Refresh near kickoff. Never set `--as-of` to
+an earlier time for a live run: that flag is historical replay only.
+
+The resulting report names the reviewed assignments and `DK_REVIEW_ENTRY` file.
+Show its limitations alongside the lineups. `DK_REVIEW_ENTRY` is a retained
+diagnostic artifact, not a certified upload package. A separately supplied
+manual lineup can follow the manual guardrail route, subject to all its gates;
+generated prior lineups cannot be relabeled as manual to bypass validation.
+
+The older diagnostic/certification procedure below still applies to that
+explicitly selected path and to Classic. Use `preflight`, rather than historical
+`audit`, immediately before any certified manual upload.
+
 This is Claude's operating procedure for the two-file NFL DFS workflow. The
 operator's intended interaction is: attach a DraftKings salary CSV and
 reserved-entry CSV, ask Claude to run the slate, review the result, and upload

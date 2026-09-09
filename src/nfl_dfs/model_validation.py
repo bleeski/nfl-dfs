@@ -47,6 +47,8 @@ def validate_simulation_draws(
 ) -> SimulationGateReport:
     actual_values = np.asarray(actual, dtype=float)
     positions_array = np.asarray(positions)
+    if minimum_position_sample < 1 or minimum_tail_sample < 1:
+        raise ValueError("minimum validation samples must be positive")
     if len(actual_values) != len(positions_array):
         raise ValueError("position labels must align with actual outcomes")
     if not dependency_bands:
@@ -108,6 +110,7 @@ def validate_simulation_draws(
                 f"{name}:{'UNKNOWN' if value is None else value}:expected[{lower},{upper}]"
             )
     blockers.extend(f"DEPENDENCY:{failure}" for failure in dependency_failures)
+    blockers.extend(f"INSUFFICIENT_SAMPLE:{warning}" for warning in warnings)
     return SimulationGateReport(
         status="PASS" if not blockers else "SIMULATION_DIAGNOSTIC_ONLY",
         proper_score_improvement=proper_improvement,

@@ -1263,6 +1263,8 @@ def _weather_evidence_basis(
         raise PriorsBuildError(
             f"WEATHER_OBSERVATION_IN_FUTURE:{observed.isoformat()}>{as_of.isoformat()}"
         )
+    if as_of > observed + timedelta(hours=6):
+        raise PriorsBuildError("WEATHER_CAPTURE_STALE:refresh the forecast; maximum age is six hours")
     return f"OPERATOR_CAPTURE:{source_uri}:observed_at={observed.isoformat()}"
 
 
@@ -1824,11 +1826,16 @@ def freeze_prior_package(
         raise PriorsBuildError("TEAM_CROSSWALK_CHANGED_SINCE_PROPOSAL")
     game_row = resolve_nflverse_game(slate, rows("games"), crosswalk, season=season)
     resolved_weather, weather_basis = resolve_weather_state(game_row, weather_state)
-    if weather_basis.startswith("OPERATOR_SUPPLIED"):
+    weather_expiry = None
+    if weather_basis.startswith("OPERATOR_SUPPLIED") or (
+        resolved_weather == "ROOF_OPEN" and weather_source_uri
+    ):
         weather_basis = (
             f"{weather_basis}|"
             + _weather_evidence_basis(weather_source_uri, weather_observed_at, as_of=when)
         )
+        if weather_source_uri and weather_observed_at is not None:
+            weather_expiry = _parse_timestamp(weather_observed_at, label="WEATHER_OBSERVED_AT") + timedelta(hours=6)
 
     lock_at = slate.games[0].lock_at.astimezone(timezone.utc)
     team_records, team_mappings, team_diagnostics = build_team_records(
@@ -1871,6 +1878,12 @@ def freeze_prior_package(
         ),
         "records": team_records,
     }
+    if weather_expiry is not None:
+        metadata = team_payload["metadata"]
+        source_expiry = _parse_timestamp(metadata["expires_at"], label="TEAM_SOURCE_EXPIRES_AT")
+        if weather_expiry < source_expiry:
+            metadata["expires_at"] = weather_expiry.isoformat()
+            metadata["coverage"]["expiry_basis"] = "WEATHER_CAPTURE_SIX_HOUR_WINDOW"
     player_payload = {
         "schema_version": PLAYER_SOURCE_SCHEMA,
         "metadata": _artifact_metadata(
@@ -1946,7 +1959,21 @@ def freeze_prior_package(
     final_dir.parent.mkdir(parents=True, exist_ok=True)
     final_dir.mkdir()
     published: dict[str, str] = {}
+    archived_files: list[Path] = []
     try:
+        # Keep the raw scoring inputs inside the package so a Cowork rerun or
+        # copied package does not depend on the original proposal directory.
+        archive_dir = final_dir / RAW_DIRNAME
+        archive_dir.mkdir()
+        for name in sorted(frozen):
+            artifact = frozen[name]
+            raw = Path(artifact.path).read_bytes()
+            if sha256_bytes(raw) != artifact.sha256:
+                raise PriorsBuildError(f"FROZEN_ARTIFACT_CHANGED_DURING_FREEZE:{name}")
+            target = archive_dir / f"{artifact.sha256}.csv"
+            if target not in archived_files:
+                archived_files.append(target)
+                _write_atomic(target, raw)
         for filename, payload in (
             (TEAM_PRIOR_FILENAME, team_payload),
             (PLAYER_PRIOR_FILENAME, player_payload),
@@ -1972,6 +1999,13 @@ def freeze_prior_package(
             final_dir / PACKAGE_FILENAME, canonical_json_bytes(package)
         )
     except Exception:
+        for archived in archived_files:
+            archived.unlink(missing_ok=True)
+        archive_dir = final_dir / RAW_DIRNAME
+        if archive_dir.exists():
+            for temporary in archive_dir.glob("*.tmp"):
+                temporary.unlink()
+            archive_dir.rmdir()
         for leftover in sorted(final_dir.glob("*")):
             leftover.unlink(missing_ok=True)
         final_dir.rmdir()

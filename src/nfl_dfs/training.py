@@ -35,14 +35,22 @@ def rolling_origin_splits(
         raise ValueError("rolling-origin train and validation sizes must be positive")
     if any(value.tzinfo is None for value in values):
         raise ValueError("rolling-origin timestamps must be timezone-aware")
-    order = np.argsort(np.array([value.timestamp() for value in values]))
+    timestamps_array = np.array([value.timestamp() for value in values])
+    order = np.argsort(timestamps_array, kind="stable")
+    ordered_times = timestamps_array[order]
     splits: list[tuple[np.ndarray, np.ndarray]] = []
     stop = minimum_train
+    # Never split outcomes from one slate timestamp between train and validation.
+    while stop < len(values) and ordered_times[stop] == ordered_times[stop - 1]:
+        stop += 1
     while stop + validation_size <= len(values):
+        end = stop + validation_size
+        while end < len(values) and ordered_times[end] == ordered_times[end - 1]:
+            end += 1
         train = order[:stop]
-        validate = order[stop : stop + validation_size]
+        validate = order[stop:end]
         splits.append((train, validate))
-        stop += validation_size
+        stop = end
     if not splits:
         raise ValueError("insufficient observations for rolling-origin validation")
     return tuple(splits)
@@ -77,6 +85,10 @@ def fit_weekly_ridge_challenger(
     alpha_scores: dict[float, list[float]] = {alpha: [] for alpha in alpha_grid}
     baseline_scores: list[float] = []
     for train, validate in splits:
+        cutoff = min(feature_times[index] for index in validate)
+        train = np.array([index for index in train if outcome_times[index] < cutoff], dtype=int)
+        if len(train) < minimum_train:
+            raise ValueError("insufficient training outcomes available before validation prediction cutoff")
         baseline = np.full(len(validate), float(y[train].mean()))
         baseline_scores.append(mean_squared_error(y[validate], baseline))
         for alpha in alpha_grid:

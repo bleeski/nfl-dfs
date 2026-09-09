@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import ipaddress
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -71,13 +72,25 @@ def evaluate_hard_gates(
 
 
 def _valid_https_source(value: str) -> bool:
-    parsed = urlparse(value)
-    return (
-        parsed.scheme.lower() == "https"
-        and bool(parsed.hostname)
-        and parsed.username is None
-        and parsed.password is None
-    )
+    """Check public HTTPS provenance shape; this does not verify source content."""
+    try:
+        parsed = urlparse(value)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if (parsed.scheme.lower() != "https" or not host
+                or parsed.username is not None or parsed.password is not None
+                or parsed.port not in (None, 443)):
+            return False
+    except ValueError:
+        return False
+    if "." not in host or host.rsplit(".", 1)[-1] in {
+        "invalid", "localhost", "local", "test", "example", "internal",
+    }:
+        return False
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return False
 
 
 def late_swap_eligibility_evidence(
@@ -551,9 +564,8 @@ def parse_official_inactive_snapshot(
             if status not in {"INACTIVE", "ACTIVE"}:
                 problems.append(f"row {row_number}: status must be ACTIVE or INACTIVE")
                 continue
-            parsed_url = urlparse(source_url)
-            if parsed_url.scheme.lower() != "https" or not parsed_url.hostname:
-                problems.append(f"row {row_number}: HTTPS source URL required")
+            if not _valid_https_source(source_url):
+                problems.append(f"row {row_number}: public HTTPS source URL without credentials required")
                 continue
             try:
                 observed = datetime.fromisoformat(observed_raw.replace("Z", "+00:00"))
@@ -570,6 +582,12 @@ def parse_official_inactive_snapshot(
                 statuses[player_id] = status
                 observations[player_id] = observed.astimezone(timezone.utc)
                 source_urls[player_id] = source_url
+    by_person: dict[str, set[str]] = {}
+    for dk_id, status in statuses.items():
+        by_person.setdefault(by_id[dk_id].underlying_id, set()).add(status)
+    for person, values in by_person.items():
+        if len(values) > 1:
+            problems.append(f"conflicting status across salary roles for {person}")
     return InactiveStatusSnapshot(statuses, observations, source_urls, tuple(problems))
 
 

@@ -389,6 +389,17 @@ def _freeze(package, tmp_path: Path, *, name: str = "out", **overrides):
 # --------------------------------------------------------------------------- #
 
 
+def test_frozen_package_contains_its_raw_scoring_inputs(package, tmp_path):
+    from nfl_dfs.prior_review import resolve_frozen_artifact
+    result = _freeze(package, tmp_path, name="portable")
+    root = Path(result["output_dir"])
+    metadata = json.loads((root / priors.PACKAGE_FILENAME).read_text(encoding="utf-8"))
+    for name, digest in metadata["frozen_sources"].items():
+        resolved = resolve_frozen_artifact(digest, package_dir=root, label=name)
+        assert resolved.resolution == "IN_PACKAGE"
+        assert sha256_file(resolved.path) == digest
+
+
 def test_two_freezes_from_the_same_frozen_artifacts_are_byte_identical(package, tmp_path):
     first = _freeze(package, tmp_path, name="first")
     second = _freeze(package, tmp_path, name="second")
@@ -924,6 +935,8 @@ def test_outdoor_freeze_records_the_weather_source(tmp_path):
         "metadata"
     ]["coverage"]
     assert "OPERATOR_CAPTURE:https://api.weather.gov/" in coverage["weather_basis"]
+    metadata = json.loads(Path(result["team_source"]).read_text(encoding="utf-8"))["metadata"]
+    assert datetime.fromisoformat(metadata["expires_at"]) <= datetime.fromisoformat("2026-09-13T19:00:00+00:00")
 
 
 def test_proposals_never_claim_exact(package):

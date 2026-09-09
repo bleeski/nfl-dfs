@@ -63,8 +63,8 @@ repairs or mark their economics as valid.
 | DL1 | S3 truth states, target 2026-09-05 | `DONE` | Report `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and `RELEASE_DECISION` independently; keep hard gates binding; make style and bank-coverage preferences advisory. |
 | DL2 | Minimum S6A projection producer, target 2026-09-07 | `DONE` | Deterministically transform frozen approved source artifacts into both model-input CSVs and a validated source ledger with no freehand numerical inputs or APPG use. |
 | DL3 | Prior-only review lineup profile, target 2026-09-07 | `DONE` (landed 2026-09-08 as `cowork-run --profile prior_review`) | Generate legal projection-led review assignments without using or relabeling the known-unvalidated field, duplication, or payout economics. It must remain `MODEL_STATUS=PRIOR_ONLY` and `DO_NOT_UPLOAD`; this does not complete S5. |
-| DL4 | Showdown exact-template acceptance, target 2026-09-08 | `BLOCKED` on operator contest facts only | Rehearse with a matching Showdown salary CSV, reserved-entry CSV, contest/payout facts, and current evidence; verify exact CPT/FLEX IDs, one Captain multiplier, underlying-person uniqueness, assignments, workbook, blockers, and final bytes. |
-| DL5 | Showdown operational run, target 2026-09-09 | `BLOCKED` on DL4 | Refresh approved inputs and evidence, generate the review lineup, and make no feature changes beyond demonstrated blocker repairs. |
+| DL4 | Showdown exact-template acceptance, target 2026-09-08 | `BLOCKED` on operator contest facts only; mechanics rehearsed 2026-09-08 | Rehearse with a matching Showdown salary CSV, reserved-entry CSV, contest/payout facts, and current evidence; verify exact CPT/FLEX IDs, one Captain multiplier, underlying-person uniqueness, assignments, workbook, blockers, and final bytes. |
+| DL5 | Showdown operational run, target 2026-09-09 | `BLOCKED` on DL4. Retargeted: 2026-09-09 is the manual-guardrail rehearsal in `docs/OPENER_RUNBOOK_2026-09-09.md`, not a model-generated upload | Refresh approved inputs and evidence, generate the review lineup, and make no feature changes beyond demonstrated blocker repairs. |
 | DL6 | Classic projection/selection extension, target 2026-09-11 | `BLOCKED` on DL2 and DL3 | Use the same source-bound projection contract across the multi-game Classic pool and produce exact-ID legal review assignments. |
 | DL7 | Classic full rehearsal, target 2026-09-12 | `BLOCKED` on DL6 plus operator files | Execute the complete intended operator path, record wall time and blockers, and preserve every exact input/output hash. |
 | DL8 | Classic operational run, target 2026-09-13 | `BLOCKED` on DL7 | Refresh current official evidence, generate and review the lineups, and retain manual DraftKings upload as the final boundary. |
@@ -426,7 +426,7 @@ revised during `W1` where the earlier measurement was wrong:
 | W3 | R03 | `PARTIAL` (selection side `DONE`, simulator mask open) | none | One participation/exclusion contract with a simulator availability mask |
 | W4 | R02 | `DONE` | none | DL3 prior-only review profile that never calls field, payout, or duplication economics |
 | W5 | R04 | `READY` once the operator files land | contest facts | Showdown exact-template rehearsal on real downloads, byte audit, repeated run, stale-source and inactive-refresh cases |
-| W6 | R09 | `READY` | none | Split historical artifact integrity from a live pre-upload check that recomputes at the current clock |
+| W6 | R09 | `DONE` | none | Split historical artifact integrity from a live pre-upload check that recomputes at the current clock. Owns `src/nfl_dfs/preflight.py` (new), the `command_audit`/`command_preflight` block and the `preflight` subparser in `src/nfl_dfs/cli.py`, and `tests/test_w6_live_preflight.py` (new) |
 | W7 | R15 | `READY` | none | Version-bound settlement capture and the canonical operator run brief. Start before the first settled slate; the validation clock starts here |
 | W8 | R05 | `READY` (W2 landed) | none | Measure the existing evaluator at true field size with cloning off, then S4A reference settlement and thresholds |
 | W9 | R06 | `BLOCKED` on W8 | none | Canonical uniqueness at every bank boundary, objective-appropriate diversity, enforced exposure and Captain-per-person caps |
@@ -452,6 +452,35 @@ is the reason.
 
 ## Next action
 
+### 2026-09-09 readiness review update
+
+The user authorized a full workflow review and verified repairs across tranches
+for today's Showdown run. Preserve the pre-existing uncommitted W6 and runbook
+work. Current results and acceptance are in
+`docs/READINESS_REVIEW_2026-09-09.md`.
+
+- W4 now passes supplied current official inactive rows into prior selection;
+  both roles are excluded. Live acquisition advances its clock before projection
+  and checks source expiry again before export. The actual 136-row NE–SEA pool
+  and two-entry template produced two legal, unique review lineups repeatedly.
+- W6 now rejects malformed truth fields/manifests, unavailable policy files,
+  missing model-specific evidence and activity/output-roster mismatches. The
+  Windows launcher exposes preflight.
+- Priors archive their raw inputs inside the frozen package; six-hour weather
+  expiry is retained downstream. New NWS captures worked from Windows.
+- R11's minimum-sample, cold-promotion, same-timestamp-fold and prediction-cutoff
+  defects are repaired. W12 remains BLOCKED on real settled-slate evidence and
+  an independently validated model registry; these repairs do not promote it.
+- W3's simulator mask, W8/W9 economics/exposure redesign, calibrated ceiling and
+  ownership, and actual Cowork/Linux live acceptance remain incomplete. No
+  generated lineup has been certified for upload. W5 has real-file Windows
+  review acceptance; complete live official-evidence acceptance remains open.
+
+Next implementation: finish W3's simulator/build participation contract, then
+W8/W9 economics and portfolio controls. Today's practical next operator step is
+a fresh official-evidence review near kickoff. The current automatic profile
+continues to report `PRIOR_ONLY / DO_NOT_UPLOAD`.
+
 `W2` is `DONE` as of 2026-09-09, which unblocks `W8`. A frozen projection
 package now carries its own per-source expiry, evidence scope and state,
 transformation version and input dependency bindings on
@@ -468,12 +497,21 @@ separately against a declared effective sample size. `MODEL_STATUS` stays
 and the NE@SEA review export is byte-identical to the pre-W2 run. See
 `changelog.md` for commands, counts and hashes.
 
-**Recommended next: `W6` (R09).** It is the deadline-critical one. The deadline
-reality check below makes the Wednesday opener a manual-guardrail rehearsal
-with a fresh certification run immediately before upload, and that plan rests
-on `audit` being trustworthy, which is exactly what R09 repairs. `W8` is newly
-`READY` and unblocks `W9` and `W10`, but it is the start of the field-economics
-rebuild, not a same-day change.
+`W6` (R09) is `DONE` as of 2026-09-08. `audit` is now historical artifact
+integrity only: it reports the manifest's stored decision labelled as stored and
+pins its own `RELEASE_DECISION` to `DO_NOT_UPLOAD`, so it can never be read as
+renewed certification. The new `preflight` command is the live pre-upload check.
+It validates the manifest schema, rebuilds every `EvidenceRecord` and re-derives
+its state at `evidence.release_clock()`, requires the manifest to still cover
+every hard field in `config/evidence_policy.json`, rebinds the salary, entry,
+assignment and output files by hash, re-derives selected-player locks from the
+current salary pool, reports the clock and scope of every check, and exits 0
+only on `CERTIFIED_UPLOAD_PACKAGE`. The standing instruction is now: **run
+`preflight` immediately before upload**, not `audit`.
+
+**Recommended next: `W7` (R15) or `W8` (R05).** `W7` starts the validation
+clock, so the sooner the better. `W8` begins the field-economics rebuild and
+unblocks `W9` and `W10`. Neither is a same-day change.
 
 `W1` and `W4` are `DONE`. `cowork-run --profile prior_review` now takes a
 DraftKings Showdown salary CSV and a DKEntries CSV and returns the byte-audited
@@ -491,9 +529,6 @@ it from a fresh nflverse fetch; both produced the same export bytes. See
 
 **Next `READY` tranches, all touching disjoint files, in any order:**
 
-- `W6` (R09): split historical artifact integrity from a live pre-upload check
-  that recomputes at the current clock. This is what makes `audit` trustworthy,
-  and the deadline reality check below depends on it.
 - `W7` (R15): version-bound settlement capture and the canonical operator run
   brief. The validation clock starts here, so the sooner the better.
 - `W8` (R05): measure the existing evaluator at true field size with cloning
@@ -631,3 +666,84 @@ other device tools keep working; the container fallback plus
   hash-bound metadata, and requires the entry set to cover all four scopes,
   because deleting an expired entry is otherwise as effective as forging its
   expiry.
+
+### Constraints measured during `W6` and the opener rehearsal, 2026-09-08
+
+Runtime, all newly measured and all cheap to trip over again:
+
+- **The `/tmp` paths a session prompt names may be owned by a previous
+  session's uid.** `/tmp/nfl-cowork-venv`, `/tmp/nfl-uv-cache` and
+  `/tmp/nfl-uv-python` were all `nobody:nogroup` and mode `755`, so the
+  prescribed `sh ./nfl.sh setup` died with `Failed to initialize cache at
+  /tmp/nfl-uv-cache ... Permission denied (os error 13)` and exit 0, which is
+  easy to miss. Point `NFL_DFS_VENV_DIR`, `NFL_DFS_UV_CACHE_DIR` and
+  `NFL_DFS_UV_PYTHON_DIR` at fresh per-session directories. A full `uv sync`
+  into new directories, interpreter download included, took under 30 seconds on
+  3.2GB free.
+- **The device VM can restart mid-session and wipe all of `/tmp`.** It happened
+  once here, between two tool calls, with no warning beyond a "Workspace still
+  starting" error on the next command. It took the working copy, the venv and
+  every rehearsal artifact with it. The mounted repository survived untouched.
+  **Write source changes into the mounted repository as they are produced and
+  build the throwaway working copy from it**, rather than editing in `/tmp` and
+  copying back at the end.
+- **`pytest` background jobs must be detached.** A plain `nohup ... &` inside a
+  `device_bash` call is killed when the call returns, leaving a zero-byte log
+  and no process. `setsid nohup sh -c '...' >log 2>&1 </dev/null &` survives.
+- **The prescribed `-q` makes the test summary disappear.**
+  `pyproject.toml` already sets `addopts = "-q --strict-markers"`, so
+  `sh ./nfl.sh test -q ...` is `-qq` and pytest suppresses the
+  `N passed, M skipped` line entirely. Drop the extra `-q` when the counts
+  matter.
+
+Certification behavior, measured against the real NE@SEA files:
+
+- **Two reserved entries carrying identical rosters block certification.**
+  `DUPLICATE_SELECTED_LINEUPS` is a CRITICAL blocking QA finding and the run
+  ends `DO_NOT_UPLOAD` with `FILE_VALID` false. Filling every reservation with
+  one lineup is not a supported shortcut.
+- **The pre-lock official-status window is three hours, not ninety minutes.**
+  `cli._official_status_evidence` uses `freshness_window=timedelta(hours=3)`:
+  the oldest selected-player observation must be no earlier than kickoff minus
+  three hours *and* the certify run must fall within three hours of it. The
+  ninety-minute figure belongs to `evidence.team_inactive_report_evidence`,
+  which governs governed late swap and is a different file shape and a
+  different gate. Do not quote T-90 for the pre-lock path.
+- **`FILE_VALID` and the byte path are independent of the evidence verdict.**
+  The same two lineups produced export SHA-256
+  `08004c252695284ea96c10c291915e9c0cf316aadec944a65ca3389cfbd38df2` both as a
+  blocked `proposed_sha256` and as a released `sha256`, 144 template lines in
+  and 144 out with exactly lines 2 and 3 changed.
+
+### Proposed `R16`: the official-status gate binds provenance, not a source
+
+Found during the opener rehearsal. Not scheduled; it needs a decision before it
+becomes a tranche.
+
+A rehearsal run reached `CERTIFIED_UPLOAD_PACKAGE` under a simulated 18:00 CT
+clock on an official-status CSV whose every `SOURCE_URL` was
+`https://rehearsal.invalid/SYNTHETIC-NOT-OFFICIAL-EVIDENCE`. `.invalid` is an
+IANA-reserved TLD that can never resolve. Two separate gaps let that through:
+
+1. **No host check.** `evidence.py:554-556` validates only
+   `scheme == "https"` and a non-empty hostname. `sources.py` maintains
+   `ALLOWED_HOSTS` for automated retrieval, and nothing on this path consults
+   it. Rejecting reserved and non-resolvable TLDs, or requiring an allowlisted
+   host, would have refused this exact file.
+2. **The validated URL is then discarded.** `parse_official_inactive_snapshot`
+   populates `InactiveStatusSnapshot.source_url_by_id`
+   (`evidence.py:572-573`), and `cli._official_status_evidence` builds its
+   `EvidenceRecord` without a `source_url` (`cli.py:519-529`). The certified
+   manifest therefore records `"source_url": null` for
+   `official_inactive_status` while that record's own `reason` reads "every
+   selected exact DK ID is source-bound". The CSV's bytes are hash-bound; the
+   source it claims is not recorded at all, so no later audit can see what was
+   asserted.
+
+Neither is a design failure on its own: this path is operator-supplied evidence
+by policy, and the operator attests to the content. What is wrong is the word
+"source-bound" in a `PASS` reason and in `docs/DATA_CONTRACTS.md`, which
+overstates what the gate binds. The honest description is a provenance and
+freshness gate, and the cheap repairs are to record `source_url` on the record
+and to reject hosts that cannot be real. The synthetic package built during the
+rehearsal was destroyed; no upload-shaped CSV survived it.

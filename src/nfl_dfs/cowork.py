@@ -419,6 +419,7 @@ def resolve_request_inputs(
     root_path = (
         confine_request_path(
             root_value,
+            base_dir=Path.cwd(),
             allowed_roots=allowed_roots,
             field_name="input_dir",
         )
@@ -447,7 +448,10 @@ def resolve_request_inputs(
     for name in PATH_FIELDS:
         explicit = overrides.get(name)
         if explicit not in (None, ""):
-            payload[name] = str(explicit)
+            payload[name] = str(confine_request_path(
+                explicit, base_dir=Path.cwd(), allowed_roots=roots,
+                allowed_files=explicit_files, field_name=name,
+            ))
         elif payload.get(name) in (None, "") and name in discovered.classified:
             payload[name] = str(discovered.classified[name])
     # A slate run folder keeps its frozen prior package beside its inputs. Find

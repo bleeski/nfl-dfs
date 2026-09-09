@@ -1,5 +1,22 @@
 # Implementation Status
 
+## Current Showdown readiness — 2026-09-09
+
+The real NE–SEA two-entry template now completes `cowork-run --profile
+prior_review` through source acquisition, projection, selection and independent
+review export. The repeated export is byte-identical; only the two reserved
+entry rows change. See `docs/READINESS_REVIEW_2026-09-09.md` for the current
+verification, fixes and limitations. Older supplied-fixture counts below are
+historical. This verifies Windows execution, not the actual Cowork/Linux VM.
+
+The generated portfolio is still `PRIOR_ONLY / DO_NOT_UPLOAD`. Its objective
+maximizes points of an expected stat line, with structural differentiation;
+it is not the required calibrated ceiling/ownership/drawdown engine. Current
+official activity, prospective validation and the quantitative redesign remain
+blocking work. Supplied current official inactive rows now affect both roles
+before prior-review selection. The older simulation/build path still needs its
+own participation and economics repairs.
+
 ## Working and locally verified
 
 - The red-team revision has replaced the prior `plan.md`.

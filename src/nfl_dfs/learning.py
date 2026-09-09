@@ -37,6 +37,8 @@ def evaluate_challenger(
     del realized_roi_observed  # ROI is descriptive and never a promotion input here.
     tier, influence = field_model_tier(comparable_settled_slates, prospective_field_gates)
     checks: Mapping[str, bool] = {
+        "minimum_comparable_slates": comparable_settled_slates >= 3,
+        "prospective_field_gates": prospective_field_gates,
         "reproducibility": reproducible,
         "integrity": integrity_pass,
         "rolling_origin_improvement": rolling_origin_improvement,

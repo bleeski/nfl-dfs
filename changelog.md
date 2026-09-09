@@ -4,6 +4,241 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-09 — Real Showdown workflow review and readiness repairs
+
+User-authorized end-to-end review, retaining all pre-existing W6/runbook and
+other work. Baseline suite: 307 passed, 1 skipped in 81.14 seconds. Final suite:
+332 passed, 1 skipped in 63.06 seconds, using pinned Python 3.13.7, a unique
+project-local `--basetemp`, and `-p no:cacheprovider`. Machine-readable result:
+`outputs/readiness-20260909-verified.xml`; full log beside it. `git diff --check`
+passes. No staging, commits, pushes or cleanup of prior work.
+
+Fixed live source-acquisition clock handling, current supplied inactive
+exclusions across CPT/FLEX, export-time freshness checks, official provenance
+shape/role conflicts/URL retention, strict preflight manifest/policy/model
+requirements and actual-roster activity reconciliation, Windows preflight
+launcher support, relative CLI paths, raw-source portability, six-hour weather
+expiry, minimum validation samples, history/field promotion gates and temporal
+training leakage. The complete detail is in
+`docs/READINESS_REVIEW_2026-09-09.md`; operating instructions now route normal
+Showdown generation through the prior-review profile.
+
+Approved nflverse and NWS retrieval succeeded from Windows. The actual NE–SEA
+136-row/68-person pool and two-entry template completed generation and repeated
+review export. Independent QA found two legal distinct lineups, 144 lines
+preserved, only lines 2 and 3 changed, and identical repeated SHA-256
+`87156b8c108bfe1585c4dc1c689258ee3fd24f525543ae19667be2017cee359e`.
+Result: `FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`. The captured forecast expires at
+2026-09-09T20:00:40Z, before kickoff, so evening evidence must be refreshed.
+
+Remaining: full ceiling/ownership/drawdown modeling, W3 simulator participation,
+W8/W9 economics/exposure controls, live official activity, prospective model
+validation/registry, and actual Cowork/Linux and large-portfolio acceptance.
+No generated portfolio was certified; no DraftKings account action occurred.
+
+### 2026-09-08 — W6: `audit` is historical only, and `preflight` is the live pre-upload check
+
+Closes `W6` / R09. Files added: `src/nfl_dfs/preflight.py`,
+`tests/test_w6_live_preflight.py`, `scripts/make_official_status.py`,
+`docs/OPENER_RUNBOOK_2026-09-09.md`. Files modified: `src/nfl_dfs/cli.py`
+(the `command_audit` body, the new `command_preflight`, one import, and the
+`preflight` subparser), `backlog.md`, `changelog.md`. Nothing staged or
+committed. `MODEL_STATUS` and `RELEASE_DECISION` are unchanged on every path
+that had them, no gate was weakened, no expiry was widened, and
+`AvgPointsPerGame` remains confined to untouched raw DraftKings bytes.
+
+HEAD at session start: `6cd710e5b3a02af163d3ae029eb849c0d1e2a92b` on
+`codex/s6a-deterministic-projection-producer`, matching
+`origin/codex/s6a-deterministic-projection-producer`. `W2` was pushed.
+
+#### R09, reproduced first
+
+Fifteen probes in `tests/test_w6_live_preflight.py`. All fifteen fail on
+`6cd710e` (`nfl_dfs.preflight` and `command_preflight` do not exist, so the
+module does not import). The behavioral reproduction, run against a copy of
+`6cd710e` with only `command_audit` restored:
+
+```text
+certified at build time: CERTIFIED_UPLOAD_PACKAGE
+evidence rewritten to expire 2026-01-15; output bytes untouched, hash matches
+--- pre-W6 audit ---
+  exit code        : 0
+  status           : PASS
+  EVIDENCE_STATE   : PASS
+  RELEASE_DECISION : CERTIFIED_UPLOAD_PACKAGE
+  problems         : []
+```
+
+That is the review's own reproduction: a stored green result stays green after
+its evidence expires, because `audit` fed the manifest's stored
+`EVIDENCE_STATE` and `MODEL_STATUS` straight into `derive_release_policy` and
+never re-derived anything at a clock.
+
+#### The split
+
+`audit` now answers only the archival question through
+`preflight.historical_artifact_integrity`: the manifest parses, its
+`manifest_version` is one this code understands, and the bytes it names still
+hash to what it recorded. It reports `ARTIFACT_INTEGRITY`, surfaces the
+manifest's own claim as `manifest_stored_RELEASE_DECISION`, and pins its own
+`RELEASE_DECISION` to `DO_NOT_UPLOAD` with
+`release_decision_basis: HISTORICAL_ONLY`. Its exit code is the integrity
+verdict, which is now a well-defined thing to be, because the payload can no
+longer be misread as permission.
+
+`preflight` is the live check, `preflight.live_pre_upload_check`. At
+`evidence.release_clock()` by default, or any clock the caller supplies, it:
+
+- validates the manifest schema and rebuilds every `EvidenceRecord` through
+  `model_validate`, so a malformed record is a blocker rather than a silent
+  skip;
+- requires the surviving hard fields to cover every entry in
+  `config/evidence_policy.json`, the same policy certification read, so
+  deleting the inconvenient record is refused as `MANIFEST_EVIDENCE_SCOPE`;
+- re-derives each state through `EvidenceRecord.state_at(when)` and aggregates
+  with `release.aggregate_evidence_state(..., final_release=True)`;
+- rebinds `salary`, `entries`, `assignments` and the output CSV by SHA-256
+  against files on disk;
+- re-derives selected-player locks from the current salary pool, so a package
+  certified before lock is refused after it, and refuses to certify at all
+  without a salary CSV (`LIVE_BINDING_INCOMPLETE`), because locks cannot be
+  re-derived without one;
+- reports `checked_at` and a per-check `scope` of `MANIFEST_SCHEMA`,
+  `LIVE_RECOMPUTE` or `FILE_BINDING`;
+- exits 0 only on `CERTIFIED_UPLOAD_PACKAGE`.
+
+The same expired package, after the repair:
+
+```text
+audit (historical):  ARTIFACT_INTEGRITY=PASS  RELEASE_DECISION=DO_NOT_UPLOAD
+                     manifest_stored_RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE
+preflight (live):    EVIDENCE_STATE=STALE     RELEASE_DECISION=DO_NOT_UPLOAD
+  blockers: selected.official_inactive_status:STALE:official exact IDs
+  checks:   manifest_readable   MANIFEST_SCHEMA  PASS
+            manifest_schema     MANIFEST_SCHEMA  PASS
+            evidence_schema     MANIFEST_SCHEMA  PASS
+            evidence_scope      LIVE_RECOMPUTE   PASS
+            evidence_states_at_current_clock     LIVE_RECOMPUTE  FAIL
+            output_bytes        FILE_BINDING     PASS
+            input_salary        FILE_BINDING     PASS
+            selected_player_locks                LIVE_RECOMPUTE  PASS
+```
+
+`preflight` is built on what `W2` left: `evidence.release_clock()` is the live
+clock, `EvidenceRecord.state_at()` re-derives staleness from a stored
+`expires_at`, and `release.aggregate_evidence_state` already took both a
+`required_hard_fields` set and a `now`. Nothing new was written to decide
+freshness.
+
+#### Verification
+
+```text
+export NFL_DFS_VENV_DIR=/tmp/w6-venv
+export NFL_DFS_UV_CACHE_DIR=/tmp/w6-uvcache
+export NFL_DFS_UV_PYTHON_DIR=/tmp/w6-uvpython
+sh ./nfl.sh setup                                                  SETUP_COMPLETE
+sh ./nfl.sh test -p no:cacheprovider --ignore=.pytest_cache tests -rs
+```
+
+```text
+1. baseline on 6cd710e, device shell, 3.13.7, local-disk working copy
+   293 collected, 292 passed, 1 skipped, exit 0, 9.89s
+   The one skip is tests/test_cowork.py:115, the Windows junction test.
+
+2. the 15 W6 probes on 6cd710e     collection error, module does not exist
+   the same 15 after the repair    15 passed, 2.96s
+
+3. full suite after the repair
+   308 collected, 307 passed, 1 skipped, exit 0, 19.15s
+   No existing test was changed, deleted or disabled.
+
+4. doctor pass_status true; compileall clean on preflight.py and cli.py;
+   no trailing whitespace and no tabs in any changed file.
+```
+
+The prescribed `sh ./nfl.sh test -q ...` was run first and is what produced the
+293/292/1 count, but it prints no summary line: `pyproject.toml` already sets
+`addopts = "-q"`, so the extra flag is `-qq`. The counts above come from the
+same invocation without the duplicate flag.
+
+#### The opener rehearsal, 2026-09-08
+
+Full MANUAL_GUARDRAIL certify path driven end to end on the real
+`DKSalaries_NE_SEA.csv` and `DKEntries_NE_SEA.csv` under
+`data/runs/20260909-showdown-ne-sea/inputs/`, with two mechanically constructed
+stand-in lineups, a stand-in payout table, and a deliberately synthetic
+official-status file. Lock read from the salary CSV's `Game Info`:
+`NE@SEA 09/09/2026 08:20PM ET`, so 2026-09-09 19:20 CT.
+
+```text
+run A   live clock, both entries identical
+        450 ms, exit 2, DO_NOT_UPLOAD, FILE_VALID false
+        blockers: DUPLICATE_SELECTED_LINEUPS
+                  official_inactive_status:STALE (3-hour lock window)
+
+run A2  live clock, two distinct lineups
+        868 ms, exit 2, DO_NOT_UPLOAD, FILE_VALID true
+        one blocker: official_inactive_status:STALE
+        proposed_sha256 08004c25...8df2, no upload CSV written
+
+run B   simulated 18:00 CT release clock, observation 17:55 CT
+        48 ms, exit 0, CERTIFIED_UPLOAD_PACKAGE, EVIDENCE_STATE PASS
+        sha256 08004c25...8df2, identical to run A2's proposed bytes
+        144 template lines in, 144 out, exactly lines 2 and 3 changed
+```
+
+Run B used a harness that injects a clock into `_official_status_evidence`
+alone. It weakens nothing: the same three-hour window rules are evaluated, at a
+simulated 18:00 CT. The certify path has no clock flag and should not get one.
+
+**Run B reached `CERTIFIED_UPLOAD_PACKAGE` on invented evidence, and that is
+reported as a finding, not kept.** Its `SOURCE_URL` was
+`https://rehearsal.invalid/SYNTHETIC-NOT-OFFICIAL-EVIDENCE`. The synthetic
+package and its upload CSV were deleted; no upload-shaped CSV survived the
+rehearsal. See the proposed `R16` note in `backlog.md`: the gate checks
+`https://` plus a hostname, consults no allowlist, and then discards the URL,
+so the certified manifest records `"source_url": null` under a `reason` that
+says "source-bound".
+
+`docs/OPENER_RUNBOOK_2026-09-09.md` is the numbered checklist Ben executes
+himself between 17:50 and 19:20 CT, with the certify command spelled out
+literally, the expected output fields named, and a stop rule for each failure
+mode. `scripts/make_official_status.py` generates the official-status CSV from
+the salary CSV and the assignment CSV, resolving `TEAM` so a player/team
+conflict cannot be typed by hand, and warning when the observation falls
+outside the window derived from `Game Info`. Standard library only, so it runs
+under any Python 3.9+ without the project environment.
+
+#### Remaining blockers and open flags
+
+- `[BEN: payout table]`, `[BEN: advertised prize value]`,
+  `[BEN: ticket face value]`, `[BEN: field size]`,
+  `[BEN: fresh DK salary CSV and DKEntries template for 2026-09-09]`,
+  `[BEN: the two lineups]`. All six were asked for in one message and none has
+  been answered yet. DL4 and DL5 stay `BLOCKED` on them.
+- Contest facts already read from the entry template and therefore not asked
+  for: contest ID `193391013`, entry fee `$20`, reserved entries `5232816721`
+  and `5238395397`.
+- The frozen NE@SEA prior package expired at `2026-09-09T04:37:46Z`. Nothing in
+  the manual-guardrail path needs it. Any path that does needs a rebuild, and
+  the rebuild stops at `WEATHER_CAPTURE_REQUIRED:roof=outdoors` for an operator
+  capture.
+- R03's simulator availability mask, the absent ownership/leverage/correlation
+  and duplication models, and
+  `projection.py`'s `SALARY_PERSON_IDENTITY_COVERAGE_MISMATCH` are all still
+  open and untouched by `W6`.
+
+#### What this does not do
+
+`preflight` re-derives states from what a manifest recorded and from files on
+disk. It does not reopen a source, refetch a page, or judge whether recorded
+evidence was true when it was recorded. R16 is exactly that gap on the
+official-status path and is not repaired here. A `CERTIFIED_UPLOAD_PACKAGE`
+from `preflight` still means the exact bytes passed every current hard gate at
+`checked_at`, and still says nothing about whether a lineup is any good.
+
+
 ### 2026-09-09 — W2: source expiry preserved across every boundary, and a selection objective independent of scenario count
 
 Closes `W2` / R07 and R08. Files added:

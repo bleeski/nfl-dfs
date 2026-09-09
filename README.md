@@ -23,6 +23,12 @@ review package plus machine-readable run request. Two files alone do not contain
 complete payouts, field size, or current official activity evidence, so that
 first pass normally ends `DO_NOT_UPLOAD` with the smallest missing next action.
 
+For Showdown generation, Cowork should use `--profile prior_review --build-priors`.
+That profile can generate legal review lineups from source-bound priors after
+weather and identity gates are resolved. It retains a review CSV, with
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. It does not yet
+optimize calibrated ceiling/ownership leverage or slate-level drawdown.
+
 Until a live slate has complete payouts, current official inactive evidence,
 weather/market evidence when required, and fully calibrated model artifacts,
 the system will label field and simulation output diagnostic and will emit
@@ -33,7 +39,9 @@ the system will label field and simulation output diagnostic and will emit
 - Python 3.13.7 and pinned `uv.lock` environment.
 - A cross-platform Cowork launcher and schema-driven `cowork-run` command; the
   PowerShell workflow remains available as a fallback.
-- 65 conventional, property, metamorphic, integration, and reduced performance tests.
+- Current test counts and the real NE–SEA two-entry rehearsal are documented in
+  `docs/READINESS_REVIEW_2026-09-09.md`. Older fixture counts below describe the
+  original acceptance data, not the current real-slate pool.
 - Supplied acceptance fixtures: 719 Classic IDs, 24 teams, 12 games, two
   reserved entries, and 63 Showdown people represented by 126 CPT/FLEX rows.
 - Five-sheet operator workbook rendered and inspected with no visible formula errors.

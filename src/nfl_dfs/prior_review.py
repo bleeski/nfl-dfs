@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
@@ -42,6 +42,7 @@ from .contracts import (
     earliest_source_freshness,
 )
 from .dk import parse_entries, parse_salaries
+from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_file
 from .opportunity import load_opportunity_model
 from .participation import (
@@ -736,7 +737,7 @@ def run_prior_review(
     salary_csv: str | Path,
     entry_csv: str | Path,
     label: str,
-    as_of: datetime,
+    as_of: datetime | None,
     run_root: str | Path,
     output_root: str | Path,
     season: int | None = None,
@@ -752,6 +753,7 @@ def run_prior_review(
     operator_excluded_dk_ids: Sequence[str] = (),
     extra_unavailable_statuses: Sequence[str] = (),
     extra_available_statuses: Sequence[str] = (),
+    official_status_csv: str | Path | None = None,
     propose: Callable[..., dict[str, object]] = propose_prior_package,
     freeze: Callable[..., dict[str, object]] = freeze_prior_package,
     project: Callable[..., object] = build_projection_package,
@@ -764,6 +766,8 @@ def run_prior_review(
 
     run_dir = Path(run_root).resolve()
     out_dir = Path(output_root).resolve()
+    live_run = as_of is None
+    as_of = as_of or datetime.now(timezone.utc)
     stages: list[dict[str, object]] = []
     artifacts: dict[str, str] = {}
     hashes: dict[str, str] = {}
@@ -788,6 +792,43 @@ def run_prior_review(
     salary_digest = sha256_file(salary_path)
     hashes["salary_csv"] = salary_digest
     hashes["entry_csv"] = sha256_file(entry_path)
+
+    # A supplied current report must affect generation, including both salary
+    # roles of an inactive person. Absence remains a release blocker; partial
+    # ACTIVE coverage here never claims that the rest of the pool is active.
+    official_exclusions: tuple[str, ...] = ()
+    if official_status_csv is not None:
+        try:
+            status_path = Path(official_status_csv).resolve()
+            status_hash = sha256_file(status_path)
+            snapshot = parse_official_inactive_snapshot(status_path, slate.players)
+            if snapshot.problems:
+                raise PriorReviewError("OFFICIAL_STATUS_INVALID:" + ";".join(snapshot.problems))
+            if not snapshot.statuses:
+                raise PriorReviewError("OFFICIAL_STATUS_EMPTY")
+            for dk_id, observed in snapshot.observed_at_by_id.items():
+                if observed > as_of + timedelta(minutes=5):
+                    raise PriorReviewError(f"OFFICIAL_STATUS_FUTURE:{dk_id}")
+                if as_of > observed + timedelta(hours=3):
+                    raise PriorReviewError(f"OFFICIAL_STATUS_STALE:{dk_id}")
+            if sha256_file(status_path) != status_hash:
+                raise PriorReviewError("OFFICIAL_STATUS_CHANGED_DURING_READ")
+            official_exclusions = tuple(
+                dk_id for dk_id, status in snapshot.statuses.items() if status == "INACTIVE"
+            )
+            hashes["official_status_csv"] = status_hash
+            artifacts["official_status_csv"] = str(status_path)
+            reports["official_status"] = {
+                "scope": "SUPPLIED_ROWS_ONLY_NOT_FULL_POOL_ACTIVITY_CERTIFICATION",
+                "rows": len(snapshot.statuses), "inactive_dk_ids": list(official_exclusions),
+                "source_urls": dict(sorted(snapshot.source_url_by_id.items())),
+            }
+        except (OSError, ValueError) as exc:
+            return PriorReviewOutcome(
+                profile_version=PROFILE_VERSION, stage="ACTIVITY", blocked=True,
+                blockers=(str(exc),), stages=(_stage("ACTIVITY", "FAILED", error=str(exc)),),
+                artifacts=artifacts, hashes=hashes, reports=reports, error=str(exc),
+            )
 
     lock_at = slate.games[0].lock_at
     resolved_season = int(season) if season is not None else derive_season(lock_at)
@@ -902,6 +943,8 @@ def run_prior_review(
             "nflverse_game_id": proposed.get("nflverse_game_id"),
         }
         market = dict(proposed.get("market") or {})
+        if live_run:
+            as_of = datetime.now(timezone.utc)
         weather = decide_weather(
             str(market.get("roof", "")),
             weather_state=weather_state,
@@ -996,6 +1039,8 @@ def run_prior_review(
             "weather_state": frozen.get("weather_state"),
             "weather_basis": frozen.get("weather_basis"),
         }
+        if live_run:
+            as_of = datetime.now(timezone.utc)
         try:
             package = resolve_prior_package(
                 frozen_dir, salary_sha256=salary_digest, as_of=as_of
@@ -1028,6 +1073,8 @@ def run_prior_review(
 
     # ---------------------------------------------------------------- PROJECT
     projected_dir = run_dir / "projected"
+    if live_run:
+        as_of = datetime.now(timezone.utc)
     try:
         projection = project(
             salaries=str(salary_path),
@@ -1148,7 +1195,7 @@ def run_prior_review(
         )
         contract = build_participation_contract(
             slate,
-            operator_excluded_dk_ids=tuple(operator_excluded_dk_ids),
+            operator_excluded_dk_ids=tuple(operator_excluded_dk_ids) + official_exclusions,
             extra_unavailable_statuses=tuple(extra_unavailable_statuses),
             extra_available_statuses=tuple(extra_available_statuses),
         )
@@ -1225,6 +1272,15 @@ def run_prior_review(
     # ----------------------------------------------------------------- EXPORT
     review_dir = out_dir / "review"
     try:
+        export_clock = datetime.now(timezone.utc) if live_run else as_of
+        if projection_freshness.state_at(export_clock) is not EvidenceState.PASS:
+            raise PriorReviewError("PROJECTION_EXPIRED_DURING_SELECTION:refresh and rerun")
+        if official_status_csv is not None:
+            if sha256_file(official_status_csv) != hashes["official_status_csv"]:
+                raise PriorReviewError("OFFICIAL_STATUS_CHANGED_DURING_SELECTION")
+            if any(export_clock > observed + timedelta(hours=3)
+                   for observed in snapshot.observed_at_by_id.values()):
+                raise PriorReviewError("OFFICIAL_STATUS_STALE_DURING_SELECTION")
         export = export_review_entries(
             slate=slate,
             template=template,
