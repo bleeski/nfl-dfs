@@ -17,9 +17,12 @@ captain, which is uniqueness rather than a claim about correlated equity.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
+from .kicker_roles import resolve_kicker_roles
 from .lineups import validate_lineup
 from .opportunity import OpportunityModel
 from .optimizer import LineupOptimizer
@@ -71,6 +74,8 @@ def select_prior_lineups(
     differentiate_captain: bool = True,
     max_person_overlap: int | None = 4,
     time_limit_seconds: float = 10.0,
+    role_evidence_json: str | Path | None = None,
+    as_of: datetime | None = None,
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
     """Solve for `count` distinct legal lineups over the permitted pool."""
 
@@ -82,8 +87,24 @@ def select_prior_lineups(
     if problems:
         raise SelectionError("SELECTABLE_POOL_INFEASIBLE:" + ";".join(problems))
 
-    scores = score_pool(slate, model, splits)
-    excluded = excluded_dk_ids(slate, contract)
+    kicker_roles = resolve_kicker_roles(
+        slate,
+        contract,
+        evidence_path=role_evidence_json,
+        as_of=as_of,
+    )
+    scores = score_pool(slate, model, splits, kicker_roles=kicker_roles)
+    zero_share_people = set(kicker_roles.zero_share_people)
+    excluded = tuple(
+        sorted(
+            set(excluded_dk_ids(slate, contract))
+            | {
+                player.dk_id
+                for player in slate.players
+                if player.underlying_id in zero_share_people
+            }
+        )
+    )
     # Every row of an unavailable person is scoreless as well as excluded, so a
     # solver bug that ignored the exclusion could not profit from it either.
     objective = {
@@ -184,6 +205,8 @@ def select_prior_lineups(
         },
         "lineups": len(selected),
         "excluded_rows": len(excluded),
+        "kicker_role_excluded_people": sorted(zero_share_people),
+        "kicker_roles": kicker_roles.as_report(),
         "selectable_people": len(contract.selectable_people),
         "person_exposure": dict(
             sorted(exposure.items(), key=lambda item: (-item[1], item[0]))

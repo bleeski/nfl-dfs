@@ -44,6 +44,7 @@ from .contracts import (
 from .dk import parse_entries, parse_salaries
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_file
+from .kicker_roles import verify_kicker_role_resolution
 from .opportunity import load_opportunity_model
 from .participation import (
     UNAVAILABLE_STATUSES,
@@ -754,6 +755,7 @@ def run_prior_review(
     extra_unavailable_statuses: Sequence[str] = (),
     extra_available_statuses: Sequence[str] = (),
     official_status_csv: str | Path | None = None,
+    role_evidence_json: str | Path | None = None,
     propose: Callable[..., dict[str, object]] = propose_prior_package,
     freeze: Callable[..., dict[str, object]] = freeze_prior_package,
     project: Callable[..., object] = build_projection_package,
@@ -1213,6 +1215,8 @@ def run_prior_review(
             count=int(lineup_count) if lineup_count else len(entry_ids),
             differentiate_captain=not allow_repeat_captain,
             max_person_overlap=max_person_overlap,
+            role_evidence_json=role_evidence_json,
+            as_of=as_of,
         )
         assignments = assignments_for_entries(entry_ids, lineups)
     except Exception as exc:  # noqa: BLE001 - named, never swallowed
@@ -1235,6 +1239,15 @@ def run_prior_review(
         for player in slate.players
     }
     selection_dir = run_dir / "selection"
+    role_resolution = scores.kicker_role_resolution
+    if role_resolution.evidence_path is not None:
+        artifacts["role_evidence_json"] = role_resolution.evidence_path
+        hashes["role_evidence_json"] = str(role_resolution.evidence_sha256)
+        for index, source_path in enumerate(role_resolution.source_paths, start=1):
+            artifacts[f"role_evidence_source:{index}"] = source_path
+            hashes[f"role_evidence_source:{index}"] = str(
+                (role_resolution.source_hashes or {})[source_path]
+            )
     assignments_path = selection_dir / "assignments.csv"
     assignments_hash = write_assignments_csv(assignments_path, assignments)
     artifacts["assignments"] = str(assignments_path)
@@ -1281,6 +1294,7 @@ def run_prior_review(
             if any(export_clock > observed + timedelta(hours=3)
                    for observed in snapshot.observed_at_by_id.values()):
                 raise PriorReviewError("OFFICIAL_STATUS_STALE_DURING_SELECTION")
+        verify_kicker_role_resolution(role_resolution, at=export_clock)
         export = export_review_entries(
             slate=slate,
             template=template,

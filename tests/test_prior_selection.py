@@ -11,11 +11,16 @@ from __future__ import annotations
 import csv
 import io
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from nfl_dfs.dk import parse_entries, parse_salaries
+from nfl_dfs.kicker_roles import (
+    KICKER_ROLE_ALLOCATION_VERSION,
+    KickerRoleResolution,
+)
 from nfl_dfs.participation import build_participation_contract, redistribute_opportunity
 from nfl_dfs.prior_score import (
     PriorScoreError,
@@ -192,6 +197,85 @@ def test_kickers_and_defences_are_scored_from_real_artifact_fields(tmp_path):
     assert "DEFENSIVE_RETURN_TOUCHDOWNS_SAFETIES_AND_BLOCKED_KICKS_NOT_MODELLED" in (
         scores.omissions
     )
+
+
+def test_two_eligible_kickers_do_not_duplicate_team_kicking_points(tmp_path):
+    slate, model, _contract, splits = _prepared(tmp_path)
+    ne_kicker = next(
+        player for player in model.players if player.team == "NE" and player.position == "K"
+    )
+    backup_person = "NE|K|Backup Kicker"
+    backup = replace(
+        ne_kicker,
+        underlying_id=backup_person,
+        source_dk_id="99000002",
+    )
+    flex = next(
+        player
+        for player in slate.players
+        if player.underlying_id == ne_kicker.underlying_id and player.role == "FLEX"
+    )
+    captain = next(
+        player
+        for player in slate.players
+        if player.underlying_id == ne_kicker.underlying_id and player.role == "CPT"
+    )
+    two_kicker_slate = slate.model_copy(
+        update={
+            "players": (
+                *slate.players,
+                flex.model_copy(
+                    update={
+                        "dk_id": "99000002",
+                        "name": "Backup Kicker",
+                        "underlying_id": backup_person,
+                    }
+                ),
+                captain.model_copy(
+                    update={
+                        "dk_id": "99000001",
+                        "name": "Backup Kicker",
+                        "underlying_id": backup_person,
+                    }
+                ),
+            )
+        }
+    )
+    two_kicker_model = replace(model, players=(*model.players, backup))
+
+    roles = KickerRoleResolution(
+        allocation_version=KICKER_ROLE_ALLOCATION_VERSION,
+        shares_by_person={
+            ne_kicker.underlying_id: 0.625,
+            backup_person: 0.375,
+            "SEA|K|Sea Kicker": 1.0,
+        },
+        zero_share_people=(),
+        assumptions=(),
+        coverage_gaps=(),
+        team_allocations={
+            "NE": {ne_kicker.underlying_id: 0.625, backup_person: 0.375},
+            "SEA": {"SEA|K|Sea Kicker": 1.0},
+        },
+    )
+    scores = score_pool(
+        two_kicker_slate, two_kicker_model, splits, kicker_roles=roles
+    )
+    original = scores.by_person[ne_kicker.underlying_id]
+    duplicated = scores.by_person[backup_person]
+
+    assert original + duplicated == pytest.approx(8.4)
+    assert original == pytest.approx(8.4 * 0.625)
+    assert duplicated == pytest.approx(8.4 * 0.375)
+    by_person_role = {
+        (player.underlying_id, player.role): scores.by_dk_id[player.dk_id]
+        for player in two_kicker_slate.players
+        if player.dk_id in scores.by_dk_id
+    }
+    for person in (ne_kicker.underlying_id, backup_person):
+        assert by_person_role[(person, "CPT")] == pytest.approx(
+            1.5 * by_person_role[(person, "FLEX")]
+        )
 
 
 def test_the_metric_names_itself_honestly(tmp_path):

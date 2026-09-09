@@ -22,6 +22,7 @@ from nfl_dfs.training import rolling_origin_splits, fit_weekly_ridge_challenger
 from nfl_dfs.priors import _weather_evidence_basis, PriorsBuildError
 
 from .test_cowork import _attachment_pair
+from .test_kicker_roles import _write_evidence
 from .test_prior_review_profile import AS_OF, _prepared_run
 from .test_w6_live_preflight import SALARY_CSV, _certified
 
@@ -144,6 +145,47 @@ def test_prior_review_applies_supplied_inactive_status_to_both_roles(tmp_path):
     for lineup in outcome.reports["selection"]["lineups"]:
         assert not (set(lineup["roster"]) & excluded)
     assert outcome.reports["selection"]["participation"]["operator_excluded_people"] == 1
+
+
+def test_late_inactive_change_invalidates_a_supported_kicker_allocation(tmp_path):
+    salary, entries, package, project = _prepared_run(
+        tmp_path, expires_at=AS_OF + timedelta(hours=6)
+    )
+    slate = parse_salaries(salary)
+    scratched = next(
+        player for player in slate.players if player.name == "NE Kicker" and player.role == "FLEX"
+    )
+    roles = _write_evidence(
+        tmp_path / "roles",
+        slate,
+        {
+            "NE": [("NE|K|NE Kicker", 1.0)],
+            "SEA": [("SEA|K|Sea Kicker", 1.0)],
+        },
+        as_of=AS_OF,
+    )
+    status = _statuses(
+        tmp_path / "official.csv",
+        slate,
+        [scratched.dk_id],
+        inactive=[scratched.dk_id],
+        observed=AS_OF,
+    )
+    outcome = run_prior_review(
+        salary_csv=salary,
+        entry_csv=entries,
+        label="inactive-role-test",
+        as_of=AS_OF,
+        run_root=tmp_path / "run",
+        output_root=tmp_path / "out",
+        prior_package_dir=package,
+        project=project,
+        official_status_csv=status,
+        role_evidence_json=roles,
+    )
+    assert outcome.blocked
+    assert any("KICKER_ROLE_POSITIVE_SHARE_NOT_ELIGIBLE" in value for value in outcome.blockers)
+    assert not list((tmp_path / "out").rglob("DK_REVIEW_ENTRY_*.csv"))
 
 
 def test_prior_review_refuses_stale_supplied_activity(tmp_path):

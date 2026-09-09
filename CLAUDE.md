@@ -90,6 +90,13 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    reports are available. The supplied rows must be current, and an INACTIVE
    row excludes both CPT and FLEX identities before selection. Missing ACTIVE
    rows remain unknown; salary status alone never establishes current activity.
+   Kicker roles are resolved after those exclusions. If more than one kicker
+   remains eligible for a team, capture approved source bytes through
+   `sources.py`, prepare the versioned `role_evidence_json` package documented
+   in `docs/DATA_CONTRACTS.md`, add it to the generated request, and rerun.
+   Never choose by salary, split evenly, or infer inactivity from zero offensive
+   snap share. A one-kicker fallback is reported only as a prior-only sole-listed
+   assumption, not confirmed role or ACTIVE evidence.
    Never send generated prior assignments to manual-guardrail certification.
    Use `preflight` immediately before any separately certified manual upload.
 8. Return `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and

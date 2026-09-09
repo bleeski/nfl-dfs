@@ -130,6 +130,7 @@ PATH_FIELDS = (
     "team_projection_csv",
     "player_opportunity_csv",
     "official_status_csv",
+    "role_evidence_json",
     "ownership_brackets_csv",
     "source_ledger_json",
 )
@@ -177,6 +178,7 @@ class CoworkRunRequest:
     team_projection_csv: str | None = None
     player_opportunity_csv: str | None = None
     official_status_csv: str | None = None
+    role_evidence_json: str | None = None
     ownership_brackets_csv: str | None = None
     source_ledger_json: str | None = None
     advertised_prize_value: float | None = None

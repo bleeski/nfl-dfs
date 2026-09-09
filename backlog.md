@@ -4,6 +4,19 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 
 ## Tracker protocol
 
+**Current Showdown review-workflow priority sequence (2026-09-09):** follow
+[`docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md`](docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md).
+SD1 is complete. Its sole next READY chunk is **SD2 — offensive-role evidence
+and explicit missing-history handling**; use its
+[session prompt](docs/session-prompts/SD2-offensive-roles-and-history.md).
+SD1 finished with 357 passed and 1 existing Windows symlink-permission skip;
+doctor and whitespace checks passed. Live approved kicker-role capture and the
+actual Cowork/Linux environment remain unverified, while offensive roles,
+model validation and all broader W/S blockers remain open.
+For this bounded sequence, that tracker supersedes the older competing next-task
+recommendations below. It does not mark the broader W/S tranches complete or
+alter release gates. Update this pointer and the priority tracker at closeout.
+
 - Statuses: `READY`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `DEFERRED`.
 - At the start of each session, read this file, `changelog.md`, `DFS_SYSTEM_GREENFIELD_SPEC.md`, and the files named by the selected item.
 - Work on one `READY` item unless an item explicitly groups inseparable changes.

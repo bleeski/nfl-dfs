@@ -45,6 +45,7 @@ from nfl_dfs.priors import IdentityProposal
 from nfl_dfs.release import derive_release_policy
 
 from .test_participation import _model, _slate
+from .test_kicker_roles import _write_evidence
 from .test_prior_selection import _entries_bytes, _splits_bytes
 
 
@@ -571,6 +572,7 @@ def _cowork_args(tmp_path: Path, attachments: Path, **overrides):
         weather_state=None,
         weather_source_uri=None,
         weather_observed_at=None,
+        role_evidence_json=None,
         lineup_count=None,
         max_person_overlap=None,
         as_of=None,
@@ -670,6 +672,198 @@ def test_one_command_exports_and_reports_all_four_truths(
     assert any(
         value.startswith("OFFICIAL_STATUS_REQUIRED:") for value in report["blockers"]
     )
+
+
+def test_prior_review_consumes_source_bound_roles_and_reports_their_hashes(tmp_path: Path) -> None:
+    from nfl_dfs.dk import parse_salaries
+
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=AS_OF + timedelta(hours=6)
+    )
+    slate = parse_salaries(salary_path)
+    role_path = _write_evidence(
+        tmp_path / "roles",
+        slate,
+        {
+            "NE": [("NE|K|NE Kicker", 1.0)],
+            "SEA": [("SEA|K|Sea Kicker", 1.0)],
+        },
+        as_of=AS_OF,
+    )
+
+    outcome = run_prior_review(
+        salary_csv=salary_path,
+        entry_csv=entry_path,
+        label="ne-sea-role",
+        as_of=AS_OF,
+        run_root=tmp_path / "run",
+        output_root=tmp_path / "out",
+        prior_package_dir=package_dir,
+        role_evidence_json=role_path,
+        project=project,
+    )
+
+    assert not outcome.blocked
+    assert outcome.file_valid
+    assert outcome.hashes["role_evidence_json"] == sha256_file(role_path)
+    role_report = outcome.reports["selection"]["prior_scores"]["kicker_roles"]
+    assert role_report["evidence_state"] == "PASS"
+    assert role_report["allocation_basis"] == "SOURCE_BOUND_CURRENT_ROLE_EVIDENCE"
+    assert role_report["synthetic_note"] == "TEST_ONLY_SYNTHETIC_EVIDENCE"
+    assert outcome.export["FILE_VALID"] is True
+    assert outcome.export["EVIDENCE_STATE"] == "UNKNOWN"
+    assert outcome.export["MODEL_STATUS"] == "PRIOR_ONLY"
+    assert outcome.export["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+
+
+def test_invalid_role_capture_blocks_before_assignments_or_review_csv(tmp_path: Path) -> None:
+    from nfl_dfs.dk import parse_salaries
+
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=AS_OF + timedelta(hours=6)
+    )
+    slate = parse_salaries(salary_path)
+    role_path = _write_evidence(
+        tmp_path / "roles",
+        slate,
+        {
+            "NE": [("NE|K|NE Kicker", 1.0)],
+            "SEA": [("SEA|K|Sea Kicker", 1.0)],
+        },
+        as_of=AS_OF,
+    )
+    role_payload = json.loads(role_path.read_text(encoding="utf-8"))
+    changed_source = role_path.parent / role_payload["sources"][0]["path"]
+    changed_source.write_text("changed after declaration", encoding="utf-8")
+
+    outcome = run_prior_review(
+        salary_csv=salary_path,
+        entry_csv=entry_path,
+        label="ne-sea-invalid-role",
+        as_of=AS_OF,
+        run_root=tmp_path / "run",
+        output_root=tmp_path / "out",
+        prior_package_dir=package_dir,
+        role_evidence_json=role_path,
+        project=project,
+    )
+
+    assert outcome.blocked
+    assert outcome.stage == "SELECT"
+    assert "KICKER_ROLE_SOURCE_HASH_MISMATCH" in outcome.blockers[0]
+    assert "assignments" not in outcome.artifacts
+    assert "bulk_entry_csv" not in outcome.artifacts
+    assert list((tmp_path / "out").rglob("DK_REVIEW_ENTRY_*.csv")) == []
+
+
+def test_role_evidence_expiring_during_selection_blocks_review_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import prior_review as prior_review_module
+    from nfl_dfs.dk import parse_salaries
+
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=AS_OF + timedelta(hours=6)
+    )
+    slate = parse_salaries(salary_path)
+    role_path = _write_evidence(
+        tmp_path / "roles",
+        slate,
+        {
+            "NE": [("NE|K|NE Kicker", 1.0)],
+            "SEA": [("SEA|K|Sea Kicker", 1.0)],
+        },
+        as_of=AS_OF,
+        expires_at=AS_OF + timedelta(seconds=90),
+    )
+    stamps = iter(
+        [AS_OF, AS_OF + timedelta(minutes=1), AS_OF + timedelta(minutes=2)]
+    )
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return next(stamps)
+
+    monkeypatch.setattr(prior_review_module, "datetime", Clock)
+    outcome = run_prior_review(
+        salary_csv=salary_path,
+        entry_csv=entry_path,
+        label="ne-sea-expiring-role",
+        as_of=None,
+        run_root=tmp_path / "run",
+        output_root=tmp_path / "out",
+        prior_package_dir=package_dir,
+        role_evidence_json=role_path,
+        project=project,
+    )
+
+    assert outcome.blocked
+    assert outcome.stage == "EXPORT"
+    assert any(
+        "KICKER_ROLE_SOURCE_EXPIRED_DURING_SELECTION" in blocker
+        for blocker in outcome.blockers
+    )
+    assert "bulk_entry_csv" not in outcome.artifacts
+    assert list((tmp_path / "out").rglob("DK_REVIEW_ENTRY_*.csv")) == []
+
+
+def test_one_cowork_command_snapshots_roles_and_retains_four_truths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import cli
+    from nfl_dfs import prior_review as prior_review_module
+    from nfl_dfs.dk import parse_salaries
+
+    now = datetime.now(timezone.utc)
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=now + timedelta(hours=6)
+    )
+    slate = parse_salaries(salary_path)
+    role_path = _write_evidence(
+        tmp_path / "roles",
+        slate,
+        {
+            "NE": [("NE|K|NE Kicker", 1.0)],
+            "SEA": [("SEA|K|Sea Kicker", 1.0)],
+        },
+        as_of=now,
+    )
+    attachments = _attachments(tmp_path, salary_path, entry_path)
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    real = prior_review_module.run_prior_review
+    monkeypatch.setattr(
+        cli, "run_prior_review", lambda **kwargs: real(**kwargs, project=project)
+    )
+
+    code = cli.command_cowork_run(
+        _cowork_args(
+            tmp_path,
+            attachments,
+            prior_package_dir=str(package_dir),
+            role_evidence_json=str(role_path),
+        )
+    )
+
+    assert code == 0
+    request = json.loads(
+        (tmp_path / "runs" / "prior-review-test" / "run_request.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    copied_role = Path(request["role_evidence_json"])
+    assert copied_role.parent == tmp_path / "runs" / "prior-review-test" / "inputs"
+    assert (copied_role.parent / "sources").is_dir()
+    report = json.loads(
+        (tmp_path / "outputs" / "prior-review-test" / "cowork_run.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert report["FILE_VALID"] is True
+    assert report["EVIDENCE_STATE"] == "UNKNOWN"
+    assert report["MODEL_STATUS"] == "PRIOR_ONLY"
+    assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert Path(report["prior_review_artifacts"]["role_evidence_json"]) == copied_role
 
 
 def test_an_unresolved_available_identity_stops_the_command_with_no_export(

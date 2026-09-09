@@ -29,6 +29,17 @@ exclude INACTIVE people across both Captain and Flex before selection; missing
 status rows do not imply ACTIVE. Refresh near kickoff. Never set `--as-of` to
 an earlier time for a live run: that flag is historical replay only.
 
+Kicker roles are resolved after those exclusions. When one eligible kicker is
+listed for a team and no role artifact is supplied, the review may continue only
+with a visible prior-only sole-listed assumption; it does not prove a confirmed
+role or ACTIVE status. When two or more remain, the run stops with
+`KICKER_ROLE_UNRESOLVED`. Use an approved adapter from `sources.py` to capture
+the supporting bytes, keep the content-addressed capture under `sources/`, and
+prepare `nfl_kicker_role_evidence_v1` as documented in `DATA_CONTRACTS.md`.
+Qualitative evidence may establish a sole kicker; only a source that explicitly
+publishes a numerical allocation may support a split. Never divide evenly, use
+salary as a depth chart, or use zero offensive snap share as inactivity.
+
 The resulting report names the reviewed assignments and `DK_REVIEW_ENTRY` file.
 Show its limitations alongside the lineups. `DK_REVIEW_ENTRY` is a retained
 diagnostic artifact, not a certified upload package. A separately supplied
@@ -120,6 +131,7 @@ the original attachment location.
   "team_projection_csv": null,
   "player_opportunity_csv": null,
   "official_status_csv": null,
+  "role_evidence_json": null,
   "ownership_brackets_csv": null,
   "source_ledger_json": null,
   "advertised_prize_value": null,
@@ -151,6 +163,10 @@ Populate only source-backed values:
   artifacts, and missing or mismatched hashes for either model-input CSV fail
   certification closed.
 - `official_status_csv`: current, source-bound, exact-ID activity evidence.
+- `role_evidence_json`: optional source-bound Showdown kicker-role package. Add
+  it to the generated request when a team has multiple eligible kickers, then
+  rerun the request. Its salary/game/ID bindings, source bytes, hashes, times,
+  expiry, and allocation must all validate; an invalid supplied package blocks.
 - `assignment_csv`: optional manual lineup path. When present, the workflow
   validates/certifies it instead of running the model-assisted build.
 - `profile`: `diagnostic` uses the bounded Cowork scenario/candidate sizes;
@@ -161,6 +177,20 @@ Unknown request keys, missing files, invalid enum values, partial team/player
 model pairs, traversal, external absolute paths, and symlink/reparse escapes
 fail closed. Request paths are limited to the explicitly supplied attachment
 directory, managed project data, and that run's immutable directory.
+
+For a prepared role package on the command line, the equivalent rerun is:
+
+```sh
+sh ./nfl.sh cowork-run \
+  --request '<full-path-to-run_request.json>' \
+  --role-evidence-json '<full-path-to-kicker-role-package/kicker_roles.json>'
+```
+
+Cowork snapshots both the manifest and its adjacent `sources/` captures before
+selection. Review `prior_review_reports.selection.prior_scores.kicker_roles` for
+the team allocation, sole-listed assumptions, zero-share exclusions, coverage
+gaps, source hashes and expiry. A source-bound role does not change
+`MODEL_STATUS=PRIOR_ONLY` or `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
 ## Produce prior-only model inputs
 

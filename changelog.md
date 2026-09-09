@@ -4,6 +4,58 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-09 — SD1 source-bound kicker roles and conserved scoring
+
+Reproduced the two-kicker scoring defect numerically: adding a second eligible
+New England kicker changed one 8.4-point team kicking line into 16.8 combined
+points. Added the strict `nfl_kicker_role_evidence_v1` contract and applied its
+allocation to team kicking events once, before DraftKings scoring and the 1.5x
+Captain multiplier. Exact current salary/game/team and CPT/FLEX person identity,
+content-addressed captured bytes, hashes, approved source policy, observation/
+capture/expiry times, transformation version and a fixed share tolerance are
+validated. Qualitative captures may establish only a supported sole role;
+fractional splits require matching structured numerical source content.
+
+Role resolution now runs after salary, official inactive and operator
+exclusions. Ambiguous multi-kicker teams stop with `KICKER_ROLE_UNRESOLVED`;
+zero-share people are excluded from selection; an excluded declared recipient
+requires refreshed evidence; no eligible kicker receives no fabricated points.
+Exactly one eligible kicker without an artifact remains compatible only through
+a visible `PRIOR_ONLY_SOLE_LISTED_ASSUMPTION`, which does not establish current
+role or official ACTIVE status. Invalid supplied evidence never falls back.
+
+Threaded `role_evidence_json` through Cowork/CLI request parsing, path
+confinement, immutable manifest/source snapshots, copied-package replay,
+prior-review selection, machine-readable reports, operator workbook guidance and
+final hash/freshness checks. Invalid, tampered or expired evidence leaves a named
+blocker and no new review-entry CSV. The synthetic full Cowork integration kept
+`FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`, and
+`RELEASE_DECISION=DO_NOT_UPLOAD` independently.
+
+Pinned Windows verification: 357 passed, 1 skipped in 69.05 seconds; the skip is
+the existing symlink-permission case. `nfl.ps1 doctor`, SD2 prompt self-check and
+`git diff --check` passed. No live approved kicker-role capture or actual
+Cowork/Linux run was performed, so live role evidence and Linux acceptance remain
+unverified. SD2 is now the sole next READY priority; broader W3 and model/
+economic readiness remain blocked. Nothing was staged, committed or pushed.
+
+### 2026-09-09 — Showdown priority session plan (documentation only)
+
+Added `docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md` with six bounded chunks,
+dependencies, acceptance checks, full-mandate limitations and required session
+closeout records. SD1 is the next READY item: source-bound kicker roles and
+conservation of team kicking production. Added its complete implementation
+prompt under `docs/session-prompts/SD1-current-role-and-kicker-scoring.md` and a
+current-priority pointer in `backlog.md`'s tracker protocol.
+
+Verified branch/HEAD `codex/s6a-deterministic-projection-producer` /
+`6b5d4625b6fa3234a07680ca27dafc819fbd05ab`, inspected current code and retained
+readiness evidence, and preserved existing untracked work. No runtime changes,
+test-suite rerun, staging, commit or push. The 332-passed/1-skipped result belongs
+to the preceding implementation review. All six chunks remain unimplemented;
+generated portfolios remain `PRIOR_ONLY / DO_NOT_UPLOAD`. Document link, fence,
+whitespace and queue-consistency checks passed, as did `git diff --check`.
+
 ### 2026-09-09 — Real Showdown workflow review and readiness repairs
 
 User-authorized end-to-end review, retaining all pre-existing W6/runbook and

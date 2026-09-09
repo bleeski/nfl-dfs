@@ -11,8 +11,8 @@ attachment/request directory. Absolute paths are accepted only for the exact
 supplied files, managed project data, or the current immutable run; traversal
 and symlink/reparse escapes are rejected before hashing or copying.
 The request records salary, entries, payouts, assignment or paired model inputs,
-official status, optional ownership brackets, the source ledger, exact contest
-economics, objective, guardrail mode, and diagnostic/registered profile.
+official status, optional `role_evidence_json`, optional ownership brackets, the
+source ledger, exact contest economics, objective, guardrail mode, and profile.
 
 The first pass rewrites recognized file paths to immutable content-addressed
 snapshots. A model-assisted Cowork run requires both team and player inputs, a
@@ -214,6 +214,92 @@ certification because every modeled outcome can affect field ranks. An eligible
 team/role share group cannot be all zero, because the
 engine will not invent a uniform allocation. Route participation is not present
 and remains `UNKNOWN` unless a separately approved timely source is introduced.
+
+## Showdown kicker-role evidence
+
+`role_evidence_json` is an optional auxiliary package manifest using schema
+`nfl_kicker_role_evidence_v1`. It is prepared by the evidence workflow, not
+authored as a third numerical CSV by the operator. The manifest binds the exact
+current salary SHA-256 and game, then declares one complete allocation for each
+team that still has an eligible kicker after salary status, official inactive,
+and operator exclusions.
+
+```json
+{
+  "schema_version": "nfl_kicker_role_evidence_v1",
+  "allocation_version": "kicker_team_scoring_event_allocation_v1",
+  "salary_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "game_id": "NE@SEA",
+  "share_tolerance": 0.000001,
+  "sources": [
+    {
+      "path": "sources/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.txt",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source_uri": "https://raw.githubusercontent.com/example/repository/main/kicker-role.txt",
+      "observed_at": "2026-09-09T18:00:00+00:00",
+      "captured_at": "2026-09-09T18:01:00+00:00",
+      "expires_at": "2026-09-09T21:00:00+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "parser_version": "current_kicker_role_v1",
+      "transformation_version": "kicker_role_extract_v1",
+      "support_kind": "QUALITATIVE_SOLE",
+      "supporting_excerpt": "Example Player is the sole kicker for NE.",
+      "synthetic": false
+    }
+  ],
+  "declarations": [
+    {
+      "game_id": "NE@SEA",
+      "team": "NE",
+      "allocation_kind": "SOLE",
+      "recipients": [
+        {
+          "underlying_id": "NE|K|Example Player",
+          "cpt_dk_id": "12345601",
+          "flex_dk_id": "12345602",
+          "share": 1.0
+        }
+      ],
+      "source_sha256s": [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ]
+    }
+  ]
+}
+```
+
+Every source path is package-relative, content-addressed, and confined beneath
+the manifest directory. The bytes are rehashed during parsing and immediately
+before review export. Source URIs, licenses, and parser versions must pass the
+same policy used by `sources.py`; observations and captures cannot be in the
+future, and original expiry is retained through snapshot and replay. A copied
+Cowork package includes the adjacent `sources/` directory and needs no original
+external path. `--as-of` is a replay clock and never renews expired evidence.
+
+Each recipient binds the underlying person to both exact current CPT and FLEX
+DraftKings IDs. Shares must be finite and nonnegative and total one per declared
+team within the fixed `0.000001` tolerance. `SOLE` has exactly one recipient at
+one. `SPLIT` has at least two recipients, explicitly covers every currently
+eligible kicker on that team (including zero shares), and requires a
+`NUMERICAL_SPLIT` capture whose exact JSON excerpt repeats the scoped IDs and
+shares. Qualitative prose can support only a sole role when the captured excerpt
+contains that player's salary-file name plus an explicit sole/only/starting
+kicker statement; it cannot create fractional shares. Synthetic captures are
+labelled `synthetic: true` and are test-only.
+
+An invalid supplied manifest always fails. It cannot fall back to an assumption.
+Without a manifest, exactly one eligible kicker per team receives the team line
+only under the visible `PRIOR_ONLY_SOLE_LISTED_ASSUMPTION`; that is not confirmed
+role or official ACTIVE evidence. Multiple eligible kickers stop with
+`KICKER_ROLE_UNRESOLVED`. No eligible kicker receives no allocation and produces
+a coverage gap, while a legal K-free diagnostic lineup may still proceed. A
+positive-share person made inactive or excluded invalidates the allocation and
+requires refreshed role evidence; production is never transferred silently.
+
+The allocation splits the existing team kicker scoring events before DraftKings
+scoring. The team's base kicker points are conserved exactly once; the Captain
+multiplier is applied afterward to the same person's base allocation. Zero-share
+kickers are scoreless and excluded from selection.
 
 ## Ownership brackets
 

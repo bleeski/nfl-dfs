@@ -23,11 +23,18 @@ field-goal distance mix). Nothing is fitted and nothing is hand-typed.
 from __future__ import annotations
 
 import csv
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
 
 from .contracts import EngineMode, SlateContract
+from .kicker_roles import (
+    KICKER_ROLE_SHARE_TOLERANCE,
+    KickerRoleResolution,
+    allocation_from_model_people,
+    validate_kicker_scoring_allocation,
+)
 from .opportunity import OpportunityModel, PlayerOpportunity
 from .scoring import (
     DefenseStatLine,
@@ -40,7 +47,7 @@ from .scoring import (
 )
 
 
-SCORE_VERSION = "prior_points_of_expected_statline_v1"
+SCORE_VERSION = "prior_points_of_expected_statline_v2"
 
 # Distance buckets in the prior-season team artifact, mapped onto the three
 # tiers DraftKings actually pays. Reading a published bucket layout is not the
@@ -246,6 +253,17 @@ def _kicker_stat_line(volume: TeamVolume, split: TeamSplits) -> KickerStatLine:
     )
 
 
+def _allocate_kicker_stat_line(line: KickerStatLine, share: float) -> KickerStatLine:
+    """Allocate scoring events before any DraftKings scoring or CPT multiplier."""
+
+    return KickerStatLine(
+        extra_points=line.extra_points * share,
+        field_goals_0_39=line.field_goals_0_39 * share,
+        field_goals_40_49=line.field_goals_40_49 * share,
+        field_goals_50_plus=line.field_goals_50_plus * share,
+    )
+
+
 def _defense_stat_line(opponent: TeamVolume) -> DefenseStatLine:
     """A defence scored entirely from what the other team gives up.
 
@@ -271,6 +289,8 @@ class PriorScores:
     stat_lines: dict[str, object]
     threshold_sensitive: tuple[str, ...]
     omissions: tuple[str, ...]
+    kicker_roles: dict[str, object]
+    kicker_role_resolution: KickerRoleResolution
 
     def as_report(self) -> dict[str, object]:
         ranked = sorted(self.by_person.items(), key=lambda item: -item[1])
@@ -291,6 +311,7 @@ class PriorScores:
                 " score is more fragile than the number suggests."
             ),
             "omissions": list(self.omissions),
+            "kicker_roles": self.kicker_roles,
         }
 
 
@@ -298,6 +319,8 @@ def score_pool(
     slate: SlateContract,
     model: OpportunityModel,
     splits: Mapping[str, TeamSplits],
+    *,
+    kicker_roles: KickerRoleResolution | None = None,
 ) -> PriorScores:
     """Score every salary row, captain rows at the 1.5 multiplier."""
 
@@ -306,6 +329,10 @@ def score_pool(
     volumes = team_volumes(model, splits)
     if len(volumes) != 2:
         raise PriorScoreError(f"EXPECTED_TWO_TEAMS:{sorted(volumes)}")
+    roles = kicker_roles or allocation_from_model_people(
+        slate, [player.underlying_id for player in model.players]
+    )
+    validate_kicker_scoring_allocation(slate, roles)
 
     def touches(player: PlayerOpportunity) -> float:
         volume = volumes[player.team]
@@ -322,14 +349,25 @@ def score_pool(
     by_person: dict[str, float] = {}
     stat_lines: dict[str, object] = {}
     sensitive: list[str] = []
+    kicker_points_by_team: dict[str, dict[str, float]] = {}
     for player in model.players:
         if player.team not in volumes:
             raise PriorScoreError(f"PLAYER_TEAM_NOT_IN_POOL:{player.underlying_id}")
         volume = volumes[player.team]
         opponent_team = next(team for team in volumes if team != player.team)
         if player.position == "K":
-            line: object = _kicker_stat_line(volume, splits[player.team])
+            share = roles.shares_by_person.get(player.underlying_id)
+            if share is None:
+                raise PriorScoreError(
+                    f"KICKER_ROLE_ALLOCATION_MISSING:{player.underlying_id}"
+                )
+            line = _allocate_kicker_stat_line(
+                _kicker_stat_line(volume, splits[player.team]), share
+            )
             points = score_kicker(line)
+            kicker_points_by_team.setdefault(player.team, {})[
+                player.underlying_id
+            ] = float(points)
         elif player.position == "DST":
             line = _defense_stat_line(volumes[opponent_team])
             points = score_defense(line)
@@ -349,6 +387,29 @@ def score_pool(
         # objective a ranking over non-negative contributions.
         by_person[player.underlying_id] = float(max(points, 0.0))
         stat_lines[player.underlying_id] = line
+
+    kicker_conservation: dict[str, dict[str, object]] = {}
+    for team, volume in sorted(volumes.items()):
+        full_points = float(score_kicker(_kicker_stat_line(volume, splits[team])))
+        allocated = sum(kicker_points_by_team.get(team, {}).values())
+        has_recipient = bool(roles.team_allocations.get(team))
+        expected = full_points if has_recipient else 0.0
+        if not math.isclose(
+            allocated,
+            expected,
+            rel_tol=0,
+            abs_tol=KICKER_ROLE_SHARE_TOLERANCE,
+        ):
+            raise PriorScoreError(
+                f"KICKER_SCORING_NOT_CONSERVED:team={team}:"
+                f"allocated={allocated:.12g}:expected={expected:.12g}"
+            )
+        kicker_conservation[team] = {
+            "unallocated_team_points": round(full_points, 6) if not has_recipient else 0.0,
+            "allocated_points": round(allocated, 6),
+            "full_team_points": round(full_points, 6),
+            "recipients": dict(sorted(kicker_points_by_team.get(team, {}).items())),
+        }
 
     by_dk_id: dict[str, float] = {}
     for salary_player in slate.players:
@@ -373,4 +434,10 @@ def score_pool(
             "POINTS_ALLOWED_TAKEN_FROM_THE_IMPLIED_TOTAL_AS_A_POINT_ESTIMATE",
             "NO_OWNERSHIP_LEVERAGE_CORRELATION_OR_DUPLICATION_TERM",
         ),
+        kicker_roles={
+            **roles.as_report(),
+            "scoring_allocation": "TEAM_SCORING_EVENTS_BEFORE_DK_SCORING_AND_CPT_MULTIPLIER",
+            "conservation": kicker_conservation,
+        },
+        kicker_role_resolution=roles,
     )

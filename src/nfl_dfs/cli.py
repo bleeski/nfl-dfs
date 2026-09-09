@@ -1708,6 +1708,12 @@ def command_select(args: argparse.Namespace) -> int:
         teams=sorted({player.team for player in slate.players}),
     )
     count = args.count if args.count else len(entry_ids)
+    selection_as_of = None
+    if getattr(args, "as_of", None):
+        selection_as_of = datetime.fromisoformat(str(args.as_of).replace("Z", "+00:00"))
+        if selection_as_of.tzinfo is None:
+            raise ValueError("as_of must be timezone aware")
+        selection_as_of = selection_as_of.astimezone(timezone.utc)
     lineups, scores, selection = select_prior_lineups(
         slate,
         reduced,
@@ -1716,6 +1722,8 @@ def command_select(args: argparse.Namespace) -> int:
         count=count,
         differentiate_captain=not args.allow_repeat_captain,
         max_person_overlap=args.max_person_overlap,
+        role_evidence_json=getattr(args, "role_evidence_json", None),
+        as_of=selection_as_of,
     )
     assignments = assignments_for_entries(entry_ids, lineups)
 
@@ -2023,6 +2031,7 @@ def _cowork_run_control_values(request: CoworkRunRequest) -> dict[str, object]:
         "TEAM_PROJECTION_CSV": request.team_projection_csv or "",
         "PLAYER_OPPORTUNITY_CSV": request.player_opportunity_csv or "",
         "OFFICIAL_STATUS_CSV": request.official_status_csv or "",
+        "ROLE_EVIDENCE_JSON": request.role_evidence_json or "",
         "FIELD_SIZE": request.field_size,
         "MAX_ENTRIES": None,
         "ADVERTISED_PRIZE_VALUE": request.advertised_prize_value,
@@ -2113,6 +2122,7 @@ def _run_prior_review_profile(
         extra_unavailable_statuses=request.unavailable_statuses,
         extra_available_statuses=request.available_statuses,
         official_status_csv=request.official_status_csv,
+        role_evidence_json=request.role_evidence_json,
     )
 
     blockers = list(reported_blockers)
@@ -2186,6 +2196,11 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     # has authorized that exact path, the same way --salaries and --entries work.
     if getattr(args, "prior_package_dir", None):
         request_roots.append(Path(args.prior_package_dir).resolve())
+    # A role manifest is a small package: its own immutable JSON plus the
+    # adjacent content-addressed `sources/` captures it binds. Authorize only
+    # that explicitly named package directory.
+    if getattr(args, "role_evidence_json", None):
+        request_roots.append(Path(args.role_evidence_json).resolve().parent)
     if args.request:
         request_source = Path(args.request).resolve()
         possible_run_root = request_source.parent
@@ -2215,6 +2230,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         ("weather_state", "weather_state"),
         ("weather_source_uri", "weather_source_uri"),
         ("weather_observed_at", "weather_observed_at"),
+        ("role_evidence_json", "role_evidence_json"),
         ("lineup_count", "lineup_count"),
         ("max_person_overlap", "max_person_overlap"),
         ("exclude", "exclude_dk_ids"),
@@ -2701,6 +2717,7 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--weather-state", choices=list(OPERATOR_WEATHER_STATES))
     cowork.add_argument("--weather-source-uri")
     cowork.add_argument("--weather-observed-at")
+    cowork.add_argument("--role-evidence-json")
     cowork.add_argument("--lineup-count", type=int)
     cowork.add_argument("--max-person-overlap", type=int)
     cowork.add_argument("--as-of")
@@ -2719,6 +2736,8 @@ def build_parser() -> argparse.ArgumentParser:
     select.add_argument("--player-opportunities", required=True)
     select.add_argument("--team-splits", required=True)
     select.add_argument("--prior-season", type=int, required=True)
+    select.add_argument("--role-evidence-json")
+    select.add_argument("--as-of")
     select.add_argument("--count", type=int)
     select.add_argument("--max-person-overlap", type=int, default=4)
     select.add_argument(
