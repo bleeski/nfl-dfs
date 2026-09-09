@@ -502,11 +502,18 @@ def _player_rows(
 ) -> list[tuple[str, ...]]:
     records_by_team: dict[str, list[tuple[PlayerSourceRecord, PlayerIdentityMapping, SalaryPlayer]]] = defaultdict(list)
     for record in player_source.records:
-        if record.evidence_state != "PASS":
+        mapping, salary_player = resolved[record.provider_player_id]
+        history = player_source.metadata.coverage.get("offensive_history_by_person", {})
+        basis_unknown = (
+            salary_player.role == "FLEX"
+            and player_source.metadata.coverage.get("adapter_version") == "nflverse_prior_adapter_v2"
+            and history.get(salary_player.underlying_id, {}).get("state")
+            in {"MISSING_HISTORY", "CURRENT_ROLE_UNKNOWN"}
+        )
+        if record.evidence_state != "PASS" and not (basis_unknown and record.evidence_state == "UNKNOWN"):
             raise ProjectionBuildError(
                 f"PLAYER_EVIDENCE_NOT_PASS:{record.provider_player_id}:{record.evidence_state}"
             )
-        mapping, salary_player = resolved[record.provider_player_id]
         records_by_team[mapping.team].append((record, mapping, salary_player))
         for field, eligible_positions in _PLAYER_GROUPS.items():
             if salary_player.position not in eligible_positions and getattr(record, field) != 0:
@@ -525,12 +532,19 @@ def _player_rows(
         for field, eligible_positions in _PLAYER_GROUPS.items():
             eligible = [item for item in values if item[2].position in eligible_positions]
             total = sum((getattr(item[0], field) for item in eligible), Decimal("0"))
-            if not eligible or total <= 0:
+            history = player_source.metadata.coverage.get("offensive_history_by_person", {})
+            unknown_group = any(
+                item[2].role == "FLEX"
+                and player_source.metadata.coverage.get("adapter_version") == "nflverse_prior_adapter_v2"
+                and history.get(item[2].underlying_id, {}).get("state") in {"MISSING_HISTORY", "CURRENT_ROLE_UNKNOWN"}
+                for item in eligible
+            )
+            if not eligible or (total <= 0 and not unknown_group):
                 raise ProjectionBuildError(f"ZERO_OR_MISSING_SHARE_GROUP:{team}:{field}")
             for record, _mapping, _salary in values:
                 normalized[(record.provider_player_id, field)] = (
                     getattr(record, field) / total
-                    if record.position in eligible_positions
+                    if record.position in eligible_positions and total > 0
                     else Decimal("0")
                 )
 
@@ -553,7 +567,7 @@ def _player_rows(
                 _decimal_text(normalized[(record.provider_player_id, "rushing_td_weight")]),
                 _decimal_text(normalized[(record.provider_player_id, "receiving_td_weight")]),
                 _decimal_text(record.role_capacity),
-                "PASS",
+                record.evidence_state,
             )
         )
     return rows
@@ -1014,7 +1028,10 @@ def build_projection_package(
             raise ProjectionBuildError("DERIVED_HASH_MISMATCH:team_projections")
         if sha256_file(player_path) != derived_hashes["player_opportunities"]:
             raise ProjectionBuildError("DERIVED_HASH_MISMATCH:player_opportunities")
-        load_opportunity_model(slate, team_path, player_path)
+        load_opportunity_model(
+            slate, team_path, player_path,
+            allow_empty_groups=bool(players.metadata.coverage.get("offensive_history_by_person")),
+        )
         validate_source_ledger(
             ledger_path,
             expected_outputs=derived_hashes,

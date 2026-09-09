@@ -705,17 +705,28 @@ def test_uniform_filling_is_refused_when_a_group_has_no_support(tmp_path):
     )
     review = root / priors.REVIEW_FILENAME
     review.write_bytes(priors.review_csv_bytes(proposals))
-    with pytest.raises(PriorsBuildError, match="PRIOR_SUPPORT_MISSING"):
-        freeze_prior_package(
-            package_dir=root,
-            reviewed=review,
-            reviewed_sha256=sha256_file(review),
-            salaries=salary,
-            salary_sha256=digest,
-            as_of=AS_OF,
-            output_dir=tmp_path / "nosupport_out",
-        )
-    assert not (tmp_path / "nosupport_out").exists()
+    result = freeze_prior_package(
+        package_dir=root, reviewed=review, reviewed_sha256=sha256_file(review),
+        salaries=salary, salary_sha256=digest, as_of=AS_OF,
+        output_dir=tmp_path / "nosupport_out",
+    )
+    # SD2 preserves a missing basis so a captured current allocation can resolve
+    # it later. No uniform share is manufactured while freezing history.
+    payload = json.loads(Path(result["player_source"]).read_text(encoding="utf-8"))
+    quarterback = next(r for r in payload["records"] if r["provider_player_id"] == "00-0026498")
+    assert quarterback["qb_attempt_weight"] == 0
+    basis = payload["metadata"]["coverage"]["offensive_history_by_person"]
+    assert basis["LAR|QB|Matthew Stafford"]["state"] == "MISSING_HISTORY"
+    projected = build_projection_package(
+        salaries=salary, salary_sha256=digest,
+        team_source=result["team_source"], team_source_sha256=result["hashes"][priors.TEAM_PRIOR_FILENAME],
+        player_source=result["player_source"], player_source_sha256=result["hashes"][priors.PLAYER_PRIOR_FILENAME],
+        identity_map=result["identity_map"], identity_map_sha256=result["hashes"][priors.IDENTITY_MAP_FILENAME],
+        as_of=AS_OF, output_dir=tmp_path / "unknown_projection",
+    )
+    with Path(projected.player_opportunities).open(newline="") as handle:
+        row = next(r for r in csv.DictReader(handle) if r["DK_ID"] == "40000002")
+    assert float(row["QB_ATTEMPT_SHARE"]) == 0 and row["EVIDENCE_STATE"] == "UNKNOWN"
 
 
 # --------------------------------------------------------------------------- #

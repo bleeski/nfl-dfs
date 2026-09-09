@@ -290,11 +290,19 @@ def _write_package(
 ) -> Path:
     package_dir = tmp_path / "priors"
     package_dir.mkdir(parents=True, exist_ok=True)
+    from .test_participation import _POOL
     metadata = {
         "metadata": {
             "expires_at": expires_at.isoformat(),
             "evidence_state": "PASS",
-            "coverage": {"expiry_basis": "MARKET_LINE_MOVES_INTRADAY"},
+            "coverage": {
+                "expiry_basis": "MARKET_LINE_MOVES_INTRADAY",
+                "offensive_history_by_person": {
+                    f"{team}|{position}|{name}": {"state": "OBSERVED_HISTORY", "synthetic": True}
+                    for team, position, name, _status, _salary in _POOL
+                    if position in {"QB", "RB", "WR", "TE"}
+                },
+            },
         }
     }
     for name in ("team_prior.json", "player_prior.json", "identity_map.json"):

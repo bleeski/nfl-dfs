@@ -36,6 +36,8 @@ from .kicker_roles import (
     validate_kicker_scoring_allocation,
 )
 from .opportunity import OpportunityModel, PlayerOpportunity
+from .offensive_roles import OffensiveResolution, resolve_offensive_roles
+from .participation import build_participation_contract
 from .scoring import (
     DefenseStatLine,
     KickerStatLine,
@@ -47,7 +49,7 @@ from .scoring import (
 )
 
 
-SCORE_VERSION = "prior_points_of_expected_statline_v2"
+SCORE_VERSION = "prior_points_of_expected_statline_v3"
 
 # Distance buckets in the prior-season team artifact, mapped onto the three
 # tiers DraftKings actually pays. Reading a published bucket layout is not the
@@ -101,11 +103,15 @@ class TeamSplits:
 
 
 def read_team_splits(
-    path: str | Path, *, prior_season: int, teams: Iterable[str]
+    path: str | Path, *, prior_season: int, teams: Iterable[str],
+    provider_team_by_team: Mapping[str, str] | None = None,
 ) -> dict[str, TeamSplits]:
     """Derive the three splits from the frozen prior-season team-week artifact."""
 
     wanted = {team.upper() for team in teams}
+    binding = dict(provider_team_by_team or {team: team for team in wanted})
+    if set(binding) != wanted or len(set(binding.values())) != len(wanted):
+        raise PriorScoreError("TEAM_SPLIT_IDENTITY_BINDING_INVALID")
     try:
         with Path(path).open("r", encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle)
@@ -117,7 +123,7 @@ def read_team_splits(
                 for row in reader
                 if (row.get("season") or "").strip() == str(prior_season)
                 and (row.get("season_type") or "").strip().upper() == "REG"
-                and (row.get("team") or "").strip().upper() in wanted
+                and (row.get("team") or "").strip().upper() in set(binding.values())
             ]
     except OSError as exc:
         raise PriorScoreError(f"TEAM_SPLIT_ARTIFACT_UNREADABLE:{path}:{exc}") from exc
@@ -135,7 +141,7 @@ def read_team_splits(
 
     splits: dict[str, TeamSplits] = {}
     for team in sorted(wanted):
-        team_rows = [r for r in rows if (r.get("team") or "").strip().upper() == team]
+        team_rows = [r for r in rows if (r.get("team") or "").strip().upper() == binding[team]]
         if not team_rows:
             raise PriorScoreError(f"TEAM_SPLIT_COVERAGE_MISSING:{team}:{prior_season}")
         passing = sum(number(r, "passing_tds") for r in team_rows)
@@ -291,6 +297,7 @@ class PriorScores:
     omissions: tuple[str, ...]
     kicker_roles: dict[str, object]
     kicker_role_resolution: KickerRoleResolution
+    offensive_role_resolution: OffensiveResolution
 
     def as_report(self) -> dict[str, object]:
         ranked = sorted(self.by_person.items(), key=lambda item: -item[1])
@@ -312,6 +319,7 @@ class PriorScores:
             ),
             "omissions": list(self.omissions),
             "kicker_roles": self.kicker_roles,
+            "offensive_roles": self.offensive_role_resolution.report,
         }
 
 
@@ -321,11 +329,14 @@ def score_pool(
     splits: Mapping[str, TeamSplits],
     *,
     kicker_roles: KickerRoleResolution | None = None,
+    offensive_roles: OffensiveResolution | None = None,
 ) -> PriorScores:
     """Score every salary row, captain rows at the 1.5 multiplier."""
 
     if slate.mode is not EngineMode.SHOWDOWN:
         raise PriorScoreError(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
+    offense = offensive_roles or resolve_offensive_roles(slate, model, build_participation_contract(slate))
+    model = offense.model
     volumes = team_volumes(model, splits)
     if len(volumes) != 2:
         raise PriorScoreError(f"EXPECTED_TWO_TEAMS:{sorted(volumes)}")
@@ -440,4 +451,5 @@ def score_pool(
             "conservation": kicker_conservation,
         },
         kicker_role_resolution=roles,
+        offensive_role_resolution=offense,
     )

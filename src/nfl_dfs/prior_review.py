@@ -46,6 +46,7 @@ from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_file
 from .kicker_roles import verify_kicker_role_resolution
 from .opportunity import load_opportunity_model
+from .offensive_roles import OffensiveRoleError, attach_history, verify_offensive_resolution
 from .participation import (
     UNAVAILABLE_STATUSES,
     build_participation_contract,
@@ -756,6 +757,7 @@ def run_prior_review(
     extra_available_statuses: Sequence[str] = (),
     official_status_csv: str | Path | None = None,
     role_evidence_json: str | Path | None = None,
+    offensive_role_evidence_json: str | Path | None = None,
     propose: Callable[..., dict[str, object]] = propose_prior_package,
     freeze: Callable[..., dict[str, object]] = freeze_prior_package,
     project: Callable[..., object] = build_projection_package,
@@ -1193,35 +1195,53 @@ def run_prior_review(
     entry_ids = [entry.entry_id for entry in template.authorizations]
     try:
         model = load_opportunity_model(
-            slate, str(projection.team_projections), str(projection.player_opportunities)
+            slate, str(projection.team_projections), str(projection.player_opportunities),
+            allow_empty_groups=True,
         )
+        model = attach_history(model, package.player_source, package.hashes[PLAYER_PRIOR_FILENAME])
         contract = build_participation_contract(
             slate,
             operator_excluded_dk_ids=tuple(operator_excluded_dk_ids) + official_exclusions,
             extra_unavailable_statuses=tuple(extra_unavailable_statuses),
             extra_available_statuses=tuple(extra_available_statuses),
         )
-        reduced, redistribution = redistribute_opportunity(model, contract)
+        _reduced, redistribution = redistribute_opportunity(model, contract, redistribute=False)
+        if sha256_file(package.identity_map) != package.hashes[IDENTITY_MAP_FILENAME]:
+            raise PriorReviewError("TEAM_SPLIT_IDENTITY_MAP_CHANGED")
+        identity_payload = json.loads(Path(package.identity_map).read_text(encoding="utf-8"))
+        team_binding = {}
+        for mapping in identity_payload.get("team_mappings", []):
+            parts = mapping["provider_team_id"].split(":")
+            if len(parts) != 3 or parts[0] != "nflverse" or parts[2] != str(package.season):
+                raise PriorReviewError("TEAM_SPLIT_PROVIDER_TEAM_ID_UNSUPPORTED")
+            if mapping["team"] in team_binding:
+                raise PriorReviewError("TEAM_SPLIT_IDENTITY_MAP_DUPLICATE")
+            team_binding[mapping["team"]] = parts[1]
+        reports["team_splits"]["provider_team_by_team"] = team_binding
         splits = read_team_splits(
             splits_path,
             prior_season=package.prior_season,
             teams=sorted({player.team for player in slate.players}),
+            provider_team_by_team=team_binding or None,
         )
         lineups, scores, selection = select_prior_lineups(
             slate,
-            reduced,
+            model,
             splits,
             contract,
             count=int(lineup_count) if lineup_count else len(entry_ids),
             differentiate_captain=not allow_repeat_captain,
             max_person_overlap=max_person_overlap,
             role_evidence_json=role_evidence_json,
+            offensive_role_evidence_json=offensive_role_evidence_json,
             as_of=as_of,
         )
         assignments = assignments_for_entries(entry_ids, lineups)
     except Exception as exc:  # noqa: BLE001 - named, never swallowed
         error = f"{type(exc).__name__}:{exc}"
         stages.append(_stage("SELECT", "FAILED", error=error))
+        if isinstance(exc, OffensiveRoleError):
+            reports["offensive_roles"] = exc.report
         return PriorReviewOutcome(
             profile_version=PROFILE_VERSION,
             stage="SELECT",
@@ -1240,6 +1260,13 @@ def run_prior_review(
     }
     selection_dir = run_dir / "selection"
     role_resolution = scores.kicker_role_resolution
+    offensive_resolution = scores.offensive_role_resolution
+    if offensive_resolution.evidence_path:
+        artifacts["offensive_role_evidence_json"] = offensive_resolution.evidence_path
+        hashes["offensive_role_evidence_json"] = str(offensive_resolution.evidence_sha256)
+        for index, (path, digest) in enumerate(sorted((offensive_resolution.source_hashes or {}).items()), start=1):
+            artifacts[f"offensive_role_source:{index}"] = path
+            hashes[f"offensive_role_source:{index}"] = digest
     if role_resolution.evidence_path is not None:
         artifacts["role_evidence_json"] = role_resolution.evidence_path
         hashes["role_evidence_json"] = str(role_resolution.evidence_sha256)
@@ -1295,6 +1322,11 @@ def run_prior_review(
                    for observed in snapshot.observed_at_by_id.values()):
                 raise PriorReviewError("OFFICIAL_STATUS_STALE_DURING_SELECTION")
         verify_kicker_role_resolution(role_resolution, at=export_clock)
+        verify_offensive_resolution(offensive_resolution, at=export_clock)
+        if sha256_file(package.player_source) != package.hashes[PLAYER_PRIOR_FILENAME]:
+            raise OffensiveRoleError("OFFENSIVE_HISTORY_CHANGED_DURING_SELECTION")
+        if sha256_file(package.identity_map) != package.hashes[IDENTITY_MAP_FILENAME]:
+            raise PriorReviewError("TEAM_SPLIT_IDENTITY_MAP_CHANGED_DURING_SELECTION")
         export = export_review_entries(
             slate=slate,
             template=template,

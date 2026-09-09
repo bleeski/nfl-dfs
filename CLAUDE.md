@@ -90,6 +90,14 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    reports are available. The supplied rows must be current, and an INACTIVE
    row excludes both CPT and FLEX identities before selection. Missing ACTIVE
    rows remain unknown; salary status alone never establishes current activity.
+   SD2 distinguishes missing and observed-zero offensive history. Rebuild older
+   prior packages without SD2 coverage. Missing history, incompatible transfers
+   and unresolved material role changes name the person and smallest evidence
+   action. Capture approved source bytes, prepare the versioned auxiliary
+   `offensive_role_evidence_json` package in `docs/DATA_CONTRACTS.md`, add it to
+   the generated request and rerun. Qualitative starter/backup evidence cannot
+   invent a numerical share. Without supported replacements, excluded volume
+   stays visibly unallocated. Never ask Ben to author numerical role priors.
    Kicker roles are resolved after those exclusions. If more than one kicker
    remains eligible for a team, capture approved source bytes through
    `sources.py`, prepare the versioned `role_evidence_json` package documented

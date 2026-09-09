@@ -83,10 +83,15 @@ group, so the denominators match the sets `projection.py` renormalizes over:
 from targets, `rushing_td_weight` and `receiving_td_weight` from those TD counts.
 `catch_rate` is receptions/targets and `yards_per_target` is
 receiving_yards/targets, both zero outside RB/WR/TE. `role_capacity` is the mean
-regular-season `offense_pct`, joined on Pro Football Reference id. Player usage
-joins on provider player id alone, never on current team, because players move.
-A group whose eligible members have no prior-season support fails closed with
-`PRIOR_SUPPORT_MISSING`; uniform filling is never applied.
+regular-season `offense_pct`, joined on Pro Football Reference id. Since SD2,
+opportunity and receiving efficiency use exact provider-person **current-team
+rows only**, using the frozen team crosswalk. Old-team rows are counted in
+history coverage but never enter a new-team denominator. A missing or transferred
+person has an explicit unknown basis, zero placeholders and `EVIDENCE_STATE=UNKNOWN`;
+those placeholders cannot enter selection without supported current opportunity.
+An entirely missing group may survive projection as unknown for role resolution;
+an observed all-zero group still fails with `PRIOR_SUPPORT_MISSING`. No uniform
+filling occurs. Adapter version: `nflverse_prior_adapter_v2`.
 
 Identity is a two-phase gate because DraftKings and nflverse share no key.
 `priors-propose` writes `nfl_prior_identity_proposal_v1` plus a reviewable
@@ -214,6 +219,122 @@ certification because every modeled outcome can affect field ranks. An eligible
 team/role share group cannot be all zero, because the
 engine will not invent a uniform allocation. Route participation is not present
 and remains `UNKNOWN` unless a separately approved timely source is introduced.
+
+## SD2 Showdown offensive history and current roles
+
+`offensive_role_evidence_json` is an optional adjacent package; SD1's
+`role_evidence_json` retains its kicker-specific v1 semantics. Cowork captures
+approved supporting artifacts, prepares this manifest, adds its path to the
+generated request and reruns. Ben still supplies only salary and reserved-entry
+CSVs. Numerical fields must never be authored from an LLM estimate or prose.
+
+The `nfl_offensive_role_evidence_v1` manifest contains:
+
+| Field | Contract |
+|---|---|
+| `schema_version` | `nfl_offensive_role_evidence_v1` |
+| `transformation_version` | Exactly `offensive_explicit_team_shares_v1` |
+| `salary_sha256`, `game_id` | Exact current salary bytes and single game |
+| `sources` | Nonempty SD1-style captured-source records, described below |
+| `declarations` | Zero or more unique current-team numerical allocations |
+| `facts` | Zero or more unique underlying-person qualitative facts |
+
+Sources use `path` (`sources/<sha256>.txt`), `sha256`, approved HTTPS
+`source_uri`, `observed_at`, `captured_at`, `expires_at`, `license_decision`,
+`parser_version`, the exact transformation version above, `support_kind`,
+`supporting_excerpt` and a strict Boolean `synthetic`. SD1's captured-source
+validator enforces policy, content addressing, relative-path confinement, hash
+integrity, excerpt presence and aware ordered timestamps. Sources must already
+be observed/captured, and remain unexpired. No URL-only evidence, renewed expiry
+or allowlist exception is accepted. Every source must be used. Synthetic
+fixtures are reported as `TEST_ONLY_SYNTHETIC_EVIDENCE` and remain `UNKNOWN`.
+The offensive excerpt limit is 100,000 characters to accommodate a complete
+current-team declaration; SD1's smaller kicker-excerpt limit is unchanged.
+
+A numerical declaration has `team`, `game_id`, `source_sha256`, `totals`,
+`unallocated`, and `recipients`. Each recipient binds `underlying_id`,
+`cpt_dk_id`, `flex_dk_id`, `shares`, and optionally `receiving_efficiency`.
+Every `shares`, `totals` and `unallocated` object contains exactly these five
+unit-fraction fields: `qb_attempt_share`, `carry_share`, `target_share`,
+`rushing_td_share`, `receiving_td_share`. All must be finite JSON numbers in
+`[0,1]`; Booleans and numeric strings are rejected. Each total must be exactly
+1.0. Recipient sums plus explicitly unallocated shares must equal each total
+within absolute tolerance `0.000001` (no relative tolerance). The engine does
+not normalize the declaration or silently allocate the remainder.
+
+All eligible offensive people on a declared team must be listed, except
+explicit nonparticipants. Position masks match the existing opportunity
+contract. Only QBs receive passing attempts, and only RB/WR/TE receive targets
+or receiving touchdowns. Each team declaration replaces all five share groups
+before scoring. A zero allocation excludes the person from selection without
+claiming inactivity. Positive recipients excluded by salary status, official
+inactive evidence, operator exclusions or explicit nonparticipation invalidate
+the whole allocation and require refreshed evidence.
+
+`support_kind=NUMERICAL_ALLOCATION` requires the captured excerpt to be a JSON
+object identical to the declaration with `source_sha256` omitted. This is the
+registered deterministic identity transformation; there is no freeform
+numerical extractor. `receiving_efficiency`, when supplied, is an object with
+`catch_rate` in `[0,1]` and `yards_per_target` in `[0,30]`, subject to the same
+source-content equality check. Positive targets without an observed receiving
+efficiency basis require these explicit captured values. Thus a rookie cannot
+receive made-up efficiency after a role adjustment. These strict source formats
+are intentionally narrow; a live compatible numerical source has not yet been
+demonstrated, and no broader scraper or transformation is implied.
+
+A qualitative fact has `team`, `game_id`, the three exact identity fields,
+`source_sha256`, and `fact`. `support_kind=QUALITATIVE_FACT` supports only exact
+captured sentences of the following registered forms, where name, team and
+game ID come from the salary contract:
+
+```text
+<name> is the starter for <team> in <game_id>.
+<name> is the backup for <team> in <game_id>.
+<name> has an unresolved role change for <team> in <game_id>.
+<name> will not participate for <team> in <game_id>.
+```
+
+They map respectively to `NAMED_STARTER`, `NAMED_BACKUP`,
+`MATERIAL_ROLE_CHANGE`, and `EXPLICIT_NONPARTICIPATION`. A different phrase needs
+a separately validated transformation in future work; do not rewrite a capture
+to fit. Starter/backup/change facts require a supported numerical allocation
+before selection. They never imply any snap, route, target or carry share.
+
+Producer coverage stores `offensive_history_by_person` with version
+`offensive_current_team_history_v1`, exact current team/provider team,
+historical teams, season, prior/current-team row counts, incompatible-transfer
+flag and receiving-efficiency coverage. Blank required historical counts are
+missing, not observed zeros. `OBSERVED_HISTORY` is the additional baseline state
+for nonzero current-team historical support. A legacy frozen prior package
+without complete SD2 coverage must be rebuilt (`OFFENSIVE_HISTORY_COVERAGE_REQUIRED`).
+
+The current-role report contains exactly one finding per offensive person:
+
+| State | Selection treatment |
+|---|---|
+| `OBSERVED_HISTORY_ZERO` | Exclude; historical zero does not establish current nonparticipation |
+| `MISSING_HISTORY` | Block selection; capture current allocation and missing efficiency |
+| `CURRENT_ROLE_UNKNOWN` | Block a transfer or declared material change; unchanged positive history may remain an explicitly unconfirmed diagnostic |
+| `EXPLICIT_NONPARTICIPATION` | Exclude before allocations; cannot be reactivated by role evidence |
+| `SOURCE_SUPPORTED_ADJUSTMENT` | Use the validated current-team allocation; zero-share people remain excluded |
+
+Each finding retains `history_state`, `history_basis`, `declared_fact`, before/
+after shares, exact IDs, selection action and smallest next evidence action.
+The report also records coverage, assumptions, declared totals, unallocated
+volume, captured metadata, hashes and original expiry. Unchanged historical
+shares remain unconfirmed; excluding people leaves their volume unallocated,
+so no unsupported backup inherits it. This is an understated retained-volume
+diagnostic, not a guaranteed lower bound on fantasy points or a current-role
+forecast. Historical `role_capacity` is never a forward ceiling.
+
+Selection/scoring reports retain this under `offensive_roles`; failed selection
+retains it directly under `prior_review_reports.offensive_roles`. Source/manifest
+bytes and freshness are rechecked after selection and immediately before export.
+The immutable manifest and its `sources/` directory travel with snapshots and
+copied packages. Invalid evidence writes no new `DK_REVIEW_ENTRY` CSV and leaves
+earlier outputs intact. The prior-review path always reports independent
+`FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`. SD2 does not change upload gates or W3's simulator.
 
 ## Showdown kicker-role evidence
 
