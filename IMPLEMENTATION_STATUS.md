@@ -38,6 +38,16 @@ See the Showdown priority tracker for final verification results. Live compatibl
 numerical offensive-role captures and actual Cowork/Linux acceptance remain
 unverified. W3's simulator mask and full forward-role model remain incomplete.
 
+SD3 adds the exact-bound `nfl_showdown_portfolio_policy_v1` contract. It binds
+the immutable salary SHA-256, single game, complete underlying-person/CPT/FLEX
+identity map and full requested Entry-ID sequence; normalizes numeric fractions
+with exact-decimal floor rounding; reports declared and effective combined-person
+and Captain limits; and defines canonical lineup, uniqueness and pairwise-person
+overlap semantics. Necessary capacity findings do not claim solver infeasibility.
+SD4 still owns enforcement and independent assignment audit. Consequently a
+policy-bearing execution is explicitly blocked before selection/export with no
+new review-entry CSV, while policy-free SD1/SD2 behavior is unchanged.
+
 ## Working and locally verified
 
 - The red-team revision has replaced the prior `plan.md`.
@@ -78,6 +88,11 @@ unverified. W3's simulator mask and full forward-role model remain incomplete.
   stale, future, tampered, incomplete, or newly ineligible allocations fail
   before assignments/review export; Cowork snapshots the manifest and sources
   for path-independent replay.
+- Showdown portfolio-policy inputs are path-confined, copied into immutable
+  content-addressed snapshots, validated against all requested entries and exact
+  role identities, and written as stable normalized bytes with source and
+  normalized SHA-256 values. Until SD4, their enforcement status is always
+  `NOT_IMPLEMENTED_SD3` and they cannot reach a review-entry writer.
 - One build/certification package is deliberately limited to one Contest ID and
   one entry fee. Mixed-contest exports fail closed until per-contest economics
   and allocation are implemented.
@@ -183,6 +198,9 @@ unverified. W3's simulator mask and full forward-role model remain incomplete.
 - Exposure envelopes, historical pair-dependence bands, and material
   ownership/market sensitivity thresholds are not yet registered inputs. The
   active QA pass leaves those triggers unasserted instead of inventing limits.
+- The SD3 portfolio policy is a validated user-control contract only. Its caps,
+  overlap and uniqueness settings are not yet solver constraints; every request
+  that supplies it stops at `PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`.
 - Weekly rolling-origin fitting, promotion, influence caps, and rollback logic
   are implemented, but automatic deployment correctly has nothing eligible to
   promote before settled-slate history accumulates.

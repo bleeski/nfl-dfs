@@ -6,16 +6,19 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 
 **Current Showdown review-workflow priority sequence (2026-09-09):** follow
 [`docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md`](docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md).
-SD1 and SD2 are complete for software acceptance. The sole next READY chunk is
-**SD3 — validated portfolio-control contract**; use its
-[session prompt](docs/session-prompts/SD3-portfolio-control-contract.md).
-SD2 finished with 416 passed and 1 existing Windows symlink-permission skip in
-61.58s; doctor and whitespace checks passed. Source-bound offensive allocations,
-missing versus zero history, transfer/current-team gates and copied synthetic
-full-chain replay passed. Live compatible numerical role captures, current
-official evidence and actual Cowork/Linux remain unverified. W3 simulator/full
-role modeling, portfolio enforcement, prospective model validation and all
-broader W/S blockers remain open. Outputs stay `PRIOR_ONLY / DO_NOT_UPLOAD`.
+SD1 through SD3 are complete for software acceptance. The sole next READY chunk
+is **SD4 — enforced portfolio controls and independent assignment audit**; use
+its [session prompt](docs/session-prompts/SD4-enforce-and-audit-portfolio-controls.md).
+SD3 finished with 440 passed and 1 existing Windows symlink-permission skip in
+57.57s; doctor and whitespace checks passed. Exact-decimal exposure rounding,
+full salary/person/Entry-ID binding, canonical uniqueness/overlap semantics,
+stable exact-byte policy hashes, confinement, snapshots and copied replay passed.
+SD3 deliberately does not enforce the policy: policy-bearing requests stop at
+`PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3` with no new review-entry CSV.
+Live compatible role/current evidence and actual Cowork/Linux remain unverified.
+W3 simulator/full role modeling, W8/W9 economics, prospective model validation
+and all broader W/S blockers remain open. Outputs stay `PRIOR_ONLY /
+DO_NOT_UPLOAD`.
 For this bounded sequence, that tracker supersedes the older competing next-task
 recommendations below. It does not mark the broader W/S tranches complete or
 alter release gates. Update this pointer and the priority tracker at closeout.

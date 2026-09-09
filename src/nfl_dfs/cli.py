@@ -50,7 +50,7 @@ from .dk import (
     single_contest_problems,
 )
 from .economics import evaluate_candidates_against_field
-from .evidence import parse_official_inactive_snapshot, source_ledger_evidence
+from .evidence import EvidenceError, parse_official_inactive_snapshot, source_ledger_evidence
 from .field import generate_opponent_field, scale_field_multiplicities
 from .hashing import content_hash, sha256_file
 from .late_swap import LateSwapRunError, govern_late_swap
@@ -65,12 +65,21 @@ from .portfolio import (
     select_portfolio,
     unpaired_difference_standard_error,
 )
+from .portfolio_policy import (
+    validate_portfolio_policy_file,
+    write_normalized_portfolio_policy,
+    write_portfolio_policy_validation,
+)
 from .projection import SOURCES_DIRNAME as PROJECTION_SOURCES_DIRNAME
 from .projection import build_projection_package
 from .prior_review import PROFILE_VERSION as PRIOR_REVIEW_PROFILE_VERSION
 from .prior_review import run_prior_review
 from .priors import freeze_prior_package, propose_prior_package
-from .participation import build_participation_contract, redistribute_opportunity
+from .participation import (
+    ParticipationError,
+    build_participation_contract,
+    redistribute_opportunity,
+)
 from .prior_score import read_team_splits
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
 from .selection import assignments_for_entries, select_prior_lineups
@@ -2032,6 +2041,7 @@ def _cowork_run_control_values(request: CoworkRunRequest) -> dict[str, object]:
         "OFFICIAL_STATUS_CSV": request.official_status_csv or "",
         "ROLE_EVIDENCE_JSON": request.role_evidence_json or "",
         "OFFENSIVE_ROLE_EVIDENCE_JSON": request.offensive_role_evidence_json or "",
+        "PORTFOLIO_POLICY_JSON": request.portfolio_policy_json or "",
         "FIELD_SIZE": request.field_size,
         "MAX_ENTRIES": None,
         "ADVERTISED_PRIZE_VALUE": request.advertised_prize_value,
@@ -2204,6 +2214,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         request_roots.append(Path(args.role_evidence_json).resolve().parent)
     if getattr(args, "offensive_role_evidence_json", None):
         request_roots.append(Path(args.offensive_role_evidence_json).resolve().parent)
+    if getattr(args, "portfolio_policy_json", None):
+        request_roots.append(Path(args.portfolio_policy_json).resolve().parent)
     if args.request:
         request_source = Path(args.request).resolve()
         possible_run_root = request_source.parent
@@ -2235,6 +2247,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         ("weather_observed_at", "weather_observed_at"),
         ("role_evidence_json", "role_evidence_json"),
         ("offensive_role_evidence_json", "offensive_role_evidence_json"),
+        ("portfolio_policy_json", "portfolio_policy_json"),
         ("lineup_count", "lineup_count"),
         ("max_person_overlap", "max_person_overlap"),
         ("exclude", "exclude_dk_ids"),
@@ -2294,6 +2307,102 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     snapshotted = _snapshot_cowork_request(request, run_id, intake["hashes"])
     request_path = DEFAULT_RUNS_DIR / run_id / "run_request.json"
     _write_json(request_path, snapshotted.to_dict())
+    policy_summary: dict[str, object] | None = None
+    policy_blockers: list[str] = []
+    if snapshotted.portfolio_policy_json is not None:
+        by_dk_id = {player.dk_id: player for player in slate.players}
+        official_exclusions: tuple[str, ...] = ()
+        if snapshotted.official_status_csv is not None:
+            try:
+                official_snapshot = parse_official_inactive_snapshot(
+                    snapshotted.official_status_csv, slate.players
+                )
+            except EvidenceError as exc:
+                policy_blockers.append(
+                    "PORTFOLIO_POLICY_OFFICIAL_STATUS_INVALID: "
+                    f"{exc}; next action: repair the exact-ID official activity snapshot"
+                )
+            else:
+                if official_snapshot.problems:
+                    policy_blockers.append(
+                        "PORTFOLIO_POLICY_OFFICIAL_STATUS_INVALID: "
+                        f"{';'.join(official_snapshot.problems)}; next action: repair the exact-ID "
+                        "official activity snapshot"
+                    )
+                official_exclusions = tuple(
+                    dk_id
+                    for dk_id, status in official_snapshot.statuses.items()
+                    if status == "INACTIVE"
+                )
+        all_request_exclusions = tuple(snapshotted.exclude_dk_ids) + official_exclusions
+        unknown_exclusions = sorted(
+            set(all_request_exclusions).difference(by_dk_id)
+        )
+        if unknown_exclusions:
+            policy_blockers.append(
+                "PORTFOLIO_POLICY_EXTERNAL_EXCLUSION_DK_ID_UNKNOWN: "
+                f"request exclusions are outside the salary pool {unknown_exclusions}; "
+                "next action: use exact current salary CPT/FLEX IDs"
+            )
+        external_people: tuple[str, ...] = ()
+        try:
+            participation = build_participation_contract(
+                slate,
+                operator_excluded_dk_ids=all_request_exclusions,
+                extra_unavailable_statuses=snapshotted.unavailable_statuses,
+                extra_available_statuses=snapshotted.available_statuses,
+            )
+        except ParticipationError as exc:
+            policy_blockers.append(
+                "PORTFOLIO_POLICY_PARTICIPATION_INVALID: "
+                f"{exc}; next action: reconcile status and exclusion inputs to the current salary file"
+            )
+        else:
+            external_people = tuple(
+                sorted(
+                    set(participation.unavailable_people)
+                    | set(participation.operator_excluded_people)
+                )
+            )
+        original_policy = str(Path(request.portfolio_policy_json or "").resolve())
+        expected_policy_sha256 = str(intake["hashes"][original_policy])
+        validation = validate_portfolio_policy_file(
+            snapshotted.portfolio_policy_json,
+            slate=slate,
+            entry_ids=tuple(entry.entry_id for entry in entries.authorizations),
+            externally_excluded_people=external_people,
+            expected_sha256=expected_policy_sha256,
+        )
+        policy_report_path = (
+            DEFAULT_RUNS_DIR / run_id / "portfolio_policy_validation.json"
+        )
+        write_portfolio_policy_validation(policy_report_path, validation)
+        normalized_path: Path | None = None
+        if validation.policy is not None:
+            normalized_path = (
+                DEFAULT_RUNS_DIR / run_id / "portfolio_policy.normalized.json"
+            )
+            write_normalized_portfolio_policy(normalized_path, validation.policy)
+        policy_blockers.extend(validation.blockers())
+        if (
+            snapshotted.lineup_count is not None
+            and snapshotted.lineup_count != len(entries.authorizations)
+        ):
+            policy_blockers.append(
+                "PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES: "
+                f"lineup_count={snapshotted.lineup_count} but requested entries="
+                f"{len(entries.authorizations)}; next action: omit lineup_count or set it "
+                "to the full requested Entry-ID count"
+            )
+        policy_summary = {
+            "valid": validation.valid,
+            "source_policy_sha256": validation.source_sha256,
+            "normalized_policy_sha256": validation.normalized_sha256,
+            "validation_report": str(policy_report_path),
+            "normalized_policy": str(normalized_path) if normalized_path else None,
+            "entry_count_denominator": len(entries.authorizations),
+            "enforcement_status": "NOT_IMPLEMENTED_SD3",
+        }
     staged_workbook = DEFAULT_RUNS_DIR / run_id / "staged" / "cowork_input.xlsx"
     create_operator_input_workbook(staged_workbook)
     populate_operator_run_control(
@@ -2302,6 +2411,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     )
     doctor_report = doctor(PROJECT_ROOT)
     blockers = list(_cowork_reported_blockers(snapshotted))
+    blockers[0:0] = policy_blockers
     contest_problems = list(single_contest_problems(entries))
     blockers[0:0] = contest_problems
     if not doctor_report.pass_status:
@@ -2315,6 +2425,11 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
 
     if not doctor_report.pass_status or contest_problems or _cowork_core_blockers(snapshotted):
         blocked_truths = _blocked_truth_values(
+            model_status=(
+                ModelStatus.PRIOR_ONLY
+                if snapshotted.profile == "prior_review"
+                else ModelStatus.UNVALIDATED
+            ),
             certification_basis=(
                 CertificationBasis.MANUAL_GUARDRAIL
                 if snapshotted.manual_guardrail and snapshotted.assignment_csv is not None
@@ -2333,7 +2448,11 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "run_id": run_id,
             "status": "DO_NOT_UPLOAD",
             **blocked_truths,
-            "stage": "RECONCILED",
+            "stage": (
+                "PORTFOLIO_POLICY_ENFORCEMENT_BLOCKED"
+                if policy_summary is not None
+                else "RECONCILED"
+            ),
             "mode": slate.mode.value,
             "authorized_entries": len(entries.authorizations),
             "contest_ids": sorted({entry.contest_id for entry in entries.authorizations}),
@@ -2350,6 +2469,13 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 "and ask the operator only for unavailable contest payout or field facts."
             ),
         }
+        if policy_summary is not None:
+            result["portfolio_policy"] = policy_summary
+            result["bulk_entry_csv"] = None
+            result["next"] = (
+                "Keep the policy snapshot for review. SD4 must implement and independently "
+                "audit enforcement before this request can generate a review-entry CSV."
+            )
         _write_json(report_path, result)
         _print_json(result)
         return 2
@@ -2723,6 +2849,7 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--weather-observed-at")
     cowork.add_argument("--role-evidence-json")
     cowork.add_argument("--offensive-role-evidence-json")
+    cowork.add_argument("--portfolio-policy-json")
     cowork.add_argument("--lineup-count", type=int)
     cowork.add_argument("--max-person-overlap", type=int)
     cowork.add_argument("--as-of")

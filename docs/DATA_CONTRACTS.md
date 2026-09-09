@@ -11,8 +11,10 @@ attachment/request directory. Absolute paths are accepted only for the exact
 supplied files, managed project data, or the current immutable run; traversal
 and symlink/reparse escapes are rejected before hashing or copying.
 The request records salary, entries, payouts, assignment or paired model inputs,
-official status, optional `role_evidence_json`, optional ownership brackets, the
-source ledger, exact contest economics, objective, guardrail mode, and profile.
+official status, optional `role_evidence_json`, optional
+`offensive_role_evidence_json`, optional `portfolio_policy_json`, optional
+ownership brackets, the source ledger, exact contest economics, objective,
+guardrail mode, and profile.
 
 The first pass rewrites recognized file paths to immutable content-addressed
 snapshots. A model-assisted Cowork run requires both team and player inputs, a
@@ -335,6 +337,107 @@ copied packages. Invalid evidence writes no new `DK_REVIEW_ENTRY` CSV and leaves
 earlier outputs intact. The prior-review path always reports independent
 `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS=PRIOR_ONLY` and
 `RELEASE_DECISION=DO_NOT_UPLOAD`. SD2 does not change upload gates or W3's simulator.
+
+## SD3 Showdown portfolio policy
+
+`portfolio_policy_json` is an optional `nfl_showdown_portfolio_policy_v1`
+artifact. It is a user preference contract, not evidence, calibrated risk, or a
+claim of optimal tournament behavior. It binds the exact immutable salary bytes,
+the one Showdown game, the complete salary person/CPT/FLEX identity map, and
+every requested Entry ID in template order. The complete shape is:
+
+```json
+{
+  "schema_version": "nfl_showdown_portfolio_policy_v1",
+  "bindings": {
+    "salary_sha256": "<64 lowercase hex characters>",
+    "game_id": "AWAY@HOME",
+    "entry_ids": ["<Entry ID 1>", "<Entry ID 2>"],
+    "person_identities": [
+      {
+        "underlying_id": "TEAM|POSITION|DraftKings name",
+        "cpt_dk_id": "<exact CPT row ID>",
+        "flex_dk_id": "<exact FLEX row ID>"
+      }
+    ]
+  },
+  "controls": {
+    "fraction_unit": "FRACTION_0_TO_1",
+    "max_combined_person_exposure": {
+      "default_fraction": null,
+      "overrides": []
+    },
+    "max_captain_exposure": {
+      "default_fraction": null,
+      "overrides": []
+    },
+    "excluded_people": [],
+    "max_pairwise_person_overlap": null,
+    "require_unique_lineups": true
+  }
+}
+```
+
+Every override and excluded-person item repeats the exact three identity fields
+shown above; an override also has a numeric `fraction`. Names, salaries, or one
+role ID are never used to infer the other identity. Unknown, duplicated, missing,
+cross-person or CPT/FLEX-reversed identities fail. `entry_ids` must be the exact
+full requested sequence, with no duplicate, subset, reordered entry or silent
+`lineup_count` reduction.
+
+Fractions are JSON numbers in `[0,1]`, with the required unit
+`FRACTION_0_TO_1`. Booleans, numeric strings, nonfinite numbers, negative values,
+bare values such as `50`, and any alternative unit fail. The denominator is all
+requested entries. Each integer maximum is
+`floor(fraction * requested_entry_count)` using exact decimal arithmetic:
+
+| Entries | Fraction | Integer maximum |
+|---:|---:|---:|
+| 2 | `0.49` | 0 |
+| 2 | `0.50` | 1 |
+| 2 | `1.00` | 2 |
+| 3 | `0.66` | 1 |
+| 3 | `0.67` | 2 |
+
+An omitted exposure object, omitted `default_fraction`, or explicit `null`
+means no additional cap (effective maximum 100% of requested entries). Numeric
+zero means zero entries; numeric one means every requested entry. A per-person
+override replaces its default for that exact person. Captain count is a subset
+of combined-person count. When a declared Captain maximum is looser than the
+combined maximum, normalization reports
+`PORTFOLIO_POLICY_CAPTAIN_TIGHTENED_BY_COMBINED` and uses the stricter combined
+integer maximum. It never relaxes the combined control. Policy exclusions and
+existing salary-status, official-activity, operator, and participation
+exclusions take precedence and make both maxima zero; the normalization report
+names that tightening.
+
+Canonical Showdown identity is the exact underlying Captain person plus the
+sorted set of five underlying FLEX people. FLEX order is irrelevant; changing
+the Captain changes the canonical lineup. Pairwise overlap compares the two
+six-person underlying-person sets regardless of role. Combined exposure counts
+a person at most once per entry. `max_pairwise_person_overlap=null` means no
+additional overlap cap (effective six); otherwise it is an integer from zero
+through six. `require_unique_lineups` defaults to `true` when omitted. Repeated
+Captains are not implicitly prohibited: SD4 will govern them only through the
+explicit effective Captain maxima.
+
+Validation emits `nfl_showdown_portfolio_policy_normalized_v1`, an exact-decimal
+canonical serialization and a stable normalized SHA-256. The run also retains
+the exact source-policy SHA-256. Whitespace and object/list ordering that do not
+change semantics leave the normalized hash stable, while immutable replay still
+requires the same source bytes, salary bytes, person identities, and Entry IDs.
+Necessary person-slot, Captain-slot, two-team, salary, unique-lineup and
+pairwise-overlap capacity checks return named findings with a smallest next
+action. These checks do not run a solver and are not proof that the full policy
+is feasible.
+
+SD3 validates and snapshots this contract only. SD4 owns enforcement and the
+independent assignment audit. Therefore every `cowork-run` request that supplies
+`portfolio_policy_json` stops with
+`PORTFOLIO_POLICY_ENFORCEMENT_UNSUPPORTED_SD3`, writes no new
+`DK_REVIEW_ENTRY` CSV, preserves earlier outputs, and remains
+`MODEL_STATUS=PRIOR_ONLY` / `RELEASE_DECISION=DO_NOT_UPLOAD` for the
+`prior_review` profile. Requests without a policy retain their SD1/SD2 behavior.
 
 ## Showdown kicker-role evidence
 
