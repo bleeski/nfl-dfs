@@ -139,6 +139,14 @@ def test_reduced_end_to_end_design_select_referee_build(
     assert '"quantitative_qa"' in text
     assert '"solver_proof"' in text
     build_payload = json.loads(text)
+    assert build_payload["schema_version"] == "nfl_prelock_run_manifest_v1"
+    assert build_payload["contest_parameters"]["contest_id"] == "193028206"
+    assert build_payload["contest_parameters"]["draft_group"] == classic_slate.draft_group
+    assert build_payload["artifact_versions"]["assignments"] == "nfl_assignment_csv_v1"
+    assert {
+        artifact["schema_version"]
+        for artifact in build_payload["scenario_artifacts"].values()
+    } == {"nfl_scenario_bank_v1"}
     assert build_payload["FILE_VALID"] is False
     assert build_payload["EVIDENCE_STATE"] == "UNKNOWN"
     assert build_payload["MODEL_STATUS"] == "PRIOR_ONLY"

@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import csv
 import math
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable
 
 from .contracts import PayoutTier
+
+
+PAYOUT_PARSER_VERSION = "nfl_payout_csv_v2"
 
 
 class PayoutContractError(ValueError):
@@ -13,7 +17,13 @@ class PayoutContractError(ValueError):
 
 
 def parse_payout_csv(
-    path: str | Path, *, ticket_face_value: float | None = None
+    path: str | Path,
+    *,
+    ticket_face_value: float | None = None,
+    advertised_value: float | None = None,
+    field_size: int | None = None,
+    reserved_entry_count: int | None = None,
+    allow_zero_payout: bool = False,
 ) -> tuple[PayoutTier, ...]:
     payout_path = Path(path)
     with payout_path.open("r", encoding="utf-8-sig", newline="") as handle:
@@ -42,7 +52,14 @@ def parse_payout_csv(
                 )
             except (TypeError, ValueError) as exc:
                 raise PayoutContractError(f"invalid payout row {row_number}") from exc
-    return validate_payout_tiers(tiers, ticket_face_value=ticket_face_value)
+    return validate_payout_tiers(
+        tiers,
+        ticket_face_value=ticket_face_value,
+        advertised_value=advertised_value,
+        field_size=field_size,
+        reserved_entry_count=reserved_entry_count,
+        allow_zero_payout=allow_zero_payout,
+    )
 
 
 def validate_payout_tiers(
@@ -52,6 +69,7 @@ def validate_payout_tiers(
     ticket_face_value: float | None = None,
     field_size: int | None = None,
     reserved_entry_count: int | None = None,
+    allow_zero_payout: bool = False,
 ) -> tuple[PayoutTier, ...]:
     if advertised_value is not None and (
         not math.isfinite(advertised_value) or advertised_value < 0
@@ -70,6 +88,8 @@ def validate_payout_tiers(
             )
     ordered = tuple(sorted(tiers, key=lambda tier: tier.rank_start))
     if not ordered:
+        if allow_zero_payout and advertised_value == 0:
+            return ()
         raise PayoutContractError("payout table is empty")
     expected_rank = 1
     previous_effective_value = float("inf")
@@ -77,6 +97,16 @@ def validate_payout_tiers(
     for tier in ordered:
         if not math.isfinite(tier.value):
             raise PayoutContractError("payout values must be finite")
+        try:
+            exact_value = Decimal(str(tier.value))
+        except InvalidOperation as exc:  # pragma: no cover - finite check is primary.
+            raise PayoutContractError("payout values must be decimal numbers") from exc
+        if tier.prize_type == "CASH" and exact_value * 100 != (
+            exact_value * 100
+        ).to_integral_value():
+            raise PayoutContractError("cash payout values must be exact cents")
+        if tier.prize_type == "TICKET" and exact_value != exact_value.to_integral_value():
+            raise PayoutContractError("ticket payout values must be whole ticket counts")
         if tier.rank_start != expected_rank:
             raise PayoutContractError(
                 f"payout ranks are not contiguous at rank {expected_rank}"

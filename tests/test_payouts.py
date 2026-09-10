@@ -191,3 +191,20 @@ def test_contest_economics_reject_nonfinite_values_and_impossible_ranks() -> Non
         validate_payout_tiers(tiers, field_size=2, reserved_entry_count=1)
     with pytest.raises(PayoutContractError, match="reserved entry count"):
         validate_payout_tiers(tiers, field_size=3, reserved_entry_count=4)
+
+
+def test_payout_contract_uses_exact_cents_whole_tickets_and_explicit_zero() -> None:
+    with pytest.raises(PayoutContractError, match="exact cents"):
+        validate_payout_tiers(
+            (PayoutTier(rank_start=1, rank_end=1, prize_type="CASH", value=1.005),)
+        )
+    with pytest.raises(PayoutContractError, match="whole ticket"):
+        validate_payout_tiers(
+            (PayoutTier(rank_start=1, rank_end=1, prize_type="TICKET", value=1.5),),
+            ticket_face_value=10,
+        )
+    assert validate_payout_tiers(
+        (), advertised_value=0, field_size=2, reserved_entry_count=1, allow_zero_payout=True
+    ) == ()
+    with pytest.raises(PayoutContractError, match="empty"):
+        validate_payout_tiers((), advertised_value=0)
