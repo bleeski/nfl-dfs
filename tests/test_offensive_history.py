@@ -30,14 +30,43 @@ def test_missing_history_is_not_observed_zero(package, tmp_path):
     assert report["offensive_history_by_person"][person]["state"] == "MISSING_HISTORY"
 
 
-def test_transfer_does_not_enter_current_team_denominator(package, tmp_path):
+def test_transfer_carries_his_own_old_team_share_as_an_unverified_prior(package, tmp_path):
+    # SD2 (2026-09-09) zeroed a transfer because his old-team counts must not
+    # enter the current team's denominator raw. 2026-09-10 (R17): his *share* of
+    # his old team's volume is carried as a pseudo-count into the current pool's
+    # normalization, flagged, with EVIDENCE_STATE=UNKNOWN. It is his own
+    # source-bound rate, not an invented number, and not a current-team role.
     def transfer(rows):
         return [{**r, "team": "DEN"} if r["player_id"] == "00-0039337" else r for r in rows]
+    baseline, _b_mappings, _b_report = _records(package, tmp_path)
     records, mappings, report = _records(package, tmp_path, transfer)
     record = next(r for r in records if r["provider_player_id"] == "00-0039337")
-    assert record["target_weight"] == 0  # Before SD2: 0.535714 from old-team targets.
+    before = next(r for r in baseline if r["provider_player_id"] == "00-0039337")
     person = next(m["underlying_id"] for m in mappings if m["provider_player_id"] == "00-0039337")
-    assert report["offensive_history_by_person"][person]["state"] == "CURRENT_ROLE_UNKNOWN"
+    history = report["offensive_history_by_person"][person]
+    assert history["state"] == "CURRENT_ROLE_UNKNOWN" and history["incompatible_transfer"] is True
+    prior = history["transfer_prior"]
+    assert prior["basis"] == "OWN_OLD_TEAM_SHARE" and prior["old_teams"] == ["DEN"]
+    assert prior["basis_version"] == priors.TRANSFER_PRIOR_VERSION
+    assert Decimal(prior["own_old_share"]["targets"]) > 0
+    assert set(prior["pseudo_counts"]) == set(priors._RAW_COLUMNS)
+    assert Decimal("0") < record["target_weight"] < before["target_weight"]
+    assert record["evidence_state"] == "UNKNOWN"
+    # The current team's target shares still sum to one, incumbents scaled down.
+    team = next(m["team"] for m in mappings if m["provider_player_id"] == "00-0039337")
+    members = {m["provider_player_id"] for m in mappings if m["team"] == team and m["position"] in {"RB", "WR", "TE"}}
+    total = sum(r["target_weight"] for r in records if r["provider_player_id"] in members)
+    assert abs(total - Decimal("1")) < Decimal("0.00001")
+
+
+def test_transfer_with_zero_old_team_production_gets_a_zero_basis(package, tmp_path):
+    def transfer_zero(rows):
+        return [{**r, "team": "DEN", **{c: "0" for c in priors._RAW_COLUMNS}} if r["player_id"] == "00-0039337" else r for r in rows]
+    records, mappings, report = _records(package, tmp_path, transfer_zero)
+    record = next(r for r in records if r["provider_player_id"] == "00-0039337")
+    person = next(m["underlying_id"] for m in mappings if m["provider_player_id"] == "00-0039337")
+    assert report["offensive_history_by_person"][person]["transfer_prior"]["basis"] == "OWN_OLD_TEAM_SHARE_ZERO"
+    assert record["target_weight"] == 0 and record["evidence_state"] == "UNKNOWN"
 
 
 def test_observed_zero_has_its_own_machine_readable_basis(package, tmp_path):

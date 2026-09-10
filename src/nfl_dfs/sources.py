@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import ssl
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -13,6 +15,38 @@ from .hashing import sha256_bytes, sha256_file
 
 class SourcePolicyError(ValueError):
     pass
+
+
+# Operator opt-in for a TLS-terminating egress proxy whose CA certificate lacks
+# the X.509 Key Usage extension. Python 3.13 enables VERIFY_X509_STRICT by
+# default and rejects such a chain with "CA cert does not include key usage
+# extension". Setting this variable to "1" clears only that strictness flag:
+# certificate verification (CERT_REQUIRED), the trust store and hostname
+# checking are unchanged, so an untrusted or misnamed certificate still fails.
+# The choice is recorded on every artifact the client captures
+# (`coverage.tls_verify_x509_strict`), so provenance shows which runs used it.
+# Default is strict. Approved by the operator on 2026-09-10 for the Cowork cloud
+# container; the device VM does not need it.
+TLS_NONSTRICT_CA_ENV = "NFL_DFS_TLS_ALLOW_NONSTRICT_CA"
+
+
+def tls_nonstrict_ca_enabled() -> bool:
+    return os.environ.get(TLS_NONSTRICT_CA_ENV, "").strip() == "1"
+
+
+def build_verify_context() -> ssl.SSLContext | bool:
+    """The httpx `verify` argument: default strict, or the opt-in relaxed context."""
+
+    if not tls_nonstrict_ca_enabled():
+        return True
+    context = ssl.create_default_context()
+    cafile = os.environ.get("SSL_CERT_FILE")
+    if cafile and Path(cafile).is_file():
+        context.load_verify_locations(cafile=cafile)
+    context.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    if context.verify_mode is not ssl.CERT_REQUIRED or not context.check_hostname:
+        raise SourcePolicyError("TLS relaxation must keep CERT_REQUIRED and hostname checking")
+    return context
 
 
 ALLOWED_HOSTS = {
@@ -162,7 +196,13 @@ def fetch_public_artifact(
     validate_url_policy(url, optional_odds_key_configured=optional_odds_key_configured)
     headers = {"User-Agent": "nfl-dfs-local-evidence-engine/0.1 (operator-controlled)"}
     resolved_uri = url
-    with httpx.Client(timeout=timeout_seconds, follow_redirects=False, headers=headers) as client:
+    strict_tls = not tls_nonstrict_ca_enabled()
+    with httpx.Client(
+        timeout=timeout_seconds,
+        follow_redirects=False,
+        headers=headers,
+        verify=build_verify_context(),
+    ) as client:
         response = client.get(url)
         if response.is_redirect and is_github_release_download(url):
             resolved_uri = resolve_github_release_redirect(
@@ -207,6 +247,7 @@ def fetch_public_artifact(
             "content_type": response.headers.get("content-type"),
             "resolved_uri_host": (urlparse(resolved_uri).hostname or "").lower(),
             "redirect_followed": resolved_uri != url,
+            "tls_verify_x509_strict": strict_tls,
         },
     )
 

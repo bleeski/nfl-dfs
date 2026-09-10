@@ -96,10 +96,24 @@ def test_cowork_roles_truths_and_no_new_csv_on_failure(tmp_path, monkeypatch, fa
         copied_request = json.loads((tmp_path / "runs" / "prior-review-test" / "run_request.json").read_text())
         copied = Path(copied_request["offensive_role_evidence_json"])
         assert copied.parent.name == "inputs" and sha256_file(copied) == sha256_file(role_path)
+    elif fault == "missing":
+        # 2026-09-10 (R17): missing history is a visible zero-share exclusion,
+        # not a stop. The run completes, the person is out of every lineup and
+        # named with salary in pool coverage, and the truths are unchanged.
+        assert code == 0 and report["FILE_VALID"] and len(new_csvs) == 1
+        roles = report["prior_review_reports"]["selection"]["prior_scores"]["offensive_roles"]
+        finding = next(f for f in roles["findings"] if f["person"] == person)
+        assert finding["selection_action"] == "EXCLUDE" and finding["finding"] == "OFFENSIVE_MISSING_HISTORY"
+        rostered = {dk for lineup in report["prior_review_reports"]["selection"]["lineups"] for dk in lineup["roster"]}
+        assert not rostered & set(_binding(slate, person).values())
+        coverage = report["prior_review_reports"]["selection"]["pool_coverage"]
+        row = next(r for r in coverage["people"] if r["person"] == person)
+        assert row["reason"] == "OFFENSIVE_ROLE_GATE_EXCLUDED:OFFENSIVE_MISSING_HISTORY"
+        assert coverage["by_reason"]["OFFENSIVE_ROLE_GATE_EXCLUDED"]["people"] == 1
     else:
         assert code == 2 and not report["FILE_VALID"] and not new_csvs
         assert "OFFENSIVE" in str(report["blockers"])
-        if fault in {"missing", "transfer"}:
+        if fault == "transfer":
             findings = report["prior_review_reports"]["offensive_roles"]["findings"]
             assert len([f for f in findings if f["person"] == person]) == 1
 

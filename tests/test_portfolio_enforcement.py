@@ -11,11 +11,18 @@ import pytest
 
 from nfl_dfs.hashing import sha256_bytes
 from nfl_dfs.portfolio_enforcement import (
+    DEFAULT_CANDIDATE_LIMIT,
+    DEFAULT_CANDIDATE_SECONDS,
+    DEFAULT_SELECTION_SECONDS,
     CandidateBank,
     PolicyCandidate,
     audit_policy_assignments,
     build_policy_candidate_bank,
     exact_assignments_for_entries,
+    plan_captain_strata,
+    scaled_candidate_limit,
+    scaled_candidate_seconds,
+    scaled_selection_seconds,
     solve_policy_portfolio,
 )
 from nfl_dfs.portfolio_policy import (
@@ -24,7 +31,7 @@ from nfl_dfs.portfolio_policy import (
 )
 from nfl_dfs.selection import select_prior_lineups
 
-from .test_participation import _slate
+from .test_participation import _POOL, _slate
 from .test_prior_selection import _prepared
 
 
@@ -475,3 +482,370 @@ def test_declared_five_entry_policy_rehearsal_uses_one_joint_solve(tmp_path) -> 
     )
     assert enforcement["solve"]["status"] == "OPTIMAL"
     assert enforcement["solve"]["selected_lineup_count"] == 5
+
+
+# --------------------------------------------------------------------------- #
+# R18: the candidate bank is policy-aware (stratified) and stays deterministic
+# --------------------------------------------------------------------------- #
+
+
+def _dominated_objective(slate, dominant_person):
+    """An objective where one person captains every plain top-K lineup."""
+
+    objective = {}
+    for index, row in enumerate(slate.players):
+        value = float(index)
+        if row.underlying_id == dominant_person:
+            value = 1000.0 if row.role == "CPT" else 500.0
+        objective[row.dk_id] = value
+    return objective
+
+
+def _five_entry_captain_capped_policy(slate, **extra_controls):
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    controls = {
+        "max_captain_exposure": {"default_fraction": 0.2, "overrides": []},
+        "max_pairwise_person_overlap": 6,
+    }
+    controls.update(extra_controls)
+    policy, raw = _policy(slate, entry_ids, **controls)
+    return entry_ids, policy, raw
+
+
+def test_scaled_policy_bounds_grow_with_the_entry_count() -> None:
+    assert scaled_candidate_limit(2) == DEFAULT_CANDIDATE_LIMIT
+    assert scaled_candidate_limit(8) == DEFAULT_CANDIDATE_LIMIT
+    assert scaled_candidate_limit(20) == 80
+    assert scaled_candidate_seconds(5) == DEFAULT_CANDIDATE_SECONDS
+    assert scaled_candidate_seconds(20) == 40.0
+    assert scaled_selection_seconds(5) == DEFAULT_SELECTION_SECONDS
+    assert scaled_selection_seconds(20) == 20.0
+
+
+def test_policy_blind_bank_exhausts_where_the_stratified_bank_seeds_captains(
+    tmp_path,
+) -> None:
+    slate = _slate(tmp_path)
+    _entry_ids, policy, _raw = _five_entry_captain_capped_policy(slate)
+    dominant = policy.people[0].underlying_id
+    objective = _dominated_objective(slate, dominant)
+
+    plain = build_policy_candidate_bank(slate, objective, candidate_limit=32)
+    assert plain.policy_aware is False
+    assert {candidate.captain_person for candidate in plain.candidates} == {dominant}
+    assert plain.as_report()["strata"] == {
+        "captain": {}, "exclusion": {}, "chain": 0, "fill": 32,
+    }
+    exhausted = solve_policy_portfolio(policy, plain)
+    assert exhausted.status == "CANDIDATE_BANK_EXHAUSTED_INCOMPLETE"
+
+    aware = build_policy_candidate_bank(
+        slate, objective, candidate_limit=32, policy=policy
+    )
+    assert aware.policy_aware is True
+    assert aware.status == "CANDIDATE_LIMIT_REACHED_INCOMPLETE"
+    assert not aware.blocking
+    assert len(aware.candidates) == aware.canonical_count == 32
+    report = aware.as_report()
+    # Captain maximum is one entry each, so at least seven Captains are
+    # seeded (five entries plus a two-slot margin) at depth ceil(5/7)+1 = 2.
+    seeded, depth = plan_captain_strata(policy, objective)
+    assert len(seeded) == 7 and depth == 2
+    assert seeded[0].person == dominant
+    assert set(report["strata"]["captain"]) == {item.person for item in seeded}
+    assert all(count == 2 for count in report["strata"]["captain"].values())
+    assert report["strata"]["exclusion"] == {}
+    # The chain walks the policy greedily (one entry per Captain here) for
+    # entry_count + 2 lineups; with overlap six it mostly re-finds the Captain
+    # strata's best lineups, which dedupe rather than count twice.
+    chain = next(item for item in report["strata_detail"] if item["kind"] == "chain")
+    assert chain["target"] == chain["enumerated"] == 7
+    assert 0 <= chain["added"] <= 7
+    assert report["strata"]["chain"] == chain["added"]
+    assert report["strata"]["fill"] == 32 - sum(report["strata"]["captain"].values()) - report["strata"]["chain"]
+    kinds = [item["kind"] for item in report["strata_detail"]]
+    assert kinds == ["captain"] * 7 + ["chain", "fill"]
+    assert all(item["terminal"] == "TARGET_REACHED" for item in report["strata_detail"])
+    assert report["search_scope"].endswith("NOT_A_FULL_SLATE_SEARCH")
+
+    result = solve_policy_portfolio(policy, aware)
+    assert result.status == "OPTIMAL"
+    chosen = [aware.candidates[index] for index in result.selected_candidate_indexes]
+    assert len(chosen) == 5
+    assert len({candidate.captain_person for candidate in chosen}) == 5
+    assert len({candidate.canonical_key for candidate in chosen}) == 5
+
+
+def test_stratified_bank_is_deterministic_across_runs(tmp_path) -> None:
+    slate = _slate(tmp_path)
+    _entry_ids, policy, _raw = _five_entry_captain_capped_policy(
+        slate, max_pairwise_person_overlap=4
+    )
+    objective = _dominated_objective(slate, policy.people[0].underlying_id)
+    first = build_policy_candidate_bank(slate, objective, candidate_limit=32, policy=policy)
+    second = build_policy_candidate_bank(slate, objective, candidate_limit=32, policy=policy)
+    assert [candidate.roster for candidate in first.candidates] == [
+        candidate.roster for candidate in second.candidates
+    ]
+    assert first.status == second.status
+    assert [item.as_report() for item in first.strata] == [
+        item.as_report() for item in second.strata
+    ]
+    first_solve = solve_policy_portfolio(policy, first)
+    second_solve = solve_policy_portfolio(policy, second)
+    assert first_solve.status == second_solve.status == "OPTIMAL"
+    assert first_solve.selected_candidate_indexes == second_solve.selected_candidate_indexes
+
+
+def test_exclusion_strata_supply_lineups_without_a_combined_capped_person(tmp_path) -> None:
+    slate = _slate(tmp_path)
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    dominant = _policy(slate, entry_ids)[0].people[0]
+    policy, _raw = _policy(
+        slate,
+        entry_ids,
+        max_combined_person_exposure={
+            "default_fraction": None,
+            "overrides": [{**dominant.as_mapping(), "fraction": 0.6}],
+        },
+        max_pairwise_person_overlap=6,
+    )
+    limit = next(
+        item for item in policy.effective_limits
+        if item.person.underlying_id == dominant.underlying_id
+    )
+    assert limit.combined_max_entries == 3
+    objective = _dominated_objective(slate, dominant.underlying_id)
+
+    plain = build_policy_candidate_bank(slate, objective, candidate_limit=32)
+    assert all(dominant.underlying_id in candidate.people for candidate in plain.candidates)
+    assert solve_policy_portfolio(policy, plain).status == "CANDIDATE_BANK_EXHAUSTED_INCOMPLETE"
+
+    aware = build_policy_candidate_bank(slate, objective, candidate_limit=32, policy=policy)
+    report = aware.as_report()
+    # Three of five entries may carry the person, so at least 5 - 3 + 1 = 3
+    # lineups without them are enumerated in a dedicated stratum.
+    exclusion = next(
+        item for item in report["strata_detail"]
+        if item["kind"] == "exclusion" and item["person"] == dominant.underlying_id
+    )
+    assert exclusion["target"] == 3
+    assert exclusion["enumerated"] >= 3
+    assert sum(
+        1 for candidate in aware.candidates if dominant.underlying_id not in candidate.people
+    ) >= 3
+    result = solve_policy_portfolio(policy, aware)
+    assert result.status == "OPTIMAL"
+    chosen = [aware.candidates[index] for index in result.selected_candidate_indexes]
+    assert sum(1 for candidate in chosen if dominant.underlying_id in candidate.people) <= 3
+
+
+def test_infeasible_captain_stratum_is_recorded_not_raised(tmp_path) -> None:
+    # A person priced beyond any legal lineup cannot captain (or flex). The
+    # policy still lists them; their stratum ends MODEL_INFEASIBLE and the
+    # bank continues instead of blocking.
+    pool = tuple(
+        (team, position, name, status, 40_000 if name == "Sea Alpha WR" else salary)
+        for team, position, name, status, salary in _POOL
+    )
+    slate = _slate(tmp_path, pool=pool)
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    policy, _raw = _policy(
+        slate,
+        entry_ids,
+        max_captain_exposure={"default_fraction": 0.2, "overrides": []},
+        max_pairwise_person_overlap=6,
+    )
+    unaffordable = next(
+        binding.underlying_id for binding in policy.people if binding.underlying_id.endswith("Sea Alpha WR")
+    )
+    objective = _dominated_objective(slate, unaffordable)
+    bank = build_policy_candidate_bank(slate, objective, candidate_limit=24, policy=policy)
+    assert not bank.blocking
+    stratum = next(
+        item for item in bank.strata if item.kind == "captain" and item.person == unaffordable
+    )
+    assert stratum.terminal == "MODEL_INFEASIBLE"
+    assert stratum.enumerated == stratum.added == 0
+    assert stratum.solve_count == 1
+    assert len(bank.candidates) == 24
+    assert all(unaffordable not in candidate.people for candidate in bank.candidates)
+    assert solve_policy_portfolio(policy, bank).status == "OPTIMAL"
+
+
+def test_plan_captain_strata_orders_by_objective_and_skips_excluded_and_zero(tmp_path) -> None:
+    slate = _slate(tmp_path)
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    people = _policy(slate, entry_ids)[0].people
+    excluded_person = people[3]
+    policy, _raw = _policy(
+        slate,
+        entry_ids,
+        max_captain_exposure={"default_fraction": 0.4, "overrides": []},
+        excluded_people=[excluded_person.as_mapping()],
+        max_pairwise_person_overlap=6,
+    )
+    objective = {}
+    for index, row in enumerate(slate.players):
+        objective[row.dk_id] = float(index) if row.role == "CPT" else 1.0
+    zero_person = people[5]
+    objective[zero_person.cpt_dk_id] = 0.0
+    seeded, depth = plan_captain_strata(
+        policy, objective, excluded_ids=(people[7].cpt_dk_id, people[7].flex_dk_id)
+    )
+    # Captain maximum is two each; five entries plus the two-slot margin need
+    # four seeded Captains, at depth ceil(5/4) + 1 = 3.
+    assert len(seeded) == 4 and depth == 3
+    assert [item.objective for item in seeded] == sorted(
+        (item.objective for item in seeded), reverse=True
+    )
+    seeded_people = {item.person for item in seeded}
+    assert excluded_person.underlying_id not in seeded_people
+    assert zero_person.underlying_id not in seeded_people
+    assert people[7].underlying_id not in seeded_people
+
+
+def test_five_entry_captain_cap_selects_five_captains_and_passes_independent_audit(
+    tmp_path,
+) -> None:
+    slate, model, contract, splits = _prepared(tmp_path)
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    policy, source_policy = _policy(
+        slate,
+        entry_ids,
+        max_captain_exposure={"default_fraction": 0.2, "overrides": []},
+        max_pairwise_person_overlap=4,
+    )
+    lineups, _scores, report = select_prior_lineups(
+        slate, model, splits, contract, count=5, portfolio_policy=policy
+    )
+    assert len(lineups) == 5
+    by_id = {row.dk_id: row for row in slate.players}
+    captains = {by_id[lineup.captain_dk_id].underlying_id for lineup in lineups}
+    assert len(captains) == 5
+    assert all(count == 1 for count in report["captain_exposure"].values())
+    assert all(item["people"] <= 4 for item in report["pairwise_person_overlap"])
+    enforcement = report["portfolio_policy"]
+    bank_report = enforcement["candidate_bank"]
+    assert bank_report["policy_aware"] is True
+    assert bank_report["candidate_limit"] == 32
+    assert bank_report["total_time_limit_seconds"] == 30.0
+    assert enforcement["solve"]["time_limit_seconds"] == 10.0
+    assert len(bank_report["strata"]["captain"]) >= 5
+    assert bank_report["strata"]["chain"] > 0
+    assert enforcement["solve"]["status"] == "OPTIMAL"
+
+    assignments = exact_assignments_for_entries(
+        entry_ids, [lineup.roster for lineup in lineups]
+    )
+    artifact = _assignment_csv_bytes(list(assignments.items()))
+    salary_bytes = (tmp_path / "DKSalaries.csv").read_bytes()
+    entry_bytes = b"exact entry bytes"
+    normalized = policy.canonical_bytes()
+    audit = audit_policy_assignments(
+        slate=slate,
+        policy=policy,
+        assignments=assignments,
+        salary_bytes=salary_bytes,
+        entry_bytes=entry_bytes,
+        expected_entry_sha256=sha256_bytes(entry_bytes),
+        source_policy_bytes=source_policy,
+        expected_source_policy_sha256=sha256_bytes(source_policy),
+        normalized_policy_bytes=normalized,
+        expected_normalized_policy_sha256=sha256_bytes(normalized),
+        assignment_artifact_bytes=artifact,
+        expected_assignment_artifact_sha256=sha256_bytes(artifact),
+        selector_summary={
+            "person_exposure": report["person_exposure"],
+            "captain_exposure": report["captain_exposure"],
+            "pairwise_person_overlap": report["pairwise_person_overlap"],
+            "selected_lineup_count": report["selected_lineup_count"],
+        },
+    )
+    assert audit.passed, audit.problems
+    assert all(count == 1 for _person, count in audit.captain_counts)
+
+
+def test_five_entry_combined_cap_on_the_top_person_is_satisfied(tmp_path) -> None:
+    slate, model, contract, splits = _prepared(tmp_path)
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    uncapped, _ = _policy(slate, entry_ids, max_pairwise_person_overlap=6)
+    _lineups, _scores, baseline = select_prior_lineups(
+        slate, model, splits, contract, count=5, portfolio_policy=uncapped
+    )
+    top_person, top_exposure = max(
+        baseline["person_exposure"].items(), key=lambda item: (item[1], item[0])
+    )
+    assert top_exposure == 5
+    binding = next(item for item in uncapped.people if item.underlying_id == top_person)
+    capped, _ = _policy(
+        slate,
+        entry_ids,
+        max_combined_person_exposure={
+            "default_fraction": None,
+            "overrides": [{**binding.as_mapping(), "fraction": 0.6}],
+        },
+        max_pairwise_person_overlap=6,
+    )
+    lineups, _scores, report = select_prior_lineups(
+        slate, model, splits, contract, count=5, portfolio_policy=capped
+    )
+    assert len(lineups) == 5
+    assert report["person_exposure"].get(top_person, 0) <= 3
+    exclusion = report["portfolio_policy"]["candidate_bank"]["strata"]["exclusion"]
+    assert top_person in exclusion
+    assert report["portfolio_policy"]["solve"]["status"] == "OPTIMAL"
+
+
+def test_policy_selection_is_deterministic_end_to_end(tmp_path) -> None:
+    slate, model, contract, splits = _prepared(tmp_path)
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    policy, _ = _policy(
+        slate,
+        entry_ids,
+        max_captain_exposure={"default_fraction": 0.4, "overrides": []},
+        max_pairwise_person_overlap=4,
+    )
+    runs = [
+        select_prior_lineups(slate, model, splits, contract, count=5, portfolio_policy=policy)
+        for _ in range(2)
+    ]
+    (first_lineups, _first_scores, first_report), (second_lineups, _second_scores, second_report) = runs
+    assert [lineup.roster for lineup in first_lineups] == [
+        lineup.roster for lineup in second_lineups
+    ]
+    first_bank = dict(first_report["portfolio_policy"]["candidate_bank"])
+    second_bank = dict(second_report["portfolio_policy"]["candidate_bank"])
+    for volatile in ("elapsed_seconds",):
+        first_bank.pop(volatile)
+        second_bank.pop(volatile)
+    assert first_bank == second_bank
+    assert (
+        first_report["portfolio_policy"]["solve"]["selected_candidate_indexes"]
+        == second_report["portfolio_policy"]["solve"]["selected_candidate_indexes"]
+    )
+
+
+def test_explicit_policy_bounds_still_override_the_scaled_defaults(tmp_path) -> None:
+    slate, model, contract, splits = _prepared(tmp_path)
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    policy, _ = _policy(slate, entry_ids, max_pairwise_person_overlap=6)
+    _lineups, _scores, report = select_prior_lineups(
+        slate,
+        model,
+        splits,
+        contract,
+        count=5,
+        portfolio_policy=policy,
+        policy_candidate_limit=12,
+        policy_candidate_seconds=7.0,
+        policy_selection_seconds=3.0,
+    )
+    bank_report = report["portfolio_policy"]["candidate_bank"]
+    assert bank_report["candidate_limit"] == 12
+    assert bank_report["candidate_count"] == 12
+    assert bank_report["total_time_limit_seconds"] == 7.0
+    assert report["portfolio_policy"]["solve"]["time_limit_seconds"] == 3.0
+    # An unconstrained policy needs no feasible chain; the report says so.
+    chain = next(item for item in bank_report["strata_detail"] if item["kind"] == "chain")
+    assert chain["terminal"] == "NOT_REQUIRED_UNCONSTRAINED"

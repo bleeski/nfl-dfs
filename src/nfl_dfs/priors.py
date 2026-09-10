@@ -1352,6 +1352,101 @@ def _player_totals(
     return totals
 
 
+_SHARE_COLUMNS: dict[str, frozenset[str]] = {
+    column: eligible for _field, column, eligible in _WEIGHT_GROUPS
+}
+TRANSFER_PRIOR_VERSION = "transfer_prior_own_old_team_share_v1"
+
+
+def _team_week_totals(
+    player_stat_rows: Sequence[Mapping[str, str]], *, prior_season: int
+) -> dict[tuple[str, str], dict[str, Decimal]]:
+    """Sum every column per (team, week) over all rows, not only pool members.
+
+    A transfer's prior-team share needs the whole old team as its denominator,
+    and only for the weeks the person actually played there, so a mid-season
+    arrival or a missed month does not dilute the rate.
+    """
+
+    totals: dict[tuple[str, str], dict[str, Decimal]] = {}
+    for row in player_stat_rows:
+        if (row.get("season") or "").strip() != str(prior_season):
+            continue
+        if (row.get("season_type") or "").strip().upper() != "REG":
+            continue
+        key = ((row.get("team") or "").strip().upper(), (row.get("week") or "").strip())
+        bucket = totals.setdefault(key, {name: Decimal("0") for name in _RAW_COLUMNS})
+        for name in _RAW_COLUMNS:
+            bucket[name] += _decimal_cell(row, name, label=f"player_stats:{name}")
+    return totals
+
+
+def transfer_prior_from_old_team(
+    person_rows: Sequence[Mapping[str, str]],
+    *,
+    provider_id: str,
+    position: str,
+    team_week_totals: Mapping[tuple[str, str], Mapping[str, Decimal]],
+    prior_season: int,
+) -> dict[str, object]:
+    """A transfer's own prior-season share of his old team's volume.
+
+    Ben's 2026-09-10 direction for R17: use the stats we have from prior teams.
+    The number is the person's own count divided by the old team's count in the
+    weeks he had a row, per column, from the same frozen `player_stats` bytes
+    that produce every other share. It is an honest cold-start prior for a
+    person whose current-team role is unobserved, carried into the package as
+    `EVIDENCE_STATE=UNKNOWN`; it is not a role confirmation and cannot certify.
+    """
+
+    own = _player_totals(person_rows, prior_season=prior_season).get(
+        provider_id, {name: Decimal("0") for name in _RAW_COLUMNS}
+    )
+    pairs = sorted(
+        {((row.get("team") or "").strip().upper(), (row.get("week") or "").strip())
+         for row in person_rows}
+    )
+    denominators = {name: Decimal("0") for name in _RAW_COLUMNS}
+    for pair in pairs:
+        for name in _RAW_COLUMNS:
+            denominators[name] += team_week_totals.get(pair, {}).get(name, Decimal("0"))
+    own_share: dict[str, Decimal] = {}
+    for column, eligible in _SHARE_COLUMNS.items():
+        if position not in eligible or denominators[column] <= 0:
+            own_share[column] = Decimal("0")
+        else:
+            own_share[column] = _bounded(
+                _ratio(own[column], denominators[column], label=f"transfer:{provider_id}:{column}"),
+                "0", "1", label=f"transfer:{provider_id}:{column}",
+            )
+    receiving = position in RECEIVING_POSITIONS and own["targets"] > 0
+    catch_rate = (
+        _bounded(_ratio(own["receptions"], own["targets"], label=f"transfer:{provider_id}:catch_rate"),
+                 "0", "1", label=f"transfer:{provider_id}:catch_rate")
+        if receiving else Decimal("0")
+    )
+    yards_per_target = (
+        _bounded(_ratio(own["receiving_yards"], own["targets"], label=f"transfer:{provider_id}:ypt"),
+                 "0", "30", label=f"transfer:{provider_id}:yards_per_target")
+        if receiving else Decimal("0")
+    )
+    nonzero = any(value > 0 for value in own_share.values())
+    return {
+        "basis_version": TRANSFER_PRIOR_VERSION,
+        "basis": "OWN_OLD_TEAM_SHARE" if nonzero else "OWN_OLD_TEAM_SHARE_ZERO",
+        "old_teams": sorted({team for team, _week in pairs}),
+        "old_team_weeks": len(pairs),
+        "own_counts": {name: decimal_text(own[name]) for name in _RAW_COLUMNS},
+        "old_team_counts": {name: decimal_text(denominators[name]) for name in _RAW_COLUMNS},
+        "own_old_share": {name: decimal_text(value) for name, value in own_share.items()},
+        "own_catch_rate": decimal_text(catch_rate),
+        "own_yards_per_target": decimal_text(yards_per_target),
+        "denominator_basis": "OLD_TEAM_ALL_PLAYERS_IN_WEEKS_WITH_A_ROW",
+        "injection": "PSEUDO_COUNT_EQUALS_OWN_OLD_SHARE_TIMES_CURRENT_TEAM_POOL_INCUMBENT_TOTAL",
+        "does_not_establish": ["CURRENT_TEAM_ROLE", "OFFICIAL_ACTIVE_STATUS", "MODEL_VALIDATION"],
+    }
+
+
 def _role_capacities(
     snap_rows: Sequence[Mapping[str, str]], *, prior_season: int
 ) -> dict[str, Decimal]:
@@ -1390,9 +1485,11 @@ def build_player_records(
     people = showdown_people(slate)
     totals = _player_totals(player_stat_rows, prior_season=prior_season)
     capacities = _role_capacities(snap_rows, prior_season=prior_season)
+    team_week_totals = _team_week_totals(player_stat_rows, prior_season=prior_season)
 
     raw: dict[str, dict[str, Decimal]] = {}
     history: dict[str, dict[str, object]] = {}
+    transfer_priors: dict[str, dict[str, object]] = {}
     for underlying_id, (proposal, provider_id) in resolved.items():
         flex = people[underlying_id]["FLEX"]
         person_rows = [row for row in player_stat_rows
@@ -1422,6 +1519,20 @@ def build_player_records(
                 "basis_version": "offensive_current_team_history_v1",
                 "denominator_basis": "CURRENT_TEAM_ROWS_ONLY_CURRENT_SALARY_POOL",
             }
+            if transfer and not incomplete:
+                prior = transfer_prior_from_old_team(
+                    person_rows,
+                    provider_id=provider_id,
+                    position=flex.position,
+                    team_week_totals=team_week_totals,
+                    prior_season=prior_season,
+                )
+                history[underlying_id]["transfer_prior"] = prior
+                if prior["basis"] == "OWN_OLD_TEAM_SHARE":
+                    transfer_priors[underlying_id] = prior
+                    history[underlying_id]["receiving_efficiency_observed"] = (
+                        Decimal(str(prior["own_catch_rate"])) > 0
+                    )
 
     # Denominators are the DraftKings pool members for each team, which is the
     # same set projection.py normalizes over, so its renormalization is an
@@ -1429,6 +1540,43 @@ def build_player_records(
     by_team: dict[str, list[str]] = {}
     for underlying_id in sorted(resolved):
         by_team.setdefault(people[underlying_id]["FLEX"].team, []).append(underlying_id)
+
+    # Transfer priors enter the same pool normalization as everyone else, as a
+    # pseudo-count equal to the person's own old-team share times the current
+    # team's incumbent pool total for that column. Incumbents' shares scale by
+    # 1/(1+sum of transfer shares); the transfer gets s/(1+sum). Receptions and
+    # receiving yards are scaled from the pseudo-targets by the person's own
+    # catch rate and yards per target, so the efficiency stays his own.
+    for dk_team, members in sorted(by_team.items()):
+        incoming = [member for member in members if member in transfer_priors]
+        if not incoming:
+            continue
+        incumbents = [member for member in members if member not in transfer_priors]
+        for member in incoming:
+            position = people[member]["FLEX"].position
+            prior = transfer_priors[member]
+            pseudo = {name: Decimal("0") for name in _RAW_COLUMNS}
+            for column, eligible in _SHARE_COLUMNS.items():
+                if position not in eligible:
+                    continue
+                pool_total = sum(
+                    (raw[other][column] for other in incumbents
+                     if people[other]["FLEX"].position in eligible),
+                    Decimal("0"),
+                )
+                pseudo[column] = (
+                    Decimal(str(prior["own_old_share"][column])) * pool_total
+                ).quantize(QUANTUM, rounding=ROUND_HALF_EVEN)
+            pseudo["receptions"] = (
+                pseudo["targets"] * Decimal(str(prior["own_catch_rate"]))
+            ).quantize(QUANTUM, rounding=ROUND_HALF_EVEN)
+            pseudo["receiving_yards"] = (
+                pseudo["targets"] * Decimal(str(prior["own_yards_per_target"]))
+            ).quantize(QUANTUM, rounding=ROUND_HALF_EVEN)
+            raw[member] = pseudo
+            history[member]["transfer_prior"]["pseudo_counts"] = {
+                name: decimal_text(value) for name, value in pseudo.items()
+            }
 
     shares: dict[tuple[str, str], Decimal] = {}
     missing_support: list[str] = []

@@ -110,17 +110,82 @@ def test_promoted_backup_conserved_without_historical_ceiling(tmp_path):
     assert result.report["unallocated_by_team"]["SEA"]["carry_share"] == pytest.approx(.55)
 
 
-@pytest.mark.parametrize("state,reason", [("MISSING_HISTORY", "OFFENSIVE_MISSING_HISTORY"), ("CURRENT_ROLE_UNKNOWN", "OFFENSIVE_TRANSFER_REQUIRES_CURRENT_TEAM_ROLE")])
-def test_missing_or_transfer_is_one_finding_and_cannot_be_a_zero_punt(tmp_path, state, reason):
+def test_transfer_without_a_carried_prior_is_one_blocking_finding(tmp_path):
+    # A package frozen before the transfer prior existed carries no
+    # `transfer_prior`; the only honest answer is still to stop and rebuild.
     slate, model, contract, splits = _setup(tmp_path)
     person = "NE|RB|Backup RB"
-    model = replace(model, offensive_history_by_person={person: {"state": state, "incompatible_transfer": state == "CURRENT_ROLE_UNKNOWN"}})
-    with pytest.raises(OffensiveRoleError, match=reason) as error:
+    model = replace(model, offensive_history_by_person={person: {"state": "CURRENT_ROLE_UNKNOWN", "incompatible_transfer": True}})
+    with pytest.raises(OffensiveRoleError, match="OFFENSIVE_TRANSFER_REQUIRES_CURRENT_TEAM_ROLE") as error:
         select_prior_lineups(slate, model, splits, contract, count=1)
     matches = [f for f in error.value.report["findings"] if f["person"] == person]
     assert len(matches) == 1 and matches[0]["selection_action"] == "BLOCK"
     assert matches[0]["after"] is None
     assert error.value.report["evidence_state"] == "UNKNOWN"
+
+
+def test_missing_history_is_a_visible_zero_share_exclusion_not_a_stop(tmp_path):
+    # 2026-09-10 (R17): a rookie or never-recorded person has no source-bound
+    # number to carry. The honest share is zero, so the run continues with the
+    # person excluded by name and salary instead of stopping for an operator
+    # `--exclude` that would produce the identical lineups.
+    slate, model, contract, splits = _setup(tmp_path)
+    person = "NE|RB|Backup RB"
+    model = replace(model, offensive_history_by_person={person: {"state": "MISSING_HISTORY", "incompatible_transfer": False}})
+    lineups, scores, report = select_prior_lineups(slate, model, splits, contract, count=1)
+    assert person not in scores.by_person
+    f = next(f for f in report["offensive_roles"]["findings"] if f["person"] == person)
+    assert f["state"] == "MISSING_HISTORY" and f["selection_action"] == "EXCLUDE"
+    assert f["finding"] == "OFFENSIVE_MISSING_HISTORY"
+    assert f["after"] == dict.fromkeys(FIELDS, 0)
+    assert report["offensive_roles"]["excluded_by_finding"]["OFFENSIVE_MISSING_HISTORY"] == [person]
+    assert "MISSING_HISTORY_PEOPLE_EXCLUDED_WITH_ZERO_SHARE" in report["offensive_roles"]["assumptions"]
+    assert report["offensive_roles"]["evidence_state"] == "UNKNOWN"
+    assert all(i not in lineups[0].roster for i in _binding(slate, person).values())
+
+
+def test_carried_transfer_prior_is_kept_as_an_unverified_diagnostic(tmp_path):
+    slate, model, contract, splits = _setup(tmp_path)
+    person = "NE|RB|Backup RB"
+    prior = {"basis_version": "transfer_prior_own_old_team_share_v1", "basis": "OWN_OLD_TEAM_SHARE",
+             "old_teams": ["DEN"], "own_old_share": {"carries": "0.25", "targets": "0.05"}}
+    model = replace(model, offensive_history_by_person={person: {
+        "state": "CURRENT_ROLE_UNKNOWN", "incompatible_transfer": True, "transfer_prior": prior}})
+    lineups, scores, report = select_prior_lineups(slate, model, splits, contract, count=1)
+    f = next(f for f in report["offensive_roles"]["findings"] if f["person"] == person)
+    assert f["state"] == "TRANSFER_PRIOR_UNVERIFIED" and f["selection_action"] == "DIAGNOSTIC"
+    assert f["finding"] == "OFFENSIVE_TRANSFER_PRIOR_UNVERIFIED"
+    assert "DEN" in f["next_evidence_action"]
+    assert f["after"] == f["before"]  # kept, not rescaled by the gate
+    assert person in scores.by_person
+    assert report["offensive_roles"]["transfer_priors"][person]["old_teams"] == ["DEN"]
+    assert "TRANSFER_PRIOR_IS_OWN_OLD_TEAM_SHARE_NOT_A_CURRENT_ROLE" in report["offensive_roles"]["assumptions"]
+    assert report["offensive_roles"]["evidence_state"] == "UNKNOWN"
+
+
+def test_zero_transfer_prior_is_excluded_not_blocked(tmp_path):
+    slate, model, contract, splits = _setup(tmp_path)
+    person = "NE|RB|Backup RB"
+    prior = {"basis_version": "transfer_prior_own_old_team_share_v1", "basis": "OWN_OLD_TEAM_SHARE_ZERO", "old_teams": ["DEN"]}
+    model = replace(model, players=tuple(replace(p, **dict.fromkeys(FIELDS, 0.0)) if p.underlying_id == person else p for p in model.players),
+                    offensive_history_by_person={person: {"state": "CURRENT_ROLE_UNKNOWN", "incompatible_transfer": True, "transfer_prior": prior}})
+    lineups, scores, report = select_prior_lineups(slate, model, splits, contract, count=1)
+    f = next(f for f in report["offensive_roles"]["findings"] if f["person"] == person)
+    assert f["state"] == "TRANSFER_PRIOR_ZERO" and f["selection_action"] == "EXCLUDE"
+    assert person not in scores.by_person
+
+
+def test_a_role_fact_still_blocks_a_transfer_even_with_a_carried_prior(tmp_path):
+    # Qualitative evidence naming a changed role outranks the cold-start prior.
+    slate, model, contract, splits = _setup(tmp_path)
+    person = "NE|RB|Backup RB"
+    prior = {"basis_version": "transfer_prior_own_old_team_share_v1", "basis": "OWN_OLD_TEAM_SHARE",
+             "old_teams": ["DEN"], "own_old_share": {"carries": "0.25"}}
+    model = replace(model, offensive_history_by_person={person: {
+        "state": "CURRENT_ROLE_UNKNOWN", "incompatible_transfer": True, "transfer_prior": prior}})
+    role_path = _package(tmp_path / "roles", slate, [], facts=[(person, "MATERIAL_ROLE_CHANGE")], as_of=AS_OF)
+    with pytest.raises(OffensiveRoleError, match="OFFENSIVE_TRANSFER_REQUIRES_CURRENT_TEAM_ROLE"):
+        select_prior_lineups(slate, model, splits, contract, count=1, offensive_role_evidence_json=role_path, as_of=AS_OF)
 
 
 def test_observed_zero_is_excluded_and_not_mapped_to_missing(tmp_path):

@@ -135,6 +135,13 @@ PATH_FIELDS = (
     "ownership_brackets_csv",
     "source_ledger_json",
 )
+# Request fields that hold operator lists. A command-line value for one of these
+# on a reloaded request is merged with what the request already carries.
+LIST_MERGE_REQUEST_FIELDS = (
+    "exclude_dk_ids",
+    "unavailable_statuses",
+    "available_statuses",
+)
 
 
 class CoworkInputError(ValueError):
@@ -450,6 +457,14 @@ def resolve_request_inputs(
         explicit_file_values.append(explicit_path.resolve())
     explicit_files = tuple(explicit_file_values)
     roots = tuple(allowed_roots)
+    # An `--input-dir` named on the command line is the operator saying "these
+    # are the files"; it outranks the snapshot paths a reloaded `--request`
+    # carries. Before this, a rerun with fresh uploads (the re-run after actives
+    # are announced) silently built from the earlier snapshot and reported
+    # nothing, which is the one way this path could hand back a stale file.
+    # A request's own recorded `input_dir` (normally null after snapshotting)
+    # keeps the old precedence so a deterministic rerun stays deterministic.
+    fresh_attachments = input_dir not in (None, "")
     for name in PATH_FIELDS:
         explicit = overrides.get(name)
         if explicit not in (None, ""):
@@ -457,7 +472,9 @@ def resolve_request_inputs(
                 explicit, base_dir=Path.cwd(), allowed_roots=roots,
                 allowed_files=explicit_files, field_name=name,
             ))
-        elif payload.get(name) in (None, "") and name in discovered.classified:
+        elif name in discovered.classified and (
+            payload.get(name) in (None, "") or fresh_attachments
+        ):
             payload[name] = str(discovered.classified[name])
     # A slate run folder keeps its frozen prior package beside its inputs. Find
     # it when it is there and confinement allows it; when it is not, the

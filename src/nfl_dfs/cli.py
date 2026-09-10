@@ -32,6 +32,7 @@ from .contracts import (
 )
 from .cowork import (
     CoworkRunRequest,
+    LIST_MERGE_REQUEST_FIELDS,
     OPERATOR_WEATHER_STATES,
     PATH_FIELDS,
     SUPPORTED_PROFILES,
@@ -2233,14 +2234,51 @@ def _run_prior_review_profile(
                     display_blocker,
                 ],
             }
+            # The review CSV stays on disk as a preserved earlier output, but
+            # nothing in this record may advertise it: not the top-level keys,
+            # and not the artifact or hash index either. It is listed under
+            # `withheld_artifacts` so the folder can be reconciled by hand.
+            withheld_path = outcome.artifacts.get("bulk_entry_csv")
+            withheld_hash = outcome.hashes.get("bulk_entry_csv")
+            remaining_artifacts = {
+                key: value for key, value in outcome.artifacts.items() if key != "bulk_entry_csv"
+            }
+            remaining_hashes = {
+                key: value for key, value in outcome.hashes.items() if key != "bulk_entry_csv"
+            }
+            withheld_record = {
+                "stage": "READABLE_REVIEW",
+                "FILE_VALID": False,
+                "RELEASE_DECISION": ReleaseDecision.DO_NOT_UPLOAD.value,
+                "blocker": display_blocker,
+                "withheld_artifacts": {
+                    "bulk_entry_csv": {"path": withheld_path, "sha256": withheld_hash}
+                },
+                "meaning": (
+                    "Display reconciliation failed after export. The review CSV named"
+                    " here is preserved as an earlier output and is not advertised;"
+                    " do not review or upload it."
+                ),
+            }
             outcome = replace(
                 outcome,
                 stage="READABLE_REVIEW",
                 blocked=True,
                 blockers=(display_blocker, *outcome.blockers),
+                artifacts=remaining_artifacts,
+                hashes=remaining_hashes,
+                reports={**outcome.reports, "readable_review_failure": withheld_record},
                 export=blocked_export,
                 error=display_blocker,
             )
+            try:
+                _write_json(
+                    DEFAULT_RUNS_DIR / run_id / "prior_review" / "READABLE_REVIEW_FAILED.json",
+                    withheld_record,
+                )
+                _write_json(output_root / "review" / "READABLE_REVIEW_FAILED.json", withheld_record)
+            except OSError:
+                pass
             truths = _blocked_truth_values(
                 file_valid=False,
                 evidence_state=ReleaseEvidenceState.UNKNOWN,
@@ -2249,6 +2287,26 @@ def _run_prior_review_profile(
             )
             next_action = "Resolve the named readable-review discrepancy and rerun from stable exact artifacts."
 
+    selection_report = outcome.reports.get("selection")
+    if isinstance(selection_report, Mapping):
+        coverage = selection_report.get("official_status_coverage")
+        if isinstance(coverage, Mapping) and coverage.get("selected_without_row"):
+            missing = list(coverage["selected_without_row"])
+            blockers.insert(
+                0,
+                "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED: "
+                f"{len(missing)} selected people have no current exact-ID row in the "
+                f"supplied official status file: {missing}; a supplied file never implies "
+                "ACTIVE for anyone it omits",
+            )
+        selector = selection_report.get("selection")
+        if isinstance(selector, Mapping) and selector.get("non_optimal_lineups"):
+            blockers.insert(
+                0,
+                "SOLVER_TIME_LIMIT_ACCEPTED_LINEUPS: lineups "
+                f"{list(selector['non_optimal_lineups'])} were accepted from a time-limited "
+                "solve and are feasible but not proven optimal for the prior objective",
+            )
     review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
     create_cowork_status_workbook(
         output_path=review_path,
@@ -2257,6 +2315,12 @@ def _run_prior_review_profile(
         report_path=report_path,
         truth_values=truths,
         readable_review=readable_review.data if readable_review is not None else None,
+        review_csv_path=(
+            outcome.artifacts.get("bulk_entry_csv") if readable_review is not None else None
+        ),
+        review_csv_sha256=(
+            outcome.hashes.get("bulk_entry_csv") if readable_review is not None else None
+        ),
     )
     review_workbook_sha256 = sha256_file(review_path)
     result = {
@@ -2278,6 +2342,7 @@ def _run_prior_review_profile(
         "blockers": blockers,
         "unclassified_csvs": [str(path) for path in unclassified],
         "input_hashes": intake["hashes"],
+        "superseded_request_inputs": getattr(args, "_cowork_superseded_inputs", {}),
         "doctor": json.loads(doctor_report.to_json()),
         **outcome.as_report(),
         "next": next_action,
@@ -2334,6 +2399,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         request_roots.append(Path(args.offensive_role_evidence_json).resolve().parent)
     if getattr(args, "portfolio_policy_json", None):
         request_roots.append(Path(args.portfolio_policy_json).resolve().parent)
+    if getattr(args, "official_status_csv", None):
+        request_roots.append(Path(args.official_status_csv).resolve().parent)
     if args.request:
         request_source = Path(args.request).resolve()
         possible_run_root = request_source.parent
@@ -2366,6 +2433,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         ("role_evidence_json", "role_evidence_json"),
         ("offensive_role_evidence_json", "offensive_role_evidence_json"),
         ("portfolio_policy_json", "portfolio_policy_json"),
+        ("official_status_csv", "official_status_csv"),
         ("lineup_count", "lineup_count"),
         ("max_person_overlap", "max_person_overlap"),
         ("exclude", "exclude_dk_ids"),
@@ -2379,6 +2447,13 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                     value, base_dir=Path.cwd(), allowed_roots=request_roots,
                     field_name=flag,
                 ))
+            if field_name in LIST_MERGE_REQUEST_FIELDS:
+                # A follow-up `--exclude` on a reloaded request adds to the
+                # exclusions the request already carries; it does not replace
+                # them. Replacing silently re-admitted every earlier fade on the
+                # rerun that was meant to add one more.
+                existing = list(getattr(requested, field_name) or ())
+                value = list(dict.fromkeys([*existing, *[str(item) for item in value]]))
             overrides[field_name] = value
     if getattr(args, "build_priors", False):
         overrides["build_priors"] = True
@@ -2393,6 +2468,14 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             ),
         )
     run_id = _resolved_run_id(args.run_id, requested.label)
+    if (DEFAULT_RUNS_DIR / run_id).exists():
+        # Refuse before anything is written. The failure handler below only
+        # writes into a run folder this invocation created, so an earlier run's
+        # record is never rewritten by a later command that reused its id.
+        raise ValueError(
+            "RUN_ID_COLLISION: run_id already exists and immutable run records are "
+            f"never overwritten: {run_id}; choose a new --run-id or omit it"
+        )
     args._resolved_cowork_run_id = run_id
     request_roots.append((DEFAULT_RUNS_DIR / run_id).resolve())
     if requested.input_dir:
@@ -2404,6 +2487,14 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         entry_csv=args.entries,
         allowed_roots=request_roots,
     )
+    superseded_inputs = {
+        name: {"request": previous, "attached": current}
+        for name in PATH_FIELDS
+        if (previous := getattr(requested, name)) not in (None, "")
+        and (current := getattr(request, name)) not in (None, "")
+        and str(Path(str(previous)).resolve()) != str(Path(str(current)).resolve())
+    }
+    args._cowork_superseded_inputs = superseded_inputs
     ContestObjective(request.objective)
     source_paths = [
         value
@@ -2600,6 +2691,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "blockers": blockers,
             "unclassified_csvs": [str(path) for path in unclassified],
             "input_hashes": intake["hashes"],
+            "superseded_request_inputs": getattr(args, "_cowork_superseded_inputs", {}),
             "doctor": json.loads(doctor_report.to_json()),
             "next": (
                 "Claude should gather and freeze approved public evidence, populate the request, "
@@ -2748,9 +2840,13 @@ def command_cowork_run(args: argparse.Namespace) -> int:
                     label = raw_request["label"]
             except (OSError, json.JSONDecodeError):
                 pass
-        run_id = getattr(args, "_resolved_cowork_run_id", None) or _resolved_run_id(
-            args.run_id, label
-        )
+        run_id = getattr(args, "_resolved_cowork_run_id", None)
+        if run_id is None:
+            # Nothing was created by this invocation (the failure came before
+            # the run id was claimed, e.g. RUN_ID_COLLISION), so there is no
+            # folder of ours to write a record into. An earlier run's folder is
+            # never touched from here.
+            raise
         intake_path = DEFAULT_RUNS_DIR / run_id / "intake.json"
         if not intake_path.is_file():
             raise
@@ -3001,6 +3097,7 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--role-evidence-json")
     cowork.add_argument("--offensive-role-evidence-json")
     cowork.add_argument("--portfolio-policy-json")
+    cowork.add_argument("--official-status-csv")
     cowork.add_argument("--lineup-count", type=int)
     cowork.add_argument("--max-person-overlap", type=int)
     cowork.add_argument("--as-of")

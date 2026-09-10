@@ -63,8 +63,11 @@ def _lock_from_game_info(rows) -> "datetime | None":
             naive = datetime.strptime(" ".join(parts[1:3]), fmt.replace(" ET", ""))
         except ValueError:
             continue
-        # DraftKings prints Eastern. Convert to UTC with the offset in force.
-        return naive.replace(tzinfo=timezone(timedelta(hours=-4)))
+        # DraftKings prints Eastern. Attach the zone so the offset in force on
+        # that date is used (a fixed -4 was wrong from November to March).
+        from zoneinfo import ZoneInfo
+
+        return naive.replace(tzinfo=ZoneInfo("America/New_York"))
     return None
 
 

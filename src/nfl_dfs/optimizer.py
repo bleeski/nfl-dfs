@@ -178,6 +178,25 @@ class LineupOptimizer:
         if indices:
             self._add_row(-highspy.kHighsInf, float(len(indices) - 1), {i: 1.0 for i in indices})
 
+    def add_required_row(self, dk_id: str) -> None:
+        """Pin one exact salary row into every subsequent solution.
+
+        The SD4 candidate bank uses this to enumerate the best lineups under a
+        fixed Captain row (or any other exact DraftKings ID) so a portfolio
+        policy with Captain maxima has candidates for more than the chalk
+        Captain. It is an equality row on the existing binary, so every other
+        legality constraint still applies; a required row that is also
+        excluded simply makes the model infeasible, which callers record.
+        """
+
+        key = str(dk_id)
+        index = next(
+            (i for i, player in enumerate(self.players) if player.dk_id == key), None
+        )
+        if index is None:
+            raise ValueError(f"required row ID is outside the salary pool: {key!r}")
+        self._add_row(1.0, 1.0, {index: 1.0})
+
     def add_person_overlap_limit(self, roster: Iterable[str], max_overlap: int) -> None:
         """Cap how many of a previous lineup's people may reappear in the next.
 

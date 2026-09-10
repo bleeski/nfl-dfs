@@ -248,6 +248,158 @@ def _role_findings(selection_record: Mapping[str, object]) -> dict[str, list[dic
     return by_person
 
 
+def _kicker_assumptions(selection_record: Mapping[str, object]) -> list[dict[str, object]]:
+    """Every prior-only kicker assumption the selector leaned on, by person.
+
+    CLAUDE.md requires the one-kicker fallback to be reported as an assumption,
+    not as a confirmed role. The selector records it under
+    `selection.kicker_roles.assumptions`; before this the review surface never
+    read that list, so a kicker in every lineup showed `NO_NAMED_ROLE_FINDING`.
+    """
+
+    selector = selection_record.get("selection")
+    if not isinstance(selector, Mapping):
+        return []
+    kicker = selector.get("kicker_roles")
+    if not isinstance(kicker, Mapping):
+        return []
+    findings: list[dict[str, object]] = []
+    for raw in kicker.get("assumptions", []):
+        text = str(raw)
+        person = None
+        for part in text.split(":"):
+            if part.startswith("person="):
+                person = part[len("person="):]
+        findings.append(
+            {
+                "person": person,
+                "finding": text,
+                "state": str(kicker.get("allocation_basis") or "PRIOR_ONLY_SOLE_LISTED_ASSUMPTION"),
+                "selection_action": "DIAGNOSTIC",
+                "next_evidence_action": (
+                    "capture approved current kicker-role evidence"
+                    " (nfl_kicker_role_evidence_v1) before treating this role as confirmed"
+                ),
+            }
+        )
+    for raw in kicker.get("coverage_gaps", []):
+        findings.append(
+            {
+                "person": None,
+                "finding": str(raw),
+                "state": "KICKER_ROLE_COVERAGE_GAP",
+                "selection_action": "DIAGNOSTIC",
+                "next_evidence_action": None,
+            }
+        )
+    return findings
+
+
+def _pool_coverage_view(
+    selection_record: Mapping[str, object],
+    slate: SlateContract,
+    selectable_count_expected: int | None,
+    problems: list[str],
+) -> dict[str, object] | None:
+    """Reconcile the selector's pool-coverage summary against the exact salary bytes.
+
+    The counts and salary totals are recomputed here from the reparsed salary
+    pool and the per-person reasons the selector recorded; a disagreement is a
+    named display failure like every other mismatch in this module.
+    """
+
+    raw = selection_record.get("pool_coverage")
+    if not isinstance(raw, Mapping):
+        return None
+    rows = _sequence(raw.get("people"), "selection.pool_coverage.people", problems)
+    by_person: dict[str, list] = defaultdict(list)
+    for player in slate.players:
+        by_person[player.underlying_id].append(player)
+    recomputed: dict[str, dict[str, object]] = {}
+    excluded_people: list[dict[str, object]] = []
+    reason_by_person: dict[str, str] = {}
+    seen: set[str] = set()
+    for item in rows:
+        row = _mapping(item, "selection.pool_coverage.person", problems)
+        person = str(row.get("person", ""))
+        reason = str(row.get("reason", ""))
+        if person not in by_person:
+            problems.append(_problem("READABLE_REVIEW_POOL_COVERAGE_UNKNOWN_PERSON", person))
+            continue
+        seen.add(person)
+        players = by_person[person]
+        flex_salary = sum(p.salary for p in players if p.role == "FLEX")
+        cpt_salary = sum(p.salary for p in players if p.role == "CPT")
+        if row.get("flex_salary") != flex_salary or row.get("cpt_salary") != cpt_salary:
+            problems.append(_problem("READABLE_REVIEW_POOL_COVERAGE_SALARY_MISMATCH", person))
+        bucket = reason.split(":", 1)[0]
+        entry = recomputed.setdefault(
+            bucket, {"people": 0, "flex_salary": 0, "cpt_salary": 0}
+        )
+        entry["people"] = int(entry["people"]) + 1
+        entry["flex_salary"] = int(entry["flex_salary"]) + flex_salary
+        entry["cpt_salary"] = int(entry["cpt_salary"]) + cpt_salary
+        reason_by_person[person] = reason
+        if reason != "SELECTABLE":
+            first = players[0]
+            excluded_people.append(
+                {
+                    "underlying_person_id": person,
+                    "name": first.name,
+                    "team": first.team,
+                    "position": first.position,
+                    "dk_status": str(row.get("dk_status", "")),
+                    "reason": reason,
+                    "flex_salary": flex_salary,
+                    "cpt_salary": cpt_salary,
+                }
+            )
+    if seen != set(by_person):
+        problems.append("READABLE_REVIEW_POOL_COVERAGE_PEOPLE_INCOMPLETE")
+    declared = _mapping(raw.get("by_reason"), "selection.pool_coverage.by_reason", problems)
+    for bucket, values in recomputed.items():
+        declared_bucket = declared.get(bucket)
+        if not isinstance(declared_bucket, Mapping) or any(
+            declared_bucket.get(key) != value for key, value in values.items()
+        ):
+            problems.append(_problem("READABLE_REVIEW_POOL_COVERAGE_TOTAL_MISMATCH", bucket))
+    selectable = int(recomputed.get("SELECTABLE", {}).get("people", 0))
+    if raw.get("selectable_people") != selectable:
+        problems.append(
+            _problem(
+                "READABLE_REVIEW_POOL_COVERAGE_SELECTABLE_MISMATCH",
+                f"declared={raw.get('selectable_people')}:recomputed={selectable}",
+            )
+        )
+    # The participation contract's own count is a separate fact: everyone the
+    # DK status and operator/official exclusions leave, before any role gate.
+    if (
+        selectable_count_expected is not None
+        and raw.get("participation_selectable_people") not in (None, selectable_count_expected)
+    ):
+        problems.append(
+            _problem(
+                "READABLE_REVIEW_POOL_COVERAGE_PARTICIPATION_MISMATCH",
+                f"declared={raw.get('participation_selectable_people')}:participation={selectable_count_expected}",
+            )
+        )
+    unallocated = raw.get("unallocated_by_team")
+    return {
+        "people_in_pool": len(by_person),
+        "selectable_people": selectable,
+        "participation_selectable_people": raw.get("participation_selectable_people"),
+        "by_reason": {
+            bucket: {**values, "names": (declared.get(bucket) or {}).get("names", [])}
+            for bucket, values in sorted(recomputed.items())
+        },
+        "by_team_position": raw.get("by_team_position"),
+        "excluded_people": excluded_people,
+        "reason_by_person": reason_by_person,
+        "unallocated_by_team": unallocated if isinstance(unallocated, Mapping) else {},
+        "note": raw.get("note"),
+    }
+
+
 def _source_observations(
     reports: Mapping[str, object], selection_record: Mapping[str, object]
 ) -> list[dict[str, object]]:
@@ -314,6 +466,42 @@ def _source_observations(
                             "next_action": raw.get("next_evidence_action"),
                         }
                     )
+            unallocated = offensive.get("unallocated_by_team")
+            if isinstance(unallocated, Mapping):
+                for team, fields in sorted(unallocated.items()):
+                    if not isinstance(fields, Mapping):
+                        continue
+                    held = {
+                        str(field): round(float(value), 4)
+                        for field, value in sorted(fields.items())
+                        if isinstance(value, (int, float)) and float(value) > 0
+                    }
+                    if held:
+                        observations.append(
+                            {
+                                "category": "unallocated_volume",
+                                "state": "PRIOR_ONLY_LIMITATION",
+                                "observation": f"{team}: prior-season share held by unselectable people, not reassigned: {held}",
+                                "observed_at": None,
+                                "expires_at": None,
+                                "source": None,
+                                "next_action": None,
+                            }
+                        )
+        kicker = selector.get("kicker_roles")
+        if isinstance(kicker, Mapping):
+            for finding in _kicker_assumptions(selection_record):
+                observations.append(
+                    {
+                        "category": "kicker_role",
+                        "state": finding.get("state"),
+                        "observation": finding.get("finding"),
+                        "observed_at": kicker.get("observed_at"),
+                        "expires_at": kicker.get("expires_at"),
+                        "source": kicker.get("evidence_path"),
+                        "next_action": finding.get("next_evidence_action"),
+                    }
+                )
     return observations
 
 
@@ -435,6 +623,49 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
         if isinstance(row, Mapping)
     ]
     sections.append(_html_table(("Entry A", "Entry B", "Actual shared people", "Maximum"), overlap_rows))
+    coverage = data.get("pool_coverage")
+    if isinstance(coverage, Mapping):
+        sections.append("<h2>Pool coverage: who could not be selected, and why</h2>")
+        sections.append(
+            f'<p>{_escape(coverage.get("people_in_pool"))} people in the salary pool, '
+            f'{_escape(coverage.get("selectable_people"))} selectable.</p>'
+        )
+        reason_rows = []
+        for bucket, values in _mapping(coverage.get("by_reason"), "pool_coverage.by_reason", []).items():
+            if not isinstance(values, Mapping):
+                continue
+            reason_rows.append(
+                (
+                    bucket, values.get("people"), values.get("flex_salary"), values.get("cpt_salary"),
+                    "; ".join(str(name) for name in values.get("names", []) if name is not None),
+                )
+            )
+        sections.append(
+            _html_table(("Reason", "People", "FLEX salary", "CPT salary", "Names"), reason_rows)
+        )
+        excluded_rows = [
+            (
+                row.get("name"), row.get("team"), row.get("position"), row.get("dk_status"),
+                row.get("reason"), row.get("flex_salary"), row.get("cpt_salary"),
+            )
+            for row in _sequence(coverage.get("excluded_people"), "pool_coverage.excluded_people", [])
+            if isinstance(row, Mapping)
+        ]
+        sections.append("<h3>Excluded people</h3>")
+        sections.append(
+            _html_table(("Player", "Team", "Position", "DK status", "Reason", "FLEX salary", "CPT salary"), excluded_rows)
+        )
+        unallocated_rows = []
+        for team, fields in _mapping(coverage.get("unallocated_by_team"), "pool_coverage.unallocated", []).items():
+            if isinstance(fields, Mapping):
+                unallocated_rows.append(
+                    (team, *[fields.get(key) for key in ("qb_attempt_share", "carry_share", "target_share", "rushing_td_share", "receiving_td_share")])
+                )
+        sections.append("<h3>Prior-season volume left unallocated</h3>")
+        sections.append(
+            _html_table(("Team", "QB attempt share", "Carry share", "Target share", "Rushing TD share", "Receiving TD share"), unallocated_rows)
+        )
+        sections.append(f'<p class="small">{_escape(coverage.get("note"))}</p>')
     sections.append("<h2>Evidence, role, and model limitations</h2>")
     evidence_rows = [
         (row.get("category"), row.get("state"), row.get("observation"), row.get("observed_at"), row.get("expires_at"), row.get("source"), row.get("next_action"))
@@ -627,6 +858,24 @@ def create_readable_review(
 
     by_id = {player.dk_id: player for player in reparsed_slate.players}
     role_findings = _role_findings(selection_record)
+    for finding in _kicker_assumptions(selection_record):
+        if finding.get("person"):
+            role_findings[str(finding["person"])].append(
+                {key: value for key, value in finding.items() if key != "person"}
+            )
+    participation_summary = selection_record.get("participation")
+    selectable_expected = (
+        participation_summary.get("selectable_people")
+        if isinstance(participation_summary, Mapping)
+        and isinstance(participation_summary.get("selectable_people"), int)
+        else None
+    )
+    pool_coverage = _pool_coverage_view(
+        selection_record, reparsed_slate, selectable_expected, problems
+    )
+    coverage_reasons: Mapping[str, str] = (
+        pool_coverage.get("reason_by_person", {}) if pool_coverage else {}
+    )
     official = reports.get("official_status") if isinstance(reports.get("official_status"), Mapping) else {}
     official_statuses = official.get("statuses", {}) if isinstance(official, Mapping) else {}
     official_observed = official.get("observed_at", {}) if isinstance(official, Mapping) else {}
@@ -780,8 +1029,16 @@ def create_readable_review(
                 "captain_percentage": round(100 * actual_captain / denominator, 3),
                 "captain_max_count": captain_max,
                 "captain_max_percentage": round(100 * int(captain_max) / denominator, 3),
-                "excluded": excluded,
-                "exclusion_source": limit.get("exclusion_source") or ("PARTICIPATION" if person in external_exclusions else None),
+                "excluded": excluded or coverage_reasons.get(person, "SELECTABLE") != "SELECTABLE",
+                "exclusion_source": (
+                    limit.get("exclusion_source")
+                    or (
+                        coverage_reasons.get(person)
+                        if coverage_reasons.get(person, "SELECTABLE") != "SELECTABLE"
+                        else None
+                    )
+                    or ("PARTICIPATION" if person in external_exclusions else None)
+                ),
             }
         )
     selection_payload = _mapping(selection_record.get("selection"), "selection.selection", problems)
@@ -921,6 +1178,11 @@ def create_readable_review(
             "effective_pairwise_person_overlap": effective_overlap,
             "pairwise_overlap": pairwise,
         },
+        "pool_coverage": (
+            {key: value for key, value in pool_coverage.items() if key != "reason_by_person"}
+            if pool_coverage is not None
+            else None
+        ),
         "evidence_observations": _source_observations(reports, selection_record),
         "artifacts": artifact_rows,
         "hashes": dict(sorted((str(key), str(value)) for key, value in expected_hashes.items())),

@@ -315,10 +315,32 @@ The current-role report contains exactly one finding per offensive person:
 | State | Selection treatment |
 |---|---|
 | `OBSERVED_HISTORY_ZERO` | Exclude; historical zero does not establish current nonparticipation |
-| `MISSING_HISTORY` | Block selection; capture current allocation and missing efficiency |
-| `CURRENT_ROLE_UNKNOWN` | Block a transfer or declared material change; unchanged positive history may remain an explicitly unconfirmed diagnostic |
+| `MISSING_HISTORY` | Exclude with zero share (2026-09-10); no prior-season row exists anywhere, so there is no source-bound number to carry. The person is named with FLEX/CPT salary in `pool_coverage` (`OFFENSIVE_ROLE_GATE_EXCLUDED:OFFENSIVE_MISSING_HISTORY`). A person with no prior record at all still blocks (`OFFENSIVE_PRIOR_ROW_MISSING`) |
+| `TRANSFER_PRIOR_UNVERIFIED` | Keep as a diagnostic (2026-09-10): the producer carried the person's own prior-team share (see below); `EVIDENCE_STATE=UNKNOWN`, never a role fact, cannot certify |
+| `TRANSFER_PRIOR_ZERO` | Exclude: the person's own prior-team share was zero in every column |
+| `CURRENT_ROLE_UNKNOWN` | Block a transfer whose frozen package carries no `transfer_prior` (rebuild the package), or any declared material change; unchanged positive history may remain an explicitly unconfirmed diagnostic |
 | `EXPLICIT_NONPARTICIPATION` | Exclude before allocations; cannot be reactivated by role evidence |
 | `SOURCE_SUPPORTED_ADJUSTMENT` | Use the validated current-team allocation; zero-share people remain excluded |
+
+Transfer prior (`transfer_prior_own_old_team_share_v1`, 2026-09-10, R17). For a
+person whose prior-season rows all sit on other teams, the producer computes his
+own share of each old team's volume, per raw column, over the weeks he had a
+row: own count divided by the old team's count summed over all of that team's
+players in those weeks, from the same frozen `player_stats` bytes as every other
+share. That share enters the current team's pool normalization as a pseudo-count
+equal to the share times the current team's incumbent pool total for the column,
+so incumbents scale by `1/(1+Σs)` and the transfer receives `s/(1+Σs)`.
+Receptions and receiving yards are scaled from the pseudo-targets by his own
+catch rate and yards per target. The history entry records `transfer_prior` with
+`basis` (`OWN_OLD_TEAM_SHARE` or `OWN_OLD_TEAM_SHARE_ZERO`), old teams and week
+count, own and old-team counts, `own_old_share`, own efficiency and the injected
+`pseudo_counts`. The record keeps `EVIDENCE_STATE=UNKNOWN` and the history state
+`CURRENT_ROLE_UNKNOWN`; the gate reports it as `TRANSFER_PRIOR_UNVERIFIED`. It is
+a cold-start prior from the person's own source-bound history, not a current-team
+role, not qualitative evidence turned into a number, and it does not change
+`PRIOR_ONLY` / `DO_NOT_UPLOAD`. A qualitative fact naming the person still
+blocks. Rookies have no such number; a registered rookie prior from approved
+draft or combine artifacts is open work.
 
 Each finding retains `history_state`, `history_basis`, `declared_fact`, before/
 after shares, exact IDs, selection action and smallest next evidence action.
@@ -441,15 +463,37 @@ Entry-ID count. The MILP enforces combined-person and Captain maxima, policy
 exclusions, configured pairwise overlap and canonical uniqueness. Repeated
 Captains are legal only when their explicit effective maximum permits them.
 
-The default bounded bank is 32 canonical candidates, with a 30-second total
-generation budget and two seconds per lineup solve. The joint solve has a
-ten-second budget. Reports distinguish `COMPLETE_MODELED_BANK` from
+The bank is generated in policy-aware strata with the same lineup MILP, exact
+no-good cuts and deterministic vanishing perturbation throughout. Captain
+strata pin one eligible Captain row at a time, in descending CPT prior order,
+and enumerate its best `k` lineups until the seeded Captains' summed effective
+Captain maxima cover the entry count plus two spare slots, with
+`k = ceil(entries / seeded) + 1`. Exclusion strata enumerate the best
+`entries - combined_max + 1` lineups without each person whose combined
+maximum is below the entry count, skipped when the bank already holds that
+many lineups without them. A chain stratum then walks the policy greedily,
+retiring a person's rows once its combined or Captain maximum is reached and
+applying the configured pairwise overlap against every earlier chain lineup,
+so the joint MILP always receives at least one candidate portfolio that is
+legal under every cap; its slots are reserved while the earlier strata run.
+The remaining budget is the plain top-K fill. Candidates are deduplicated by
+canonical identity across strata, and the report lists per-stratum targets,
+enumerated and added counts and each stratum's terminal state; a sub-problem
+that runs out of legal lineups (for example a person who cannot legally
+captain) is recorded as `MODEL_INFEASIBLE`, not raised. Requests without a
+policy keep the plain top-K enumeration.
+
+Bounds scale with the requested entry count: `max(32, 4 x entries)` canonical
+candidates, `max(30 s, 2 s x entries)` of total generation time, two seconds
+per lineup solve and `max(10 s, 1 s x entries)` for the joint solve. This is
+still a bounded search over an actual bank, not a full-slate enumeration.
+Reports distinguish `COMPLETE_MODELED_BANK` from
 `CANDIDATE_LIMIT_REACHED_INCOMPLETE`, candidate time/search limits and solver
 errors. An optimal result is explicitly scoped to the actual candidate bank.
-Only an infeasible joint MILP over a bank whose enumeration ended in a proven
-lineup-model `INFEASIBLE` state is `MODELED_BANK_INFEASIBLE_PROVEN`; infeasibility
-over a bounded incomplete bank is `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`, never a
-full-slate mathematical claim.
+Only an infeasible joint MILP over a bank whose fill enumeration ended in a
+proven lineup-model `INFEASIBLE` state is `MODELED_BANK_INFEASIBLE_PROVEN`;
+infeasibility over a bounded incomplete bank is
+`CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`, never a full-slate mathematical claim.
 
 Assignment never cycles for policy-bearing requests. The output must retain the
 exact policy Entry-ID order once each. Immediately before export, an independent
