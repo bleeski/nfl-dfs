@@ -470,6 +470,53 @@ remains `MODEL_STATUS=PRIOR_ONLY` / `RELEASE_DECISION=DO_NOT_UPLOAD`; an audited
 review file is not an upload package or an economics/model-quality claim.
 Requests without a policy retain their SD1/SD2 selection and assignment behavior.
 
+## SD5 prior-only readable review
+
+A successful Showdown `prior_review` creates canonical
+`prior_only_readable_review.json` with schema
+`prior_only_readable_review_sd5_v1`, a self-contained escaped HTML rendering,
+and an extended review workbook. This is a presentation contract, not a new
+selection, evidence, model or release contract. The JSON records:
+
+- all four independent release truths and the explicit prior-only warning;
+- exactly one next operator action and every named blocker;
+- `reconciliation.status=PASS` with basis
+  `INDEPENDENT_EXACT_BYTE_REPARSE_AND_RECOMPUTATION`;
+- each requested Entry ID in original order, contest metadata, exact CPT/FLEX
+  DraftKings roster IDs, underlying-person IDs, names, teams, positions, slot
+  and lineup salaries, remaining salary, prior-only central estimates,
+  official-activity state and named role findings;
+- actual combined-person and Captain counts and percentages, exact integer
+  maxima, exclusions, canonical uniqueness, configured/effective overlap and
+  every requested-entry pair's actual underlying-person overlap;
+- source, expiry, model-omission and role observations; and
+- portable artifact paths, hyperlinks where local, exact artifact hashes and
+  every upstream hash label supplied by the prior-review outcome.
+
+Before publishing `PASS`, the writer independently reparses the exact salary
+CSV, reserved-entry CSV, assignment CSV, exported `DK_REVIEW_ENTRY` CSV and
+selection report. For policy-bearing runs it also reparses the normalized policy
+and independent audit, rechecks their embedded salary, entry, source-policy,
+normalized-policy and assignment hashes, and recomputes legality, salaries,
+canonical identities, person/Captain counts, limits, uniqueness and pairwise
+overlap from exact roster IDs. Names are display-only and never join people.
+Repeated names and distinct CPT/FLEX IDs retain exact identity and entry order.
+
+Canonical JSON and HTML are written atomically and reported with independent
+SHA-256 values. HTML markup is escaped. Every user/provider-controlled workbook
+string is stripped of illegal control characters for display and prefixed with
+an apostrophe when a leading or whitespace-prefixed `=`, `+`, `-` or `@` could
+be spreadsheet-active. This display escaping never rewrites the bound source
+bytes or exact IDs in JSON/CSV artifacts.
+
+Any missing file, hash change, malformed record, semantic disagreement, policy
+or audit mismatch, roster mutation, entry-order/metadata change or post-write
+hash failure raises a named `READABLE_REVIEW_*` discrepancy. The Cowork command
+then reports `FILE_VALID=false`, stops at stage `READABLE_REVIEW`, exits 2,
+preserves artifacts already written earlier in the run, and does not expose a
+new top-level `bulk_entry_csv` path. No readable-review success may alter
+`MODEL_STATUS=PRIOR_ONLY` or `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Showdown kicker-role evidence
 
 `role_evidence_json` is an optional auxiliary package manifest using schema
