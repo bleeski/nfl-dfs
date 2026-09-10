@@ -4,6 +4,82 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-10: Q1 settlement and reference-economics foundation
+
+- Added strict `nfl_settlement_request_v1` capture and immutable
+  `nfl_settlement_bundle_v1` publication. The package binds and copies salary,
+  reserved-entry, payout, assignment, pre-lock manifest, prediction/model,
+  versioned scenario, metric-registry, and complete standings bytes; it records
+  contest/draft-group/mode/economics, timestamps, parser/scoring/schema versions,
+  assignment semantic hash, and explicit evidence limitations. Existing package
+  paths refuse overwrite.
+- Added package-relative `replay_request.json`, exact reference output, and the
+  canonical `nfl_run_settlement_brief_v1`. Original or copied packages reparse,
+  rehash, reevaluate, and reconcile their inputs, assignment semantics,
+  reference-result hash, and brief without relying on conversation history.
+- Replaced the old toy-settlement implementation behind its compatibility
+  wrapper with `nfl_reference_settlement_v1`, deliberately independent of the
+  vectorized production economics path. It uses decimal six-place score
+  rounding, strict-above ranks, exact ties, rational-cent cash/ticket shares,
+  full-lineup duplication, multiple owned entries, and explicit
+  size/work/runtime refusal budgets. Production economics was not replaced.
+- Tightened payout boundaries to exact cash cents and whole ticket counts;
+  added explicit header-only zero-payout support for Q1. New scenario banks
+  carry `nfl_scenario_bank_v1`; legacy unversioned reads remain compatible, but
+  Q1 capture requires the versioned form. Build reports now emit the versioned
+  pre-lock run manifest, contest facts, and complete artifact-version map.
+- Added predeclared `config/metric_registry_q1_v1.json` plus a human-readable
+  registration summary. It fixes player, participation, ownership, duplication,
+  rank/payout-tail, portfolio utility/downside, runtime, and memory metrics;
+  uncertainty/ESS and slate-grouped temporal splits; minimum samples; and
+  promotion, noninferiority, demotion, rollback, and integrity rules. `learn`
+  hashes it, rejects post-evaluation registration, and stays registration-only
+  with `REGISTERED_METRIC_RESULTS_REQUIRED_Q6`; legacy boolean checks cannot
+  promote a model. No challenger was viewed or promoted while defining these
+  thresholds.
+- The legacy `settle --entries ... --standings ...` form now returns
+  `LEGACY_PARTIAL_SETTLEMENT_CAPTURE`, exit code 2, and `DO_NOT_UPLOAD`; it cannot
+  masquerade as Q1 complete. Complete capture and replay use `settle --request`
+  and `settle --replay`.
+- Golden coverage includes exchangeable fields, exact and boundary-spanning
+  ties, known duplicates, flat/top-heavy/satellite/zero payouts, last-paid rank,
+  multiple owned entries and owned duplicates, score-rounding boundaries,
+  incomplete standings/reserved coverage, contest/mode/draft-group/Entry-ID/hash/
+  version mismatch, source mutation, overwrite refusal, copied replay,
+  reference-versus-production cases, and metric predeclaration.
+- Verification: focused Q1 plus affected build/governance tests passed `46
+  passed in 7.10s`; final full pinned suite passed `542 passed, 1 skipped in
+  117.86s` on Python 3.13.7 using `.artifact-runtime/t-5530fad3` and separate
+  cache `.artifact-runtime/c-5530fad3`. A prior run with a 32-character temp ID
+  hit the known Windows long-path failure in one existing projection fixture;
+  that test passed alone with a short unique root and the short-root full rerun
+  passed. Doctor, compile/import, and `git diff --check` passed.
+- Controlled reference benchmark: 50,000 entries, 1,000 score groups, 150 owned
+  entries, and 51,000 work units completed exactly in 4.229390s with 35,013,145
+  peak traced Python bytes. A 100,000-entry run refused at its explicit 10-second
+  limit, proving the fail-closed runtime boundary rather than a production-scale
+  throughput claim.
+- The four truths remain independent and unchanged for model output:
+  `FILE_VALID` is artifact-specific, `EVIDENCE_STATE` remains evidence-derived,
+  `MODEL_STATUS=PRIOR_ONLY`, and `RELEASE_DECISION=DO_NOT_UPLOAD`. Q1 settlement
+  completion neither certifies a lineup nor establishes EV, ROI, ownership,
+  payout, or profitability calibration. C1 is the sole next `READY` item.
+
+### 2026-09-10: DEV0 merged baseline closed; Q1 started
+
+- Confirmed PR #9 on merged `main` commit
+  `7f083fbd77620d96e3f0571f09d93fdaeb32e377`; reviewed source commit
+  `652c855` is present as an ancestor and the engine-hardening changes are in
+  the current tree.
+- `git pull --ff-only` reported the branch already current. The only untracked
+  paths were the explicitly preserved `Claude outputs/` and W2/W4 session
+  prompts. No tracked modification needed reconciliation.
+- Recorded the merged DEV0 evidence (`516 passed, 1 skipped`, doctor, compile,
+  and whitespace checks from the reviewed development PR) and moved Q1 to
+  `IN_PROGRESS`. C1 and all later chunks remain `BLOCKED` pending Q1 closeout.
+- Started Q1 on `codex/q1-settlement-reference-economics`. No Classic feature
+  work is in scope.
+
 ### 2026-09-10: Classic and quantitative development backlog reprioritized
 
 Planning/documentation only; no engine, test, configuration, source, run, or

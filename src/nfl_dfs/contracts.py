@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from enum import StrEnum
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Iterable, Literal
@@ -775,13 +776,170 @@ class LateSwapManifest(FrozenModel):
         return self
 
 
-class SettlementBundle(FrozenModel):
-    settlement_id: str
-    contest_id: str
-    frozen_manifest_hash: str
-    standings_hash: str
-    scoring_reconciliation: dict[str, Any]
+class SettlementEvidenceIssue(FrozenModel):
+    state: Literal["MISSING", "STALE", "CONFLICTED", "MISMATCHED"]
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1)
+
+
+class SettlementArtifactRequest(FrozenModel):
+    name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
+    path: str = Field(min_length=1)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    artifact_version: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
+
+
+class SettlementArtifactSet(FrozenModel):
+    salary: SettlementArtifactRequest
+    entries: SettlementArtifactRequest
+    payouts: SettlementArtifactRequest
+    assignments: SettlementArtifactRequest
+    prelock_manifest: SettlementArtifactRequest
+    standings: SettlementArtifactRequest
+    metric_registry: SettlementArtifactRequest
+    predictions: tuple[SettlementArtifactRequest, ...] = Field(min_length=1)
+    scenarios: tuple[SettlementArtifactRequest, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def artifact_names_are_unique(self) -> "SettlementArtifactSet":
+        artifacts = (
+            self.salary,
+            self.entries,
+            self.payouts,
+            self.assignments,
+            self.prelock_manifest,
+            self.standings,
+            self.metric_registry,
+            *self.predictions,
+            *self.scenarios,
+        )
+        names = [artifact.name for artifact in artifacts]
+        if len(set(names)) != len(names):
+            raise ValueError("settlement artifact names must be unique")
+        return self
+
+
+class SettlementContestFacts(FrozenModel):
+    contest_id: str = Field(pattern=r"^[0-9]+$")
+    draft_group: str = Field(min_length=1)
+    mode: EngineMode
+    entry_fee: Decimal = Field(ge=0, decimal_places=2)
+    field_size: int = Field(ge=2)
+    objective: ContestObjective
+    advertised_prize_value: Decimal = Field(ge=0, decimal_places=2)
+    ticket_face_value: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+
+
+class SettlementVersions(FrozenModel):
+    salary_parser: Literal["dk_csv_v1"] = "dk_csv_v1"
+    entry_parser: Literal["dk_csv_v1"] = "dk_csv_v1"
+    payout_parser: Literal["nfl_payout_csv_v2"] = "nfl_payout_csv_v2"
+    standings_parser: Literal["nfl_standings_csv_v2"] = "nfl_standings_csv_v2"
+    assignment_parser: Literal["nfl_assignment_csv_v1"] = "nfl_assignment_csv_v1"
+    scoring: str = Field(min_length=1)
+    settlement: Literal["nfl_reference_settlement_v1"] = (
+        "nfl_reference_settlement_v1"
+    )
+    bundle_schema: Literal["nfl_settlement_bundle_v1"] = "nfl_settlement_bundle_v1"
+    brief_schema: Literal["nfl_run_settlement_brief_v1"] = (
+        "nfl_run_settlement_brief_v1"
+    )
+    metric_registry_schema: Literal["nfl_metric_promotion_registry_v1"] = (
+        "nfl_metric_promotion_registry_v1"
+    )
+
+
+class SettlementReleaseTruths(FrozenModel):
+    file_valid: bool = Field(alias="FILE_VALID")
+    evidence_state: ReleaseEvidenceState = Field(alias="EVIDENCE_STATE")
+    model_status: ModelStatus = Field(alias="MODEL_STATUS")
+    release_decision: ReleaseDecision = Field(alias="RELEASE_DECISION")
+
+
+class SettlementCaptureRequest(FrozenModel):
+    schema_version: Literal["nfl_settlement_request_v1"]
+    settlement_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
+    run_id: str = Field(min_length=1)
+    captured_at: datetime
     settled_at: datetime
+    contest: SettlementContestFacts
+    versions: SettlementVersions
+    artifacts: SettlementArtifactSet
+    release_truths: SettlementReleaseTruths
+    evidence_issues: tuple[SettlementEvidenceIssue, ...]
+    reference_budget: dict[str, int | float]
+
+    @field_validator("captured_at", "settled_at")
+    @classmethod
+    def settlement_timestamp_timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("settlement timestamps must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def settlement_times_are_ordered(self) -> "SettlementCaptureRequest":
+        if self.settled_at < self.captured_at:
+            raise ValueError("settled_at must not precede captured_at")
+        if (
+            self.release_truths.evidence_state is not ReleaseEvidenceState.PASS
+            or self.release_truths.model_status is not ModelStatus.PROSPECTIVELY_VALIDATED
+        ) and not self.evidence_issues:
+            raise ValueError(
+                "non-PASS evidence or non-validated models require an explicit evidence issue"
+            )
+        return self
+
+
+class SettledArtifact(FrozenModel):
+    name: str
+    role: Literal[
+        "SALARY",
+        "ENTRIES",
+        "PAYOUTS",
+        "ASSIGNMENTS",
+        "PRELOCK_MANIFEST",
+        "STANDINGS",
+        "METRIC_REGISTRY",
+        "PREDICTION",
+        "SCENARIO",
+    ]
+    relative_path: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    artifact_version: str
+    byte_count: int = Field(ge=0)
+
+
+class SettlementBundle(FrozenModel):
+    schema_version: Literal["nfl_settlement_bundle_v1"] = "nfl_settlement_bundle_v1"
+    settlement_id: str
+    run_id: str
+    capture_status: Literal["Q1_COMPLETE"] = "Q1_COMPLETE"
+    complete: Literal[True] = True
+    contest: SettlementContestFacts
+    versions: SettlementVersions
+    artifacts: tuple[SettledArtifact, ...]
+    assignment_semantic_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reference_result_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reference_result_path: str
+    brief_path: str
+    metric_registry_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    captured_at: datetime
+    settled_at: datetime
+    release_truths: SettlementReleaseTruths
+    evidence_issues: tuple[SettlementEvidenceIssue, ...]
+
+    @field_validator("captured_at", "settled_at")
+    @classmethod
+    def bundle_timestamp_timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("settlement bundle timestamps must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def bundle_times_are_ordered(self) -> "SettlementBundle":
+        if self.settled_at < self.captured_at:
+            raise ValueError("settlement bundle settled_at must not precede captured_at")
+        return self
 
 
 class ModelRegistryEntry(FrozenModel):

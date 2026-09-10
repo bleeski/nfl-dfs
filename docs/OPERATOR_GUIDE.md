@@ -244,6 +244,37 @@ list. It derives replaceable cells from exact DraftKings IDs, the certified
 prior assignment, game lock times, the current prefilled template, and the
 timezone-aware `--as-of` value.
 
+## Settlement capture and replay
+
+After the contest is final, prepare the strict `nfl_settlement_request_v1`
+described in `docs/DATA_CONTRACTS.md`. It must name and hash the frozen salary,
+reserved-entry, payout, selected-assignment, pre-lock manifest, prediction,
+scenario, complete standings, and predeclared metric-registry artifacts. Then
+run one command:
+
+```powershell
+.\nfl.ps1 settle `
+  --request 'C:\full\path\settlement_request.json' `
+  --output-dir 'C:\full\path\outputs\settlements'
+```
+
+Use a new `settlement_id`; an existing package is immutable and is never
+overwritten. A successful result is `Q1_SETTLEMENT_COMPLETE` and reports the
+package path, exact reference-result hash, runtime, memory, and the unchanged
+four pre-lock release truths. It does not authorize upload or promote a model.
+
+Copy the complete package anywhere and verify it with:
+
+```powershell
+.\nfl.ps1 settle --replay 'C:\full\path\copied-settlement-id'
+```
+
+Only `DETERMINISTIC_REPLAY_PASS` establishes that the copied immutable inputs,
+versions, assignment semantics, ranks, ties, duplicates, prizes, reference
+result, and run/settlement brief reconstruct exactly. The compatibility form
+with only `--entries` and `--standings` is partial, exits `2`, and is never a
+Q1-complete settlement.
+
 ## Safe failure behavior
 
 - Excel open: readable stop message; no partial workbook.

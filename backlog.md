@@ -66,18 +66,18 @@ do not delay a useful Classic review workflow until the quantitative research
 track is complete. Conversely, a legal Classic review portfolio does not close
 the quantitative weakness.
 
-The table below is the authoritative dev-session queue. `DEV0` is the only
-current `READY` item. When a chunk closes, update the table so only the next
-dependency-satisfied chunk is `READY`; the preferred tie-break order after
-`DEV0` is `Q1`, then `C1` through `C4`, then `Q2` onward. `Q1` starts the
-settlement/validation clock early; the bounded Classic sequence then delivers
-the useful prior-only workflow before the longer calibrated-model build.
+The table below is the authoritative dev-session queue. DEV0 and Q1 are done;
+`C1` is the only current `READY` item. When a chunk closes, update the table so
+only the next dependency-satisfied chunk is `READY`; the remaining preferred
+order is `C1` through `C4`, then `Q2` onward. Q1 started the settlement/
+validation clock early; the bounded Classic sequence now delivers the useful
+prior-only workflow before the longer calibrated-model build.
 
 | Order | ID | Track | Status | Depends on | Session outcome | Absorbs/supersedes |
 |---:|---|---|---|---|---|---|
-| 0 | DEV0 | Shared | `READY` | none | Reconcile and freeze the exact current development baseline without losing any existing work | current dirty-tree handoff and stale baseline text |
-| 1 | Q1 | Quantitative | `BLOCKED` | DEV0 | Settlement capture plus an auditable reference evaluator and registered promotion metrics | W7, W8, S4A |
-| 2 | C1 | Classic | `BLOCKED` | DEV0, Q1 contract decisions only | Multi-game Classic immutable intake, priors, projection, participation, and one-command prior-review orchestration | DL6, Classic portion of S6 |
+| 0 | DEV0 | Shared | `DONE` | none | Reconcile and freeze the exact current development baseline without losing any existing work | current dirty-tree handoff and stale baseline text |
+| 1 | Q1 | Quantitative | `DONE` | DEV0 | Settlement capture plus an auditable reference evaluator and registered promotion metrics | W7, W8, S4A |
+| 2 | C1 | Classic | `READY` | DEV0, Q1 contract decisions only | Multi-game Classic immutable intake, priors, projection, participation, and one-command prior-review orchestration | DL6, Classic portion of S6 |
 | 3 | C2 | Classic | `BLOCKED` | C1 | Classic policy contract, candidate generation, joint portfolio selection, and exact Entry-ID assignment | Classic portion of S5 and W9 |
 | 4 | C3 | Classic | `BLOCKED` | C2 | Independent audit, readable review, exact-template export, deterministic replay, and 1/3/20/150-entry benchmarks | DL7, W10, Classic review portion of S8/S9 |
 | 5 | C4 | Classic | `BLOCKED` | C3, current operator files/evidence | Current real-slate Cowork/Linux rehearsal and operator handoff | DL8 |
@@ -91,6 +91,13 @@ the useful prior-only workflow before the longer calibrated-model build.
 | 13 | QC1 | Shared | `BLOCKED` | C4, C5, Q7 | Integrate the promoted objective into Classic and Showdown, including conditional late swap, without weakening release gates | remaining W13 and full production promotion |
 
 ### DEV0 — Reconcile and freeze the current development baseline
+
+Status: `DONE` on merged `main` commit
+`7f083fbd77620d96e3f0571f09d93fdaeb32e377` (PR #9; reviewed source commit
+`652c855`). The merged baseline preserved the excluded user/generated paths,
+reproduced `516 passed, 1 skipped`, and passed doctor, compile, and whitespace
+checks. Q1 began from that exact commit after `git pull --ff-only` reported the
+branch current.
 
 - Goal: make every later session start from one reproducible, reviewed code
   state rather than the deleted SD5 branch plus a large uncommitted layer.
@@ -114,6 +121,26 @@ the useful prior-only workflow before the longer calibrated-model build.
     actual baseline and the next `READY` chunk.
 
 ### Q1 — Settlement and reference-economics foundation
+
+Status: `DONE` on branch `codex/q1-settlement-reference-economics`, based on
+merged-main commit `7f083fbd77620d96e3f0571f09d93fdaeb32e377`. Q1 adds the
+strict immutable `nfl_settlement_bundle_v1`, complete-field copied-package
+replay, the exact independent `nfl_reference_settlement_v1`, the predeclared
+`nfl_metric_promotion_registry_v1`, and the canonical
+`nfl_run_settlement_brief_v1`. The old two-file capture is explicitly partial
+and cannot report Q1 completion.
+
+Acceptance evidence: focused settlement/payout/contract/CLI/build tests passed
+`46 passed in 7.10s`; the final complete pinned suite passed `542 passed, 1
+skipped in 117.86s` using unique workspace-local roots
+`.artifact-runtime/t-5530fad3` and `.artifact-runtime/c-5530fad3`. Doctor,
+compile/import, and `git diff --check` passed. Copied-package replay, source
+mutation, immutable overwrite, exact ties/duplicates/tickets/boundaries,
+multiple-owned-entry, version/hash/contest/mode/draft-group/Entry-ID mismatch,
+and predeclaration tests passed. A 50,000-entry exact zero-payout benchmark
+completed in 4.229390s with 35,013,145 peak traced Python bytes; a 100,000-entry
+run refused truthfully at its declared 10-second runtime budget rather than
+approximating.
 
 - Goal: establish the truth and measurement plane before fitting or promoting
   any ownership, duplication, field, or portfolio model.
@@ -780,14 +807,11 @@ is the reason.
 
 ### 2026-09-10 current development action
 
-**Only `DEV0` is `READY`.** Reconcile and freeze the exact current development
-baseline before starting Classic or quantitative code. Preserve every existing
-change and user/generated path; run the complete pinned verification; prepare an
-explicit reviewed path list; and do not commit, push, or open a PR without
-separate authorization.
-
-When DEV0 closes, make `Q1` the sole `READY` chunk. Q1 starts immutable
-settlement capture, reference economics, and predeclared validation metrics.
+**Only `C1` is `READY`.** DEV0 and Q1 are done. Begin the bounded multi-game
+Classic immutable intake, prior projection, participation, and one-command
+prior-review tranche using `docs/session-prompts/C1-classic-intake-prior-review.md`.
+Do not begin C2 policy/candidate/portfolio work, use the production field or
+payout economics path, or change `PRIOR_ONLY / DO_NOT_UPLOAD` truth.
 After Q1's contracts are fixed, execute C1 through C4 in order to deliver the
 prior-only Classic review workflow. Then continue Q2 through Q7 and QC1 to fix
 the central-estimate/uncalibrated portfolio weakness for both modes. C5 may be

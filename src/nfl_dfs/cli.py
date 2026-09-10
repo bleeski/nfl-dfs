@@ -57,6 +57,10 @@ from .hashing import content_hash, sha256_file
 from .late_swap import LateSwapRunError, govern_late_swap
 from .learning import evaluate_challenger, should_rollback
 from .lineups import read_assignment_csv, validate_lineup
+from .metric_registry import (
+    load_metric_registry,
+    require_registry_precedes_evaluation,
+)
 from .opportunity import load_opportunity_model
 from .optimizer import generate_candidates
 from .ownership import OwnershipBracket, cold_start_states
@@ -92,7 +96,12 @@ from .selection import assignments_for_entries, select_prior_lineups
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .release import derive_release_policy
 from .scenario_store import save_scenario_bank
-from .settlement import parse_standings, require_entry_coverage
+from .settlement import (
+    capture_settlement_bundle,
+    parse_standings,
+    replay_settlement_package,
+    require_entry_coverage,
+)
 from .simulation import lineup_score_matrix, simulate_factor_bank
 from .system import doctor, live_memory_limit, workbook_is_closed
 from .workbook import (
@@ -1622,6 +1631,7 @@ def command_build(args: argparse.Namespace) -> int:
         for player in model.players
     )
     report = {
+        "schema_version": "nfl_prelock_run_manifest_v1",
         "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "DIAGNOSTIC_ASSIGNMENTS_READY_DO_NOT_UPLOAD",
@@ -1636,6 +1646,10 @@ def command_build(args: argparse.Namespace) -> int:
         "assignment_sha256": sha256_file(assignment_path),
         "input_hashes": input_hashes,
         "contest_parameters": {
+            "contest_id": entries.authorizations[0].contest_id,
+            "draft_group": slate.draft_group,
+            "mode": slate.mode.value,
+            "entry_fee": entries.authorizations[0].entry_fee,
             "field_size": args.field_size,
             "objective": ContestObjective(args.objective).value,
             "advertised_prize_value": args.advertised_prize_value,
@@ -1654,6 +1668,17 @@ def command_build(args: argparse.Namespace) -> int:
             "DESIGN": design_count,
             "SELECT": select_count,
             "REFEREE": referee_count,
+        },
+        "artifact_versions": {
+            "salary": "dk_salary_csv_v1",
+            "entries": "dk_entry_csv_v1",
+            "payouts": "nfl_payout_contract_v1",
+            "assignments": "nfl_assignment_csv_v1",
+            "team_projections": "nfl_team_projections_csv_v1",
+            "player_opportunities": "nfl_player_opportunities_csv_v1",
+            "DESIGN": "nfl_scenario_bank_v1",
+            "SELECT": "nfl_scenario_bank_v1",
+            "REFEREE": "nfl_scenario_bank_v1",
         },
         "scenario_artifacts": scenario_artifacts,
         "field_sample_size": sample_size,
@@ -1936,21 +1961,71 @@ def command_late_swap(args: argparse.Namespace) -> int:
 
 
 def command_settle(args: argparse.Namespace) -> int:
+    if args.request and args.replay:
+        raise ValueError("settle accepts only one of --request or --replay")
+    if (args.request or args.replay) and (args.entries or args.standings):
+        raise ValueError(
+            "legacy --entries/--standings cannot be mixed with --request or --replay"
+        )
+    if args.replay:
+        _print_json(replay_settlement_package(args.replay))
+        return 0
+    if args.request:
+        outcome = capture_settlement_bundle(args.request, args.output_dir)
+        bundle = outcome.bundle
+        _print_json(
+            {
+                "status": "Q1_SETTLEMENT_COMPLETE",
+                "capture_status": bundle.capture_status,
+                "settlement_id": bundle.settlement_id,
+                "run_id": bundle.run_id,
+                "package_path": outcome.package_path,
+                "reference_result_hash": bundle.reference_result_hash,
+                "assignment_semantic_hash": bundle.assignment_semantic_hash,
+                "artifact_count": len(bundle.artifacts),
+                "elapsed_seconds": outcome.elapsed_seconds,
+                "peak_python_memory_bytes": outcome.peak_python_memory_bytes,
+                **bundle.release_truths.model_dump(mode="json", by_alias=True),
+                "note": (
+                    "Settlement capture completion does not change the frozen pre-lock "
+                    "release truths or make a lineup upload-ready."
+                ),
+            }
+        )
+        return 0
+    if not args.entries or not args.standings:
+        raise ValueError(
+            "settle requires --request for a Q1-complete bundle, --replay for copied-package "
+            "verification, or both --entries and --standings for a legacy partial check"
+        )
     entries = parse_entries(args.entries)
     snapshot = parse_standings(args.standings)
     require_entry_coverage(snapshot, {entry.entry_id for entry in entries.authorizations})
     result = {
-        "status": "SETTLEMENT_CAPTURED",
+        "status": "LEGACY_PARTIAL_SETTLEMENT_CAPTURE",
+        "q1_complete": False,
+        **_blocked_truth_values(),
         "standings_sha256": snapshot.sha256,
         "rows": len(snapshot.rows),
         "reserved_entry_coverage": len(entries.authorizations),
-        "note": "Projection, ownership, and payout grading remains version-bound to the frozen pre-lock manifest.",
+        "blockers": [
+            "Q1_COMPLETE_REQUEST_REQUIRED: legacy coverage does not bind salaries, payouts, "
+            "assignments, predictions, scenarios, versions, or the metric registry"
+        ],
+        "note": "This compatibility check is intentionally not a Q1 settlement bundle.",
     }
     _print_json(result)
-    return 0
+    return 2
 
 
 def command_learn(args: argparse.Namespace) -> int:
+    registry = load_metric_registry(args.metric_registry)
+    evaluated_at = (
+        datetime.fromisoformat(args.challenger_evaluated_at.replace("Z", "+00:00"))
+        if args.challenger_evaluated_at
+        else datetime.now(timezone.utc)
+    )
+    require_registry_precedes_evaluation(registry, evaluated_at)
     decision = evaluate_challenger(
         comparable_settled_slates=args.comparable_slates,
         reproducible=args.reproducible,
@@ -1966,18 +2041,27 @@ def command_learn(args: argparse.Namespace) -> int:
         integrity_failure=args.integrity_failure,
         consecutive_registered_degradation_windows=args.degradation_windows,
     )
+    promotion_failures = tuple(
+        dict.fromkeys((*decision.reasons, "REGISTERED_METRIC_RESULTS_REQUIRED_Q6"))
+    )
     _print_json(
         {
-            "promote": decision.promote,
-            "tier": decision.tier,
-            "influence_cap": decision.influence_cap,
-            "promotion_failures": decision.reasons,
+            "promote": False,
+            "tier": "COLD",
+            "influence_cap": 0.0,
+            "promotion_failures": promotion_failures,
+            "legacy_boolean_checks_passed": decision.promote,
             "rollback": rollback,
             "rollback_reason": rollback_reason,
+            "metric_registry_id": registry.registry_id,
+            "metric_registry_sha256": registry.sha256,
+            "metric_registry_registered_at": registry.registered_at.isoformat(),
+            "challenger_evaluated_at": evaluated_at.isoformat(),
+            "registry_policy_status": "REGISTRATION_ONLY_NO_MODEL_PROMOTION",
             "roi_policy": "realized ROI is descriptive and was not used in this decision",
         }
     )
-    return 0 if decision.promote else 2
+    return 2
 
 
 def command_status(args: argparse.Namespace) -> int:
@@ -3241,8 +3325,11 @@ def build_parser() -> argparse.ArgumentParser:
     late.add_argument("--as-of", required=True)
     late.set_defaults(func=command_late_swap)
     settle = subparsers.add_parser("settle")
-    settle.add_argument("--entries", required=True)
-    settle.add_argument("--standings", required=True)
+    settle.add_argument("--request")
+    settle.add_argument("--replay")
+    settle.add_argument("--entries")
+    settle.add_argument("--standings")
+    settle.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR / "settlements"))
     settle.set_defaults(func=command_settle)
     learn = subparsers.add_parser("learn")
     learn.add_argument("--comparable-slates", type=int, required=True)
@@ -3259,6 +3346,11 @@ def build_parser() -> argparse.ArgumentParser:
         learn.add_argument(f"--{flag}", action=argparse.BooleanOptionalAction, default=False)
     learn.add_argument("--realized-roi", type=float)
     learn.add_argument("--degradation-windows", type=int, default=0)
+    learn.add_argument(
+        "--metric-registry",
+        default=str(PROJECT_ROOT / "config" / "metric_registry_q1_v1.json"),
+    )
+    learn.add_argument("--challenger-evaluated-at")
     learn.set_defaults(func=command_learn)
     status = subparsers.add_parser("status")
     status.add_argument("--manifest", required=True)

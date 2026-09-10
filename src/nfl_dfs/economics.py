@@ -7,7 +7,7 @@ import numpy as np
 
 from .contracts import PayoutTier, SlateContract
 from .field import FieldLineup
-from .payouts import divided_payout
+from .reference_settlement import ReferenceFieldEntry, evaluate_reference_settlement
 from .simulation import SimulationResult, lineup_score_matrix
 
 
@@ -174,9 +174,19 @@ def evaluate_candidates_against_field(
 def exact_toy_field_settlement(
     scores: list[float], tiers: tuple[PayoutTier, ...]
 ) -> list[float]:
-    result = [0.0] * len(scores)
-    for index, score in enumerate(scores):
-        rank = 1 + sum(other > score for other in scores)
-        ties = sum(other == score for other in scores)
-        result[index] = divided_payout(rank, ties, tiers)
-    return result
+    """Compatibility wrapper over the Q1 independent reference evaluator."""
+
+    if not scores:
+        return []
+    result = evaluate_reference_settlement(
+        (
+            ReferenceFieldEntry(
+                entry_id=str(index), score=score, lineup_key=f"toy-lineup-{index}"
+            )
+            for index, score in enumerate(scores)
+        ),
+        tiers,
+        field_size=len(scores),
+    )
+    by_id = {row.entry_id: row for row in result.rows}
+    return [float(by_id[str(index)].gross_prize.cents / 100) for index in range(len(scores))]

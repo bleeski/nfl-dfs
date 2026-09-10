@@ -1,5 +1,17 @@
 # Implementation Status
 
+## Current development program — 2026-09-10
+
+DEV0 is complete on merged `main` commit
+`7f083fbd77620d96e3f0571f09d93fdaeb32e377` (PR #9; reviewed source
+`652c855`). That baseline retained the excluded user/generated paths and
+recorded `516 passed, 1 skipped` plus doctor, compile, and whitespace checks. Q1
+is now complete on `codex/q1-settlement-reference-economics`: focused tests
+passed 46/46 and the final full suite passed `542 passed, 1 skipped` in 117.86s;
+doctor, compile/import, whitespace, mutation, overwrite, and copied-package
+replay checks passed. C1 is the sole `READY` item. Every later item remains
+blocked.
+
 ## Current Showdown readiness — 2026-09-09
 
 The recorded pre-SD2 real NE–SEA two-entry template completed `cowork-run --profile
@@ -120,8 +132,28 @@ acceptance are SD6.
   one entry fee. Mixed-contest exports fail closed until per-contest economics
   and allocation are implemented.
 - Payouts enforce contiguous paid ranks, monotonic tiers, advertised-value
-  reconciliation, finite values, field-size bounds, cash/ticket distinction,
-  and exact tied-rank division.
+  reconciliation, finite exact-cent cash values, whole ticket counts,
+  field-size bounds, cash/ticket distinction, and exact tied-rank division.
+- Q1 settlement capture consumes a strict hash- and version-bound request and
+  atomically publishes a never-overwritten copied package containing every
+  salary, reserved-entry, payout, assignment, pre-lock prediction/model,
+  scenario, metric-registry, and complete standings artifact. It rejects
+  contest, draft-group, mode, Entry-ID, artifact, version, rank, prize, and
+  source-mutation disagreement. The generated machine-readable brief and
+  package-relative replay request reconstruct without conversation history.
+- The Q1 reference evaluator is independent of the vectorized production
+  economics path. Decimal six-place score rounding, strict-above ranks, exact
+  tie occupancy, rational-cent cash/ticket division, complete-lineup
+  duplication, and multiple owned entries are evaluated exactly within an
+  explicit size/work/runtime budget or refused with a named blocker. A copied
+  package must reproduce the same semantic assignment and reference-result
+  hashes.
+- `config/metric_registry_q1_v1.json` predeclares player-outcome,
+  participation, ownership, duplication, rank/payout-tail, portfolio-risk,
+  runtime, and memory metrics with uncertainty, ESS, temporal split, sample,
+  promotion, noninferiority, demotion, and rollback requirements. `learn`
+  refuses a registry that did not precede challenger evaluation. No model was
+  promoted.
 - Manual assignments can be independently validated and exported into only the
   blank, authorized Entry-ID rows. Untouched lines preserve their exact bytes,
   including original BOM state. The final CSV is reparsed and SHA-256 bound.
@@ -180,10 +212,11 @@ acceptance are SD6.
   identities and source bytes stay in the hash-bound artifacts. The output has
   explicit print areas, repeated headings and normalized freeze panes, opens
   normally in native Excel, and renders without formula errors.
-- Parquet scenario storage, rolling-origin challenger fitting, model promotion
-  tiers, multi-slate rollback rules, standings capture, and locked-cell late-swap
-  audit are implemented. The SQLite registry and lifecycle transition guard are
-  library components exercised by tests but are not yet wired into live runs.
+- Versioned Parquet scenario storage, rolling-origin challenger fitting, model
+  promotion tiers, multi-slate rollback rules, Q1 settlement capture, and
+  locked-cell late-swap audit are implemented. The SQLite registry and lifecycle
+  transition guard are library components exercised by tests but are not yet
+  wired into live runs.
 
 ## Deliberately diagnostic or externally gated
 

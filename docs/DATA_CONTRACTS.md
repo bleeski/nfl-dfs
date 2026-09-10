@@ -664,7 +664,10 @@ rank_start,rank_end,prize_type,value
 
 `prize_type` is `CASH` or `TICKET`. Ranges are contiguous and non-overlapping.
 For `TICKET`, `value` is the number of tickets; certification multiplies it by
-the separately supplied ticket face value.
+the separately supplied ticket face value. Cash and advertised values must be
+exact cents; ticket counts must be whole numbers. A contest with no paid ranks
+uses a header-only payout file and exact advertised value `0.00`; this explicit
+zero-payout contract is accepted only by the Q1 settlement path.
 
 ## Pre-lock official activity evidence (compatibility path)
 
@@ -785,11 +788,151 @@ the release decision is `CERTIFIED_UPLOAD_PACKAGE`.
 
 ## Standings settlement
 
-The normalized standings adapter currently requires columns including:
+Q1 uses normalized complete-field standings with columns including:
 
 ```text
 EntryId,Rank,Points,Prize,Lineup
 ```
 
 All operated Entry IDs must be present before the portfolio can be called settled.
-Original standings bytes and their SHA-256 remain the authority.
+Every field Entry ID must be unique, points finite, prize an exact non-negative
+cent amount, and `Lineup` a nonempty complete-lineup canonical key. For an
+operated entry, `Lineup` must exactly equal the canonical key independently
+reconstructed from the frozen salary file and selected assignment. A
+Q1-complete settlement requires exactly `field_size` rows and rejects a rank or
+prize that disagrees with the independent reference evaluator. Original
+standings bytes and their SHA-256 remain the authority.
+
+## Q1 settlement request and immutable bundle
+
+The complete one-command capture is:
+
+```powershell
+.\nfl.ps1 settle --request '<path>\settlement_request.json' --output-dir 'outputs\settlements'
+```
+
+The request is strict JSON schema `nfl_settlement_request_v1`. It contains:
+
+```json
+{
+  "schema_version": "nfl_settlement_request_v1",
+  "settlement_id": "unique-never-reused-id",
+  "run_id": "the-frozen-prelock-run-id",
+  "captured_at": "2026-09-13T16:00:00-04:00",
+  "settled_at": "2026-09-14T00:30:00-04:00",
+  "contest": {
+    "contest_id": "193028206",
+    "draft_group": "exact-draft-group",
+    "mode": "CLASSIC",
+    "entry_fee": "5.00",
+    "field_size": 2,
+    "objective": "SMALL_GPP",
+    "advertised_prize_value": "20.00",
+    "ticket_face_value": null
+  },
+  "versions": {
+    "salary_parser": "dk_csv_v1",
+    "entry_parser": "dk_csv_v1",
+    "payout_parser": "nfl_payout_csv_v2",
+    "standings_parser": "nfl_standings_csv_v2",
+    "assignment_parser": "nfl_assignment_csv_v1",
+    "scoring": "draftkings_nfl_scoring_2026_fixture_v1",
+    "settlement": "nfl_reference_settlement_v1",
+    "bundle_schema": "nfl_settlement_bundle_v1",
+    "brief_schema": "nfl_run_settlement_brief_v1",
+    "metric_registry_schema": "nfl_metric_promotion_registry_v1"
+  },
+  "artifacts": {
+    "salary": {"name": "salary", "path": "salary.csv", "sha256": "<64 lower hex>", "artifact_version": "dk_salary_csv_v1"},
+    "entries": {"name": "entries", "path": "entries.csv", "sha256": "<64 lower hex>", "artifact_version": "dk_entry_csv_v1"},
+    "payouts": {"name": "payouts", "path": "payouts.csv", "sha256": "<64 lower hex>", "artifact_version": "nfl_payout_contract_v1"},
+    "assignments": {"name": "assignments", "path": "assignments.csv", "sha256": "<64 lower hex>", "artifact_version": "nfl_assignment_csv_v1"},
+    "prelock_manifest": {"name": "prelock_manifest", "path": "build.json", "sha256": "<64 lower hex>", "artifact_version": "nfl_prelock_run_manifest_v1"},
+    "standings": {"name": "standings", "path": "standings.csv", "sha256": "<64 lower hex>", "artifact_version": "nfl_standings_csv_v2"},
+    "metric_registry": {"name": "metric_registry", "path": "metric_registry.json", "sha256": "<64 lower hex>", "artifact_version": "nfl_metric_promotion_registry_v1"},
+    "predictions": [{"name": "team_projections", "path": "team.csv", "sha256": "<64 lower hex>", "artifact_version": "nfl_team_projections_csv_v1"}],
+    "scenarios": [{"name": "REFEREE", "path": "referee.parquet", "sha256": "<64 lower hex>", "artifact_version": "nfl_scenario_bank_v1"}]
+  },
+  "release_truths": {
+    "FILE_VALID": true,
+    "EVIDENCE_STATE": "UNKNOWN",
+    "MODEL_STATUS": "PRIOR_ONLY",
+    "RELEASE_DECISION": "DO_NOT_UPLOAD"
+  },
+  "evidence_issues": [
+    {"state": "MISSING", "code": "PROSPECTIVE_VALIDATION_ABSENT", "detail": "No prospective validation corpus yet."}
+  ],
+  "reference_budget": {"max_entries": 200000, "max_work_units": 1000000, "max_runtime_seconds": 10.0}
+}
+```
+
+All artifact paths may be relative to the request. The request must include at
+least one frozen prediction/model artifact and one versioned scenario bank.
+The pre-lock manifest must be `nfl_prelock_run_manifest_v1` and independently
+bind the run, contest facts, release truths, input and assignment hashes,
+artifact versions, and scenario hashes. The capture rejects contest, mode,
+draft-group, Entry-ID, hash, version, field-completeness, rank, prize, or source-
+mutation disagreement. Missing, stale, conflicted, or mismatched model evidence
+is recorded explicitly in `evidence_issues`; settlement capture never changes
+the pre-lock release decision.
+
+The command creates `outputs/settlements/<settlement_id>/` only when it does not
+already exist. It copies every immutable input under `artifacts/` and writes:
+
+- `settlement_bundle.json` (`nfl_settlement_bundle_v1`);
+- `reference_settlement.json` (exact referee output);
+- `run_settlement_brief.json` (`nfl_run_settlement_brief_v1`); and
+- `replay_request.json` with package-relative paths.
+
+No file in an existing package is overwritten. Copying that directory does not
+change its meaning. Verify either original or copied bytes with:
+
+```powershell
+.\nfl.ps1 settle --replay '<path>\<settlement_id>'
+```
+
+`DETERMINISTIC_REPLAY_PASS` means every copied input hash, version, semantic
+assignment, rank, tie, duplication, prize, reference-result hash, and canonical
+brief was independently reconstructed. It is not an upload or model-promotion
+decision. The old `settle --entries ... --standings ...` form remains only as a
+`LEGACY_PARTIAL_SETTLEMENT_CAPTURE`, exits `2`, reports `DO_NOT_UPLOAD`, and can
+never claim Q1 completeness.
+
+## Q1 independent reference economics
+
+`nfl_reference_settlement_v1` is deliberately separate from the NumPy
+production evaluator. It rounds scores with decimal `ROUND_HALF_EVEN` to
+`0.000001`, assigns rank as one plus the exact number of entries strictly above,
+forms exact tie groups, and divides every cash cent and ticket-face-value cent
+across all occupied tied ranks. Money is retained as rational cents so even a
+three-way split of one dollar is exact rather than a binary-float approximation.
+Complete-lineup duplication is counted from the full canonical lineup key, and
+all operated entries are present in the same field, so they affect one another's
+ranks, ties, duplicates, and payouts.
+
+Evaluation is exact or refused. `max_entries`, `max_work_units`, and
+`max_runtime_seconds` are persisted in the request and result. An exceeded
+budget produces a named `REFERENCE_*_BUDGET_EXCEEDED` error; there is no sampled
+or extrapolated fallback.
+
+## Q1 metric and promotion registration
+
+`config/metric_registry_q1_v1.json` is the predeclared
+`nfl_metric_promotion_registry_v1` artifact. It registers player-outcome
+accuracy/calibration, participation, ownership calibration, complete-lineup
+duplication, rank/payout tails, portfolio utility/downside, runtime, and memory.
+Every metric declares its definition, direction, unit, interval method,
+effective-sample-size report, minimum sample, practical promotion delta,
+noninferiority margin, demotion threshold, rollback threshold, and rationale.
+The registry also fixes slate-grouped temporal splits, holdout embargo,
+multiple-testing control, runtime/memory caps, and fail-closed missing-metric
+behavior.
+
+The `learn` command hashes and validates this artifact and requires its
+timezone-aware `registered_at` to precede `--challenger-evaluated-at` (or the
+current command time). A registry created after evaluation is rejected as
+`METRIC_REGISTRY_NOT_PREDECLARED`. Until Q6 implements the complete registered
+metric-result artifact, `learn` also reports
+`REGISTERED_METRIC_RESULTS_REQUIRED_Q6`, keeps `promote=false`, and cannot use
+legacy boolean diagnostics to promote. This registration does not promote any
+model.
