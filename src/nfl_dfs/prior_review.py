@@ -862,7 +862,12 @@ def run_prior_review(
             reports["official_status"] = {
                 "scope": "SUPPLIED_ROWS_ONLY_NOT_FULL_POOL_ACTIVITY_CERTIFICATION",
                 "rows": len(snapshot.statuses), "inactive_dk_ids": list(official_exclusions),
+                "statuses": dict(sorted(snapshot.statuses.items())),
                 "source_urls": dict(sorted(snapshot.source_url_by_id.items())),
+                "observed_at": {
+                    dk_id: observed.astimezone(timezone.utc).isoformat()
+                    for dk_id, observed in sorted(snapshot.observed_at_by_id.items())
+                },
             }
         except (OSError, ValueError) as exc:
             return PriorReviewOutcome(
@@ -1351,7 +1356,17 @@ def run_prior_review(
         "assignments_sha256": assignments_hash,
         "reserved_entries": entry_ids,
         "lineups": [lineup.as_payload(names) for lineup in lineups],
+        "selected_prior_points_by_dk_id": {
+            dk_id: scores.by_dk_id[dk_id]
+            for dk_id in sorted({dk_id for lineup in lineups for dk_id in lineup.roster})
+        },
         "participation": contract.as_report(),
+        "participation_detail": {
+            "unavailable_people": list(contract.unavailable_people),
+            "degraded_people": list(contract.degraded_people),
+            "operator_excluded_people": list(contract.operator_excluded_people),
+            "status_by_person": dict(sorted(contract.status_by_person.items())),
+        },
         "redistribution": redistribution,
         "selection": selection,
         "prior_scores": scores.as_report(),
@@ -1360,7 +1375,10 @@ def run_prior_review(
             " ownership aware, and not EV, ROI, win probability or edge."
         ),
     }
-    write_run_record(selection_dir / "selection_report.json", selection_report)
+    selection_report_path = selection_dir / "selection_report.json"
+    selection_report_hash = write_run_record(selection_report_path, selection_report)
+    artifacts["selection_report"] = str(selection_report_path)
+    hashes["selection_report"] = selection_report_hash
     reports["selection"] = selection_report
     stages.append(
         _stage(

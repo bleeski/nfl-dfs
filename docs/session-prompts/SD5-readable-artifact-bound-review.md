@@ -30,16 +30,25 @@ Every generated portfolio remains `PRIOR_ONLY / DO_NOT_UPLOAD`.
 
 ## Actual SD4 baseline and Git safeguards
 
-SD4 was implemented on branch
-`codex/sd4-enforce-and-audit-portfolio-controls` from verified
-`origin/main` commit `2e045d53afcc5d9f1d2363f09d8778e77f1b4284`, which contains SD3
-implementation commit `e71961485dbfcdae299caaa325c35efc866427cd`.
-At SD4 closeout the implementation and documentation changes are intentionally
-uncommitted and the index is empty. Do not infer that GitHub `main` contains SD4.
-Recheck actual HEAD, branch, ancestry, index and working tree before editing.
-If the user supplies a later merged SD4 commit, verify it and live remote state
-before selecting a base. Otherwise continue safely in place on the existing SD4
-branch; do not branch from a `main` that lacks the uncommitted SD4 work.
+SD4 implementation commit
+`25564e364f6fce5a04b47e8a1812c4afa1dba5bb` was merged through GitHub PR #7.
+A live `git fetch --prune origin` on 2026-09-09 verified GitHub `main` at merge
+commit `8d94b4e9a3c8593b152e8a6e8822a4ba1237bfa6`; its parents are the prior
+`main` commit `2e045d53afcc5d9f1d2363f09d8778e77f1b4284` and the exact SD4
+implementation commit. The merge tree matches the SD4 implementation tree, and
+`refs/heads/codex/sd4-enforce-and-audit-portfolio-controls` is absent remotely.
+Recheck the live remote, actual HEAD, branch, ancestry, index and working tree
+before editing; do not rely on this recorded snapshot if the repository moves.
+
+At this handoff the local checkout still uses the merged source branch
+`codex/sd4-enforce-and-audit-portfolio-controls` at
+`25564e364f6fce5a04b47e8a1812c4afa1dba5bb`, with its upstream marked gone.
+The index is empty. Local `main` is not an assumed base. Verify that live
+`origin/main` still contains the SD4 implementation, then create or use local
+branch `codex/sd5-readable-artifact-bound-review` from the verified
+`origin/main` while carrying this refreshed prompt and unrelated dirt unchanged.
+If ancestry or checkout safety cannot be established, stop with the exact Git
+blocker instead of merging, rebasing, stashing or overwriting anything.
 
 The final SD4 pinned Windows suite was 475 passed and 1 skipped in 71.33s. The
 skip was the existing Windows symlink-creation privilege case. Doctor and
@@ -50,20 +59,18 @@ before export. Its default bank is capped at 32 candidates. An optimal result is
 only optimal over that actual bank when coverage is incomplete. Policy-free
 behavior is unchanged.
 
-Preserve **every** existing change, including the tracked refreshed
-`docs/session-prompts/SD4-enforce-and-audit-portfolio-controls.md`, all SD4
-source/test/documentation changes, untracked `src/nfl_dfs/portfolio_enforcement.py`,
-`tests/test_portfolio_enforcement.py`, this SD5 prompt, `Claude outputs/`,
+Preserve **every** existing change, including this refreshed tracked SD5 prompt
+and untracked `Claude outputs/`,
 `docs/session-prompts/W2-expiry-and-selection-objective.md` and
 `docs/session-prompts/W4-cowork-prior-only-profile.md`. Do not edit, delete,
-overwrite or absorb unrelated untracked paths into SD5. Preserve supplied bytes,
-byte-sensitive fixtures, prior outputs and generated evidence.
+overwrite or absorb those unrelated untracked paths into SD5. Preserve supplied
+bytes, byte-sensitive fixtures, prior outputs and generated evidence.
 
-No reset, clean, stash, rebase, pull, merge, broad formatting, dependency
-upgrade, staging, commit, push or account action. Never use `git add .` or
-`git add -A`. A fetch is allowed only when needed to verify user-supplied remote
-state; it must not overwrite or replace local work. If checkout safety or the
-actual SD4 base cannot be established, stop with the exact Git blocker.
+Use a fetch rather than a pull to refresh remote metadata. No reset, clean,
+stash, rebase, pull, merge, broad formatting, dependency upgrade, staging,
+commit, push or account action. Never use `git add .` or `git add -A`. The fetch
+must not overwrite or replace local work. If checkout safety or the actual SD4
+base cannot be established, stop with the exact Git blocker.
 
 Before code edits, mark SD5 `IN_PROGRESS` and record the date, actual starting
 HEAD/branch, scope and all existing dirt in the priority tracker. Use pinned

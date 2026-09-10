@@ -354,12 +354,21 @@ def _prepared_run(tmp_path: Path, *, expires_at: datetime):
     def project(**kwargs):
         output = Path(kwargs["output_dir"])
         output.mkdir(parents=True, exist_ok=True)
+        ledger_path = output / "source_ledger.json"
+        ledger_path.write_text(
+            json.dumps({"schema_version": "nfl_source_ledger_v2", "fixture": True}),
+            encoding="utf-8",
+        )
         return _StubProjection(
             output_dir=str(output),
             team_projections=str(tmp_path / "team_projections.csv"),
             player_opportunities=str(tmp_path / "player_opportunities.csv"),
-            source_ledger=str(output / "source_ledger.json"),
-            hashes={"team_projections": "0" * 64},
+            source_ledger=str(ledger_path),
+            hashes={
+                "team_projections": sha256_file(tmp_path / "team_projections.csv"),
+                "player_opportunities": sha256_file(tmp_path / "player_opportunities.csv"),
+                "source_ledger": sha256_file(ledger_path),
+            },
             input_hashes={},
             # A real package's expiry is derived from its sources and is always
             # ahead of the `as_of` it was built at, because the producer

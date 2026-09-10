@@ -4,6 +4,59 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-09 — SD5 readable, exact-artifact-bound review
+
+Closes SD5 for software and rendered-review acceptance. Added
+`src/nfl_dfs/readable_review.py` and `tests/test_readable_review.py`; extended
+the prior-review selection record, CLI and workbook writer; and updated the
+Showdown tracker, backlog, Cowork/contract/implementation documentation and the
+complete SD6 handoff prompt.
+
+After a valid Showdown prior-review export, the new presentation boundary
+strictly reparses the exact salary, entry, assignment, exported review CSV and
+selection-report bytes. Policy-bearing runs also reparse the normalized policy
+and independent audit. It checks every applicable SHA-256 binding and
+independently recomputes exact Entry-ID order, roster/person/role identity,
+legality, salary and remaining salary, prior-only points, combined-person and
+Captain counts/percentages/maxima, exclusions, canonical uniqueness and every
+pairwise overlap. Only a discrepancy-free result publishes canonical JSON,
+escaped self-contained HTML and an eight-sheet readable workbook. Markup and
+spreadsheet-active prefixes are inert at display boundaries without changing
+exact source bytes. Any mismatch stops at `READABLE_REVIEW`, reports a named
+blocker, preserves earlier artifacts and withholds a top-level review-export
+path.
+
+The workbook exposes exact assignments, exposure, evidence/role observations,
+provenance links and hashes, all four independent truths and one next operator
+action. Its output-only print areas, repeated headings and normalized freeze
+views do not change the five-sheet input contract. Native Excel initially found
+and repaired stale right-pane selection metadata inherited by Portfolio; the
+writer now emits one valid selection view, and final two-entry and five-entry
+samples both open normally without repair.
+
+Verification on pinned Python 3.13.7: focused SD5/prior-review/policy/Cowork
+regressions 120 passed, 1 skipped in 48.32s; a post-review missing-artifact
+regression passed in 4.10s; final complete suite 482 passed, 1 skipped in 91.93s.
+The skip is the existing Windows symlink-privilege case. Doctor
+passed with SQLite `ok`/WAL, no Excel lock or sync/reparse finding; Windows long
+paths remain disabled. The independent spreadsheet renderer found zero formula
+errors and rendered all eight sheets for both fixtures. Native Excel exported
+and visual review accepted all 18 pages of the two-entry workbook and all 20
+pages of the five-entry workbook, including continued headings and warning
+hierarchy.
+
+Ignored accepted closeout samples are
+`outputs/sd5-render-bfcf2ed5/two-entry-closeout.xlsx` (SHA-256
+`2f374cbc66c702b5da075f9f559d7ccd5ab49b8ee87ea2ae128ef67dd66f4d62`)
+and `five-entry-closeout.xlsx` (SHA-256
+`69028b0acc5352fce409bd11f6249dbd42acb63f3c2c7d768062d1718e9c38bd`).
+Their readable JSON/HTML reconciliation status was `PASS`; exact hashes are
+recorded in the Showdown tracker. Representative truths remained
+`FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`, and
+`RELEASE_DECISION=DO_NOT_UPLOAD`. Actual Cowork/Linux, current game evidence,
+larger portfolios and prospective model/economic quality remain unverified.
+SD6 is the sole next READY item.
+
 ### 2026-09-09 — First live NE@SEA Showdown run through Cowork (operations record, no code change)
 
 Live run at 22:06Z against the 22:06Z DraftKings salary download and the

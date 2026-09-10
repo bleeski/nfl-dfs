@@ -14,6 +14,18 @@ ceiling/ownership/drawdown mandate and cannot certify generated lineups for
 upload. A successful review run exits 0 with `FILE_VALID=true`,
 `MODEL_STATUS=PRIOR_ONLY`, and `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
+The success package contains `prior_only_readable_review.json`, a self-contained
+`prior_only_readable_review.html`, and
+`NFL_DFS_Cowork_Review_<run-id>.xlsx`. Open the workbook or HTML first. Confirm
+the exact Entry IDs and CPT/FLEX roster IDs, salary totals/remaining salary,
+combined-person and Captain exposure, policy maxima, overlap, role/activity
+concerns, evidence expiry, provenance hashes and the one next action. The
+workbook's `Upload` sheet must show all four release truths and
+`DISPLAY_RECONCILIATION=PASS`. That pass means the display agrees with exact
+artifacts; it never changes `DO_NOT_UPLOAD`. The input workbook contract remains
+five sheets, while this successful output copy has eight sheets: Run Control,
+Evidence Paste, Portfolio, QA, Upload, Exposure, Review Evidence and Artifacts.
+
 For outdoor weather, capture the relevant NWS gridpoint forecast through
 `sources.fetch_public_artifact`, retain the original response and hash, and
 populate the request's `weather_state`, `weather_source_uri`, and
@@ -78,11 +90,16 @@ Qualitative evidence may establish a sole kicker; only a source that explicitly
 publishes a numerical allocation may support a split. Never divide evenly, use
 salary as a depth chart, or use zero offensive snap share as inactivity.
 
-The resulting report names the reviewed assignments and `DK_REVIEW_ENTRY` file.
-Show its limitations alongside the lineups. `DK_REVIEW_ENTRY` is a retained
-diagnostic artifact, not a certified upload package. A separately supplied
-manual lineup can follow the manual guardrail route, subject to all its gates;
-generated prior lineups cannot be relabeled as manual to bypass validation.
+The resulting report names the reviewed assignments and `DK_REVIEW_ENTRY` file,
+plus the readable JSON, HTML and workbook with their SHA-256 values. Show its
+limitations alongside the lineups. `DK_REVIEW_ENTRY` is a retained diagnostic
+artifact, not a certified upload package. If display reconciliation finds any
+byte or semantic mismatch, the command stops at `READABLE_REVIEW`, returns exit
+2 with a named discrepancy, preserves earlier artifacts, and withholds the
+top-level review-export path; do not review or upload the failed display. A
+separately supplied manual lineup can follow the manual guardrail route, subject
+to all its gates; generated prior lineups cannot be relabeled as manual to
+bypass validation.
 
 The older diagnostic/certification procedure below still applies to that
 explicitly selected path and to Classic. Use `preflight`, rather than historical
@@ -366,6 +383,11 @@ editing, and upload remain manual.
 The result folder contains, as applicable:
 
 - `cowork_run.json`: top-level status and artifact index.
+- `review/prior_only_readable_review.json` and `.html`: independently
+  reconciled prior-review display data and escaped human rendering; present
+  only after display reconciliation passes.
+- `NFL_DFS_Cowork_Review_<run-id>.xlsx`: prior-review workbook. A successful
+  copy has eight sheets and safe, wrapped display text.
 - `build_<run_id>.json`: diagnostic build, solver proof, quantitative QA, and
   binding REFEREE report. Its assignment hash, exact build-input hashes, and
   contest parameters are checked during model-assisted certification.
@@ -379,7 +401,8 @@ Always report:
 1. `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and `RELEASE_DECISION`, plus
    the derived compatibility status (`CERTIFIED` or `DO_NOT_UPLOAD`).
 2. The exact blocker list.
-3. Review workbook and manifest paths.
+3. Readable JSON/HTML/workbook and manifest paths, with their exact hashes and
+   display-reconciliation status where present.
 4. Output SHA-256 when an upload CSV exists.
 5. One next operator action.
 

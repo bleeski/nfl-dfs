@@ -6,19 +6,21 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 
 **Current Showdown review-workflow priority sequence (2026-09-09):** follow
 [`docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md`](docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md).
-SD1 through SD4 are complete for software acceptance. The sole next READY chunk
-is **SD5 — readable, artifact-bound lineup and exposure review**; use its
-[session prompt](docs/session-prompts/SD5-readable-artifact-bound-review.md).
-SD4 finished with 475 passed and 1 existing Windows symlink-permission skip in
-71.33s; doctor and whitespace checks passed. Supplied policies now use bounded
-joint MILP selection, exact non-cycling Entry-ID assignment and an independent
-exact-byte final audit before review export. Policy-free behavior is unchanged.
-Measured fixtures covered 2 entries and 5 entries with 32-candidate incomplete
-banks and optimal selection over each reported actual bank. This does not prove
-complete-slate feasibility or 20/150-entry readiness. Actual Cowork/Linux, live
-policy use, compatible role/current evidence, W3 simulator/full role modeling,
-W8/W9 economics, prospective model validation and all broader W/S blockers
-remain unverified. Outputs stay `PRIOR_ONLY / DO_NOT_UPLOAD`.
+SD1 through SD5 are complete for software acceptance, including SD5's rendered
+review conditions. The sole next READY chunk is **SD6 — complete Cowork/Linux
+rehearsal with current evidence**; use its
+[session prompt](docs/session-prompts/SD6-complete-cowork-linux-rehearsal.md).
+SD5 finished with 482 passed and 1 existing Windows symlink-permission skip in
+91.93s; doctor, compile, whitespace, native Excel and independent render checks
+passed. The prior-review output now adds exact-artifact-reconciled JSON, escaped
+HTML and an eight-sheet readable workbook without changing policy selection or
+release gates. Measured fixtures covered 2 entries and 5 entries with bounded
+32-candidate incomplete banks and optimal selection over each reported actual
+bank. This does not prove complete-slate feasibility or 20/150-entry readiness.
+Actual Cowork/Linux, live policy use, compatible role/current evidence, W3
+simulator/full role modeling, W8/W9 economics, prospective model validation and
+all broader W/S blockers remain unverified. Outputs stay
+`PRIOR_ONLY / DO_NOT_UPLOAD`.
 For this bounded sequence, that tracker supersedes the older competing next-task
 recommendations below. It does not mark the broader W/S tranches complete or
 alter release gates. Update this pointer and the priority tracker at closeout.
@@ -470,6 +472,25 @@ Classic (DL6 through DL8) stays behind Showdown; the 719-row, 24-team identity m
 is the reason.
 
 ## Next action
+
+### 2026-09-09 SD5 readable-review closeout
+
+The bounded Showdown priority sequence in
+`docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md` has completed SD5 software and
+rendered-review acceptance. A valid `prior_review` export now produces
+canonical readable JSON, escaped self-contained HTML and an eight-sheet workbook
+only after independent exact-byte display reconciliation. The review exposes
+exact entry/roster/person identity, salary, prior-only points, combined and
+Captain exposure, policy maxima, overlap, evidence/role limitations, provenance,
+all four release truths and one next action. Any mismatch stops at
+`READABLE_REVIEW`, preserves earlier artifacts and remains `DO_NOT_UPLOAD`.
+
+**Sole next READY item in that sequence: SD6**, the actual Cowork/Linux complete
+workflow rehearsal using matching files and current game-specific evidence.
+Windows acceptance cannot satisfy it. The self-contained prompt is
+`docs/session-prompts/SD6-complete-cowork-linux-rehearsal.md`. W3, W7, W8, W9
+and the larger S-tranche dependencies below remain separate and are not marked
+complete by SD5.
 
 ### 2026-09-09 readiness review update
 

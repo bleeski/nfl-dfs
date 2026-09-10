@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 
 from nfl_dfs.cowork import CoworkInputError, CoworkRunRequest, required_next_inputs
 from nfl_dfs.dk import parse_entries, parse_salaries
@@ -508,6 +509,59 @@ def test_cowork_policy_is_enforced_audited_snapshotted_and_replays_identically(
     assert first_report["MODEL_STATUS"] == "PRIOR_ONLY"
     assert first_report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
     assert Path(first_report["bulk_entry_csv"]).is_file()
+    readable = first_report["prior_review_reports"]["readable_review"]
+    assert readable["reconciliation"]["status"] == "PASS"
+    assert readable["truths"] == {
+        "FILE_VALID": True,
+        "EVIDENCE_STATE": "UNKNOWN",
+        "MODEL_STATUS": "PRIOR_ONLY",
+        "RELEASE_DECISION": "DO_NOT_UPLOAD",
+    }
+    assert [entry["entry_id"] for entry in readable["entries"]] == [
+        entry.entry_id for entry in entries.authorizations
+    ]
+    assert all(len(entry["slots"]) == 6 for entry in readable["entries"])
+    assert all(
+        entry["salary_total"] + entry["salary_remaining"] == 50_000
+        for entry in readable["entries"]
+    )
+    assert readable["exposure"]["canonical_uniqueness"] == "PASS"
+    assert readable["exposure"]["effective_pairwise_person_overlap"] == 4
+    assert readable["exposure"]["pairwise_overlap"][0]["actual_people"] <= 4
+    assert "official_activity" in {
+        observation["category"] for observation in readable["evidence_observations"]
+    }
+    readable_json = Path(first_report["prior_review_artifacts"]["readable_review_json"])
+    readable_html = Path(first_report["prior_review_artifacts"]["readable_review_html"])
+    assert sha256_bytes(readable_json.read_bytes()) == first_report["prior_review_hashes"]["readable_review_json"]
+    assert sha256_bytes(readable_html.read_bytes()) == first_report["prior_review_hashes"]["readable_review_html"]
+    workbook = load_workbook(first_report["review_workbook"], data_only=False)
+    assert workbook.sheetnames == [
+        "Run Control", "Evidence Paste", "Portfolio", "QA", "Upload",
+        "Exposure", "Review Evidence", "Artifacts",
+    ]
+    assert workbook["Upload"]["B17"].value == "PASS"
+    assert workbook["Upload"]["B5"].value == "TRUE"
+    assert workbook["Upload"]["B7"].value == "PRIOR_ONLY"
+    assert workbook["Upload"]["B8"].value == "DO_NOT_UPLOAD"
+    assert str(workbook["Run Control"].print_area) == (
+        "'Run Control'!$A$1:$D$21"
+    )
+    assert str(workbook["Evidence Paste"].print_area) == (
+        "'Evidence Paste'!$A$1:$E$105,'Evidence Paste'!$G$4:$J$108,"
+        "'Evidence Paste'!$L$4:$O$105,'Evidence Paste'!$Q$4:$W$37"
+    )
+    assert str(workbook["QA"].print_area) == "'QA'!$A$1:$G$44"
+    assert str(workbook["Upload"].print_area) == "'Upload'!$A$1:$B$18"
+    for sheet_name in (
+        "Portfolio", "Exposure", "Review Evidence", "Artifacts",
+    ):
+        sheet = workbook[sheet_name]
+        assert sheet.page_setup.fitToWidth == 1
+        assert sheet.page_setup.fitToHeight == 0
+        assert sheet.print_title_rows == "$1:$4"
+        assert len(sheet.sheet_view.selection) == 1
+        assert sheet.sheet_view.selection[0].pane == "bottomLeft"
     assert first_report["portfolio_policy"]["valid"] is True
     assert first_report["portfolio_policy"]["enforcement_status"] == (
         "ENFORCED_AND_INDEPENDENTLY_AUDITED"

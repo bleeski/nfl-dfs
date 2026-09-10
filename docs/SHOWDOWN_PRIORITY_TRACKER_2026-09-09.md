@@ -47,8 +47,8 @@ backlog items remain separate; their statuses do not override this queue.
 | 2 | SD2 | P0 | Offensive-role evidence and explicit missing-history handling | `DONE` | SD1 |
 | 3 | SD3 | P1 | Precise, validated portfolio-control contract | `DONE` | SD2 |
 | 4 | SD4 | P1 | Enforced portfolio controls and independent assignment audit | `DONE` | SD3 |
-| 5 | SD5 | P1 | Readable, artifact-bound lineup and exposure review | `READY` | SD4 |
-| 6 | SD6 | P0 acceptance | Complete Cowork/Linux rehearsal with current evidence | `BLOCKED` | SD5 and access to the actual environment and matching files |
+| 5 | SD5 | P1 | Readable, artifact-bound lineup and exposure review | `DONE` | SD4 |
+| 6 | SD6 | P0 acceptance | Complete Cowork/Linux rehearsal with current evidence | `READY` | SD5; execution still requires the actual environment and matching files |
 
 Priority indicates consequence; order reflects dependencies. Do not attempt all
 six in one session. If there is too little time before lock, report what remains
@@ -887,3 +887,139 @@ unverified or out of scope. Enforced and audited output is still only
 
 Next READY chunk: **SD5 only**, with
 `docs/session-prompts/SD5-readable-artifact-bound-review.md`. SD6 remains blocked.
+
+### 2026-09-09 — SD5 implementation session started
+
+Actual start HEAD: `8d94b4e9a3c8593b152e8a6e8822a4ba1237bfa6`, branch
+`codex/sd5-readable-artifact-bound-review`, created from live verified
+`origin/main` after `git fetch --prune origin`. The merge commit contains exact
+SD4 implementation commit `25564e364f6fce5a04b47e8a1812c4afa1dba5bb`, and
+their trees match. Scope is limited to SD5's readable, artifact-bound lineup and
+exposure review, independent display reconciliation, safe rendering, focused and
+complete verification, rendered inspection and mandatory documentation updates.
+SD4 selection, enforcement, independent audit and policy-free behavior remain
+unchanged. SD6, field/payout economics, ownership, calibrated drawdown,
+simulation, Classic expansion, upload automation and release-gate changes are
+excluded. Every generated portfolio remains `PRIOR_ONLY / DO_NOT_UPLOAD`.
+
+Pre-existing changes preserved: modified tracked
+`docs/session-prompts/SD5-readable-artifact-bound-review.md`, plus untracked
+`Claude outputs/`, `docs/session-prompts/W2-expiry-and-selection-objective.md`
+and `docs/session-prompts/W4-cowork-prior-only-profile.md`. The index was empty.
+No reset, clean, stash, rebase, pull, merge, broad formatting, dependency change,
+staging, commit, push or account action is authorized. SD6 remains blocked
+pending every SD5 software and rendered-review acceptance condition.
+
+### 2026-09-09 — SD5 implementation complete
+
+SD5 is `DONE` for software and rendered-review acceptance. Start and end HEAD
+remained `8d94b4e9a3c8593b152e8a6e8822a4ba1237bfa6` on
+`codex/sd5-readable-artifact-bound-review`; all work remains uncommitted and the
+index remains empty. Pre-existing modified
+`docs/session-prompts/SD5-readable-artifact-bound-review.md` is preserved at
+SHA-256 `df603df19d08a759e25e1beea3d1652c73edfaf3b79c814cdd603167ceb5e3a7`;
+untracked
+`Claude outputs/`, `docs/session-prompts/W2-expiry-and-selection-objective.md`
+and `docs/session-prompts/W4-cowork-prior-only-profile.md` remain preserved.
+No reset, clean, stash, rebase, pull, merge, broad formatting, dependency
+change, staging, commit, push or account action occurred.
+
+Implemented `src/nfl_dfs/readable_review.py` and integrated it through
+`src/nfl_dfs/prior_review.py`, `src/nfl_dfs/cli.py` and
+`src/nfl_dfs/workbook.py`. A valid Showdown prior-review export now publishes
+canonical JSON and escaped self-contained HTML, then extends the copied review
+workbook from the unchanged five-sheet input contract to an eight-sheet output.
+Portfolio, Exposure, Review Evidence and Artifacts show every exact Entry ID,
+CPT/FLEX roster ID, underlying person, name, team, position, slot and lineup
+salary, remaining salary, prior-only central estimate, role/activity concern,
+combined-person/Captain exposure and exact maxima, exclusions, uniqueness,
+configured/effective overlap, source/expiry observations, portable paths,
+hashes, all four release truths and one next operator action.
+
+The display boundary does not trust an earlier `PASS`. It strictly reparses and
+hashes the exact salary, entry, assignment, exported review CSV and selection
+report; policy-bearing runs also reparse the normalized policy and independent
+audit. It recomputes legality, salary, prior points, canonical identity,
+combined/Captain counts, exclusions, uniqueness and every pairwise overlap from
+exact IDs and checks the audit's embedded bindings. Repeated names and distinct
+CPT/FLEX identities never join by name. HTML markup is escaped, and every
+provider/operator-controlled workbook string that could be spreadsheet-active
+is rendered inert without changing the exact source artifact. A missing,
+mutated, malformed or semantically inconsistent artifact stops at
+`READABLE_REVIEW`, changes the run to `FILE_VALID=false`, preserves earlier
+artifacts, returns exit 2 and withholds the top-level review-export path.
+
+New `tests/test_readable_review.py` plus focused updates in
+`tests/test_portfolio_policy.py` and `tests/test_prior_review_profile.py` cover
+two- and five-entry packages, exact roster/person/role/salary reconciliation,
+zero/one/repeated Captain and combined exposure, CPT/FLEX role changes, policy
+maxima, overlap, uniqueness, duplicate/reordered FLEX, repeated and non-ASCII
+names, punctuation, missing contest labels, stale/missing sources, inactive and
+unsupported-role findings, formula-active prefixes, tabs/newlines and markup,
+exact byte/semantic mutations across salary, entry, policy, assignment, audit
+and output artifacts, deterministic copied-package replay, and unchanged
+policy-free behavior.
+
+Verification used pinned Python 3.13.7 and locked dependencies on Windows:
+
+- Focused SD5/prior-review/policy/Cowork regression command used isolated
+  `outputs/p5-focus-accepted-7d1c6e83`: 120 passed, 1 skipped in 48.32s.
+- Post-review missing-declared-artifact regression used isolated
+  `outputs/p5-missing-artifact-5d91`: 1 passed in 4.10s.
+- Final-code two-entry/five-entry artifact regeneration used isolated
+  `outputs/p5-artifacts-closeout-31be06`: 2 passed in 14.32s.
+- Complete pinned-runtime suite used isolated
+  `outputs/p5-suite-closeout-4fb823d1`: 482 passed, 1 skipped in 91.93s. The
+  skip is the existing Windows symlink-privilege case.
+- `nfl.ps1 doctor` passed: Python 3.13.7, SQLite integrity `ok`, WAL mode,
+  8 processors, 10,449,735,680 available bytes, no Excel lock and no
+  sync/reparse finding; Windows long paths remain disabled.
+- `.venv/Scripts/python.exe -B -m compileall -q src` passed.
+- The independent spreadsheet renderer imported both accepted workbooks,
+  rendered all eight sheets in each, and found zero spreadsheet formula-error
+  cells. Native Microsoft Excel opened each workbook normally with no repair
+  and exported its print surface. Every rendered page was visually inspected:
+  18 pages for the two-entry fixture and 20 for the five-entry fixture. Exact
+  rows remained legible; paths wrapped; no clipping or overlap remained;
+  continued Portfolio, Exposure and Artifacts pages repeated headings; and the
+  four truths, `DO_NOT_UPLOAD`, reconciliation pass and one action had a clear
+  warning hierarchy.
+- Review caught one native compatibility defect that the first renderer did not:
+  changing Portfolio's inherited two-axis freeze left stale right-pane
+  selection records. Excel's repair log named only the sheet view. The final
+  writer emits one valid bottom-left selection and explicit output-only print
+  areas; both accepted workbooks now normal-open without repair.
+- Final `git diff --check` passed. No-index checks for
+  `src/nfl_dfs/readable_review.py`, `tests/test_readable_review.py` and
+  `docs/session-prompts/SD6-complete-cowork-linux-rehearsal.md` emitted no
+  whitespace errors.
+
+Accepted ignored samples and exact hashes:
+
+- `outputs/sd5-render-bfcf2ed5/two-entry-closeout.xlsx` —
+  `2f374cbc66c702b5da075f9f559d7ccd5ab49b8ee87ea2ae128ef67dd66f4d62`.
+  Its canonical readable JSON at
+  `outputs/p5-artifacts-closeout-31be06/test_cowork_policy_is_enforced0/outputs/sd4-first/review/prior_only_readable_review.json`
+  is `5b6a63e190603118d4bf4a84e81442aa780721fe8bbb8d05463877025d412d65`;
+  the HTML is
+  `a55a58a24128f39db63ac7d879f86cc75eba447bdab93f067c14aaffaecd7e66`.
+- `outputs/sd5-render-bfcf2ed5/five-entry-closeout.xlsx` —
+  `69028b0acc5352fce409bd11f6249dbd42acb63f3c2c7d768062d1718e9c38bd`.
+  Its canonical readable JSON at
+  `outputs/p5-artifacts-closeout-31be06/test_five_entry_fixture_and_co0/first/package/output/review/prior_only_readable_review.json`
+  is `0774b5549519216a3138bc39491ba521f4a403d56cdc17ffd91f0112a5b0e9e1`;
+  the HTML is
+  `06637f60689bd12ba672a52a3b8c7e308f888aeac818d99eefc6421b5311c377`.
+
+Both readable artifacts reported reconciliation `PASS` with
+`FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`. This proves software behavior and rendered
+clarity on the declared fixtures only. Actual Cowork/Linux execution, current
+game-specific evidence, live policy authoring, larger portfolios, prospective
+model quality, field/payout economics, ownership, calibrated drawdown, W3
+simulator participation, Classic expansion and upload automation remain
+unverified or out of scope. No generated output is upload-ready.
+
+No SD5 software or rendered-review acceptance criterion remains. The sole next
+READY item in this sequence is **SD6 only**, with the complete prompt at
+`docs/session-prompts/SD6-complete-cowork-linux-rehearsal.md`.

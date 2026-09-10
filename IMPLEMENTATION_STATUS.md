@@ -51,6 +51,19 @@ bound artifact immediately before export. Feasible results remain optimal only
 over the reported actual bank; incomplete-bank exhaustion is not called full-
 slate infeasibility. Policy-free SD1/SD2 behavior is unchanged.
 
+SD5 adds a readable review layer without changing selection or release policy.
+After a valid prior-review export, it independently reparses the exact salary,
+entry, assignment, exported review CSV, selection report, normalized policy and
+policy audit; rechecks every bound hash; and recomputes lineups, salaries,
+combined-person/Captain exposure, uniqueness and pairwise overlap before any
+display is marked `PASS`. The generated package contains canonical JSON, escaped
+self-contained HTML and an eight-sheet workbook with exact assignments,
+exposure, evidence/role observations, provenance, all four release truths and
+one next action. A mismatch fails closed at `READABLE_REVIEW`, preserves earlier
+artifacts and returns no top-level review-export path. The layer remains
+`PRIOR_ONLY / DO_NOT_UPLOAD`; actual Cowork/Linux and current real-evidence
+acceptance are SD6.
+
 ## Working and locally verified
 
 - The red-team revision has replaced the prior `plan.md`.
@@ -159,9 +172,14 @@ slate infeasibility. Policy-free SD1/SD2 behavior is unchanged.
 - Exact one-to-three-entry search is exhaustive only inside an explicit bounded
   shortlist (maximum 50,000 combinations); combinations are evaluated in
   vectorized batches and the effective search size is reported.
-- The five-sheet workbook is a generated Cowork review artifact and remains a
-  separate staged-input/timestamped-output design for the manual fallback; it
-  detects Excel locks and renders cleanly.
+- The five-sheet operator-input workbook remains the stable staged-input
+  contract. A successful Showdown `prior_review` output extends its copied
+  review workbook to eight sheets: exact Portfolio rows, Exposure, Review
+  Evidence and Artifacts sit beside Run Control, Evidence Paste, QA and Upload.
+  Formula-active prefixes and markup are inert at the display boundary; exact
+  identities and source bytes stay in the hash-bound artifacts. The output has
+  explicit print areas, repeated headings and normalized freeze panes, opens
+  normally in native Excel, and renders without formula errors.
 - Parquet scenario storage, rolling-origin challenger fitting, model promotion
   tiers, multi-slate rollback rules, standings capture, and locked-cell late-swap
   audit are implemented. The SQLite registry and lifecycle transition guard are

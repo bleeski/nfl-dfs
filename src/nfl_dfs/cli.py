@@ -74,6 +74,11 @@ from .projection import SOURCES_DIRNAME as PROJECTION_SOURCES_DIRNAME
 from .projection import build_projection_package
 from .prior_review import PROFILE_VERSION as PRIOR_REVIEW_PROFILE_VERSION
 from .prior_review import run_prior_review
+from .readable_review import (
+    ReadableReviewError,
+    create_readable_review,
+    verify_readable_review_artifacts,
+)
 from .priors import freeze_prior_package, propose_prior_package
 from .participation import (
     ParticipationError,
@@ -2149,6 +2154,12 @@ def _run_prior_review_profile(
 
     blockers = list(reported_blockers)
     blockers[0:0] = list(outcome.blockers)
+    next_action = (
+        "Review every exact Entry ID and named limitation, refresh missing or stale "
+        "evidence, and rerun before any separately certified manual workflow."
+        if outcome.file_valid
+        else "Resolve every named blocker above, then rerun the same command."
+    )
     truths = _blocked_truth_values(
         file_valid=outcome.file_valid,
         evidence_state=ReleaseEvidenceState.UNKNOWN,
@@ -2164,6 +2175,80 @@ def _run_prior_review_profile(
             "refusing to write anything"
         )
 
+    readable_review = None
+    if outcome.file_valid:
+        try:
+            readable_review = create_readable_review(
+                slate=slate,
+                template=entries,
+                salary_path=request.salary_csv or "",
+                entry_path=request.entry_csv or "",
+                assignment_path=outcome.artifacts["assignments"],
+                exported_path=outcome.artifacts["bulk_entry_csv"],
+                artifacts=outcome.artifacts,
+                expected_hashes=outcome.hashes,
+                reports=outcome.reports,
+                truth_values=truths,
+                blockers=tuple(blockers),
+                next_action=next_action,
+                output_dir=output_root / "review",
+                package_root=PROJECT_ROOT,
+            )
+            readable_problems = verify_readable_review_artifacts(
+                json_path=readable_review.json_path,
+                json_sha256=readable_review.json_sha256,
+                html_path=readable_review.html_path,
+                html_sha256=readable_review.html_sha256,
+            )
+            if readable_problems:
+                raise ReadableReviewError(";".join(readable_problems))
+            outcome = replace(
+                outcome,
+                artifacts={
+                    **outcome.artifacts,
+                    "readable_review_json": readable_review.json_path,
+                    "readable_review_html": readable_review.html_path,
+                },
+                hashes={
+                    **outcome.hashes,
+                    "readable_review_json": readable_review.json_sha256,
+                    "readable_review_html": readable_review.html_sha256,
+                },
+                reports={
+                    **outcome.reports,
+                    "readable_review": readable_review.data,
+                },
+            )
+        except (KeyError, OSError, ValueError) as exc:
+            readable_review = None
+            display_blocker = f"READABLE_REVIEW_FAILED:{type(exc).__name__}:{exc}"
+            blockers.insert(0, display_blocker)
+            blocked_export = {
+                **dict(outcome.export or {}),
+                "FILE_VALID": False,
+                "bulk_entry_csv": None,
+                "bulk_entry_sha256": None,
+                "problems": [
+                    *list((outcome.export or {}).get("problems", [])),
+                    display_blocker,
+                ],
+            }
+            outcome = replace(
+                outcome,
+                stage="READABLE_REVIEW",
+                blocked=True,
+                blockers=(display_blocker, *outcome.blockers),
+                export=blocked_export,
+                error=display_blocker,
+            )
+            truths = _blocked_truth_values(
+                file_valid=False,
+                evidence_state=ReleaseEvidenceState.UNKNOWN,
+                model_status=ModelStatus.PRIOR_ONLY,
+                certification_basis=CertificationBasis.MODEL_ASSISTED,
+            )
+            next_action = "Resolve the named readable-review discrepancy and rerun from stable exact artifacts."
+
     review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
     create_cowork_status_workbook(
         output_path=review_path,
@@ -2171,7 +2256,9 @@ def _run_prior_review_profile(
         blockers=blockers,
         report_path=report_path,
         truth_values=truths,
+        readable_review=readable_review.data if readable_review is not None else None,
     )
+    review_workbook_sha256 = sha256_file(review_path)
     result = {
         "run_id": run_id,
         "status": "DO_NOT_UPLOAD",
@@ -2187,17 +2274,13 @@ def _run_prior_review_profile(
         "entry_fees": sorted({entry.entry_fee for entry in entries.authorizations}),
         "request": str(request_path),
         "review_workbook": str(review_path),
+        "review_workbook_sha256": review_workbook_sha256,
         "blockers": blockers,
         "unclassified_csvs": [str(path) for path in unclassified],
         "input_hashes": intake["hashes"],
         "doctor": json.loads(doctor_report.to_json()),
         **outcome.as_report(),
-        "next": (
-            "Review the lineups and the bulk-entry CSV, then decide manually. Re-run"
-            " after actives are announced, roughly ninety minutes before kickoff."
-            if outcome.file_valid
-            else "Resolve every named blocker above, then re-run the same command."
-        ),
+        "next": next_action,
         "meaning": (
             "Legal and byte-audited, never certified. This profile reads no payout"
             " table or field size; supplied activity reports constrain selection. It makes no EV, ROI,"
@@ -2231,7 +2314,7 @@ def _run_prior_review_profile(
         }
     _write_json(report_path, result)
     _print_json(result)
-    return 0 if outcome.file_valid else 2
+    return 0 if outcome.file_valid and readable_review is not None else 2
 
 
 def _command_cowork_run(args: argparse.Namespace) -> int:

@@ -59,7 +59,14 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    not use the Windows `.venv` from a Linux Cowork runtime. `nfl.sh` keeps its
    Linux environment isolated in `.cowork-venv`.
 3. Read the generated `cowork_run.json`, `run_request.json`, and review
-   workbook. The first pass always freezes and reconciles the supplied files.
+   package. A successful Showdown `prior_review` run includes the readable
+   workbook plus `prior_only_readable_review.json` and a self-contained
+   `prior_only_readable_review.html`. Start with the workbook or HTML, but use
+   the JSON and reported SHA-256 values to identify the exact reviewed bytes.
+   `DISPLAY_RECONCILIATION=PASS` means the display was independently rebuilt
+   from and reconciled to the exact salary, entry, assignment, policy, audit,
+   selection, and review-export artifacts; it is not a release decision. The
+   first pass always freezes and reconciles the supplied files.
 4. Gather everything discoverable from approved public sources and freeze the
    artifacts. For an outdoor Showdown game, obtain the forecast through the
    approved `sources.fetch_public_artifact` adapter from `api.weather.gov`;
@@ -116,6 +123,14 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    Other profiles refuse a supplied policy instead of ignoring it. Requests
    without the policy retain their existing SD1/SD2 behavior, including the
    legacy sequential Captain differentiation and assignment cycling.
+   The SD5 review surface lists every exact Entry ID and roster ID, underlying
+   person, slot and salary, prior-only central estimate, actual combined-person
+   and Captain exposure, policy maxima, overlap, uniqueness, evidence/role
+   observations, provenance paths and hashes. It escapes markup and renders
+   spreadsheet-active prefixes inert without changing the exact source bytes.
+   Any byte or semantic disagreement is a named `READABLE_REVIEW_FAILED`
+   blocker, returns exit code 2, preserves earlier artifacts, and does not
+   advertise a new review CSV through the top-level result.
    Kicker roles are resolved after those exclusions. If more than one kicker
    remains eligible for a team, capture approved source bytes through
    `sources.py`, prepare the versioned `role_evidence_json` package documented
@@ -127,8 +142,9 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    Use `preflight` immediately before any separately certified manual upload.
 8. Return `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and
    `RELEASE_DECISION`, plus the compatibility status, blockers,
-   review-workbook path, manifest path, proposed/final SHA-256, and the single
-   next operator action. `FILE_VALID` never implies release. A compatibility
+   readable JSON/HTML/workbook paths and SHA-256 values, manifest path,
+   proposed/final SHA-256, display-reconciliation status, and the single next
+   operator action. `FILE_VALID` never implies release. A compatibility
    `CERTIFIED` status is derived only from
    `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` and is not a profitability claim.
 
