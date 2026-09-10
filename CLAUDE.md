@@ -98,13 +98,17 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    row excludes both CPT and FLEX identities before selection. Missing ACTIVE
    rows remain unknown; salary status alone never establishes current activity.
    SD2 distinguishes missing and observed-zero offensive history. Rebuild older
-   prior packages without SD2 coverage. Missing history, incompatible transfers
-   and unresolved material role changes name the person and smallest evidence
-   action. Capture approved source bytes, prepare the versioned auxiliary
-   `offensive_role_evidence_json` package in `docs/DATA_CONTRACTS.md`, add it to
-   the generated request and rerun. Qualitative starter/backup evidence cannot
-   invent a numerical share. Without supported replacements, excluded volume
-   stays visibly unallocated. Never ask Ben to author numerical role priors.
+   prior packages without SD2 coverage. A transfer carries his own prior-team
+   share as an unverified cold-start prior (`TRANSFER_PRIOR_UNVERIFIED`,
+   `EVIDENCE_STATE=UNKNOWN`); a person with no prior-season row anywhere is
+   excluded with zero share and named with salary in `pool_coverage`; an
+   unresolved material role change still names the person and the smallest
+   evidence action and stops. Capture approved source bytes, prepare the
+   versioned auxiliary `offensive_role_evidence_json` package in
+   `docs/DATA_CONTRACTS.md`, add it to the generated request and rerun.
+   Qualitative starter/backup evidence cannot invent a numerical share. Without
+   supported replacements, excluded volume stays visibly unallocated. Never ask
+   Ben to author numerical role priors.
    A versioned `portfolio_policy_json` may bind exact salary bytes, the game,
    the complete person/CPT/FLEX map, and all requested Entry IDs. On the
    Showdown `prior_review` profile, SD4 snapshots and validates the source and
@@ -117,9 +121,12 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    `DK_REVIEW_ENTRY` CSV. Time/search limits, solver errors, incomplete-bank
    exhaustion, modeled-bank infeasibility, assignment mismatch, audit failure
    or input mutation preserve earlier outputs and write no new review CSV.
-   The active bank is bounded to 32 canonical candidates with a 30-second total
-   generation budget, two seconds per candidate solve and ten seconds for the
-   joint solve; its completeness is reported and is not a full-slate claim.
+   The active bank is stratified by the policy (per-captain, per-capped-person
+   exclusion, a policy-feasible chain, then top-K fill) and bounded to
+   `max(32, 4 x entries)` canonical candidates with a `max(30s, 2s x entries)`
+   generation budget, two seconds per candidate solve and `max(10s, 1s x
+   entries)` for the joint solve; its completeness is reported and is not a
+   full-slate claim.
    Other profiles refuse a supplied policy instead of ignoring it. Requests
    without the policy retain their existing SD1/SD2 behavior, including the
    legacy sequential Captain differentiation and assignment cycling.

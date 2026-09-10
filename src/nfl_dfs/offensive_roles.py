@@ -302,9 +302,45 @@ def resolve_offensive_roles(
             state, action, reason, next_action = "SOURCE_SUPPORTED_ADJUSTMENT", "SELECT", "EXPLICIT_TEAM_ALLOCATION", "Refresh allocation when a recipient or source changes."
             if player is None or not any(getattr(player, field) for field in FIELDS):
                 action = "EXCLUDE"
-        elif historical_state == "MISSING_HISTORY" or original is None:
-            state, action, reason = "MISSING_HISTORY", "BLOCK", "OFFENSIVE_MISSING_HISTORY"
-            next_action = "Capture a complete current-team numerical allocation and any missing receiving efficiency."
+        elif original is None:
+            state, action, reason = "MISSING_HISTORY", "BLOCK", "OFFENSIVE_PRIOR_ROW_MISSING"
+            next_action = "Rebuild the complete prior package; this person has no prior record at all."
+        elif historical_state == "MISSING_HISTORY":
+            # No prior-season row anywhere (a rookie, or a person who never
+            # recorded a stat). There is no source-bound number to carry, so the
+            # honest share is zero: the person is excluded, named here and in
+            # the pool-coverage report with salary, rather than stopping the run
+            # for an operator `--exclude` that produces the identical result.
+            # A rookie prior from approved draft/combine artifacts is the open
+            # follow-up (R17); until it exists this stays an exclusion.
+            state, action, reason = "MISSING_HISTORY", "EXCLUDE", "OFFENSIVE_MISSING_HISTORY"
+            next_action = (
+                "Excluded with zero share: no prior-season rows. Capture a numerical"
+                " current-team allocation, or a registered rookie prior, to select this person."
+            )
+        elif (
+            historical_state == "CURRENT_ROLE_UNKNOWN"
+            and history.get("incompatible_transfer")
+            and isinstance(history.get("transfer_prior"), dict)
+            and person not in facts
+        ):
+            prior = history["transfer_prior"]
+            if prior.get("basis") == "OWN_OLD_TEAM_SHARE" and any(getattr(original, f) for f in FIELDS):
+                # The producer carried the person's own prior-team share into the
+                # current team's normalization. It is a cold-start prior with
+                # EVIDENCE_STATE=UNKNOWN, kept and reported, never a role fact.
+                state, action, reason = "TRANSFER_PRIOR_UNVERIFIED", "DIAGNOSTIC", "OFFENSIVE_TRANSFER_PRIOR_UNVERIFIED"
+                next_action = (
+                    "Prior-team share carried as an unverified cold-start prior"
+                    f" (old team {','.join(str(t) for t in prior.get('old_teams', []))});"
+                    " capture an explicit numerical current-team allocation to replace it."
+                )
+            else:
+                state, action, reason = "TRANSFER_PRIOR_ZERO", "EXCLUDE", "OFFENSIVE_TRANSFER_PRIOR_ZERO"
+                next_action = (
+                    "Excluded with zero share: the person's own prior-team share was zero."
+                    " Capture current opportunity evidence before selecting."
+                )
         elif historical_state == "CURRENT_ROLE_UNKNOWN" or person in facts or original.evidence_state != "PASS":
             state, action = "CURRENT_ROLE_UNKNOWN", "BLOCK"
             reason = "OFFENSIVE_TRANSFER_REQUIRES_CURRENT_TEAM_ROLE" if history.get("incompatible_transfer") else "OFFENSIVE_CURRENT_ROLE_UNRESOLVED"
@@ -328,13 +364,30 @@ def resolve_offensive_roles(
                              f: getattr(player, f) if player and action != "EXCLUDE" else 0 for f in FIELDS
                          }})
     survivors = tuple(p for person, p in updated.items() if person not in excluded)
+    transfer_priors = {
+        f["person"]: {
+            "team": f["team"],
+            "old_teams": (f["history_basis"].get("transfer_prior") or {}).get("old_teams"),
+            "own_old_share": (f["history_basis"].get("transfer_prior") or {}).get("own_old_share"),
+            "pool_share_after_normalization": f["before"],
+        }
+        for f in findings
+        if f["state"] == "TRANSFER_PRIOR_UNVERIFIED"
+    }
     unallocated = {}
     for team in sorted({p.team for p in model.players}):
         unallocated[team] = {f: max(0.0, 1.0 - sum(getattr(p, f) for p in survivors if p.team == team)) for f in FIELDS}
     report = {"schema_version": VERSION, "transformation_version": TRANSFORM, "findings": findings,
               "evidence_state": "UNKNOWN" if not manifest or blocked or synthetic or any(f["selection_action"] == "DIAGNOSTIC" for f in findings) else "PASS",
               "coverage": {"offensive_people": len(people), "findings": len(findings), "blocked_people": len(blocked)},
-              "assumptions": ["HISTORY_IS_UNCONFIRMED; VACATED_VOLUME_REMAINS_UNALLOCATED", "ROLE_CAPACITY_IS_NOT_A_CEILING"],
+              "assumptions": ["HISTORY_IS_UNCONFIRMED; VACATED_VOLUME_REMAINS_UNALLOCATED", "ROLE_CAPACITY_IS_NOT_A_CEILING",
+                              *(["TRANSFER_PRIOR_IS_OWN_OLD_TEAM_SHARE_NOT_A_CURRENT_ROLE"] if transfer_priors else []),
+                              *(["MISSING_HISTORY_PEOPLE_EXCLUDED_WITH_ZERO_SHARE"] if any(f["finding"] == "OFFENSIVE_MISSING_HISTORY" for f in findings) else [])],
+              "transfer_priors": transfer_priors,
+              "excluded_by_finding": {
+                  reason: sorted(f["person"] for f in findings if f["selection_action"] == "EXCLUDE" and f["finding"] == reason)
+                  for reason in sorted({f["finding"] for f in findings if f["selection_action"] == "EXCLUDE"})
+              },
               "unallocated_by_team": unallocated,
               "declared_totals": {t: a.totals.model_dump() for t, a in allocations.items()},
               "declared_unallocated": {t: a.unallocated.model_dump() for t, a in allocations.items()},

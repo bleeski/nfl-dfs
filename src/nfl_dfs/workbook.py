@@ -231,6 +231,51 @@ def _populate_readable_review(workbook, review: Mapping[str, object]) -> None:
         values = (raw.get("entry_id_a"), raw.get("entry_id_b"), raw.get("actual_people"), raw.get("maximum_people"))
         for column, value in enumerate(values, start=1):
             _set_display(exposure.cell(overlap_row + 1, column), value)
+    coverage = review.get("pool_coverage")
+    if isinstance(coverage, Mapping):
+        coverage_row = overlap_row + 3
+        _section_header(
+            exposure, coverage_row, 1, 5,
+            f"Pool coverage: {coverage.get('people_in_pool')} people in the salary pool, "
+            f"{coverage.get('selectable_people')} selectable",
+        )
+        coverage_row += 1
+        for column, value in enumerate(("Reason", "People", "FLEX salary", "CPT salary", "Names"), start=1):
+            _set_display(exposure.cell(coverage_row, column), value)
+            exposure.cell(coverage_row, column).font = Font(bold=True)
+        by_reason = coverage.get("by_reason", {})
+        if isinstance(by_reason, Mapping):
+            for bucket, values in by_reason.items():
+                if not isinstance(values, Mapping):
+                    continue
+                coverage_row += 1
+                names = "; ".join(str(name) for name in values.get("names", []) if name is not None)
+                cells = (bucket, values.get("people"), values.get("flex_salary"), values.get("cpt_salary"), names)
+                for column, value in enumerate(cells, start=1):
+                    _set_display(exposure.cell(coverage_row, column), value)
+                for column in (3, 4):
+                    exposure.cell(coverage_row, column).number_format = '"$"#,##0'
+                exposure.row_dimensions[coverage_row].height = 44
+        coverage_row += 2
+        _section_header(exposure, coverage_row, 1, 6, "Prior-season volume left unallocated (held by unselectable people, not reassigned)")
+        coverage_row += 1
+        share_keys = ("qb_attempt_share", "carry_share", "target_share", "rushing_td_share", "receiving_td_share")
+        for column, value in enumerate(("Team", *share_keys), start=1):
+            _set_display(exposure.cell(coverage_row, column), value)
+            exposure.cell(coverage_row, column).font = Font(bold=True)
+        unallocated = coverage.get("unallocated_by_team", {})
+        if isinstance(unallocated, Mapping):
+            for team, fields in unallocated.items():
+                if not isinstance(fields, Mapping):
+                    continue
+                coverage_row += 1
+                cells = (team, *[fields.get(key) for key in share_keys])
+                for column, value in enumerate(cells, start=1):
+                    _set_display(exposure.cell(coverage_row, column), value)
+        coverage_row += 1
+        _set_display(exposure.cell(coverage_row, 1), coverage.get("note"))
+        exposure.merge_cells(start_row=coverage_row, start_column=1, end_row=coverage_row, end_column=6)
+        exposure.row_dimensions[coverage_row].height = 44
     exposure.auto_filter.ref = f"A4:M{max(4, row_number - 1)}"
     _finish_generated_sheet(
         exposure,
@@ -693,6 +738,8 @@ def create_cowork_status_workbook(
     report_path: str | Path,
     truth_values: Mapping[str, bool | str] | None = None,
     readable_review: Mapping[str, object] | None = None,
+    review_csv_path: str | Path | None = None,
+    review_csv_sha256: str | None = None,
 ) -> Path:
     target = create_operator_input_workbook(output_path)
     populate_operator_run_control(target, run_values)
@@ -736,6 +783,13 @@ def create_cowork_status_workbook(
     upload["B9"] = truths["certification_basis"]
     upload["B4"].fill = PatternFill("solid", fgColor=PALE_RED)
     upload["B4"].font = Font(bold=True, color="9C0006")
+    if review_csv_path is not None:
+        # A prior-only review CSV is named here so the Upload sheet points at
+        # the exact reviewed bytes; the DO_NOT_UPLOAD verdict above is unchanged.
+        _set_display(
+            upload["B10"], f"REVIEW ONLY (not certified): {Path(review_csv_path).resolve()}"
+        )
+        _set_display(upload["B11"], review_csv_sha256 or "")
     _set_display(upload["B13"], str(Path(report_path).resolve()))
     upload["B14"] = datetime.now(timezone.utc).isoformat()
     upload["B15"] = "DO NOT UPLOAD. Resolve the QA blockers and rerun the Cowork request."

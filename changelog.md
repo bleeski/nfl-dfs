@@ -4,6 +4,155 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-10: Classic and quantitative development backlog reprioritized
+
+Planning/documentation only; no engine, test, configuration, source, run, or
+lineup artifact changed.
+
+- Replaced the competing `S*`, `W*`, `DL6`-`DL8`, and Showdown `sole next`
+  development recommendations with one authoritative, dependency-ordered
+  program in `backlog.md`. The historical findings remain in place and are
+  mapped into the new chunks rather than discarded or relabeled complete.
+- Added a bounded Classic track: C1 multi-game immutable intake/projection and
+  one-command prior review; C2 exact policy/candidate/joint selection; C3
+  independent audit/readable export and 1/3/20/150-entry benchmarks; C4 current
+  real-file Cowork/Linux rehearsal; and C5 lock-aware slot ordering/governed
+  mechanical late swap. This track delivers useful review lineups while staying
+  `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+- Added the quantitative repair track for the engine's largest product gap: Q1
+  immutable settlement/reference economics and predeclared metrics; Q2 joint
+  calibrated player/team outcomes and participation; Q3 contest-conditioned
+  ownership/legal fields/exact duplication; Q4 production payout/tie
+  economics; Q5 candidate coverage and shared-scenario payout/risk portfolio
+  utility; Q6 rolling-origin holdout promotion/registry/rollback; Q7
+  registered-scale shadow/game-week acceptance; and QC1 governed integration
+  across Classic, Showdown, and conditional late swap.
+- Added DEV0 as the sole current `READY` chunk because the current 2026-09-10
+  repairs are a large uncommitted layer on a deleted-upstream SD5 branch. DEV0
+  preserves and reconciles that state before feature work. It allows no new
+  model/Classic code and no commit, push, PR, or generated-file staging without
+  separate authorization.
+- Retained SD6 as the Showdown tracker's final current-file/Cowork acceptance
+  item while making explicit that it is an operational acceptance task, not the
+  next code-development tranche and not a prerequisite for the Classic or
+  quantitative program.
+
+### 2026-09-10: pre-slate end-to-end test and code review in the Cowork/Linux container
+
+Full-suite and end-to-end verification of the Showdown `prior_review` path
+ahead of the 2026-09-10 slate, run in the cloud container because the device
+shell failed to mount (`sandbox-helper: no Plan9 drive shares mounted`, same as
+2026-09-09). `sh ./nfl.sh setup` completed in 7.5s with `uv sync`. Baseline
+suite: 482 passed, 1 skipped (Windows junction). Byte-exact replay of the live
+excl20 run (`--request .../20260909T222153Z-ne-sea-live-excl20/run_request.json
+--as-of 2026-09-09T22:21:53+00:00`) reproduced export SHA-256
+`cf33f3e598270d40ea117d86ccac4ebce640b479baa8539b630f828aed585b96` before and
+after every change below. Five independent reviewers covered orchestration,
+priors/identity/weather, the SD2 role gate, selection/policy, and export/review.
+
+Repairs, each pinned by `tests/test_cowork_rerun_regressions.py` (13 tests):
+
+- `cowork.resolve_request_inputs`: an explicit `--input-dir` now outranks a
+  reloaded `--request`'s snapshot paths. Before, fresh uploads on a rerun were
+  silently ignored and the review CSV was built from the earlier snapshot.
+  `cowork_run.json` reports `superseded_request_inputs`.
+- `cli._command_cowork_run`: `--exclude`, `--unavailable-status` and
+  `--available-status` merge with the reloaded request's lists
+  (`LIST_MERGE_REQUEST_FIELDS`) instead of replacing them.
+- `cli`: a reused `--run-id` is refused as `RUN_ID_COLLISION` before any write;
+  the failure handler no longer rewrites an earlier run's `cowork_run.json`.
+- `prior_review`: `lineup_count` below the reserved-entry count blocks at
+  SELECT (`LINEUP_COUNT_BELOW_RESERVED_ENTRIES`) instead of exporting duplicate
+  rosters that SD5 then rejected with the CSV already on disk; a surplus is
+  reported in `assignment_summary`. On a READABLE_REVIEW failure the artifact
+  and hash indexes no longer name the withheld CSV; `READABLE_REVIEW_FAILED.json`
+  is written beside it.
+- `selection.select_prior_lineups`: when the distinct-captain rule exhausts the
+  selectable pool, the legacy path rebuilds without captain no-goods and
+  continues with repeats, reported as
+  `DISTINCT_UNTIL_POOL_EXHAUSTED_THEN_REPEATED` with
+  `captain_repeats_from_index` and `captain_exposure`. Measured on the real
+  26-person NE@SEA pool: 50 lineups in 16.4s (was `INFEASIBLE` at index 27).
+  Time-limited (`FEASIBLE_LIMIT`) lineups are listed as `non_optimal_lineups`
+  and surface as `SOLVER_TIME_LIMIT_ACCEPTED_LINEUPS`.
+- `prior_review`: `PRIOR_PACKAGE_SALARY_MISMATCH` with `build_priors` set now
+  re-proposes (`REBUILDING_SALARY_MISMATCHED_PACKAGE`); a frozen-artifact hash
+  mismatch is still never rebuilt over.
+- `prior_review`: export filename uses a sanitized label
+  (`DK_REVIEW_ENTRY_<label>.csv`; `a/b c` no longer creates a subdirectory).
+  Failed exports report stage `EXPORT` (was `EXPORT_BLOCKED_BLOCKED`).
+- `prior_review`/`readable_review`/`workbook`: new `pool_coverage` in the
+  selection report and review JSON/HTML/workbook: every person's exclusion
+  reason (DK status, official INACTIVE, operator fade, role gate), FLEX and CPT
+  salary by reason, per-team position coverage, and `unallocated_by_team`.
+  The readable layer recomputes the salary totals from the exact salary bytes
+  (`READABLE_REVIEW_POOL_COVERAGE_*` on mismatch). Exposure rows carry the
+  specific `exclusion_source`. Sole-kicker assumptions from
+  `selection.kicker_roles` now appear on the kicker's slot and in the evidence
+  table (were `NO_NAMED_ROLE_FINDING`). A reused frozen package reports its
+  inherited weather basis. The workbook Upload sheet names the review CSV and
+  SHA-256 as `REVIEW ONLY (not certified)`.
+- `cli`: new `--official-status-csv` on `cowork-run`; a supplied file that omits
+  selected people reports `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED` with names,
+  instead of clearing the requirement on presence alone.
+- `scripts/make_official_status.py`: Eastern via `ZoneInfo`, not a fixed -4.
+
+Verification after repairs: 495 passed, 1 skipped in 109.5s on Python 3.13.7;
+replay export hash unchanged; the readable HTML shows the pool-coverage
+section and kicker assumption; the eight-sheet workbook opens with the new
+Exposure section. Environment facts this session: `github.com` and
+`api.github.com` fail Python 3.13 strict X.509 verification behind the container
+egress proxy (CA lacks Key Usage) while `raw.githubusercontent.com` passes, so
+`--build-priors` stops at `PRIORS_PROPOSE_FAILED` in the container without the
+previously approved venv-level relaxation; `api.weather.gov` is denied (403).
+Owner decisions taken the same day, and landed:
+
+- TLS (`src/nfl_dfs/sources.py`, `tests/test_sources_tls.py`): opt-in
+  `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1` clears only `ssl.VERIFY_X509_STRICT`;
+  `CERT_REQUIRED` and hostname checking stay on, and every captured artifact
+  records `coverage.tls_verify_x509_strict`. Default strict. Verified: strict
+  still fails in the container; opt-in fetched all seven nflverse artifacts in
+  9s with the flag stamped on each, and the live chain proceeded to the
+  expected `WEATHER_CAPTURE_REQUIRED` stop for the outdoor NE@SEA row.
+- R17, per Ben's direction to use prior-team stats (`src/nfl_dfs/priors.py`
+  `transfer_prior_from_old_team`, `_team_week_totals`;
+  `src/nfl_dfs/offensive_roles.py`; `docs/DATA_CONTRACTS.md`; `CLAUDE.md`):
+  a transfer carries his own prior-season share of his old team's volume (own
+  count over the old team's count in the weeks he had a row, per column, from
+  the same frozen `player_stats` bytes) into the current pool's normalization
+  as a pseudo-count; incumbents scale by `1/(1+Σs)`. Record keeps
+  `EVIDENCE_STATE=UNKNOWN`; the gate reports `TRANSFER_PRIOR_UNVERIFIED`
+  (diagnostic) or `TRANSFER_PRIOR_ZERO` (exclude). `MISSING_HISTORY` is now a
+  visible zero-share exclusion (`OFFENSIVE_MISSING_HISTORY`) named with salary
+  in `pool_coverage`, not a stop; a person with no prior record at all still
+  blocks (`OFFENSIVE_PRIOR_ROW_MISSING`), and a declared material role change
+  still blocks. Packages frozen before this change carry no `transfer_prior`
+  and their transfers still block, which is the rebuild signal. Offline replay
+  of the live NE@SEA chain against the frozen 2026-09-09 raw captures with no
+  operator excludes: completes, 33 selectable people (was 26 after 20 manual
+  excludes); A.J. Brown 0.175 NE target share (0.295 at PHI), Doubs 0.112,
+  Emanuel Wilson 0.203 SEA carry share, Kiner 0.135; 12 rookies excluded
+  visibly; Latu `TRANSFER_PRIOR_ZERO`. Rookie priors from approved draft or
+  combine artifacts remain open (no captured mapping to usage exists).
+- R18 (`src/nfl_dfs/portfolio_enforcement.py`, `optimizer.add_required_row`,
+  the policy branch of `selection.py`, `tests/test_portfolio_enforcement.py`):
+  the SD4 candidate bank is now policy-aware: per-captain strata, per-capped-
+  person exclusion strata, a greedy policy-feasible chain, then top-K fill;
+  bounds scale as `max(32, 4×entries)` candidates, `max(30s, 2s×entries)`
+  generation, `max(10s, 1s×entries)` joint solve, with per-stratum counts in
+  the report. Verified on the real 68-person pool: 20 entries, captain cap
+  0.25, combined cap 0.6 on JSN and Maye, overlap 4 →
+  `ENFORCED_AND_INDEPENDENTLY_AUDITED` in 7.3s (was
+  `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`), captains Maye 5 / JSN 5 / Henry 4 /
+  Darnold 4 / Stevenson 1 / Myers 1, JSN and Maye at exactly 12/20, max pairwise
+  overlap 4, audit PASS, byte-identical on repeat. The 5-entry cases from the
+  backlog (captain 0.2; combined 0.8) also pass.
+
+Final verification: 516 passed, 1 skipped in 79.8s; no-policy replay export
+SHA-256 `cf33f3e5…` unchanged after every change. Truths remain
+`PRIOR_ONLY` / `DO_NOT_UPLOAD`; nothing here is a projection, ownership or
+edge claim.
+
 ### 2026-09-09 — SD5 readable, exact-artifact-bound review
 
 Closes SD5 for software and rendered-review acceptance. Added

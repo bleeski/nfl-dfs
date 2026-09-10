@@ -16,6 +16,7 @@ captain, which is uniqueness rather than a claim about correlated equity.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,12 +30,12 @@ from .offensive_roles import resolve_offensive_roles, verify_offensive_resolutio
 from .optimizer import LineupOptimizer
 from .participation import ParticipationContract, excluded_dk_ids, selectable_pool_problems
 from .portfolio_enforcement import (
-    DEFAULT_CANDIDATE_LIMIT,
     DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
-    DEFAULT_CANDIDATE_SECONDS,
-    DEFAULT_SELECTION_SECONDS,
     ENFORCEMENT_VERSION,
     build_policy_candidate_bank,
+    scaled_candidate_limit,
+    scaled_candidate_seconds,
+    scaled_selection_seconds,
     solve_policy_portfolio,
 )
 from .portfolio_policy import NormalizedPortfolioPolicy
@@ -89,12 +90,19 @@ def select_prior_lineups(
     offensive_role_evidence_json: str | Path | None = None,
     as_of: datetime | None = None,
     portfolio_policy: NormalizedPortfolioPolicy | None = None,
-    policy_candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
-    policy_candidate_seconds: float = DEFAULT_CANDIDATE_SECONDS,
+    policy_candidate_limit: int | None = None,
+    policy_candidate_seconds: float | None = None,
     policy_candidate_per_solve_seconds: float = DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
-    policy_selection_seconds: float = DEFAULT_SELECTION_SECONDS,
+    policy_selection_seconds: float | None = None,
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
-    """Solve for `count` distinct legal lineups over the permitted pool."""
+    """Solve for `count` distinct legal lineups over the permitted pool.
+
+    The `policy_*` bounds default to `None`, meaning "scale with the policy's
+    entry count" (`max(32, 4 * entries)` candidates, `max(30s, 2s * entries)`
+    of bank generation, `max(10s, 1s * entries)` for the joint solve). An
+    explicit value is used as given, so tests and diagnostics can pin small
+    bounds.
+    """
 
     if slate.mode is not EngineMode.SHOWDOWN:
         raise SelectionError(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
@@ -148,13 +156,30 @@ def select_prior_lineups(
     selected: list[SelectedLineup] = []
     forbidden_captains: list[str] = []
     if portfolio_policy is not None:
+        entry_count = portfolio_policy.entry_count
+        candidate_limit = (
+            scaled_candidate_limit(entry_count)
+            if policy_candidate_limit is None
+            else policy_candidate_limit
+        )
+        candidate_seconds = (
+            scaled_candidate_seconds(entry_count)
+            if policy_candidate_seconds is None
+            else policy_candidate_seconds
+        )
+        selection_seconds = (
+            scaled_selection_seconds(entry_count)
+            if policy_selection_seconds is None
+            else policy_selection_seconds
+        )
         bank = build_policy_candidate_bank(
             slate,
             objective,
             excluded_ids=excluded,
-            candidate_limit=policy_candidate_limit,
-            total_time_limit_seconds=policy_candidate_seconds,
+            candidate_limit=candidate_limit,
+            total_time_limit_seconds=candidate_seconds,
             per_solve_time_limit_seconds=policy_candidate_per_solve_seconds,
+            policy=portfolio_policy,
         )
         if bank.blocking:
             raise SelectionError(
@@ -164,7 +189,7 @@ def select_prior_lineups(
         portfolio_solve = solve_policy_portfolio(
             portfolio_policy,
             bank,
-            time_limit_seconds=policy_selection_seconds,
+            time_limit_seconds=selection_seconds,
         )
         if not portfolio_solve.passed:
             raise SelectionError(
@@ -255,8 +280,27 @@ def select_prior_lineups(
     optimizer = LineupOptimizer(
         slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
     )
+    captain_repeats_from_index: int | None = None
     for index in range(1, count + 1):
         result = optimizer.solve(objective)
+        if result.roster is None and differentiate_captain and selected:
+            # Every selectable person has already captained one lineup, so the
+            # distinct-captain rule alone makes the next solve infeasible. That
+            # is a structural limit of the pool, not a reason to hand back
+            # nothing: rebuild the model without the captain no-goods, keep
+            # every exact-roster and overlap cut, and continue with captain
+            # repetition permitted. The index where repetition began is
+            # reported so the review can see it.
+            optimizer = LineupOptimizer(
+                slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
+            )
+            for earlier in selected:
+                optimizer.add_no_good(earlier.roster)
+                if max_person_overlap is not None:
+                    optimizer.add_person_overlap_limit(earlier.roster, max_person_overlap)
+            differentiate_captain = False
+            captain_repeats_from_index = index
+            result = optimizer.solve(objective)
         if result.roster is None:
             raise SelectionError(
                 f"SOLVER_RETURNED_NO_LINEUP:index={index}:status={result.status}"
@@ -301,8 +345,13 @@ def select_prior_lineups(
     keys = [lineup.canonical_key for lineup in selected]
     if len(set(keys)) != len(keys):
         raise SelectionError("DUPLICATE_LINEUP_SELECTED")
-    if differentiate_captain:
-        captains = [lineup.captain_dk_id for lineup in selected]
+    distinct_captain_span = (
+        selected[: captain_repeats_from_index - 1]
+        if captain_repeats_from_index is not None
+        else selected
+    )
+    if differentiate_captain or captain_repeats_from_index is not None:
+        captains = [lineup.captain_dk_id for lineup in distinct_captain_span]
         if len(set(captains)) != len(captains):
             raise SelectionError("DUPLICATE_CAPTAIN_SELECTED")
 
@@ -334,7 +383,20 @@ def select_prior_lineups(
             "NO_FIELD_OR_PAYOUT_ECONOMICS_CONSULTED",
         ],
         "differentiation": {
-            "captain": "DISTINCT_PER_ENTRY" if differentiate_captain else "UNCONSTRAINED",
+            "captain": (
+                "DISTINCT_UNTIL_POOL_EXHAUSTED_THEN_REPEATED"
+                if captain_repeats_from_index is not None
+                else ("DISTINCT_PER_ENTRY" if differentiate_captain else "UNCONSTRAINED")
+            ),
+            "captain_repeats_from_index": captain_repeats_from_index,
+            "captain_exposure": dict(
+                sorted(
+                    Counter(
+                        by_id[lineup.captain_dk_id].underlying_id for lineup in selected
+                    ).items(),
+                    key=lambda item: (-item[1], item[0]),
+                )
+            ),
             "max_person_overlap": max_person_overlap,
             "basis": "STRUCTURAL_UNIQUENESS_NOT_A_CORRELATED_EQUITY_CLAIM",
         },
@@ -348,6 +410,9 @@ def select_prior_lineups(
             sorted(exposure.items(), key=lambda item: (-item[1], item[0]))
         ),
         "forbidden_captain_rows": forbidden_captains,
+        "non_optimal_lineups": [
+            lineup.index for lineup in selected if lineup.solver_status != "OPTIMAL"
+        ],
         "threshold_sensitive": list(scores.threshold_sensitive),
         "score_omissions": list(scores.omissions),
         "never_calls": ["field.py", "economics.py", "portfolio economics"],

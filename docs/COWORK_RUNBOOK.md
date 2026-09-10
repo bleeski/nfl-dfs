@@ -36,14 +36,63 @@ six-hour weather expiry survives freezing, projection, selection and export.
 
 Rerun using the generated request with the completed weather fields. If the
 command stops for identity decisions, resolve only the named ambiguities from
-verifiable identity evidence. Current `official_status_csv` rows are used to
+verifiable identity evidence.
+
+Rerun semantics, fixed 2026-09-10 and pinned by
+`tests/test_cowork_rerun_regressions.py`:
+
+- `--request <run_request.json> --input-dir <fresh uploads>` uses the fresh
+  files and reports them under `superseded_request_inputs`. Without
+  `--input-dir`, the request's immutable snapshots are used. This is the
+  re-run after actives are announced: point `--input-dir` at the new salary CSV.
+- `--exclude`, `--unavailable-status` and `--available-status` on a rerun are
+  added to the saved request's lists, never substituted for them.
+- `--official-status-csv <file>` supplies current exact-ID activity rows. Any
+  selected person the file omits is named under
+  `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED`; a file never implies ACTIVE for
+  people it does not list.
+- `--lineup-count` below the reserved-entry count is refused at SELECT; above
+  it, the surplus lineups stay in the selection report and fill no entry.
+- A `--run-id` that already exists is refused (`RUN_ID_COLLISION`) before any
+  file is written; omit it and the timestamped id is generated.
+- An out-of-tree `--prior-package-dir` must be repeated on every `--request`
+  rerun; the request's recorded copy is not trusted on its own. After a
+  `--build-priors` run the generated request keeps `prior_package_dir: null`,
+  so a plain `--request` rerun re-fetches nflverse. To reuse the frozen
+  package, pass `--prior-package-dir <repo>/data/runs/<run_id>/prior_review/priors/frozen`.
+  A package whose bound salary bytes no longer match the current upload is
+  rebuilt automatically when `--build-priors` is also set.
+- More reserved entries than selectable people no longer fails: the legacy
+  path captains every selectable person once, then repeats captains and says
+  so (`captain_repeats_from_index`). Read the pool-coverage section and the
+  captain exposure before accepting a portfolio that large. For 4 or more
+  entries, supply a `portfolio_policy_json` with the captain and exposure caps
+  you want; since 2026-09-10 the stratified bank supports real caps (verified:
+  20 entries, captain cap 0.25, combined cap 0.6 on the top two people,
+  overlap 4, in about 8 seconds).
+- Container fallback for nflverse fetch: if the device shell is down and the
+  container's egress proxy fails Python's strict X.509 check, run with
+  `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1`. Only the strictness flag is cleared;
+  certificate and hostname verification stay on and every captured artifact
+  records `tls_verify_x509_strict=false`. Approved 2026-09-10.
+
+The readable review, workbook Exposure sheet and `selection_report.json` now
+carry `pool_coverage`: every person's exclusion reason (DK status, official
+INACTIVE, operator fade, role gate), the FLEX and CPT salary of each excluded
+group, per-team position coverage, and the prior-season volume left
+unallocated. The kicker slot shows the sole-listed assumption when no role
+evidence was supplied. Current `official_status_csv` rows are used to
 exclude INACTIVE people across both Captain and Flex before selection; missing
 status rows do not imply ACTIVE. Refresh near kickoff. Never set `--as-of` to
 an earlier time for a live run: that flag is historical replay only.
 
 Offensive history is now explicit. Rebuild older frozen prior packages that
-lack SD2 coverage. A missing historical basis, incompatible transfer or material
-role change blocks selection with one named finding per person. Capture approved
+lack SD2 coverage (a package frozen before 2026-09-10 has no `transfer_prior`
+and its transfers still block; rebuild with `--build-priors`). A transfer
+carries his own prior-team share as an unverified cold-start prior and is
+reported as `TRANSFER_PRIOR_UNVERIFIED`; a rookie or never-recorded person is
+excluded with zero share and listed with salary in pool coverage; a declared
+material role change blocks selection with one named finding per person. Capture approved
 evidence through `sources.fetch_public_artifact`, prepare the narrow
 `nfl_offensive_role_evidence_v1` package in `docs/DATA_CONTRACTS.md`, and set
 `offensive_role_evidence_json` in the generated request. Keep the manifest beside
@@ -67,7 +116,9 @@ The workflow accepts an optional versioned `portfolio_policy_json` with exact sa
 game, full person/CPT/FLEX identity, and requested Entry-ID bindings. The
 contract uses explicit fractions in `[0,1]` and exact-decimal floor rounding;
 see `docs/DATA_CONTRACTS.md`. SD4 enforces it on the Showdown `prior_review`
-profile through a bounded 32-candidate bank and one joint MILP, assigns the
+profile through a bounded, policy-stratified candidate bank (`max(32, 4 x
+entries)` candidates, seeded per captain and per capped person, then a
+policy-feasible chain and top-K fill) and one joint MILP, assigns the
 exact requested Entry IDs without cycling, and runs an independent audit that
 reparses the normalized-policy and assignment artifacts immediately before
 review export. Read the reported candidate-bank

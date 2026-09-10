@@ -37,6 +37,8 @@ from typing import Callable, Mapping, Sequence
 from .contracts import (
     EngineMode,
     EvidenceState,
+    SalaryPlayer,
+    SlateContract,
     SourceFreshness,
     earliest_expiry,
     earliest_source_freshness,
@@ -49,6 +51,7 @@ from .opportunity import load_opportunity_model
 from .offensive_roles import OffensiveRoleError, attach_history, verify_offensive_resolution
 from .participation import (
     UNAVAILABLE_STATUSES,
+    ParticipationContract,
     build_participation_contract,
     redistribute_opportunity,
 )
@@ -739,6 +742,215 @@ def _stage(name: str, status: str, **detail: object) -> dict[str, object]:
     return {"stage": name, "status": status, **detail}
 
 
+def _safe_label(label: str) -> str:
+    """Make an operator label safe for a filename without changing the run id.
+
+    The export used the raw label, so `--label 'ne/sea wk1'` created a
+    subdirectory and a name with spaces, and a label containing `..` could place
+    the CSV outside the review folder. Same character policy as `cli._run_id`.
+    """
+
+    cleaned = "".join(
+        character if character.isalnum() or character in "-_" else "-"
+        for character in str(label)
+    )
+    return cleaned[:60] or "slate"
+
+
+def _official_status_coverage(
+    slate: SlateContract, lineups: Sequence[object], official_report: object
+) -> dict[str, object] | None:
+    """Which selected people the supplied official status file actually covers.
+
+    A supplied file used to clear `OFFICIAL_STATUS_REQUIRED` from the reported
+    blockers on presence alone, while the rows were used only to exclude
+    INACTIVE people. The gap this closes is a selected person with no row at
+    all: nothing named them, and the run read as if activity were covered.
+    """
+
+    if not isinstance(official_report, Mapping):
+        return None
+    statuses = official_report.get("statuses")
+    if not isinstance(statuses, Mapping):
+        return None
+    covered_people = {
+        player.underlying_id for player in slate.players if player.dk_id in statuses
+    }
+    by_id = {player.dk_id: player for player in slate.players}
+    selected_people: set[str] = set()
+    for lineup in lineups:
+        for dk_id in getattr(lineup, "roster", ()):
+            player = by_id.get(str(dk_id))
+            if player is not None:
+                selected_people.add(player.underlying_id)
+    without_row = sorted(person for person in selected_people if person not in covered_people)
+    return {
+        "scope": "SUPPLIED_ROWS_ONLY_NOT_FULL_POOL_ACTIVITY_CERTIFICATION",
+        "selected_people": len(selected_people),
+        "selected_with_row": len(selected_people) - len(without_row),
+        "selected_without_row": without_row,
+    }
+
+
+def _weather_from_frozen_package(team_source: str | Path) -> dict[str, object] | None:
+    """Recover the weather basis a reused frozen package was built with.
+
+    On a `--build-priors` run the weather decision is reported directly. On a
+    reuse run it used to be absent from every review surface even though the
+    frozen team prior carries its basis and its six-hour expiry still binds.
+    """
+
+    try:
+        payload = json.loads(Path(team_source).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    metadata = payload.get("metadata") if isinstance(payload, dict) else None
+    coverage = metadata.get("coverage") if isinstance(metadata, dict) else None
+    basis = coverage.get("weather_basis") if isinstance(coverage, dict) else None
+    if not basis:
+        return None
+    observed = None
+    source_uri = None
+    for part in str(basis).split("|"):
+        if part.startswith("OPERATOR_CAPTURE:"):
+            capture = part[len("OPERATOR_CAPTURE:"):]
+            marker = ":observed_at="
+            if marker in capture:
+                source_uri, observed = capture.split(marker, 1)
+            else:
+                source_uri = capture
+    states = {
+        str(record.get("weather_state"))
+        for record in (payload.get("records") or [])
+        if isinstance(record, dict) and record.get("weather_state")
+    }
+    return {
+        "basis": f"INHERITED_FROM_FROZEN_PACKAGE:{basis}",
+        "weather_state": sorted(states)[0] if len(states) == 1 else (sorted(states) or None),
+        "source_uri": source_uri,
+        "observed_at": observed,
+        "expires_at": metadata.get("expires_at") if isinstance(metadata, dict) else None,
+    }
+
+
+def pool_coverage_summary(
+    slate: SlateContract,
+    contract: ParticipationContract,
+    *,
+    official_inactive_dk_ids: Sequence[str],
+    operator_excluded_dk_ids: Sequence[str],
+    offense_excluded_people: Sequence[str],
+    kicker_zero_share_people: Sequence[str],
+    unallocated_by_team: Mapping[str, Mapping[str, float]],
+    offense_excluded_by_finding: Mapping[str, Sequence[str]] | None = None,
+) -> dict[str, object]:
+    """Say who was selectable, who was not, why, and what it cost in salary.
+
+    R17 asked for this next to the lineups: the count and salary of everyone the
+    run could not use, by reason, so pool coverage is visible without reading
+    the offensive-roles report. Exclusion sources are kept distinct because a
+    DraftKings OUT flag, an official INACTIVE row, an operator fade and a role
+    gate are four different facts with four different next actions.
+    """
+
+    by_person: dict[str, list[SalaryPlayer]] = {}
+    for player in slate.players:
+        by_person.setdefault(player.underlying_id, []).append(player)
+    official_people = {
+        player.underlying_id
+        for player in slate.players
+        if player.dk_id in set(official_inactive_dk_ids)
+    }
+    operator_people = {
+        player.underlying_id
+        for player in slate.players
+        if player.dk_id in set(operator_excluded_dk_ids)
+    }
+    unavailable = set(contract.unavailable_people)
+    offense_excluded = set(offense_excluded_people)
+    kicker_excluded = set(kicker_zero_share_people)
+    finding_by_person = {
+        str(person): str(finding)
+        for finding, members in dict(offense_excluded_by_finding or {}).items()
+        for person in members
+    }
+
+    def reason_for(person: str) -> str:
+        if person in unavailable:
+            return f"DK_STATUS_UNAVAILABLE:{contract.status_by_person.get(person, '')}"
+        if person in official_people:
+            return "OFFICIAL_INACTIVE"
+        if person in operator_people:
+            return "OPERATOR_EXCLUDED"
+        if person in offense_excluded:
+            finding = finding_by_person.get(person)
+            return f"OFFENSIVE_ROLE_GATE_EXCLUDED:{finding}" if finding else "OFFENSIVE_ROLE_GATE_EXCLUDED"
+        if person in kicker_excluded:
+            return "KICKER_ROLE_ZERO_SHARE"
+        return "SELECTABLE"
+
+    rows: list[dict[str, object]] = []
+    totals: dict[str, dict[str, object]] = {}
+    for person, players in sorted(by_person.items()):
+        flex_salary = sum(player.salary for player in players if player.role == "FLEX")
+        cpt_salary = sum(player.salary for player in players if player.role == "CPT")
+        reason = reason_for(person)
+        bucket = reason.split(":", 1)[0]
+        first = players[0]
+        rows.append(
+            {
+                "person": person,
+                "name": first.name,
+                "team": first.team,
+                "position": first.position,
+                "dk_status": contract.status_by_person.get(person, ""),
+                "reason": reason,
+                "flex_salary": flex_salary,
+                "cpt_salary": cpt_salary,
+            }
+        )
+        entry = totals.setdefault(
+            bucket, {"people": 0, "flex_salary": 0, "cpt_salary": 0, "names": []}
+        )
+        entry["people"] = int(entry["people"]) + 1
+        entry["flex_salary"] = int(entry["flex_salary"]) + int(flex_salary)
+        entry["cpt_salary"] = int(entry["cpt_salary"]) + int(cpt_salary)
+        names = entry["names"]
+        assert isinstance(names, list)
+        names.append(f"{first.name} ({first.position}, {first.team})")
+    selectable_positions: dict[str, dict[str, int]] = {}
+    for row in rows:
+        team = str(row["team"])
+        position = str(row["position"])
+        slot = selectable_positions.setdefault(team, {})
+        key = f"{position}_selectable"
+        pool_key = f"{position}_in_pool"
+        slot[pool_key] = slot.get(pool_key, 0) + 1
+        if row["reason"] == "SELECTABLE":
+            slot[key] = slot.get(key, 0) + 1
+    return {
+        "people_in_pool": len(rows),
+        # Selectable here means selectable by the solver: participation-eligible
+        # AND not removed by a role gate. The participation-only count is kept
+        # beside it so the two are never confused again.
+        "selectable_people": sum(1 for row in rows if row["reason"] == "SELECTABLE"),
+        "participation_selectable_people": len(contract.selectable_people),
+        "by_reason": dict(sorted(totals.items())),
+        "by_team_position": dict(sorted(selectable_positions.items())),
+        "unallocated_by_team": {
+            team: {field: round(float(value), 4) for field, value in sorted(dict(fields).items())}
+            for team, fields in sorted(dict(unallocated_by_team).items())
+        },
+        "people": rows,
+        "note": (
+            "Unallocated shares are prior-season volume held by people who cannot"
+            " be selected; it is not reassigned. Salary totals are DraftKings FLEX"
+            " and CPT prices of the excluded people, a coverage measure, not a"
+            " projection or an edge claim."
+        ),
+    }
+
+
 def run_prior_review(
     *,
     salary_csv: str | Path,
@@ -900,19 +1112,40 @@ def run_prior_review(
                 prior_package_dir, salary_sha256=salary_digest, as_of=as_of
             )
         except PriorReviewError as exc:
-            return PriorReviewOutcome(
-                profile_version=PROFILE_VERSION,
-                stage="PRIORS",
-                blocked=True,
-                blockers=(str(exc),),
-                stages=(_stage("PRIORS", "FAILED", error=str(exc)),),
-                artifacts=artifacts,
-                hashes=hashes,
-                reports=reports,
-                error=str(exc),
-            )
-        reuse_detail = package.as_report()
-        if package.expired:
+            if build_priors and str(exc).startswith("PRIOR_PACKAGE_SALARY_MISMATCH:"):
+                # A fresh DraftKings download (one status flag is enough) no
+                # longer matches the package's bound salary bytes. With rebuild
+                # authorized, that is a reason to re-propose against the current
+                # snapshot, exactly like an expiry; without it, it stays a named
+                # stop. A hash mismatch inside the package is never rebuilt over.
+                stages.append(
+                    _stage(
+                        "PRIORS",
+                        "REBUILDING_SALARY_MISMATCHED_PACKAGE",
+                        package_dir=str(prior_package_dir),
+                        error=str(exc),
+                    )
+                )
+                reports["superseded_package"] = {
+                    "package_dir": str(prior_package_dir),
+                    "reason": str(exc),
+                }
+                package = None
+            else:
+                return PriorReviewOutcome(
+                    profile_version=PROFILE_VERSION,
+                    stage="PRIORS",
+                    blocked=True,
+                    blockers=(str(exc),),
+                    stages=(_stage("PRIORS", "FAILED", error=str(exc)),),
+                    artifacts=artifacts,
+                    hashes=hashes,
+                    reports=reports,
+                    error=str(exc),
+                )
+        if package is not None:
+            reuse_detail = package.as_report()
+        if package is not None and package.expired:
             if not build_priors:
                 return PriorReviewOutcome(
                     profile_version=PROFILE_VERSION,
@@ -952,6 +1185,10 @@ def run_prior_review(
         )
 
     proposal_dir: Path | None = None
+    if package is not None:
+        inherited_weather = _weather_from_frozen_package(package.team_source)
+        if inherited_weather is not None:
+            reports["weather"] = inherited_weather
     if package is None:
         proposal_dir = run_dir / "priors" / "proposal"
         try:
@@ -1235,6 +1472,30 @@ def run_prior_review(
 
     template = parse_entries(entry_path)
     entry_ids = [entry.entry_id for entry in template.authorizations]
+    requested_count = int(lineup_count) if lineup_count else len(entry_ids)
+    if portfolio_policy is None and requested_count < len(entry_ids):
+        # Fewer lineups than reserved entries can only be filled by repeating a
+        # roster across entries. The export would then carry duplicate lineups
+        # into a bulk-entry file, which the display reconciliation rejects one
+        # stage later, after the CSV is already on disk. Refuse here instead.
+        message = (
+            "LINEUP_COUNT_BELOW_RESERVED_ENTRIES:"
+            f"lineup_count={requested_count}:reserved_entries={len(entry_ids)}"
+            ":every reserved entry needs its own distinct lineup; omit lineup_count"
+            " or set it to at least the reserved-entry count"
+        )
+        stages.append(_stage("SELECT", "FAILED", error=message))
+        return PriorReviewOutcome(
+            profile_version=PROFILE_VERSION,
+            stage="SELECT",
+            blocked=True,
+            blockers=(message,),
+            stages=tuple(stages),
+            artifacts=artifacts,
+            hashes=hashes,
+            reports=reports,
+            error=message,
+        )
     try:
         if portfolio_policy is not None:
             assert policy_source_path is not None
@@ -1286,7 +1547,7 @@ def run_prior_review(
             model,
             splits,
             contract,
-            count=int(lineup_count) if lineup_count else len(entry_ids),
+            count=requested_count,
             differentiate_captain=not allow_repeat_captain,
             max_person_overlap=max_person_overlap,
             role_evidence_json=role_evidence_json,
@@ -1368,6 +1629,34 @@ def run_prior_review(
             "status_by_person": dict(sorted(contract.status_by_person.items())),
         },
         "redistribution": redistribution,
+        "pool_coverage": pool_coverage_summary(
+            slate,
+            contract,
+            official_inactive_dk_ids=official_exclusions,
+            operator_excluded_dk_ids=tuple(operator_excluded_dk_ids),
+            offense_excluded_people=scores.offensive_role_resolution.excluded_people,
+            kicker_zero_share_people=scores.kicker_role_resolution.zero_share_people,
+            unallocated_by_team=dict(
+                scores.offensive_role_resolution.report.get("unallocated_by_team") or {}
+            ),
+            offense_excluded_by_finding=dict(
+                scores.offensive_role_resolution.report.get("excluded_by_finding") or {}
+            ),
+        ),
+        "official_status_coverage": _official_status_coverage(
+            slate, lineups, reports.get("official_status")
+        ),
+        "assignment_summary": {
+            "lineups_generated": len(lineups),
+            "reserved_entries": len(entry_ids),
+            "unassigned_lineups": max(0, len(lineups) - len(entry_ids)),
+            "note": (
+                "Lineups beyond the reserved-entry count are retained in this report"
+                " for review and are not written to any entry."
+                if len(lineups) > len(entry_ids)
+                else "Every reserved entry received its own lineup."
+            ),
+        },
         "selection": selection,
         "prior_scores": scores.as_report(),
         "warning": (
@@ -1455,7 +1744,7 @@ def run_prior_review(
             slate=slate,
             template=template,
             assignments=assignments,
-            output_path=review_dir / f"DK_REVIEW_ENTRY_{label}.csv",
+            output_path=review_dir / f"DK_REVIEW_ENTRY_{_safe_label(label)}.csv",
         )
     except Exception as exc:  # noqa: BLE001 - named, never swallowed
         error = f"{type(exc).__name__}:{exc}"
@@ -1500,7 +1789,7 @@ def run_prior_review(
     )
     outcome = PriorReviewOutcome(
         profile_version=PROFILE_VERSION,
-        stage="EXPORT" if export.file_valid else "EXPORT_BLOCKED",
+        stage="EXPORT",
         blocked=not export.file_valid,
         blockers=tuple(f"REVIEW_EXPORT:{problem}" for problem in export.problems),
         stages=tuple(stages),
