@@ -12,15 +12,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
-from .contracts import FrozenModel, SlateContract
+from .contracts import EngineMode, FrozenModel, SlateContract
 from .hashing import sha256_file
 from .kicker_roles import KickerRoleError, KickerRoleSource, _validate_source
 from .opportunity import OpportunityModel
 from .participation import ParticipationContract
 
 VERSION = "nfl_offensive_role_evidence_v1"
+CLASSIC_VERSION = "nfl_classic_offensive_role_evidence_c1_v1"
 TRANSFORM = "offensive_explicit_team_shares_v1"
 FIELDS = ("qb_attempt_share", "carry_share", "target_share", "rushing_td_share", "receiving_td_share")
 POSITIONS = {
@@ -69,8 +70,17 @@ class Efficiency(FrozenModel):
 
 class PersonBinding(FrozenModel):
     underlying_id: str = Field(min_length=1)
-    cpt_dk_id: str = Field(min_length=1)
-    flex_dk_id: str = Field(min_length=1)
+    dk_id: str | None = Field(default=None, min_length=1)
+    cpt_dk_id: str | None = Field(default=None, min_length=1)
+    flex_dk_id: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def exact_identity_shape(self) -> "PersonBinding":
+        classic = self.dk_id is not None
+        showdown = self.cpt_dk_id is not None and self.flex_dk_id is not None
+        if classic == showdown:
+            raise ValueError("supply exactly dk_id or both cpt_dk_id and flex_dk_id")
+        return self
 
 
 class Recipient(PersonBinding):
@@ -102,13 +112,26 @@ class OffensiveSource(KickerRoleSource):
 
 
 class OffensiveEvidence(FrozenModel):
-    schema_version: Literal["nfl_offensive_role_evidence_v1"]
+    schema_version: Literal[
+        "nfl_offensive_role_evidence_v1",
+        "nfl_classic_offensive_role_evidence_c1_v1",
+    ]
     transformation_version: Literal["offensive_explicit_team_shares_v1"]
     salary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    game_id: str
+    game_id: str | None = None
+    game_ids: tuple[str, ...] = ()
     sources: tuple[OffensiveSource, ...] = Field(min_length=1)
     declarations: tuple[TeamAllocation, ...] = ()
     facts: tuple[RoleFact, ...] = ()
+
+    @model_validator(mode="after")
+    def game_scope_shape(self) -> "OffensiveEvidence":
+        if self.schema_version == VERSION:
+            if not self.game_id or self.game_ids:
+                raise ValueError("Showdown evidence requires one game_id")
+        elif self.game_id or len(set(self.game_ids)) < 2:
+            raise ValueError("Classic evidence requires at least two unique game_ids")
+        return self
 
 
 @dataclass(frozen=True)
@@ -152,6 +175,16 @@ def _people(slate: SlateContract) -> dict[str, dict]:
     for p in slate.players:
         if p.position not in OFFENSE:
             continue
+        if slate.mode is EngineMode.CLASSIC:
+            if p.underlying_id in result:
+                raise OffensiveRoleError(
+                    f"OFFENSIVE_ROLE_DUPLICATE_ID:{p.underlying_id}"
+                )
+            # Internal aliases only: Classic has one exact DK row.  Evidence
+            # v1 remains Showdown-only, while the history/participation gate is
+            # shared across every game in the Classic slate.
+            result[p.underlying_id] = {"CPT": p, "FLEX": p}
+            continue
         rows = result.setdefault(p.underlying_id, {})
         if p.role in rows:
             raise OffensiveRoleError(f"OFFENSIVE_ROLE_DUPLICATE_ID:{p.underlying_id}")
@@ -164,7 +197,15 @@ def _people(slate: SlateContract) -> dict[str, dict]:
 
 def _bind(binding: PersonBinding, team: str, game: str, people: dict) -> None:
     rows = people.get(binding.underlying_id)
-    if rows is None or rows["CPT"].dk_id != binding.cpt_dk_id or rows["FLEX"].dk_id != binding.flex_dk_id:
+    if rows is None:
+        raise OffensiveRoleError(f"OFFENSIVE_ROLE_EXACT_ID_MISMATCH:{binding.underlying_id}")
+    if binding.dk_id is not None:
+        if rows["CPT"].dk_id != binding.dk_id or rows["FLEX"].dk_id != binding.dk_id:
+            raise OffensiveRoleError(f"OFFENSIVE_ROLE_EXACT_ID_MISMATCH:{binding.underlying_id}")
+    elif (
+        rows["CPT"].dk_id != binding.cpt_dk_id
+        or rows["FLEX"].dk_id != binding.flex_dk_id
+    ):
         raise OffensiveRoleError(f"OFFENSIVE_ROLE_EXACT_ID_MISMATCH:{binding.underlying_id}")
     if rows["FLEX"].team != team or rows["FLEX"].game_id != game:
         raise OffensiveRoleError(f"OFFENSIVE_ROLE_TEAM_GAME_MISMATCH:{binding.underlying_id}")
@@ -179,8 +220,16 @@ def _load(path: str | Path, slate: SlateContract, when: datetime):
             raise OffensiveRoleError("OFFENSIVE_ROLE_MANIFEST_CHANGED_DURING_READ")
         if evidence.salary_sha256 != slate.salary_hash:
             raise OffensiveRoleError("OFFENSIVE_ROLE_SALARY_HASH_MISMATCH")
-        if {g.game_id for g in slate.games} != {evidence.game_id}:
-            raise OffensiveRoleError("OFFENSIVE_ROLE_GAME_MISMATCH")
+        slate_games = {g.game_id for g in slate.games}
+        if slate.mode is EngineMode.SHOWDOWN:
+            if evidence.schema_version != VERSION or slate_games != {evidence.game_id}:
+                raise OffensiveRoleError("OFFENSIVE_ROLE_GAME_MISMATCH")
+        elif (
+            evidence.schema_version != CLASSIC_VERSION
+            or set(evidence.game_ids) != slate_games
+            or len(evidence.game_ids) != len(slate_games)
+        ):
+            raise OffensiveRoleError("OFFENSIVE_ROLE_CLASSIC_GAME_COVERAGE_MISMATCH")
         sources, hashes = {}, {}
         for source in evidence.sources:
             if source.sha256 in sources:
@@ -234,12 +283,26 @@ def resolve_offensive_roles(
         for declaration in evidence.declarations:
             if declaration.team in allocations:
                 raise OffensiveRoleError(f"OFFENSIVE_ROLE_DUPLICATE_TEAM:{declaration.team}")
-            if declaration.team not in {p.team for p in slate.players} or declaration.game_id != evidence.game_id:
+            allowed_games = (
+                {str(evidence.game_id)}
+                if slate.mode is EngineMode.SHOWDOWN
+                else set(evidence.game_ids)
+            )
+            expected_game_by_team = {
+                player.team: player.game_id for player in slate.players
+            }
+            if (
+                declaration.team not in expected_game_by_team
+                or declaration.game_id not in allowed_games
+                or expected_game_by_team[declaration.team] != declaration.game_id
+            ):
                 raise OffensiveRoleError("OFFENSIVE_ROLE_TEAM_GAME_MISMATCH")
             source = sources.get(declaration.source_sha256)
             if source is None or source.support_kind != "NUMERICAL_ALLOCATION":
                 raise OffensiveRoleError("OFFENSIVE_ROLE_NUMERICAL_SOURCE_REQUIRED")
-            expected = declaration.model_dump(mode="json", exclude={"source_sha256"})
+            expected = declaration.model_dump(
+                mode="json", exclude={"source_sha256"}, exclude_none=True
+            )
             # A registered identity transformation: source JSON must explicitly
             # contain these numbers and exact identities. Prose supplies none.
             try:
@@ -247,7 +310,9 @@ def resolve_offensive_roles(
                 supported = TeamAllocation.model_validate({**observed, "source_sha256": declaration.source_sha256})
             except (ValueError, TypeError) as exc:
                 raise OffensiveRoleError("OFFENSIVE_ROLE_NUMERICAL_SUPPORT_INVALID") from exc
-            if supported.model_dump(mode="json", exclude={"source_sha256"}) != expected:
+            if supported.model_dump(
+                mode="json", exclude={"source_sha256"}, exclude_none=True
+            ) != expected:
                 raise OffensiveRoleError("OFFENSIVE_ROLE_NUMERICAL_SUPPORT_MISMATCH")
             recipients = set()
             for recipient in declaration.recipients:
@@ -355,8 +420,12 @@ def resolve_offensive_roles(
         if action == "BLOCK":
             excluded.add(person)
             blocked.append(f"{reason}:{person}:{next_action}")
-        findings.append({"person": person, "team": rows["FLEX"].team, "cpt_dk_id": rows["CPT"].dk_id,
-                         "flex_dk_id": rows["FLEX"].dk_id, "state": state, "history_state": historical_state,
+        findings.append({"person": person, "team": rows["FLEX"].team,
+                         "game_id": rows["FLEX"].game_id,
+                         "dk_id": rows["FLEX"].dk_id,
+                         "cpt_dk_id": rows["CPT"].dk_id if slate.mode is EngineMode.SHOWDOWN else None,
+                         "flex_dk_id": rows["FLEX"].dk_id if slate.mode is EngineMode.SHOWDOWN else None,
+                         "state": state, "history_state": historical_state,
                          "history_basis": history, "declared_fact": facts.get(person), "selection_action": action,
                          "finding": reason, "next_evidence_action": next_action,
                          "before": {f: getattr(original, f) for f in FIELDS} if original else None,

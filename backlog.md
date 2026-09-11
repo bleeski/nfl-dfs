@@ -66,10 +66,10 @@ do not delay a useful Classic review workflow until the quantitative research
 track is complete. Conversely, a legal Classic review portfolio does not close
 the quantitative weakness.
 
-The table below is the authoritative dev-session queue. DEV0 and Q1 are done;
-`C1` is the only current `READY` item. When a chunk closes, update the table so
-only the next dependency-satisfied chunk is `READY`; the remaining preferred
-order is `C1` through `C4`, then `Q2` onward. Q1 started the settlement/
+The table below is the authoritative dev-session queue. DEV0, Q1, and C1 are
+done; `C2` is the only current `READY` item. When a chunk closes, update the table
+so only the next dependency-satisfied chunk is `READY`; the remaining preferred
+order is `C2` through `C4`, then `Q2` onward. Q1 started the settlement/
 validation clock early; the bounded Classic sequence now delivers the useful
 prior-only workflow before the longer calibrated-model build.
 
@@ -77,8 +77,8 @@ prior-only workflow before the longer calibrated-model build.
 |---:|---|---|---|---|---|---|
 | 0 | DEV0 | Shared | `DONE` | none | Reconcile and freeze the exact current development baseline without losing any existing work | current dirty-tree handoff and stale baseline text |
 | 1 | Q1 | Quantitative | `DONE` | DEV0 | Settlement capture plus an auditable reference evaluator and registered promotion metrics | W7, W8, S4A |
-| 2 | C1 | Classic | `READY` | DEV0, Q1 contract decisions only | Multi-game Classic immutable intake, priors, projection, participation, and one-command prior-review orchestration | DL6, Classic portion of S6 |
-| 3 | C2 | Classic | `BLOCKED` | C1 | Classic policy contract, candidate generation, joint portfolio selection, and exact Entry-ID assignment | Classic portion of S5 and W9 |
+| 2 | C1 | Classic | `DONE` | DEV0, Q1 contract decisions only | Multi-game Classic immutable intake, priors, projection, participation, and one-command prior-review orchestration | DL6, Classic portion of S6 |
+| 3 | C2 | Classic | `READY` | C1 | Classic policy contract, candidate generation, joint portfolio selection, and exact Entry-ID assignment | Classic portion of S5 and W9 |
 | 4 | C3 | Classic | `BLOCKED` | C2 | Independent audit, readable review, exact-template export, deterministic replay, and 1/3/20/150-entry benchmarks | DL7, W10, Classic review portion of S8/S9 |
 | 5 | C4 | Classic | `BLOCKED` | C3, current operator files/evidence | Current real-slate Cowork/Linux rehearsal and operator handoff | DL8 |
 | 6 | C5 | Classic | `BLOCKED` | C3, S2 | Lock-aware slot ordering and governed Classic late-swap mechanics | W13 mechanical portion |
@@ -165,6 +165,13 @@ approximating.
     are registered before challenger results are viewed.
 
 ### C1 — Classic intake, projection, and one-command prior review
+
+Status: `DONE` on `codex/c1-classic-intake-prior-review` at unchanged baseline
+HEAD `9d25ad75f6fd08a22b700e3062b7304158e5c0c8` (uncommitted implementation).
+Final verification collected 555 tests: `554 passed, 1 skipped`; doctor,
+compile/import, whitespace, deterministic replay, mutation, prohibited-path,
+and runtime/memory checks passed. C1 emits canonical review JSON only and does
+not unlock any upload claim.
 
 - Goal: make the normal two-CSV Cowork surface work for NFL Classic across all
   games on the slate without routing through the known-defective economics
@@ -807,11 +814,12 @@ is the reason.
 
 ### 2026-09-10 current development action
 
-**Only `C1` is `READY`.** DEV0 and Q1 are done. Begin the bounded multi-game
-Classic immutable intake, prior projection, participation, and one-command
-prior-review tranche using `docs/session-prompts/C1-classic-intake-prior-review.md`.
-Do not begin C2 policy/candidate/portfolio work, use the production field or
-payout economics path, or change `PRIOR_ONLY / DO_NOT_UPLOAD` truth.
+**Only `C2` is `READY`.** DEV0, Q1, and C1 are done. Begin the bounded Classic
+policy, deterministic candidate-bank, joint portfolio selection, and exact
+Entry-ID assignment tranche using
+`docs/session-prompts/C2-classic-policy-candidates-portfolio.md`. Do not begin
+C3 review/export work, use the production field or payout economics path, or
+change `PRIOR_ONLY / DO_NOT_UPLOAD` truth.
 After Q1's contracts are fixed, execute C1 through C4 in order to deliver the
 prior-only Classic review workflow. Then continue Q2 through Q7 and QC1 to fix
 the central-estimate/uncalibrated portfolio weakness for both modes. C5 may be

@@ -546,7 +546,7 @@ def test_a_missing_package_blocks_rather_than_building_without_permission(
     assert outcome.export is None
 
 
-def test_classic_is_refused_by_this_showdown_only_profile(tmp_path: Path) -> None:
+def test_classic_reaches_the_shared_prior_chain_instead_of_a_mode_block(tmp_path: Path) -> None:
     classic = Path(__file__).parent / "fixtures" / "supplied" / "DKSalaries Salary CSV Classic.csv"
     entries = Path(__file__).parent / "fixtures" / "supplied" / "DKEntries CSV.csv"
 
@@ -557,11 +557,12 @@ def test_classic_is_refused_by_this_showdown_only_profile(tmp_path: Path) -> Non
         as_of=AS_OF,
         run_root=tmp_path / "run",
         output_root=tmp_path / "out",
-        build_priors=True,
+        build_priors=False,
     )
 
     assert outcome.blocked
-    assert outcome.blockers[0].startswith("PROFILE_MODE_NOT_SUPPORTED:CLASSIC")
+    assert outcome.profile_version == "cowork_classic_prior_review_c1_v1"
+    assert outcome.blockers[0].startswith("PRIOR_PACKAGE_REQUIRED:")
     assert outcome.export is None
 
 

@@ -1,4 +1,4 @@
-"""Prior-only Showdown lineup selection.
+"""Prior-only NFL lineup selection for Showdown and Classic.
 
 R02, selection side. This is the step that turns a frozen prior package into
 assignments, and it is deliberately narrow: it calls the MILP in `optimizer.py`
@@ -43,6 +43,7 @@ from .prior_score import PriorScores, TeamSplits, score_pool
 
 
 PROFILE_VERSION = "prior_only_showdown_selection_v1"
+CLASSIC_PROFILE_VERSION = "prior_only_classic_selection_c1_v1"
 
 
 class SelectionError(ValueError):
@@ -64,8 +65,12 @@ class SelectedLineup:
         return {
             "index": self.index,
             "roster": list(self.roster),
-            "captain": names.get(self.captain_dk_id, self.captain_dk_id),
-            "captain_dk_id": self.captain_dk_id,
+            "captain": (
+                names.get(self.captain_dk_id, self.captain_dk_id)
+                if self.captain_dk_id
+                else None
+            ),
+            "captain_dk_id": self.captain_dk_id or None,
             "salary": self.salary,
             "salary_remaining": 50_000 - self.salary,
             "prior_points": round(self.prior_points, 3),
@@ -104,7 +109,7 @@ def select_prior_lineups(
     bounds.
     """
 
-    if slate.mode is not EngineMode.SHOWDOWN:
+    if slate.mode not in {EngineMode.SHOWDOWN, EngineMode.CLASSIC}:
         raise SelectionError(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
     if count < 1:
         raise SelectionError(f"LINEUP_COUNT_INVALID:{count}")
@@ -112,6 +117,11 @@ def select_prior_lineups(
         raise SelectionError(
             "PORTFOLIO_POLICY_ENTRY_COUNT_MISMATCH:"
             f"count={count}:policy_entries={portfolio_policy.entry_count}"
+        )
+    if portfolio_policy is not None and slate.mode is not EngineMode.SHOWDOWN:
+        raise SelectionError(
+            "PORTFOLIO_POLICY_MODE_UNSUPPORTED_C1:Classic policy, candidate-bank, "
+            "and joint portfolio selection belong to C2"
         )
     problems = selectable_pool_problems(slate, contract)
     if problems:
@@ -280,10 +290,23 @@ def select_prior_lineups(
     optimizer = LineupOptimizer(
         slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
     )
+    selection_profile_version = (
+        PROFILE_VERSION
+        if slate.mode is EngineMode.SHOWDOWN
+        else CLASSIC_PROFILE_VERSION
+    )
+    effective_overlap = (
+        max_person_overlap if slate.mode is EngineMode.SHOWDOWN else None
+    )
     captain_repeats_from_index: int | None = None
     for index in range(1, count + 1):
         result = optimizer.solve(objective)
-        if result.roster is None and differentiate_captain and selected:
+        if (
+            result.roster is None
+            and slate.mode is EngineMode.SHOWDOWN
+            and differentiate_captain
+            and selected
+        ):
             # Every selectable person has already captained one lineup, so the
             # distinct-captain rule alone makes the next solve infeasible. That
             # is a structural limit of the pool, not a reason to hand back
@@ -296,8 +319,8 @@ def select_prior_lineups(
             )
             for earlier in selected:
                 optimizer.add_no_good(earlier.roster)
-                if max_person_overlap is not None:
-                    optimizer.add_person_overlap_limit(earlier.roster, max_person_overlap)
+                if effective_overlap is not None:
+                    optimizer.add_person_overlap_limit(earlier.roster, effective_overlap)
             differentiate_captain = False
             captain_repeats_from_index = index
             result = optimizer.solve(objective)
@@ -317,7 +340,7 @@ def select_prior_lineups(
             raise SelectionError(
                 f"SOLVER_SELECTED_AN_EXCLUDED_ROW:index={index}:{sorted(blocked)}"
             )
-        captain = roster[0]
+        captain = roster[0] if slate.mode is EngineMode.SHOWDOWN else ""
         selected.append(
             SelectedLineup(
                 index=index,
@@ -336,9 +359,9 @@ def select_prior_lineups(
         # optionally forbid a repeat captain. Without the overlap cap the next
         # solve returns the same six people with a rotated captain.
         optimizer.add_no_good(roster)
-        if max_person_overlap is not None:
-            optimizer.add_person_overlap_limit(roster, max_person_overlap)
-        if differentiate_captain:
+        if effective_overlap is not None:
+            optimizer.add_person_overlap_limit(roster, effective_overlap)
+        if differentiate_captain and slate.mode is EngineMode.SHOWDOWN:
             optimizer.add_no_good([captain])
             forbidden_captains.append(captain)
 
@@ -350,21 +373,23 @@ def select_prior_lineups(
         if captain_repeats_from_index is not None
         else selected
     )
-    if differentiate_captain or captain_repeats_from_index is not None:
+    if slate.mode is EngineMode.SHOWDOWN and (
+        differentiate_captain or captain_repeats_from_index is not None
+    ):
         captains = [lineup.captain_dk_id for lineup in distinct_captain_span]
         if len(set(captains)) != len(captains):
             raise SelectionError("DUPLICATE_CAPTAIN_SELECTED")
 
-    if max_person_overlap is not None and len(selected) > 1:
+    if effective_overlap is not None and len(selected) > 1:
         for earlier in range(len(selected)):
             for later in range(earlier + 1, len(selected)):
                 first = {by_id[dk].underlying_id for dk in selected[earlier].roster}
                 second = {by_id[dk].underlying_id for dk in selected[later].roster}
                 shared = len(first & second)
-                if shared > max_person_overlap:
+                if shared > effective_overlap:
                     raise SelectionError(
                         f"OVERLAP_LIMIT_BREACHED:{earlier + 1}v{later + 1}:{shared}"
-                        f">{max_person_overlap}"
+                        f">{effective_overlap}"
                     )
 
     exposure: dict[str, int] = {}
@@ -374,7 +399,8 @@ def select_prior_lineups(
             exposure[person] = exposure.get(person, 0) + 1
 
     report = {
-        "profile_version": PROFILE_VERSION,
+        "profile_version": selection_profile_version,
+        "mode": slate.mode.value,
         "score_version": scores.score_version,
         "objective": "MAXIMIZE_PRIOR_POINTS_OF_THE_EXPECTED_STAT_LINE",
         "objective_limits": [
@@ -384,21 +410,35 @@ def select_prior_lineups(
         ],
         "differentiation": {
             "captain": (
-                "DISTINCT_UNTIL_POOL_EXHAUSTED_THEN_REPEATED"
-                if captain_repeats_from_index is not None
-                else ("DISTINCT_PER_ENTRY" if differentiate_captain else "UNCONSTRAINED")
+                "NOT_APPLICABLE_CLASSIC"
+                if slate.mode is EngineMode.CLASSIC
+                else (
+                    "DISTINCT_UNTIL_POOL_EXHAUSTED_THEN_REPEATED"
+                    if captain_repeats_from_index is not None
+                    else (
+                        "DISTINCT_PER_ENTRY"
+                        if differentiate_captain
+                        else "UNCONSTRAINED"
+                    )
+                )
             ),
             "captain_repeats_from_index": captain_repeats_from_index,
             "captain_exposure": dict(
                 sorted(
                     Counter(
-                        by_id[lineup.captain_dk_id].underlying_id for lineup in selected
+                        by_id[lineup.captain_dk_id].underlying_id
+                        for lineup in selected
+                        if lineup.captain_dk_id
                     ).items(),
                     key=lambda item: (-item[1], item[0]),
                 )
             ),
-            "max_person_overlap": max_person_overlap,
-            "basis": "STRUCTURAL_UNIQUENESS_NOT_A_CORRELATED_EQUITY_CLAIM",
+            "max_person_overlap": effective_overlap,
+            "basis": (
+                "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_ONLY_C1_NOT_A_PORTFOLIO_POLICY"
+                if slate.mode is EngineMode.CLASSIC
+                else "STRUCTURAL_UNIQUENESS_NOT_A_CORRELATED_EQUITY_CLAIM"
+            ),
         },
         "lineups": len(selected),
         "excluded_rows": len(excluded),

@@ -1,4 +1,4 @@
-"""Deterministic nflverse-to-prior adapter for a single DraftKings Showdown game.
+"""Deterministic nflverse-to-prior adapter for DraftKings NFL slates.
 
 R01 closure. The `project` command already validates and transforms frozen prior
 artifacts; nothing produced them. This module does, from approved public
@@ -650,6 +650,31 @@ def showdown_people(slate: SlateContract) -> dict[str, dict[str, SalaryPlayer]]:
     return people
 
 
+def slate_people(slate: SlateContract) -> dict[str, dict[str, SalaryPlayer]]:
+    """Return one exact current-DK row per person, preserving Showdown pairs.
+
+    The projection contract consumes the FLEX row for Showdown and the sole
+    salary row for Classic.  Keeping both behind one helper lets the source and
+    identity transformations stay shared without inventing a second Classic
+    prior engine.
+    """
+
+    if slate.mode is EngineMode.SHOWDOWN:
+        return showdown_people(slate)
+    if slate.mode is not EngineMode.CLASSIC:
+        raise PriorsBuildError(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
+    if len(slate.games) < 2:
+        raise PriorsBuildError(f"CLASSIC_GAME_COUNT:{len(slate.games)}")
+    people: dict[str, dict[str, SalaryPlayer]] = {}
+    for player in slate.players:
+        if player.role is not None:
+            raise PriorsBuildError(f"CLASSIC_ROW_HAS_ROLE:{player.dk_id}:{player.role}")
+        if player.underlying_id in people:
+            raise PriorsBuildError(f"DUPLICATE_CLASSIC_PERSON:{player.underlying_id}")
+        people[player.underlying_id] = {"FLEX": player}
+    return people
+
+
 def resolve_team_crosswalk(
     slate: SlateContract,
     teams_rows: Sequence[Mapping[str, str]],
@@ -675,8 +700,12 @@ def resolve_team_crosswalk(
             nickname_to_team.setdefault(nickname, []).append(code)
 
     dk_teams = sorted({player.team for player in slate.players})
-    if len(dk_teams) != 2:
-        raise PriorsBuildError(f"SHOWDOWN_TEAM_COUNT:{dk_teams}")
+    expected_teams = 2 if slate.mode is EngineMode.SHOWDOWN else 2 * len(slate.games)
+    if len(dk_teams) != expected_teams:
+        raise PriorsBuildError(
+            f"SLATE_TEAM_COUNT:mode={slate.mode.value}:teams={dk_teams}:"
+            f"expected={expected_teams}"
+        )
 
     crosswalk: dict[str, str] = {}
     for player in slate.players:
@@ -702,9 +731,51 @@ def resolve_team_crosswalk(
     missing = [team for team in dk_teams if team not in crosswalk]
     if missing:
         raise PriorsBuildError(f"TEAM_CROSSWALK_INCOMPLETE:{missing}:no DST row to bind")
-    if len(set(crosswalk.values())) != 2:
+    if len(set(crosswalk.values())) != len(dk_teams):
         raise PriorsBuildError(f"TEAM_CROSSWALK_NOT_INJECTIVE:{sorted(crosswalk.items())}")
     return crosswalk
+
+
+def resolve_nflverse_games(
+    slate: SlateContract,
+    games_rows: Sequence[Mapping[str, str]],
+    crosswalk: Mapping[str, str],
+    *,
+    season: int,
+) -> dict[str, dict[str, str]]:
+    """Bind every DK game to exactly one oriented nflverse schedule row."""
+
+    resolved: dict[str, dict[str, str]] = {}
+    for game in slate.games:
+        expected = {crosswalk[game.away_team], crosswalk[game.home_team]}
+        kickoff_date = game.lock_at.astimezone(game.lock_at.tzinfo).date().isoformat()
+        matches = [
+            row
+            for row in games_rows
+            if (row.get("season") or "").strip() == str(season)
+            and {
+                (row.get("away_team") or "").strip().upper(),
+                (row.get("home_team") or "").strip().upper(),
+            }
+            == expected
+            and (row.get("gameday") or "").strip() == kickoff_date
+        ]
+        if len(matches) != 1:
+            raise PriorsBuildError(
+                f"NFLVERSE_GAME_NOT_UNIQUE:{game.game_id}:{sorted(expected)}:"
+                f"{kickoff_date}:matches={len(matches)}"
+            )
+        matched = dict(matches[0])
+        if (matched.get("away_team") or "").strip().upper() != crosswalk[game.away_team]:
+            raise PriorsBuildError(
+                "NFLVERSE_GAME_ORIENTATION_CONFLICT:"
+                f"game={game.game_id}:dk_away={game.away_team}:"
+                f"nflverse_away={matched.get('away_team')}"
+            )
+        resolved[game.game_id] = matched
+    if set(resolved) != {game.game_id for game in slate.games}:
+        raise PriorsBuildError("NFLVERSE_GAME_COVERAGE_MISMATCH")
+    return resolved
 
 
 def resolve_nflverse_game(
@@ -721,31 +792,11 @@ def resolve_nflverse_game(
     match fails closed rather than picking a row.
     """
 
-    game = slate.games[0]
-    expected = {crosswalk[game.away_team], crosswalk[game.home_team]}
-    kickoff_date = game.lock_at.astimezone(game.lock_at.tzinfo).date().isoformat()
-    matches = [
-        row
-        for row in games_rows
-        if (row.get("season") or "").strip() == str(season)
-        and {
-            (row.get("away_team") or "").strip().upper(),
-            (row.get("home_team") or "").strip().upper(),
-        }
-        == expected
-        and (row.get("gameday") or "").strip() == kickoff_date
-    ]
-    if len(matches) != 1:
-        raise PriorsBuildError(
-            f"NFLVERSE_GAME_NOT_UNIQUE:{sorted(expected)}:{kickoff_date}:matches={len(matches)}"
-        )
-    matched = matches[0]
-    if (matched.get("away_team") or "").strip().upper() != crosswalk[game.away_team]:
-        raise PriorsBuildError(
-            "NFLVERSE_GAME_ORIENTATION_CONFLICT:"
-            f"dk_away={game.away_team}:nflverse_away={matched.get('away_team')}"
-        )
-    return dict(matched)
+    if len(slate.games) != 1:
+        raise PriorsBuildError(f"SINGLE_GAME_REQUIRED:{len(slate.games)}")
+    return resolve_nflverse_games(
+        slate, games_rows, crosswalk, season=season
+    )[slate.games[0].game_id]
 
 
 # --------------------------------------------------------------------------- #
@@ -877,7 +928,7 @@ def propose_identities(
     `freeze_prior_package` does, and only for a reviewed decision.
     """
 
-    people = showdown_people(slate)
+    people = slate_people(slate)
     candidates = _roster_candidates(
         roster_rows, season=season, nflverse_teams=crosswalk.values()
     )
@@ -918,7 +969,7 @@ def propose_identities(
     for underlying_id in sorted(people):
         roles = people[underlying_id]
         flex = roles["FLEX"]
-        captain = roles["CPT"]
+        captain = roles.get("CPT")
         nflverse_team = crosswalk[flex.team]
         normalized = normalize_person_name(flex.name)
 
@@ -927,7 +978,7 @@ def propose_identities(
             proposals.append(
                 IdentityProposal(
                     dk_id=flex.dk_id,
-                    captain_dk_id=captain.dk_id,
+                    captain_dk_id=captain.dk_id if captain is not None else "",
                     dk_name=flex.name,
                     dk_team=flex.team,
                     dk_position=flex.position,
@@ -991,7 +1042,7 @@ def propose_identities(
         proposals.append(
             IdentityProposal(
                 dk_id=flex.dk_id,
-                captain_dk_id=captain.dk_id,
+                captain_dk_id=captain.dk_id if captain is not None else "",
                 dk_name=flex.name,
                 dk_team=flex.team,
                 dk_position=flex.position,
@@ -1084,9 +1135,9 @@ def build_team_records(
     slate: SlateContract,
     *,
     crosswalk: Mapping[str, str],
-    game_row: Mapping[str, str],
+    game_rows: Mapping[str, Mapping[str, str]],
     team_stat_rows: Sequence[Mapping[str, str]],
-    weather_state: str,
+    weather_by_game: Mapping[str, str],
     market_observed_at: datetime,
     season: int,
     prior_season: int,
@@ -1100,52 +1151,60 @@ def build_team_records(
     and not a confidence interval.
     """
 
-    game = slate.games[0]
-    total_line = _required_decimal(game_row, "total_line", label="games.total_line")
-    spread_line = _required_decimal(game_row, "spread_line", label="games.spread_line")
     records: list[dict[str, object]] = []
     mappings: list[dict[str, object]] = []
     diagnostics: dict[str, object] = {}
 
-    for dk_team in (game.away_team, game.home_team):
-        nflverse_team = crosswalk[dk_team]
-        label = f"team:{dk_team}"
-        weeks = _team_weekly_rows(
-            team_stat_rows, nflverse_team=nflverse_team, prior_season=prior_season
+    expected_games = {game.game_id for game in slate.games}
+    if set(game_rows) != expected_games or set(weather_by_game) != expected_games:
+        raise PriorsBuildError(
+            "TEAM_PRIOR_GAME_COVERAGE_MISMATCH:"
+            f"schedule_missing={sorted(expected_games - set(game_rows))}:"
+            f"weather_missing={sorted(expected_games - set(weather_by_game))}"
         )
-        played = Decimal(len(weeks))
-
-        def column(name: str) -> Decimal:
-            return sum(
-                (_decimal_cell(row, name, label=f"{label}:{name}") for row in weeks),
-                Decimal("0"),
+    for game in slate.games:
+        game_row = game_rows[game.game_id]
+        total_line = _required_decimal(game_row, "total_line", label="games.total_line")
+        spread_line = _required_decimal(game_row, "spread_line", label="games.spread_line")
+        for dk_team in (game.away_team, game.home_team):
+            nflverse_team = crosswalk[dk_team]
+            label = f"team:{dk_team}"
+            weeks = _team_weekly_rows(
+                team_stat_rows, nflverse_team=nflverse_team, prior_season=prior_season
             )
+            played = Decimal(len(weeks))
 
-        attempts = column("attempts")
-        carries = column("carries")
-        sacks = column("sacks_suffered")
-        dropbacks = attempts + sacks
-        plays = dropbacks + carries
-        weekly_plays = [
-            _decimal_cell(row, "attempts", label=label)
-            + _decimal_cell(row, "sacks_suffered", label=label)
-            + _decimal_cell(row, "carries", label=label)
-            for row in weeks
-        ]
-        mean_plays = _ratio(plays, played, label=f"{label}:plays_mean")
-        dispersion = (
-            _ratio(statistics.stdev(weekly_plays), mean_plays, label=f"{label}:uncertainty")
-            if len(weekly_plays) > 1
-            else Decimal("1")
-        )
+            def column(name: str) -> Decimal:
+                return sum(
+                    (_decimal_cell(row, name, label=f"{label}:{name}") for row in weeks),
+                    Decimal("0"),
+                )
+
+            attempts = column("attempts")
+            carries = column("carries")
+            sacks = column("sacks_suffered")
+            dropbacks = attempts + sacks
+            plays = dropbacks + carries
+            weekly_plays = [
+                _decimal_cell(row, "attempts", label=label)
+                + _decimal_cell(row, "sacks_suffered", label=label)
+                + _decimal_cell(row, "carries", label=label)
+                for row in weeks
+            ]
+            mean_plays = _ratio(plays, played, label=f"{label}:plays_mean")
+            dispersion = (
+                _ratio(statistics.stdev(weekly_plays), mean_plays, label=f"{label}:uncertainty")
+                if len(weekly_plays) > 1
+                else Decimal("1")
+            )
 
         # nflverse publishes spread_line from the home team's point of view and
         # positive when the home team is favoured, so each team's own betting
         # spread is the negation for the home side.
-        team_spread = -spread_line if dk_team == game.home_team else spread_line
+            team_spread = -spread_line if dk_team == game.home_team else spread_line
 
-        records.append(
-            {
+            records.append(
+                {
                 "provider_team_id": f"nflverse:{nflverse_team}:{season}",
                 "game_id": game.game_id,
                 "plays_mean": _bounded(mean_plays, "35", "95", label=f"{label}:plays_mean"),
@@ -1207,25 +1266,28 @@ def build_team_records(
                     team_spread, "-40", "40", label=f"{label}:market_spread"
                 ),
                 "market_observed_at": market_observed_at.isoformat(),
-                "weather_state": weather_state,
+                "weather_state": weather_by_game[game.game_id],
                 "era": f"{season}_REG_PRIOR_FROM_{prior_season}_REG",
                 "evidence_state": "PASS",
-            }
-        )
-        mappings.append(
-            {
+                }
+            )
+            mappings.append(
+                {
                 "provider_team_id": f"nflverse:{nflverse_team}:{season}",
                 "team": dk_team,
                 "game_id": game.game_id,
                 "match_method": "EXACT",
                 "evidence_state": "PASS",
+                }
+            )
+            diagnostics[dk_team] = {
+                "game_id": game.game_id,
+                "nflverse_game_id": (game_row.get("game_id") or "").strip(),
+                "nflverse_team": nflverse_team,
+                "prior_games": len(weeks),
+                "weeks": [int((row.get("week") or "0").strip() or 0) for row in weeks],
+                "weather_state": weather_by_game[game.game_id],
             }
-        )
-        diagnostics[dk_team] = {
-            "nflverse_team": nflverse_team,
-            "prior_games": len(weeks),
-            "weeks": [int((row.get("week") or "0").strip() or 0) for row in weeks],
-        }
     return records, mappings, diagnostics
 
 
@@ -1482,7 +1544,7 @@ def build_player_records(
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, object]]:
     """Derive one player-prior record and one identity mapping per person."""
 
-    people = showdown_people(slate)
+    people = slate_people(slate)
     totals = _player_totals(player_stat_rows, prior_season=prior_season)
     capacities = _role_capacities(snap_rows, prior_season=prior_season)
     team_week_totals = _team_week_totals(player_stat_rows, prior_season=prior_season)
@@ -1671,7 +1733,7 @@ def build_player_records(
                 "underlying_id": underlying_id,
                 "team": flex.team,
                 "position": position,
-                "dk_role": "FLEX",
+                "dk_role": "FLEX" if slate.mode is EngineMode.SHOWDOWN else None,
                 "match_method": "EXACT",
                 "evidence_state": "PASS",
             }
@@ -1746,7 +1808,7 @@ def propose_prior_package(
     when = _parse_timestamp(as_of, label="AS_OF")
     package_root = _require_absent(Path(output_dir))
     _, slate, salary_digest = _require_salary(salaries, salary_sha256)
-    people = showdown_people(slate)
+    people = slate_people(slate)
 
     package_root.mkdir(parents=True)
     specifications = source_specifications(season=season, prior_season=prior_season)
@@ -1772,7 +1834,7 @@ def propose_prior_package(
         label="players",
     )
     crosswalk = resolve_team_crosswalk(slate, teams_rows, season=season)
-    game_row = resolve_nflverse_game(slate, games_rows, crosswalk, season=season)
+    game_rows = resolve_nflverse_games(slate, games_rows, crosswalk, season=season)
     proposals = propose_identities(
         slate,
         roster_rows,
@@ -1788,9 +1850,26 @@ def propose_prior_package(
         "season": season,
         "prior_season": prior_season,
         "salary_artifact_id": salary_digest,
-        "dk_game_id": slate.games[0].game_id,
-        "dk_lock_at": slate.games[0].lock_at.isoformat(),
-        "nflverse_game_id": (game_row.get("game_id") or "").strip(),
+        "mode": slate.mode.value,
+        "dk_game_ids": [game.game_id for game in slate.games],
+        "dk_lock_times": {
+            game.game_id: game.lock_at.isoformat() for game in slate.games
+        },
+        "nflverse_game_ids": {
+            game_id: (row.get("game_id") or "").strip()
+            for game_id, row in sorted(game_rows.items())
+        },
+        **(
+            {
+                "dk_game_id": slate.games[0].game_id,
+                "dk_lock_at": slate.games[0].lock_at.isoformat(),
+                "nflverse_game_id": (
+                    game_rows[slate.games[0].game_id].get("game_id") or ""
+                ).strip(),
+            }
+            if slate.mode is EngineMode.SHOWDOWN
+            else {}
+        ),
         "team_crosswalk": dict(sorted(crosswalk.items())),
         "artifacts": [
             frozen[name].manifest_entry(package_root=package_root) for name in sorted(frozen)
@@ -1842,13 +1921,42 @@ def propose_prior_package(
         "people": len(people),
         "salary_rows": len(slate.players),
         "team_crosswalk": dict(sorted(crosswalk.items())),
-        "nflverse_game_id": (game_row.get("game_id") or "").strip(),
-        "market": {
-            "total_line": (game_row.get("total_line") or "").strip(),
-            "spread_line_home_favoured_positive": (game_row.get("spread_line") or "").strip(),
-            "roof": (game_row.get("roof") or "").strip(),
-            "attribution": "NFLVERSE_SCHEDULE_ARTIFACT_NO_BOOK_NO_PUBLISHER_TIMESTAMP",
+        "nflverse_game_id": (
+            (game_rows[slate.games[0].game_id].get("game_id") or "").strip()
+            if slate.mode is EngineMode.SHOWDOWN
+            else None
+        ),
+        "nflverse_game_ids": {
+            game_id: (row.get("game_id") or "").strip()
+            for game_id, row in sorted(game_rows.items())
         },
+        "markets": {
+            game_id: {
+                "total_line": (row.get("total_line") or "").strip(),
+                "spread_line_home_favoured_positive": (
+                    row.get("spread_line") or ""
+                ).strip(),
+                "roof": (row.get("roof") or "").strip(),
+                "attribution": "NFLVERSE_SCHEDULE_ARTIFACT_NO_BOOK_NO_PUBLISHER_TIMESTAMP",
+            }
+            for game_id, row in sorted(game_rows.items())
+        },
+        "market": (
+            {
+                "total_line": (
+                    game_rows[slate.games[0].game_id].get("total_line") or ""
+                ).strip(),
+                "spread_line_home_favoured_positive": (
+                    game_rows[slate.games[0].game_id].get("spread_line") or ""
+                ).strip(),
+                "roof": (
+                    game_rows[slate.games[0].game_id].get("roof") or ""
+                ).strip(),
+                "attribution": "NFLVERSE_SCHEDULE_ARTIFACT_NO_BOOK_NO_PUBLISHER_TIMESTAMP",
+            }
+            if slate.mode is EngineMode.SHOWDOWN
+            else None
+        ),
         "match_methods": dict(sorted(method_counts.items())),
         "unresolved": [item.as_payload() for item in unresolved],
         "blockers": (
@@ -1931,6 +2039,7 @@ def freeze_prior_package(
     salary_observed_at: str | datetime | None = None,
     weather_source_uri: str | None = None,
     weather_observed_at: str | datetime | None = None,
+    weather_evidence_by_game: Mapping[str, Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
     """Publish the three artifacts `project` consumes, from a reviewed crosswalk."""
 
@@ -1986,7 +2095,7 @@ def freeze_prior_package(
     if not proposals:
         raise PriorsBuildError("PROPOSAL_HAS_NO_ROWS")
 
-    people = showdown_people(slate)
+    people = slate_people(slate)
     if {item.underlying_id for item in proposals} != set(people):
         raise PriorsBuildError("PROPOSAL_POOL_COVERAGE_MISMATCH")
 
@@ -2006,26 +2115,86 @@ def freeze_prior_package(
     crosswalk = resolve_team_crosswalk(slate, rows("teams"), season=season)
     if crosswalk != {key: value for key, value in manifest["team_crosswalk"].items()}:
         raise PriorsBuildError("TEAM_CROSSWALK_CHANGED_SINCE_PROPOSAL")
-    game_row = resolve_nflverse_game(slate, rows("games"), crosswalk, season=season)
-    resolved_weather, weather_basis = resolve_weather_state(game_row, weather_state)
-    weather_expiry = None
-    if weather_basis.startswith("OPERATOR_SUPPLIED") or (
-        resolved_weather == "ROOF_OPEN" and weather_source_uri
+    game_rows = resolve_nflverse_games(
+        slate, rows("games"), crosswalk, season=season
+    )
+    outdoor_games = [
+        game_id
+        for game_id, row in sorted(game_rows.items())
+        if (row.get("roof") or "").strip().lower() not in _ROOF_WEATHER
+    ]
+    evidence_by_game = dict(weather_evidence_by_game or {})
+    if evidence_by_game and any(
+        value is not None
+        for value in (weather_state, weather_source_uri, weather_observed_at)
     ):
-        weather_basis = (
-            f"{weather_basis}|"
-            + _weather_evidence_basis(weather_source_uri, weather_observed_at, as_of=when)
+        raise PriorsBuildError(
+            "WEATHER_EVIDENCE_INPUT_CONFLICT:use the per-game evidence map or the "
+            "legacy single-game weather fields, not both"
         )
-        if weather_source_uri and weather_observed_at is not None:
-            weather_expiry = _parse_timestamp(weather_observed_at, label="WEATHER_OBSERVED_AT") + timedelta(hours=6)
+    unknown_weather_games = sorted(set(evidence_by_game).difference(game_rows))
+    if unknown_weather_games:
+        raise PriorsBuildError(
+            f"WEATHER_EVIDENCE_UNKNOWN_GAMES:{unknown_weather_games}"
+        )
+    if len(outdoor_games) > 1 and weather_state:
+        raise PriorsBuildError(
+            "CLASSIC_WEATHER_SCOPE_AMBIGUOUS:"
+            f"outdoor_games={outdoor_games}:one scalar weather state/source cannot be "
+            "bound to multiple games; freeze a package only after each material game "
+            "has exact source-bound weather evidence"
+        )
+    weather_by_game: dict[str, str] = {}
+    weather_basis_by_game: dict[str, str] = {}
+    weather_expiries: list[datetime] = []
+    for game_id, row in sorted(game_rows.items()):
+        game_evidence = dict(evidence_by_game.get(game_id) or {})
+        roof = (row.get("roof") or "").strip().lower()
+        supplied_state = None if roof in _ROOF_WEATHER else (
+            (str(game_evidence.get("weather_state") or "") or None)
+            if evidence_by_game
+            else (weather_state if game_id in outdoor_games else None)
+        )
+        supplied_source_uri = (
+            str(game_evidence.get("source_uri") or "") or None
+            if evidence_by_game
+            else weather_source_uri
+        )
+        supplied_observed_at = (
+            game_evidence.get("observed_at")
+            if evidence_by_game
+            else weather_observed_at
+        )
+        resolved_weather, weather_basis = resolve_weather_state(row, supplied_state)
+        if weather_basis.startswith("OPERATOR_SUPPLIED") or (
+            resolved_weather == "ROOF_OPEN" and supplied_source_uri
+        ):
+            evidence_basis = _weather_evidence_basis(
+                supplied_source_uri, supplied_observed_at, as_of=when
+            )
+            if slate.mode is EngineMode.CLASSIC and evidence_basis.endswith("UNATTRIBUTED"):
+                raise PriorsBuildError(
+                    f"CLASSIC_WEATHER_SOURCE_REQUIRED:{game_id}:outdoor weather must "
+                    "be bound to an approved captured source URI and observation time"
+                )
+            weather_basis = f"{weather_basis}|{evidence_basis}"
+            if supplied_source_uri and supplied_observed_at is not None:
+                weather_expiries.append(
+                    _parse_timestamp(
+                        supplied_observed_at, label="WEATHER_OBSERVED_AT"
+                    )
+                    + timedelta(hours=6)
+                )
+        weather_by_game[game_id] = resolved_weather
+        weather_basis_by_game[game_id] = weather_basis
 
-    lock_at = slate.games[0].lock_at.astimezone(timezone.utc)
+    lock_at = min(game.lock_at for game in slate.games).astimezone(timezone.utc)
     team_records, team_mappings, team_diagnostics = build_team_records(
         slate,
         crosswalk=crosswalk,
-        game_row=game_row,
+        game_rows=game_rows,
         team_stat_rows=rows("team_stats"),
-        weather_state=resolved_weather,
+        weather_by_game=weather_by_game,
         market_observed_at=frozen["games"].observed_at,
         season=season,
         prior_season=prior_season,
@@ -2047,12 +2216,33 @@ def freeze_prior_package(
             parser_version=TEAM_SOURCE_PARSER,
             coverage={
                 "teams": len(team_records),
-                "dk_game_id": slate.games[0].game_id,
-                "nflverse_game_id": (game_row.get("game_id") or "").strip(),
+                "mode": slate.mode.value,
+                "dk_game_ids": [game.game_id for game in slate.games],
+                "nflverse_game_ids": {
+                    game_id: (row.get("game_id") or "").strip()
+                    for game_id, row in sorted(game_rows.items())
+                },
                 "prior_season": prior_season,
                 "transformation": "NFLVERSE_PRIOR_SEASON_TEAM_WEEK_RATES_AND_SCHEDULE_MARKET_V1",
                 "market_attribution": "NFLVERSE_SCHEDULE_NO_BOOK_NO_PUBLISHER_TIMESTAMP",
-                "weather_basis": weather_basis,
+                "weather_basis_by_game": weather_basis_by_game,
+                "weather_evidence_by_game": {
+                    game_id: {
+                        "source_sha256": evidence.get("sha256"),
+                        "source_uri": evidence.get("source_uri"),
+                        "observed_at": evidence.get("observed_at"),
+                        "captured_at": evidence.get("captured_at"),
+                        "expires_at": evidence.get("expires_at"),
+                        "parser_version": evidence.get("parser_version"),
+                        "license_decision": evidence.get("license_decision"),
+                    }
+                    for game_id, evidence in sorted(evidence_by_game.items())
+                },
+                "weather_basis": (
+                    weather_basis_by_game[slate.games[0].game_id]
+                    if slate.mode is EngineMode.SHOWDOWN
+                    else "COMPLETE_GAME_MAP"
+                ),
                 "uncertainty_definition": "COEFFICIENT_OF_VARIATION_OF_WEEKLY_OFFENSIVE_PLAYS",
                 "prior_games_by_team": team_diagnostics,
             },
@@ -2060,9 +2250,10 @@ def freeze_prior_package(
         ),
         "records": team_records,
     }
-    if weather_expiry is not None:
+    if weather_expiries:
         metadata = team_payload["metadata"]
         source_expiry = _parse_timestamp(metadata["expires_at"], label="TEAM_SOURCE_EXPIRES_AT")
+        weather_expiry = min(weather_expiries)
         if weather_expiry < source_expiry:
             metadata["expires_at"] = weather_expiry.isoformat()
             metadata["coverage"]["expiry_basis"] = "WEATHER_CAPTURE_SIX_HOUR_WINDOW"
@@ -2103,14 +2294,29 @@ def freeze_prior_package(
                     )
                 ),
                 "transformation": "OPERATOR_REVIEWED_NORMALIZED_CROSSWALK_FROZEN_AS_EXACT_V1",
-                "showdown_role_reconciliation": {
+                "salary_role_reconciliation": {
+                    "mode": slate.mode.value,
                     "people": len(people),
                     "salary_rows": len(slate.players),
-                    "output_role": "FLEX",
+                    "output_role": (
+                        "FLEX" if slate.mode is EngineMode.SHOWDOWN else "CLASSIC"
+                    ),
                     "captain_rows_reconciled": len(
                         [item for item in proposals if item.captain_dk_id]
                     ),
                 },
+                **(
+                    {
+                        "showdown_role_reconciliation": {
+                            "people": len(people),
+                            "salary_rows": len(slate.players),
+                            "output_role": "FLEX",
+                            "captain_rows_reconciled": len(proposals),
+                        }
+                    }
+                    if slate.mode is EngineMode.SHOWDOWN
+                    else {}
+                ),
             },
             horizon=lock_at,
         ),
@@ -2205,8 +2411,18 @@ def freeze_prior_package(
         "salary_artifact_id": salary_digest,
         "teams": len(team_records),
         "people": len(player_records),
-        "weather_basis": weather_basis,
-        "weather_state": resolved_weather,
+        "weather_basis": (
+            weather_basis_by_game[slate.games[0].game_id]
+            if slate.mode is EngineMode.SHOWDOWN
+            else "COMPLETE_GAME_MAP"
+        ),
+        "weather_basis_by_game": weather_basis_by_game,
+        "weather_state": (
+            weather_by_game[slate.games[0].game_id]
+            if slate.mode is EngineMode.SHOWDOWN
+            else None
+        ),
+        "weather_by_game": weather_by_game,
         "diagnostics": {**player_diagnostics, "prior_games_by_team": team_diagnostics},
         "next": (
             "Run project with --salaries, --team-source, --player-source, --identity-map"

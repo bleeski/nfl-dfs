@@ -27,6 +27,7 @@ _GAME_RE = re.compile(
 )
 CLASSIC_COLUMNS = ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
 SHOWDOWN_COLUMNS = ("CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX")
+_DRAFT_GROUP_COLUMNS = ("Draft Group", "Draft Group ID", "DraftGroup")
 
 
 class DraftKingsParseError(ValueError):
@@ -244,6 +245,30 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
     else:
         raise DraftKingsParseError(f"unsupported salary roster positions: {sorted(roster_values)}")
 
+    present_draft_group_columns = [name for name in _DRAFT_GROUP_COLUMNS if name in header]
+    if len(present_draft_group_columns) > 1:
+        raise DraftKingsParseError(
+            f"salary CSV has ambiguous draft-group columns: {present_draft_group_columns}"
+        )
+    embedded_draft_group: str | None = None
+    if present_draft_group_columns:
+        column = header.index(present_draft_group_columns[0])
+        values = {
+            row[column].strip()
+            for _row_number, row in data_rows
+            if row[column].strip()
+        }
+        if len(values) != 1:
+            raise DraftKingsParseError(
+                f"DRAFT_GROUP_MIXED_OR_BLANK:{sorted(values)}"
+            )
+        embedded_draft_group = next(iter(values))
+        if draft_group is not None and draft_group != embedded_draft_group:
+            raise DraftKingsParseError(
+                "salary draft group does not match the required contest draft group: "
+                f"salary={embedded_draft_group!r}, required={draft_group!r}"
+            )
+
     players: list[SalaryPlayer] = []
     games: dict[str, GameContract] = {}
     seen_ids: set[str] = set()
@@ -269,6 +294,21 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
             raise DraftKingsParseError(
                 f"blank name, position, or team at salary row {row_number}"
             )
+        if salary <= 0:
+            raise DraftKingsParseError(f"salary must be positive at row {row_number}")
+        if mode is EngineMode.CLASSIC:
+            expected_roster = {
+                "QB": "QB",
+                "RB": "RB/FLEX",
+                "WR": "WR/FLEX",
+                "TE": "TE/FLEX",
+                "DST": "DST",
+            }
+            if position not in expected_roster or roster_raw != expected_roster[position]:
+                raise DraftKingsParseError(
+                    f"Classic position/roster mismatch at row {row_number}: "
+                    f"position={position!r}, roster={roster_raw!r}"
+                )
         players.append(
             SalaryPlayer(
                 dk_id=dk_id,
@@ -298,7 +338,7 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
     _validate_salary_pool(players, mode)
     return SlateContract(
         mode=mode,
-        draft_group=draft_group or raw_hash[:16],
+        draft_group=embedded_draft_group or draft_group or f"salary-sha256:{raw_hash}",
         games=tuple(sorted(games.values(), key=lambda game: (game.lock_at, game.game_id))),
         scoring_version="draftkings_nfl_scoring_2026_fixture_v1",
         salary_hash=raw_hash,
@@ -323,6 +363,18 @@ def _validate_salary_pool(players: Iterable[SalaryPlayer], mode: EngineMode) -> 
             raise DraftKingsParseError(
                 "ambiguous same-name/team/position identity collision; exact disambiguation "
                 f"is required: {collisions}"
+            )
+        games_by_team: dict[str, set[str]] = defaultdict(set)
+        for player in pool:
+            games_by_team[player.team].add(player.game_id)
+        conflicted_teams = {
+            team: sorted(games)
+            for team, games in games_by_team.items()
+            if len(games) != 1
+        }
+        if conflicted_teams:
+            raise DraftKingsParseError(
+                f"Classic team appears in multiple games: {conflicted_teams}"
             )
     if mode is EngineMode.SHOWDOWN:
         if len({player.game_id for player in pool}) != 1 or len(

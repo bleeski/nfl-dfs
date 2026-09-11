@@ -69,6 +69,21 @@ The command chooses the next safe action:
 Every run writes to a new timestamped folder under `outputs`. The engine never
 overwrites a prior review package.
 
+## Classic C1 prior-only review
+
+Run `cowork-run --profile prior_review --build-priors` with the normal Classic
+salary and blank reserved-entry CSVs. C1 publishes `classic_selection.json` for
+the exact Entry-ID-to-roster map and `classic_complete_slate_coverage.json` for
+named game/team/position/person coverage, exclusion reasons, unallocated volume,
+conservation, and next evidence actions. These files are
+`PRIOR_ONLY / DO_NOT_UPLOAD`; they are not DraftKings templates.
+
+Every selected person requires a fresh exact-ID official activity row, and every
+selected QB/RB/WR/TE requires a source-supported numerical current-team role
+allocation. Missing current evidence stops publication. C1 writes no
+`assignments.csv`, `DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`; Classic policy,
+candidate-bank, portfolio and exact-template export work begins in C2/C3.
+
 ## Manual-lineup safety guardrail
 
 Prepare an assignment CSV with the exact header for the mode:

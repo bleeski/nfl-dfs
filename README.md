@@ -23,7 +23,10 @@ review package plus machine-readable run request. Two files alone do not contain
 complete payouts, field size, or current official activity evidence, so that
 first pass normally ends `DO_NOT_UPLOAD` with the smallest missing next action.
 
-For Showdown generation, Cowork should use `--profile prior_review --build-priors`.
+For Showdown or Classic prior-only review generation, Cowork should use
+`--profile prior_review --build-priors`. Classic C1 produces deterministic
+machine-readable selection and complete-slate coverage JSON only; it emits no
+DraftKings-shaped CSV and remains `PRIOR_ONLY / DO_NOT_UPLOAD`.
 That profile can generate legal review lineups from source-bound priors after
 weather and identity gates are resolved. It retains a review CSV, with
 `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. It does not yet

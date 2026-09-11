@@ -195,8 +195,14 @@ def team_volumes(
     """Turn each team's prior rates into the volumes a stat line needs."""
 
     projections = {team.team: team for team in model.teams}
-    if len(projections) != 2:
-        raise PriorScoreError(f"EXPECTED_TWO_TEAMS:{sorted(projections)}")
+    if len(projections) < 2:
+        raise PriorScoreError(f"TEAM_PROJECTION_COVERAGE_TOO_SMALL:{sorted(projections)}")
+    if set(projections) != set(splits):
+        raise PriorScoreError(
+            "TEAM_SPLIT_COVERAGE_MISMATCH:"
+            f"missing={sorted(set(projections) - set(splits))}:"
+            f"extra={sorted(set(splits) - set(projections))}"
+        )
     volumes: dict[str, TeamVolume] = {}
     for team, projection in sorted(projections.items()):
         split = splits.get(team)
@@ -333,13 +339,28 @@ def score_pool(
 ) -> PriorScores:
     """Score every salary row, captain rows at the 1.5 multiplier."""
 
-    if slate.mode is not EngineMode.SHOWDOWN:
+    if slate.mode not in {EngineMode.SHOWDOWN, EngineMode.CLASSIC}:
         raise PriorScoreError(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
     offense = offensive_roles or resolve_offensive_roles(slate, model, build_participation_contract(slate))
     model = offense.model
     volumes = team_volumes(model, splits)
-    if len(volumes) != 2:
-        raise PriorScoreError(f"EXPECTED_TWO_TEAMS:{sorted(volumes)}")
+    expected_teams = {player.team for player in slate.players}
+    if set(volumes) != expected_teams:
+        raise PriorScoreError(
+            "TEAM_VOLUME_COVERAGE_MISMATCH:"
+            f"missing={sorted(expected_teams - set(volumes))}:"
+            f"extra={sorted(set(volumes) - expected_teams)}"
+        )
+    opponent_by_team = {
+        team: opponent
+        for game in slate.games
+        for team, opponent in (
+            (game.away_team, game.home_team),
+            (game.home_team, game.away_team),
+        )
+    }
+    if set(opponent_by_team) != expected_teams:
+        raise PriorScoreError("TEAM_OPPONENT_COVERAGE_MISMATCH")
     roles = kicker_roles or allocation_from_model_people(
         slate, [player.underlying_id for player in model.players]
     )
@@ -365,7 +386,7 @@ def score_pool(
         if player.team not in volumes:
             raise PriorScoreError(f"PLAYER_TEAM_NOT_IN_POOL:{player.underlying_id}")
         volume = volumes[player.team]
-        opponent_team = next(team for team in volumes if team != player.team)
+        opponent_team = opponent_by_team[player.team]
         if player.position == "K":
             share = roles.shares_by_person.get(player.underlying_id)
             if share is None:
