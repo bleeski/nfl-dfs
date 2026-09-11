@@ -290,8 +290,100 @@ these canonical payloads, so identical immutable inputs reproduce both hashes.
 `FILE_VALID` describes these two review JSON files only. `EVIDENCE_STATE`,
 `MODEL_STATUS=PRIOR_ONLY`, and `RELEASE_DECISION=DO_NOT_UPLOAD` are separate.
 C1 writes no Classic assignment CSV, `DK_REVIEW_ENTRY_*.csv`, or
-`DK_UPLOAD_*.csv`; C2 owns policy/candidates/joint selection and C3 owns readable
-review, independent export audit, and exact-template export.
+`DK_UPLOAD_*.csv`; C2 adds policy/candidates/joint selection as documented
+below, and C3 owns readable review, downstream independent export audit, and
+exact-template export.
+
+## C2 Classic policy, candidate bank, assignment, and selection audit
+
+`nfl_classic_portfolio_policy_c2_v1` is the only Classic policy source schema.
+It binds the exact untouched salary and entry SHA-256 values, draft group,
+complete ordered Entry IDs, complete games/teams/people/positions/roster slots,
+registered stack-rule set, `classic_prior_points_expected_stat_line_c2_v1`
+objective, maximize direction, and seed zero. Search limits are direct JSON
+integers: candidate limit, total candidate milliseconds, per-solve milliseconds,
+and joint-selection milliseconds. Fractions, percentages, inferred rounding,
+unknown fields, duplicate JSON keys, nonfinite values, incomplete identity,
+source mutation, and unregistered objective or rule names fail validation.
+
+The validated source is normalized to canonical
+`nfl_classic_portfolio_policy_normalized_c2_v1` bytes. All exposure limits use
+inclusive direct lineup counts with the exact requested Entry-ID count as the
+denominator:
+
+- a player count is the number of selected lineups containing the exact bound
+  underlying person/DK ID;
+- a team or game count is the number of selected lineups containing at least
+  one member of that exact team or game;
+- an exact exclusion gives that person effective maximum zero, with current
+  source/participation exclusions taking precedence;
+- a group qualifies one lineup when the count of its exact members is inside
+  `minimum_players..maximum_players`; its entry bounds count qualifying
+  lineups;
+- canonical lineup uniqueness is mandatory, and every unordered lineup pair
+  must be at or below `max_pairwise_person_overlap`.
+
+Groups and stack rules declare `strength=HARD` or `strength=ADVISORY`. Hard
+rules enter the joint portfolio model and are never relaxed. Advisory rules
+affect candidate coverage and reporting only. Registered stack values are:
+
+| Rule type | Per-lineup integer value |
+|---|---|
+| `QB_PASS_CATCHER` | Selected same-team WR/TE count for the selected QB |
+| `QB_BRINGBACK` | Selected opponent RB/WR/TE count for the selected QB |
+| `RB_DST_PAIR` | Selected RB count whose team also supplies the selected DST |
+| `SECONDARY_GAME_CORRELATION` | Count of non-QB games where selected non-DST players cover both teams |
+
+Every stack rule supplies inclusive `minimum_value..maximum_value` per lineup
+and `minimum_entries..maximum_entries` across qualifying lineups. Policy
+validation checks exact references, ordered integer domains, direct
+contradictions, position/skill/player capacity, team/game capacity, exclusions,
+and loose uniqueness/overlap capacity before candidate solving.
+
+`nfl_classic_candidate_bank_c2_v1` contains the normalized-policy hash,
+requested and produced counts, canonical-unique count, explicit bounded versus
+exhaustive state, family/group/stack coverage, every documented stratum and
+termination reason, policy-feasible-chain candidate indexes, and every exact
+candidate roster with its canonical identity and prior-only central estimate.
+Runtime diagnostics separately report elapsed seconds, peak traced Python
+bytes, solve count, nodes, maximum reported gap, and terminal model status.
+The bank distinguishes `EXHAUSTIVE_COMPLETION`, `BOUNDED_COMPLETION`,
+`CANDIDATE_BANK_TIMEOUT`, `CANDIDATE_BANK_SEARCH_LIMIT`,
+`CANDIDATE_BANK_SOLVER_ERROR`, and `STRUCTURAL_INFEASIBILITY`. A bounded bank
+never asserts full-slate optimality.
+
+The joint MILP chooses exactly the Entry-ID count from the actual canonical
+bank under all hard player/team/game/group/stack, uniqueness, and pair-overlap
+bounds. `OPTIMAL_ACTUAL_CANDIDATE_BANK` is the only accepted solver status and
+means optimal only over that reported bank. `MODELED_BANK_INFEASIBILITY` applies
+only to an exhaustive modeled bank; `INCOMPLETE_BANK_EXHAUSTION` is the distinct
+bounded-bank result. Timeout, search-limit, non-optimal, invalid-integrality,
+and solver-error results fail closed. Selected lineups are paired one-to-one
+with `entry_ids` in exact template order; cycling is prohibited.
+
+A successful governed C2 run writes three additional atomic canonical JSON
+artifacts before extending the C1 selection and coverage records:
+
+- `classic_candidate_bank.json` using `nfl_classic_candidate_bank_c2_v1`;
+- `classic_assignment.json` using
+  `nfl_classic_portfolio_assignment_c2_v1`, bound to the normalized policy and
+  candidate-bank hashes with ordered exact Entry-ID/roster pairs;
+- `classic_portfolio_audit.json` using
+  `prior_only_classic_portfolio_audit_c2_v1`.
+
+The independent selection audit reparses the canonical normalized policy and
+assignment, verifies source/normalized policy, salary, entry, prior, projection,
+current-evidence, candidate-bank and assignment hashes, and recomputes complete
+identity, roster legality, every hard integer count, exclusions, canonical
+uniqueness and every pairwise overlap from selected roster IDs. Only audit
+`PASS` extends `classic_selection.json` to
+`nfl_classic_prior_review_selection_c2_v1` and coverage to
+`nfl_classic_slate_coverage_c2_v1`. These remain machine-readable review JSON,
+not DraftKings templates. C2 creates no `assignments.csv`,
+`DK_REVIEW_ENTRY_*.csv`, `DK_UPLOAD_*.csv`, HTML, or readable workbook; C3 owns
+the downstream independent export audit, readable surfaces, and exact-template
+export. `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS=PRIOR_ONLY`, and
+`RELEASE_DECISION=DO_NOT_UPLOAD` remain separate truths.
 
 ## SD2 Showdown offensive history and current roles
 

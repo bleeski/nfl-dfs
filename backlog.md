@@ -4,7 +4,7 @@ This is the living implementation plan for the findings in `DFS_SYSTEM_GREENFIEL
 
 ## Tracker protocol
 
-**Current development priority sequence (2026-09-10):** follow
+**Current development priority sequence (2026-09-11):** follow
 `Reprioritized development program — 2026-09-10` below. It is the authoritative
 order for new development sessions and supersedes older `Next action`, `S*`,
 `W*`, and `DL6`-`DL8` sequencing statements without deleting their historical
@@ -66,10 +66,10 @@ do not delay a useful Classic review workflow until the quantitative research
 track is complete. Conversely, a legal Classic review portfolio does not close
 the quantitative weakness.
 
-The table below is the authoritative dev-session queue. DEV0, Q1, and C1 are
-done; `C2` is the only current `READY` item. When a chunk closes, update the table
+The table below is the authoritative dev-session queue. DEV0, Q1, C1, and C2
+are done; `C3` is the only current `READY` item. When a chunk closes, update the table
 so only the next dependency-satisfied chunk is `READY`; the remaining preferred
-order is `C2` through `C4`, then `Q2` onward. Q1 started the settlement/
+order is `C3` through `C4`, then `Q2` onward. Q1 started the settlement/
 validation clock early; the bounded Classic sequence now delivers the useful
 prior-only workflow before the longer calibrated-model build.
 
@@ -78,8 +78,8 @@ prior-only workflow before the longer calibrated-model build.
 | 0 | DEV0 | Shared | `DONE` | none | Reconcile and freeze the exact current development baseline without losing any existing work | current dirty-tree handoff and stale baseline text |
 | 1 | Q1 | Quantitative | `DONE` | DEV0 | Settlement capture plus an auditable reference evaluator and registered promotion metrics | W7, W8, S4A |
 | 2 | C1 | Classic | `DONE` | DEV0, Q1 contract decisions only | Multi-game Classic immutable intake, priors, projection, participation, and one-command prior-review orchestration | DL6, Classic portion of S6 |
-| 3 | C2 | Classic | `READY` | C1 | Classic policy contract, candidate generation, joint portfolio selection, and exact Entry-ID assignment | Classic portion of S5 and W9 |
-| 4 | C3 | Classic | `BLOCKED` | C2 | Independent audit, readable review, exact-template export, deterministic replay, and 1/3/20/150-entry benchmarks | DL7, W10, Classic review portion of S8/S9 |
+| 3 | C2 | Classic | `DONE` | C1 | Classic policy contract, candidate generation, joint portfolio selection, and exact Entry-ID assignment | Classic portion of S5 and W9 |
+| 4 | C3 | Classic | `READY` | C2 | Downstream independent export audit, readable review, exact-template export, copied-package replay, and full-fixture 1/3/20/150-entry acceptance | DL7, W10, Classic review portion of S8/S9 |
 | 5 | C4 | Classic | `BLOCKED` | C3, current operator files/evidence | Current real-slate Cowork/Linux rehearsal and operator handoff | DL8 |
 | 6 | C5 | Classic | `BLOCKED` | C3, S2 | Lock-aware slot ordering and governed Classic late-swap mechanics | W13 mechanical portion |
 | 7 | Q2 | Quantitative | `BLOCKED` | Q1, C1 | Calibrated player opportunity/outcome distributions, participation, and correlation | W3 remainder, W11, broader S6, S7 outcome work |
@@ -201,6 +201,15 @@ not unlock any upload claim.
 
 ### C2 — Classic policy, candidates, and joint portfolio selection
 
+Status: `DONE` on `codex/c2-classic-policy-candidates-portfolio` at unchanged
+baseline HEAD `90361980959916333cbd4b820680166a7e4fe6a2` (uncommitted
+implementation). The final focused regression passed `203 passed, 1 skipped`
+in 214.21s and the complete pinned suite passed `581 passed, 1 skipped` in
+312.25s. Doctor, compile/import, whitespace, deterministic replay, mutation,
+prohibited-path, adversarial diff, and synthetic 1/3/20/150-entry runtime/memory
+checks passed. The bounded banks remain prior-only and make no full-slate
+optimality or upload claim.
+
 - Goal: select an explicit, bounded Classic portfolio rather than cycle a list
   of individually strong lineups.
 - Scope:
@@ -217,7 +226,7 @@ not unlock any upload claim.
 - Non-goals: no ownership leverage or payout-aware objective until Q2-Q5; no
   automatic relaxation of a requested limit.
 - Acceptance:
-  - Feasible 3-, 20-, and 150-entry policy fixtures meet every declared bound;
+  - Feasible 1-, 3-, 20-, and 150-entry policy fixtures meet every declared bound;
     infeasible, time-limited, incomplete-bank, and solver-error states remain
     distinct and fail closed where required.
   - Repeated runs select byte-identical assignments under the same registered
@@ -812,14 +821,14 @@ is the reason.
 
 ## Next action
 
-### 2026-09-10 current development action
+### 2026-09-11 current development action
 
-**Only `C2` is `READY`.** DEV0, Q1, and C1 are done. Begin the bounded Classic
-policy, deterministic candidate-bank, joint portfolio selection, and exact
-Entry-ID assignment tranche using
-`docs/session-prompts/C2-classic-policy-candidates-portfolio.md`. Do not begin
-C3 review/export work, use the production field or payout economics path, or
-change `PRIOR_ONLY / DO_NOT_UPLOAD` truth.
+**Only `C3` is `READY`.** DEV0, Q1, C1, and C2 are done. Begin the downstream
+Classic independent export audit, readable review, exact-template export,
+copied-package replay, and full supplied-fixture scale-acceptance tranche using
+`docs/session-prompts/C3-classic-audit-review-export.md`. Preserve the C2
+policy/bank/assignment contracts and do not use the production field or payout
+economics path or change `PRIOR_ONLY / DO_NOT_UPLOAD` truth.
 After Q1's contracts are fixed, execute C1 through C4 in order to deliver the
 prior-only Classic review workflow. Then continue Q2 through Q7 and QC1 to fix
 the central-estimate/uncalibrated portfolio weakness for both modes. C5 may be

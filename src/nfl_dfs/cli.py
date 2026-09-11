@@ -17,6 +17,11 @@ from typing import Iterable, Mapping
 import numpy as np
 
 from .certification import certify_upload
+from .classic_portfolio_policy import (
+    validate_classic_portfolio_policy_file,
+    write_classic_portfolio_policy_validation,
+    write_normalized_classic_portfolio_policy,
+)
 from .preflight import historical_artifact_integrity, live_pre_upload_check
 from .candidate_families import coverage_report
 from .contracts import (
@@ -2444,7 +2449,7 @@ def _run_prior_review_profile(
         "meaning": (
             "Legal and byte-audited, never certified. This profile reads no payout "
             "table or field size; supplied activity reports constrain selection. It makes no EV, ROI, "
-            "win probability, cash probability, ownership or edge claim. Classic C1 "
+            "win probability, cash probability, ownership or edge claim. Classic "
             "emits machine-readable review JSON only and no upload-shaped package."
         ),
     }
@@ -2454,7 +2459,11 @@ def _run_prior_review_profile(
             .get("selection", {})
             .get("portfolio_policy")
         )
-        audit_report = outcome.reports.get("portfolio_policy_audit")
+        audit_report = outcome.reports.get(
+            "classic_portfolio_audit"
+            if slate.mode is EngineMode.CLASSIC
+            else "portfolio_policy_audit"
+        )
         enforced_and_audited = bool(
             outcome.file_valid
             and isinstance(selector_policy, Mapping)
@@ -2678,29 +2687,52 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             )
         original_policy = str(Path(request.portfolio_policy_json or "").resolve())
         expected_policy_sha256 = str(intake["hashes"][original_policy])
-        validation = validate_portfolio_policy_file(
-            snapshotted.portfolio_policy_json,
-            slate=slate,
-            entry_ids=tuple(entry.entry_id for entry in entries.authorizations),
-            externally_excluded_people=external_people,
-            expected_sha256=expected_policy_sha256,
-        )
+        if slate.mode is EngineMode.CLASSIC:
+            validation = validate_classic_portfolio_policy_file(
+                snapshotted.portfolio_policy_json,
+                slate=slate,
+                entry_ids=tuple(entry.entry_id for entry in entries.authorizations),
+                entry_sha256=entries.raw_hash,
+                externally_excluded_people=external_people,
+                expected_sha256=expected_policy_sha256,
+            )
+        else:
+            validation = validate_portfolio_policy_file(
+                snapshotted.portfolio_policy_json,
+                slate=slate,
+                entry_ids=tuple(entry.entry_id for entry in entries.authorizations),
+                externally_excluded_people=external_people,
+                expected_sha256=expected_policy_sha256,
+            )
         policy_report_path = (
             DEFAULT_RUNS_DIR / run_id / "portfolio_policy_validation.json"
         )
-        write_portfolio_policy_validation(policy_report_path, validation)
+        if slate.mode is EngineMode.CLASSIC:
+            write_classic_portfolio_policy_validation(policy_report_path, validation)
+        else:
+            write_portfolio_policy_validation(policy_report_path, validation)
         if validation.policy is not None:
             normalized_path = (
                 DEFAULT_RUNS_DIR / run_id / "portfolio_policy.normalized.json"
             )
-            write_normalized_portfolio_policy(normalized_path, validation.policy)
+            if slate.mode is EngineMode.CLASSIC:
+                write_normalized_classic_portfolio_policy(
+                    normalized_path, validation.policy
+                )
+            else:
+                write_normalized_portfolio_policy(normalized_path, validation.policy)
         if validation.valid:
             validated_policy = validation.policy
         policy_blockers.extend(validation.blockers())
         if snapshotted.profile != "prior_review":
+            policy_profile_code = (
+                "PORTFOLIO_POLICY_PROFILE_UNSUPPORTED_SD4"
+                if slate.mode is EngineMode.SHOWDOWN
+                else "PORTFOLIO_POLICY_PROFILE_UNSUPPORTED_C2"
+            )
             policy_blockers.append(
-                "PORTFOLIO_POLICY_PROFILE_UNSUPPORTED_SD4: policy enforcement and "
-                "independent audit are available only in the Showdown prior_review "
+                f"{policy_profile_code}: policy enforcement and "
+                "independent audit are available only in the prior_review "
                 "profile; next action: use profile=prior_review or omit the policy"
             )
         if (

@@ -1,6 +1,6 @@
 # Claude Cowork Runbook
 
-## Classic C1 prior review: current operating path (2026-09-10)
+## Classic C2 governed prior review: current operating path (2026-09-11)
 
 The same normal two-CSV command now accepts a multi-game DraftKings NFL Classic
 salary file and matching blank reserved-entry file:
@@ -13,16 +13,35 @@ Classic C1 validates and binds the exact salary and entry bytes, draft group,
 complete game/team/opponent/lock set, contest and Entry IDs, and blank-cell
 authority. It builds or reuses the shared frozen prior package, produces the
 shared deterministic projection package, applies full-slate participation,
-official activity, current role, weather and expiry gates, and solves one legal
-prior-only lineup per reserved Entry ID. It never calls the field, ownership,
-duplication, payout, candidate-economics or production portfolio selector.
+official activity, current role, weather and expiry gates. With no policy, the
+byte-compatible C1 sequential selection remains in place. To invoke governed
+C2 joint selection, supply the exact-input C2 policy on the command line or in
+the generated request:
 
-Success writes canonical `classic_selection.json` and
-`classic_complete_slate_coverage.json` plus the status workbook. The two JSON
-hashes reproduce across new run IDs from identical immutable inputs. They are
-review records, not a DraftKings template: C1 writes no `assignments.csv`,
-`DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`. `FILE_VALID=true` describes the
-machine-readable review files only. `MODEL_STATUS=PRIOR_ONLY` and
+```sh
+sh ./nfl.sh cowork-run \
+  --request '<full-path-to-run_request.json>' \
+  --portfolio-policy-json '<full-path-to/classic_portfolio_policy.json>'
+```
+
+The policy must use `nfl_classic_portfolio_policy_c2_v1` and bind the current
+salary and entry hashes, complete identity, registered objective/seed, direct
+integer bounds, and exact ordered Entry IDs. C2 snapshots and canonically
+normalizes it, generates a deterministic bounded legal candidate bank, jointly
+selects one unique lineup per Entry ID without cycling, and independently
+reparses and audits the canonical artifacts. It never calls the field,
+ownership, duplication, payout/economics, production portfolio selector, or C3
+review/export code.
+
+C2 success writes canonical `classic_candidate_bank.json`,
+`classic_assignment.json`, and `classic_portfolio_audit.json`, then extends
+`classic_selection.json` and `classic_complete_slate_coverage.json` with their
+hashes, policy facts, actual-bank solve status and independent audit. Canonical
+hashes reproduce across new run IDs from identical immutable inputs. These are
+review JSON, not DraftKings templates: C2 writes no `assignments.csv`, HTML,
+readable review workbook, `DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`.
+`FILE_VALID=true` describes the bound machine-readable JSON only.
+`EVIDENCE_STATE` is separately derived; `MODEL_STATUS=PRIOR_ONLY` and
 `RELEASE_DECISION=DO_NOT_UPLOAD` are invariant.
 
 Classic publication requires fresh exact-ID official activity for every selected
@@ -37,9 +56,13 @@ timezone-aware `observed_at`, plus the relative content-addressed capture path,
 SHA-256, license/parser decision, capture time and expiry. Scalar weather flags remain the single-game
 Showdown interface.
 
-C1 deliberately has no Classic portfolio policy, candidate bank, joint portfolio
-optimizer, readable review, exact-template export, or scale certification. Those
-are C2 and C3.
+C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
+solver-error, structural-infeasibility, modeled-bank-infeasibility, and
+incomplete-bank-exhaustion states separately. Accept only
+`OPTIMAL_ACTUAL_CANDIDATE_BANK` plus independent audit `PASS`; this is optimal
+over the reported bank only. C3 remains responsible for readable review,
+downstream independent export audit, exact-template review export, copied-package
+replay, and the full 719-person 1/3/20/150-entry acceptance run.
 
 ## Showdown generation: current operating path (2026-09-09)
 
@@ -153,10 +176,11 @@ the next evidence action. The same optional CLI input is
 `--offensive-role-evidence-json '<path-to-offensive_roles.json>'`.
 The main operating workflow remains two attached CSV files.
 
-The workflow accepts an optional versioned `portfolio_policy_json` with exact salary,
-game, full person/CPT/FLEX identity, and requested Entry-ID bindings. The
-contract uses explicit fractions in `[0,1]` and exact-decimal floor rounding;
-see `docs/DATA_CONTRACTS.md`. SD4 enforces it on the Showdown `prior_review`
+For Showdown, the workflow accepts a versioned `portfolio_policy_json` with
+exact salary, game, full person/CPT/FLEX identity, and requested Entry-ID
+bindings. That mode's contract uses explicit fractions in `[0,1]` and
+exact-decimal floor rounding; see `docs/DATA_CONTRACTS.md`. SD4 enforces it on
+the Showdown `prior_review`
 profile through a bounded, policy-stratified candidate bank (`max(32, 4 x
 entries)` candidates, seeded per captain and per capped person, then a
 policy-feasible chain and top-K fill) and one joint MILP, assigns the
@@ -316,12 +340,14 @@ Populate only source-backed values:
   it to the generated request when a team has multiple eligible kickers, then
   rerun the request. Its salary/game/ID bindings, source bytes, hashes, times,
   expiry, and allocation must all validate; an invalid supplied package blocks.
-- `portfolio_policy_json`: optional exact-bound Showdown preference contract.
-  It is snapshotted, deterministically normalized, jointly enforced and
-  independently audited only by the Showdown `prior_review` profile. A
-  `valid=true` validation report alone is not enforcement; require the final
+- `portfolio_policy_json`: optional mode-specific exact-bound preference
+  contract. Showdown uses the SD3 fractional source schema; C2 Classic uses
+  direct integer lineup counts with exact entry-byte and full multi-game
+  identity bindings. It is snapshotted, deterministically normalized, jointly
+  enforced, and independently audited only by `prior_review`. A `valid=true`
+  validation report alone is not enforcement; require the final
   `ENFORCED_AND_INDEPENDENTLY_AUDITED` status and audit `PASS`. Even then the
-  artifact is a prior-only review file, never a certified upload package.
+  artifact is prior-only review output, never a certified upload package.
 - `assignment_csv`: optional manual lineup path. When present, the workflow
   validates/certifies it instead of running the model-assisted build.
 - `profile`: `diagnostic` uses the bounded Cowork scenario/candidate sizes;
@@ -360,7 +386,8 @@ With valid supporting inputs and a feasible, audited policy portfolio, the
 expected exit is 0 with `FILE_VALID=true`, `MODEL_STATUS=PRIOR_ONLY` and
 `RELEASE_DECISION=DO_NOT_UPLOAD`. Exit 0 means review generation completed, not
 upload permission. A named policy, bank, solver, assignment, audit or mutation
-failure exits 2, preserves earlier outputs and creates no new review-entry CSV.
+failure exits 2, preserves earlier outputs, and creates no accepted Classic
+portfolio or new Showdown review-entry CSV.
 
 ## Produce prior-only model inputs
 

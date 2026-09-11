@@ -197,6 +197,103 @@ class LineupOptimizer:
             raise ValueError(f"required row ID is outside the salary pool: {key!r}")
         self._add_row(1.0, 1.0, {index: 1.0})
 
+    def add_selected_count_bounds(
+        self,
+        dk_ids: Iterable[str],
+        *,
+        minimum: int = 0,
+        maximum: int | None = None,
+    ) -> None:
+        """Constrain how many exact salary rows from ``dk_ids`` are selected.
+
+        C2 uses this only for deterministic Classic construction strata.  The
+        joint portfolio limits remain in the separate portfolio MILP; this row
+        simply asks the existing legal-lineup model for candidates that cover a
+        declared group or construction family.
+        """
+
+        selected = {str(dk_id) for dk_id in dk_ids}
+        by_id = {player.dk_id for player in self.players}
+        unknown = selected.difference(by_id)
+        if unknown:
+            raise ValueError(
+                f"selected-count IDs are outside the salary pool: {sorted(unknown)}"
+            )
+        if isinstance(minimum, bool) or minimum < 0:
+            raise ValueError("selected-count minimum must be a non-negative integer")
+        upper = len(selected) if maximum is None else maximum
+        if isinstance(upper, bool) or upper < minimum:
+            raise ValueError("selected-count maximum must be an integer >= minimum")
+        indices = [
+            index for index, player in enumerate(self.players) if player.dk_id in selected
+        ]
+        self._add_row(
+            float(minimum),
+            float(upper),
+            {index: 1.0 for index in indices},
+        )
+
+    def add_classic_qb_correlation_bounds(
+        self,
+        *,
+        kind: str,
+        minimum: int,
+        maximum: int,
+    ) -> None:
+        """Bind selected-QB teammate or opponent skill-player counts.
+
+        ``kind`` is ``PASS_CATCHER`` (same-team WR/TE) or ``BRINGBACK``
+        (opponent RB/WR/TE).  Exactly one Classic QB is already enforced, so
+        one pair of conditional linear rows per QB expresses the family without
+        introducing a second optimizer or heuristic post-filter.
+        """
+
+        if self.slate.mode is not EngineMode.CLASSIC:
+            raise ValueError("QB correlation bounds require a Classic slate")
+        if kind not in {"PASS_CATCHER", "BRINGBACK"}:
+            raise ValueError(f"unsupported QB correlation kind: {kind}")
+        if (
+            isinstance(minimum, bool)
+            or isinstance(maximum, bool)
+            or minimum < 0
+            or maximum < minimum
+            or maximum > 7
+        ):
+            raise ValueError("QB correlation bounds must be ordered integers from 0 through 7")
+        for qb_index, qb in enumerate(self.players):
+            if qb.position != "QB":
+                continue
+            correlated = [
+                index
+                for index, player in enumerate(self.players)
+                if (
+                    player.team == qb.team
+                    and player.position in {"WR", "TE"}
+                    if kind == "PASS_CATCHER"
+                    else player.team == qb.opponent
+                    and player.position in {"RB", "WR", "TE"}
+                )
+            ]
+            # q=1 -> minimum <= sum(correlated) <= maximum.  q=0 leaves
+            # these rows non-binding for the QB that was not selected.
+            self._add_row(
+                0.0,
+                highspy.kHighsInf,
+                {
+                    **{index: 1.0 for index in correlated},
+                    qb_index: -float(minimum),
+                },
+            )
+            big_m = float(len(correlated))
+            self._add_row(
+                -highspy.kHighsInf,
+                big_m,
+                {
+                    **{index: 1.0 for index in correlated},
+                    qb_index: big_m - float(maximum),
+                },
+            )
+
     def add_person_overlap_limit(self, roster: Iterable[str], max_overlap: int) -> None:
         """Cap how many of a previous lineup's people may reappear in the next.
 

@@ -43,6 +43,12 @@ from .contracts import (
     earliest_expiry,
     earliest_source_freshness,
 )
+from .classic_portfolio import (
+    assignment_artifact_bytes,
+    audit_classic_portfolio,
+    exact_classic_assignments,
+)
+from .classic_portfolio_policy import NormalizedClassicPortfolioPolicy
 from .dk import (
     PARSER_VERSION as DK_PARSER_VERSION,
     parse_entries,
@@ -50,7 +56,7 @@ from .dk import (
     reconcile_template,
 )
 from .evidence import parse_official_inactive_snapshot
-from .hashing import sha256_file
+from .hashing import sha256_bytes, sha256_file
 from .kicker_roles import verify_kicker_role_resolution
 from .opportunity import load_opportunity_model
 from .offensive_roles import OffensiveRoleError, attach_history, verify_offensive_resolution
@@ -87,8 +93,11 @@ from .sources import SourcePolicyError, validate_source_reference_policy
 
 PROFILE_VERSION = "cowork_prior_review_v1"
 CLASSIC_PROFILE_VERSION = "cowork_classic_prior_review_c1_v1"
+CLASSIC_PROFILE_VERSION_C2 = "cowork_classic_prior_review_c2_v1"
 CLASSIC_SELECTION_SCHEMA = "nfl_classic_prior_review_selection_c1_v1"
+CLASSIC_SELECTION_SCHEMA_C2 = "nfl_classic_prior_review_selection_c2_v1"
 CLASSIC_COVERAGE_SCHEMA = "nfl_classic_slate_coverage_c1_v1"
+CLASSIC_COVERAGE_SCHEMA_C2 = "nfl_classic_slate_coverage_c2_v1"
 
 # nflverse roof values the frozen schedule artifact resolves without any
 # operator input. `priors._ROOF_WEATHER` also maps "open", but a retractable
@@ -1020,7 +1029,7 @@ def run_prior_review(
     official_status_csv: str | Path | None = None,
     role_evidence_json: str | Path | None = None,
     offensive_role_evidence_json: str | Path | None = None,
-    portfolio_policy: NormalizedPortfolioPolicy | None = None,
+    portfolio_policy: NormalizedPortfolioPolicy | NormalizedClassicPortfolioPolicy | None = None,
     portfolio_policy_source_path: str | Path | None = None,
     portfolio_policy_source_sha256: str | None = None,
     portfolio_policy_normalized_path: str | Path | None = None,
@@ -1075,7 +1084,11 @@ def run_prior_review(
     profile_version = (
         PROFILE_VERSION
         if slate.mode is EngineMode.SHOWDOWN
-        else CLASSIC_PROFILE_VERSION
+        else (
+            CLASSIC_PROFILE_VERSION_C2
+            if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
+            else CLASSIC_PROFILE_VERSION
+        )
     )
     salary_digest = sha256_file(salary_path)
     hashes["salary_csv"] = salary_digest
@@ -1221,22 +1234,6 @@ def run_prior_review(
                 reports=reports,
                 error=str(exc),
             )
-    if portfolio_policy is not None and slate.mode is EngineMode.CLASSIC:
-        message = (
-            "PORTFOLIO_POLICY_MODE_UNSUPPORTED_C1:Classic policy, candidates, and "
-            "joint portfolio selection belong to C2"
-        )
-        return PriorReviewOutcome(
-            profile_version=profile_version,
-            stage="PORTFOLIO_POLICY",
-            blocked=True,
-            blockers=(message,),
-            stages=tuple(stages) + (_stage("PORTFOLIO_POLICY", "BLOCKED"),),
-            artifacts=artifacts,
-            hashes=hashes,
-            reports=reports,
-            error=message,
-        )
     policy_source_path: Path | None = None
     policy_normalized_path: Path | None = None
     if portfolio_policy is not None:
@@ -1252,7 +1249,7 @@ def run_prior_review(
                 blocked=True,
                 blockers=(
                     "PORTFOLIO_POLICY_ARTIFACT_BINDING_INCOMPLETE: source and normalized "
-                    "policy paths and hashes are required for SD4 enforcement",
+                    "policy paths and hashes are required for governed enforcement",
                 ),
                 stages=(_stage("PORTFOLIO_POLICY", "FAILED_BINDING"),),
                 artifacts=artifacts,
@@ -1789,6 +1786,11 @@ def run_prior_review(
                 raise PriorReviewError("PORTFOLIO_POLICY_SALARY_CHANGED_BEFORE_SELECTION")
             if sha256_file(entry_path) != hashes["entry_csv"]:
                 raise PriorReviewError("PORTFOLIO_POLICY_ENTRY_BYTES_CHANGED_BEFORE_SELECTION")
+            if (
+                isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
+                and portfolio_policy.entry_sha256 != hashes["entry_csv"]
+            ):
+                raise PriorReviewError("CLASSIC_PORTFOLIO_POLICY_ENTRY_HASH_MISMATCH")
             if sha256_file(policy_source_path) != portfolio_policy_source_sha256:
                 raise PriorReviewError("PORTFOLIO_POLICY_SOURCE_CHANGED_BEFORE_SELECTION")
             if sha256_file(policy_normalized_path) != portfolio_policy_normalized_sha256:
@@ -1838,14 +1840,20 @@ def run_prior_review(
             as_of=as_of,
             portfolio_policy=portfolio_policy,
         )
-        assignments = (
-            exact_assignments_for_entries(
+        if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+            assignments = dict(
+                exact_classic_assignments(
+                    portfolio_policy.entry_ids,
+                    [lineup.roster for lineup in lineups],
+                )
+            )
+        elif portfolio_policy is not None:
+            assignments = exact_assignments_for_entries(
                 portfolio_policy.entry_ids,
                 [lineup.roster for lineup in lineups],
             )
-            if portfolio_policy is not None
-            else assignments_for_entries(entry_ids, lineups)
-        )
+        else:
+            assignments = assignments_for_entries(entry_ids, lineups)
     except Exception as exc:  # noqa: BLE001 - named, never swallowed
         error = f"{type(exc).__name__}:{exc}"
         stages.append(_stage("SELECT", "FAILED", error=error))
@@ -2147,6 +2155,231 @@ def run_prior_review(
             and not offensive_resolution.report.get("synthetic_sources")
             else "UNKNOWN"
         )
+        classic_policy_report: dict[str, object] | None = None
+        classic_audit_report: dict[str, object] | None = None
+        if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+            def blocked_classic_portfolio(message: str) -> PriorReviewOutcome:
+                return PriorReviewOutcome(
+                    profile_version=profile_version,
+                    stage="SELECT",
+                    blocked=True,
+                    blockers=(message,),
+                    stages=tuple(stages)
+                    + (_stage("SELECT", "BLOCKED_CLASSIC_PORTFOLIO"),),
+                    artifacts=artifacts,
+                    hashes=hashes,
+                    reports=reports,
+                    error=message,
+                )
+
+            assert policy_source_path is not None
+            assert policy_normalized_path is not None
+            assert portfolio_policy_source_sha256 is not None
+            assert portfolio_policy_normalized_sha256 is not None
+            raw_policy_report = selection.get("portfolio_policy")
+            if not isinstance(raw_policy_report, Mapping):
+                return PriorReviewOutcome(
+                    profile_version=profile_version,
+                    stage="SELECT",
+                    blocked=True,
+                    blockers=("CLASSIC_PORTFOLIO_SELECTION_REPORT_MISSING",),
+                    stages=tuple(stages) + (_stage("SELECT", "BLOCKED_POLICY_REPORT"),),
+                    artifacts=artifacts,
+                    hashes=hashes,
+                    reports=reports,
+                )
+            classic_policy_report = dict(raw_policy_report)
+            candidate_json = classic_policy_report.get(
+                "candidate_bank_canonical_json"
+            )
+            if not isinstance(candidate_json, str):
+                return blocked_classic_portfolio(
+                    "CLASSIC_CANDIDATE_BANK_CANONICAL_BYTES_MISSING"
+                )
+            candidate_bytes = candidate_json.encode("utf-8")
+            expected_candidate_hash = str(
+                classic_policy_report.get("candidate_bank_sha256") or ""
+            )
+            if sha256_file(policy_source_path) != portfolio_policy_source_sha256:
+                return blocked_classic_portfolio(
+                    "CLASSIC_POLICY_SOURCE_CHANGED_BEFORE_BANK_PUBLISH"
+                )
+            if sha256_file(policy_normalized_path) != portfolio_policy_normalized_sha256:
+                return blocked_classic_portfolio(
+                    "CLASSIC_POLICY_NORMALIZED_CHANGED_BEFORE_BANK_PUBLISH"
+                )
+            if sha256_bytes(candidate_bytes) != expected_candidate_hash:
+                return blocked_classic_portfolio(
+                    "CLASSIC_CANDIDATE_BANK_IN_MEMORY_HASH_MISMATCH"
+                )
+            selection_dir.mkdir(parents=True, exist_ok=True)
+            candidate_path = selection_dir / "classic_candidate_bank.json"
+            candidate_temporary = candidate_path.with_suffix(".json.tmp")
+            candidate_temporary.write_bytes(candidate_bytes)
+            candidate_temporary.replace(candidate_path)
+            if sha256_file(candidate_path) != expected_candidate_hash:
+                return blocked_classic_portfolio(
+                    "CLASSIC_CANDIDATE_BANK_POST_WRITE_HASH_MISMATCH"
+                )
+            artifacts["classic_candidate_bank"] = str(candidate_path)
+            hashes["classic_candidate_bank"] = expected_candidate_hash
+
+            ordered_assignments = exact_classic_assignments(
+                portfolio_policy.entry_ids,
+                [assignments[entry_id] for entry_id in portfolio_policy.entry_ids],
+            )
+            assignment_bytes = assignment_artifact_bytes(
+                portfolio_policy,
+                ordered_assignments,
+                candidate_bank_sha256=expected_candidate_hash,
+            )
+            assignment_hash = sha256_bytes(assignment_bytes)
+            assignment_json_path = selection_dir / "classic_assignment.json"
+            assignment_temporary = assignment_json_path.with_suffix(".json.tmp")
+            assignment_temporary.write_bytes(assignment_bytes)
+            assignment_temporary.replace(assignment_json_path)
+            if sha256_file(assignment_json_path) != assignment_hash:
+                return blocked_classic_portfolio(
+                    "CLASSIC_ASSIGNMENT_POST_WRITE_HASH_MISMATCH"
+                )
+            artifacts["classic_assignment"] = str(assignment_json_path)
+            hashes["classic_assignment"] = assignment_hash
+
+            bound_artifacts: dict[str, tuple[bytes, str]] = {
+                "team_prior_sha256": (
+                    Path(package.team_source).read_bytes(),
+                    package.hashes[TEAM_PRIOR_FILENAME],
+                ),
+                "player_prior_sha256": (
+                    Path(package.player_source).read_bytes(),
+                    package.hashes[PLAYER_PRIOR_FILENAME],
+                ),
+                "identity_map_sha256": (
+                    Path(package.identity_map).read_bytes(),
+                    package.hashes[IDENTITY_MAP_FILENAME],
+                ),
+                "team_projections_sha256": (
+                    Path(projection.team_projections).read_bytes(),
+                    projection.hashes["team_projections"],
+                ),
+                "player_opportunities_sha256": (
+                    Path(projection.player_opportunities).read_bytes(),
+                    projection.hashes["player_opportunities"],
+                ),
+                "source_ledger_sha256": (
+                    Path(projection.source_ledger).read_bytes(),
+                    projection.hashes["source_ledger"],
+                ),
+                "team_splits_sha256": (
+                    Path(splits_path).read_bytes(),
+                    hashes["frozen:team_stats"],
+                ),
+            }
+            for artifact_key, expected_hash in sorted(hashes.items()):
+                if artifact_key in {
+                    "official_status_csv",
+                    "offensive_role_evidence_json",
+                    "role_evidence_json",
+                    "weather_evidence_json",
+                } or artifact_key.startswith(
+                    (
+                        "offensive_role_source:",
+                        "role_evidence_source:",
+                        "weather_source:",
+                    )
+                ):
+                    artifact_path = artifacts.get(artifact_key)
+                    if artifact_path is not None:
+                        bound_artifacts[f"{artifact_key}_sha256"] = (
+                            Path(artifact_path).read_bytes(),
+                            expected_hash,
+                        )
+            audit = audit_classic_portfolio(
+                slate=slate,
+                normalized_policy_bytes=policy_normalized_path.read_bytes(),
+                expected_normalized_policy_sha256=portfolio_policy_normalized_sha256,
+                source_policy_bytes=policy_source_path.read_bytes(),
+                expected_source_policy_sha256=portfolio_policy_source_sha256,
+                salary_bytes=salary_path.read_bytes(),
+                expected_salary_sha256=salary_digest,
+                entry_bytes=entry_path.read_bytes(),
+                expected_entry_sha256=hashes["entry_csv"],
+                bound_artifacts=bound_artifacts,
+                candidate_bytes=candidate_path.read_bytes(),
+                expected_candidate_sha256=expected_candidate_hash,
+                assignment_bytes=assignment_json_path.read_bytes(),
+                expected_assignment_sha256=assignment_hash,
+            )
+            classic_audit_report = audit.as_report()
+            reports["classic_portfolio_audit"] = classic_audit_report
+            audit_path = selection_dir / "classic_portfolio_audit.json"
+            audit_hash = _write_canonical_json(audit_path, classic_audit_report)
+            artifacts["classic_portfolio_audit"] = str(audit_path)
+            hashes["classic_portfolio_audit"] = audit_hash
+            if not audit.passed:
+                return PriorReviewOutcome(
+                    profile_version=profile_version,
+                    stage="SELECT",
+                    blocked=True,
+                    blockers=(
+                        "CLASSIC_PORTFOLIO_INDEPENDENT_AUDIT_FAILED:"
+                        + ";".join(audit.problems),
+                    ),
+                    stages=tuple(stages)
+                    + (_stage("SELECT", "BLOCKED_INDEPENDENT_AUDIT"),),
+                    artifacts=artifacts,
+                    hashes=hashes,
+                    reports=reports,
+                )
+            post_audit_checks: list[tuple[str | Path, str, str]] = [
+                (salary_path, salary_digest, "salary_csv"),
+                (entry_path, hashes["entry_csv"], "entry_csv"),
+                (package.team_source, package.hashes[TEAM_PRIOR_FILENAME], "team_source"),
+                (package.player_source, package.hashes[PLAYER_PRIOR_FILENAME], "player_source"),
+                (package.identity_map, package.hashes[IDENTITY_MAP_FILENAME], "identity_map"),
+                (projection.team_projections, projection.hashes["team_projections"], "team_projections"),
+                (projection.player_opportunities, projection.hashes["player_opportunities"], "player_opportunities"),
+                (projection.source_ledger, projection.hashes["source_ledger"], "source_ledger"),
+                (splits_path, hashes["frozen:team_stats"], "team_splits"),
+                (policy_source_path, portfolio_policy_source_sha256, "portfolio_policy_source"),
+                (policy_normalized_path, portfolio_policy_normalized_sha256, "portfolio_policy_normalized"),
+                (candidate_path, expected_candidate_hash, "classic_candidate_bank"),
+                (assignment_json_path, assignment_hash, "classic_assignment"),
+                (audit_path, audit_hash, "classic_portfolio_audit"),
+            ]
+            for artifact_key, expected_hash in sorted(hashes.items()):
+                if artifact_key in {
+                    "official_status_csv",
+                    "offensive_role_evidence_json",
+                    "role_evidence_json",
+                    "weather_evidence_json",
+                } or artifact_key.startswith(
+                    (
+                        "offensive_role_source:",
+                        "role_evidence_source:",
+                        "weather_source:",
+                    )
+                ):
+                    artifact_path = artifacts.get(artifact_key)
+                    if artifact_path is not None:
+                        post_audit_checks.append(
+                            (artifact_path, expected_hash, artifact_key)
+                        )
+            for artifact_path, expected_hash, artifact_key in post_audit_checks:
+                if sha256_file(artifact_path) != expected_hash:
+                    return PriorReviewOutcome(
+                        profile_version=profile_version,
+                        stage="SELECT",
+                        blocked=True,
+                        blockers=(
+                            f"CLASSIC_PORTFOLIO_ARTIFACT_MUTATED_AFTER_AUDIT:{artifact_key}",
+                        ),
+                        stages=tuple(stages)
+                        + (_stage("SELECT", "BLOCKED_POST_AUDIT_MUTATION"),),
+                        artifacts=artifacts,
+                        hashes=hashes,
+                        reports=reports,
+                    )
         immutable_bindings = {
             "salary_sha256": salary_digest,
             "entry_sha256": hashes["entry_csv"],
@@ -2171,13 +2404,21 @@ def run_prior_review(
                 "roster": list(lineup.roster),
                 "salary": lineup.salary,
                 "prior_points": round(lineup.prior_points, 6),
-                "canonical_key": list(lineup.canonical_key),
+                "canonical_key": (
+                    lineup.canonical_key
+                    if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
+                    else list(lineup.canonical_key)
+                ),
                 "solver_status": lineup.solver_status,
             }
             for lineup in lineups
         ]
         stable_selection = {
-            "schema_version": CLASSIC_SELECTION_SCHEMA,
+            "schema_version": (
+                CLASSIC_SELECTION_SCHEMA_C2
+                if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
+                else CLASSIC_SELECTION_SCHEMA
+            ),
             "artifact_class": "REVIEW_ONLY_NOT_DRAFTKINGS_UPLOAD",
             "FILE_VALID": True,
             "EVIDENCE_STATE": overall_evidence_state,
@@ -2200,7 +2441,11 @@ def run_prior_review(
             ],
         }
         stable_coverage = {
-            "schema_version": CLASSIC_COVERAGE_SCHEMA,
+            "schema_version": (
+                CLASSIC_COVERAGE_SCHEMA_C2
+                if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
+                else CLASSIC_COVERAGE_SCHEMA
+            ),
             "artifact_class": "COMPLETE_SLATE_REVIEW_COVERAGE",
             "FILE_VALID": True,
             "EVIDENCE_STATE": overall_evidence_state,
@@ -2225,6 +2470,59 @@ def run_prior_review(
                 ),
             },
         }
+        if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+            immutable_bindings.update(
+                {
+                    "source_policy_sha256": hashes["portfolio_policy_source"],
+                    "normalized_policy_sha256": hashes[
+                        "portfolio_policy_normalized"
+                    ],
+                    "candidate_bank_sha256": hashes["classic_candidate_bank"],
+                    "assignment_sha256": hashes["classic_assignment"],
+                    "classic_portfolio_audit_sha256": hashes[
+                        "classic_portfolio_audit"
+                    ],
+                }
+            )
+            stable_selection.update(
+                {
+                    "entry_assignments": [
+                        {
+                            "entry_id": entry_id,
+                            "roster": list(assignments[entry_id]),
+                        }
+                        for entry_id in portfolio_policy.entry_ids
+                    ],
+                    "portfolio_policy": {
+                        "source_policy_sha256": portfolio_policy_source_sha256,
+                        "normalized_policy_sha256": portfolio_policy_normalized_sha256,
+                        "candidate_bank_sha256": hashes["classic_candidate_bank"],
+                        "assignment_sha256": hashes["classic_assignment"],
+                        "audit_sha256": hashes["classic_portfolio_audit"],
+                        "enforcement": {
+                            "status": "ENFORCED_AND_INDEPENDENTLY_AUDITED",
+                            "candidate_bank_status": dict(
+                                (classic_policy_report or {}).get(
+                                    "candidate_bank_artifact", {}
+                                )
+                            ).get("status"),
+                            "joint_selection_status": dict(
+                                (classic_policy_report or {}).get("solve", {})
+                            ).get("status"),
+                            "optimality_scope": "ACTUAL_CANDIDATE_BANK",
+                        },
+                        "independent_audit": classic_audit_report,
+                    },
+                }
+            )
+            stable_coverage["policy_coverage"] = {
+                "candidate_bank": (
+                    classic_policy_report.get("candidate_bank_artifact")
+                    if classic_policy_report
+                    else None
+                ),
+                "independent_audit": classic_audit_report,
+            }
         selection_report_path = selection_dir / "classic_selection.json"
         coverage_report_path = selection_dir / "classic_complete_slate_coverage.json"
         selection_report_hash = _write_canonical_json(
@@ -2269,10 +2567,29 @@ def run_prior_review(
             "coverage_artifact": artifacts["complete_slate_coverage"],
             "coverage_sha256": hashes["complete_slate_coverage"],
             "note": (
-                "Classic C1 emits no DraftKings-shaped CSV. FILE_VALID describes the "
+                "Classic C2 emits no DraftKings-shaped CSV. FILE_VALID describes the "
+                "bound machine-readable JSON artifacts only; C3 owns readable review, "
+                "independent export audit, and exact-template export."
+                if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
+                else "Classic C1 emits no DraftKings-shaped CSV. FILE_VALID describes the "
                 "two bound review JSON artifacts only; C3 owns export redesign."
             ),
         }
+        if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+            export_report.update(
+                {
+                    "candidate_bank_artifact": artifacts["classic_candidate_bank"],
+                    "candidate_bank_sha256": hashes["classic_candidate_bank"],
+                    "assignment_artifact": artifacts["classic_assignment"],
+                    "assignment_sha256": hashes["classic_assignment"],
+                    "independent_audit_artifact": artifacts[
+                        "classic_portfolio_audit"
+                    ],
+                    "independent_audit_sha256": hashes[
+                        "classic_portfolio_audit"
+                    ],
+                }
+            )
         stages.append(
             _stage(
                 "EXPORT",
