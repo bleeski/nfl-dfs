@@ -129,6 +129,7 @@ PATH_FIELDS = (
     "team_projection_csv",
     "player_opportunity_csv",
     "official_status_csv",
+    "weather_evidence_json",
     "role_evidence_json",
     "offensive_role_evidence_json",
     "portfolio_policy_json",
@@ -186,6 +187,7 @@ class CoworkRunRequest:
     team_projection_csv: str | None = None
     player_opportunity_csv: str | None = None
     official_status_csv: str | None = None
+    weather_evidence_json: str | None = None
     role_evidence_json: str | None = None
     offensive_role_evidence_json: str | None = None
     portfolio_policy_json: str | None = None

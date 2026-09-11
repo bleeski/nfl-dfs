@@ -214,13 +214,84 @@ DK_ID,TEAM,POSITION,QB_ATTEMPT_SHARE,CARRY_SHARE,TARGET_SHARE,CATCH_RATE,YARDS_P
 ```
 
 There must be one row per underlying person. For Showdown, use that person's
-FLEX role-row DraftKings ID. Shares are bounded to `[0,1]` and are deterministically
+FLEX role-row DraftKings ID; for Classic, use the sole exact salary-row ID and a
+null `dk_role` identity mapping. Shares are bounded to `[0,1]` and are deterministically
 normalized within team/role. `EVIDENCE_STATE` is `PASS`, `UNKNOWN`, `STALE`, or
 `CONFLICTED`; every modeled salary-pool player must be `PASS` for model-assisted
 certification because every modeled outcome can affect field ranks. An eligible
 team/role share group cannot be all zero, because the
 engine will not invent a uniform allocation. Route participation is not present
 and remains `UNKNOWN` unless a separately approved timely source is introduced.
+
+## C1 Classic intake and prior-review artifacts
+
+Classic is detected only from the exact nine-slot reserved-entry schema and a
+salary roster-position set contained in `QB`, `RB/FLEX`, `WR/FLEX`, `TE/FLEX`,
+and `DST`. The salary parser requires exact position/roster compatibility,
+positive salaries, at least two games, every team in exactly one game, unique DK
+IDs and underlying people, legal position depth, and the fixed $50,000 cap. If a
+salary file includes one of `Draft Group`, `Draft Group ID`, or `DraftGroup`,
+exactly one nonblank value must cover every row and must match any explicitly
+required draft group. With no embedded field, the full salary SHA-256 is the
+draft-group identity fallback. Intake binds that hash plus the untouched entry
+hash, exact game/team/opponent/lock set, mode, parser/scoring versions, contest
+facts, Entry IDs, and blank-cell authority. `AvgPointsPerGame` remains only in
+those untouched raw bytes and has no parsed numerical field.
+
+The shared S6A prior and projection schemas cover every Classic game, team, and
+person. The prior package records ordered `dk_game_ids`, exact lock times,
+nflverse game IDs, per-game market/weather basis, full team mappings and one
+null-role player mapping per exact Classic DK ID. A game resolves only through
+the exact season, local game date, oriented away/home pair and injective team
+crosswalk. Team/player share validation, missing-history/observed-zero/transfer
+states, source metadata, approved license decisions, expiry, archived source
+hashes and deterministic projection ledger remain the existing S6A contracts.
+
+Per-game operator weather uses `nfl_classic_weather_evidence_c1_v1`:
+
+| Field | Contract |
+|---|---|
+| `schema_version` | Exactly `nfl_classic_weather_evidence_c1_v1` |
+| `salary_sha256` | Exact untouched current Classic salary bytes |
+| `games` | Object whose keys exactly equal the complete salary game set |
+| each game value | `weather_state`; relative content-addressed `path` and exact `sha256`; approved `source_uri`, `license_decision`, and `parser_version`; ordered timezone-aware `observed_at`, `captured_at`, and `expires_at` |
+
+The existing six-hour weather expiry applies independently; the earliest
+material observation expires the team package. Unknown games, incomplete game
+coverage, scalar/per-game conflicts, invalid states, unapproved sources, stale
+observations and input mutation fail before publication. Schedule-authoritative
+fixed/closed/open roof state is not overwritten by an operator state.
+
+Classic current offensive allocation uses
+`nfl_classic_offensive_role_evidence_c1_v1`. It shares SD2's source,
+transformation, conservation, position-mask, freshness and numerical-support
+rules, but has `game_ids` exactly equal to the full slate and each person binds
+the sole exact `dk_id` rather than CPT/FLEX IDs. Every declaration's team and
+game must match the salary contract. Every selected offensive person must have
+state `SOURCE_SUPPORTED_ADJUSTMENT`; a selected person with historical-only,
+missing, transfer-unknown, synthetic, stale, or absent current role evidence
+stops publication and reports the smallest evidence action. Every selected
+person also needs a fresh exact-ID official ACTIVE/INACTIVE row. Nonselected
+uncertainty stays visible and can keep overall `EVIDENCE_STATE=UNKNOWN` without
+creating an upload file.
+
+A successful Classic C1 run writes two atomic canonical JSON artifacts:
+
+- `nfl_classic_prior_review_selection_c1_v1` in `classic_selection.json`, with
+  exact Entry-ID assignments, legal roster IDs, salaries, prior-only score,
+  canonical identity, solver status, immutable hashes and limitations;
+- `nfl_classic_slate_coverage_c1_v1` in
+  `classic_complete_slate_coverage.json`, with every person, team, position,
+  game, salary, activity state, inclusion/exclusion reason, unallocated share,
+  conservation totals and smallest evidence action.
+
+Runtime paths, run IDs, timestamps and solver elapsed seconds are excluded from
+these canonical payloads, so identical immutable inputs reproduce both hashes.
+`FILE_VALID` describes these two review JSON files only. `EVIDENCE_STATE`,
+`MODEL_STATUS=PRIOR_ONLY`, and `RELEASE_DECISION=DO_NOT_UPLOAD` are separate.
+C1 writes no Classic assignment CSV, `DK_REVIEW_ENTRY_*.csv`, or
+`DK_UPLOAD_*.csv`; C2 owns policy/candidates/joint selection and C3 owns readable
+review, independent export audit, and exact-template export.
 
 ## SD2 Showdown offensive history and current roles
 

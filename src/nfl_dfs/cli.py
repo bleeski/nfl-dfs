@@ -2222,6 +2222,7 @@ def _run_prior_review_profile(
         weather_state=request.weather_state,
         weather_source_uri=request.weather_source_uri,
         weather_observed_at=request.weather_observed_at,
+        weather_evidence_json=request.weather_evidence_json,
         lineup_count=request.lineup_count,
         max_person_overlap=request.max_person_overlap,
         operator_excluded_dk_ids=request.exclude_dk_ids,
@@ -2247,7 +2248,13 @@ def _run_prior_review_profile(
     )
     truths = _blocked_truth_values(
         file_valid=outcome.file_valid,
-        evidence_state=ReleaseEvidenceState.UNKNOWN,
+        evidence_state=(
+            ReleaseEvidenceState(
+                str((outcome.export or {}).get("EVIDENCE_STATE", "UNKNOWN"))
+            )
+            if slate.mode is EngineMode.CLASSIC
+            else ReleaseEvidenceState.UNKNOWN
+        ),
         model_status=ModelStatus.PRIOR_ONLY,
         certification_basis=CertificationBasis.MODEL_ASSISTED,
     )
@@ -2261,7 +2268,7 @@ def _run_prior_review_profile(
         )
 
     readable_review = None
-    if outcome.file_valid:
+    if outcome.file_valid and slate.mode is EngineMode.SHOWDOWN:
         try:
             readable_review = create_readable_review(
                 slate=slate,
@@ -2412,7 +2419,11 @@ def _run_prior_review_profile(
         "status": "DO_NOT_UPLOAD",
         **truths,
         "stage": (
-            "PRIOR_ONLY_REVIEW_EXPORT"
+            (
+                "PRIOR_ONLY_CLASSIC_REVIEW_ARTIFACTS"
+                if slate.mode is EngineMode.CLASSIC
+                else "PRIOR_ONLY_REVIEW_EXPORT"
+            )
             if outcome.file_valid
             else f"PRIOR_REVIEW_{outcome.stage}_BLOCKED"
         ),
@@ -2431,10 +2442,10 @@ def _run_prior_review_profile(
         **outcome.as_report(),
         "next": next_action,
         "meaning": (
-            "Legal and byte-audited, never certified. This profile reads no payout"
-            " table or field size; supplied activity reports constrain selection. It makes no EV, ROI,"
-            " win probability, cash probability, ownership or edge claim. Uploading"
-            " to DraftKings remains a manual operator action."
+            "Legal and byte-audited, never certified. This profile reads no payout "
+            "table or field size; supplied activity reports constrain selection. It makes no EV, ROI, "
+            "win probability, cash probability, ownership or edge claim. Classic C1 "
+            "emits machine-readable review JSON only and no upload-shaped package."
         ),
     }
     if policy_summary is not None:
@@ -2463,7 +2474,9 @@ def _run_prior_review_profile(
         }
     _write_json(report_path, result)
     _print_json(result)
-    return 0 if outcome.file_valid and readable_review is not None else 2
+    return 0 if outcome.file_valid and (
+        slate.mode is EngineMode.CLASSIC or readable_review is not None
+    ) else 2
 
 
 def _command_cowork_run(args: argparse.Namespace) -> int:
@@ -2485,6 +2498,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         request_roots.append(Path(args.portfolio_policy_json).resolve().parent)
     if getattr(args, "official_status_csv", None):
         request_roots.append(Path(args.official_status_csv).resolve().parent)
+    if getattr(args, "weather_evidence_json", None):
+        request_roots.append(Path(args.weather_evidence_json).resolve().parent)
     if args.request:
         request_source = Path(args.request).resolve()
         possible_run_root = request_source.parent
@@ -2514,6 +2529,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         ("weather_state", "weather_state"),
         ("weather_source_uri", "weather_source_uri"),
         ("weather_observed_at", "weather_observed_at"),
+        ("weather_evidence_json", "weather_evidence_json"),
         ("role_evidence_json", "role_evidence_json"),
         ("offensive_role_evidence_json", "offensive_role_evidence_json"),
         ("portfolio_policy_json", "portfolio_policy_json"),
@@ -3178,6 +3194,13 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--weather-state", choices=list(OPERATOR_WEATHER_STATES))
     cowork.add_argument("--weather-source-uri")
     cowork.add_argument("--weather-observed-at")
+    cowork.add_argument(
+        "--weather-evidence-json",
+        help=(
+            "hash-bound per-game Classic weather evidence manifest; required when "
+            "more than one game needs an operator weather observation"
+        ),
+    )
     cowork.add_argument("--role-evidence-json")
     cowork.add_argument("--offensive-role-evidence-json")
     cowork.add_argument("--portfolio-policy-json")

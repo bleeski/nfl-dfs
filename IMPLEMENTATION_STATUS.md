@@ -9,8 +9,15 @@ recorded `516 passed, 1 skipped` plus doctor, compile, and whitespace checks. Q1
 is now complete on `codex/q1-settlement-reference-economics`: focused tests
 passed 46/46 and the final full suite passed `542 passed, 1 skipped` in 117.86s;
 doctor, compile/import, whitespace, mutation, overwrite, and copied-package
-replay checks passed. C1 is the sole `READY` item. Every later item remains
-blocked.
+replay checks passed. C1 is complete on
+`codex/c1-classic-intake-prior-review` at unchanged baseline HEAD
+`9d25ad75f6fd08a22b700e3062b7304158e5c0c8`: the shared frozen prior/projection
+path now covers multi-game Classic, selected activity/current-role evidence
+fails closed, and one-command prior review emits deterministic selection and
+complete-slate coverage JSON without an upload-shaped CSV. Final verification
+collected 555 tests (`554 passed, 1 skipped`) and passed doctor, compile/import,
+whitespace, replay, mutation, prohibited-path, and benchmark checks. C2 is the
+sole `READY` item; C3 and every later item remain blocked.
 
 ## Current Showdown readiness — 2026-09-09
 

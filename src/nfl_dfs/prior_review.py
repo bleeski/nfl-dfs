@@ -1,4 +1,4 @@
-"""One gated entry point for the prior-only Showdown review chain.
+"""One gated entry point for the prior-only Showdown and Classic review chain.
 
 R02, the `cowork-run` half. `select` and `review-export` already exist and are
 tested; what was missing was a single command that drives the whole chain, so a
@@ -43,7 +43,12 @@ from .contracts import (
     earliest_expiry,
     earliest_source_freshness,
 )
-from .dk import parse_entries, parse_salaries
+from .dk import (
+    PARSER_VERSION as DK_PARSER_VERSION,
+    parse_entries,
+    parse_salaries,
+    reconcile_template,
+)
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_file
 from .kicker_roles import verify_kicker_role_resolution
@@ -77,9 +82,13 @@ from .portfolio_enforcement import (
 from .portfolio_policy import NormalizedPortfolioPolicy
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
 from .selection import assignments_for_entries, select_prior_lineups
+from .sources import SourcePolicyError, validate_source_reference_policy
 
 
 PROFILE_VERSION = "cowork_prior_review_v1"
+CLASSIC_PROFILE_VERSION = "cowork_classic_prior_review_c1_v1"
+CLASSIC_SELECTION_SCHEMA = "nfl_classic_prior_review_selection_c1_v1"
+CLASSIC_COVERAGE_SCHEMA = "nfl_classic_slate_coverage_c1_v1"
 
 # nflverse roof values the frozen schedule artifact resolves without any
 # operator input. `priors._ROOF_WEATHER` also maps "open", but a retractable
@@ -757,6 +766,21 @@ def _safe_label(label: str) -> str:
     return cleaned[:60] or "slate"
 
 
+def _write_canonical_json(path: str | Path, value: Mapping[str, object]) -> str:
+    """Write stable run-ID-independent machine bytes for deterministic replay."""
+
+    target = Path(path).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = (
+        json.dumps(dict(value), sort_keys=True, separators=(",", ":"), default=str)
+        + "\n"
+    ).encode("utf-8")
+    temporary = target.with_name(target.name + ".tmp")
+    temporary.write_bytes(payload)
+    temporary.replace(target)
+    return sha256_file(target)
+
+
 def _official_status_coverage(
     slate: SlateContract, lineups: Sequence[object], official_report: object
 ) -> dict[str, object] | None:
@@ -843,6 +867,8 @@ def pool_coverage_summary(
     kicker_zero_share_people: Sequence[str],
     unallocated_by_team: Mapping[str, Mapping[str, float]],
     offense_excluded_by_finding: Mapping[str, Sequence[str]] | None = None,
+    offense_findings: Sequence[Mapping[str, object]] = (),
+    official_statuses: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     """Say who was selectable, who was not, why, and what it cost in salary.
 
@@ -874,6 +900,16 @@ def pool_coverage_summary(
         for finding, members in dict(offense_excluded_by_finding or {}).items()
         for person in members
     }
+    next_action_by_person = {
+        str(item.get("person")): str(item.get("next_evidence_action") or "")
+        for item in offense_findings
+        if item.get("person")
+    }
+    official_by_person: dict[str, str] = {}
+    for player in slate.players:
+        status = (official_statuses or {}).get(player.dk_id)
+        if status:
+            official_by_person[player.underlying_id] = str(status)
 
     def reason_for(person: str) -> str:
         if person in unavailable:
@@ -892,7 +928,9 @@ def pool_coverage_summary(
     rows: list[dict[str, object]] = []
     totals: dict[str, dict[str, object]] = {}
     for person, players in sorted(by_person.items()):
-        flex_salary = sum(player.salary for player in players if player.role == "FLEX")
+        flex_salary = sum(
+            player.salary for player in players if player.role in {None, "FLEX"}
+        )
         cpt_salary = sum(player.salary for player in players if player.role == "CPT")
         reason = reason_for(person)
         bucket = reason.split(":", 1)[0]
@@ -903,8 +941,14 @@ def pool_coverage_summary(
                 "name": first.name,
                 "team": first.team,
                 "position": first.position,
+                "game_id": first.game_id,
+                "lock_at": first.lock_at.isoformat(),
+                "dk_ids": sorted((player.dk_id for player in players), key=int),
                 "dk_status": contract.status_by_person.get(person, ""),
+                "official_activity": official_by_person.get(person, "UNKNOWN"),
                 "reason": reason,
+                "smallest_evidence_action": next_action_by_person.get(person, ""),
+                "salary": flex_salary,
                 "flex_salary": flex_salary,
                 "cpt_salary": cpt_salary,
             }
@@ -945,7 +989,7 @@ def pool_coverage_summary(
         "note": (
             "Unallocated shares are prior-season volume held by people who cannot"
             " be selected; it is not reassigned. Salary totals are DraftKings FLEX"
-            " and CPT prices of the excluded people, a coverage measure, not a"
+            " and, for Showdown, CPT prices of the excluded people, a coverage measure, not a"
             " projection or an edge claim."
         ),
     }
@@ -966,6 +1010,7 @@ def run_prior_review(
     weather_state: str | None = None,
     weather_source_uri: str | None = None,
     weather_observed_at: str | None = None,
+    weather_evidence_json: str | Path | None = None,
     lineup_count: int | None = None,
     max_person_overlap: int | None = 4,
     allow_repeat_captain: bool = False,
@@ -1001,23 +1046,197 @@ def run_prior_review(
 
     salary_path = Path(salary_csv).resolve()
     entry_path = Path(entry_csv).resolve()
-    slate = parse_salaries(salary_path)
-    if slate.mode is not EngineMode.SHOWDOWN:
+    try:
+        slate = parse_salaries(salary_path)
+        template = parse_entries(entry_path)
+        reconcile_template(template, slate)
+        prefilled = [
+            entry.entry_id
+            for entry in template.authorizations
+            if any(entry.existing_cells)
+        ]
+        if prefilled:
+            raise PriorReviewError(
+                "ENTRY_BLANK_CELL_AUTHORITY_REQUIRED:"
+                f"prefilled_entries={prefilled}:prior_review may assign only exact "
+                "reserved Entry IDs whose roster cells are all blank"
+            )
+    except (OSError, ValueError) as exc:
         return PriorReviewOutcome(
             profile_version=PROFILE_VERSION,
-            stage="PRIORS",
+            stage="INTAKE",
             blocked=True,
-            blockers=(
-                f"PROFILE_MODE_NOT_SUPPORTED:{slate.mode.value}"
-                ":the prior_review profile is Showdown only; Classic selection is DL6",
-            ),
-            stages=(_stage("PRIORS", "BLOCKED", mode=slate.mode.value),),
+            blockers=(f"INTAKE_FAILED:{type(exc).__name__}:{exc}",),
+            stages=(_stage("INTAKE", "FAILED", error=str(exc)),),
             artifacts={},
             hashes={},
+            error=str(exc),
         )
+    profile_version = (
+        PROFILE_VERSION
+        if slate.mode is EngineMode.SHOWDOWN
+        else CLASSIC_PROFILE_VERSION
+    )
     salary_digest = sha256_file(salary_path)
     hashes["salary_csv"] = salary_digest
     hashes["entry_csv"] = sha256_file(entry_path)
+    reports["intake"] = {
+        "schema_version": "nfl_prior_review_intake_c1_v1",
+        "mode": slate.mode.value,
+        "salary_sha256": salary_digest,
+        "entry_sha256": hashes["entry_csv"],
+        "draft_group": slate.draft_group,
+        "games": [
+            {
+                "game_id": game.game_id,
+                "away_team": game.away_team,
+                "home_team": game.home_team,
+                "lock_at": game.lock_at.isoformat(),
+            }
+            for game in slate.games
+        ],
+        "salary_cap": slate.salary_cap,
+        "salary_parser_version": DK_PARSER_VERSION,
+        "entry_parser_version": DK_PARSER_VERSION,
+        "scoring_version": slate.scoring_version,
+        "entry_ids": [entry.entry_id for entry in template.authorizations],
+        "contest_ids": sorted({entry.contest_id for entry in template.authorizations}),
+        "contest_names": sorted({entry.contest_name for entry in template.authorizations}),
+        "entry_fees": sorted({entry.entry_fee for entry in template.authorizations}),
+        "blank_cell_authority": "PASS",
+        "appg_policy": "PRESENT_ONLY_IN_HASHED_UNTOUCHED_RAW_SALARY_BYTES",
+    }
+    stages.append(
+        _stage(
+            "INTAKE",
+            "OK",
+            mode=slate.mode.value,
+            games=len(slate.games),
+            entries=len(template.authorizations),
+        )
+    )
+    weather_evidence_by_game: dict[str, dict[str, object]] = {}
+    if weather_evidence_json is not None:
+        try:
+            weather_path = Path(weather_evidence_json).resolve()
+            weather_hash = sha256_file(weather_path)
+            weather_payload = _read_json(
+                weather_path, "WEATHER_EVIDENCE_JSON_INVALID"
+            )
+            if weather_payload.get("schema_version") != "nfl_classic_weather_evidence_c1_v1":
+                raise PriorReviewError("WEATHER_EVIDENCE_SCHEMA_UNSUPPORTED")
+            if weather_payload.get("salary_sha256") != salary_digest:
+                raise PriorReviewError("WEATHER_EVIDENCE_SALARY_HASH_MISMATCH")
+            games_payload = weather_payload.get("games")
+            if not isinstance(games_payload, Mapping):
+                raise PriorReviewError("WEATHER_EVIDENCE_GAMES_REQUIRED")
+            expected_games = {game.game_id for game in slate.games}
+            if set(map(str, games_payload)) != expected_games:
+                raise PriorReviewError(
+                    "WEATHER_EVIDENCE_GAME_COVERAGE_MISMATCH:"
+                    f"expected={sorted(expected_games)}:actual={sorted(map(str, games_payload))}"
+                )
+            for game_id, raw in games_payload.items():
+                if not isinstance(raw, Mapping):
+                    raise PriorReviewError(
+                        f"WEATHER_EVIDENCE_GAME_INVALID:{game_id}"
+                    )
+                game_evidence = dict(raw)
+                source_relative = Path(str(game_evidence.get("path") or ""))
+                expected_source_hash = str(game_evidence.get("sha256") or "").lower()
+                if (
+                    not source_relative.parts
+                    or source_relative.is_absolute()
+                    or ".." in source_relative.parts
+                    or len(expected_source_hash) != 64
+                    or any(character not in "0123456789abcdef" for character in expected_source_hash)
+                ):
+                    raise PriorReviewError(
+                        f"WEATHER_EVIDENCE_SOURCE_BINDING_INVALID:{game_id}"
+                    )
+                source_path = (weather_path.parent / source_relative).resolve()
+                if (
+                    not source_path.is_relative_to(weather_path.parent)
+                    or source_path.is_symlink()
+                    or not source_path.is_file()
+                    or not source_path.name.startswith(expected_source_hash)
+                ):
+                    raise PriorReviewError(
+                        f"WEATHER_EVIDENCE_SOURCE_PATH_INVALID:{game_id}"
+                    )
+                if sha256_file(source_path) != expected_source_hash:
+                    raise PriorReviewError(
+                        f"WEATHER_EVIDENCE_SOURCE_HASH_MISMATCH:{game_id}"
+                    )
+                try:
+                    validate_source_reference_policy(
+                        str(game_evidence.get("source_uri") or ""),
+                        license_decision=str(
+                            game_evidence.get("license_decision") or ""
+                        ),
+                        parser_version=str(game_evidence.get("parser_version") or ""),
+                    )
+                except SourcePolicyError as exc:
+                    raise PriorReviewError(
+                        f"WEATHER_EVIDENCE_SOURCE_POLICY:{game_id}:{exc}"
+                    ) from exc
+                observed = _parse_moment(
+                    game_evidence.get("observed_at"),
+                    label=f"WEATHER_OBSERVED_AT:{game_id}",
+                )
+                captured = _parse_moment(
+                    game_evidence.get("captured_at"),
+                    label=f"WEATHER_CAPTURED_AT:{game_id}",
+                )
+                expires = _parse_moment(
+                    game_evidence.get("expires_at"),
+                    label=f"WEATHER_EXPIRES_AT:{game_id}",
+                )
+                if observed > captured or captured > as_of or as_of > expires:
+                    raise PriorReviewError(
+                        f"WEATHER_EVIDENCE_TIME_INVALID_OR_STALE:{game_id}"
+                    )
+                if sha256_file(source_path) != expected_source_hash:
+                    raise PriorReviewError(
+                        f"WEATHER_EVIDENCE_SOURCE_CHANGED_DURING_READ:{game_id}"
+                    )
+                artifacts[f"weather_source:{game_id}"] = str(source_path)
+                hashes[f"weather_source:{game_id}"] = expected_source_hash
+                weather_evidence_by_game[str(game_id)] = game_evidence
+            if sha256_file(weather_path) != weather_hash:
+                raise PriorReviewError("WEATHER_EVIDENCE_CHANGED_DURING_READ")
+            artifacts["weather_evidence_json"] = str(weather_path)
+            hashes["weather_evidence_json"] = weather_hash
+        except (OSError, ValueError) as exc:
+            return PriorReviewOutcome(
+                profile_version=profile_version,
+                stage="WEATHER",
+                blocked=True,
+                blockers=(str(exc),),
+                stages=tuple(stages) + (
+                    _stage("WEATHER", "FAILED", error=str(exc)),
+                ),
+                artifacts=artifacts,
+                hashes=hashes,
+                reports=reports,
+                error=str(exc),
+            )
+    if portfolio_policy is not None and slate.mode is EngineMode.CLASSIC:
+        message = (
+            "PORTFOLIO_POLICY_MODE_UNSUPPORTED_C1:Classic policy, candidates, and "
+            "joint portfolio selection belong to C2"
+        )
+        return PriorReviewOutcome(
+            profile_version=profile_version,
+            stage="PORTFOLIO_POLICY",
+            blocked=True,
+            blockers=(message,),
+            stages=tuple(stages) + (_stage("PORTFOLIO_POLICY", "BLOCKED"),),
+            artifacts=artifacts,
+            hashes=hashes,
+            reports=reports,
+            error=message,
+        )
     policy_source_path: Path | None = None
     policy_normalized_path: Path | None = None
     if portfolio_policy is not None:
@@ -1028,7 +1247,7 @@ def run_prior_review(
             or portfolio_policy_normalized_sha256 is None
         ):
             return PriorReviewOutcome(
-                profile_version=PROFILE_VERSION,
+                profile_version=profile_version,
                 stage="PORTFOLIO_POLICY",
                 blocked=True,
                 blockers=(
@@ -1083,7 +1302,7 @@ def run_prior_review(
             }
         except (OSError, ValueError) as exc:
             return PriorReviewOutcome(
-                profile_version=PROFILE_VERSION, stage="ACTIVITY", blocked=True,
+                profile_version=profile_version, stage="ACTIVITY", blocked=True,
                 blockers=(str(exc),), stages=(_stage("ACTIVITY", "FAILED", error=str(exc)),),
                 artifacts=artifacts, hashes=hashes, reports=reports, error=str(exc),
             )
@@ -1133,7 +1352,7 @@ def run_prior_review(
                 package = None
             else:
                 return PriorReviewOutcome(
-                    profile_version=PROFILE_VERSION,
+                    profile_version=profile_version,
                     stage="PRIORS",
                     blocked=True,
                     blockers=(str(exc),),
@@ -1148,7 +1367,7 @@ def run_prior_review(
         if package is not None and package.expired:
             if not build_priors:
                 return PriorReviewOutcome(
-                    profile_version=PROFILE_VERSION,
+                    profile_version=profile_version,
                     stage="PRIORS",
                     blocked=True,
                     blockers=(
@@ -1169,7 +1388,7 @@ def run_prior_review(
             package = None
     elif not build_priors:
         return PriorReviewOutcome(
-            profile_version=PROFILE_VERSION,
+            profile_version=profile_version,
             stage="PRIORS",
             blocked=True,
             blockers=(
@@ -1203,7 +1422,7 @@ def run_prior_review(
         except Exception as exc:  # noqa: BLE001 - named, never swallowed
             error = f"{type(exc).__name__}:{exc}"
             return PriorReviewOutcome(
-                profile_version=PROFILE_VERSION,
+                profile_version=profile_version,
                 stage="PRIORS",
                 blocked=True,
                 blockers=(f"PRIORS_PROPOSE_FAILED:{error}",),
@@ -1223,18 +1442,46 @@ def run_prior_review(
             "salary_rows": proposed.get("salary_rows"),
             "match_methods": proposed.get("match_methods"),
             "market": proposed.get("market"),
+            "markets": proposed.get("markets"),
             "nflverse_game_id": proposed.get("nflverse_game_id"),
+            "nflverse_game_ids": proposed.get("nflverse_game_ids"),
         }
-        market = dict(proposed.get("market") or {})
         if live_run:
             as_of = datetime.now(timezone.utc)
-        weather = decide_weather(
-            str(market.get("roof", "")),
-            weather_state=weather_state,
-            weather_source_uri=weather_source_uri,
-            weather_observed_at=weather_observed_at,
-        )
-        reports["weather"] = weather.as_report()
+        proposed_markets = dict(proposed.get("markets") or {})
+        if not proposed_markets and proposed.get("market"):
+            proposed_markets = {
+                slate.games[0].game_id: dict(proposed.get("market") or {})
+            }
+        weather_decisions: dict[str, WeatherDecision] = {}
+        for game_id, raw_market in sorted(proposed_markets.items()):
+            market = dict(raw_market or {})
+            supplied = dict(weather_evidence_by_game.get(game_id) or {})
+            weather_decisions[game_id] = decide_weather(
+                str(market.get("roof", "")),
+                weather_state=(
+                    str(supplied.get("weather_state") or "") or None
+                    if weather_evidence_by_game
+                    else weather_state
+                ),
+                weather_source_uri=(
+                    str(supplied.get("source_uri") or "") or None
+                    if weather_evidence_by_game
+                    else weather_source_uri
+                ),
+                weather_observed_at=(
+                    str(supplied.get("observed_at") or "") or None
+                    if weather_evidence_by_game
+                    else weather_observed_at
+                ),
+            )
+        reports["weather"] = {
+            "scope": "COMPLETE_GAME_SET",
+            "games": {
+                game_id: decision.as_report()
+                for game_id, decision in sorted(weather_decisions.items())
+            },
+        }
 
         # --------------------------------------------------------- IDENTITY
         status_by_dk_id = {
@@ -1249,7 +1496,12 @@ def run_prior_review(
         hashes["identity_reviewed"] = reviewed_hash
         write_run_record(run_dir / "priors" / "identity_decisions.json", gate.as_report())
 
-        blockers = tuple(weather.blockers) + gate.blockers
+        weather_blockers = tuple(
+            f"{game_id}:{blocker}"
+            for game_id, decision in sorted(weather_decisions.items())
+            for blocker in decision.blockers
+        )
+        blockers = weather_blockers + gate.blockers
         stages.append(
             _stage(
                 "PRIORS",
@@ -1261,8 +1513,8 @@ def run_prior_review(
         stages.append(
             _stage(
                 "WEATHER",
-                "BLOCKED" if weather.blockers else "OK",
-                **weather.as_report(),
+                "BLOCKED" if weather_blockers else "OK",
+                games=reports["weather"]["games"],
             )
         )
         stages.append(
@@ -1276,7 +1528,7 @@ def run_prior_review(
         )
         if blockers:
             return PriorReviewOutcome(
-                profile_version=PROFILE_VERSION,
+                profile_version=profile_version,
                 stage="IDENTITY" if gate.blockers else "WEATHER",
                 blocked=True,
                 blockers=blockers,
@@ -1288,6 +1540,7 @@ def run_prior_review(
 
         frozen_dir = run_dir / "priors" / "frozen"
         try:
+            legacy_weather = weather_decisions[slate.games[0].game_id]
             frozen = freeze(
                 package_dir=str(proposal_dir),
                 reviewed=str(reviewed_path),
@@ -1296,16 +1549,31 @@ def run_prior_review(
                 salary_sha256=salary_digest,
                 as_of=as_of.isoformat(),
                 output_dir=str(frozen_dir),
-                weather_state=weather.freeze_weather_state,
+                weather_state=(
+                    None
+                    if weather_evidence_by_game
+                    else legacy_weather.freeze_weather_state
+                ),
                 salary_observed_at=None,
-                weather_source_uri=weather.freeze_source_uri,
-                weather_observed_at=weather.freeze_observed_at,
+                weather_source_uri=(
+                    None
+                    if weather_evidence_by_game
+                    else legacy_weather.freeze_source_uri
+                ),
+                weather_observed_at=(
+                    None
+                    if weather_evidence_by_game
+                    else legacy_weather.freeze_observed_at
+                ),
+                weather_evidence_by_game=(
+                    weather_evidence_by_game or None
+                ),
             )
         except Exception as exc:  # noqa: BLE001 - named, never swallowed
             error = f"{type(exc).__name__}:{exc}"
             stages.append(_stage("PRIORS", "FAILED", error=error))
             return PriorReviewOutcome(
-                profile_version=PROFILE_VERSION,
+                profile_version=profile_version,
                 stage="PRIORS",
                 blocked=True,
                 blockers=(f"PRIORS_FREEZE_FAILED:{error}",),
@@ -1331,7 +1599,7 @@ def run_prior_review(
         except PriorReviewError as exc:
             stages.append(_stage("PRIORS", "FAILED", error=str(exc)))
             return PriorReviewOutcome(
-                profile_version=PROFILE_VERSION,
+                profile_version=profile_version,
                 stage="PRIORS",
                 blocked=True,
                 blockers=(str(exc),),
@@ -1375,7 +1643,7 @@ def run_prior_review(
         error = f"{type(exc).__name__}:{exc}"
         stages.append(_stage("PROJECT", "FAILED", error=error))
         return PriorReviewOutcome(
-            profile_version=PROFILE_VERSION,
+            profile_version=profile_version,
             stage="PROJECT",
             blocked=True,
             blockers=(f"PROJECTION_FAILED:{error}",),
@@ -1427,7 +1695,7 @@ def run_prior_review(
         )
         stages.append(_stage("PROJECT", "BLOCKED_NOT_FRESH", **reports["projection"]))
         return PriorReviewOutcome(
-            profile_version=PROFILE_VERSION,
+            profile_version=profile_version,
             stage="PROJECT",
             blocked=True,
             blockers=(blocker,),
@@ -1456,7 +1724,7 @@ def run_prior_review(
     except PriorReviewError as exc:
         stages.append(_stage("SELECT", "FAILED", error=str(exc)))
         return PriorReviewOutcome(
-            profile_version=PROFILE_VERSION,
+            profile_version=profile_version,
             stage="SELECT",
             blocked=True,
             blockers=(str(exc),),
@@ -1486,7 +1754,7 @@ def run_prior_review(
         )
         stages.append(_stage("SELECT", "FAILED", error=message))
         return PriorReviewOutcome(
-            profile_version=PROFILE_VERSION,
+            profile_version=profile_version,
             stage="SELECT",
             blocked=True,
             blockers=(message,),
@@ -1497,6 +1765,21 @@ def run_prior_review(
             error=message,
         )
     try:
+        if slate.mode is EngineMode.CLASSIC:
+            if sha256_file(salary_path) != salary_digest:
+                raise PriorReviewError("SALARY_INPUT_CHANGED_BEFORE_SELECTION")
+            if sha256_file(entry_path) != hashes["entry_csv"]:
+                raise PriorReviewError("ENTRY_INPUT_CHANGED_BEFORE_SELECTION")
+            for source_path, expected_hash, label_name in (
+                (package.team_source, package.hashes[TEAM_PRIOR_FILENAME], "TEAM_PRIOR"),
+                (package.player_source, package.hashes[PLAYER_PRIOR_FILENAME], "PLAYER_PRIOR"),
+                (package.identity_map, package.hashes[IDENTITY_MAP_FILENAME], "IDENTITY_MAP"),
+                (projection.team_projections, projection.hashes["team_projections"], "TEAM_PROJECTIONS"),
+                (projection.player_opportunities, projection.hashes["player_opportunities"], "PLAYER_OPPORTUNITIES"),
+                (projection.source_ledger, projection.hashes["source_ledger"], "SOURCE_LEDGER"),
+            ):
+                if sha256_file(source_path) != expected_hash:
+                    raise PriorReviewError(f"{label_name}_CHANGED_BEFORE_SELECTION")
         if portfolio_policy is not None:
             assert policy_source_path is not None
             assert policy_normalized_path is not None
@@ -1569,7 +1852,7 @@ def run_prior_review(
         if isinstance(exc, OffensiveRoleError):
             reports["offensive_roles"] = exc.report
         return PriorReviewOutcome(
-            profile_version=PROFILE_VERSION,
+            profile_version=profile_version,
             stage="SELECT",
             blocked=True,
             blockers=(f"SELECTION_FAILED:{error}",),
@@ -1587,6 +1870,115 @@ def run_prior_review(
     selection_dir = run_dir / "selection"
     role_resolution = scores.kicker_role_resolution
     offensive_resolution = scores.offensive_role_resolution
+    selected_ids = {
+        dk_id for lineup in lineups for dk_id in lineup.roster
+    }
+    by_dk_id = {player.dk_id: player for player in slate.players}
+    selected_people = {
+        by_dk_id[dk_id].underlying_id for dk_id in selected_ids
+    }
+    selected_unavailable = sorted(
+        selected_people.intersection(contract.unavailable_people)
+    )
+    activity_coverage = _official_status_coverage(
+        slate, lineups, reports.get("official_status")
+    )
+    selected_evidence_gaps: list[dict[str, object]] = []
+    if slate.mode is EngineMode.CLASSIC:
+        if offensive_resolution.report.get("synthetic_sources"):
+            selected_evidence_gaps.append(
+                {
+                    "person": "SELECTED_OFFENSE",
+                    "evidence": "CURRENT_OFFENSIVE_ROLE",
+                    "state": "SYNTHETIC_TEST_EVIDENCE",
+                    "smallest_evidence_action": (
+                        "Replace synthetic role sources with fresh approved captured sources."
+                    ),
+                }
+            )
+        if selected_unavailable:
+            selected_evidence_gaps.extend(
+                {
+                    "person": person,
+                    "evidence": "PARTICIPATION",
+                    "smallest_evidence_action": "Remove the unavailable person and rerun selection.",
+                }
+                for person in selected_unavailable
+            )
+        missing_activity = (
+            sorted(selected_people)
+            if activity_coverage is None
+            else list(activity_coverage["selected_without_row"])
+        )
+        selected_evidence_gaps.extend(
+            {
+                "person": person,
+                "evidence": "OFFICIAL_ACTIVITY",
+                "smallest_evidence_action": (
+                    "Capture a fresh exact-ID ACTIVE or INACTIVE row from the approved "
+                    "official status source and rerun."
+                ),
+            }
+            for person in missing_activity
+        )
+        finding_by_person = {
+            str(item.get("person")): item
+            for item in offensive_resolution.report.get("findings", [])
+            if isinstance(item, Mapping) and item.get("person")
+        }
+        for person in sorted(selected_people):
+            selected_player = next(
+                player
+                for player in slate.players
+                if player.underlying_id == person
+            )
+            if selected_player.position not in {"QB", "RB", "WR", "TE"}:
+                continue
+            finding = finding_by_person.get(person)
+            if not finding or finding.get("state") != "SOURCE_SUPPORTED_ADJUSTMENT":
+                selected_evidence_gaps.append(
+                    {
+                        "person": person,
+                        "evidence": "CURRENT_OFFENSIVE_ROLE",
+                        "state": finding.get("state") if finding else "MISSING",
+                        "smallest_evidence_action": (
+                            finding.get("next_evidence_action")
+                            if finding
+                            else "Capture a fresh exact-ID numerical current-team allocation."
+                        ),
+                    }
+                )
+        reports["selected_evidence_gate"] = {
+            "schema_version": "nfl_classic_selected_evidence_gate_c1_v1",
+            "selected_people": sorted(selected_people),
+            "gaps": selected_evidence_gaps,
+            "status": "BLOCKED" if selected_evidence_gaps else "PASS",
+        }
+        if selected_evidence_gaps:
+            blocker = (
+                "SELECTED_CURRENT_EVIDENCE_REQUIRED:"
+                + ";".join(
+                    f"{item['evidence']}:{item['person']}:{item['smallest_evidence_action']}"
+                    for item in selected_evidence_gaps
+                )
+            )
+            stages.append(
+                _stage(
+                    "SELECT",
+                    "BLOCKED_SELECTED_EVIDENCE",
+                    gaps=len(selected_evidence_gaps),
+                )
+            )
+            return PriorReviewOutcome(
+                profile_version=profile_version,
+                stage="SELECT",
+                blocked=True,
+                blockers=(blocker,),
+                stages=tuple(stages),
+                artifacts=artifacts,
+                hashes=hashes,
+                reports=reports,
+            )
     if offensive_resolution.evidence_path:
         artifacts["offensive_role_evidence_json"] = offensive_resolution.evidence_path
         hashes["offensive_role_evidence_json"] = str(offensive_resolution.evidence_sha256)
@@ -1602,19 +1994,21 @@ def run_prior_review(
                 (role_resolution.source_hashes or {})[source_path]
             )
     assignments_path = selection_dir / "assignments.csv"
-    assignments_hash = write_assignments_csv(
-        assignments_path,
-        assignments,
-        entry_order=portfolio_policy.entry_ids if portfolio_policy is not None else None,
-    )
-    artifacts["assignments"] = str(assignments_path)
-    hashes["assignments"] = assignments_hash
+    assignments_hash = ""
+    if slate.mode is EngineMode.SHOWDOWN:
+        assignments_hash = write_assignments_csv(
+            assignments_path,
+            assignments,
+            entry_order=portfolio_policy.entry_ids if portfolio_policy is not None else None,
+        )
+        artifacts["assignments"] = str(assignments_path)
+        hashes["assignments"] = assignments_hash
     selection_report = {
         "status": "DO_NOT_UPLOAD",
         "MODEL_STATUS": "PRIOR_ONLY",
         "RELEASE_DECISION": "DO_NOT_UPLOAD",
-        "assignments": str(assignments_path),
-        "assignments_sha256": assignments_hash,
+        "assignments": str(assignments_path) if slate.mode is EngineMode.SHOWDOWN else None,
+        "assignments_sha256": assignments_hash or None,
         "reserved_entries": entry_ids,
         "lineups": [lineup.as_payload(names) for lineup in lineups],
         "selected_prior_points_by_dk_id": {
@@ -1642,10 +2036,14 @@ def run_prior_review(
             offense_excluded_by_finding=dict(
                 scores.offensive_role_resolution.report.get("excluded_by_finding") or {}
             ),
+            offense_findings=tuple(
+                scores.offensive_role_resolution.report.get("findings") or ()
+            ),
+            official_statuses=dict(
+                (reports.get("official_status") or {}).get("statuses") or {}
+            ),
         ),
-        "official_status_coverage": _official_status_coverage(
-            slate, lineups, reports.get("official_status")
-        ),
+        "official_status_coverage": activity_coverage,
         "assignment_summary": {
             "lineups_generated": len(lineups),
             "reserved_entries": len(entry_ids),
@@ -1664,10 +2062,186 @@ def run_prior_review(
             " ownership aware, and not EV, ROI, win probability or edge."
         ),
     }
-    selection_report_path = selection_dir / "selection_report.json"
-    selection_report_hash = write_run_record(selection_report_path, selection_report)
-    artifacts["selection_report"] = str(selection_report_path)
-    hashes["selection_report"] = selection_report_hash
+    if slate.mode is EngineMode.CLASSIC:
+        # Publish only after re-reading every immutable input and current-evidence
+        # artifact.  The JSON is deliberately not a DraftKings-shaped template;
+        # C3 owns review/export redesign and this C1 output cannot be uploaded.
+        mutation_checks = (
+            (salary_path, salary_digest, "SALARY"),
+            (entry_path, hashes["entry_csv"], "ENTRY"),
+            (package.team_source, package.hashes[TEAM_PRIOR_FILENAME], "TEAM_PRIOR"),
+            (package.player_source, package.hashes[PLAYER_PRIOR_FILENAME], "PLAYER_PRIOR"),
+            (package.identity_map, package.hashes[IDENTITY_MAP_FILENAME], "IDENTITY_MAP"),
+            (projection.team_projections, projection.hashes["team_projections"], "TEAM_PROJECTIONS"),
+            (projection.player_opportunities, projection.hashes["player_opportunities"], "PLAYER_OPPORTUNITIES"),
+            (projection.source_ledger, projection.hashes["source_ledger"], "SOURCE_LEDGER"),
+        )
+        for source_path, expected_hash, label_name in mutation_checks:
+            if sha256_file(source_path) != expected_hash:
+                return PriorReviewOutcome(
+                    profile_version=profile_version,
+                    stage="SELECT",
+                    blocked=True,
+                    blockers=(f"{label_name}_CHANGED_BEFORE_ARTIFACT_PUBLISH",),
+                    stages=tuple(stages) + (
+                        _stage("SELECT", "BLOCKED_INPUT_MUTATION", input=label_name),
+                    ),
+                    artifacts=artifacts,
+                    hashes=hashes,
+                    reports=reports,
+                )
+        if weather_evidence_json is not None and sha256_file(weather_evidence_json) != hashes.get(
+            "weather_evidence_json"
+        ):
+            return PriorReviewOutcome(
+                profile_version=profile_version,
+                stage="SELECT",
+                blocked=True,
+                blockers=("WEATHER_EVIDENCE_CHANGED_BEFORE_ARTIFACT_PUBLISH",),
+                stages=tuple(stages) + (
+                    _stage("SELECT", "BLOCKED_INPUT_MUTATION", input="WEATHER_EVIDENCE"),
+                ),
+                artifacts=artifacts,
+                hashes=hashes,
+                reports=reports,
+            )
+        for key, expected_hash in sorted(hashes.items()):
+            if not key.startswith("weather_source:"):
+                continue
+            if sha256_file(artifacts[key]) != expected_hash:
+                return PriorReviewOutcome(
+                    profile_version=profile_version,
+                    stage="SELECT",
+                    blocked=True,
+                    blockers=(f"WEATHER_SOURCE_CHANGED_BEFORE_ARTIFACT_PUBLISH:{key}",),
+                    stages=tuple(stages) + (
+                        _stage("SELECT", "BLOCKED_INPUT_MUTATION", input=key),
+                    ),
+                    artifacts=artifacts,
+                    hashes=hashes,
+                    reports=reports,
+                )
+        if official_status_csv is not None and sha256_file(official_status_csv) != hashes.get(
+            "official_status_csv"
+        ):
+            return PriorReviewOutcome(
+                profile_version=profile_version,
+                stage="SELECT",
+                blocked=True,
+                blockers=("OFFICIAL_STATUS_CHANGED_BEFORE_ARTIFACT_PUBLISH",),
+                stages=tuple(stages) + (
+                    _stage("SELECT", "BLOCKED_INPUT_MUTATION", input="OFFICIAL_STATUS"),
+                ),
+                artifacts=artifacts,
+                hashes=hashes,
+                reports=reports,
+            )
+        verify_offensive_resolution(offensive_resolution, at=as_of)
+        official_statuses = dict(
+            (reports.get("official_status") or {}).get("statuses") or {}
+        )
+        overall_evidence_state = (
+            "PASS"
+            if set(official_statuses) == {player.dk_id for player in slate.players}
+            and offensive_resolution.report.get("evidence_state") == "PASS"
+            and not offensive_resolution.report.get("synthetic_sources")
+            else "UNKNOWN"
+        )
+        immutable_bindings = {
+            "salary_sha256": salary_digest,
+            "entry_sha256": hashes["entry_csv"],
+            "team_prior_sha256": package.hashes[TEAM_PRIOR_FILENAME],
+            "player_prior_sha256": package.hashes[PLAYER_PRIOR_FILENAME],
+            "identity_map_sha256": package.hashes[IDENTITY_MAP_FILENAME],
+            "team_projections_sha256": projection.hashes["team_projections"],
+            "player_opportunities_sha256": projection.hashes["player_opportunities"],
+            "source_ledger_sha256": projection.hashes["source_ledger"],
+            "official_status_sha256": hashes.get("official_status_csv"),
+            "offensive_role_evidence_sha256": hashes.get("offensive_role_evidence_json"),
+            "weather_evidence_sha256": hashes.get("weather_evidence_json"),
+            "weather_source_sha256_by_game": {
+                key.removeprefix("weather_source:"): value
+                for key, value in sorted(hashes.items())
+                if key.startswith("weather_source:")
+            },
+        }
+        stable_lineups = [
+            {
+                "index": lineup.index,
+                "roster": list(lineup.roster),
+                "salary": lineup.salary,
+                "prior_points": round(lineup.prior_points, 6),
+                "canonical_key": list(lineup.canonical_key),
+                "solver_status": lineup.solver_status,
+            }
+            for lineup in lineups
+        ]
+        stable_selection = {
+            "schema_version": CLASSIC_SELECTION_SCHEMA,
+            "artifact_class": "REVIEW_ONLY_NOT_DRAFTKINGS_UPLOAD",
+            "FILE_VALID": True,
+            "EVIDENCE_STATE": overall_evidence_state,
+            "MODEL_STATUS": "PRIOR_ONLY",
+            "RELEASE_DECISION": "DO_NOT_UPLOAD",
+            "mode": slate.mode.value,
+            "draft_group": slate.draft_group,
+            "scoring_version": slate.scoring_version,
+            "immutable_bindings": immutable_bindings,
+            "assignments_by_entry_id": {
+                entry_id: list(roster)
+                for entry_id, roster in sorted(assignments.items())
+            },
+            "lineups": stable_lineups,
+            "objective": "MAXIMIZE_PRIOR_POINTS_OF_THE_EXPECTED_STAT_LINE",
+            "limitations": [
+                "NOT_CALIBRATED_EV_ROI_WIN_OR_CASH_PROBABILITY",
+                "NO_OWNERSHIP_FIELD_DUPLICATION_PAYOUT_OR_PORTFOLIO_ECONOMICS",
+                "NOT_UPLOAD_READY",
+            ],
+        }
+        stable_coverage = {
+            "schema_version": CLASSIC_COVERAGE_SCHEMA,
+            "artifact_class": "COMPLETE_SLATE_REVIEW_COVERAGE",
+            "FILE_VALID": True,
+            "EVIDENCE_STATE": overall_evidence_state,
+            "MODEL_STATUS": "PRIOR_ONLY",
+            "RELEASE_DECISION": "DO_NOT_UPLOAD",
+            "mode": slate.mode.value,
+            "immutable_bindings": immutable_bindings,
+            "games": reports["intake"]["games"],
+            "official_status_coverage": activity_coverage,
+            "selected_evidence_gate": reports.get("selected_evidence_gate"),
+            "pool_coverage": selection_report["pool_coverage"],
+            "conservation": {
+                "declared_totals_by_team": offensive_resolution.report.get(
+                    "declared_totals", {}
+                ),
+                "declared_unallocated_by_team": offensive_resolution.report.get(
+                    "declared_unallocated", {}
+                ),
+                "basis": (
+                    "For each team and registered opportunity field, explicit "
+                    "recipient shares plus unallocated share equal one."
+                ),
+            },
+        }
+        selection_report_path = selection_dir / "classic_selection.json"
+        coverage_report_path = selection_dir / "classic_complete_slate_coverage.json"
+        selection_report_hash = _write_canonical_json(
+            selection_report_path, stable_selection
+        )
+        coverage_report_hash = _write_canonical_json(
+            coverage_report_path, stable_coverage
+        )
+        artifacts["selection_report"] = str(selection_report_path)
+        artifacts["complete_slate_coverage"] = str(coverage_report_path)
+        hashes["selection_report"] = selection_report_hash
+        hashes["complete_slate_coverage"] = coverage_report_hash
+    else:
+        selection_report_path = selection_dir / "selection_report.json"
+        selection_report_hash = write_run_record(selection_report_path, selection_report)
+        artifacts["selection_report"] = str(selection_report_path)
+        hashes["selection_report"] = selection_report_hash
     reports["selection"] = selection_report
     stages.append(
         _stage(
@@ -1681,6 +2255,46 @@ def run_prior_review(
     )
 
     # ----------------------------------------------------------------- EXPORT
+    if slate.mode is EngineMode.CLASSIC:
+        export_report = {
+            "FILE_VALID": True,
+            "EVIDENCE_STATE": overall_evidence_state,
+            "MODEL_STATUS": "PRIOR_ONLY",
+            "RELEASE_DECISION": "DO_NOT_UPLOAD",
+            "file_kind": "VERSIONED_MACHINE_READABLE_REVIEW_ARTIFACTS",
+            "bulk_entry_csv": None,
+            "bulk_entry_sha256": None,
+            "selection_artifact": artifacts["selection_report"],
+            "selection_sha256": hashes["selection_report"],
+            "coverage_artifact": artifacts["complete_slate_coverage"],
+            "coverage_sha256": hashes["complete_slate_coverage"],
+            "note": (
+                "Classic C1 emits no DraftKings-shaped CSV. FILE_VALID describes the "
+                "two bound review JSON artifacts only; C3 owns export redesign."
+            ),
+        }
+        stages.append(
+            _stage(
+                "EXPORT",
+                "NOT_APPLICABLE_REVIEW_JSON_ONLY",
+                file_valid=True,
+                release_decision="DO_NOT_UPLOAD",
+            )
+        )
+        outcome = PriorReviewOutcome(
+            profile_version=profile_version,
+            stage="EXPORT",
+            blocked=False,
+            blockers=(),
+            stages=tuple(stages),
+            artifacts=artifacts,
+            hashes=hashes,
+            reports=reports,
+            export=export_report,
+        )
+        write_run_record(run_dir / "prior_review.json", outcome.as_report())
+        return outcome
+
     review_dir = out_dir / "review"
     try:
         export_clock = datetime.now(timezone.utc) if live_run else as_of
@@ -1788,7 +2402,7 @@ def run_prior_review(
         )
     )
     outcome = PriorReviewOutcome(
-        profile_version=PROFILE_VERSION,
+        profile_version=profile_version,
         stage="EXPORT",
         blocked=not export.file_valid,
         blockers=tuple(f"REVIEW_EXPORT:{problem}" for problem in export.problems),

@@ -202,10 +202,36 @@ def excluded_dk_ids(slate: SlateContract, contract: ParticipationContract) -> tu
 def selectable_pool_problems(
     slate: SlateContract, contract: ParticipationContract
 ) -> tuple[str, ...]:
-    """Report whether a legal Showdown lineup can still be built at all."""
+    """Report obvious mode-specific blockers before invoking the solver."""
 
     problems: list[str] = []
     selectable = set(contract.selectable_people)
+    if slate.mode is EngineMode.CLASSIC:
+        selectable_rows = [
+            player for player in slate.players if player.underlying_id in selectable
+        ]
+        counts = {
+            position: sum(player.position == position for player in selectable_rows)
+            for position in ("QB", "RB", "WR", "TE", "DST")
+        }
+        required = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
+        for position, minimum in required.items():
+            if counts[position] < minimum:
+                problems.append(
+                    f"SELECTABLE_CLASSIC_POSITION_SHORTAGE:{position}:"
+                    f"available={counts[position]}:required={minimum}"
+                )
+        flex_count = counts["RB"] + counts["WR"] + counts["TE"]
+        if flex_count < 7:
+            problems.append(
+                f"SELECTABLE_CLASSIC_FLEX_SHORTAGE:available={flex_count}:required=7"
+            )
+        games = {player.game_id for player in selectable_rows}
+        if len(games) < 2:
+            problems.append(
+                f"SELECTABLE_CLASSIC_GAME_SHORTAGE:available={sorted(games)}:required=2"
+            )
+        return tuple(problems)
     if slate.mode is not EngineMode.SHOWDOWN:
         return ()
     if len(selectable) < 6:

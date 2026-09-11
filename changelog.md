@@ -4,6 +4,55 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-10: C1 Classic intake and one-command prior review completed
+
+- Confirmed Q1 is `DONE` on merged `main` commit
+  `9d25ad75f6fd08a22b700e3062b7304158e5c0c8`; `main` and `origin/main`
+  matched. Completed C1 on `codex/c1-classic-intake-prior-review` without
+  changing HEAD.
+- Extended the shared frozen nflverse prior and S6A projection path across every
+  Classic game, team, and exact DK person. Intake now binds exact salary/entry
+  bytes, optional embedded draft group, complete game/team/opponent/lock and
+  contest/Entry-ID facts, blank-cell authority, mode and parser/scoring
+  versions. APPG remains raw-byte-only.
+- Added full-slate prior scoring/selection, exact-ID participation and activity,
+  per-game content-addressed weather evidence, and the
+  `nfl_classic_offensive_role_evidence_c1_v1` exact-ID numerical allocation
+  contract. Selected missing/stale/synthetic/current-role or activity evidence
+  blocks publication with the smallest named evidence action; unsupported
+  shares are never invented or redistributed.
+- Classic `cowork-run --profile prior_review --build-priors` now publishes
+  deterministic `nfl_classic_prior_review_selection_c1_v1` and
+  `nfl_classic_slate_coverage_c1_v1` canonical JSON. It assigns one legal unique
+  lineup to each exact reserved Entry ID, re-hashes inputs immediately before
+  publication, and emits no Classic assignment, `DK_REVIEW_ENTRY`, or
+  `DK_UPLOAD` CSV. Showdown behavior is unchanged.
+- Focused Classic/intake/prior/projection/participation/selection/Cowork/
+  contract/Showdown coverage passed `220 passed, 1 skipped in 43.66s`; the final
+  pinned suite collected 555 tests and passed `554 passed, 1 skipped` with short
+  local temp/cache paths. The initial full run exposed the pre-existing guard
+  that `UNKNOWN` S6A player evidence may not be extended to Classic; C1 restored
+  that fail-closed contract and the final run passed.
+- `./nfl.ps1 doctor` passed on Python 3.13.7 with SQLite `ok`/WAL, closed or
+  absent Excel lock, no sync/reparse workspace, and long paths still disabled.
+  Compile/import checks and `git diff --check` passed. Mutation tests caught
+  role-source and during-selection salary changes; repeated run IDs produced
+  identical selection and coverage hashes. Adversarial monkeypatches proved C1
+  did not call field, ownership, duplication, payout/economics, or production
+  portfolio selection.
+- A full-width supplied Classic projection fixture (719 people, 24 teams, 12
+  games) completed in 0.515s with 5.916 MiB peak traced Python memory. The
+  complete two-game/two-entry governed C1 fixture completed in 0.469s with
+  1.955 MiB peak traced memory.
+- `FILE_VALID=true` refers only to valid Classic review JSON;
+  `EVIDENCE_STATE` remains independently derived, `MODEL_STATUS=PRIOR_ONLY`,
+  and `RELEASE_DECISION=DO_NOT_UPLOAD`. C1 makes no EV, ROI, ownership,
+  win/cash-probability, calibrated-performance, live-slate, or upload-readiness
+  claim. C2 is the sole next `READY` item; C3 and later work remain blocked.
+- Preserved the existing untracked `Claude outputs/` and W2/W4 session prompts.
+  No staging, commit, push, pull request, merge, or DraftKings account action
+  is authorized for this session.
+
 ### 2026-09-10: Q1 settlement and reference-economics foundation
 
 - Added strict `nfl_settlement_request_v1` capture and immutable

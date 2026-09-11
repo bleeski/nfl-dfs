@@ -1,5 +1,46 @@
 # Claude Cowork Runbook
 
+## Classic C1 prior review: current operating path (2026-09-10)
+
+The same normal two-CSV command now accepts a multi-game DraftKings NFL Classic
+salary file and matching blank reserved-entry file:
+
+```sh
+sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<slate-label>'
+```
+
+Classic C1 validates and binds the exact salary and entry bytes, draft group,
+complete game/team/opponent/lock set, contest and Entry IDs, and blank-cell
+authority. It builds or reuses the shared frozen prior package, produces the
+shared deterministic projection package, applies full-slate participation,
+official activity, current role, weather and expiry gates, and solves one legal
+prior-only lineup per reserved Entry ID. It never calls the field, ownership,
+duplication, payout, candidate-economics or production portfolio selector.
+
+Success writes canonical `classic_selection.json` and
+`classic_complete_slate_coverage.json` plus the status workbook. The two JSON
+hashes reproduce across new run IDs from identical immutable inputs. They are
+review records, not a DraftKings template: C1 writes no `assignments.csv`,
+`DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`. `FILE_VALID=true` describes the
+machine-readable review files only. `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD` are invariant.
+
+Classic publication requires fresh exact-ID official activity for every selected
+person and `nfl_classic_offensive_role_evidence_c1_v1` source-supported numerical
+allocations for every selected offensive person. A missing selected row stops
+publication and names the person plus the smallest evidence action. Uncertainty
+for nonselected people remains visible in complete-slate coverage. A multi-game
+weather capture uses `--weather-evidence-json`; its
+`nfl_classic_weather_evidence_c1_v1` payload binds `salary_sha256` and maps the
+exact complete game set to `weather_state`, approved `source_uri`, and
+timezone-aware `observed_at`, plus the relative content-addressed capture path,
+SHA-256, license/parser decision, capture time and expiry. Scalar weather flags remain the single-game
+Showdown interface.
+
+C1 deliberately has no Classic portfolio policy, candidate bank, joint portfolio
+optimizer, readable review, exact-template export, or scale certification. Those
+are C2 and C3.
+
 ## Showdown generation: current operating path (2026-09-09)
 
 For the normal request to generate a Showdown portfolio from the two attached

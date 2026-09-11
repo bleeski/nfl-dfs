@@ -41,16 +41,18 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 1. Locate the attached salary and reserved-entry CSVs. Do not depend on their
    filenames. If both are in one attachment directory, run:
 
-   For Showdown lineup generation, use:
+   For prior-only Showdown or Classic review generation, use:
 
    `sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<short-label>'`
 
-   This automatically runs the frozen prior, projection, selection, and review
-   export chain. It produces review lineups with `PRIOR_ONLY / DO_NOT_UPLOAD`.
+   This automatically runs the frozen prior, projection, and selection chain.
+   It produces review lineups with `PRIOR_ONLY / DO_NOT_UPLOAD`.
    It does not implement calibrated ceiling, ownership leverage, or portfolio
    drawdown optimization. The default `diagnostic` profile is the older
-   economics workflow and normally stops on missing contest inputs. Classic
-   still uses that default; `prior_review` currently supports Showdown only.
+   economics workflow and normally stops on missing contest inputs. For Classic,
+   C1 writes canonical `classic_selection.json` and
+   `classic_complete_slate_coverage.json` review artifacts. It deliberately
+   writes no DraftKings-shaped assignment or upload CSV; C2 and C3 remain open.
 
    If they are in different locations, pass `--salaries` and `--entries`
    explicitly. On Windows outside Cowork, use `./nfl.ps1 cowork-run` with the
@@ -66,13 +68,19 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    `DISPLAY_RECONCILIATION=PASS` means the display was independently rebuilt
    from and reconciled to the exact salary, entry, assignment, policy, audit,
    selection, and review-export artifacts; it is not a release decision. The
-   first pass always freezes and reconciles the supplied files.
+   first pass always freezes and reconciles the supplied files. A successful
+   Classic C1 run instead starts with the two canonical JSON artifacts and the
+   status workbook; it has no upload or readable-export artifact.
 4. Gather everything discoverable from approved public sources and freeze the
    artifacts. For an outdoor Showdown game, obtain the forecast through the
    approved `sources.fetch_public_artifact` adapter from `api.weather.gov`;
    retain its raw bytes and hash. Use its actual `generatedAt` observation time
    and game-period conditions to populate `weather_state`,
    `weather_source_uri`, and `weather_observed_at` in the request, then rerun.
+   For multi-game Classic, use a hash-bound
+   `nfl_classic_weather_evidence_c1_v1` JSON file through
+   `weather_evidence_json`; it must bind the salary hash and contain exactly one
+   source/state/observation record for every game.
    Do not claim NWS is universally unreachable: test the current session.
    Weather capture expires after six hours. Use a fresh run before kickoff.
    `prior_review` already produces its model inputs; the manual fallback is
@@ -97,6 +105,10 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    reports are available. The supplied rows must be current, and an INACTIVE
    row excludes both CPT and FLEX identities before selection. Missing ACTIVE
    rows remain unknown; salary status alone never establishes current activity.
+   Classic C1 will not publish selection artifacts unless every selected person
+   has a fresh exact-ID row. Every selected offensive person must also have a
+   source-supported numerical current-team allocation in
+   `nfl_classic_offensive_role_evidence_c1_v1`.
    SD2 distinguishes missing and observed-zero offensive history. Rebuild older
    prior packages without SD2 coverage. A transfer carries his own prior-team
    share as an unverified cold-start prior (`TRANSFER_PRIOR_UNVERIFIED`,
@@ -197,11 +209,11 @@ and reports one of these truthful outcomes:
   blocker is named, and the smallest next action is explicit. A valid proposed
   file may still be reported and hashed in memory.
 
-The explicitly requested `prior_review` profile has a diagnostic exception:
-it may retain `DK_REVIEW_ENTRY_*.csv` with independent legality/byte checks.
-That review artifact is never a certified `DK_UPLOAD` package. Return its
-limitations and `DO_NOT_UPLOAD` prominently; exit code 0 means review generation
-completed, not that uploading is cleared.
+The explicitly requested `prior_review` profile has a Showdown-only diagnostic
+exception: it may retain `DK_REVIEW_ENTRY_*.csv` with independent legality/byte
+checks. Classic C1 emits no upload-shaped CSV. Neither path creates a certified
+`DK_UPLOAD` package. Return limitations and `DO_NOT_UPLOAD` prominently; exit
+code 0 means review generation completed, not that uploading is cleared.
 
 Never describe `RECONCILED`, `MODELLED`, legal lineups, generated assignments,
 or a green diagnostic as upload-ready.
