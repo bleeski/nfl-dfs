@@ -49,6 +49,7 @@ class ReviewExport:
     entries: int
     file_valid: bool
     problems: tuple[str, ...]
+    observations: tuple[str, ...] = ()
 
     def as_report(self, extra: Mapping[str, object] | None = None) -> dict[str, object]:
         return {
@@ -63,9 +64,9 @@ class ReviewExport:
             "bulk_entry_sha256": self.output_sha256 if self.file_valid else None,
             "entries": self.entries,
             "problems": list(self.problems),
+            "observations": list(self.observations),
             "checks_run": [
                 "TEMPLATE_RECONCILED_TO_SALARY_POOL",
-                "SINGLE_CONTEST_AND_ENTRY_FEE",
                 "EXACT_SALARY_ROW_IDENTITY_PER_SLOT",
                 "ONE_CAPTAIN_AND_FIVE_FLEX",
                 "UNDERLYING_PERSON_UNIQUENESS",
@@ -76,6 +77,7 @@ class ReviewExport:
                 "SHA256_OF_PROPOSED_BYTES",
             ],
             "checks_not_run": [
+                "SINGLE_CONTEST_AND_ENTRY_FEE_ECONOMICS_SCOPE",
                 "PAYOUT_AND_FIELD_ECONOMICS",
                 "OWNERSHIP_AND_DUPLICATION",
                 "PROSPECTIVE_MODEL_VALIDATION",
@@ -103,7 +105,14 @@ def export_review_entries(
     if output.exists():
         raise ReviewExportError(f"OUTPUT_EXISTS:{output}")
 
-    problems: list[str] = list(single_contest_problems(template))
+    # A DraftKings bulk-entry file is exported per draft group and routinely spans
+    # several contests and entry fees. Contest identity is economics: payouts, field
+    # size and ticket value. This path consults none of them and always ends
+    # DO_NOT_UPLOAD, and Contest ID and Entry Fee are never written or read as roster
+    # cells, so a spanning file is recorded as an observation here and stays a
+    # fail-closed blocker on every path that does consult economics.
+    observations: tuple[str, ...] = single_contest_problems(template)
+    problems: list[str] = []
     if slate.mode is not EngineMode.SHOWDOWN:
         problems.append(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
     try:
@@ -168,6 +177,7 @@ def export_review_entries(
         entries=len(authorized),
         file_valid=file_valid,
         problems=tuple(problems),
+        observations=observations,
     )
 
 

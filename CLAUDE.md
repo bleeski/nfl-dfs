@@ -159,7 +159,23 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    assumption, not confirmed role or ACTIVE evidence.
    Never send generated prior assignments to manual-guardrail certification.
    Use `preflight` immediately before any separately certified manual upload.
-8. Return `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and
+8. Run the adversarial QA pass before any operator handoff on a slate that will
+   actually be entered, in Classic and in Showdown alike. Legality, byte
+   fidelity and policy enforcement do not ask whether the portfolio is coherent,
+   and a build can pass all three while holding a quarterback and his own
+   backup, a lineup with no quarterback, two entries separated by one $200
+   player, or a person the official report already ruled out. The full
+   specification is `docs/ADVERSARIAL_QA.md`. Two layers, and they have
+   different trust properties. The deterministic `portfolio_coherence` checks
+   are engine output and are read like any other block. The adversarial agent
+   pass is procedural: give a subagent the artifacts, the engine source and an
+   instruction to assume the build is wrong, run the external-data track
+   separately because the agent does not fetch, re-verify through the real
+   validator and selector anything the agent proposes, and treat its verdict as
+   advisory. A language model's opinion is neither hash-bound nor replayable and
+   never becomes a release gate. Time-box the pass against lock; an unfinished
+   pass is worth less than a build that ships.
+9. Return `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and
    `RELEASE_DECISION`, plus the compatibility status, blockers,
    readable JSON/HTML/workbook paths and SHA-256 values, manifest path,
    proposed/final SHA-256, display-reconciliation status, and the single next
@@ -192,6 +208,7 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 - `plan.md` governs architecture and safety decisions.
 - `docs/DATA_CONTRACTS.md` governs all structured inputs.
 - `docs/COWORK_RUNBOOK.md` is the Cowork operating procedure.
+- `docs/ADVERSARIAL_QA.md` is the pre-handoff portfolio QA pass for both modes.
 - `IMPLEMENTATION_STATUS.md` distinguishes working code from unverified live
   data, calibration, and performance claims.
 - The latest run artifacts and their hashes are authoritative for slate state;
@@ -199,8 +216,10 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
 
 ## Definition of done
 
-A Cowork slate task is complete only when it leaves a versioned review package
-and reports one of these truthful outcomes:
+A Cowork slate task is complete only when it leaves a versioned review package,
+reports the adversarial QA pass of `docs/ADVERSARIAL_QA.md` including every
+`DEFECT` finding and every blind spot that could not be honestly closed, and
+reports one of these truthful outcomes:
 
 - `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE`: exact final bytes passed every
   current hard gate. Ben may review and manually upload them. Manual guardrail

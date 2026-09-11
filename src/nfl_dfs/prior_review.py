@@ -48,6 +48,7 @@ from .dk import (
     parse_entries,
     parse_salaries,
     reconcile_template,
+    single_contest_problems,
 )
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_file
@@ -1050,6 +1051,7 @@ def run_prior_review(
         slate = parse_salaries(salary_path)
         template = parse_entries(entry_path)
         reconcile_template(template, slate)
+        contest_scope_observations = single_contest_problems(template)
         prefilled = [
             entry.entry_id
             for entry in template.authorizations
@@ -1104,6 +1106,12 @@ def run_prior_review(
         "contest_names": sorted({entry.contest_name for entry in template.authorizations}),
         "entry_fees": sorted({entry.entry_fee for entry in template.authorizations}),
         "blank_cell_authority": "PASS",
+        "contest_scope_observations": list(contest_scope_observations),
+        "contest_scope_basis": (
+            "PRIOR_ONLY_NO_ECONOMICS_CONSULTED"
+            if contest_scope_observations
+            else "SINGLE_CONTEST_AND_ENTRY_FEE"
+        ),
         "appg_policy": "PRESENT_ONLY_IN_HASHED_UNTOUCHED_RAW_SALARY_BYTES",
     }
     stages.append(
@@ -2387,6 +2395,7 @@ def run_prior_review(
             ),
             "contest_ids": sorted({e.contest_id for e in template.authorizations}),
             "entry_fees": sorted({e.entry_fee for e in template.authorizations}),
+            "contest_scope_observations": list(contest_scope_observations),
         }
     )
     write_run_record(review_dir / "review_export_report.json", export_report)

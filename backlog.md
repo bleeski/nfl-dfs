@@ -67,11 +67,14 @@ track is complete. Conversely, a legal Classic review portfolio does not close
 the quantitative weakness.
 
 The table below is the authoritative dev-session queue. DEV0, Q1, and C1 are
-done; `C2` is the only current `READY` item. When a chunk closes, update the table
-so only the next dependency-satisfied chunk is `READY`; the remaining preferred
-order is `C2` through `C4`, then `Q2` onward. Q1 started the settlement/
-validation clock early; the bounded Classic sequence now delivers the useful
-prior-only workflow before the longer calibrated-model build.
+done; `C2` and `QA1` are the current `READY` items and they touch disjoint files.
+When a chunk closes, update the table so only the next dependency-satisfied chunk
+is `READY`; the remaining preferred order is `C2`, `QA1`, `C3`, `C4`, then `Q2`
+onward. Take `QA1` before `C2` when a real slate is imminent: its Showdown half
+is dependency-free, and it is the only chunk that pays off on a build shipping
+tonight. Q1 started the settlement/validation clock early; the bounded Classic
+sequence now delivers the useful prior-only workflow before the longer
+calibrated-model build.
 
 | Order | ID | Track | Status | Depends on | Session outcome | Absorbs/supersedes |
 |---:|---|---|---|---|---|---|
@@ -79,16 +82,17 @@ prior-only workflow before the longer calibrated-model build.
 | 1 | Q1 | Quantitative | `DONE` | DEV0 | Settlement capture plus an auditable reference evaluator and registered promotion metrics | W7, W8, S4A |
 | 2 | C1 | Classic | `DONE` | DEV0, Q1 contract decisions only | Multi-game Classic immutable intake, priors, projection, participation, and one-command prior-review orchestration | DL6, Classic portion of S6 |
 | 3 | C2 | Classic | `READY` | C1 | Classic policy contract, candidate generation, joint portfolio selection, and exact Entry-ID assignment | Classic portion of S5 and W9 |
-| 4 | C3 | Classic | `BLOCKED` | C2 | Independent audit, readable review, exact-template export, deterministic replay, and 1/3/20/150-entry benchmarks | DL7, W10, Classic review portion of S8/S9 |
-| 5 | C4 | Classic | `BLOCKED` | C3, current operator files/evidence | Current real-slate Cowork/Linux rehearsal and operator handoff | DL8 |
-| 6 | C5 | Classic | `BLOCKED` | C3, S2 | Lock-aware slot ordering and governed Classic late-swap mechanics | W13 mechanical portion |
-| 7 | Q2 | Quantitative | `BLOCKED` | Q1, C1 | Calibrated player opportunity/outcome distributions, participation, and correlation | W3 remainder, W11, broader S6, S7 outcome work |
-| 8 | Q3 | Quantitative | `BLOCKED` | Q1, Q2 | Contest-conditioned ownership, legal field generation, and exact-lineup duplication | S7 field/ownership/duplication work |
-| 9 | Q4 | Quantitative | `BLOCKED` | Q1, Q3 | Production field-size payout, strict-above/tie, and duplicate economics | S4B |
-| 10 | Q5 | Quantitative | `BLOCKED` | Q2, Q3, Q4 | Objective-appropriate candidate coverage and joint payout/risk portfolio selection | S5, W9 |
-| 11 | Q6 | Quantitative | `BLOCKED` | Q5, settled-slate accrual | Rolling-origin validation, untouched holdout, model registry, promotion, rollback, and claim policy | W12 and S7 calibration/promotion |
-| 12 | Q7 | Quantitative | `BLOCKED` | Q6 | Registered-scale Windows/Cowork benchmarks, shadow operation, fault drills, and game-week acceptance | W10, S9, S10 |
-| 13 | QC1 | Shared | `BLOCKED` | C4, C5, Q7 | Integrate the promoted objective into Classic and Showdown, including conditional late swap, without weakening release gates | remaining W13 and full production promotion |
+| 4 | QA1 | Shared | `READY` | none for Showdown; Classic wiring rides with C3 | Deterministic portfolio coherence checks for Classic and Showdown, emitted as `portfolio_coherence` and reconciled into the readable review | Layer A of `docs/ADVERSARIAL_QA.md` |
+| 5 | C3 | Classic | `BLOCKED` | C2, QA1 | Independent audit, readable review, exact-template export, deterministic replay, and 1/3/20/150-entry benchmarks | DL7, W10, Classic review portion of S8/S9 |
+| 6 | C4 | Classic | `BLOCKED` | C3, current operator files/evidence | Current real-slate Cowork/Linux rehearsal and operator handoff | DL8 |
+| 7 | C5 | Classic | `BLOCKED` | C3, S2 | Lock-aware slot ordering and governed Classic late-swap mechanics | W13 mechanical portion |
+| 8 | Q2 | Quantitative | `BLOCKED` | Q1, C1 | Calibrated player opportunity/outcome distributions, participation, and correlation | W3 remainder, W11, broader S6, S7 outcome work |
+| 9 | Q3 | Quantitative | `BLOCKED` | Q1, Q2 | Contest-conditioned ownership, legal field generation, and exact-lineup duplication | S7 field/ownership/duplication work |
+| 10 | Q4 | Quantitative | `BLOCKED` | Q1, Q3 | Production field-size payout, strict-above/tie, and duplicate economics | S4B |
+| 11 | Q5 | Quantitative | `BLOCKED` | Q2, Q3, Q4 | Objective-appropriate candidate coverage and joint payout/risk portfolio selection | S5, W9 |
+| 12 | Q6 | Quantitative | `BLOCKED` | Q5, settled-slate accrual | Rolling-origin validation, untouched holdout, model registry, promotion, rollback, and claim policy | W12 and S7 calibration/promotion |
+| 13 | Q7 | Quantitative | `BLOCKED` | Q6 | Registered-scale Windows/Cowork benchmarks, shadow operation, fault drills, and game-week acceptance | W10, S9, S10 |
+| 14 | QC1 | Shared | `BLOCKED` | C4, C5, Q7 | Integrate the promoted objective into Classic and Showdown, including conditional late swap, without weakening release gates | remaining W13 and full production promotion |
 
 ### DEV0 — Reconcile and freeze the current development baseline
 
@@ -223,6 +227,60 @@ not unlock any upload claim.
   - Repeated runs select byte-identical assignments under the same registered
     limits and seed.
 
+### QA1 — Deterministic portfolio coherence for Classic and Showdown
+
+- Origin: the 2026-09-10 SF@LAR Showdown run returned `FILE_VALID=true`,
+  `ENFORCED_AND_INDEPENDENTLY_AUDITED` and `DISPLAY_RECONCILIATION=PASS` while
+  shipping a lineup holding Brock Purdy and his own backup, a lineup with no
+  quarterback, an entry pair at 0.994 outcome correlation separated by one $200
+  player, and a candidate pool that still contained two officially inactive
+  people. Legality, byte fidelity and policy enforcement cannot see any of it,
+  because none of them asks whether the portfolio is coherent.
+- Specification: [`docs/ADVERSARIAL_QA.md`](docs/ADVERSARIAL_QA.md), Layer A.
+  That document also specifies Layer B, the procedural adversarial agent pass,
+  which needs no code and is already in force through `CLAUDE.md` and the
+  `nfl-showdown-lineups` skill.
+- Goal: make a portfolio's incoherence visible in the same artifact that already
+  proves its legality, without adding a release gate or a model claim.
+- Scope:
+  - New `portfolio_coherence` block, schema `nfl_portfolio_coherence_v1`,
+    emitted by the prior-review path beside `pool_coverage` and reconciled into
+    readable JSON/HTML/workbook with the existing exact-byte discipline.
+  - Roster coherence: `SINGLE_JOB_SPLIT`, `NO_QB_IN_LINEUP` (Showdown),
+    `ROLE_GROUP_SATURATED`, `OFFICIALLY_INACTIVE_ROSTERED`,
+    `INACTIVE_STILL_SELECTABLE`.
+  - Portfolio structure: `EFFECTIVE_INDEPENDENT_ENTRIES`, `NEAR_DUPLICATE_PAIR`,
+    `CHALK_CONCENTRATION`, `UNUSED_SELECTABLE_POOL`, `SALARY_REMAINING`.
+  - Model-versus-market: `PRICED_BUT_UNSCORED`, `MODEL_MARKET_RESIDUAL`.
+  - Severities `DEFECT`, `STRUCTURE`, `CONTEXT`. Only `DEFECT` reaches the
+    top-level `next` action.
+  - Showdown first, since SD5 already provides the review surface. Classic reads
+    the same block; `C3` builds the Classic review surface against this contract
+    rather than retrofitting it, which is why `C3` now depends on `QA1`.
+- Explicit ruling this chunk needs, and must not quietly widen:
+  `MODEL_MARKET_RESIDUAL` reads DraftKings `AvgPointsPerGame`. The standing ban
+  is on `AvgPointsPerGame` as a numerical *model input*, and it stands. Reading
+  the column after projection, as a read-only cross-check in a path that cannot
+  write back to any model artifact, is permitted and is the cheapest detector of
+  the class of error that halved Purdy's projection. Keep
+  `appg_is_absent_from_model_contract()` passing and add a test proving the
+  check cannot mutate a projection, an opportunity row, a candidate or a policy.
+- Non-goals: no new release gate, no ownership or leverage model, no correlation
+  term in the objective, no automatic repair. A coherence finding never unblocks
+  a build and never relaxes an existing gate. Fixing the simulator's zero
+  cross-team correlation belongs to `Q2`, not here; this chunk reports the
+  number the simulator produces and labels it.
+- Acceptance:
+  - Every check has a fixture that fires it and a fixture that does not.
+  - The 2026-09-10 SF@LAR artifacts are a pinned regression fixture: the
+    pre-fix portfolio produces `SINGLE_JOB_SPLIT`, `NO_QB_IN_LINEUP`,
+    `INACTIVE_STILL_SELECTABLE` for Tutu Atwell and Jordan Watkins, at least one
+    `NEAR_DUPLICATE_PAIR`, and `PRICED_BUT_UNSCORED` naming De'Zhaun Stribling;
+    the shipped final portfolio produces none of the `DEFECT` codes.
+  - Findings are deterministic across repeated runs at a fixed seed, and a
+    readable-review disagreement is a named `READABLE_REVIEW_FAILED` blocker.
+  - The four release truths are unchanged by this chunk on every fixture.
+
 ### C3 — Classic audit, review, export, and scale acceptance
 
 - Goal: deliver a human-verifiable Classic portfolio package with the same
@@ -234,6 +292,12 @@ not unlock any upload claim.
     overlap, selected-player evidence fact, and unchanged template byte.
   - Extend readable JSON/HTML/workbook views for Classic and render-inspect all
     sheets/pages. Preserve formula-injection defenses.
+  - Carry the `QA1` `portfolio_coherence` block on the Classic surface, with the
+    Classic variants of its checks: `SINGLE_JOB_SPLIT` over backfield committees
+    rather than quarterbacks, `CHALK_CONCENTRATION` keyed on the top-salary core
+    rather than a captain, and every check evaluated per game as well as per
+    portfolio, because a multi-game portfolio can be diversified overall and
+    concentrated inside one game.
   - Benchmark 1, 3, 20, and 150 entries on the full supplied 24-team/719-person
     fixture with registered time/RSS budgets and deterministic copied-package
     replay.
@@ -1252,3 +1316,57 @@ none taken here:
 Whichever is chosen, `prior_review` should report the count and salary of
 blocked-and-excluded people next to the lineups so the pool coverage is visible
 without reading the offensive-roles report.
+
+### Proposed `R19`: the entry parser rejects DraftKings' own embedded pool table (`DONE` 2026-09-10)
+
+Found 2026-09-10 on the real SF@LAR Showdown export. DraftKings writes the
+whole player pool into columns to the right of the entry template, starting at
+the `Instructions` column on a fixed physical row (row 8 in this export). With
+11 reserved entries, rows 8 through 12 carry both an Entry ID and pool cells,
+so they are legitimately wider than the 12-column entry header and
+`dk._parse_entries_rows` raised `entry row for '5249175224' has more cells than
+the header`. The repo fixture only escaped this because it has 7 entries and
+the block starts below the last entry row. Any slate with roughly 7 or more
+reserved entries in one draft group hits it.
+
+Landed: `dk.EMBEDDED_SALARY_TABLE_HEADER` plus `dk._embedded_pool_start`, which
+locates the exact salary-table header strictly to the right of the roster
+columns. An over-wide row is admitted only when that block exists, begins at or
+after `roster_end` and before `len(header)`, and the row's cells between
+`roster_end` and the block are blank; anything else still raises. The guard's
+real purpose, catching a shifted row, is preserved: a row that pushes a roster
+ID into the gap column still fails. `lineups.write_upload_bytes` already
+rewrites by byte span and `referee.audit_output_bytes` already compares
+`source_row[roster_end:]`, so the trailing pool cells survive the export
+byte-exact. Covered by `tests/test_entries_embedded_pool_table.py`.
+
+### Proposed `R20`: contest scope gated the prior-only path, which reads no economics (`DONE` 2026-09-10)
+
+Found in the same run. `single_contest_problems` exists to fail closed "when
+one entry file spans contest economics", and `certification.py` enforces the
+same rule for payouts, prize value and field size. But a DraftKings bulk-entry
+file is exported per draft group, so Ben's 11 reserved entries span 8 Contest
+IDs and 4 entry fees, which is the normal shape and not an anomaly. Both
+`cli._cowork_run` and `review_export.export_review_entries` treated it as a
+hard blocker on the `prior_review` profile, which reads no payout table, prize
+value or field size and always ends `DO_NOT_UPLOAD`; the path was therefore
+unusable for how the operator actually enters. Contest ID and Entry Fee are
+columns 2 and 3 and are never read or written as roster cells, so a spanning
+file cannot affect legality or bytes.
+
+Landed: the prior-only path records the finding instead of blocking.
+`prior_review` intake stores `contest_scope_observations` and
+`contest_scope_basis` and no longer calls `require_single_contest`;
+`review_export` returns the same strings as `observations`, moves
+`SINGLE_CONTEST_AND_ENTRY_FEE` from `checks_run` to
+`SINGLE_CONTEST_AND_ENTRY_FEE_ECONOMICS_SCOPE` under `checks_not_run`, and
+keeps `problems` empty; `cli` gates only non-`prior_review` profiles and
+reports `contest_scope_observations`. `certify`, `preflight`, `validate`, the
+reconcile summary and `require_single_contest` itself are unchanged and still
+fail closed. Covered by `tests/test_contest_scope_is_economics_only.py`.
+
+Open for Ben: this narrows a gate's scope. The reasoning is that the gate is
+economics-only by its own docstring and the prior-only path consults no
+economics, but it is worth an explicit ruling rather than an inherited one. If
+the answer is that the contest spread should still stop the run, revert both
+call sites and the profile becomes single-contest-only in practice.

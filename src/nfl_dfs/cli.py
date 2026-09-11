@@ -2735,7 +2735,14 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     doctor_report = doctor(PROJECT_ROOT)
     blockers = list(_cowork_reported_blockers(snapshotted))
     blockers[0:0] = policy_blockers
-    contest_problems = list(single_contest_problems(entries))
+    # Contest identity gates economics. The prior-only profile consults none and
+    # always ends DO_NOT_UPLOAD, so a DraftKings draft-group export spanning several
+    # contests is reported there rather than blocking; every economics-bearing
+    # profile keeps the fail-closed blocker.
+    contest_scope = list(single_contest_problems(entries))
+    prior_only_profile = snapshotted.profile == "prior_review"
+    contest_problems = [] if prior_only_profile else contest_scope
+    contest_observations = contest_scope if prior_only_profile else []
     blockers[0:0] = contest_problems
     if not doctor_report.pass_status:
         blockers.insert(
@@ -2786,6 +2793,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "contest_ids": sorted({entry.contest_id for entry in entries.authorizations}),
             "contest_names": sorted({entry.contest_name for entry in entries.authorizations}),
             "entry_fees": sorted({entry.entry_fee for entry in entries.authorizations}),
+            "contest_scope_observations": contest_observations,
             "request": str(request_path),
             "review_workbook": str(review_path),
             "blockers": blockers,

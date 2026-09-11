@@ -27,6 +27,17 @@ _GAME_RE = re.compile(
 )
 CLASSIC_COLUMNS = ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
 SHOWDOWN_COLUMNS = ("CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX")
+EMBEDDED_SALARY_TABLE_HEADER = (
+    "Position",
+    "Name + ID",
+    "Name",
+    "ID",
+    "Roster Position",
+    "Salary",
+    "Game Info",
+    "TeamAbbrev",
+    "AvgPointsPerGame",
+)
 _DRAFT_GROUP_COLUMNS = ("Draft Group", "Draft Group ID", "DraftGroup")
 
 
@@ -111,6 +122,27 @@ def _parse_fee(raw: str) -> float:
     return value
 
 
+def _embedded_pool_start(rows: list[list[str]], roster_end: int) -> int | None:
+    """Column index where DraftKings' embedded salary-pool block begins.
+
+    DraftKings writes the whole player pool into columns to the right of the
+    entry template. When the reserved-entry count reaches the physical row on
+    which that block starts, the same rows carry both an Entry ID and pool
+    cells, so those rows are legitimately wider than the entry header. Return
+    the pool block's first column only when the exact salary-table header is
+    found strictly to the right of the roster columns; otherwise return None so
+    the over-wide-row guard still fails closed.
+    """
+
+    width = len(EMBEDDED_SALARY_TABLE_HEADER)
+    for row in rows:
+        stripped = [cell.strip() for cell in row]
+        for index in range(roster_end, len(stripped) - width + 1):
+            if tuple(stripped[index : index + width]) == EMBEDDED_SALARY_TABLE_HEADER:
+                return index
+    return None
+
+
 def _parse_entries_rows(
     csv_path: Path,
     encoding: str,
@@ -137,6 +169,11 @@ def _parse_entries_rows(
     if roster_columns not in {CLASSIC_COLUMNS, SHOWDOWN_COLUMNS}:
         raise DraftKingsParseError(f"unknown DraftKings template geometry: {roster_columns}")
 
+    pool_start = _embedded_pool_start(rows, roster_end)
+    pool_block_explains_extra_cells = (
+        pool_start is not None and roster_end <= pool_start < len(header)
+    )
+
     authorizations: list[EntryAuthorization] = []
     seen_entries: set[str] = set()
     for row in rows[1:]:
@@ -145,9 +182,13 @@ def _parse_entries_rows(
         if not entry_id:
             continue
         if len(row) > len(header):
-            raise DraftKingsParseError(
-                f"entry row for {entry_id!r} has more cells than the header"
+            gap_is_blank = pool_block_explains_extra_cells and not any(
+                cell.strip() for cell in row[roster_end:pool_start]
             )
+            if not gap_is_blank:
+                raise DraftKingsParseError(
+                    f"entry row for {entry_id!r} has more cells than the header"
+                )
         if not entry_id.isdigit():
             raise DraftKingsParseError(f"non-numeric Entry ID: {entry_id!r}")
         if entry_id in seen_entries:
