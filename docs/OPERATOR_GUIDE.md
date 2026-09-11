@@ -69,20 +69,32 @@ The command chooses the next safe action:
 Every run writes to a new timestamped folder under `outputs`. The engine never
 overwrites a prior review package.
 
-## Classic C1 prior-only review
+## Classic C2 governed prior-only review
 
 Run `cowork-run --profile prior_review --build-priors` with the normal Classic
-salary and blank reserved-entry CSVs. C1 publishes `classic_selection.json` for
+salary and blank reserved-entry CSVs. Without a policy, the C1 compatibility
+path publishes `classic_selection.json` for
 the exact Entry-ID-to-roster map and `classic_complete_slate_coverage.json` for
 named game/team/position/person coverage, exclusion reasons, unallocated volume,
 conservation, and next evidence actions. These files are
 `PRIOR_ONLY / DO_NOT_UPLOAD`; they are not DraftKings templates.
 
+For C2, add `--portfolio-policy-json '<full-path-to/classic_policy.json>'` or
+set `portfolio_policy_json` in the generated request. The policy must bind the
+exact current salary and entry hashes, full Classic identity, direct integer
+bounds, and exact Entry IDs in template order. Require all of the following in
+the completed report: policy enforcement `PASS`, candidate bank
+`BOUNDED_COMPLETION` or `EXHAUSTIVE_COMPLETION`, joint selection
+`OPTIMAL_ACTUAL_CANDIDATE_BANK`, and independent audit `PASS`. An actual-bank
+optimum is not a full-slate optimum.
+
 Every selected person requires a fresh exact-ID official activity row, and every
 selected QB/RB/WR/TE requires a source-supported numerical current-team role
-allocation. Missing current evidence stops publication. C1 writes no
-`assignments.csv`, `DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`; Classic policy,
-candidate-bank, portfolio and exact-template export work begins in C2/C3.
+allocation. Missing current evidence stops publication. C2 additionally writes
+canonical candidate-bank, ordered assignment, and independent selection-audit
+JSON, but no `assignments.csv`, HTML/readable workbook,
+`DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`. C3 owns the downstream export
+audit, readable review, and exact-template review export.
 
 ## Manual-lineup safety guardrail
 

@@ -16,6 +16,7 @@ captain, which is uniqueness rather than a claim about correlated equity.
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -23,6 +24,14 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
+from .classic_portfolio import (
+    ENFORCEMENT_VERSION as CLASSIC_ENFORCEMENT_VERSION,
+    build_classic_candidate_bank,
+    candidate_bank_bytes,
+    solve_classic_portfolio,
+)
+from .classic_portfolio_policy import NormalizedClassicPortfolioPolicy
+from .hashing import sha256_bytes
 from .kicker_roles import resolve_kicker_roles
 from .lineups import validate_lineup
 from .opportunity import OpportunityModel
@@ -94,7 +103,7 @@ def select_prior_lineups(
     role_evidence_json: str | Path | None = None,
     offensive_role_evidence_json: str | Path | None = None,
     as_of: datetime | None = None,
-    portfolio_policy: NormalizedPortfolioPolicy | None = None,
+    portfolio_policy: NormalizedPortfolioPolicy | NormalizedClassicPortfolioPolicy | None = None,
     policy_candidate_limit: int | None = None,
     policy_candidate_seconds: float | None = None,
     policy_candidate_per_solve_seconds: float = DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
@@ -118,10 +127,20 @@ def select_prior_lineups(
             "PORTFOLIO_POLICY_ENTRY_COUNT_MISMATCH:"
             f"count={count}:policy_entries={portfolio_policy.entry_count}"
         )
-    if portfolio_policy is not None and slate.mode is not EngineMode.SHOWDOWN:
+    if (
+        isinstance(portfolio_policy, NormalizedPortfolioPolicy)
+        and slate.mode is not EngineMode.SHOWDOWN
+    ):
         raise SelectionError(
             "PORTFOLIO_POLICY_MODE_UNSUPPORTED_C1:Classic policy, candidate-bank, "
             "and joint portfolio selection belong to C2"
+        )
+    if (
+        isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
+        and slate.mode is not EngineMode.CLASSIC
+    ):
+        raise SelectionError(
+            "CLASSIC_PORTFOLIO_POLICY_MODE_MISMATCH:Classic C2 policy requires Classic"
         )
     problems = selectable_pool_problems(slate, contract)
     if problems:
@@ -148,10 +167,15 @@ def select_prior_lineups(
                 }
             )
     )
-    if portfolio_policy is not None:
+    if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
         for limit in portfolio_policy.effective_limits:
             if limit.combined_max_entries == 0:
                 excluded_set.extend((limit.person.cpt_dk_id, limit.person.flex_dk_id))
+    elif isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+        by_person = {player.underlying_id: player for player in slate.players}
+        for limit in portfolio_policy.player_bounds:
+            if limit.maximum_entries == 0:
+                excluded_set.append(by_person[limit.entity_id].dk_id)
     excluded = tuple(sorted(set(excluded_set)))
     # Every row of an unavailable person is scoreless as well as excluded, so a
     # solver bug that ignored the exclusion could not profit from it either.
@@ -165,7 +189,116 @@ def select_prior_lineups(
     by_id = {player.dk_id: player for player in slate.players}
     selected: list[SelectedLineup] = []
     forbidden_captains: list[str] = []
-    if portfolio_policy is not None:
+    if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+        bank = build_classic_candidate_bank(
+            slate,
+            objective,
+            portfolio_policy,
+            excluded_ids=excluded,
+        )
+        if bank.blocking:
+            raise SelectionError(
+                f"{bank.status}:model_status={bank.terminal_model_status}:"
+                f"candidates={len(bank.candidates)}:requested={bank.requested_candidates}"
+            )
+        portfolio_solve = solve_classic_portfolio(portfolio_policy, bank)
+        if not portfolio_solve.passed:
+            raise SelectionError(
+                f"{portfolio_solve.status}:model_status={portfolio_solve.model_status}:"
+                f"candidate_bank={len(bank.candidates)}:scope={portfolio_solve.infeasibility_scope}"
+            )
+        for index, candidate_index in enumerate(
+            portfolio_solve.selected_candidate_indexes, start=1
+        ):
+            candidate = bank.candidates[candidate_index]
+            validation = validate_lineup(slate, candidate.roster)
+            if validation.lineup is None:
+                raise SelectionError(
+                    f"CLASSIC_PORTFOLIO_SOLVER_PRODUCED_ILLEGAL_LINEUP:index={index}:"
+                    f"{validation.errors}"
+                )
+            selected.append(
+                SelectedLineup(
+                    index=index,
+                    roster=candidate.roster,
+                    captain_dk_id="",
+                    salary=validation.lineup.salary,
+                    prior_points=candidate.prior_points,
+                    canonical_key=validation.lineup.canonical_key,
+                    solver_status=portfolio_solve.status,
+                    solver_seconds=portfolio_solve.elapsed_seconds,
+                )
+            )
+        exposure: Counter[str] = Counter()
+        team_exposure: Counter[str] = Counter()
+        game_exposure: Counter[str] = Counter()
+        people_by_lineup: list[frozenset[str]] = []
+        for lineup in selected:
+            rows = [by_id[dk_id] for dk_id in lineup.roster]
+            people = frozenset(row.underlying_id for row in rows)
+            people_by_lineup.append(people)
+            exposure.update(people)
+            team_exposure.update({row.team for row in rows})
+            game_exposure.update({row.game_id for row in rows})
+        overlaps = [
+            {
+                "entry_id_a": portfolio_policy.entry_ids[left],
+                "entry_id_b": portfolio_policy.entry_ids[right],
+                "people": len(people_by_lineup[left] & people_by_lineup[right]),
+            }
+            for left in range(len(selected))
+            for right in range(left + 1, len(selected))
+        ]
+        bank_raw = candidate_bank_bytes(portfolio_policy, bank)
+        report = {
+            "profile_version": "prior_only_classic_selection_c2_v1",
+            "mode": slate.mode.value,
+            "score_version": scores.score_version,
+            "objective": "MAXIMIZE_PRIOR_POINTS_OF_THE_EXPECTED_STAT_LINE",
+            "objective_version": portfolio_policy.objective_version,
+            "objective_limits": [
+                "CENTRAL_ESTIMATE_NOT_A_CEILING",
+                "NO_OWNERSHIP_LEVERAGE_OR_DUPLICATION_TERM",
+                "NO_FIELD_OR_PAYOUT_ECONOMICS_CONSULTED",
+                "OPTIMAL_ONLY_OVER_ACTUAL_CANDIDATE_BANK",
+            ],
+            "lineups": len(selected),
+            "selected_lineup_count": len(selected),
+            "excluded_rows": len(excluded),
+            "kicker_role_excluded_people": sorted(zero_share_people),
+            "kicker_roles": kicker_roles.as_report(),
+            "offensive_roles": offense.report,
+            "selectable_people": len(contract.selectable_people),
+            "person_exposure": dict(sorted(exposure.items())),
+            "team_exposure": dict(sorted(team_exposure.items())),
+            "game_exposure": dict(sorted(game_exposure.items())),
+            "pairwise_person_overlap": overlaps,
+            "threshold_sensitive": list(scores.threshold_sensitive),
+            "score_omissions": list(scores.omissions),
+            "portfolio_policy": {
+                "enforcement_version": CLASSIC_ENFORCEMENT_VERSION,
+                "enforcement_status": "PASS",
+                "normalized_policy_sha256": portfolio_policy.normalized_sha256,
+                "entry_ids": list(portfolio_policy.entry_ids),
+                "candidate_bank": bank.as_report(),
+                "candidate_bank_artifact": json.loads(bank_raw.decode("utf-8")),
+                "candidate_bank_canonical_json": bank_raw.decode("utf-8"),
+                "candidate_bank_sha256": sha256_bytes(bank_raw),
+                "solve": portfolio_solve.as_report(),
+            },
+            "never_calls": [
+                "field.py",
+                "ownership.py",
+                "economics.py",
+                "portfolio.py",
+                "review_export.py",
+                "readable_review.py",
+            ],
+        }
+        verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
+        return tuple(selected), scores, report
+
+    if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
         entry_count = portfolio_policy.entry_count
         candidate_limit = (
             scaled_candidate_limit(entry_count)

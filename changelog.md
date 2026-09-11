@@ -4,6 +4,61 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-11: C2 Classic policy, bounded candidates, and joint selection completed
+
+- Started from merged `main`/`origin/main`
+  `90361980959916333cbd4b820680166a7e4fe6a2`, created
+  `codex/c2-classic-policy-candidates-portfolio`, and left HEAD unchanged. The
+  separate `codex/qa-work-preservation` branch and every pre-existing tracked,
+  untracked, generated, and user-owned path were preserved.
+- Added `nfl_classic_portfolio_policy_c2_v1` and canonical normalized C2 policy
+  bytes bound to exact salary/entry SHA-256, draft group, complete games,
+  teams, people, positions and roster slots, registered objective/seed, and
+  ordered Entry IDs. Direct integer player/team/game bounds, exact exclusions,
+  hard/advisory groups and stack rules, canonical uniqueness, pairwise overlap,
+  identity, contradiction, capacity, source-hash, normalized-hash and mutation
+  checks fail closed; hard limits are never relaxed.
+- Added a deterministic bounded Classic candidate bank with documented
+  QB-stack/bringback families, policy-capped-person coverage, group/stack
+  strata, a jointly verified policy-feasible chain before top-objective fill,
+  and exact status separation for exhaustive/bounded completion, timeout,
+  search limit, solver error, structural infeasibility, modeled-bank
+  infeasibility and incomplete-bank exhaustion. Exact legal MILP seeds are
+  expanded by deterministic exact-ID one-player swaps that are independently
+  revalidated; this replaced the rejected 150 sequential accumulating no-good
+  solve design that exhausted the registered time budget.
+- Added joint actual-bank MILP selection and exact template-order Entry-ID
+  assignment without cycling. The canonical independent audit reparses the
+  normalized policy and re-hashes salary, entries, priors, projections, current
+  evidence, source/normalized policy, candidate bank and assignment before
+  recomputing complete identity, legality, every integer bound, exclusions,
+  uniqueness and every pairwise person overlap.
+- Extended Classic prior review to C2 selection/coverage, candidate-bank,
+  assignment and audit JSON artifacts. C1 without a policy remains
+  byte-compatible, Showdown policy behavior is unchanged, and C2 emits no
+  `assignments.csv`, `DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`. Field,
+  ownership, duplication, payout/economics, production portfolio selection and
+  C3 exporters remain unreachable.
+- Dedicated golden/adversarial coverage passed `27 passed in 73.89s`; the final
+  C1/C2/Classic/Showdown focused regression passed `203 passed, 1 skipped in
+  214.21s`; and the complete pinned suite passed `581 passed, 1 skipped in
+  312.25s`. The skip is the existing Windows permission-dependent case.
+  Deterministic replay plus source/normalized-policy/salary/entry/prior/
+  candidate/assignment mutation checks passed 8/8. `./nfl.ps1 doctor`, all
+  changed-module compile/import checks, `git diff --check`, and the adversarial
+  complete-diff review passed.
+- Synthetic 102-person/six-team measurements for 1/3/20/150 entries completed
+  in 3.660694/1.704845/2.130239/4.015856s total with
+  146,453/132,738/164,054/432,880 bytes peak traced Python memory. Every result
+  is `BOUNDED_COMPLETION` plus `OPTIMAL_ACTUAL_CANDIDATE_BANK`; these are not
+  full-slate optimality or the C3 full 719-person benchmark.
+- The four truths remain independent: `FILE_VALID` covers only the bound C2
+  JSON, evidence is separately derived, `MODEL_STATUS=PRIOR_ONLY`, and
+  `RELEASE_DECISION=DO_NOT_UPLOAD`. No EV, ROI, ownership, win/cash probability,
+  calibrated-performance, live-slate, or upload-readiness claim is made. C3 is
+  the sole next `READY` item. Nothing was staged, committed, pushed, opened as a
+  pull request, or merged.
+
 ### 2026-09-10: C1 Classic intake and one-command prior review completed
 
 - Confirmed Q1 is `DONE` on merged `main` commit

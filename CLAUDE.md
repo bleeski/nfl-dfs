@@ -50,9 +50,12 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    It does not implement calibrated ceiling, ownership leverage, or portfolio
    drawdown optimization. The default `diagnostic` profile is the older
    economics workflow and normally stops on missing contest inputs. For Classic,
-   C1 writes canonical `classic_selection.json` and
-   `classic_complete_slate_coverage.json` review artifacts. It deliberately
-   writes no DraftKings-shaped assignment or upload CSV; C2 and C3 remain open.
+   the no-policy C1 compatibility path writes canonical
+   `classic_selection.json` and `classic_complete_slate_coverage.json`. A valid
+   C2 Classic policy adds canonical candidate-bank, exact ordered assignment,
+   and independent selection-audit JSON. Classic deliberately writes no
+   DraftKings-shaped assignment or upload CSV; C3 readable/export work remains
+   open.
 
    If they are in different locations, pass `--salaries` and `--entries`
    explicitly. On Windows outside Cowork, use `./nfl.ps1 cowork-run` with the
@@ -69,8 +72,9 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    from and reconciled to the exact salary, entry, assignment, policy, audit,
    selection, and review-export artifacts; it is not a release decision. The
    first pass always freezes and reconciles the supplied files. A successful
-   Classic C1 run instead starts with the two canonical JSON artifacts and the
-   status workbook; it has no upload or readable-export artifact.
+   Classic C2 run instead starts with its canonical policy/bank/assignment/
+   audit/selection/coverage JSON and the status workbook; it has no upload or
+   readable-export artifact.
 4. Gather everything discoverable from approved public sources and freeze the
    artifacts. For an outdoor Showdown game, obtain the forecast through the
    approved `sources.fetch_public_artifact` adapter from `api.weather.gov`;
@@ -105,7 +109,7 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    reports are available. The supplied rows must be current, and an INACTIVE
    row excludes both CPT and FLEX identities before selection. Missing ACTIVE
    rows remain unknown; salary status alone never establishes current activity.
-   Classic C1 will not publish selection artifacts unless every selected person
+   Classic C1/C2 will not publish selection artifacts unless every selected person
    has a fresh exact-ID row. Every selected offensive person must also have a
    source-supported numerical current-team allocation in
    `nfl_classic_offensive_role_evidence_c1_v1`.
@@ -121,7 +125,7 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    Qualitative starter/backup evidence cannot invent a numerical share. Without
    supported replacements, excluded volume stays visibly unallocated. Never ask
    Ben to author numerical role priors.
-   A versioned `portfolio_policy_json` may bind exact salary bytes, the game,
+   A versioned Showdown `portfolio_policy_json` may bind exact salary bytes, the game,
    the complete person/CPT/FLEX map, and all requested Entry IDs. On the
    Showdown `prior_review` profile, SD4 snapshots and validates the source and
    normalized bytes, generates a bounded legal candidate bank, jointly selects
@@ -139,6 +143,17 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    generation budget, two seconds per candidate solve and `max(10s, 1s x
    entries)` for the joint solve; its completeness is reported and is not a
    full-slate claim.
+   Classic C2 uses a distinct direct-integer policy bound to the exact salary
+   and entry hashes, draft group, complete multi-game identity, registered
+   objective/seed, and ordered Entry IDs. It supports player/team/game bounds,
+   exclusions, hard/advisory groups and registered stack rules, uniqueness and
+   pairwise person overlap. It creates a deterministic bounded legal candidate
+   bank, a policy-feasible chain before top-objective fill, and one joint
+   assignment without cycling. Accept only
+   `OPTIMAL_ACTUAL_CANDIDATE_BANK` and independent audit `PASS`; that status is
+   optimal over the reported actual bank only. C2 writes machine-readable JSON
+   only. C3 owns readable review, downstream export audit, and exact-template
+   review export.
    Other profiles refuse a supplied policy instead of ignoring it. Requests
    without the policy retain their existing SD1/SD2 behavior, including the
    legacy sequential Captain differentiation and assignment cycling.
@@ -204,14 +219,14 @@ and reports one of these truthful outcomes:
 
 - `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE`: exact final bytes passed every
   current hard gate. Ben may review and manually upload them. Manual guardrail
-  certification remains explicitly distinct from model-performance validation.
+certification remains explicitly distinct from model-performance validation.
 - `RELEASE_DECISION=DO_NOT_UPLOAD`: no upload-shaped CSV survives, every
   blocker is named, and the smallest next action is explicit. A valid proposed
   file may still be reported and hashed in memory.
 
 The explicitly requested `prior_review` profile has a Showdown-only diagnostic
 exception: it may retain `DK_REVIEW_ENTRY_*.csv` with independent legality/byte
-checks. Classic C1 emits no upload-shaped CSV. Neither path creates a certified
+checks. Classic C1/C2 emit no upload-shaped CSV. Neither path creates a certified
 `DK_UPLOAD` package. Return limitations and `DO_NOT_UPLOAD` prominently; exit
 code 0 means review generation completed, not that uploading is cleared.
 

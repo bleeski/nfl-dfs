@@ -1,6 +1,6 @@
 # Implementation Status
 
-## Current development program — 2026-09-10
+## Current development program — 2026-09-11
 
 DEV0 is complete on merged `main` commit
 `7f083fbd77620d96e3f0571f09d93fdaeb32e377` (PR #9; reviewed source
@@ -16,8 +16,27 @@ path now covers multi-game Classic, selected activity/current-role evidence
 fails closed, and one-command prior review emits deterministic selection and
 complete-slate coverage JSON without an upload-shaped CSV. Final verification
 collected 555 tests (`554 passed, 1 skipped`) and passed doctor, compile/import,
-whitespace, replay, mutation, prohibited-path, and benchmark checks. C2 is the
-sole `READY` item; C3 and every later item remain blocked.
+whitespace, replay, mutation, prohibited-path, and benchmark checks.
+
+C2 is complete on `codex/c2-classic-policy-candidates-portfolio` at unchanged
+baseline HEAD `90361980959916333cbd4b820680166a7e4fe6a2`. Classic now has a
+canonical exact-input policy with direct integer player/team/game bounds,
+exclusions, hard/advisory groups and registered stack rules, uniqueness and
+pairwise overlap. Deterministic documented construction strata produce a
+bounded legal candidate bank; one joint MILP assigns one unique lineup to every
+ordered reserved Entry ID; a separate canonical-artifact audit reparses policy
+bytes and recomputes identity, legality, every hard count and all overlaps.
+Candidate, assignment and audit output is machine-readable JSON only. It never
+calls ownership, field, duplication, payout/economics, production portfolio, or
+C3 review/export code and never emits a Classic assignment or upload-shaped
+CSV. Final verification passed `203 passed, 1 skipped` focused and `581 passed,
+1 skipped` full, plus doctor, compile/import, whitespace, replay, mutation,
+prohibited-path, adversarial-diff, and synthetic scale checks. The 150-entry
+synthetic case built 174 candidates and selected the portfolio in 4.015856s
+total with 432,880 bytes peak traced Python memory. This is optimal only over
+the reported actual bounded bank; it is not the C3 full 719-person acceptance,
+not a calibrated objective, and not upload-ready. C3 is now the sole `READY`
+item; C4, C5, and Q2 onward remain blocked.
 
 ## Current Showdown readiness — 2026-09-09
 
