@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -37,9 +38,35 @@ from nfl_dfs.sources import (
 )
 
 
+# AS_OF is slate time, not wall-clock time: it is a fixed point inside this
+# module's own synthetic LAR@SEA slate, and it has to stay before that slate's
+# lock for the expiry assertions below to mean anything.
 AS_OF = "2026-09-13T14:00:00+00:00"
 CAPTURED = datetime(2026, 9, 13, 13, 0, tzinfo=timezone.utc)
 GAME_INFO = "LAR@SEA 09/13/2026 04:25PM ET"
+
+# P3-17. A salary file written into `tmp_path` carries an mtime of "now", and
+# `_salary_timestamp` reads that mtime as the operator's observation whenever no
+# download time was stated. Comparing a wall-clock observation against a frozen
+# AS_OF is a clock that expires: at 10:00am ET on 2026-09-13 real time crossed
+# AS_OF and eighteen tests in this module began failing
+# SALARY_OBSERVATION_IN_FUTURE with no engine defect behind any of them, costing
+# five minutes to prove innocent on slate day.
+#
+# The fix is to stamp the observation rather than inherit the wall clock, so
+# these tests read the same on any date. AS_OF itself stays a constant because
+# the slate it describes is one: rebasing it onto "today" would drift the season
+# the adapter resolves and silently change which fixture rows are in scope.
+SALARY_OBSERVED_AT = datetime.fromisoformat(AS_OF) - timedelta(hours=2)
+
+
+def _write_salary(path: Path, payload: bytes | None = None) -> Path:
+    """Write salary bytes with a deterministic observation time."""
+
+    path.write_bytes(_salary_bytes() if payload is None else payload)
+    stamp = SALARY_OBSERVED_AT.timestamp()
+    os.utime(path, (stamp, stamp))
+    return path
 
 # DraftKings writes LAR where nflverse writes LA. Using that pair on purpose:
 # it is the case a naive abbreviation match gets wrong.
@@ -97,7 +124,7 @@ def _csv_bytes(header: tuple[str, ...], rows) -> bytes:
     return buffer.getvalue().encode("utf-8")
 
 
-def _salary_bytes() -> bytes:
+def _salary_bytes(status_by_name: dict[str, str] | None = None) -> bytes:
     header = (
         "Position", "Name + ID", "Name", "ID", "Roster Position", "Salary",
         "Game Info", "TeamAbbrev", "AvgPointsPerGame", "Status",
@@ -116,7 +143,7 @@ def _salary_bytes() -> bytes:
                     GAME_INFO, team,
                     # A deliberately absurd APPG: if it ever reached a numerical
                     # path the derived output would move, and it must not.
-                    "999.9", "",
+                    "999.9", (status_by_name or {}).get(name, ""),
                 )
             )
     return _csv_bytes(header, rows)
@@ -307,11 +334,16 @@ def _write_package(root: Path, *, salary_digest: str, overrides=None) -> Path:
 
 
 @pytest.fixture
-def package(tmp_path: Path):
-    """A reviewed propose-stage package plus everything freeze needs."""
+def package(tmp_path: Path, request: pytest.FixtureRequest):
+    """A reviewed propose-stage package plus everything freeze needs.
+
+    Parametrize indirectly with a `{name: status}` map to build the package on
+    salary bytes that already carry a DraftKings Status. The proposal manifest
+    binds the salary digest, so a status cannot be introduced after the fact.
+    """
 
     salary = tmp_path / "DKSalaries.csv"
-    salary.write_bytes(_salary_bytes())
+    _write_salary(salary, _salary_bytes(getattr(request, "param", None)))
     salary_digest = sha256_file(salary)
     root = _write_package(tmp_path / "proposal", salary_digest=salary_digest)
 
@@ -428,7 +460,7 @@ def test_appg_never_reaches_a_derived_number(package, tmp_path):
     baseline = _freeze(package, tmp_path, name="baseline")
     mutated = Path(package["salary"]).read_bytes().replace(b"999.9", b"111.1")
     salary = tmp_path / "mutated.csv"
-    salary.write_bytes(mutated)
+    _write_salary(salary, mutated)
     root = _write_package(tmp_path / "proposal2", salary_digest=sha256_file(salary))
     # Rebuild the proposal against the mutated salary file, then freeze again.
     slate = parse_salaries(salary)
@@ -583,7 +615,7 @@ def test_tampered_frozen_artifact_fails_closed(package, tmp_path):
 
 def test_insufficient_team_coverage_fails_closed(tmp_path):
     salary = tmp_path / "DKSalaries.csv"
-    salary.write_bytes(_salary_bytes())
+    _write_salary(salary)
     digest = sha256_file(salary)
     root = _write_package(
         tmp_path / "thin",
@@ -668,7 +700,7 @@ def test_output_directory_is_never_reused(package, tmp_path):
 
 def test_uniform_filling_is_refused_when_a_group_has_no_support(tmp_path):
     salary = tmp_path / "DKSalaries.csv"
-    salary.write_bytes(_salary_bytes())
+    _write_salary(salary)
     digest = sha256_file(salary)
     stripped = _player_stats_bytes().replace(b",500,", b",0,").replace(b",250,", b",0,")
     rows = [
@@ -816,7 +848,7 @@ def test_weather_state_is_derived_for_a_roof_and_required_outdoors():
 
 def test_outdoor_game_needs_an_operator_weather_state_to_freeze(tmp_path):
     salary = tmp_path / "DKSalaries.csv"
-    salary.write_bytes(_salary_bytes())
+    _write_salary(salary)
     digest = sha256_file(salary)
     root = _write_package(
         tmp_path / "outdoor",
@@ -899,7 +931,7 @@ def test_weather_evidence_uri_is_held_to_source_policy(tmp_path, package):
 
 def test_outdoor_freeze_records_the_weather_source(tmp_path):
     salary = tmp_path / "DKSalaries.csv"
-    salary.write_bytes(_salary_bytes())
+    _write_salary(salary)
     digest = sha256_file(salary)
     root = _write_package(
         tmp_path / "attributed",
@@ -968,7 +1000,7 @@ def test_proposals_never_claim_exact(package):
 
 def test_a_person_on_another_nflverse_team_is_reported_with_its_candidate(package, tmp_path):
     salary = tmp_path / "moved.csv"
-    salary.write_bytes(_salary_bytes())
+    _write_salary(salary)
     slate = parse_salaries(salary)
     roster = _roster_bytes().replace(b",LA,WR,Puka Nacua,", b",DEN,WR,Puka Nacua,")
     path = tmp_path / "roster.csv"
@@ -985,7 +1017,7 @@ def test_a_person_on_another_nflverse_team_is_reported_with_its_candidate(packag
 
 def test_person_missing_from_the_weekly_roster_resolves_through_the_player_index(tmp_path):
     salary = tmp_path / "reserve.csv"
-    salary.write_bytes(_salary_bytes())
+    _write_salary(salary)
     slate = parse_salaries(salary)
     # Drop the Rams tight end from the dated weekly roster entirely, the way a
     # reserve-list person is absent from it, and leave him in the index on the
@@ -1015,7 +1047,7 @@ def test_person_missing_from_the_weekly_roster_resolves_through_the_player_index
 
 def test_ambiguous_candidates_are_not_resolved(package, tmp_path):
     salary = tmp_path / "ambiguous.csv"
-    salary.write_bytes(_salary_bytes())
+    _write_salary(salary)
     slate = parse_salaries(salary)
     extra = _roster_bytes() + b"2026,2,LA,WR,Puka Nacua,00-0099999,NacuPu99,ACT\n"
     path = tmp_path / "roster.csv"
@@ -1125,3 +1157,87 @@ def test_stale_source_is_refused_by_project(package, tmp_path):
             as_of=late,
             output_dir=tmp_path / "stale",
         )
+
+
+# --------------------------------------------------------------------------- #
+# P0-1: the identity / pool-completeness alignment of 2026-09-13
+# --------------------------------------------------------------------------- #
+
+_DROPPABLE = "Joshua Karty"
+
+
+def _decide_by_name(package, name: str, decision: str) -> str:
+    """Rewrite one reviewed person's DECISION in place. Returns his DK ID."""
+
+    rows = list(csv.reader(io.StringIO(package["review"].read_text(encoding="utf-8"))))
+    name_column = priors.REVIEW_COLUMNS.index("DK_NAME")
+    target = next(row for row in rows[1:] if row[name_column] == name)
+    target[priors.REVIEW_COLUMNS.index("DECISION")] = decision
+    buffer = io.StringIO(newline="")
+    csv.writer(buffer, lineterminator="\n").writerows(rows)
+    package["review"].write_bytes(buffer.getvalue().encode("utf-8"))
+    return target[priors.REVIEW_COLUMNS.index("DK_ID")]
+
+
+@pytest.mark.parametrize("package", [{_DROPPABLE: "OUT"}], indirect=True)
+def test_an_unresolved_person_the_site_flags_out_may_be_dropped(package, tmp_path):
+    """Ben's ruling, 2026-09-13.
+
+    A full Classic pool lists deep practice-squad and UDFA people DraftKings
+    itself flags OUT or IR and nflverse has no record of under any spelling.
+    Demanding a complete identity map made the Classic path unpublishable on
+    every real main slate, which CLAUDE.md classes as a defect, not a
+    constraint.
+    """
+
+    _decide_by_name(package, _DROPPABLE, priors.EXCLUDED_UNRESOLVED_DECISION)
+    result = _freeze(package, tmp_path)
+    assert result["package_status"] == "PRIOR_ARTIFACTS_READY"
+    # The drop is named, not merely tolerated: a silent drop is the failure the
+    # token exists to avoid.
+    assert any(_DROPPABLE in entry for entry in result["excluded_unresolved_people"])
+
+
+def test_dropping_a_still_selectable_person_fails_closed(package, tmp_path):
+    """The guard that makes the tolerance safe.
+
+    The permission is re-derived from the bound salary bytes, so the reviewed
+    file alone can never widen it. Here nothing flags the person, so the drop is
+    refused and no package is published.
+    """
+
+    _decide_by_name(package, _DROPPABLE, priors.EXCLUDED_UNRESOLVED_DECISION)
+    with pytest.raises(PriorsBuildError, match="IDENTITY_EXCLUDED_BUT_SELECTABLE"):
+        _freeze(package, tmp_path)
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("package", [{_DROPPABLE: "D"}], indirect=True)
+def test_a_doubtful_person_may_also_be_dropped(package, tmp_path):
+    """One vocabulary, four readers, so P3-18's `D` reaches this gate too.
+
+    Before it, `priors`, `projection` and `opportunity` each carried a private
+    `{"OUT", "IR"}` literal and a code added to the participation contract would
+    have reached none of them.
+    """
+
+    _decide_by_name(package, _DROPPABLE, priors.EXCLUDED_UNRESOLVED_DECISION)
+    assert _freeze(package, tmp_path)["package_status"] == "PRIOR_ARTIFACTS_READY"
+
+
+@pytest.mark.parametrize("package", [{_DROPPABLE: "Q"}], indirect=True)
+def test_a_questionable_person_may_not_be_dropped(package, tmp_path):
+    """Questionable is playable, so his identity is still required."""
+
+    _decide_by_name(package, _DROPPABLE, priors.EXCLUDED_UNRESOLVED_DECISION)
+    with pytest.raises(PriorsBuildError, match="IDENTITY_EXCLUDED_BUT_SELECTABLE"):
+        _freeze(package, tmp_path)
+
+
+@pytest.mark.parametrize("package", [{_DROPPABLE: "OUT"}], indirect=True)
+def test_an_unknown_decision_token_is_still_a_rejection(package, tmp_path):
+    """Only the exact token drops a person; a typo is not a quiet exclusion."""
+
+    _decide_by_name(package, _DROPPABLE, "EXCLUDE_UNRESOLVED")
+    with pytest.raises(PriorsBuildError, match="IDENTITY_NOT_ACCEPTED"):
+        _freeze(package, tmp_path)

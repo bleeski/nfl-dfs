@@ -20,7 +20,20 @@ const errors = await workbook.inspect({
   summary: "operator workbook formula error scan",
 });
 console.log(errors.ndjson);
-for (const sheetName of ["Run Control", "Evidence Paste", "Portfolio", "QA", "Upload"]) {
+if (!errors.ndjson.includes("Cell search matched 0 entries.")) {
+  throw new Error("WORKBOOK_FORMULA_ERROR_SCAN_NOT_CLEAN");
+}
+const sheetNames = [
+  "Run Control",
+  "Evidence Paste",
+  "Portfolio",
+  "QA",
+  "Upload",
+  "Exposure",
+  "Review Evidence",
+  "Artifacts",
+];
+for (const sheetName of sheetNames) {
   const preview = await workbook.render({
     sheetName,
     autoCrop: "all",
@@ -33,3 +46,4 @@ for (const sheetName of ["Run Control", "Evidence Paste", "Portfolio", "QA", "Up
     new Uint8Array(await preview.arrayBuffer()),
   );
 }
+console.log(`WORKBOOK_VERIFY=PASS SHEETS_RENDERED=${sheetNames.length}`);

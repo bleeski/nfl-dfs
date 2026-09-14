@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from nfl_dfs import certification as certification_module
 from nfl_dfs.certification import certify_upload
 from nfl_dfs.cli import command_audit, command_preflight
 from nfl_dfs.contracts import EvidenceRecord, EvidenceState
@@ -33,6 +34,22 @@ EXPIRED = datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc)
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "supplied"
 SALARY_CSV = FIXTURE_ROOT / "DKSalaries Salary CSV Classic.csv"
 ENTRIES_CSV = FIXTURE_ROOT / "DKEntries CSV.csv"
+
+
+def _before_fixture_lock(slate, *, minutes: int = 30) -> datetime:
+    """A clock inside the supplied fixture slate's own pre-lock window.
+
+    The fixture is the real 2026-09-13 Classic slate, whose players lock at real
+    wall-clock times. A live check anchored to `datetime.now()` therefore passed
+    only until that slate kicked off and reported
+    SELECTED_PLAYER_ALREADY_LOCKED permanently afterwards. This is the same
+    defect as the hardcoded AS_OF in `test_priors_adapter.py` (P3-17), one file
+    over and worse: that one failed for a day, this one fails forever. A replay
+    supplies its own clock, which is what `preflight.py` documents.
+    """
+
+    earliest = min(player.lock_at for player in slate.players).astimezone(timezone.utc)
+    return earliest - timedelta(minutes=minutes)
 
 
 def _assignments(slate, entries):
@@ -60,8 +77,25 @@ def _evidence(slate, entries, assignments, *, expires_at):
     ]
 
 
-def _certified(tmp_path: Path, slate, entries, *, expires_at):
-    """A genuinely certified package whose official evidence expires at `expires_at`."""
+def _certified(tmp_path: Path, slate, entries, *, expires_at, monkeypatch=None, now=None):
+    """A genuinely certified package whose official evidence expires at `expires_at`.
+
+    `certify_upload` grades its evidence at the live clock and takes no `now`,
+    so a package whose expiry sits inside the fixture slate's own pre-lock
+    window cannot be certified today without pinning that clock. Pass
+    `monkeypatch` and `now` to do it; the injection point is the one function
+    certification uses to grade evidence, not `datetime` itself.
+    """
+
+    if now is not None:
+        if monkeypatch is None:
+            raise AssertionError("pinning the certification clock needs monkeypatch")
+        graded = certification_module.aggregate_evidence_state
+        monkeypatch.setattr(
+            certification_module,
+            "aggregate_evidence_state",
+            lambda evidence, **kwargs: graded(evidence, **{**kwargs, "now": now}),
+        )
     assignments = _assignments(slate, entries)
     output = tmp_path / "upload.csv"
     manifest_path = tmp_path / "upload.manifest.json"
@@ -160,11 +194,14 @@ def test_live_check_refuses_expired_evidence_at_the_current_clock(
 
 
 def test_live_check_recomputes_at_the_clock_it_is_given(
-    tmp_path: Path, classic_slate, classic_entries
+    tmp_path: Path, classic_slate, classic_entries, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Same package, two clocks: fresh before the expiry, stale one second after."""
-    expires = datetime.now(timezone.utc) + timedelta(hours=2)
-    manifest_path, _ = _certified(tmp_path, classic_slate, classic_entries, expires_at=expires)
+    expires = _before_fixture_lock(classic_slate)
+    manifest_path, _ = _certified(
+        tmp_path, classic_slate, classic_entries, expires_at=expires,
+        monkeypatch=monkeypatch, now=expires - timedelta(minutes=1),
+    )
     before = live_pre_upload_check(
         manifest_path, salaries=SALARY_CSV, now=expires - timedelta(seconds=1)
     )
@@ -191,11 +228,12 @@ def test_live_check_rebinds_the_files_the_manifest_claims_to_cover(
 
 
 def test_live_check_binds_a_matching_file_as_pass(
-    tmp_path: Path, classic_slate, classic_entries
+    tmp_path: Path, classic_slate, classic_entries, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    expires = datetime.now(timezone.utc) + timedelta(hours=2)
+    expires = _before_fixture_lock(classic_slate)
     manifest_path, output = _certified(
-        tmp_path, classic_slate, classic_entries, expires_at=expires
+        tmp_path, classic_slate, classic_entries, expires_at=expires,
+        monkeypatch=monkeypatch, now=expires - timedelta(minutes=1),
     )
     report = live_pre_upload_check(
         manifest_path, salaries=SALARY_CSV, entries=ENTRIES_CSV,
@@ -327,11 +365,22 @@ def test_preflight_exit_code_follows_the_release_decision(
 
 
 def test_preflight_exit_zero_only_on_a_current_certified_decision(
-    tmp_path: Path, classic_slate, classic_entries, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    classic_slate,
+    classic_entries,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # `command_preflight` takes no clock: a release asks about right now. The
+    # fixture slate's "right now" is 2026-09-13 before lock, so the test pins
+    # that rather than borrowing today's. See `_before_fixture_lock`.
+    expires = _before_fixture_lock(classic_slate)
+    monkeypatch.setattr(
+        "nfl_dfs.preflight.release_clock", lambda: expires - timedelta(minutes=1)
+    )
     manifest_path, _ = _certified(
-        tmp_path, classic_slate, classic_entries,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
+        tmp_path, classic_slate, classic_entries, expires_at=expires,
+        monkeypatch=monkeypatch, now=expires - timedelta(minutes=1),
     )
     code = command_preflight(
         argparse.Namespace(

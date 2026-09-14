@@ -80,7 +80,13 @@ def _write_prior_manifest(
     assignments_path: Path,
     prior_output: Path,
 ) -> Path:
-    now = datetime.now(timezone.utc).isoformat()
+    # P3-17, same defect as `AS_OF` in test_priors_adapter.py. A prior
+    # certification happens BEFORE the late swap that supersedes it, so its
+    # `created_at` belongs to the fixture's own timeline. Reading the wall clock
+    # here meant every test in this module began failing
+    # PRIOR_MANIFEST_CREATED_AFTER_LATE_SWAP_AS_OF at 3pm ET on 2026-09-13 and
+    # would have kept failing on every date after it.
+    now = (AS_OF - timedelta(hours=1)).isoformat()
     output_hash = sha256_file(prior_output)
     payload = {
         "manifest_version": "certification_manifest_v1",

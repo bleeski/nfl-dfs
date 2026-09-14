@@ -1,0 +1,92 @@
+{
+  "193028206": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; field settled 832342 entries, over the registered max_entries 200000",
+    "recorded_at": "2026-09-14T20:30:31.612567+00:00",
+    "status": "placeholder"
+  },
+  "193391013": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact",
+    "recorded_at": "2026-09-14T20:30:31.623388+00:00",
+    "status": "placeholder"
+  },
+  "195379585": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.638267+00:00",
+    "status": "placeholder"
+  },
+  "195379668": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.654806+00:00",
+    "status": "placeholder"
+  },
+  "195384501": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.669644+00:00",
+    "status": "placeholder"
+  },
+  "195390867": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.681911+00:00",
+    "status": "placeholder"
+  },
+  "195390868": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.691310+00:00",
+    "status": "placeholder"
+  },
+  "195390870": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.697804+00:00",
+    "status": "placeholder"
+  },
+  "195390889": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.705991+00:00",
+    "status": "placeholder"
+  },
+  "195507184": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.718063+00:00",
+    "status": "placeholder"
+  },
+  "195520918": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.729983+00:00",
+    "status": "placeholder"
+  },
+  "195521582": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.738151+00:00",
+    "status": "placeholder"
+  },
+  "195526142": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.751213+00:00",
+    "status": "placeholder"
+  },
+  "195526144": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.760385+00:00",
+    "status": "placeholder"
+  },
+  "195526145": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.771004+00:00",
+    "status": "placeholder"
+  },
+  "195526163": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.781817+00:00",
+    "status": "placeholder"
+  },
+  "195641911": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.791419+00:00",
+    "status": "placeholder"
+  },
+  "195642262": {
+    "reason": "Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table",
+    "recorded_at": "2026-09-14T20:30:31.799876+00:00",
+    "status": "placeholder"
+  }
+}

@@ -15,7 +15,12 @@ import io
 import pytest
 
 from nfl_dfs.dk import parse_salaries
-from nfl_dfs.opportunity import PLAYER_COLUMNS, TEAM_COLUMNS, load_opportunity_model
+from nfl_dfs.opportunity import (
+    PLAYER_COLUMNS,
+    TEAM_COLUMNS,
+    OpportunityError,
+    load_opportunity_model,
+)
 from nfl_dfs.participation import (
     CONTRACT_VERSION,
     ParticipationError,
@@ -170,20 +175,88 @@ def test_questionable_is_reported_but_stays_selectable(tmp_path):
 
 
 def test_unknown_status_is_refused_not_assumed_available(tmp_path):
+    # "SSPD" stands in for a code DraftKings has not shipped here yet. It used
+    # to be "D", which stopped being an unknown code when doubtful was handled
+    # natively; an exemplar that the vocabulary later absorbs stops testing the
+    # thing it was written for.
     pool = list(_POOL)
-    pool[3] = ("NE", "WR", "Alpha WR", "D", 9000)
+    pool[3] = ("NE", "WR", "Alpha WR", "SSPD", 9000)
     slate = _slate(tmp_path, tuple(pool))
     with pytest.raises(ParticipationError, match="UNKNOWN_DK_STATUS"):
         build_participation_contract(slate)
     # The operator can classify a new code, either way, and it is honoured.
-    unavailable = build_participation_contract(slate, extra_unavailable_statuses=["d"])
+    unavailable = build_participation_contract(slate, extra_unavailable_statuses=["sspd"])
     assert "NE|WR|Alpha WR" in unavailable.unavailable_people
-    available = build_participation_contract(slate, extra_available_statuses=["D"])
+    available = build_participation_contract(slate, extra_available_statuses=["SSPD"])
     assert "NE|WR|Alpha WR" in available.selectable_people
+    with pytest.raises(ParticipationError, match="STATUS_CLASSIFIED_BOTH_WAYS"):
+        build_participation_contract(
+            slate, extra_unavailable_statuses=["SSPD"], extra_available_statuses=["SSPD"]
+        )
+
+
+def test_doubtful_is_unavailable_without_an_operator_flag(tmp_path):
+    """P3-18. On 2026-09-13 a real Classic slate stopped on UNKNOWN_DK_STATUS:D.
+
+    The operator cleared it by remembering `--unavailable-status D` under a lock
+    clock, which is a default masquerading as a decision.
+    """
+
+    pool = list(_POOL)
+    pool[3] = ("NE", "WR", "Alpha WR", "D", 9000)
+    slate = _slate(tmp_path, tuple(pool))
+
+    contract = build_participation_contract(slate)
+    assert "NE|WR|Alpha WR" in contract.unavailable_people
+    assert "NE|WR|Alpha WR" not in contract.selectable_people
+    # Every role row of the person moves together, so a Showdown CPT row cannot
+    # survive its own FLEX row being excluded.
+    assert set(excluded_dk_ids(slate, contract)) >= {
+        row.dk_id for row in slate.players if row.underlying_id == "NE|WR|Alpha WR"
+    }
+
+
+def test_the_operator_can_still_put_a_doubtful_person_back_in_the_pool(tmp_path):
+    """The default is a judgement, so it has to be reversible in one flag.
+
+    Before this, `--available-status D` collided with the built-in default and
+    raised STATUS_CLASSIFIED_BOTH_WAYS, which left the operator no way back.
+    """
+
+    pool = list(_POOL)
+    pool[3] = ("NE", "WR", "Alpha WR", "D", 9000)
+    slate = _slate(tmp_path, tuple(pool))
+
+    restored = build_participation_contract(slate, extra_available_statuses=["D"])
+    assert "NE|WR|Alpha WR" in restored.selectable_people
+    assert "NE|WR|Alpha WR" not in restored.unavailable_people
+    # Two operator flags that contradict each other are still a typo, not a
+    # judgement, and still fail closed.
     with pytest.raises(ParticipationError, match="STATUS_CLASSIFIED_BOTH_WAYS"):
         build_participation_contract(
             slate, extra_unavailable_statuses=["D"], extra_available_statuses=["D"]
         )
+
+
+def test_the_supplied_classic_slate_needs_no_status_flags(classic_slate):
+    """The 2026-09-13 fixture carries D rows. It must build unflagged.
+
+    This is the end-to-end form of P3-18: the supplied Classic bytes are the
+    exact shape that stopped the live run.
+    """
+
+    statuses = {(row.status_raw or "").strip().upper() for row in classic_slate.players}
+    assert "D" in statuses, "fixture no longer exercises the doubtful path"
+
+    contract = build_participation_contract(classic_slate)
+    doubtful = {
+        row.underlying_id
+        for row in classic_slate.players
+        if (row.status_raw or "").strip().upper() == "D"
+    }
+    assert doubtful
+    assert doubtful <= set(contract.unavailable_people)
+    assert not doubtful & set(contract.selectable_people)
 
 
 def test_roles_disagreeing_about_a_person_fails_closed(tmp_path):
@@ -380,3 +453,70 @@ def test_capacity_data_quality_separates_conversion_from_join_gaps(tmp_path):
     # ordinary football and must be reported rather than enforced.
     assert quality["share_above_capacity_count"] >= 1
     assert "interpretation" in quality
+
+
+# --------------------------------------------------------------------------- #
+# P0-1: pool completeness, the opportunity side
+# --------------------------------------------------------------------------- #
+
+
+def _model_missing(tmp_path, slate, omit: str):
+    """Build the opportunity inputs with one person's row left out."""
+
+    team_path = tmp_path / "team_projections.csv"
+    player_path = tmp_path / "player_opportunities.csv"
+    game_id = slate.games[0].game_id
+    team_rows = []
+    for team in ("NE", "SEA"):
+        row = {"TEAM": team, "GAME_ID": game_id, **_TEAM_ROW}
+        row["MARKET_SPREAD"] = "3" if team == "NE" else "-3"
+        team_rows.append([row[column] for column in TEAM_COLUMNS])
+    flex = {p.underlying_id: p for p in slate.players if p.role == "FLEX"}
+    player_rows = []
+    for player in sorted(flex.values(), key=lambda item: int(item.dk_id)):
+        if player.name == omit:
+            continue
+        s = _SHARES[player.name]
+        player_rows.append(
+            [
+                player.dk_id, player.team, player.position,
+                s["qb"], s["carry"], s["target"], s["catch"], s["ypt"],
+                s["rtd"], s["ctd"], s["cap"], "PASS",
+            ]
+        )
+    for path, columns, rows in (
+        (team_path, TEAM_COLUMNS, team_rows),
+        (player_path, PLAYER_COLUMNS, player_rows),
+    ):
+        buffer = io.StringIO(newline="")
+        writer = csv.writer(buffer, lineterminator="\n")
+        writer.writerow(columns)
+        writer.writerows(rows)
+        path.write_bytes(buffer.getvalue().encode("utf-8"))
+    return load_opportunity_model(slate, team_path, player_path)
+
+
+def test_a_missing_selectable_person_is_still_a_hard_stop(tmp_path):
+    """The tolerance added on 2026-09-13 must not become a blanket one."""
+
+    slate = _slate(tmp_path)
+    with pytest.raises(OpportunityError, match="missing 1 selectable people"):
+        _model_missing(tmp_path, slate, "Sea Third RB")
+
+
+def test_a_missing_person_the_site_flags_out_is_tolerated(tmp_path):
+    """A person DraftKings flags OUT cannot be selected, so his absence from the
+    model inputs cannot change any lineup. Blocking on it was an evidence gate
+    no source could clear on a full Classic pool.
+    """
+
+    pool = list(_POOL)
+    index = next(i for i, row in enumerate(pool) if row[2] == "Sea Third RB")
+    pool[index] = (pool[index][0], pool[index][1], pool[index][2], "OUT", pool[index][4])
+    slate = _slate(tmp_path, tuple(pool))
+
+    model = _model_missing(tmp_path, slate, "Sea Third RB")
+    assert model is not None
+    assert "SEA|RB|Sea Third RB" not in {
+        player.underlying_id for player in model.players
+    }

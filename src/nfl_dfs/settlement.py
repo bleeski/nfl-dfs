@@ -291,6 +291,15 @@ def _manifest_hash(
     return None
 
 
+def _manifest_field_size(mapping: Mapping[str, Any]) -> int | None:
+    """The pre-lock field-size assumption, if the manifest recorded one."""
+    contest = mapping.get("contest_parameters")
+    if not isinstance(contest, dict):
+        return None
+    value = contest.get("field_size")
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def _compare_manifest_value(
     actual: object, expected: object, code: str, *, optional: bool = False
 ) -> None:
@@ -309,13 +318,26 @@ def _validate_prelock_manifest(
         manifest.get("schema_version"), PRELOCK_MANIFEST_VERSION, "PRELOCK_VERSION_MISMATCH"
     )
     _compare_manifest_value(manifest.get("run_id"), request.run_id, "RUN_ID_MISMATCH")
-    for name in ("salary", "entries", "payouts"):
+    for name in ("salary", "entries"):
         recorded = _manifest_hash(manifest, name, aliases=(f"{name}s",))
         _compare_manifest_value(
             recorded,
             artifacts[name].request.sha256,
             f"PRELOCK_{name.upper()}_HASH_MISMATCH",
         )
+    # Payouts are optional in the manifest, and only in the manifest. A
+    # prior-only run never reads a payout table — CLAUDE.md keeps contest
+    # economics out of that path deliberately — so it has no hash to record,
+    # while the legacy `build` path does and is still checked exactly as before.
+    # The request binds the payout bytes by SHA-256 either way, so nothing is
+    # unbound by this; only the manifest's second copy of that binding is
+    # allowed to be absent. Ben's ruling, 2026-09-14.
+    _compare_manifest_value(
+        _manifest_hash(manifest, "payouts", aliases=("payout",)),
+        artifacts["payouts"].request.sha256,
+        "PRELOCK_PAYOUTS_HASH_MISMATCH",
+        optional=True,
+    )
     assignment_recorded = _manifest_hash(manifest, "assignments") or manifest.get(
         "assignment_sha256"
     )
@@ -333,6 +355,10 @@ def _validate_prelock_manifest(
     scenario_records = manifest.get("scenario_artifacts")
     if not isinstance(scenario_records, dict):
         raise SettlementError("PRELOCK_SCENARIO_ARTIFACTS_MISSING")
+    # A prior-only run simulates nothing, so it declares `{}` here and the
+    # request binds no bank. The coverage check below still holds both sides to
+    # each other; `SettlementCaptureRequest` is what refuses an empty set for any
+    # model status other than PRIOR_ONLY.
     requested_scenarios = {binding.name for binding in request.artifacts.scenarios}
     if requested_scenarios != set(scenario_records):
         raise SettlementError(
@@ -374,7 +400,6 @@ def _validate_prelock_manifest(
     versioned_bindings = (
         request.artifacts.salary,
         request.artifacts.entries,
-        request.artifacts.payouts,
         request.artifacts.assignments,
         *request.artifacts.predictions,
         *request.artifacts.scenarios,
@@ -385,27 +410,55 @@ def _validate_prelock_manifest(
             binding.artifact_version,
             f"PRELOCK_ARTIFACT_VERSION_MISMATCH:{binding.name}",
         )
+    # Payouts again: a producer that never read a payout table cannot declare its
+    # version any more than it can declare its hash. Checked when recorded.
+    _compare_manifest_value(
+        versions.get(request.artifacts.payouts.name),
+        request.artifacts.payouts.artifact_version,
+        "PRELOCK_ARTIFACT_VERSION_MISMATCH:payouts",
+        optional=True,
+    )
 
     contest = manifest.get("contest_parameters")
     if not isinstance(contest, dict):
         raise SettlementError("PRELOCK_CONTEST_PARAMETERS_MISSING")
     facts = request.contest
-    checks = {
+    # Contest identity. A pre-lock run reads all four of these straight out of
+    # the salary and reserved-entry bytes, so they stay hard checks: they are
+    # what proves the manifest describes this contest and not another.
+    for key, expected in {
         "contest_id": facts.contest_id,
         "draft_group": facts.draft_group,
         "mode": facts.mode.value,
         "entry_fee": float(facts.entry_fee),
-        "field_size": facts.field_size,
+    }.items():
+        _compare_manifest_value(
+            contest.get(key), expected, f"PRELOCK_CONTEST_MISMATCH:{key}"
+        )
+    # Contest economics. Stable facts, but an operator supplies them and a
+    # prior-only run never sees them, so they are checked when the manifest
+    # records them and not required when it does not.
+    for key, expected in {
         "objective": facts.objective.value,
         "advertised_prize_value": float(facts.advertised_prize_value),
         "ticket_face_value": (
             float(facts.ticket_face_value) if facts.ticket_face_value is not None else None
         ),
-    }
-    for key, expected in checks.items():
+    }.items():
         _compare_manifest_value(
-            contest.get(key), expected, f"PRELOCK_CONTEST_MISMATCH:{key}"
+            contest.get(key),
+            expected,
+            f"PRELOCK_CONTEST_MISMATCH:{key}",
+            optional=True,
         )
+    # `field_size` is deliberately NOT compared. The manifest's copy is the
+    # pre-lock *assumption* the portfolio was built against; the request's is the
+    # *settled* count, which must equal the standings row count. Those are two
+    # different quantities and they routinely differ — contest 193391013 was
+    # advertised at 133,000 and settled 126,020 — so requiring equality made this
+    # gate unclearable by any honest producer, `build` included. The difference is
+    # reported in the run brief as a Q6 diagnostic instead. Ben's ruling,
+    # 2026-09-14.
     truths = request.release_truths.model_dump(mode="json", by_alias=True)
     for key, expected in truths.items():
         _compare_manifest_value(
@@ -609,6 +662,12 @@ def _prepare_settlement(
             "prediction_artifact_names": [item.name for item in request.artifacts.predictions],
             "scenario_artifact_names": [item.name for item in request.artifacts.scenarios],
             "manifest_status": manifest.get("status"),
+            # What the portfolio was built against, beside what actually turned
+            # up. These are two different quantities, so this is reported rather
+            # than enforced: for Q6 the gap between an assumed and a settled field
+            # is signal about the build, not a fault in the capture.
+            "assumed_field_size": _manifest_field_size(manifest),
+            "settled_field_size": request.contest.field_size,
         },
         "selection_and_entry": {
             "assignment_sha256": request.artifacts.assignments.sha256,

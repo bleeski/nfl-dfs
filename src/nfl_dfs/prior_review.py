@@ -49,6 +49,10 @@ from .classic_portfolio import (
     exact_classic_assignments,
 )
 from .classic_portfolio_policy import NormalizedClassicPortfolioPolicy
+from .classic_review import (
+    SCORE_SNAPSHOT_VERSION,
+    create_classic_review_package,
+)
 from .dk import (
     PARSER_VERSION as DK_PARSER_VERSION,
     parse_entries,
@@ -86,6 +90,12 @@ from .portfolio_enforcement import (
     exact_assignments_for_entries,
 )
 from .portfolio_policy import NormalizedPortfolioPolicy
+from .prelock_manifest import (
+    PredictionArtifact,
+    PrelockManifestError,
+    build_prelock_manifest,
+    write_prelock_manifest,
+)
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
 from .selection import assignments_for_entries, select_prior_lineups
 from .sources import SourcePolicyError, validate_source_reference_policy
@@ -94,6 +104,7 @@ from .sources import SourcePolicyError, validate_source_reference_policy
 PROFILE_VERSION = "cowork_prior_review_v1"
 CLASSIC_PROFILE_VERSION = "cowork_classic_prior_review_c1_v1"
 CLASSIC_PROFILE_VERSION_C2 = "cowork_classic_prior_review_c2_v1"
+CLASSIC_PROFILE_VERSION_C3 = "cowork_classic_prior_review_c3_v1"
 CLASSIC_SELECTION_SCHEMA = "nfl_classic_prior_review_selection_c1_v1"
 CLASSIC_SELECTION_SCHEMA_C2 = "nfl_classic_prior_review_selection_c2_v1"
 CLASSIC_COVERAGE_SCHEMA = "nfl_classic_slate_coverage_c1_v1"
@@ -1004,6 +1015,175 @@ def pool_coverage_summary(
     }
 
 
+#: The frozen model artifacts a prior-only run produces, and the schema version
+#: each one declares. Together these *are* the prediction: the projections the
+#: portfolio was selected from, plus the provenance ledger binding them to their
+#: approved sources. Anything listed here becomes a prediction the settlement
+#: request must bind, so the list stays exactly what the run actually froze.
+_PRELOCK_PREDICTION_VERSIONS = {
+    "team_projections": "nfl_team_projections_csv_v1",
+    "player_opportunities": "nfl_player_opportunities_csv_v1",
+    "source_ledger": "nfl_source_ledger_v2",
+}
+
+
+def _declared_schema_version(path: Path) -> str | None:
+    """The schema version a JSON artifact declares about itself, if any.
+
+    `None` for a CSV, which carries no such declaration and which settlement
+    therefore does not version-check.
+    """
+    if path.suffix.lower() != ".json":
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    declared = payload.get("schema_version") or payload.get("artifact_version")
+    return str(declared) if declared else None
+
+
+def _emit_prelock_manifest(
+    *,
+    run_dir: Path,
+    as_of: datetime,
+    slate: SlateContract,
+    template: object,
+    salary_digest: str,
+    assignments: Mapping[str, tuple[str, ...]],
+    assignments_path: Path,
+    assignments_hash: str,
+    projection: object,
+    export_report: Mapping[str, object],
+    artifacts: dict[str, str],
+    hashes: dict[str, str],
+) -> dict[str, object]:
+    """Freeze this run's prediction as `nfl_prelock_run_manifest_v1`.
+
+    Emitted at the end of the run, which is still before lock: the whole point is
+    that the record predates the outcome, and the run does. It is emitted for a
+    `DO_NOT_UPLOAD` run on purpose — those are the review lineups Ben actually
+    enters by hand, so those are the ones worth settling later. Emitting one
+    changes no release truth and unlocks nothing.
+
+    Never fails the run. A slate this cannot describe truthfully produces a named
+    `SKIPPED` stage and no file, because a run that produced a portfolio is still
+    a good run even when its manifest cannot be written.
+    """
+
+    contests = {entry.contest_id for entry in template.authorizations}
+    fees = {entry.entry_fee for entry in template.authorizations}
+    if len(contests) != 1 or len(fees) != 1:
+        # `settlement.require_single_contest` refuses a multi-contest template
+        # outright, so a manifest naming one of several contests would bind a
+        # portfolio to a contest it only partly belongs to. 16 of Ben's 18
+        # entered contests are in exactly this state.
+        return _stage(
+            "PRELOCK_MANIFEST",
+            "SKIPPED",
+            reason="MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED",
+            contest_ids=sorted(contests),
+            entry_fees=sorted(fees),
+        )
+    if not assignments or not assignments_hash:
+        return _stage(
+            "PRELOCK_MANIFEST", "SKIPPED", reason="NO_ASSIGNMENT_TO_FREEZE"
+        )
+
+    predictions: list[PredictionArtifact] = []
+    missing: list[str] = []
+    for name, version in sorted(_PRELOCK_PREDICTION_VERSIONS.items()):
+        digest = projection.hashes.get(name) if projection is not None else None
+        path = artifacts.get(name)
+        if not digest or not path:
+            missing.append(name)
+            continue
+        # Settlement re-reads every JSON prediction and compares the version the
+        # request declares against the one the file itself carries. Checking that
+        # here turns a confusing capture-time refusal days later into an obvious
+        # one now, and stops the manifest asserting a version that has moved on.
+        declared = _declared_schema_version(Path(path))
+        if declared is not None and declared != version:
+            return _stage(
+                "PRELOCK_MANIFEST",
+                "SKIPPED",
+                reason="PREDICTION_VERSION_UNEXPECTED",
+                artifact=name,
+                expected=version,
+                declared=declared,
+            )
+        predictions.append(
+            PredictionArtifact(
+                name=name, path=str(path), sha256=str(digest), artifact_version=version
+            )
+        )
+    if missing:
+        return _stage(
+            "PRELOCK_MANIFEST", "SKIPPED", reason="PREDICTION_ARTIFACT_ABSENT",
+            absent=sorted(missing),
+        )
+
+    truths = {
+        key: export_report.get(key)
+        for key in ("FILE_VALID", "EVIDENCE_STATE", "MODEL_STATUS", "RELEASE_DECISION")
+    }
+    if any(value is None for value in truths.values()):
+        return _stage(
+            "PRELOCK_MANIFEST", "SKIPPED", reason="RELEASE_TRUTHS_INCOMPLETE",
+            observed=sorted(k for k, v in truths.items() if v is not None),
+        )
+
+    try:
+        relative_assignments = Path(assignments_path)
+        try:
+            relative_assignments = relative_assignments.relative_to(run_dir)
+        except ValueError:
+            relative_assignments = Path(relative_assignments.name)
+        manifest = build_prelock_manifest(
+            run_id=run_dir.name,
+            # The run's own clock, not `now()`: a run replayed at a pinned
+            # `as_of` must produce byte-identical bytes, and a wall-clock stamp
+            # here would be the one thing that could not.
+            created_at=as_of,
+            mode=slate.mode,
+            contest_id=sorted(contests)[0],
+            draft_group=slate.draft_group,
+            entry_fee=sorted(fees)[0],
+            salary_sha256=salary_digest,
+            entries_sha256=template.raw_hash,
+            assignments_path=relative_assignments.as_posix(),
+            assignments_sha256=assignments_hash,
+            predictions=predictions,
+            release_truths=truths,
+            selected_entry_ids=sorted(assignments),
+            evidence={
+                "official_status_csv_sha256": hashes.get("official_status_csv"),
+                "weather_evidence_json_sha256": hashes.get("weather_evidence_json"),
+                "role_evidence_json_sha256": hashes.get("role_evidence_json"),
+                "offensive_role_evidence_json_sha256": hashes.get(
+                    "offensive_role_evidence_json"
+                ),
+            },
+        )
+    except PrelockManifestError as exc:
+        return _stage("PRELOCK_MANIFEST", "SKIPPED", reason=str(exc))
+
+    manifest_path = run_dir / "prelock_manifest.json"
+    manifest_hash = write_prelock_manifest(manifest_path, manifest)
+    artifacts["prelock_manifest"] = str(manifest_path)
+    hashes["prelock_manifest"] = manifest_hash
+    return _stage(
+        "PRELOCK_MANIFEST",
+        "OK",
+        path=str(manifest_path),
+        sha256=manifest_hash,
+        prediction_artifacts=[item.name for item in predictions],
+        selected_entries=len(assignments),
+    )
+
+
 def run_prior_review(
     *,
     salary_csv: str | Path,
@@ -1085,7 +1265,7 @@ def run_prior_review(
         PROFILE_VERSION
         if slate.mode is EngineMode.SHOWDOWN
         else (
-            CLASSIC_PROFILE_VERSION_C2
+            CLASSIC_PROFILE_VERSION_C3
             if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
             else CLASSIC_PROFILE_VERSION
         )
@@ -1093,6 +1273,10 @@ def run_prior_review(
     salary_digest = sha256_file(salary_path)
     hashes["salary_csv"] = salary_digest
     hashes["entry_csv"] = sha256_file(entry_path)
+    # The run already hashed both; recording where they are too is what lets a
+    # settlement request bind the exact bytes the pre-lock manifest names.
+    artifacts["salary_csv"] = str(salary_path)
+    artifacts["entry_csv"] = str(entry_path)
     reports["intake"] = {
         "schema_version": "nfl_prior_review_intake_c1_v1",
         "mode": slate.mode.value,
@@ -1934,6 +2118,19 @@ def run_prior_review(
             for item in offensive_resolution.report.get("findings", [])
             if isinstance(item, Mapping) and item.get("person")
         }
+        # R17 extended to Classic, 2026-09-12, on Ben's explicit ruling. The
+        # resolver is the single authority on whether a role is good enough to
+        # select: it BLOCKS an unresolved or declared-changed role before any
+        # selection happens, and EXCLUDES a person with no prior-season row, so
+        # anyone who survives into a lineup already carries a SELECT or
+        # DIAGNOSTIC action. Classic previously demanded
+        # `SOURCE_SUPPORTED_ADJUSTMENT` here, which only a captured numerical
+        # team allocation produces and no approved host publishes before a game,
+        # so a live Classic slate could never publish while the identical
+        # Showdown pool could. This gate is now exactly as strict as Showdown
+        # and no stricter; every state that is not source-supported is named in
+        # `selected_role_observations` rather than passing silently.
+        selected_role_observations: list[dict[str, object]] = []
         for person in sorted(selected_people):
             selected_player = next(
                 player
@@ -1943,12 +2140,16 @@ def run_prior_review(
             if selected_player.position not in {"QB", "RB", "WR", "TE"}:
                 continue
             finding = finding_by_person.get(person)
-            if not finding or finding.get("state") != "SOURCE_SUPPORTED_ADJUSTMENT":
+            selection_action = (
+                str(finding.get("selection_action") or "") if finding else ""
+            )
+            if not finding or selection_action not in {"SELECT", "DIAGNOSTIC"}:
                 selected_evidence_gaps.append(
                     {
                         "person": person,
                         "evidence": "CURRENT_OFFENSIVE_ROLE",
                         "state": finding.get("state") if finding else "MISSING",
+                        "selection_action": selection_action or "MISSING",
                         "smallest_evidence_action": (
                             finding.get("next_evidence_action")
                             if finding
@@ -1956,10 +2157,35 @@ def run_prior_review(
                         ),
                     }
                 )
+                continue
+            selected_role_observations.append(
+                {
+                    "person": person,
+                    "dk_id": selected_player.dk_id,
+                    "team": selected_player.team,
+                    "position": selected_player.position,
+                    "state": finding.get("state"),
+                    "selection_action": selection_action,
+                    "finding": finding.get("finding"),
+                    "next_evidence_action": finding.get("next_evidence_action"),
+                }
+            )
+        unverified_role_people = sorted(
+            str(item["person"])
+            for item in selected_role_observations
+            if item.get("state") != "SOURCE_SUPPORTED_ADJUSTMENT"
+        )
         reports["selected_evidence_gate"] = {
-            "schema_version": "nfl_classic_selected_evidence_gate_c1_v1",
+            "schema_version": "nfl_classic_selected_evidence_gate_c1_v2",
             "selected_people": sorted(selected_people),
             "gaps": selected_evidence_gaps,
+            "selected_role_observations": selected_role_observations,
+            "unverified_role_people": unverified_role_people,
+            "role_basis": (
+                "HISTORY_DERIVED_PRIOR_IS_NOT_A_CURRENT_ROLE"
+                if unverified_role_people
+                else "EVERY_SELECTED_ROLE_IS_SOURCE_SUPPORTED"
+            ),
             "status": "BLOCKED" if selected_evidence_gaps else "PASS",
         }
         if selected_evidence_gaps:
@@ -2011,6 +2237,49 @@ def run_prior_review(
         )
         artifacts["assignments"] = str(assignments_path)
         hashes["assignments"] = assignments_hash
+    else:
+        # Classic previously left its selection only as `classic_assignment.json`,
+        # which `lineups.read_assignment_csv` cannot read, so a Classic run could
+        # not bind an assignment into a pre-lock manifest at all. This is the same
+        # nine-slot geometry `certify` and `settle` already accept; it is an
+        # additional record of the same selection, and changes none of the C2/C3
+        # artifacts that remain authoritative for the audit.
+        assignments_hash = write_assignments_csv(
+            assignments_path,
+            assignments,
+            entry_order=(
+                portfolio_policy.entry_ids
+                if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
+                else None
+            ),
+            mode=EngineMode.CLASSIC,
+        )
+        artifacts["assignments"] = str(assignments_path)
+        hashes["assignments"] = assignments_hash
+
+    def freeze_prelock(export_report: Mapping[str, object]) -> dict[str, object]:
+        """Freeze this run's prediction, whichever success path it exits by.
+
+        Showdown, Classic C1/C2 and Classic C3 each return from their own place,
+        and a manifest emitted on only one of them would silently make the other
+        two unsettleable — which is exactly the failure Q1B found. Bound here,
+        once, so every exit carries the same record.
+        """
+        return _emit_prelock_manifest(
+            run_dir=run_dir,
+            as_of=as_of,
+            slate=slate,
+            template=template,
+            salary_digest=salary_digest,
+            assignments=assignments,
+            assignments_path=assignments_path,
+            assignments_hash=assignments_hash,
+            projection=projection,
+            export_report=export_report,
+            artifacts=artifacts,
+            hashes=hashes,
+        )
+
     selection_report = {
         "status": "DO_NOT_UPLOAD",
         "MODEL_STATUS": "PRIOR_ONLY",
@@ -2554,6 +2823,122 @@ def run_prior_review(
 
     # ----------------------------------------------------------------- EXPORT
     if slate.mode is EngineMode.CLASSIC:
+        if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+            selected_score_ids = sorted(
+                {dk_id for roster in assignments.values() for dk_id in roster}, key=int
+            )
+            score_snapshot_path = selection_dir / "classic_selected_scores.json"
+            score_snapshot_hash = _write_canonical_json(
+                score_snapshot_path,
+                {
+                    "schema_version": SCORE_SNAPSHOT_VERSION,
+                    "salary_sha256": salary_digest,
+                    "assignment_sha256": hashes["classic_assignment"],
+                    "scores_by_dk_id": {
+                        dk_id: scores.by_dk_id[dk_id] for dk_id in selected_score_ids
+                    },
+                    "metric": "DRAFTKINGS_POINTS_OF_THE_EXPECTED_STAT_LINE",
+                    "not_a_claim_of": (
+                        "CEILING_LEVERAGE_EV_ROI_WIN_PROBABILITY_CASH_PROBABILITY_"
+                        "CALIBRATED_OWNERSHIP_OR_VALIDATED_PERFORMANCE"
+                    ),
+                },
+            )
+            artifacts["classic_selected_scores"] = str(score_snapshot_path)
+            hashes["classic_selected_scores"] = score_snapshot_hash
+            package_root = (
+                run_dir.parent
+                if run_dir.parent == out_dir.parent
+                else Path.cwd().resolve()
+            )
+            review_dir = out_dir / "review"
+            try:
+                classic_review = create_classic_review_package(
+                    salary_path=salary_path,
+                    entry_path=entry_path,
+                    artifacts=artifacts,
+                    expected_hashes=hashes,
+                    audit_at=(datetime.now(timezone.utc) if live_run else as_of),
+                    output_path=review_dir / f"DK_REVIEW_ENTRY_{_safe_label(label)}.csv",
+                    output_dir=review_dir,
+                    package_root=package_root,
+                )
+            except (OSError, ValueError) as exc:
+                error = f"{type(exc).__name__}:{exc}"
+                stages.append(_stage("EXPORT", "FAILED_C3_DOWNSTREAM_AUDIT", error=error))
+                outcome = PriorReviewOutcome(
+                    profile_version=profile_version,
+                    stage="EXPORT",
+                    blocked=True,
+                    blockers=(f"CLASSIC_C3_REVIEW_EXPORT_FAILED:{error}",),
+                    stages=tuple(stages),
+                    artifacts=artifacts,
+                    hashes=hashes,
+                    reports=reports,
+                    error=error,
+                )
+                write_run_record(run_dir / "prior_review.json", outcome.as_report())
+                return outcome
+            artifacts.update(
+                {
+                    "classic_export_audit": classic_review.audit_path,
+                    "bulk_entry_csv": classic_review.export_path,
+                    "readable_review_json": classic_review.json_path,
+                    "readable_review_html": classic_review.html_path,
+                }
+            )
+            hashes.update(
+                {
+                    "classic_export_audit": classic_review.audit_sha256,
+                    "bulk_entry_csv": classic_review.export_sha256,
+                    "readable_review_json": classic_review.json_sha256,
+                    "readable_review_html": classic_review.html_sha256,
+                }
+            )
+            reports["classic_export_audit"] = classic_review.audit
+            reports["readable_review"] = classic_review.data
+            export_report = {
+                "FILE_VALID": True,
+                "EVIDENCE_STATE": overall_evidence_state,
+                "MODEL_STATUS": "PRIOR_ONLY",
+                "RELEASE_DECISION": "DO_NOT_UPLOAD",
+                "file_kind": "EXACT_TEMPLATE_REVIEW_CSV_NOT_UPLOAD_CERTIFICATION",
+                "bulk_entry_csv": classic_review.export_path,
+                "bulk_entry_sha256": classic_review.export_sha256,
+                "downstream_audit": classic_review.audit_path,
+                "downstream_audit_sha256": classic_review.audit_sha256,
+                "readable_review_json": classic_review.json_path,
+                "readable_review_json_sha256": classic_review.json_sha256,
+                "readable_review_html": classic_review.html_path,
+                "readable_review_html_sha256": classic_review.html_sha256,
+                "certification_basis": "NOT_CERTIFIED_CLASSIC_C3_REVIEW_ONLY",
+                "warning": (
+                    "Exact-template and independently audited review bytes only. "
+                    "This remains PRIOR_ONLY / DO_NOT_UPLOAD."
+                ),
+            }
+            stages.append(
+                _stage(
+                    "EXPORT",
+                    "C3_INDEPENDENT_AUDIT_AND_REVIEW_PASS",
+                    file_valid=True,
+                    release_decision="DO_NOT_UPLOAD",
+                )
+            )
+            stages.append(freeze_prelock(export_report))
+            outcome = PriorReviewOutcome(
+                profile_version=profile_version,
+                stage="EXPORT",
+                blocked=False,
+                blockers=(),
+                stages=tuple(stages),
+                artifacts=artifacts,
+                hashes=hashes,
+                reports=reports,
+                export=export_report,
+            )
+            write_run_record(run_dir / "prior_review.json", outcome.as_report())
+            return outcome
         export_report = {
             "FILE_VALID": True,
             "EVIDENCE_STATE": overall_evidence_state,
@@ -2598,6 +2983,7 @@ def run_prior_review(
                 release_decision="DO_NOT_UPLOAD",
             )
         )
+        stages.append(freeze_prelock(export_report))
         outcome = PriorReviewOutcome(
             profile_version=profile_version,
             stage="EXPORT",
@@ -2718,6 +3104,7 @@ def run_prior_review(
             problems=list(export.problems),
         )
     )
+    stages.append(freeze_prelock(export_report))
     outcome = PriorReviewOutcome(
         profile_version=profile_version,
         stage="EXPORT",

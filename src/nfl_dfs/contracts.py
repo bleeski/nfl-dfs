@@ -479,6 +479,40 @@ class SalaryPlayer(FrozenModel):
     role: Literal["CPT", "FLEX"] | None = None
 
 
+# DraftKings' own Status vocabulary for a person who may not take the field.
+#
+# One definition, four readers. `participation.py` owns the selection contract;
+# `priors.py`, `projection.py` and `opportunity.py` each re-derive this set from
+# the bound salary bytes to decide whether a person missing from their inputs is
+# a tolerable absence or a blocking one. Before 2026-09-13 each of those three
+# carried its own `{"OUT", "IR"}` literal, which is the "same assumption
+# expressed in four modules" failure the C4 retrospective names in section 3: a
+# code added here would have silently failed to reach the other three.
+#
+# "D" is doubtful. DraftKings keeps a doubtful person priceable and selectable,
+# so treating him as unavailable is a judgement rather than a site rule, and the
+# operator can reverse it with `--available-status D`. The default is
+# unavailable because that is the classification the operator applied by hand on
+# 2026-09-13, and because the failure it prevents (a scratched person occupying
+# a roster slot) costs more than the one it causes (a 25%-to-play person left
+# out of the pool).
+UNAVAILABLE_DK_STATUSES = frozenset({"OUT", "IR", "D"})
+
+
+def unavailable_people(players: Iterable[SalaryPlayer]) -> set[str]:
+    """Every person the salary bytes themselves flag as unable to play.
+
+    Read from `status_raw` rather than from a downstream package, so a drop
+    introduced upstream can never widen the set a caller is willing to tolerate.
+    """
+
+    return {
+        player.underlying_id
+        for player in players
+        if (player.status_raw or "").strip().upper() in UNAVAILABLE_DK_STATUSES
+    }
+
+
 class SlateContract(FrozenModel):
     site: Literal["DRAFTKINGS"] = "DRAFTKINGS"
     sport: Literal["NFL"] = "NFL"
@@ -798,7 +832,12 @@ class SettlementArtifactSet(FrozenModel):
     standings: SettlementArtifactRequest
     metric_registry: SettlementArtifactRequest
     predictions: tuple[SettlementArtifactRequest, ...] = Field(min_length=1)
-    scenarios: tuple[SettlementArtifactRequest, ...] = Field(min_length=1)
+    #: May be empty only for a `PRIOR_ONLY` model. A prior-only run does no
+    #: simulation, so it has no scenario bank of any purpose to bind, and a
+    #: degenerate one-scenario bank would invite being read as a distribution it
+    #: does not have. `SettlementCaptureRequest` enforces the condition, because
+    #: the model status lives there rather than here. Ben's ruling, 2026-09-14.
+    scenarios: tuple[SettlementArtifactRequest, ...] = ()
 
     @model_validator(mode="after")
     def artifact_names_are_unique(self) -> "SettlementArtifactSet":
@@ -886,6 +925,15 @@ class SettlementCaptureRequest(FrozenModel):
         ) and not self.evidence_issues:
             raise ValueError(
                 "non-PASS evidence or non-validated models require an explicit evidence issue"
+            )
+        if (
+            not self.artifacts.scenarios
+            and self.release_truths.model_status is not ModelStatus.PRIOR_ONLY
+        ):
+            raise ValueError(
+                "only a PRIOR_ONLY model may settle without a scenario bank; "
+                f"MODEL_STATUS={self.release_truths.model_status.value} must bind at "
+                "least one nfl_scenario_bank_v1"
             )
         return self
 

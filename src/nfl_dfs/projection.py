@@ -21,6 +21,7 @@ from .contracts import (
     SalaryPlayer,
     SlateContract,
     earliest_source_freshness,
+    unavailable_people,
 )
 from .contracts import SourceFreshness as SourceFreshnessContract
 from .dk import PARSER_VERSION as DK_PARSER_VERSION
@@ -460,8 +461,24 @@ def _validate_identities(
     }
     if set(source_by_provider) != set(mappings_by_provider):
         raise ProjectionBuildError("PLAYER_IDENTITY_COVERAGE_MISMATCH")
-    if {row.underlying_id for row in identity_map.player_mappings} != set(salary_people):
-        raise ProjectionBuildError("SALARY_PERSON_IDENTITY_COVERAGE_MISMATCH")
+    mapped_people = {row.underlying_id for row in identity_map.player_mappings}
+    if not mapped_people <= set(salary_people):
+        raise ProjectionBuildError(
+            "SALARY_PERSON_IDENTITY_COVERAGE_MISMATCH:mapped people absent from the "
+            f"salary bytes:{sorted(mapped_people - set(salary_people))[:10]}"
+        )
+    # A person may be absent from the identity map only when the salary bytes
+    # themselves flag him unable to play, which the availability contract already
+    # makes unselectable. Re-derived from those bytes rather than trusted from the
+    # package, so an upstream drop cannot widen silently.
+    selectable_unmapped = sorted(
+        (set(salary_people) - mapped_people) - unavailable_people(slate.players)
+    )
+    if selectable_unmapped:
+        raise ProjectionBuildError(
+            "SALARY_PERSON_IDENTITY_COVERAGE_MISMATCH:selectable people with no "
+            f"identity:{selectable_unmapped[:10]}"
+        )
 
     resolved: dict[str, tuple[PlayerIdentityMapping, SalaryPlayer]] = {}
     for provider_id, source in source_by_provider.items():
@@ -504,9 +521,25 @@ def _player_rows(
     for record in player_source.records:
         mapping, salary_player = resolved[record.provider_player_id]
         history = player_source.metadata.coverage.get("offensive_history_by_person", {})
+        # R21 (Ben's ruling 2026-09-12, extended to Classic 2026-09-13) is a rule
+        # about the BASIS of a person's role prior: an unresolved or missing
+        # history carries a history-derived prior rather than a current fact, and
+        # selects with that named.
+        #
+        # This test used to also require `salary_player.role == "FLEX"`. `role` is
+        # a Showdown-only attribute -- it is "CPT" or "FLEX" on a Showdown slate
+        # and None on every Classic row, and the identity check above already
+        # refuses any Showdown record that is not "FLEX". So that clause was
+        # never a position or roster-slot filter at all: it was true for every
+        # Showdown record and false for every Classic one, which made it a mode
+        # gate that switched R21 off entirely in Classic. On the 2026-09-13 Week 1
+        # slate that surfaced as PLAYER_EVIDENCE_NOT_PASS and
+        # ZERO_OR_MISSING_SHARE_GROUP, an evidence gate no source could clear in
+        # the week when prior-season history is least informative. What bounds the
+        # tolerance is the adapter version and the history state below; the role
+        # never did.
         basis_unknown = (
-            salary_player.role == "FLEX"
-            and player_source.metadata.coverage.get("adapter_version") == "nflverse_prior_adapter_v2"
+            player_source.metadata.coverage.get("adapter_version") == "nflverse_prior_adapter_v2"
             and history.get(salary_player.underlying_id, {}).get("state")
             in {"MISSING_HISTORY", "CURRENT_ROLE_UNKNOWN"}
         )
@@ -533,9 +566,14 @@ def _player_rows(
             eligible = [item for item in values if item[2].position in eligible_positions]
             total = sum((getattr(item[0], field) for item in eligible), Decimal("0"))
             history = player_source.metadata.coverage.get("offensive_history_by_person", {})
+            # The same mode gate described in `_player_rows` above was copied into
+            # this group check. A share group whose every member carries a
+            # history-derived basis is legitimately UNKNOWN rather than broken:
+            # Miami's entire 2026 quarterback room is new (two transfers with a
+            # prior-season row on another team, two with none), so the group's
+            # own-team attempt share is genuinely zero.
             unknown_group = any(
-                item[2].role == "FLEX"
-                and player_source.metadata.coverage.get("adapter_version") == "nflverse_prior_adapter_v2"
+                player_source.metadata.coverage.get("adapter_version") == "nflverse_prior_adapter_v2"
                 and history.get(item[2].underlying_id, {}).get("state") in {"MISSING_HISTORY", "CURRENT_ROLE_UNKNOWN"}
                 for item in eligible
             )

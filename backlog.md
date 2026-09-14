@@ -66,20 +66,30 @@ do not delay a useful Classic review workflow until the quantitative research
 track is complete. Conversely, a legal Classic review portfolio does not close
 the quantitative weakness.
 
-The table below is the authoritative dev-session queue. DEV0, Q1, C1, and C2
-are done; `C3` is the only current `READY` item. When a chunk closes, update the table
-so only the next dependency-satisfied chunk is `READY`; the remaining preferred
-order is `C3` through `C4`, then `Q2` onward. Q1 started the settlement/
+The table below is the authoritative dev-session queue. DEV0, Q1, Q1B, Q1C, C1,
+and C2 are done; `C3` is `BLOCKED` only on native Excel open/recalculate/save/reopen
+acceptance after its code, deterministic replay, rendering, exact-byte, test,
+and registered-scale checks passed. No later item is `READY`. When a chunk
+closes, update the table so only the next dependency-satisfied chunk is
+`READY`; the remaining preferred order is `C3` through `C4`, then `Q2` onward. Q1 started the settlement/
 validation clock early; the bounded Classic sequence now delivers the useful
 prior-only workflow before the longer calibrated-model build.
+
+Q1B and Q1C are lettered sub-tranches of Q1 on the `S4A`/`S4B` precedent. Q1B
+depends on Q1 alone and Q1C on Q1B, and neither displaces anything: `C3`, `C4`
+and `Q2` keep their order and their dependencies. It exists because Q1's settlement plane has consumed zero
+real contests since 2026-09-10 while Ben has entered 18, and accrual is the one
+dependency in the program that no later engineering can shorten.
 
 | Order | ID | Track | Status | Depends on | Session outcome | Absorbs/supersedes |
 |---:|---|---|---|---|---|---|
 | 0 | DEV0 | Shared | `DONE` | none | Reconcile and freeze the exact current development baseline without losing any existing work | current dirty-tree handoff and stale baseline text |
 | 1 | Q1 | Quantitative | `DONE` | DEV0 | Settlement capture plus an auditable reference evaluator and registered promotion metrics | W7, W8, S4A |
+| 1b | Q1B | Quantitative | `DONE` | Q1 | Standings intake: normalizer, settlement-request builder, checklist filed/normalized/settled states, and dispositions | nothing; it is the back half Q1 left unbuilt |
+| 1c | Q1C | Quantitative | `DONE` | Q1B | Pre-lock manifest emitter on the prior_review path, so a slate built the way Ben builds them can be settled | nothing; it repairs the gate Q1B measured |
 | 2 | C1 | Classic | `DONE` | DEV0, Q1 contract decisions only | Multi-game Classic immutable intake, priors, projection, participation, and one-command prior-review orchestration | DL6, Classic portion of S6 |
 | 3 | C2 | Classic | `DONE` | C1 | Classic policy contract, candidate generation, joint portfolio selection, and exact Entry-ID assignment | Classic portion of S5 and W9 |
-| 4 | C3 | Classic | `READY` | C2 | Downstream independent export audit, readable review, exact-template export, copied-package replay, and full-fixture 1/3/20/150-entry acceptance | DL7, W10, Classic review portion of S8/S9 |
+| 4 | C3 | Classic | `BLOCKED` | C2; native Excel acceptance | Downstream independent export audit, readable review, exact-template export, copied-package replay, and full-fixture 1/3/20/150-entry acceptance | DL7, W10, Classic review portion of S8/S9 |
 | 5 | C4 | Classic | `BLOCKED` | C3, current operator files/evidence | Current real-slate Cowork/Linux rehearsal and operator handoff | DL8 |
 | 6 | C5 | Classic | `BLOCKED` | C3, S2 | Lock-aware slot ordering and governed Classic late-swap mechanics | W13 mechanical portion |
 | 7 | Q2 | Quantitative | `BLOCKED` | Q1, C1 | Calibrated player opportunity/outcome distributions, participation, and correlation | W3 remainder, W11, broader S6, S7 outcome work |
@@ -164,6 +174,363 @@ approximating.
   - Metric definitions, sample minimums, split policy, and promotion thresholds
     are registered before challenger results are viewed.
 
+### Q1B — Standings intake and the settlement request builder
+
+Status: `DONE` on branch `codex/c3-classic-audit-review-export` at unchanged
+baseline HEAD `f2890a6c587b01cede2e07bdcbb3ec1dd0ab0d33` (uncommitted
+implementation). Q1B adds `scripts/file_standings.py`,
+`scripts/make_settlement_request.py`, three distinct checklist states, and the
+dispositions for all 18 entered contests. It adds no model, no economics and no
+release truth; `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`
+are unchanged.
+
+**The validation corpus holds zero settled contests.** That is the number that
+matters, and Q1B did not change it. What it changed is that the reason is now
+measured and named rather than unknown.
+
+- Goal: make a pulled DraftKings standings export reachable by `settle
+  --request`, so settled slates can begin accruing for Q6.
+- Scope: a standard-library normalizer from a raw export to
+  `nfl_standings_csv_v2`; a builder for `nfl_settlement_request_v1`; filed,
+  normalized and settled as three separate checklist states; an explicit
+  disposition for every contest that cannot settle, with its reason.
+- Non-goals: no DraftKings access of any kind, no ownership, field, duplication,
+  EV, ROI or calibration work, no promotion, and no change to `prior_review.py`,
+  any evidence gate, C3, or the C2 policy contracts.
+
+#### The finding: no contest Ben has entered can ever settle
+
+`settle --request` binds nine artifacts. Two of them do not exist anywhere in
+this repo, for any of the 18 contests:
+
+- **`nfl_prelock_run_manifest_v1`** — zero across all 18 `data/runs/` snapshots.
+  Only the legacy `build` command writes one (`src/nfl_dfs/cli.py:1640`); the
+  `prior_review`/C1-C3 path that produced every contest Ben has actually entered
+  never has. A pre-lock manifest records what was predicted *before* lock, so it
+  cannot be written afterwards, and `settlement._validate_prelock_manifest` will
+  refuse those 18 permanently.
+- **`nfl_scenario_bank_v1`** — zero, for the same reason.
+
+Reconstructing either after the fact is forbidden outright: a fabricated
+prediction silently poisons every later replay, which is worse than a missing
+slate. The repair is an emitter on the path Ben actually uses. It makes the
+*next* slate settleable and recovers none of the eighteen already played.
+
+Three further blockers were measured on the real files, all independent of the
+above, and each would have been enough on its own:
+
+- 16 of 18 contests came from multi-contest reserved-entry templates, which
+  `settlement.require_single_contest` refuses.
+- 17 of 18 have no payout table on disk, and payout tiers must never be inferred
+  from a contest name.
+- 193028206 settled **832,342** entries, over four times the registered
+  `max_entries` of 200,000, and the complete-field rule allows no partial option.
+
+**Resolved by Q1C, 2026-09-14.** Ben ruled that the emitter was the next
+settlement-plane tranche and it landed the same day: `prior_review` now freezes a
+pre-lock manifest on every success path, and the four settlement gates that no
+honest producer could clear were corrected with his sign-off. See `Q1C — The
+pre-lock manifest emitter` below. It changes nothing for these eighteen
+contests — a pre-lock prediction cannot be written after the fact — so they stay
+dispositioned; it is future slates that can now accrue.
+
+#### Design answer 1 — where `Prize` comes from
+
+**It is derived, never observed.** A real DraftKings full standings export has no
+`Prize` column at all. Measured across all 18 of Ben's exports, the header is
+uniformly:
+
+```text
+Rank,EntryId,EntryName,TimeRemaining,Points,Lineup,,Player,Roster Position,%Drafted,FPTS
+```
+
+So the prize is necessarily joined from the contest's payout table. The
+normalizer binds the payout bytes by SHA-256, labels the column
+`provenance: DERIVED_REFERENCE_SETTLEMENT_V1` and `observed_in_export: false` in
+its manifest, and derives the value with the registered reference evaluator
+rather than a second tie-splitting implementation.
+
+The consequence is stated rather than hidden: because the column is produced by
+the same evaluator that `settlement._prepare_settlement` later checks it against,
+**`STANDINGS_PRIZE_MISMATCH` cannot fire on a file this tool wrote.** That check
+is independent evidence only for a standings file carrying an externally observed
+prize, which DraftKings does not supply. It is not a working check on real data.
+
+#### Design answer 2 — which contests the reference evaluator can settle
+
+Scope the first corpus to the contests the evaluator settles exactly, and name
+the excluded ones with a measured reason. The registered `max_entries` of 200,000
+stays as it is; `max_runtime_seconds` is raised from 10.0 to 180.0 on fresh
+measurement, and the builder records the budget it used.
+
+Measured on this Windows box:
+
+| field | budget | outcome | work units | peak traced bytes |
+|---:|---:|---|---:|---:|
+| 133,000 synthetic | 10.0s | refused `REFERENCE_RUNTIME_BUDGET_EXCEEDED` | — | 61,632,179 |
+| 133,000 synthetic | 30.0s | exact in **27.868447s** | 177,477 | 95,515,201 |
+| 200,000 synthetic | 120.0s | exact in **22.582837s** | 244,496 | 142,015,359 |
+| 126,020 real (193391013) | 300.0s | exact; whole normalization 5.908s wall | — | — |
+
+Two things in that table are worth keeping. Runtime is **not** monotonic in field
+size — 200,000 settled faster than 133,000 — because it tracks tie-group and
+duplication structure rather than row count, so field size alone never predicts
+whether a contest will settle within budget. And the real 126,020-entry field
+settled far faster than the synthetic one of similar size, so the synthetic
+benchmark is a conservative bound, not a forecast.
+
+Excluded, with its reason: **193028206** at 832,342 entries. Not approximated,
+not sampled, not partially settled.
+
+#### Design answer 3 — the 8 loose-only DAL@NYG contests
+
+Ben's ruling, 2026-09-14: **dispositioned out with a recorded reason.** They are
+marked `placeholder` naming the absent `data/runs` snapshot, the absent pre-lock
+manifest and scenario bank, and the absent payout table. They stop appearing as
+pending work and never look settled. No pre-lock manifest was reconstructed for
+them or for any other contest.
+
+The same ruling covers the other 10: all 18 are dispositioned, because the
+pre-lock gap is not specific to the loose-only slate.
+
+#### Two contract defects found on real bytes
+
+Both are places where `nfl_standings_csv_v2` cannot represent a real DraftKings
+contest. Neither was worked around silently: the normalizer refuses by default
+and offers an explicit, default-off, fully labelled opt-in so the path can be
+exercised once ruled on.
+
+1. **Entries that never submitted a lineup.** 11 of 18 exports carry them — 220
+   in 193391013, 1,314 in 193028206. They are real paid field members, tied at
+   the last rank, scoring 0. The contract requires a nonempty canonical key and
+   `settlement.parse_standings` refuses an empty one. Opt-in:
+   `--unsubmitted-entry-policy sentinel`, which writes
+   `NO_LINEUP_SUBMITTED:<entry_id>` — unique per entry, so the row forms its own
+   duplication group of one, which is the true statement that it duplicates
+   nothing. An *operated* entry with no lineup is always refused, whatever the
+   policy: it means the portfolio never reached DraftKings.
+2. **Exact tie splits that are not whole cents.** In 193391013 alone, **757
+   entries across 9 tie groups**, beginning with a 23-way tie for first. The
+   reference evaluator keeps money as exact rational cents by design; the
+   contract requires an integer. `settlement._prepare_settlement` compares the
+   evaluator's `Fraction` against the file's integer cents for *every* field row,
+   so **a contest with any uneven tie split can never clear
+   `STANDINGS_PRIZE_MISMATCH`, whatever the intake writes.** Opt-in:
+   `--prize-rounding half-even`, which records the residual — 33 cents on that
+   contest, reconciling 224,999,967 paid cents against the advertised
+   $2,250,000.00.
+
+**[BEN: both need your ruling on the contract, not on the tool.** My
+recommendation is that `nfl_standings_csv_v2` gains an explicit representation
+for a non-submitting field member, and that the prize comparison in
+`_prepare_settlement` either carries the exact rational or compares against a
+declared rounding. Neither is a change I should make unilaterally: both alter
+what a column in a versioned artifact means.]
+
+#### Points rounding, and why it is load-bearing
+
+DraftKings exports float round-trip noise in `Points`: `85.850006` sits beside
+`85.85`, and DraftKings ranks both entries 2nd. Across all **1,415,500** entry
+rows in the 18 exports the largest gap between a raw value and its 2-decimal
+rounding is **0.00003**, and `ROUND_HALF_EVEN` and `ROUND_HALF_UP` disagree on
+**zero** rows, so no true midpoint exists and the rounding mode is immaterial.
+
+Rounding is not cosmetic. DraftKings' own `Rank` is computed from the true
+2-decimal score, so ranking the raw values splits tie groups DraftKings did not:
+
+| contest | rank agreement, raw | rank agreement, 2dp |
+|---|---:|---:|
+| 195384501 | 70/71 | 71/71 |
+| 195379585 | 223/237 | 237/237 |
+| 195520918 | 430/475 | 475/475 |
+| 195390889 | 6415/9512 | 9512/9512 |
+| 195526163 | 4195/5945 | 5945/5945 |
+
+A row that would move further than the declared float-noise tolerance is a
+refusal, not a repair: past that point the assumption has stopped holding.
+
+#### One thing that did work, independently verified
+
+The normalizer rebuilds each field entry's lineup into the engine's own canonical
+key by resolving DraftKings' slot-tagged names against the frozen salary
+snapshot. Checked against contest 193391013, the reconstructed keys for Ben's two
+entries match, exactly, the keys `lineups.validate_lineup` builds from the
+`excl20` review export — and **differ** from the keys built from
+`data/runs/20260909-showdown-ne-sea/review/assignments.csv`. The standings export
+is therefore able to identify which of the repo's several assignment artifacts
+actually reached DraftKings, which is precisely what `OWNED_LINEUP_MISMATCH`
+exists to catch. Ben's two entries finished 17,298th and 17,328th of 126,020 for
+$30.00 each on $20.00 entries, with 23 and 35 duplicate lineups in the field.
+
+That is one contest's outcome, reported because it was measured. It is not
+evidence that the engine picks good lineups, it licenses no EV or ROI claim, and
+one slate is not a sample.
+
+#### Corpus as of 2026-09-14
+
+**0 settled.** 18 entered contests tracked across three slates — 2026-09-09
+NE@SEA (1), 2026-09-10 SF@LAR (8), 2026-09-13 Week 1 main plus DAL@NYG (9). All
+18 raw exports are pulled and preserved on disk; 1 is normalized to
+`nfl_standings_csv_v2`; 18 are dispositioned `placeholder`. Q6's accrual
+dependency remains entirely unmet.
+
+- Acceptance met:
+  - The normalizer reads all 18 real exports and normalizes 193391013's
+    126,020-entry field end to end; golden, adversarial, determinism and
+    raw-unchanged coverage passes.
+  - The builder assembles a complete request that `settle --request` captures and
+    `settle --replay` reproduces, on a synthetic complete slate. **Not on a real
+    contest** — none can reach capture, for the reasons above.
+  - The checklist distinguishes filed, normalized and settled, and reports raw,
+    normalized and bundle presence independently of status so a disposition never
+    reads as "the bytes are gone".
+  - Every contest that cannot settle carries an explicit disposition and reason.
+
+### Q1C — The pre-lock manifest emitter
+
+Status: `DONE` on branch `codex/c3-classic-audit-review-export` at unchanged
+baseline HEAD `f2890a6c587b01cede2e07bdcbb3ec1dd0ab0d33` (uncommitted
+implementation). Q1C adds `src/nfl_dfs/prelock_manifest.py` and emits
+`nfl_prelock_run_manifest_v1` from every `prior_review` success path, so a slate
+built on the path Ben actually uses can now be settled. It adds no model, no
+economics and no release truth; `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD` are unchanged, and a manifest is emitted for a
+`DO_NOT_UPLOAD` run precisely because those are the review lineups Ben enters by
+hand.
+
+- Goal: close the gap Q1B measured — no `data/runs/` snapshot held a pre-lock
+  manifest, so no contest could ever reach `settle --request`.
+- Scope: a deterministic emitter bound to the hashes a run already computed; the
+  nine-slot Classic assignment record settlement reads; and the four contract
+  corrections below, each ruled on by Ben before it was made.
+- Non-goals: no backfill of the eighteen contests already played, no scenario
+  simulation, no contest economics on the prior-review path, and no change to any
+  evidence gate.
+
+**It recovers nothing already played.** A pre-lock manifest records what was
+predicted *before* lock; writing one afterwards would be a fabricated prediction,
+which is worse than a missing slate because it silently poisons every later
+replay. The eighteen contests dispositioned under Q1B stay dispositioned.
+
+#### Four contract corrections, each on Ben's ruling of 2026-09-14
+
+Every one of these was a gate no honest producer could clear. They were measured
+against Q1's own passing fixture by removing, one at a time, exactly what a
+prior-only run does not have.
+
+1. **`field_size` is no longer compared.** This was the serious one, and it was
+   never `prior_review`-specific. `_validate_prelock_manifest` required the
+   manifest's `contest_parameters.field_size` to equal the request's, and
+   `_prepare_settlement` separately required that to equal the settled standings
+   row count — so the pre-lock manifest had to record the *settled* field size,
+   which no producer can know before lock. The legacy `build` path records the
+   operator's `--field-size` assumption and would have failed identically the
+   first time a contest did not fill: 193391013 was advertised at 133,000 and
+   settled 126,020. Q1's fixture only ever passed because its synthetic contest
+   has `field_size` 2 and the operator owns both entries. The manifest now
+   records the assumption a portfolio was built against, labelled
+   `field_size_basis`, and the run brief reports `assumed_field_size` beside
+   `settled_field_size` as a Q6 diagnostic. Contest id, draft group, mode and
+   entry fee remain hard identity checks, unchanged.
+2. **The payout hash and version are optional in the manifest.** A prior-only run
+   never reads a payout table — `CLAUDE.md` keeps contest economics off that path
+   deliberately — so it has none to record. A `build` manifest that records them
+   is still checked exactly as before. Nothing is unbound: the request binds the
+   payout bytes by SHA-256 either way; only the manifest's second copy of that
+   binding may be absent.
+3. **`objective`, `advertised_prize_value` and `ticket_face_value` are compared
+   when present.** Same reasoning: stable facts, but an operator supplies them
+   and a prior-only run never sees them.
+4. **A request may bind zero scenario banks if and only if `MODEL_STATUS` is
+   `PRIOR_ONLY`.** `prior_review` runs no simulation, so it has no bank of any
+   purpose to emit, and `inspect_scenario_bank` only accepts DESIGN, SELECT or
+   REFEREE. The alternative — a degenerate one-scenario bank holding the point
+   estimates — was rejected because a bank with no distribution invites being
+   read as one. `SettlementCaptureRequest` enforces the condition, so the
+   relaxation cannot reach a prospectively-validated model, where the banks do
+   real work.
+
+#### What the emitter records, and what it refuses to
+
+Only what the run genuinely observed: the exact salary and reserved-entry bytes
+it read, the frozen projections that *are* the prediction (`team_projections`,
+`player_opportunities`, `source_ledger`), the assignment it selected, contest
+identity read straight out of those CSVs, and the four release truths unchanged.
+Every hash is one the run already computed while doing the work, never recomputed
+from a path, because a path can be swapped between the run and the emitter and a
+recomputed hash would silently bless the swap.
+
+Absence is declared rather than left to be inferred from a missing key:
+`scenario_artifacts: {}`, `field_size: null` with its basis, and a
+`model_status_limitations` block naming all three gaps. It refuses a naive clock,
+a manifest with no prediction or no selected entry, a prediction named after a
+reserved artifact role, duplicate prediction names, and incomplete release
+truths. It also stops if a JSON prediction declares a schema version other than
+the one the emitter expects, which turns a confusing capture-time refusal days
+later into an obvious one at the run. It never fails a run: a slate it cannot describe truthfully produces a
+named `SKIPPED` stage and no file, because a run that produced a portfolio is
+still a good run even when its manifest cannot be written. The clearest such case
+is a multi-contest reserved-entry template, which `settlement` refuses anyway and
+which covers 16 of Ben's 18 entered contests.
+
+#### Classic now writes the assignment settlement reads
+
+Classic previously left its selection only as `classic_assignment.json`, which
+`lineups.read_assignment_csv` cannot read, so a Classic run could not bind an
+assignment into a manifest at all. `write_assignments_csv` gained a `mode`
+parameter and Classic writes the nine-slot `nfl_assignment_csv_v1` record that
+`certify` and `settle` already accept.
+
+Two existing Classic assertions changed as a result, and the reasoning is worth
+keeping. `assignments.csv` is **not** an upload shape: it carries no Contest ID,
+Contest Name, Entry Fee or instructions block, so DraftKings would reject it, and
+Showdown's prior review has always written the same file. The `DK_UPLOAD_*` and
+`DK_REVIEW_ENTRY_*` prohibitions are unchanged and still checked. The C2
+prohibited-path guard that banned `write_assignments_csv` outright became a spy
+asserting the writer is called with `mode=CLASSIC` — a strictly stronger check,
+because it also proves the geometry is right rather than only that nothing
+happened.
+
+#### Verified composition
+
+On a realistic `cowork-run` tree the Q1B request builder now resolves
+`prelock_manifest`, `predictions`, `assignments`, `scenarios`, `release_truths`,
+`salary`, `entries`, `entry_fee`, `draft_group`, `mode`, `scoring`,
+`metric_registry` and `owned_entry_ids`, leaving exactly two blockers:
+`PAYOUT_TABLE_ABSENT` and `NORMALIZED_STANDINGS_ABSENT`. Both are facts only Ben
+can supply at settlement time — the payout table and the standings pull — and
+both are correct refusals rather than gaps.
+
+- Acceptance met:
+  - A real Classic `prior_review` run freezes a manifest bound to the hashes the
+    run computed, and a replayed run at a pinned `as_of` freezes byte-identical
+    bytes.
+  - That manifest captures through `settle --request` and reproduces through
+    `settle --replay`, with no scenario bank, no payout hash in the manifest, and
+    a field size the run never claimed to know.
+  - The manifest's release truths equal the run's own, so the capture cannot
+    report a better decision than the slate shipped with.
+  - The Classic assignment CSV reads back through `read_assignment_csv` and
+    matches the canonical selection report roster for roster.
+  - The Showdown exit freezes a manifest too, asserted separately: emitting from
+    only one of the three success paths would leave the other two unsettleable,
+    which is the exact failure Q1B found.
+  - A prediction whose declared schema version drifts from the emitter's
+    expectation produces a named `SKIPPED` stage at the run rather than a
+    confusing capture-time refusal days later.
+  - Complete pinned suite `735 passed, 1 failed, 1 skipped in 198.190s` (737
+    collected); doctor, compile/import and `git diff --check` pass. The single
+    failure is the pre-existing `test_w6_live_preflight` time bomb described in
+    the close-out note under `Next action`.
+
+#### What is still required before a slate accrues
+
+Q1C makes the next slate settleable; it does not settle one. For a real contest
+Ben still needs to supply the contest's payout table and pull its standings
+export, and the contest must have come from a single-contest reserved-entry
+template. The corpus still holds **zero settled contests**, and it will until a
+slate is run, entered, and settled end to end.
+
 ### C1 — Classic intake, projection, and one-command prior review
 
 Status: `DONE` on `codex/c1-classic-intake-prior-review` at unchanged baseline
@@ -233,6 +600,16 @@ optimality or upload claim.
     limits and seed.
 
 ### C3 — Classic audit, review, export, and scale acceptance
+
+Status: `BLOCKED` on branch `codex/c3-classic-audit-review-export` at unchanged
+baseline HEAD `f2890a6c587b01cede2e07bdcbb3ec1dd0ab0d33`. The downstream
+audit, exact-template review export, readable JSON/HTML/eight-sheet workbook,
+copied-package replay, mutation matrix, and full supplied-fixture 1/3/20/150
+scale matrix pass. Independent artifact-tool rendering covered all eight sheets
+and the HTML rendered to a readable nine-page PDF. Native Excel refused the
+required open/recalculate/save/reopen operation on this host; C3 cannot be
+marked `DONE`, no C4 prompt is prepared, and no later item is `READY` until that
+single acceptance step passes.
 
 - Goal: deliver a human-verifiable Classic portfolio package with the same
   exact-artifact discipline as SD5.
@@ -821,12 +1198,147 @@ is the reason.
 
 ## Next action
 
+### 2026-09-14 close-out: Q1B and Q1C are `DONE`; the corpus is still empty
+
+Two settlement-plane sub-tranches landed the same day. Q1B built the standings
+intake and measured why nothing could settle; Q1C built the pre-lock manifest
+emitter that fixes it going forward. Complete pinned suite on Ben's Windows box:
+**735 passed, 1 failed, 1 skipped in 198.190s** (737 collected). Doctor,
+compile/import and `git diff --check` pass. Nothing is staged or committed.
+
+**The next `READY` chunk is unchanged: none.** `C3` is still `BLOCKED` on native
+Excel open/recalculate/save/reopen acceptance, which blocks `C4` and everything
+after it. Q1B and Q1C were lettered sub-tranches of Q1 and displaced nothing.
+
+Three things are open, in the order they matter.
+
+1. **[BEN: two `nfl_standings_csv_v2` contract defects need your ruling.** Both
+   were found on your real exports and neither was worked around silently: the
+   contract cannot represent a field member who never submitted a lineup (11 of
+   18 exports carry them), and it cannot hold an exact tie split that is not a
+   whole number of cents (757 entries in 193391013 alone). The second is the
+   serious one — `settlement._prepare_settlement` compares the evaluator's exact
+   `Fraction` against the file's integer cents for every field row, so a contest
+   with any uneven tie split can never clear `STANDINGS_PRIZE_MISMATCH` whatever
+   the intake writes. Recommendations are under Q1B above. The normalizer refuses
+   by default with a labelled, default-off opt-in for each, so nothing is blocked
+   on this except settling a contest that has ties.]
+2. **Landing the first settled contest is operator work, not code.** The engine
+   can now do its half. What it needs from Ben: a slate entered from a
+   *single-contest* reserved-entry file (16 of the 18 so far were multi-contest,
+   which `settlement.require_single_contest` refuses outright), that contest's
+   payout table, and its standings export pulled before DraftKings ages it out.
+   The contest must also settle inside the registered `max_entries` of 200,000 —
+   193028206 settled 832,342 and is excluded for that reason.
+3. **A pre-existing test now fails every day.**
+   `tests/test_w6_live_preflight.py::test_live_check_refuses_once_a_selected_player_has_locked`
+   hardcodes an evidence expiry of `2026-09-14T00:00Z` and does not pin the
+   certification clock, so `certify_upload` correctly refuses and the fixture's
+   own assertion fails. Identical in `HEAD`, unrelated to either tranche, and
+   left unfixed as out of scope. The fixture docstring already documents the
+   repair: pass `monkeypatch` and `now`.
+
+The validation corpus holds **zero settled contests**, across 18 entered across
+three slates. All 18 raw exports are pulled and preserved, one is normalized, and
+all 18 are dispositioned `placeholder` — a pre-lock prediction cannot be written
+after the fact, so none of them can ever enter the corpus. Q6's accrual
+dependency is unmet and no dev work shortens it.
+
+### 2026-09-12 pre-slate action, Sunday Classic main slate
+
+Ben is entering the 2026-09-13 Sunday Classic main slate. The blocking item was
+R21 below, now landed. What remains before the run is operator evidence, not
+code: an `api.weather.gov` capture per game (see R22 for why the dome games are
+included), and one official-activity observation covering every selected person,
+taken after the inactives publish and inside the three-hour window ending at the
+earliest kickoff. C3 is still `BLOCKED` on native Excel acceptance; that blocks
+calling C3 complete and blocks starting C4, and it does not block generating and
+reviewing a Classic package.
+
+**R24 — the registered C2 defaults build the wrong portfolio.** `LANDED
+2026-09-12` (as tooling; no engine change). All four default stack rules ship
+`strength: ADVISORY` with `minimum_entries: 0`, which the solver does not
+enforce, and `default_search_limits` asks for `max(32, entries + 24)` candidates
+out of a several-hundred-person pool. Measured on the supplied 719-person
+fixture at a 1000-candidate bank: 811 of 1000 candidates `NAKED_QB`, 181 with a
+QB and pass catcher. `scripts/make_classic_policy.py` now emits the same
+registered contract with `QB_PASS_CATCHER` and `QB_BRINGBACK` at `HARD`,
+scaled overlap and exposure caps, and a bank sized from wall-clock minutes.
+Verified at 20 entries, rung 0: bank 1000 in 273.62s, joint solve
+`OPTIMAL_ACTUAL_CANDIDATE_BANK` in 0.393s, all 20 entries selected, 20/20
+`qb-pass-catcher` and 14/20 `qb-bringback`, zero naked-QB lineups selected.
+Open question for a later tranche: whether these defaults should change in
+`classic_portfolio_policy.py` itself, or stay a generator concern so the
+registered contract keeps its current meaning.
+
+**QA1 — the adversarial QA agent is not implemented.** `READY, NEXT DEV
+TRANCHE`. Spec section 6 wants an audit that emits MILP constraints rather than
+prose, applies a strict Pareto filter (`ΔCeiling >= 0 AND ΔSafety >= 0`, at least
+one strict), re-solves, and caps at three iterations with early exit on zero
+improvements. Today the pass is a manual subagent whose findings a human retypes
+into a policy. The blocking design question is what `ΔCeiling` and `ΔSafety` mean
+in an engine with no ceiling and no covariance: both currently have to be proxies
+computed from the prior objective and the portfolio's own overlap structure, and
+the tranche has to declare them honestly rather than implying a calibrated
+quantity. Must not be started the night before a slate; it touches selection.
+
+**R21 — the Classic selected-evidence gate demanded evidence no source
+publishes.** `LANDED 2026-09-12`. `prior_review` required every selected
+QB/RB/WR/TE to carry `state == "SOURCE_SUPPORTED_ADJUSTMENT"`, which only a
+captured `NUMERICAL_ALLOCATION` team-allocation package produces. No approved
+host publishes a forward-looking allocation, and `CLAUDE.md` forbids Ben
+authoring one, so no live Classic slate could ever publish a selection while the
+identical Showdown pool published fine. Every Classic test supplied a synthetic
+role package, so the gap never surfaced. Ben ruled on 2026-09-12 that R17 applies
+to Classic. The gate now accepts the resolver's own `selection_action` of
+`SELECT` or `DIAGNOSTIC`, exactly as Showdown does, and no looser: an unresolved
+or declared-changed role still blocks before selection, a person with no
+prior-season row is still excluded with zero share, and a missing finding still
+blocks. Every selected person resting on a history-derived prior is named in
+`selected_evidence_gate.unverified_role_people` and in the C3 review's
+`SELECTED_CURRENT_OFFENSIVE_ROLE` observation, whose state is now `UNKNOWN` when
+any such person is in the portfolio. C3 re-derives the split from the gate
+artifact rather than assuming it, so a package that stops covering a person the
+gate claimed is still a hard `CLASSIC_C3_SELECTED_ROLE_EVIDENCE_MISSING`.
+
+**R22 — Classic weather evidence demands a capture for schedule-resolved
+games.** `PROPOSED`. `decide_weather` resolves a `dome` or `closed` roof from the
+frozen schedule with no capture at all, but the multi-game package validated at
+intake requires the exact complete game set, so supplying it at all forces a
+capture for every dome as well. On the 2026-09-13 slate that is four unnecessary
+`api.weather.gov` reads out of thirteen. The cause is ordering: the package is
+validated at intake, before the propose step knows any roof. Cheapest honest
+repair is to defer the coverage check until the roofs are known and require a
+record only for a roof the schedule cannot resolve, still refusing a package that
+omits a game whose roof needs one.
+
+**R23 — the weather enum is a gate with no consumer.** `PROPOSED, NEEDS BEN'S
+RULING`. `weather_state` is validated, hash-bound, carried into
+`team_projections.csv` and reported, and no projection, opportunity or scoring
+path reads it: the only references outside contracts and reporting are the
+artifact row in `projection.py` and the report map in `cli.py`. On a
+thirteen-game Classic slate it costs roughly half an hour of Sunday-morning
+captures and expires six hours later, and it changes no number in the portfolio.
+Either it should feed the model or the Classic gate should stop demanding one
+capture per game for it. Do not act on this without Ben; it is an evidence-policy
+decision, not a cleanup.
+
+**Tooling added 2026-09-12.** `scripts/make_classic_weather_evidence.py` builds
+the weather package from saved captures (stdlib only, no network, derives the
+`AWAY@HOME` `game_id` set and salary hash from the exact salary bytes, reads each
+forecast's own `generatedAt`). `scripts/make_official_status.py` gained
+`--selection` (read roster IDs from `classic_selection.json`, since Classic C1/C2
+write no assignment CSV) and `--whole-pool`, and its slate-lock warning now
+derives the earliest kickoff on a multi-game file instead of silently going
+quiet.
+
 ### 2026-09-11 current development action
 
-**Only `C3` is `READY`.** DEV0, Q1, C1, and C2 are done. Begin the downstream
-Classic independent export audit, readable review, exact-template export,
-copied-package replay, and full supplied-fixture scale-acceptance tranche using
-`docs/session-prompts/C3-classic-audit-review-export.md`. Preserve the C2
+**No item is currently `READY`.** DEV0, Q1, C1, and C2 are done. C3 remains
+`BLOCKED` only on native Excel open/recalculate/save/reopen acceptance for its
+generated workbook. Resume `docs/session-prompts/C3-classic-audit-review-export.md`
+at that exact step; if it passes, finish the complete regression closeout,
+mark C3 `DONE`, and then make C4 the sole `READY` item. Preserve the C2
 policy/bank/assignment contracts and do not use the production field or payout
 economics path or change `PRIOR_ONLY / DO_NOT_UPLOAD` truth.
 After Q1's contracts are fixed, execute C1 through C4 in order to deliver the

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFL standings pulls needed &mdash; 2026-09-14</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2e38;
+    --text: #e6e8ec; --muted: #8b93a3; --accent: #4f8cff;
+    --done-bg: #10241a; --done-text: #5fbd8a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 16px 80px;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 24px; }
+  .sub b { color: var(--text); }
+  .sub code, .note code { background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+  .progress {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg); padding: 8px 0 16px; font-size: 13px; color: var(--muted);
+  }
+  #progressBar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  #progressFill { height: 100%; width: 0%; background: var(--accent); transition: width .15s; }
+  section { margin-bottom: 28px; }
+  h2 {
+    font-size: 15px; border-bottom: 1px solid var(--border); padding-bottom: 6px;
+    margin: 0 0 10px; display: flex; align-items: baseline; gap: 8px;
+  }
+  h2 .count { color: var(--muted); font-weight: normal; font-size: 13px; }
+  ul.rows { list-style: none; margin: 0; padding: 0; }
+  li.row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px; margin-bottom: 6px;
+    font-size: 13.5px;
+  }
+  li.row.done { background: var(--done-bg); border-color: #1d3b2a; }
+  li.row.done .name { color: var(--done-text); text-decoration: line-through; }
+  .chk input { width: 16px; height: 16px; cursor: pointer; }
+  .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .tags { display: inline-flex; gap: 5px; margin-left: 8px; vertical-align: middle; }
+  .tag {
+    color: var(--muted); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; font-size: 11px; white-space: nowrap;
+  }
+  .tag.loose { color: #d8a657; border-color: #4a3c22; }
+  .cid { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; flex-shrink: 0; }
+  a.pull {
+    flex-shrink: 0; color: #fff; background: var(--accent); text-decoration: none;
+    font-size: 12.5px; padding: 6px 10px; border-radius: 6px; white-space: nowrap;
+  }
+  a.pull:hover { background: #3d78e6; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+  th { background: var(--panel); color: var(--muted); font-weight: 600; }
+  .note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NFL standings pulls needed</h1>
+  <p class="sub">
+    <b>0 contests</b> awaiting a pull; 0 filed,
+    0 normalized, 0 settled,
+    18 dispositioned, 18 entered
+    contests tracked. Generated 2026-09-14T20:38:52.144104+00:00.<br>
+    Click <b>Open export</b> while logged into DraftKings; it opens the download and ticks
+    the row off. Confirm the file is non-zero bytes, then drop it unmodified into
+    <code>data/standings/inbox/</code> (flat &mdash; no subfolders). Oldest evidence date
+    first: DK's export ages out after a contest settles, so those are the most at risk.
+  </p>
+  <div class="progress">
+    <span id="progressLabel">0 / 0 pulled</span>
+    <div id="progressBar"><div id="progressFill"></div></div>
+  </div>
+<p class='empty'>Nothing awaiting a pull.</p>
+<p class='note'><b>8</b> of these were found only in a repo-root or <code>Claude outputs/</code> CSV, not an immutable <code>data/runs/</code> snapshot (tagged <span class='tag loose'>loose</span>). Real contests, but not hash-bound, so the entry count is worth a second look.</p>
+<section><h2>Filed, normalized, settled or dispositioned <span class="count">(18)</span></h2><table><thead><tr><th>Contest ID</th><th>Contest</th><th>Status</th><th>Raw</th><th>Norm</th><th>Bundle</th><th>Reason</th></tr></thead><tbody><tr><td class='cid'>193028206</td><td>NFL $3.5M Fantasy Football Millionaire [$1M to 1st]</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; field settled 832342 entries, over the registered max_entries 200000</td></tr><tr><td class='cid'>193391013</td><td>NFL Showdown $2.25M Wednesday Kickoff Millionaire [$1M to 1st TD Throne Eligible] (NE @ SEA)</td><td>placeholder</td><td>yes</td><td>yes</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact</td></tr><tr><td class='cid'>195379585</td><td>NFL Showdown $0.25 Contest (SF vs LAR)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table</td></tr><tr><td class='cid'>195379668</td><td>NFL Showdown SUPERSatellite to NFL 9-13 $5 Fantasy Football Millionaire [2x] (SF vs LAR)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table</td></tr><tr><td class='cid'>195384501</td><td>NFL Showdown Satellite to NHL 9-29 $15 Opening Night Puck Drop (SF vs LAR)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table</td></tr><tr><td class='cid'>195390867</td><td>NFL Showdown $70K First Down [20 Entry Max] (SF vs LAR)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table</td></tr><tr><td class='cid'>195390868</td><td>NFL Showdown $75K mini-MAX [150 Entry Max] (SF vs LAR)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table</td></tr><tr><td class='cid'>195390870</td><td>NFL Showdown $4K Dime Package [Just $0.10!] (SF vs LAR)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table</td></tr><tr><td class='cid'>195390889</td><td>NFL Showdown $8K Daily Dollar [Single Entry] (SF vs LAR)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table</td></tr><tr><td class='cid'>195507184</td><td>NFL Showdown 40x Micro Booster [Top 5 Win $10] (SF vs LAR)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; multi-contest reserved-entry file and no payout table</td></tr><tr><td class='cid'>195520918</td><td>NFL Showdown $0.25 Winner Take All [$100 to 1st] (DAL @ NYG)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table</td></tr><tr><td class='cid'>195521582</td><td>NFL Showdown Satellite to NBA 10-20 $20 Opening Tip Off (DAL @ NYG)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table</td></tr><tr><td class='cid'>195526142</td><td>NFL Showdown $50K First Down [20 Entry Max] (DAL @ NYG)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table</td></tr><tr><td class='cid'>195526144</td><td>NFL Showdown $7.5K Quarter Jukebox [Just $0.25!] (DAL @ NYG)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table</td></tr><tr><td class='cid'>195526145</td><td>NFL Showdown $3K Dime Package [Just $0.10!] (DAL @ NYG)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table</td></tr><tr><td class='cid'>195526163</td><td>NFL Showdown $5K Daily Dollar [Single Entry] (DAL @ NYG)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table</td></tr><tr><td class='cid'>195641911</td><td>NFL Showdown 40x Micro Booster [Top 5 Win $10] (DAL @ NYG)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table</td></tr><tr><td class='cid'>195642262</td><td>NFL Showdown SUPERSat to $20 NFL Fantasy Football Millionaire [2x] (DAL @ NYG)</td><td>placeholder</td><td>yes</td><td>no</td><td>no</td><td>Q1B 2026-09-14 ruling: no nfl_prelock_run_manifest_v1 or nfl_scenario_bank_v1 exists for this run (prior_review/C1-C3 never emits either; only the legacy build command does), so settle --request refuses permanently and a pre-lock prediction cannot be reconstructed after the fact; loose-only, no data/runs snapshot, and no payout table</td></tr></tbody></table></section>
+
+  <p class="note">Evidence date is the newest date any entry file for that contest
+  carries (a <code>data/runs/</code> snapshot ID, else the file's own modification
+  date). It is this repo's best proxy for when the contest ran; DraftKings' own
+  contest date is not in the entry CSV.</p>
+</div>
+<script>
+  var rows = Array.prototype.slice.call(document.querySelectorAll('li.row'));
+  var boxes = rows.map(function (row) { return row.querySelector('input[type=checkbox]'); });
+  var label = document.getElementById('progressLabel');
+  var fill = document.getElementById('progressFill');
+  function sync() {
+    var done = 0;
+    rows.forEach(function (row, i) {
+      var on = boxes[i].checked;
+      row.classList.toggle('done', on);
+      if (on) { done += 1; }
+    });
+    label.textContent = done + ' / ' + rows.length + ' pulled';
+    fill.style.width = (rows.length ? (100 * done / rows.length) : 0) + '%';
+  }
+  rows.forEach(function (row, i) {
+    boxes[i].addEventListener('change', sync);
+    var link = row.querySelector('a.pull');
+    if (link) {
+      link.addEventListener('click', function () { boxes[i].checked = true; sync(); });
+    }
+  });
+  sync();
+</script>
+</body>
+</html>

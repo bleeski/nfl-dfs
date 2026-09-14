@@ -23,3 +23,17 @@ def showdown_slate():
 @pytest.fixture(scope="session")
 def classic_entries():
     return parse_entries(FIXTURE_ROOT / "DKEntries CSV.csv")
+
+
+@pytest.fixture(scope="session")
+def classic_entries_20():
+    """A Classic entries export at a realistic entry count.
+
+    The two-entry `DKEntries CSV.csv` keeps both of its entries inside the
+    six-line instructions block, so no entry row is ever wider than the header
+    and the embedded player-pool table is never parsed alongside one. That is
+    the only reason the 2026-09-13 parse defect reached a live slate. Fourteen
+    of this file's twenty entry rows carry the pool table.
+    """
+
+    return parse_entries(FIXTURE_ROOT / "DKEntries CSV 20 entries.csv")

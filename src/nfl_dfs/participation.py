@@ -11,6 +11,13 @@ file's own bytes, moves both Showdown roles of a person together, and refuses a
 status vocabulary it does not recognize rather than guessing that an unknown
 code means available.
 
+`D` (doubtful) is recognized natively and classified unavailable. On
+2026-09-13 it was not, so a real Classic slate stopped on `UNKNOWN_DK_STATUS:D`
+until the operator remembered `--unavailable-status D` by hand, which is a
+default masquerading as a decision. An operator who wants a doubtful person in
+the pool says `--available-status D`, and that now overrides the default
+instead of colliding with it.
+
 What it deliberately does not do: it does not touch the simulator's scoring
 path. The full R03 contract in tranche `W3` still owns the availability mask
 inside `simulation.py`. A prior-only selection never simulates, so filtering the
@@ -22,7 +29,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Mapping
 
-from .contracts import EngineMode, SalaryPlayer, SlateContract
+from .contracts import (
+    UNAVAILABLE_DK_STATUSES,
+    EngineMode,
+    SalaryPlayer,
+    SlateContract,
+)
 from .opportunity import OpportunityError, OpportunityModel, remove_inactive_and_redistribute
 
 
@@ -31,7 +43,10 @@ CONTRACT_VERSION = "dk_status_participation_v1"
 # DraftKings' own vocabulary in the salary export's Status column, as observed.
 # An empty cell is the site's way of saying nothing is flagged.
 AVAILABLE_STATUSES = frozenset({""})
-UNAVAILABLE_STATUSES = frozenset({"OUT", "IR"})
+# Defined once in `contracts.py`, because `priors.py`, `projection.py` and
+# `opportunity.py` each re-derive the same set to decide whether a person
+# missing from their inputs is a tolerable absence. See the note there.
+UNAVAILABLE_STATUSES = UNAVAILABLE_DK_STATUSES
 # Flagged but still permitted to play. Reported, never silently excluded: fading
 # a questionable player is an operator judgement, not a legality fact.
 DEGRADED_STATUSES = frozenset({"Q"})
@@ -104,15 +119,22 @@ def build_participation_contract(
     recorded in the report.
     """
 
-    unavailable_vocabulary = UNAVAILABLE_STATUSES | {
+    extra_unavailable = {
         value.strip().upper() for value in extra_unavailable_statuses if value.strip()
     }
-    available_vocabulary = AVAILABLE_STATUSES | {
+    extra_available = {
         value.strip().upper() for value in extra_available_statuses if value.strip()
     }
-    overlap = unavailable_vocabulary & available_vocabulary
+    overlap = extra_unavailable & extra_available
     if overlap:
         raise ParticipationError(f"STATUS_CLASSIFIED_BOTH_WAYS:{sorted(overlap)}")
+    # An explicit operator classification overrides the built-in default rather
+    # than colliding with it, so `--available-status D` restores a doubtful
+    # person to the pool instead of raising STATUS_CLASSIFIED_BOTH_WAYS. Only
+    # the two operator sets may contradict each other; that is a typo, not a
+    # judgement, and it still fails closed above.
+    unavailable_vocabulary = (UNAVAILABLE_STATUSES | extra_unavailable) - extra_available
+    available_vocabulary = (AVAILABLE_STATUSES | extra_available) - extra_unavailable
 
     grouped = _people(slate)
     by_dk_id = {player.dk_id: player for player in slate.players}

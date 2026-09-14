@@ -18,6 +18,15 @@ data/registry/*
 !data/registry/.gitkeep
 data/models/*
 !data/models/.gitkeep
+# Standings intake, same rule as data/runs: raw DraftKings exports Ben pulled by
+# hand and the normalized artifacts derived from them are bulk operator data, not
+# source. 18 exports and one normalized field already come to ~58MB. The small
+# records that are worth keeping are listed back in below: the dispositions are a
+# record of Ben's own rulings, and the checklists are the working surface.
+data/standings/inbox/*
+!data/standings/inbox/.gitkeep
+data/standings/normalized/*
+!data/standings/normalized/.gitkeep
 outputs/*
 !outputs/.gitkeep
 operator_input.xlsx

@@ -17,6 +17,7 @@ captain, which is uniqueness rather than a claim about correlated equity.
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -90,6 +91,60 @@ class SelectedLineup:
         }
 
 
+POOL_SCORES_SCHEMA = "nfl_prior_pool_scores_v1"
+
+# Environment fallback for the two entry points that cannot yet take a keyword:
+# `cowork-run --profile prior_review` and the `select` subcommand both reach
+# selection through fixed request plumbing. Backlog P1-4 replaces this whole
+# function with a first-class, hash-bound artifact emitted by the engine and
+# removes both the variable and the parameter; until then this is the documented
+# way to get the gated scores out, and `scripts/build_classic_portfolio.py`
+# consumes exactly this schema.
+POOL_SCORES_PATH_ENV = "NFL_DFS_DUMP_SCORES"
+
+
+def resolve_pool_scores_path(explicit: str | Path | None) -> Path | None:
+    """Where to write the scored pool, or None when nobody asked for it."""
+
+    raw = explicit if explicit is not None else os.environ.get(POOL_SCORES_PATH_ENV) or None
+    if raw is None:
+        return None
+    path = Path(raw).expanduser()
+    if path.is_dir():
+        raise SelectionError(f"POOL_SCORES_PATH_IS_A_DIRECTORY:{path}")
+    parent = path.parent if str(path.parent) else Path(".")
+    if not parent.is_dir():
+        raise SelectionError(f"POOL_SCORES_PARENT_MISSING:{parent}")
+    return path
+
+
+def write_pool_scores(scores: PriorScores, path: str | Path) -> Path:
+    """Write the gated per-player scores as a schema-versioned JSON document.
+
+    This is a diagnostic export, not a release artifact: it binds no hashes and
+    carries no evidence decision, so nothing downstream may treat its presence
+    as authorization. It exists because on 2026-09-13 the engine's own scores
+    were the one artifact that reached the shipped portfolio, and they left
+    through an unnamed environment variable read in the middle of the scoring
+    path.
+    """
+
+    target = Path(path).expanduser()
+    payload = {
+        "schema_version": POOL_SCORES_SCHEMA,
+        "score_version": scores.score_version,
+        "status": "DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION",
+        "by_dk_id": dict(sorted(scores.by_dk_id.items())),
+        "by_person": dict(sorted(scores.by_person.items())),
+        "threshold_sensitive": sorted(scores.threshold_sensitive),
+        "omissions": sorted(scores.omissions),
+    }
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=False, default=str), encoding="utf-8"
+    )
+    return target
+
+
 def select_prior_lineups(
     slate: SlateContract,
     model: OpportunityModel,
@@ -108,6 +163,7 @@ def select_prior_lineups(
     policy_candidate_seconds: float | None = None,
     policy_candidate_per_solve_seconds: float = DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
     policy_selection_seconds: float | None = None,
+    pool_scores_path: str | Path | None = None,
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
     """Solve for `count` distinct legal lineups over the permitted pool.
 
@@ -156,6 +212,9 @@ def select_prior_lineups(
         slate, model, contract, evidence_path=offensive_role_evidence_json, as_of=as_of,
     )
     scores = score_pool(slate, offense.model, splits, kicker_roles=kicker_roles, offensive_roles=offense)
+    pool_scores_target = resolve_pool_scores_path(pool_scores_path)
+    if pool_scores_target is not None:
+        write_pool_scores(scores, pool_scores_target)
     zero_share_people = set(kicker_roles.zero_share_people)
     excluded_set = (
             sorted(

@@ -385,6 +385,82 @@ the downstream independent export audit, readable surfaces, and exact-template
 export. `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS=PRIOR_ONLY`, and
 `RELEASE_DECISION=DO_NOT_UPLOAD` remain separate truths.
 
+## C3 Classic downstream audit, readable review, and exact-template export
+
+C3 runs only for a governed C2 Classic prior-review result. The downstream
+auditor does not import or trust the C2 candidate producer, selector, or audit
+implementation and does not accept their in-memory objects as authority. It
+strictly reads the immutable salary and entry CSVs plus the canonical source
+and normalized policy, candidate bank, assignment, C2 portfolio audit,
+selection, complete-slate coverage, selected-score snapshot, source ledger,
+priors/projections, identity, current official activity, current offensive-role
+manifest and every bound role-source capture.
+
+Every tracked input has an expected SHA-256 and is hashed at four named
+boundaries: `intake`, `immediately_before_export`, `after_final_write`, and
+`immediately_before_render`. Unknown fields, duplicate JSON keys, noncanonical
+JSON bytes, nonfinite numbers, missing expected hashes, or any hash change fail
+closed. The C3 audit independently recomputes:
+
+- exact Classic mode, draft group, games, teams, opponents, people, positions,
+  roster slots, ordered Entry IDs, and blank-cell authority;
+- candidate membership, ordered assignment, exact nine-slot roster legality,
+  $50,000 salary cap, two-game rule, exclusions, and selected prior-only score;
+- every direct player/team/game/group/stack count and limit, canonical lineup
+  uniqueness, and every unordered pairwise underlying-person overlap; and
+- selected exact-ID official activity plus selected current-team offensive-role
+  evidence, including source paths, source hashes, observation and expiry.
+
+Only `ENFORCED_AND_INDEPENDENTLY_AUDITED`, C2 audit `PASS`, bank status
+`EXHAUSTIVE_COMPLETION` or `BOUNDED_COMPLETION`, and joint status
+`OPTIMAL_ACTUAL_CANDIDATE_BANK` over `ACTUAL_CANDIDATE_BANK` can reach C3
+publication. A bounded bank remains explicitly incomplete and never implies
+full-slate optimality.
+
+Successful C3 publication is atomic and adds:
+
+| Artifact | Contract |
+|---|---|
+| `classic_review_export_audit.json` | Canonical `prior_only_classic_export_audit_c3_v1`; every boundary hash, recomputed fact, exact output hash, status, limitations, truths, and one next action |
+| `DK_REVIEW_ENTRY_<label>.csv` | Exact reserved-entry template bytes with only nine previously blank authorized roster cells rewritten for each exact Entry ID in template order |
+| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v1` display data independently reconstructed from the accepted artifacts |
+| `prior_only_readable_review.html` | Self-contained escaped rendering of the canonical readable JSON |
+| `NFL_DFS_Cowork_Review_<run-id>.xlsx` | Eight sheets: Run Control, Evidence Paste, Portfolio, QA, Upload, Exposure, Review Evidence, and Artifacts |
+
+The CSV writer preserves BOM/encoding, header, line endings, row order,
+quoting, physical-line geometry, unrelated rows, contest facts, and every
+non-roster byte. It reparses and byte-diffs both proposed and final bytes and
+binds the final SHA-256 into the audit, readable package, and run record. A
+partial write, existing/stale target, mismatched Entry ID, prefilled roster
+cell, unauthorized row, mutation, audit failure, post-write disagreement, or
+display disagreement removes or withholds all new C3 artifacts.
+
+The readable surfaces enumerate every exact Entry ID and roster ID, underlying
+person, slot, game/team/opponent, salary, lineup total/remaining salary,
+prior-only central estimate, player/team/game/group/stack counts and limits,
+every overlap pair, exclusions, unallocated volume, evidence observation,
+artifact path/hash, candidate-bank status/completeness, joint solve scope,
+independent audit state, and all four release truths. HTML markup is escaped;
+spreadsheet-active prefixes are written as inert display values. A readable
+`PASS` proves only that the display reconciles to the exact accepted artifacts.
+
+`FILE_VALID` describes the exact C3 review artifacts only.
+`EVIDENCE_STATE` remains separately derived. `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD` remain invariant. C3 never creates
+`DK_UPLOAD_*.csv` and never calls ownership, field, duplication, payout,
+economics, EV, production portfolio selection, C4, C5, or Q2-Q5 paths.
+
+`config/classic_c3_scale_acceptance_v1.json` registers the full supplied
+719-person/24-team/12-game fixture matrix before execution. Each 1/3/20/150
+case records candidate request/production, bank completeness/status, family and
+policy coverage, solve status, elapsed time, nodes, gap, process peak RSS and
+traced Python peak memory. The objective is explicitly test-only deterministic
+fixture rank, never model performance, and `uses_draftkings_appg=false`. The
+complete package is copied to a separate short path and rerun; canonical source
+and copy hashes must match for policy, bank, assignment, C2/C3 audit, selection,
+coverage, selected-score snapshot, readable JSON/HTML, and review CSV. Runtime
+metrics and workbook container timestamps remain outside canonical bytes.
+
 ## SD2 Showdown offensive history and current roles
 
 `offensive_role_evidence_json` is an optional adjacent package; SD1's
@@ -966,6 +1042,184 @@ Q1-complete settlement requires exactly `field_size` rows and rejects a rank or
 prize that disagrees with the independent reference evaluator. Original
 standings bytes and their SHA-256 remain the authority.
 
+## Q1C pre-lock run manifest
+
+`nfl_prelock_run_manifest_v1` is the record, written *before* the games start, of
+what a run predicted and which lineups it selected, bound by SHA-256 so a
+settlement written days later cannot quietly disagree with it. The ordering is
+the whole point: a manifest written after the outcome is known proves nothing.
+`src/nfl_dfs/prelock_manifest.py` builds it, and `prior_review` emits one from
+each of its three success paths — Showdown, Classic C1/C2 and Classic C3.
+
+It is emitted for a `DO_NOT_UPLOAD` run, which is every prior-only run, and which
+is the case that matters: those are the review lineups Ben enters by hand.
+Emitting one changes no release truth and unlocks nothing. It is never
+backfilled; a run that cannot be described truthfully produces a named `SKIPPED`
+stage and no file.
+
+A prior-only manifest records:
+
+- `input_hashes` for the salary bytes, the reserved-entry bytes, the assignment,
+  and each frozen prediction (`team_projections`, `player_opportunities`,
+  `source_ledger`);
+- `artifact_versions` for the same set — and nothing else, because
+  `settlement._validate_prelock_manifest` derives the expected prediction set by
+  subtracting the fixed artifact roles and the scenario names from this mapping,
+  so anything listed here becomes a prediction the request must bind;
+- `contest_parameters` with `contest_id`, `draft_group`, `mode` and `entry_fee`,
+  all four read straight out of the two CSVs;
+- the four release truths, copied from the run's own result;
+- `selected_entry_ids` and `assignment_sha256`.
+
+It declares what it does not have, rather than omitting the key and leaving "did
+not know" indistinguishable from "forgot": `scenario_artifacts` is `{}`,
+`field_size` is `null` with a `field_size_basis` of
+`UNKNOWN_PRIOR_ONLY_RUN_READS_NO_CONTEST_ECONOMICS`, and
+`model_status_limitations` names the absent prospective validation, scenarios and
+contest economics.
+
+Two properties make it replayable. The `created_at` stamp is the run's own
+`as_of`, not a wall clock, and the recorded assignment path is run-relative, never
+absolute. A run replayed at a pinned `as_of` therefore writes byte-identical
+bytes.
+
+### What settlement requires of a manifest, after Ben's 2026-09-14 ruling
+
+Four checks were relaxed because no honest producer could clear them. Each was
+measured against Q1's own passing fixture by removing exactly what a prior-only
+run lacks.
+
+- **`field_size` is not compared.** The manifest's copy is the pre-lock
+  *assumption* a portfolio was built against; the request's is the *settled*
+  entry count, which must equal the standings row count. These are different
+  quantities and they routinely differ — contest 193391013 was advertised at
+  133,000 and settled 126,020 — so requiring equality made the gate unclearable
+  by any producer, the legacy `build` path included. `run_settlement_brief.json`
+  reports `assumed_field_size` beside `settled_field_size` instead, which is
+  signal for Q6 rather than a fault.
+- **The payout hash and `artifact_versions` entry are optional**, and only in the
+  manifest. A prior-only run reads no payout table, by design. The request binds
+  the payout bytes by SHA-256 regardless, so no binding is lost; only the
+  manifest's second copy of it may be absent.
+- **`objective`, `advertised_prize_value` and `ticket_face_value` are compared
+  when present.** Stable facts, but operator-supplied and never seen by a
+  prior-only run.
+- **`scenario_artifacts` may be `{}`**, and a request may bind zero scenario
+  banks, if and only if `MODEL_STATUS` is `PRIOR_ONLY`.
+  `SettlementCaptureRequest` enforces that condition, so a prospectively
+  validated model still must bind its banks.
+
+`contest_id`, `draft_group`, `mode` and `entry_fee` remain hard identity checks,
+unchanged: they are what prove the manifest describes this contest and not
+another, and a pre-lock run reads all four from bytes.
+
+### The Classic assignment record
+
+`write_assignments_csv` takes a `mode`. Classic writes the nine-slot
+`nfl_assignment_csv_v1` file `lineups.read_assignment_csv`, `certify` and
+`settle` all read; Showdown writes the six-column form it always has. Classic
+previously left its selection only as `classic_assignment.json`, which that
+reader cannot parse, so a Classic run could not bind an assignment into a
+manifest at all.
+
+`assignments.csv` is not an upload shape and never has been: it carries no
+Contest ID, Contest Name, Entry Fee or instructions block, so DraftKings would
+reject it. The prohibition on `DK_UPLOAD_*` and `DK_REVIEW_ENTRY_*` in a
+prior-only Classic run is unchanged.
+
+## Q1B standings normalization
+
+A raw DraftKings standings export is not `nfl_standings_csv_v2` and cannot be
+made into one by renaming it. `scripts/file_standings.py` performs the
+conversion and writes an `nfl_standings_normalization_v1` manifest beside every
+artifact it produces, recording each decision and its binding.
+
+The real export header, measured across all 18 of Ben's 2026-09-09/10/13 pulls,
+is uniformly:
+
+```text
+Rank,EntryId,EntryName,TimeRemaining,Points,Lineup,,Player,Roster Position,%Drafted,FPTS
+```
+
+Four properties of that shape drive the contract.
+
+- **The ownership table is columns, not a trailing block.** It occupies columns 7
+  to 10 of the same rows, separated by one unnamed spacer column, and runs out
+  long before the standings do. Everything from the first unnamed header onward
+  is dropped. A row with no `EntryId` is the ownership table outliving the
+  standings, not a standings row.
+- **There is no `Prize` column.** DraftKings exports no per-entry prize, so the
+  column is joined from the contest's payout table and can never be an
+  observation. The manifest records `observed_in_export: false`,
+  `provenance: DERIVED_REFERENCE_SETTLEMENT_V1`, and the payout file's SHA-256.
+  Because the value is produced by the same evaluator that
+  `settlement._prepare_settlement` checks it against, `STANDINGS_PRIZE_MISMATCH`
+  cannot fire on a file this tool writes; it is independent evidence only for a
+  standings file carrying an externally observed prize.
+- **`Points` carries float round-trip noise** and is quantized to two decimal
+  places with `ROUND_HALF_EVEN`. Across 1,415,500 real entry rows the largest
+  adjustment is 0.00003 and no row is a true midpoint. The rounding is required,
+  not cosmetic: DraftKings computes its own `Rank` from the true 2-decimal score,
+  and ranking the raw values splits tie groups DraftKings did not split. A row
+  that would move further than the declared tolerance is a named refusal.
+- **`Lineup` carries names, not identifiers.** It is rebuilt into the engine's
+  own canonical key by resolving DraftKings' slot-tagged names against the frozen
+  salary snapshot for that slate, whose SHA-256 the manifest binds. The recovered
+  slot multiset is checked against the mode's required roster shape, and any name
+  that does not resolve to exactly one person is a refusal.
+
+Both inputs are therefore mandatory: without the payout table there is no prize,
+and without the salary snapshot there is no canonical key. A raw export alone
+produces a named refusal and no file.
+
+Outputs are content-addressed at
+`data/standings/normalized/<contest_id>/<sha256>.csv`, with
+`<sha256>.manifest.json` beside them. The raw export in `data/standings/inbox/`
+is never edited, moved, renamed or deleted, and its bytes are re-hashed after
+every run to prove it.
+
+### Two cases this contract cannot represent
+
+Both are real and both are refused by default. Each has an explicit, default-off
+opt-in so the path can be exercised, and neither changes the contract.
+
+- **A field member who never submitted a lineup.** 11 of the 18 real exports
+  carry them: paid entries tied at the last rank, scoring zero, with an empty
+  `Lineup` cell. This contract requires a nonempty canonical key.
+  `--unsubmitted-entry-policy sentinel` writes
+  `NO_LINEUP_SUBMITTED:<entry_id>`, unique per entry so the row forms its own
+  duplication group of one. An *operated* entry with no lineup is refused under
+  every policy: it means the selected assignment never reached DraftKings.
+- **An exact tie split that is not a whole number of cents.** The reference
+  evaluator keeps money as exact rational cents; this contract requires an exact
+  cent amount. Contest 193391013 has 757 such entries across 9 tie groups.
+  Because `settlement._prepare_settlement` compares the evaluator's `Fraction`
+  against the file's integer cents for every field row, a contest with any uneven
+  tie split can never clear `STANDINGS_PRIZE_MISMATCH` whatever the intake
+  writes. `--prize-rounding half-even` records the residual in the manifest.
+
+## Q1B settlement request builder
+
+`scripts/make_settlement_request.py` assembles `nfl_settlement_request_v1` from
+frozen bytes. It resolves nothing it cannot bind and defaults nothing:
+
+- salary and reserved-entry snapshots are classified by the engine's own parser,
+  never by filename, because `data/runs/*/inputs/` is content-addressed;
+- prediction and scenario artifacts are located by the exact SHA-256 the pre-lock
+  manifest declares, and the prediction *names* come from the manifest's
+  `artifact_versions`, since `settlement._validate_prelock_manifest` refuses on
+  `PRELOCK_PREDICTION_COVERAGE_MISMATCH` if the request coins its own;
+- `field_size` is the observed row count of the normalized standings, which is
+  the only place a contest's true settled field size exists;
+- the four release truths are **copied** from the frozen pre-lock run, never
+  re-derived, so a settlement cannot report a better release decision than the
+  slate actually shipped with;
+- an assignment CSV is never chosen automatically when a run holds more than one,
+  because the wrong one settles a lineup that was never entered.
+
+`--report` resolves and names every blocker without writing anything, and exits
+`2` while any remain.
+
 ## Q1 settlement request and immutable bundle
 
 The complete one-command capture is:
@@ -1030,7 +1284,10 @@ The request is strict JSON schema `nfl_settlement_request_v1`. It contains:
 ```
 
 All artifact paths may be relative to the request. The request must include at
-least one frozen prediction/model artifact and one versioned scenario bank.
+least one frozen prediction/model artifact. It must also include at least one
+versioned scenario bank unless `MODEL_STATUS` is `PRIOR_ONLY`, which simulates
+nothing and so has no bank of any purpose to bind; see "Q1C pre-lock run
+manifest" above for that ruling and the three others made with it.
 The pre-lock manifest must be `nfl_prelock_run_manifest_v1` and independently
 bind the run, contest facts, release truths, input and assignment hashes,
 artifact versions, and scenario hashes. The capture rejects contest, mode,

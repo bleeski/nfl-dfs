@@ -69,7 +69,7 @@ The command chooses the next safe action:
 Every run writes to a new timestamped folder under `outputs`. The engine never
 overwrites a prior review package.
 
-## Classic C2 governed prior-only review
+## Classic C3 governed prior-only review
 
 Run `cowork-run --profile prior_review --build-priors` with the normal Classic
 salary and blank reserved-entry CSVs. Without a policy, the C1 compatibility
@@ -92,9 +92,24 @@ Every selected person requires a fresh exact-ID official activity row, and every
 selected QB/RB/WR/TE requires a source-supported numerical current-team role
 allocation. Missing current evidence stops publication. C2 additionally writes
 canonical candidate-bank, ordered assignment, and independent selection-audit
-JSON, but no `assignments.csv`, HTML/readable workbook,
-`DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`. C3 owns the downstream export
-audit, readable review, and exact-template review export.
+JSON. C3 independently reparses and re-hashes the entire accepted package,
+recomputes legality, all hard policy counts, uniqueness, every overlap pair and
+selected evidence, then writes `DK_REVIEW_ENTRY_<label>.csv`, readable JSON,
+self-contained escaped HTML, and an eight-sheet workbook only after downstream
+audit `PASS`.
+
+Open the workbook or HTML first. Confirm every exact Entry ID and roster ID,
+salary total, player/team/game/group/stack limit, overlap pair, current
+activity/role observation, source hash, bounded-bank warning and the four
+independent truths. The review CSV preserves the original template byte-for-
+byte except for the nine previously blank roster cells per authorized Entry ID.
+It is explicitly review-only: `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`; no `DK_UPLOAD_*.csv` is created.
+
+Current C3 code, deterministic copied-package replay, full supplied-fixture
+1/3/20/150 acceptance and independent workbook/HTML rendering pass. Native
+Excel open/recalculate/save/reopen acceptance remains blocked on this host, so
+C3 is not yet complete and C4 must not begin.
 
 ## Manual-lineup safety guardrail
 

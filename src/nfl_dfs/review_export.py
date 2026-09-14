@@ -28,7 +28,14 @@ from pathlib import Path
 from typing import Mapping
 
 from .contracts import EngineMode, SlateContract
-from .dk import EntryTemplate, parse_entry_bytes, reconcile_template, single_contest_problems
+from .dk import (
+    CLASSIC_COLUMNS,
+    SHOWDOWN_COLUMNS,
+    EntryTemplate,
+    parse_entry_bytes,
+    reconcile_template,
+    single_contest_problems,
+)
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup, write_upload_bytes
 from .referee import audit_output_bytes
@@ -49,6 +56,7 @@ class ReviewExport:
     entries: int
     file_valid: bool
     problems: tuple[str, ...]
+    contest_scope_observations: tuple[str, ...] = ()
 
     def as_report(self, extra: Mapping[str, object] | None = None) -> dict[str, object]:
         return {
@@ -63,9 +71,9 @@ class ReviewExport:
             "bulk_entry_sha256": self.output_sha256 if self.file_valid else None,
             "entries": self.entries,
             "problems": list(self.problems),
+            "contest_scope_observations": list(self.contest_scope_observations),
             "checks_run": [
                 "TEMPLATE_RECONCILED_TO_SALARY_POOL",
-                "SINGLE_CONTEST_AND_ENTRY_FEE",
                 "EXACT_SALARY_ROW_IDENTITY_PER_SLOT",
                 "ONE_CAPTAIN_AND_FIVE_FLEX",
                 "UNDERLYING_PERSON_UNIQUENESS",
@@ -76,6 +84,7 @@ class ReviewExport:
                 "SHA256_OF_PROPOSED_BYTES",
             ],
             "checks_not_run": [
+                "CONTEST_SCOPE_ECONOMICS",
                 "PAYOUT_AND_FIELD_ECONOMICS",
                 "OWNERSHIP_AND_DUPLICATION",
                 "PROSPECTIVE_MODEL_VALIDATION",
@@ -103,7 +112,8 @@ def export_review_entries(
     if output.exists():
         raise ReviewExportError(f"OUTPUT_EXISTS:{output}")
 
-    problems: list[str] = list(single_contest_problems(template))
+    contest_scope = single_contest_problems(template)
+    problems: list[str] = []
     if slate.mode is not EngineMode.SHOWDOWN:
         problems.append(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
     try:
@@ -168,6 +178,7 @@ def export_review_entries(
         entries=len(authorized),
         file_valid=file_valid,
         problems=tuple(problems),
+        contest_scope_observations=tuple(contest_scope),
     )
 
 
@@ -176,12 +187,20 @@ def write_assignments_csv(
     assignments: Mapping[str, tuple[str, ...]],
     *,
     entry_order: tuple[str, ...] | None = None,
+    mode: EngineMode = EngineMode.SHOWDOWN,
 ) -> str:
-    """Write the Entry ID,CPT,FLEX... assignments file `certify` also accepts."""
+    """Write the `nfl_assignment_csv_v1` file `certify` and `settle` both accept.
+
+    Showdown by default, which is what every caller before Q1C wanted. Classic
+    needs its own nine-slot geometry so that a Classic prior-review run can bind
+    an assignment into its pre-lock manifest; `lineups.read_assignment_csv`
+    already reads both and is the reader this must satisfy.
+    """
 
     target = Path(path).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    header = "Entry ID,CPT,FLEX,FLEX,FLEX,FLEX,FLEX"
+    columns = CLASSIC_COLUMNS if mode is EngineMode.CLASSIC else SHOWDOWN_COLUMNS
+    header = ",".join(("Entry ID", *columns))
     lines = [header]
     if entry_order is None:
         ordered = sorted(assignments.items())
@@ -192,7 +211,7 @@ def write_assignments_csv(
             )
         ordered = [(entry_id, assignments[entry_id]) for entry_id in entry_order]
     for entry_id, roster in ordered:
-        if len(roster) != 6:
+        if len(roster) != len(columns):
             raise ReviewExportError(f"ASSIGNMENT_WIDTH:{entry_id}:{len(roster)}")
         lines.append(",".join((entry_id, *roster)))
     payload = ("\n".join(lines) + "\n").encode("utf-8")
