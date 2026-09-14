@@ -85,6 +85,7 @@ from .projection import build_projection_package
 from .prior_review import PROFILE_VERSION as PRIOR_REVIEW_PROFILE_VERSION
 from .prior_review import run_prior_review
 from .readable_review import (
+    ReadableReviewArtifacts,
     ReadableReviewError,
     create_readable_review,
     verify_readable_review_artifacts,
@@ -2273,6 +2274,85 @@ def _run_prior_review_profile(
         )
 
     readable_review = None
+    if outcome.file_valid and slate.mode is EngineMode.CLASSIC:
+        classic_data = outcome.reports.get("readable_review")
+        if isinstance(classic_data, Mapping):
+            try:
+                readable_review = ReadableReviewArtifacts(
+                    data=dict(classic_data),
+                    json_path=outcome.artifacts["readable_review_json"],
+                    json_sha256=outcome.hashes["readable_review_json"],
+                    html_path=outcome.artifacts["readable_review_html"],
+                    html_sha256=outcome.hashes["readable_review_html"],
+                )
+                readable_problems = verify_readable_review_artifacts(
+                    json_path=readable_review.json_path,
+                    json_sha256=readable_review.json_sha256,
+                    html_path=readable_review.html_path,
+                    html_sha256=readable_review.html_sha256,
+                )
+                if readable_problems:
+                    raise ReadableReviewError(";".join(readable_problems))
+            except (KeyError, OSError, ValueError) as exc:
+                display_blocker = f"CLASSIC_C3_READABLE_REVIEW_FAILED:{type(exc).__name__}:{exc}"
+                blockers.insert(0, display_blocker)
+                c3_output_keys = {
+                    "classic_export_audit",
+                    "bulk_entry_csv",
+                    "readable_review_json",
+                    "readable_review_html",
+                }
+                for key in c3_output_keys:
+                    candidate = outcome.artifacts.get(key)
+                    if candidate:
+                        try:
+                            Path(candidate).unlink(missing_ok=True)
+                        except OSError:
+                            pass
+                blocked_export = {
+                    **dict(outcome.export or {}),
+                    "FILE_VALID": False,
+                    "bulk_entry_csv": None,
+                    "bulk_entry_sha256": None,
+                    "downstream_audit": None,
+                    "downstream_audit_sha256": None,
+                    "readable_review_json": None,
+                    "readable_review_json_sha256": None,
+                    "readable_review_html": None,
+                    "readable_review_html_sha256": None,
+                    "problems": [display_blocker],
+                }
+                outcome = replace(
+                    outcome,
+                    stage="READABLE_REVIEW",
+                    blocked=True,
+                    blockers=(display_blocker, *outcome.blockers),
+                    artifacts={
+                        key: value
+                        for key, value in outcome.artifacts.items()
+                        if key not in c3_output_keys
+                    },
+                    hashes={
+                        key: value
+                        for key, value in outcome.hashes.items()
+                        if key not in c3_output_keys
+                    },
+                    reports={
+                        key: value
+                        for key, value in outcome.reports.items()
+                        if key not in {"classic_export_audit", "readable_review"}
+                    },
+                    export=blocked_export,
+                    error=display_blocker,
+                )
+                readable_review = None
+                truths = _blocked_truth_values(
+                    file_valid=False,
+                    evidence_state=ReleaseEvidenceState.UNKNOWN,
+                    model_status=ModelStatus.PRIOR_ONLY,
+                    certification_basis=CertificationBasis.MODEL_ASSISTED,
+                )
+                next_action = "Resolve the named Classic C3 readable-review discrepancy and rerun."
     if outcome.file_valid and slate.mode is EngineMode.SHOWDOWN:
         try:
             readable_review = create_readable_review(
@@ -2425,7 +2505,11 @@ def _run_prior_review_profile(
         **truths,
         "stage": (
             (
-                "PRIOR_ONLY_CLASSIC_REVIEW_ARTIFACTS"
+                (
+                    "PRIOR_ONLY_CLASSIC_C3_REVIEW_EXPORT"
+                    if "classic_export_audit" in outcome.artifacts
+                    else "PRIOR_ONLY_CLASSIC_REVIEW_ARTIFACTS"
+                )
                 if slate.mode is EngineMode.CLASSIC
                 else "PRIOR_ONLY_REVIEW_EXPORT"
             )
@@ -2449,8 +2533,14 @@ def _run_prior_review_profile(
         "meaning": (
             "Legal and byte-audited, never certified. This profile reads no payout "
             "table or field size; supplied activity reports constrain selection. It makes no EV, ROI, "
-            "win probability, cash probability, ownership or edge claim. Classic "
-            "emits machine-readable review JSON only and no upload-shaped package."
+            "win probability, cash probability, ownership or edge claim. "
+            + (
+                "Classic C3 may emit an independently audited exact-template "
+                "DK_REVIEW_ENTRY CSV, but never a DK_UPLOAD package."
+                if "classic_export_audit" in outcome.artifacts
+                else "Classic emits machine-readable review JSON only and no "
+                "upload-shaped package."
+            )
         ),
     }
     if policy_summary is not None:
@@ -2767,8 +2857,12 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     doctor_report = doctor(PROJECT_ROOT)
     blockers = list(_cowork_reported_blockers(snapshotted))
     blockers[0:0] = policy_blockers
-    contest_problems = list(single_contest_problems(entries))
-    blockers[0:0] = contest_problems
+    contest_scope_spread = list(single_contest_problems(entries))
+    if snapshotted.profile == "prior_review":
+        contest_problems: list[str] = []
+    else:
+        contest_problems = list(contest_scope_spread)
+        blockers[0:0] = contest_problems
     if not doctor_report.pass_status:
         blockers.insert(
             0,
@@ -2818,6 +2912,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "contest_ids": sorted({entry.contest_id for entry in entries.authorizations}),
             "contest_names": sorted({entry.contest_name for entry in entries.authorizations}),
             "entry_fees": sorted({entry.entry_fee for entry in entries.authorizations}),
+            "contest_scope_observations": contest_scope_spread,
             "request": str(request_path),
             "review_workbook": str(review_path),
             "blockers": blockers,

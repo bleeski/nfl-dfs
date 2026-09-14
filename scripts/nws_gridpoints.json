@@ -1,0 +1,27 @@
+{
+  "_note": "api.weather.gov gridpoint forecast endpoints for the 2026-09-13 and 2026-09-14 home stadiums, resolved 2026-09-12 through https://api.weather.gov/points/<lat>,<lon>. Keyed by the DraftKings home-team abbreviation. The coordinates are operator-supplied stadium locations; `city` is what NWS returned for each, which is how they were checked. A gridpoint is stable, the forecast behind it is not: fetch the forecast fresh on slate day and let scripts/make_classic_weather_evidence.py read its own generatedAt.",
+  "_forecast_hourly_hint": "append /hourly to a forecast URL for period-level detail spanning kickoff",
+  "teams": {
+    "CAR": {"stadium": "Bank of America Stadium", "point": [35.2258, -80.8528], "city": "Charlotte, NC", "forecast": "https://api.weather.gov/gridpoints/GSP/118,65/forecast"},
+    "CIN": {"stadium": "Paycor Stadium", "point": [39.0955, -84.5161], "city": "Cincinnati, OH", "forecast": "https://api.weather.gov/gridpoints/ILN/35,38/forecast"},
+    "DET": {"stadium": "Ford Field", "point": [42.34, -83.0456], "city": "Detroit, MI", "forecast": "https://api.weather.gov/gridpoints/DTX/66,34/forecast"},
+    "HOU": {"stadium": "NRG Stadium", "point": [29.6847, -95.4107], "city": "Houston, TX", "forecast": "https://api.weather.gov/gridpoints/HGX/61,91/forecast"},
+    "IND": {"stadium": "Lucas Oil Stadium", "point": [39.7601, -86.1639], "city": "Indianapolis, IN", "forecast": "https://api.weather.gov/gridpoints/IND/58,69/forecast"},
+    "JAX": {"stadium": "EverBank Stadium", "point": [30.3239, -81.6373], "city": "Jacksonville, FL", "forecast": "https://api.weather.gov/gridpoints/JAX/66,64/forecast"},
+    "PIT": {"stadium": "Acrisure Stadium", "point": [40.4468, -80.0158], "city": "Pittsburgh, PA", "forecast": "https://api.weather.gov/gridpoints/PBZ/77,66/forecast"},
+    "TEN": {"stadium": "Nissan Stadium", "point": [36.1665, -86.7713], "city": "Nashville, TN", "forecast": "https://api.weather.gov/gridpoints/OHX/50,57/forecast"},
+    "LAC": {"stadium": "SoFi Stadium", "point": [33.9535, -118.3392], "city": "Inglewood, CA", "forecast": "https://api.weather.gov/gridpoints/LOX/151,41/forecast"},
+    "LV": {"stadium": "Allegiant Stadium", "point": [36.0909, -115.1833], "city": "Paradise, NV", "forecast": "https://api.weather.gov/gridpoints/VEF/121,95/forecast"},
+    "MIN": {"stadium": "U.S. Bank Stadium", "point": [44.9738, -93.2578], "city": "Minneapolis, MN", "forecast": "https://api.weather.gov/gridpoints/MPX/109,72/forecast"},
+    "PHI": {"stadium": "Lincoln Financial Field", "point": [39.9008, -75.1675], "city": "Philadelphia, PA", "forecast": "https://api.weather.gov/gridpoints/PHI/50,76/forecast"},
+    "NYG": {"stadium": "MetLife Stadium", "point": [40.8135, -74.0745], "city": "East Rutherford, NJ", "forecast": "https://api.weather.gov/gridpoints/OKX/30,46/forecast"},
+    "KC": {"stadium": "GEHA Field at Arrowhead Stadium", "point": [39.0489, -94.4839], "city": "Kansas City, MO", "forecast": "https://api.weather.gov/gridpoints/EAX/47,48/forecast"}
+  },
+  "_roofs_2026_week_1": {
+    "_source": "nflverse games.csv, read 2026-09-12",
+    "dome_schedule_resolves_no_capture_needed_for_state": ["DET", "LAC", "LV", "MIN"],
+    "outdoors_capture_required": ["CAR", "CIN", "JAX", "PIT", "TEN", "PHI", "NYG", "KC"],
+    "blank_roof_capture_and_explicit_weather_state_required": ["HOU", "IND"],
+    "_blank_note": "nfldata has no roof value yet for the two retractable venues, so decide_weather cannot derive a state and asks for one of CLEAR, INDOOR_OR_CLEAR, MIXED, RAIN, SNOW, WIND. Supplying the package at all still requires a capture record for every game, domes included (backlog R22)."
+  }
+}

@@ -26,8 +26,10 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
   CSV generation must be local and deterministic. Do not freehand model values
   or let prose research directly write a number without a validated contract.
 - Missing, stale, conflicted, partial, ambiguous, or unbound hard evidence is
-  `DO_NOT_UPLOAD`. Continue diagnostically when useful, but never weaken a gate
-  to finish the task.
+  `DO_NOT_UPLOAD`. Continue diagnostically when useful, but never weaken an
+  evidence gate to finish the task. Construction preferences are a separate
+  class and may be relaxed freely under a clock: see "Shipping under a lock
+  clock".
 - Cold-start projections, ownership, fields, duplication estimates, and
   scenario utilities are diagnostics or priors. Never call them EV, ROI, win
   probability, cash probability, calibrated ownership, or proven edge.
@@ -53,9 +55,11 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    the no-policy C1 compatibility path writes canonical
    `classic_selection.json` and `classic_complete_slate_coverage.json`. A valid
    C2 Classic policy adds canonical candidate-bank, exact ordered assignment,
-   and independent selection-audit JSON. Classic deliberately writes no
-   DraftKings-shaped assignment or upload CSV; C3 readable/export work remains
-   open.
+   and independent selection-audit JSON. C3 independently audits those exact
+   bytes and can write a review-only `DK_REVIEW_ENTRY` CSV plus readable
+   JSON/HTML/eight-sheet workbook. It never writes `DK_UPLOAD`, and remains
+   `PRIOR_ONLY / DO_NOT_UPLOAD`. C3 native Excel save/reopen acceptance is still
+   blocked; do not begin C4 until it passes.
 
    If they are in different locations, pass `--salaries` and `--entries`
    explicitly. On Windows outside Cowork, use `./nfl.ps1 cowork-run` with the
@@ -72,9 +76,10 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    from and reconciled to the exact salary, entry, assignment, policy, audit,
    selection, and review-export artifacts; it is not a release decision. The
    first pass always freezes and reconciles the supplied files. A successful
-   Classic C2 run instead starts with its canonical policy/bank/assignment/
-   audit/selection/coverage JSON and the status workbook; it has no upload or
-   readable-export artifact.
+   Classic C3 starts with its canonical policy/bank/assignment/audit/selection/
+   coverage JSON and adds the downstream audit, exact-template review CSV,
+   canonical readable JSON, self-contained HTML, and the eight-sheet workbook.
+   The review CSV is not an upload authorization.
 4. Gather everything discoverable from approved public sources and freeze the
    artifacts. For an outdoor Showdown game, obtain the forecast through the
    approved `sources.fetch_public_artifact` adapter from `api.weather.gov`;
@@ -84,7 +89,12 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    For multi-game Classic, use a hash-bound
    `nfl_classic_weather_evidence_c1_v1` JSON file through
    `weather_evidence_json`; it must bind the salary hash and contain exactly one
-   source/state/observation record for every game.
+   source/state/observation record for every game, including the dome games the
+   schedule already resolves. Build it with
+   `scripts/make_classic_weather_evidence.py`, which derives the exact `game_id`
+   set from the salary bytes, content-addresses each capture and reads each
+   forecast's own `generatedAt`. The `game_id` is the `AWAY@HOME` matchup alone,
+   not the whole `Game Info` cell.
    Do not claim NWS is universally unreachable: test the current session.
    Weather capture expires after six hours. Use a fresh run before kickoff.
    `prior_review` already produces its model inputs; the manual fallback is
@@ -110,9 +120,17 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    row excludes both CPT and FLEX identities before selection. Missing ACTIVE
    rows remain unknown; salary status alone never establishes current activity.
    Classic C1/C2 will not publish selection artifacts unless every selected person
-   has a fresh exact-ID row. Every selected offensive person must also have a
+   has a fresh exact-ID row. Classic current-role evidence follows the same rule
+   as Showdown (R17, extended to Classic 2026-09-12 on Ben's ruling): the role
+   resolver decides, so an unresolved or declared-changed role still blocks
+   before selection and a person with no prior-season row is still excluded with
+   zero share, but a history-derived prior is a sufficient basis to select. Every
+   selected offensive person resting on one is named in
+   `selected_evidence_gate.unverified_role_people` and in the review. A
    source-supported numerical current-team allocation in
-   `nfl_classic_offensive_role_evidence_c1_v1`.
+   `nfl_classic_offensive_role_evidence_c1_v1` is still the only thing that makes
+   a role a current fact, and any person the selection gate recorded as
+   source-supported must still be covered by that package at C3.
    SD2 distinguishes missing and observed-zero offensive history. Rebuild older
    prior packages without SD2 coverage. A transfer carries his own prior-team
    share as an unverified cold-start prior (`TRANSFER_PRIOR_UNVERIFIED`,
@@ -152,8 +170,11 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    assignment without cycling. Accept only
    `OPTIMAL_ACTUAL_CANDIDATE_BANK` and independent audit `PASS`; that status is
    optimal over the reported actual bank only. C2 writes machine-readable JSON
-   only. C3 owns readable review, downstream export audit, and exact-template
-   review export.
+   only. C3 independently reparses every bound artifact and proposed/final CSV,
+   recomputes the complete portfolio and every hard limit, and publishes the
+   exact-template review CSV plus readable JSON/HTML/workbook only after audit
+   `PASS`. Only the nine authorized blank roster cells per exact Entry ID may
+   change; all non-roster bytes and physical-line geometry remain exact.
    Other profiles refuse a supplied policy instead of ignoring it. Requests
    without the policy retain their existing SD1/SD2 behavior, including the
    legacy sequential Captain differentiation and assignment cycling.
@@ -181,6 +202,57 @@ slate. Use `docs/OPERATOR_GUIDE.md` only for the manual PowerShell fallback.
    operator action. `FILE_VALID` never implies release. A compatibility
    `CERTIFIED` status is derived only from
    `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` and is not a profitability claim.
+
+## Shipping under a lock clock
+
+Ben's ruling, 2026-09-12. **The worst outcome on this project is not a bad
+lineup. It is no lineup.** A weak portfolio can be repaired by late swap; a
+missed lock cannot be repaired at all, and those games are gone. Procedure
+exists to keep the output honest, not to keep it from existing. When the two
+conflict, ship.
+
+Two classes of rule live in this repo and they are not the same thing.
+
+**Construction preferences** are quality choices: stack rules, exposure and
+overlap caps, candidate-bank size and search budgets, uniqueness, the objective's
+tuning. They are opinions about what makes a good portfolio. **Claude may relax
+any of them, on its own authority, without asking Ben**, whenever they are what
+stands between the run and a legal portfolio. Do not stop to request permission,
+do not present a menu of options, and do not spend the last hour before lock
+tuning. Relax, rerun, and report what was relaxed and why in the handoff.
+
+`scripts/make_classic_policy.py` encodes this as a rung ladder. Rung 0 is every
+entry stacked with a bring-back on most of them; each rung relaxes one class; and
+**rung 4 emits no policy at all and runs C1 sequential selection, which is the
+proven floor and always produces a legal portfolio.** Rung 4 is not a failure. It
+is the guarantee. If a run reports `MODELED_BANK_INFEASIBILITY`,
+`INCOMPLETE_BANK_EXHAUSTION`, `CANDIDATE_BANK_TIMEOUT` or
+`CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun immediately rather than
+diagnosing. Diagnose afterwards, in the changelog.
+
+**Evidence gates** are truth claims: official activity, current offensive role,
+weather capture and its expiry, identity resolution, prior-package expiry, and
+every hash binding. These are not preferences and the ladder does not touch them.
+They are also the only things that can genuinely make you miss a lock, so they go
+first in the running order, not last. On a Classic slate that means the per-game
+weather captures and the official-activity observation are the critical path;
+start them before anything else and let the build wait on them.
+
+Three rules bound the autonomy above.
+
+- **Never fabricate an observation to clear a gate.** Not a weather state, not an
+  ACTIVE row, not a role allocation, not a timestamp. An invented observation is
+  worse than a missed slate because it silently poisons every later replay.
+- **Never relax a gate that a real source could still clear.** If the capture
+  exists and you have time, go get it. Relaxation is for the clock and for
+  infeasibility, not for saving effort.
+- **A gate that no real source can ever clear is a defect, not a constraint.**
+  Take it to Ben with a recommendation, the way R21 went. Do not work around it
+  silently and do not loosen it unilaterally.
+
+If the clock beats an evidence gate that a source could have cleared, say so
+plainly, ship whatever the engine will legally produce without it, and name the
+gap in the handoff. Silence about a gap is the only unrecoverable error.
 
 ## Source and account policy
 

@@ -88,18 +88,73 @@ def test_blank_historical_count_is_missing_not_observed_zero(package, tmp_path):
     assert record["target_weight"] == 0 and record["evidence_state"] == "UNKNOWN"
 
 
-def test_sd2_unknown_projection_path_does_not_extend_classic(tmp_path):
+def _classic_unknown_history_args(tmp_path, *, state="MISSING_HISTORY", adapter="nflverse_prior_adapter_v2"):
     import json
-    from nfl_dfs.projection import build_projection_package, ProjectionBuildError
     from .test_projection_producer import _prepare, _rewrite_input, CLASSIC_SALARY
     args = _prepare(tmp_path, CLASSIC_SALARY)
     payload = json.loads(args["player_source"].read_text())
     identity = json.loads(args["identity_map"].read_text())
     payload["metadata"]["coverage"].update(
-        adapter_version="nflverse_prior_adapter_v2",
-        offensive_history_by_person={m["underlying_id"]: {"state": "MISSING_HISTORY"} for m in identity["player_mappings"]},
+        adapter_version=adapter,
+        offensive_history_by_person={
+            m["underlying_id"]: {"state": state} for m in identity["player_mappings"]
+        },
     )
     payload["records"][0]["evidence_state"] = "UNKNOWN"
     _rewrite_input(args, "player_source", payload)
+    return args
+
+
+def test_sd2_unknown_projection_path_extends_to_classic(tmp_path):
+    """R21/R17, extended to Classic on Ben's ruling of 2026-09-12.
+
+    This test previously asserted the opposite, under the name
+    `..._does_not_extend_classic`. It and `projection.py` both date from
+    2026-09-10; CLAUDE.md's ruling that "a history-derived prior is a sufficient
+    basis to select" in Classic lands two days later, and neither file was
+    updated to match it. That gap is what stopped the 2026-09-13 Week 1 Classic
+    run with PLAYER_EVIDENCE_NOT_PASS and ZERO_OR_MISSING_SHARE_GROUP.
+
+    The gate in `projection.py` expressed the restriction as
+    `salary_player.role == "FLEX"`, which reads like a position filter and is
+    not one: `role` is "CPT" or "FLEX" on a Showdown slate and None on every
+    Classic row, so the clause was true for every Showdown record and false for
+    every Classic one. It was a mode gate wearing a roster slot's name.
+    """
+
+    from nfl_dfs.projection import build_projection_package
+
+    package = build_projection_package(**_classic_unknown_history_args(tmp_path))
+    assert package is not None
+
+
+@pytest.mark.parametrize("state", ["MISSING_HISTORY", "CURRENT_ROLE_UNKNOWN"])
+def test_the_classic_tolerance_covers_exactly_the_two_history_states(tmp_path, state):
+    from nfl_dfs.projection import build_projection_package
+
+    assert build_projection_package(**_classic_unknown_history_args(tmp_path, state=state))
+
+
+def test_an_unknown_record_with_a_resolved_history_still_blocks_classic(tmp_path):
+    """The bound the old test was really protecting, kept.
+
+    Extending the tolerance to Classic must not become "UNKNOWN is fine in
+    Classic". What licenses the UNKNOWN is the named history state; a person
+    whose history resolved has no such licence and still stops the package.
+    """
+
+    from nfl_dfs.projection import build_projection_package, ProjectionBuildError
+
+    args = _classic_unknown_history_args(tmp_path, state="OBSERVED_HISTORY_ZERO")
+    with pytest.raises(ProjectionBuildError, match="PLAYER_EVIDENCE_NOT_PASS"):
+        build_projection_package(**args)
+
+
+def test_an_unknown_record_from_another_adapter_still_blocks_classic(tmp_path):
+    """The adapter version is the other half of the bound."""
+
+    from nfl_dfs.projection import build_projection_package, ProjectionBuildError
+
+    args = _classic_unknown_history_args(tmp_path, adapter="nflverse_prior_adapter_v1")
     with pytest.raises(ProjectionBuildError, match="PLAYER_EVIDENCE_NOT_PASS"):
         build_projection_package(**args)

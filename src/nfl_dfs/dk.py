@@ -137,6 +137,25 @@ def _parse_entries_rows(
     if roster_columns not in {CLASSIC_COLUMNS, SHOWDOWN_COLUMNS}:
         raise DraftKingsParseError(f"unknown DraftKings template geometry: {roster_columns}")
 
+    # A real DraftKings Classic entries export repeats the player-pool table to
+    # the right of the entry block, starting in the Instructions column, so every
+    # entry row past the six instruction lines is wider than the header. The
+    # supplied fixture carries only two entries, both inside the instructions
+    # block, so that shape was never parsed and the malformed-row guard below
+    # rejected any export with more than a handful of entries. Locate the
+    # embedded table from the file itself, so the guard still catches a row that
+    # is genuinely misshapen rather than merely wide.
+    embedded_pool_start: int | None = None
+    for row in rows[1:]:
+        if len(row) <= len(header):
+            continue
+        for index in range(roster_end, len(row)):
+            if row[index].strip() == "Position":
+                embedded_pool_start = index
+                break
+        if embedded_pool_start is not None:
+            break
+
     authorizations: list[EntryAuthorization] = []
     seen_entries: set[str] = set()
     for row in rows[1:]:
@@ -144,7 +163,13 @@ def _parse_entries_rows(
         entry_id = padded[0].strip()
         if not entry_id:
             continue
-        if len(row) > len(header):
+        # Cells at or past `roster_end` are never read, so trailing width cannot
+        # misalign a roster. Only unexplained cells between the roster block and
+        # the embedded pool table can, and those still fail closed.
+        if len(row) > len(header) and (
+            embedded_pool_start is None
+            or any(cell.strip() for cell in row[roster_end:embedded_pool_start])
+        ):
             raise DraftKingsParseError(
                 f"entry row for {entry_id!r} has more cells than the header"
             )

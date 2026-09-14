@@ -24,9 +24,14 @@ complete payouts, field size, or current official activity evidence, so that
 first pass normally ends `DO_NOT_UPLOAD` with the smallest missing next action.
 
 For Showdown or Classic prior-only review generation, Cowork should use
-`--profile prior_review --build-priors`. Classic C1 produces deterministic
-machine-readable selection and complete-slate coverage JSON only; it emits no
-DraftKings-shaped CSV and remains `PRIOR_ONLY / DO_NOT_UPLOAD`.
+`--profile prior_review --build-priors`. Classic C1 without a policy produces
+deterministic machine-readable selection and complete-slate coverage JSON only.
+A governed C2 policy adds the bounded candidate bank, exact Entry-ID assignment
+and independent portfolio audit. C3 independently re-audits those bytes and,
+only on `PASS`, produces an exact-template `DK_REVIEW_ENTRY` CSV plus readable
+JSON, self-contained HTML and an eight-sheet workbook. Every Classic output
+remains `PRIOR_ONLY / DO_NOT_UPLOAD`; C3 currently awaits native Excel
+open/recalculate/save/reopen acceptance before it can be called complete.
 That profile can generate legal review lineups from source-bound priors after
 weather and identity gates are resolved. It retains a review CSV, with
 `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. It does not yet
@@ -47,4 +52,6 @@ the system will label field and simulation output diagnostic and will emit
   original acceptance data, not the current real-slate pool.
 - Supplied acceptance fixtures: 719 Classic IDs, 24 teams, 12 games, two
   reserved entries, and 63 Showdown people represented by 126 CPT/FLEX rows.
-- Five-sheet operator workbook rendered and inspected with no visible formula errors.
+- The five-sheet operator input workbook and eight-sheet prior-review output
+  workbook have independent render/error-scan coverage. Current C3 native Excel
+  save/reopen acceptance remains pending.

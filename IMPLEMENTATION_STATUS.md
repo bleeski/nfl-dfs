@@ -1,5 +1,90 @@
 # Implementation Status
 
+## Validation corpus — 2026-09-14 (Q1B)
+
+**The validation corpus holds zero settled contests.** Ben has entered 18 real
+contests across three slates since 2026-09-09; all 18 raw DraftKings standings
+exports are now pulled and preserved, one is normalized to
+`nfl_standings_csv_v2`, and all 18 are dispositioned as unsettleable with
+recorded reasons. Q6's accrual dependency is entirely unmet, and no amount of
+later engineering shortens it.
+
+The reason was measured rather than left unknown. No `data/runs/` snapshot held
+an `nfl_prelock_run_manifest_v1` or an `nfl_scenario_bank_v1` for any contest:
+only the legacy `build` command wrote them, and every contest Ben has actually
+entered came through `prior_review`/C1-C3. A pre-lock manifest records what was
+predicted *before* lock, so it cannot be written afterwards and was not. Those 18
+are permanently unsettleable.
+
+**Q1C closed that gap going forward.** `prior_review` now emits a pre-lock
+manifest from every success path, and four settlement gates that no honest
+producer could clear were corrected on Ben's ruling — chief among them
+`field_size`, which required the pre-lock manifest to record the *settled* entry
+count. On a realistic `cowork-run` tree the request builder now resolves
+everything except the payout table and the standings pull, which are the two
+facts only Ben supplies at settlement time. The next slate he runs, enters and
+pulls can settle. None of the 18 already played can, and none was backfilled.
+
+What Q1B does and does not establish:
+
+- **Working, on real bytes:** the normalizer reads all 18 real exports and
+  converted contest 193391013's full 126,020-entry field in 5.908s, with its
+  reconstructed canonical lineup keys independently matching those
+  `lineups.validate_lineup` builds from the review export Ben actually uploaded.
+- **Working, on a synthetic slate only:** the `--request` → `--replay` round
+  trip, now including a manifest frozen by a real `prior_review` run. The
+  settlement itself is still a synthetic complete field where the operator owns
+  every entry; no real contest has been settled.
+- **Not established:** anything about model quality. One contest's measured
+  result (two entries, 17,298th and 17,328th of 126,020, $30.00 each on $20.00
+  entries) is a recorded outcome, not evidence that the engine picks good
+  lineups, and licenses no EV, ROI, ownership or calibration claim. One slate is
+  not a sample, and zero settled slates are not a corpus.
+- **Unchanged:** `MODEL_STATUS=PRIOR_ONLY` and
+  `RELEASE_DECISION=DO_NOT_UPLOAD`. Landing a settled slate would change no
+  release truth, and none landed.
+
+Two defects in `nfl_standings_csv_v2` were found on real bytes and left open for
+Ben's ruling rather than worked around: it cannot represent a field member who
+never submitted a lineup (11 of 18 exports carry them), and it cannot hold an
+exact tie split that is not a whole number of cents (757 entries in 193391013
+alone), which means a contest with any uneven tie split can never clear
+`STANDINGS_PRIZE_MISMATCH`. Both are detailed under Q1B in `backlog.md`.
+
+One pre-existing test failure is now permanent and unrelated to Q1B:
+`tests/test_w6_live_preflight.py::test_live_check_refuses_once_a_selected_player_has_locked`
+hardcodes an evidence expiry of 2026-09-14T00:00Z that has now passed, so
+`certify_upload` correctly refuses and the test's own helper assertion fails. It
+is identical in `HEAD` and will fail every day from now on.
+
+## Pre-slate state — 2026-09-12
+
+The C3 working tree was executed on Cowork/Linux for the first time and
+reproduced the Windows result exactly: `sh ./nfl.sh setup` in 9.171s, doctor
+`pass_status: true` on Python 3.13.7, and `618 passed, 1 skipped in 152.12s`.
+That closes the "actual Cowork/Linux acceptance remains unverified" caveat for
+suite execution; it does not close C4, which is a real-slate operator rehearsal
+with current evidence.
+
+R21 landed: the Classic selected-evidence gate demanded
+`SOURCE_SUPPORTED_ADJUSTMENT` for every selected offensive person, which only a
+captured numerical allocation produces and no approved host publishes, so no live
+Classic slate could publish a selection. Every Classic test supplied a synthetic
+role package, so the suite never saw it. On Ben's 2026-09-12 ruling the gate now
+matches Showdown exactly and names every history-derived role it selects on. The
+suite after the change and its new coverage is `623 passed, 1 skipped in
+144.64s`. The four truths are unchanged: `FILE_VALID` remains artifact-specific,
+`EVIDENCE_STATE` remains separately derived, `MODEL_STATUS=PRIOR_ONLY`, and
+`RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+C3 is still `BLOCKED` on native Excel open/recalculate/save/reopen acceptance and
+no later item is `READY`. That blocks calling C3 complete and blocks starting C4;
+it does not block generating and reviewing a Classic package.
+
+`device_bash` has been unusable since a Windows update released 2026-09-08; the
+other device tools work, so the repo is staged into the cloud container, built
+and tested there, and changed files are written back.
+
 ## Current development program — 2026-09-11
 
 DEV0 is complete on merged `main` commit
@@ -35,8 +120,35 @@ prohibited-path, adversarial-diff, and synthetic scale checks. The 150-entry
 synthetic case built 174 candidates and selected the portfolio in 4.015856s
 total with 432,880 bytes peak traced Python memory. This is optimal only over
 the reported actual bounded bank; it is not the C3 full 719-person acceptance,
-not a calibrated objective, and not upload-ready. C3 is now the sole `READY`
-item; C4, C5, and Q2 onward remain blocked.
+not a calibrated objective, and not upload-ready.
+
+C3 is implemented on `codex/c3-classic-audit-review-export` at unchanged
+baseline HEAD `f2890a6c587b01cede2e07bdcbb3ec1dd0ab0d33`. A new downstream
+auditor strictly reparses and re-hashes every authoritative C1/C2 artifact at
+four boundaries, independently recomputes Classic identity, legality, salary,
+policy counts, stack/group semantics, evidence, uniqueness and every pairwise
+overlap, and byte-diffs the proposed and final exact-template review CSV. Only
+audit `PASS` can publish `DK_REVIEW_ENTRY`; every tested mutation, stale or
+partial output, prefilled or unauthorized row, unavailable/current-role stop,
+non-optimal state, and display disagreement withholds all new C3 output. The
+successful package adds canonical audit/readable JSON, escaped self-contained
+HTML, and a Classic eight-sheet workbook while preserving Showdown behavior.
+
+The supplied 719-person/24-team/12-game fixture passed registered 1/3/20/150
+entry acceptance and short-path copied-package replay with byte-identical
+canonical policy, bank, assignment, audit, selection, coverage, readable
+JSON/HTML, and review CSV hashes. Independent rendering inspected all eight
+workbook sheets and every page of the nine-page HTML PDF. C3 nevertheless
+remains `BLOCKED`: the installed Excel automation endpoint refused the required
+native open/recalculate/save/reopen operation. No C4 prompt was created and no
+later item is `READY`. The four truths remain independent and fixed at
+`FILE_VALID=true`, `EVIDENCE_STATE=PASS`, `MODEL_STATUS=PRIOR_ONLY`, and
+`RELEASE_DECISION=DO_NOT_UPLOAD` for the test-only acceptance packages.
+Golden/adversarial C3 coverage passed 36/36; the combined focused regression
+passed `217 passed, 1 skipped` in 265.42 seconds; and the complete pinned suite
+collected 619 tests and passed `618 passed, 1 skipped` in 364.86 seconds. Doctor,
+changed-module compile/import, whitespace, exact-byte, Entry-ID order,
+copied-package hash, render, mutation, and no-`DK_UPLOAD` checks passed.
 
 ## Current Showdown readiness — 2026-09-09
 

@@ -1,0 +1,49 @@
+{
+  "schema_version": "nfl_classic_c3_scale_acceptance_limits_v1",
+  "fixture": {
+    "salary_path": "tests/fixtures/supplied/DKSalaries Salary CSV Classic.csv",
+    "salary_sha256": "d8ce5c1dd643ec419a0c4bc99b05a5f619f99dd23bc8369f70b795d8ac6132fb",
+    "expected_people": 719,
+    "expected_teams": 24,
+    "expected_games": 12
+  },
+  "objective": {
+    "version": "classic_c3_deterministic_fixture_rank_v1",
+    "scope": "TEST_ONLY_SCALE_OBJECTIVE_NOT_MODEL_PERFORMANCE",
+    "uses_draftkings_appg": false
+  },
+  "scales": {
+    "1": {
+      "candidate_limit": 32,
+      "candidate_total_milliseconds": 60000,
+      "candidate_per_solve_milliseconds": 5000,
+      "selection_milliseconds": 10000,
+      "wall_seconds_limit": 120,
+      "peak_rss_bytes_limit": 2147483648
+    },
+    "3": {
+      "candidate_limit": 32,
+      "candidate_total_milliseconds": 60000,
+      "candidate_per_solve_milliseconds": 5000,
+      "selection_milliseconds": 10000,
+      "wall_seconds_limit": 120,
+      "peak_rss_bytes_limit": 2147483648
+    },
+    "20": {
+      "candidate_limit": 44,
+      "candidate_total_milliseconds": 60000,
+      "candidate_per_solve_milliseconds": 5000,
+      "selection_milliseconds": 10000,
+      "wall_seconds_limit": 180,
+      "peak_rss_bytes_limit": 2147483648
+    },
+    "150": {
+      "candidate_limit": 174,
+      "candidate_total_milliseconds": 120000,
+      "candidate_per_solve_milliseconds": 5000,
+      "selection_milliseconds": 22500,
+      "wall_seconds_limit": 300,
+      "peak_rss_bytes_limit": 2147483648
+    }
+  }
+}

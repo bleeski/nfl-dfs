@@ -8,7 +8,7 @@ from typing import Iterable, Mapping
 
 import numpy as np
 
-from .contracts import SalaryPlayer, SlateContract
+from .contracts import SalaryPlayer, SlateContract, unavailable_people
 
 
 class OpportunityError(ValueError):
@@ -268,8 +268,27 @@ def load_opportunity_model(
         seen_people.add(salary_player.underlying_id)
     slate_people = {player.underlying_id for player in slate.players}
     if seen_people != slate_people:
-        missing = sorted(slate_people.difference(seen_people))
-        raise OpportunityError(f"player coverage mismatch; missing {len(missing)} people")
+        # The same rule the frozen package and the projection identity check
+        # apply (Ben's ruling 2026-09-13): a person may be absent from the model
+        # inputs only when the salary bytes themselves flag him unable to play,
+        # which the availability contract already makes unselectable. Re-derived
+        # from the slate here, so an upstream drop can never widen into a
+        # selectable person silently. A row for someone who is not on the slate
+        # at all is always a hard stop; that direction is never tolerable.
+        unexpected = sorted(seen_people.difference(slate_people))
+        if unexpected:
+            raise OpportunityError(
+                f"player coverage mismatch; {len(unexpected)} rows are not on the "
+                f"slate:{unexpected[:10]}"
+            )
+        selectable_missing = sorted(
+            slate_people.difference(seen_people) - unavailable_people(slate.players)
+        )
+        if selectable_missing:
+            raise OpportunityError(
+                f"player coverage mismatch; missing {len(selectable_missing)} "
+                f"selectable people:{selectable_missing[:10]}"
+            )
     return conserve_team_shares(
         OpportunityModel(tuple(teams), tuple(players)), allow_empty_groups=allow_empty_groups
     )

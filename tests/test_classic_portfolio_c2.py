@@ -481,7 +481,7 @@ def test_nonoptimal_and_solver_error_selection_states_fail_closed(model_status, 
     assert not result.passed
 
 
-def test_c2_full_prior_review_writes_only_bound_json_and_replays(tmp_path: Path) -> None:
+def test_c3_full_prior_review_writes_bound_review_package_and_replays(tmp_path: Path) -> None:
     salary, entry, package, role, status, _inactive = _fixture(
         tmp_path / "fixture", entries=3
     )
@@ -530,7 +530,7 @@ def test_c2_full_prior_review_writes_only_bound_json_and_replays(tmp_path: Path)
     first = run("first")
     second = run("second")
     assert not first.blocked, first.blockers
-    assert first.profile_version == "cowork_classic_prior_review_c2_v1"
+    assert first.profile_version == "cowork_classic_prior_review_c3_v1"
     assert first.reports["classic_portfolio_audit"]["status"] == "PASS"
     for key in (
         "classic_candidate_bank",
@@ -538,12 +538,23 @@ def test_c2_full_prior_review_writes_only_bound_json_and_replays(tmp_path: Path)
         "classic_portfolio_audit",
         "selection_report",
         "complete_slate_coverage",
+        "classic_selected_scores",
+        "classic_export_audit",
+        "bulk_entry_csv",
+        "readable_review_json",
+        "readable_review_html",
     ):
         assert Path(first.artifacts[key]).is_file()
         assert first.hashes[key] == second.hashes[key]
     assert json.loads(Path(first.artifacts["selection_report"]).read_text())["schema_version"] == "nfl_classic_prior_review_selection_c2_v1"
-    assert not list(tmp_path.rglob("assignments.csv"))
-    assert not list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))
+    # Since Q1C each run also writes `assignments.csv`, the nine-slot
+    # `nfl_assignment_csv_v1` record `settle` reads. It is deterministic like
+    # every other bound artifact, and it is not an upload shape: no Contest ID,
+    # Contest Name, Entry Fee or instructions block, so DraftKings would reject
+    # it. The upload-shape prohibitions below are unchanged.
+    assert len(list(tmp_path.rglob("assignments.csv"))) == 2
+    assert first.hashes["assignments"] == second.hashes["assignments"]
+    assert len(list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))) == 2
     assert not list(tmp_path.rglob("DK_UPLOAD_*.csv"))
 
 
@@ -621,7 +632,7 @@ def test_c2_required_player_without_current_activity_stops_before_publish(
     assert "selection_report" not in outcome.artifacts
 
 
-def test_one_cowork_command_dispatches_classic_c2_policy(
+def test_one_cowork_command_dispatches_classic_c3_review_package(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from nfl_dfs import cli
@@ -672,7 +683,7 @@ def test_one_cowork_command_dispatches_classic_c2_policy(
             encoding="utf-8"
         )
     )
-    assert report["stage"] == "PRIOR_ONLY_CLASSIC_REVIEW_ARTIFACTS"
+    assert report["stage"] == "PRIOR_ONLY_CLASSIC_C3_REVIEW_EXPORT"
     assert report["FILE_VALID"] is True
     assert report["MODEL_STATUS"] == "PRIOR_ONLY"
     assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
@@ -685,13 +696,19 @@ def test_one_cowork_command_dispatches_classic_c2_policy(
         "classic_portfolio_audit",
         "selection_report",
         "complete_slate_coverage",
+        "classic_selected_scores",
+        "classic_export_audit",
+        "bulk_entry_csv",
+        "readable_review_json",
+        "readable_review_html",
     ):
         assert Path(report["prior_review_artifacts"][key]).is_file()
-    assert not list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))
+    assert Path(report["review_workbook"]).is_file()
+    assert len(list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))) == 1
     assert not list(tmp_path.rglob("DK_UPLOAD_*.csv"))
 
 
-def test_c2_enforcement_never_calls_quantitative_or_c3_paths(
+def test_c3_enforcement_never_calls_quantitative_or_later_paths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from nfl_dfs import (
@@ -701,33 +718,41 @@ def test_c2_enforcement_never_calls_quantitative_or_c3_paths(
         ownership,
         portfolio,
         prior_review as prior_module,
-        readable_review,
-        review_export,
     )
     from nfl_dfs.dk import parse_entries, parse_salaries
     from .test_prior_review_profile import _cowork_args
 
     def forbidden(*_args, **_kwargs):
-        raise AssertionError("prohibited C2 path called")
+        raise AssertionError("prohibited C3-or-later path called")
 
     monkeypatch.setattr(economics, "evaluate_candidates_against_field", forbidden)
     monkeypatch.setattr(field, "generate_opponent_field", forbidden)
     monkeypatch.setattr(ownership, "cold_start_states", forbidden)
     monkeypatch.setattr(portfolio, "select_portfolio", forbidden)
-    monkeypatch.setattr(readable_review, "create_readable_review", forbidden)
-    monkeypatch.setattr(review_export, "export_review_entries", forbidden)
     for name in (
         "evaluate_candidates_against_field",
         "generate_opponent_field",
         "cold_start_states",
         "select_portfolio",
-        "create_readable_review",
-        "export_review_entries",
         "write_assignments_csv",
     ):
         monkeypatch.setattr(cli, name, forbidden)
-    monkeypatch.setattr(prior_module, "export_review_entries", forbidden)
-    monkeypatch.setattr(prior_module, "write_assignments_csv", forbidden)
+
+    # Since Q1C the Classic prior-review path does write `assignments.csv`, so
+    # that a Classic run can bind its own selection into a pre-lock manifest and
+    # become settleable. The real hazard the old blanket ban guarded against is
+    # narrower and is still checked here: writing a Showdown-shaped six-column
+    # CPT/FLEX file for a nine-slot Classic roster. A spy that asserts the mode
+    # is a stronger check than refusing the call, because it also proves the
+    # geometry is right rather than only that nothing happened.
+    real_writer = prior_module.write_assignments_csv
+    observed_modes: list[EngineMode] = []
+
+    def spy(path, assignments, *, entry_order=None, mode=EngineMode.SHOWDOWN):
+        observed_modes.append(mode)
+        return real_writer(path, assignments, entry_order=entry_order, mode=mode)
+
+    monkeypatch.setattr(prior_module, "write_assignments_csv", spy)
 
     salary, entry, package, role, status, _inactive = _fixture(
         tmp_path / "fixture", entries=1
@@ -767,6 +792,85 @@ def test_c2_enforcement_never_calls_quantitative_or_c3_paths(
         )
     )
     assert code == 0
-    assert not list(tmp_path.rglob("*.html"))
+    # Nine-slot Classic geometry, never the six-column Showdown shape.
+    assert observed_modes == [EngineMode.CLASSIC], observed_modes
+    assert len(list(tmp_path.rglob("prior_only_readable_review.html"))) == 1
+    assert len(list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))) == 1
+    assert not list(tmp_path.rglob("DK_UPLOAD_*.csv"))
+
+
+def test_c3_readable_reconciliation_failure_removes_new_review_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import cli
+    from nfl_dfs.dk import parse_entries, parse_salaries
+    from .test_prior_review_profile import _cowork_args
+
+    salary, entry, package, role, status, _inactive = _fixture(
+        tmp_path / "fixture", entries=1
+    )
+    attachments = tmp_path / "attachments"
+    attachments.mkdir()
+    attached_salary = attachments / "salary.csv"
+    attached_entry = attachments / "entries.csv"
+    attached_salary.write_bytes(salary.read_bytes())
+    attached_entry.write_bytes(entry.read_bytes())
+    slate = parse_salaries(attached_salary)
+    entries = parse_entries(attached_entry)
+    policy_path = tmp_path / "classic_policy.json"
+    policy_path.write_text(
+        json.dumps(
+            classic_portfolio_policy_template(
+                slate,
+                tuple(item.entry_id for item in entries.authorizations),
+                entry_sha256=entries.raw_hash,
+            )
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(
+        cli,
+        "verify_readable_review_artifacts",
+        lambda **_kwargs: ("FORCED_POST_PUBLICATION_DISPLAY_MUTATION",),
+    )
+    code = cli.command_cowork_run(
+        _cowork_args(
+            tmp_path,
+            attachments,
+            label="classic-c3-display-failure",
+            run_id="classic-c3-display-failure",
+            prior_package_dir=str(package),
+            build_priors=True,
+            official_status_csv=str(status),
+            offensive_role_evidence_json=str(role),
+            portfolio_policy_json=str(policy_path),
+            as_of=AS_OF.isoformat(),
+        )
+    )
+    assert code == 2
+    report = json.loads(
+        (
+            tmp_path
+            / "outputs"
+            / "classic-c3-display-failure"
+            / "cowork_run.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert report["stage"] == "PRIOR_REVIEW_READABLE_REVIEW_BLOCKED"
+    assert report["FILE_VALID"] is False
+    assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert report["export"]["bulk_entry_csv"] is None
+    assert report["export"]["downstream_audit"] is None
+    for key in (
+        "classic_export_audit",
+        "bulk_entry_csv",
+        "readable_review_json",
+        "readable_review_html",
+    ):
+        assert key not in report["prior_review_artifacts"]
     assert not list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))
+    assert not list(tmp_path.rglob("classic_review_export_audit.json"))
+    assert not list(tmp_path.rglob("prior_only_readable_review.json"))
+    assert not list(tmp_path.rglob("prior_only_readable_review.html"))
     assert not list(tmp_path.rglob("DK_UPLOAD_*.csv"))

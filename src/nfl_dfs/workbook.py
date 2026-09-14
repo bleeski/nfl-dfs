@@ -102,8 +102,269 @@ def _finish_generated_sheet(
         ws.column_dimensions[get_column_letter(column)].width = width
 
 
+def _populate_classic_readable_review(workbook, review: Mapping[str, object]) -> None:
+    """Populate the C3 Classic review copy; the five-sheet input stays unchanged."""
+
+    portfolio = workbook["Portfolio"]
+    portfolio.tables.clear()
+    if portfolio.max_row >= 4:
+        portfolio.delete_rows(4, portfolio.max_row - 3)
+    _title(
+        portfolio,
+        "Classic prior-only exact Entry-ID assignments",
+        "Exact audited DraftKings IDs in template order. Scores are prior-only central estimates; this is not an upload authorization.",
+        18,
+    )
+    headers = (
+        "Entry ID", "Contest", "Contest ID", "Slot", "Player", "Exact DK ID",
+        "Underlying person", "Position", "Team", "Opponent", "Game", "Salary",
+        "Lineup salary", "Salary remaining", "Prior-only slot points",
+        "Prior-only lineup points", "Official activity", "Current-role evidence",
+    )
+    for column, value in enumerate(headers, start=1):
+        _set_display(portfolio.cell(4, column), value)
+        portfolio.cell(4, column).fill = PatternFill("solid", fgColor=BLUE)
+        portfolio.cell(4, column).font = Font(bold=True, color=WHITE)
+    row_number = 5
+    for raw_entry in review.get("entries", []):
+        if not isinstance(raw_entry, Mapping):
+            continue
+        for raw_slot in raw_entry.get("slots", []):
+            if not isinstance(raw_slot, Mapping):
+                continue
+            values = (
+                raw_entry.get("entry_id"), raw_entry.get("contest_name") or "Contest label unavailable",
+                raw_entry.get("contest_id"), raw_slot.get("slot"), raw_slot.get("name"),
+                raw_slot.get("dk_roster_id"), raw_slot.get("underlying_person_id"),
+                raw_slot.get("position"), raw_slot.get("team"), raw_slot.get("opponent"),
+                raw_slot.get("game_id"), raw_slot.get("salary"), raw_entry.get("salary_total"),
+                raw_entry.get("salary_remaining"), raw_slot.get("prior_only_central_estimate_points"),
+                raw_entry.get("prior_only_central_estimate_points"), raw_slot.get("official_activity"),
+                raw_slot.get("role_evidence_state"),
+            )
+            for column, value in enumerate(values, start=1):
+                _set_display(portfolio.cell(row_number, column), value)
+            for column in (12, 13, 14):
+                portfolio.cell(row_number, column).number_format = '"$"#,##0'
+            for column in (15, 16):
+                portfolio.cell(row_number, column).number_format = "0.000000"
+            portfolio.row_dimensions[row_number].height = 38
+            row_number += 1
+    portfolio.auto_filter.ref = f"A4:R{max(4, row_number - 1)}"
+    _finish_generated_sheet(
+        portfolio,
+        print_area=f"A1:R{max(4, row_number - 1)}",
+        widths={1: 15, 2: 28, 3: 14, 4: 9, 5: 23, 6: 16, 7: 30, 8: 10,
+                9: 9, 10: 10, 11: 15, 12: 11, 13: 13, 14: 14, 15: 14,
+                16: 16, 17: 15, 18: 28},
+    )
+
+    exposure = workbook.create_sheet("Exposure")
+    _title(
+        exposure,
+        "Classic policy counts, limits, uniqueness, and overlap",
+        "Every value is independently recomputed from exact selected roster IDs. HARD limits are never relaxed.",
+        12,
+    )
+    people_headers = (
+        "Player", "Underlying person", "Team", "Position", "Actual #", "Actual %",
+        "Minimum #", "Maximum #", "Minimum %", "Maximum %", "Excluded", "Basis",
+    )
+    for column, value in enumerate(people_headers, start=1):
+        _set_display(exposure.cell(4, column), value)
+        exposure.cell(4, column).fill = PatternFill("solid", fgColor=BLUE)
+        exposure.cell(4, column).font = Font(bold=True, color=WHITE)
+    exposure_payload = review.get("exposure", {})
+    if not isinstance(exposure_payload, Mapping):
+        exposure_payload = {}
+    row_number = 5
+    for raw in exposure_payload.get("people", []):
+        if not isinstance(raw, Mapping):
+            continue
+        if not (raw.get("actual_count") or raw.get("minimum_count") or raw.get("excluded")):
+            continue
+        values = (
+            raw.get("name"), raw.get("underlying_person_id"), raw.get("team"), raw.get("position"),
+            raw.get("actual_count"), raw.get("actual_percentage"), raw.get("minimum_count"),
+            raw.get("maximum_count"), raw.get("minimum_percentage"), raw.get("maximum_percentage"),
+            "YES" if raw.get("excluded") else "NO", raw.get("exclusion_source"),
+        )
+        for column, value in enumerate(values, start=1):
+            _set_display(exposure.cell(row_number, column), value)
+        for column in (6, 9, 10):
+            exposure.cell(row_number, column).number_format = '0.000"%"'
+        row_number += 1
+    exposure.auto_filter.ref = f"A4:L{max(4, row_number - 1)}"
+    row_number += 1
+    for title, key in (
+        ("Team exposure", "teams"),
+        ("Game exposure", "games"),
+        ("Group counts", "groups"),
+        ("Stack-rule counts", "stack_rules"),
+    ):
+        _section_header(exposure, row_number, 1, 8, title)
+        row_number += 1
+        detail_headers = (
+            "ID", "Type", "Strength", "Actual #", "Minimum #", "Maximum #",
+            "Per-lineup minimum", "Per-lineup maximum",
+        )
+        for column, value in enumerate(detail_headers, start=1):
+            _set_display(exposure.cell(row_number, column), value)
+            exposure.cell(row_number, column).font = Font(bold=True)
+        for raw in exposure_payload.get(key, []):
+            if not isinstance(raw, Mapping):
+                continue
+            row_number += 1
+            values = (
+                raw.get("id"), raw.get("rule_type"), raw.get("strength"), raw.get("actual_count"),
+                raw.get("minimum_count"), raw.get("maximum_count"),
+                raw.get("minimum_players", raw.get("minimum_value")),
+                raw.get("maximum_players", raw.get("maximum_value")),
+            )
+            for column, value in enumerate(values, start=1):
+                _set_display(exposure.cell(row_number, column), value)
+        row_number += 2
+    _section_header(exposure, row_number, 1, 4, "Every pairwise underlying-person overlap")
+    row_number += 1
+    for column, value in enumerate(("Entry A", "Entry B", "Actual shared people", "Maximum"), start=1):
+        _set_display(exposure.cell(row_number, column), value)
+        exposure.cell(row_number, column).font = Font(bold=True)
+    for raw in exposure_payload.get("pairwise_overlap", []):
+        if not isinstance(raw, Mapping):
+            continue
+        row_number += 1
+        for column, value in enumerate(
+            (raw.get("entry_id_a"), raw.get("entry_id_b"), raw.get("actual_people"), raw.get("maximum_people")),
+            start=1,
+        ):
+            _set_display(exposure.cell(row_number, column), value)
+    _finish_generated_sheet(
+        exposure,
+        print_area=f"A1:L{exposure.max_row}",
+        widths={1: 24, 2: 32, 3: 10, 4: 14, 5: 12, 6: 12, 7: 12, 8: 12,
+                9: 13, 10: 13, 11: 11, 12: 28},
+    )
+
+    evidence = workbook.create_sheet("Review Evidence")
+    _title(
+        evidence,
+        "Current evidence, complete-slate coverage, and limitations",
+        "Selected activity and role evidence remain distinct. Unallocated volume is visible and never silently reassigned here.",
+        7,
+    )
+    evidence_headers = ("Category", "State", "Observation", "Observed", "Expires", "Source", "Next action")
+    for column, value in enumerate(evidence_headers, start=1):
+        _set_display(evidence.cell(4, column), value)
+        evidence.cell(4, column).fill = PatternFill("solid", fgColor=BLUE)
+        evidence.cell(4, column).font = Font(bold=True, color=WHITE)
+    row_number = 5
+    for raw in review.get("evidence_observations", []):
+        if not isinstance(raw, Mapping):
+            continue
+        for column, value in enumerate(tuple(raw.get(key) for key in ("category", "state", "observation", "observed_at", "expires_at", "source", "next_action")), start=1):
+            if isinstance(value, (dict, list, tuple)):
+                value = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+            _set_display(evidence.cell(row_number, column), value)
+        evidence.row_dimensions[row_number].height = 42
+        row_number += 1
+    coverage = review.get("pool_coverage")
+    if isinstance(coverage, Mapping):
+        row_number += 1
+        _section_header(
+            evidence,
+            row_number,
+            1,
+            7,
+            f"Complete slate: {coverage.get('people_in_pool')} people; {coverage.get('selectable_people')} selectable",
+        )
+        unallocated = coverage.get("unallocated_by_team", {})
+        if isinstance(unallocated, Mapping):
+            row_number += 1
+            share_headers = ("Team", "QB attempt", "Carry", "Target", "Rushing TD", "Receiving TD")
+            for column, value in enumerate(share_headers, start=1):
+                _set_display(evidence.cell(row_number, column), value)
+                evidence.cell(row_number, column).font = Font(bold=True)
+            for team, fields in unallocated.items():
+                if not isinstance(fields, Mapping):
+                    continue
+                row_number += 1
+                values = (team, *[fields.get(key) for key in ("qb_attempt_share", "carry_share", "target_share", "rushing_td_share", "receiving_td_share")])
+                for column, value in enumerate(values, start=1):
+                    _set_display(evidence.cell(row_number, column), value)
+        row_number += 2
+        _set_display(evidence.cell(row_number, 1), coverage.get("note"))
+        evidence.merge_cells(start_row=row_number, start_column=1, end_row=row_number, end_column=7)
+        evidence.row_dimensions[row_number].height = 44
+    row_number += 2
+    _section_header(evidence, row_number, 1, 7, "Prominent limitations")
+    for limitation in review.get("limitations", []):
+        row_number += 1
+        _set_display(evidence.cell(row_number, 1), limitation)
+        evidence.merge_cells(start_row=row_number, start_column=1, end_row=row_number, end_column=7)
+    _finish_generated_sheet(
+        evidence,
+        print_area=f"A1:G{evidence.max_row}",
+        widths={1: 26, 2: 24, 3: 56, 4: 26, 5: 26, 6: 52, 7: 52},
+    )
+
+    artifacts = workbook.create_sheet("Artifacts")
+    _title(
+        artifacts,
+        "Artifact provenance and exact hashes",
+        "The downstream C3 audit independently reparsed every authoritative byte before review publication.",
+        3,
+    )
+    for column, value in enumerate(("Artifact", "Package-relative path", "SHA-256"), start=1):
+        _set_display(artifacts.cell(4, column), value)
+        artifacts.cell(4, column).fill = PatternFill("solid", fgColor=BLUE)
+        artifacts.cell(4, column).font = Font(bold=True, color=WHITE)
+    row_number = 5
+    for raw in review.get("artifacts", []):
+        if not isinstance(raw, Mapping):
+            continue
+        for column, value in enumerate((raw.get("name"), raw.get("path"), raw.get("sha256")), start=1):
+            _set_display(artifacts.cell(row_number, column), value)
+        href = raw.get("href")
+        if isinstance(href, str):
+            artifacts.cell(row_number, 2).hyperlink = href
+            artifacts.cell(row_number, 2).style = "Hyperlink"
+        artifacts.row_dimensions[row_number].height = 46
+        row_number += 1
+    _finish_generated_sheet(
+        artifacts,
+        print_area=f"A1:C{artifacts.max_row}",
+        widths={1: 36, 2: 78, 3: 70},
+    )
+
+    upload = workbook["Upload"]
+    truths = review.get("truths", {})
+    if not isinstance(truths, Mapping):
+        truths = {}
+    for row, label in enumerate(("FILE_VALID", "EVIDENCE_STATE", "MODEL_STATUS", "RELEASE_DECISION"), start=5):
+        value = truths.get(label)
+        _set_display(upload.cell(row, 2), str(value).upper() if isinstance(value, bool) else value)
+    _set_display(upload["A17"], "DISPLAY_RECONCILIATION")
+    reconciliation = review.get("reconciliation", {})
+    _set_display(upload["B17"], reconciliation.get("status") if isinstance(reconciliation, Mapping) else "UNKNOWN")
+    _set_display(upload["A18"], "READABLE_WARNING")
+    _set_display(upload["B18"], review.get("warning"))
+    upload.column_dimensions["A"].width = 28
+    upload.column_dimensions["B"].width = 88
+    for sheet, area, repeat, orientation in (
+        (workbook["Run Control"], f"A1:D{workbook['Run Control'].max_row}", "1:4", "landscape"),
+        (workbook["Evidence Paste"], "A1:E105,G4:J108,L4:O105,Q4:W37", "4:5", "landscape"),
+        (workbook["QA"], f"A1:G{workbook['QA'].max_row}", "1:4", "landscape"),
+        (upload, "A1:B18", "1:3", "portrait"),
+    ):
+        _configure_review_print_layout(sheet, print_area=area, repeat_rows=repeat, orientation=orientation)
+
+
 def _populate_readable_review(workbook, review: Mapping[str, object]) -> None:
     """Add the SD5 human surface without changing the five-sheet input contract."""
+
+    if review.get("mode") == "CLASSIC":
+        _populate_classic_readable_review(workbook, review)
+        return
 
     portfolio = workbook["Portfolio"]
     portfolio.tables.clear()

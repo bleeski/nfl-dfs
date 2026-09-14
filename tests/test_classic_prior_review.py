@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 from datetime import datetime, timedelta, timezone
@@ -667,12 +668,20 @@ def test_classic_review_is_deterministic_legal_and_emits_no_upload_shape(
     assert first.export["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
     assert first.hashes["selection_report"] == second.hashes["selection_report"]
     assert first.hashes["complete_slate_coverage"] == second.hashes["complete_slate_coverage"]
-    assert "assignments" not in first.artifacts
     assert "bulk_entry_csv" not in first.artifacts
+    # Since Q1C, Classic writes `assignments.csv` — `Entry ID,QB,RB,...` holding
+    # DraftKings IDs. That is not an upload shape: it carries no Contest ID,
+    # Contest Name, Entry Fee or instructions block, so DraftKings would reject
+    # it, and Showdown's prior review has always written the same file. It exists
+    # because `lineups.read_assignment_csv` is what `settle` reads, and without
+    # it a Classic run cannot bind its own selection into a pre-lock manifest.
+    # The upload-shape prohibition above is unchanged and still checked.
+    assert Path(first.artifacts["assignments"]).name == "assignments.csv"
+    assert first.hashes["assignments"] == second.hashes["assignments"]
     assert not list((tmp_path / "a").rglob("*.csv")) == []  # immutable inputs still exist
     assert not [
         path for path in (tmp_path / "a").rglob("*.csv")
-        if path.name.startswith(("DK_UPLOAD_", "DK_REVIEW_ENTRY_", "assignments"))
+        if path.name.startswith(("DK_UPLOAD_", "DK_REVIEW_ENTRY_"))
     ]
     payload = json.loads(Path(first.artifacts["selection_report"]).read_text(encoding="utf-8"))
     assert len(payload["assignments_by_entry_id"]) == entries
@@ -710,7 +719,7 @@ def test_missing_selected_activity_blocks_before_any_selection_artifact(tmp_path
     assert not list((tmp_path / "out").rglob("*.csv"))
 
 
-def test_role_source_mutation_and_missing_current_role_fail_closed(tmp_path: Path) -> None:
+def test_role_source_mutation_fails_closed(tmp_path: Path) -> None:
     salary, entry, package, role, status, _ = _fixture(tmp_path)
     source = next((role.parent / "sources").iterdir())
     source.write_text(source.read_text(encoding="utf-8") + " ", encoding="utf-8")
@@ -722,13 +731,90 @@ def test_role_source_mutation_and_missing_current_role_fail_closed(tmp_path: Pat
     )
     assert mutated.blocked
     assert "OFFENSIVE_ROLE_SOURCE_HASH_MISMATCH" in mutated.blockers[0]
-    no_role = run_prior_review(
+
+
+def test_classic_selects_on_history_derived_priors_and_names_them(tmp_path: Path) -> None:
+    """R17 extended to Classic on 2026-09-12.
+
+    No approved host publishes a forward-looking numerical allocation, so
+    demanding one for every selected offensive person made a live Classic slate
+    unpublishable while the identical Showdown pool selected fine. Classic now
+    selects on the same history-derived priors, and every such person is named.
+    """
+
+    salary, entry, package, role, status, _ = _fixture(tmp_path)
+    del role
+    outcome = run_prior_review(
         salary_csv=salary, entry_csv=entry, label="no-role", as_of=AS_OF,
-        run_root=tmp_path / "run-b", output_root=tmp_path / "out-b",
+        run_root=tmp_path / "run", output_root=tmp_path / "out",
         prior_package_dir=package, official_status_csv=status,
     )
-    assert no_role.blocked
-    assert "CURRENT_OFFENSIVE_ROLE" in no_role.blockers[0]
+    assert not outcome.blocked, outcome.blockers
+    gate = outcome.reports["selected_evidence_gate"]
+    assert gate["status"] == "PASS"
+    assert gate["gaps"] == []
+    assert gate["role_basis"] == "HISTORY_DERIVED_PRIOR_IS_NOT_A_CURRENT_ROLE"
+    assert gate["unverified_role_people"]
+    observed = {item["person"] for item in gate["selected_role_observations"]}
+    assert set(gate["unverified_role_people"]).issubset(observed)
+    assert all(
+        item["selection_action"] in {"SELECT", "DIAGNOSTIC"}
+        for item in gate["selected_role_observations"]
+    )
+    # The release truths are untouched by the ruling.
+    selection = json.loads(
+        Path(outcome.artifacts["selection_report"]).read_text(encoding="utf-8")
+    )
+    assert selection["MODEL_STATUS"] == "PRIOR_ONLY"
+    assert selection["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+
+
+def test_unselectable_or_missing_role_finding_still_blocks_classic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The R17 ruling widened the accepted states, it did not remove the gate.
+
+    A selected offensive person whose resolver finding is absent, or carries an
+    action the resolver would never select on, still stops publication.
+    """
+
+    import nfl_dfs.prior_review as module
+    import nfl_dfs.selection as selection_module
+
+    real = selection_module.resolve_offensive_roles
+
+    def drop_first_offensive_finding(*args, **kwargs):
+        resolution = real(*args, **kwargs)
+        findings = list(resolution.report.get("findings", []))
+        keep = [
+            item for item in findings
+            if item.get("selection_action") not in {"SELECT", "DIAGNOSTIC"}
+        ]
+        dropped = next(
+            item for item in findings
+            if item.get("selection_action") in {"SELECT", "DIAGNOSTIC"}
+        )
+        resolution.report["findings"] = keep + [
+            {**dropped, "selection_action": "EXCLUDE"}
+        ]
+        return resolution
+
+    salary, entry, package, role, status, _ = _fixture(tmp_path)
+    del role
+    monkeypatch.setattr(
+        selection_module, "resolve_offensive_roles", drop_first_offensive_finding
+    )
+    assert module.run_prior_review is run_prior_review
+    outcome = run_prior_review(
+        salary_csv=salary, entry_csv=entry, label="dropped-finding", as_of=AS_OF,
+        run_root=tmp_path / "run", output_root=tmp_path / "out",
+        prior_package_dir=package, official_status_csv=status,
+    )
+    assert outcome.blocked
+    assert outcome.blockers[0].startswith("SELECTED_CURRENT_EVIDENCE_REQUIRED:")
+    assert "CURRENT_OFFENSIVE_ROLE" in outcome.blockers[0]
+    assert "selection_report" not in outcome.artifacts
+    assert not list((tmp_path / "out").rglob("*.csv"))
 
 
 def test_salary_mutation_during_selection_blocks_artifact_publication(
@@ -814,7 +900,7 @@ def test_one_cowork_command_emits_classic_review_json_and_no_upload_csv(
     assert Path(report["prior_review_artifacts"]["complete_slate_coverage"]).is_file()
     assert not [
         path for path in tmp_path.rglob("*.csv")
-        if path.name.startswith(("DK_UPLOAD_", "DK_REVIEW_ENTRY_", "assignments"))
+        if path.name.startswith(("DK_UPLOAD_", "DK_REVIEW_ENTRY_"))
     ]
 
 
@@ -845,3 +931,109 @@ def test_classic_weather_manifest_requires_exact_complete_game_scope(tmp_path: P
     )
     assert outcome.blocked
     assert outcome.blockers[0].startswith("WEATHER_EVIDENCE_GAME_COVERAGE_MISMATCH")
+
+
+def _weather_package(root: Path, salary: Path, slate, *, captured=CAPTURED):
+    """A complete multi-game weather package, shaped like the real thing.
+
+    The capture bodies are SYNTHETIC: they carry the `properties.generatedAt`
+    field the package reads and nothing was fetched to produce them. This
+    exercises the binding, hashing, host-policy and freshness checks, not the
+    truth of any forecast.
+    """
+
+    out = root / "weather"
+    sources = out / "sources"
+    sources.mkdir(parents=True, exist_ok=True)
+    games = {}
+    for index, game in enumerate(slate.games):
+        body = json.dumps(
+            {
+                "properties": {
+                    "generatedAt": OBSERVED.isoformat(),
+                    "gridId": f"SYNTHETIC{index}",
+                    "periods": [{"name": "This Afternoon", "shortForecast": "Sunny"}],
+                }
+            },
+            indent=2,
+            sort_keys=True,
+        ).encode("utf-8") + b"\n"
+        digest = hashlib.sha256(body).hexdigest()
+        (sources / f"{digest}.json").write_bytes(body)
+        games[game.game_id] = {
+            "path": f"sources/{digest}.json",
+            "sha256": digest,
+            "source_uri": f"https://api.weather.gov/gridpoints/SYN/{index},{index}/forecast",
+            "license_decision": "PUBLIC_DOMAIN",
+            "parser_version": "nws_gridpoint_forecast_v1",
+            "observed_at": OBSERVED.isoformat(),
+            "captured_at": captured.isoformat(),
+            "expires_at": EXPIRES.isoformat(),
+        }
+    return _json(
+        out / "weather_evidence.json",
+        {
+            "schema_version": "nfl_classic_weather_evidence_c1_v1",
+            "salary_sha256": sha256_file(salary),
+            "games": games,
+        },
+    )
+
+
+def test_classic_weather_package_binds_every_game_and_clears_intake(tmp_path: Path) -> None:
+    """The complete multi-game weather path had only negative coverage."""
+
+    salary, entry, package, role, status, _ = _fixture(tmp_path)
+    slate = parse_salaries(salary)
+    weather = _weather_package(tmp_path, salary, slate)
+    outcome = run_prior_review(
+        salary_csv=salary, entry_csv=entry, label="weather-ok", as_of=AS_OF,
+        run_root=tmp_path / "run", output_root=tmp_path / "out",
+        prior_package_dir=package, official_status_csv=status,
+        offensive_role_evidence_json=role, weather_evidence_json=weather,
+        project=build_projection_package, build_priors=True,
+    )
+    assert not any(
+        blocker.startswith("WEATHER") or ":WEATHER" in blocker
+        for blocker in outcome.blockers
+    ), outcome.blockers
+    assert outcome.hashes["weather_evidence_json"] == sha256_file(weather)
+    for game in slate.games:
+        assert outcome.hashes[f"weather_source:{game.game_id}"]
+    assert not outcome.blocked, outcome.blockers
+
+
+def test_classic_weather_package_rejects_a_mutated_capture(tmp_path: Path) -> None:
+    salary, entry, package, role, status, _ = _fixture(tmp_path)
+    slate = parse_salaries(salary)
+    weather = _weather_package(tmp_path, salary, slate)
+    stored = next((weather.parent / "sources").iterdir())
+    stored.write_bytes(stored.read_bytes() + b" ")
+    outcome = run_prior_review(
+        salary_csv=salary, entry_csv=entry, label="weather-mutated", as_of=AS_OF,
+        run_root=tmp_path / "run", output_root=tmp_path / "out",
+        prior_package_dir=package, official_status_csv=status,
+        offensive_role_evidence_json=role, weather_evidence_json=weather,
+        project=build_projection_package, build_priors=True,
+    )
+    assert outcome.blocked
+    assert outcome.blockers[0].startswith("WEATHER_EVIDENCE_SOURCE_HASH_MISMATCH")
+
+
+def test_classic_weather_package_rejects_a_stale_capture(tmp_path: Path) -> None:
+    salary, entry, package, role, status, _ = _fixture(tmp_path)
+    slate = parse_salaries(salary)
+    weather = _weather_package(tmp_path, salary, slate)
+    payload = json.loads(weather.read_text(encoding="utf-8"))
+    first = sorted(payload["games"])[0]
+    payload["games"][first]["expires_at"] = (AS_OF - timedelta(minutes=1)).isoformat()
+    _json(weather, payload)
+    outcome = run_prior_review(
+        salary_csv=salary, entry_csv=entry, label="weather-stale", as_of=AS_OF,
+        run_root=tmp_path / "run", output_root=tmp_path / "out",
+        prior_package_dir=package, official_status_csv=status,
+        offensive_role_evidence_json=role, weather_evidence_json=weather,
+        project=build_projection_package, build_priors=True,
+    )
+    assert outcome.blocked
+    assert outcome.blockers[0].startswith("WEATHER_EVIDENCE_TIME_INVALID_OR_STALE")

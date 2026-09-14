@@ -1,6 +1,6 @@
 # Claude Cowork Runbook
 
-## Classic C2 governed prior review: current operating path (2026-09-11)
+## Classic C3 governed prior review: current operating path (2026-09-11)
 
 The same normal two-CSV command now accepts a multi-game DraftKings NFL Classic
 salary file and matching blank reserved-entry file:
@@ -30,8 +30,7 @@ integer bounds, and exact ordered Entry IDs. C2 snapshots and canonically
 normalizes it, generates a deterministic bounded legal candidate bank, jointly
 selects one unique lineup per Entry ID without cycling, and independently
 reparses and audits the canonical artifacts. It never calls the field,
-ownership, duplication, payout/economics, production portfolio selector, or C3
-review/export code.
+ownership, duplication, payout/economics, or production portfolio selector.
 
 C2 success writes canonical `classic_candidate_bank.json`,
 `classic_assignment.json`, and `classic_portfolio_audit.json`, then extends
@@ -44,25 +43,155 @@ readable review workbook, `DK_REVIEW_ENTRY_*.csv`, or `DK_UPLOAD_*.csv`.
 `EVIDENCE_STATE` is separately derived; `MODEL_STATUS=PRIOR_ONLY` and
 `RELEASE_DECISION=DO_NOT_UPLOAD` are invariant.
 
+C3 then independently reparses every canonical input and C2 output, recomputes
+the complete ordered portfolio and every hard count/overlap/evidence fact, and
+only after audit `PASS` writes `DK_REVIEW_ENTRY_<label>.csv`, canonical readable
+JSON, self-contained escaped HTML, and the eight-sheet review workbook. The
+review CSV is an exact template copy with only the nine previously blank roster
+cells for each authorized Entry ID changed; all non-roster bytes and physical
+line geometry remain exact. It is a review artifact, never an upload package.
+
 Classic publication requires fresh exact-ID official activity for every selected
-person and `nfl_classic_offensive_role_evidence_c1_v1` source-supported numerical
-allocations for every selected offensive person. A missing selected row stops
-publication and names the person plus the smallest evidence action. Uncertainty
-for nonselected people remains visible in complete-slate coverage. A multi-game
-weather capture uses `--weather-evidence-json`; its
+person. A missing selected row stops publication and names the person plus the
+smallest evidence action. Uncertainty for nonselected people remains visible in
+complete-slate coverage.
+
+Current offensive roles follow the Showdown rule since 2026-09-12 (R21, Ben's
+ruling extending R17 to Classic). The role resolver decides: an unresolved or
+declared-changed role blocks before selection, a person with no prior-season row
+is excluded with zero share, and a history-derived prior selects. Every selected
+person resting on one is named in `selected_evidence_gate.unverified_role_people`
+and in the review's `SELECTED_CURRENT_OFFENSIVE_ROLE` observation, which reports
+state `UNKNOWN` in that case. A `nfl_classic_offensive_role_evidence_c1_v1`
+package is still the only thing that makes a role a current fact; supply one for
+a role you actually doubt, and note that any person the gate recorded as
+source-supported must still be covered by that package when C3 re-audits.
+
+A multi-game weather capture uses `--weather-evidence-json`; its
 `nfl_classic_weather_evidence_c1_v1` payload binds `salary_sha256` and maps the
 exact complete game set to `weather_state`, approved `source_uri`, and
 timezone-aware `observed_at`, plus the relative content-addressed capture path,
-SHA-256, license/parser decision, capture time and expiry. Scalar weather flags remain the single-game
-Showdown interface.
+SHA-256, license/parser decision, capture time and expiry. Build it with
+`scripts/make_classic_weather_evidence.py` rather than by hand:
+
+```sh
+python scripts/make_classic_weather_evidence.py \
+  --salaries <run>/inputs/DKSalaries.csv \
+  --plan <run>/weather/plan.json \
+  --out-dir <run>/weather
+```
+
+The plan is one entry per game keyed by home team abbreviation (or exact
+`game_id`), each naming the `api.weather.gov` gridpoint forecast URI and the
+saved response. Three facts that cost time otherwise: the engine's `game_id` is
+the `AWAY@HOME` matchup alone and not the whole `Game Info` cell; the package
+must cover every game including the domes the schedule already resolves (R22);
+and `observed_at` must be the forecast's own `generatedAt`, which the script
+reads for you. The capture expires six hours after capture, so take them close
+to the slate. Scalar weather flags remain the single-game Showdown interface.
+
+Official activity on a Classic slate: `scripts/make_official_status.py` accepts
+`--whole-pool` for a first pass with no selection yet, and `--selection
+<classic_selection.json>` once a run has produced one, because Classic C1/C2
+write no assignment CSV. Its slate-lock warning uses the earliest kickoff on the
+slate. Inactives publish about ninety minutes before each kickoff and the
+observation window is the three hours ending at the earliest kickoff, so the
+final Classic pass is a narrow window on Sunday morning.
+
+Build the C2 policy with `scripts/make_classic_policy.py` rather than by hand.
+The registered template's defaults are the worst configuration the engine
+supports: all four stack rules ship `ADVISORY` with `minimum_entries: 0`, which
+the solver does not enforce, and the bank defaults to `max(32, entries + 24)`.
+Measured on the supplied 719-person fixture, 811 of 1000 generated candidates
+were `NAKED_QB`.
+
+```sh
+python scripts/make_classic_policy.py \
+  --salaries <run>/inputs/DKSalaries.csv \
+  --entries  <run>/inputs/DKEntries.csv \
+  --out      <run>/policy/classic_portfolio_policy.json \
+  --rung 0 --minutes 5
+```
+
+Rung 0 puts `QB_PASS_CATCHER` at `HARD` on every entry and `QB_BRINGBACK` at
+`HARD` on 70% of them, caps pairwise person overlap at 5 of 9 and player exposure
+at half the entries, and sizes the bank from the minutes you are willing to
+spend. Measured at 20 entries on the fixture: a 1000-candidate bank in 273.6s,
+the joint MILP in 0.39s, `OPTIMAL_ACTUAL_CANDIDATE_BANK` with all 20 entries
+selected, and the selected portfolio carried `qb-pass-catcher` on 20 of 20 and
+`qb-bringback` on 14 of 20 with zero naked-QB lineups.
+
+If a run reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
+`CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, regenerate one rung
+lower and rerun immediately. Do not stop to ask; see "Shipping under a lock
+clock" in `CLAUDE.md`. Rung 4 emits no policy and runs C1 sequential selection,
+which always produces a legal portfolio and is the floor the ladder guarantees.
 
 C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
 solver-error, structural-infeasibility, modeled-bank-infeasibility, and
 incomplete-bank-exhaustion states separately. Accept only
 `OPTIMAL_ACTUAL_CANDIDATE_BANK` plus independent audit `PASS`; this is optimal
-over the reported bank only. C3 remains responsible for readable review,
-downstream independent export audit, exact-template review export, copied-package
-replay, and the full 719-person 1/3/20/150-entry acceptance run.
+over the reported bank only. Before accepting the display, require
+`classic_review_export_audit.json` status `PASS`,
+`DISPLAY_RECONCILIATION=PASS`, the exact review CSV SHA-256, and all four
+release truths. Start with the workbook or HTML; inspect every exact Entry ID,
+limit, overlap, evidence observation, prominent bounded-bank limitation and
+provenance hash. `FILE_VALID=true` never changes
+`MODEL_STATUS=PRIOR_ONLY` or `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+The C3 code, copied-package replay, exact-byte diff, rendering, mutation matrix,
+and registered full-fixture 1/3/20/150 acceptance have passed on Windows. C3 is
+still operationally blocked on a successful native Excel
+open/recalculate/save/reopen acceptance on this host. Do not treat the package
+as C3-complete or begin C4 until that exact check passes.
+
+## Continuity: getting the repo into a session (2026-09-12)
+
+`device_bash` has been dead since a Windows update released 2026-09-08. The
+working path is `device_stage_files` into the cloud container and
+`device_commit_files` back; that has been used repeatedly with no rejections and
+is the primary route. This section records what the GitHub fallback needs before
+it can be one.
+
+**Order of preference.**
+
+1. `device_stage_files` / `device_commit_files`. Proven, needs no credential,
+   and reaches the exact working tree including uncommitted work.
+2. `git clone` from `origin` in the container. Needs the work pushed AND a read
+   credential the container does not currently have. See below.
+3. A `git bundle` attached to the chat. Zero auth, survives a total bridge
+   failure, and carries full history: `git bundle create nfl-dfs.bundle --all`
+   on the Windows side, attach the file, then `git clone nfl-dfs.bundle` in the
+   container. This is the only route that works when every device tool is down.
+
+**What the GitHub fallback needs.**
+
+`git` over HTTPS works from the container; a plain `curl https://github.com`
+returns 400 through the egress proxy but `git ls-remote` against a public repo
+succeeds, so the protocol is not the problem. Two things are.
+
+*Content.* `origin/main` is `f2890a6c587b01cede2e07bdcbb3ec1dd0ab0d33`, which is
+C1 plus C2. The entire C3 tranche and everything after it is uncommitted in the
+working tree. A clone today produces an engine that cannot publish a Classic
+review CSV and, without the R21 repair, cannot publish a Classic selection at
+all. **Push before relying on a clone.** Never `git add .`; stage the explicit
+reviewed path list.
+
+*Credentials.* `github.com/bleeski/nfl-dfs` is private and the container's
+ambient `GITHUB_TOKEN` is not Ben's and is rejected
+(`Invalid username or token`). Claude does not handle tokens: a personal access
+token must not be pasted into a chat transcript and Claude will not enter one.
+The two clean options are to provision a fine-grained, read-only,
+single-repository PAT into the session environment through whatever secret
+mechanism the runtime exposes rather than through conversation, or to make the
+repository public. Nothing sensitive is tracked (`.gitignore` excludes
+`data/runs`, `data/registry`, `data/models`, `outputs` and
+`operator_input.xlsx`), so public is a real option; it exposes the engine and
+the strategy, which is Ben's call and no one else's.
+
+*Write-back.* A clone gives reads. A dev session that changes code still has to
+return it, which needs either write credentials in the container or a patch
+handed back through the chat. Plan for the patch unless write auth exists.
 
 ## Showdown generation: current operating path (2026-09-09)
 

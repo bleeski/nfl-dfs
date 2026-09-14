@@ -30,7 +30,12 @@ from decimal import Decimal, ROUND_HALF_EVEN
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from .contracts import EngineMode, SalaryPlayer, SlateContract
+from .contracts import (
+    EngineMode,
+    SalaryPlayer,
+    SlateContract,
+    unavailable_people,
+)
 from .dk import PARSER_VERSION as DK_PARSER_VERSION
 from .dk import parse_salaries
 from .hashing import sha256_bytes, sha256_file
@@ -77,6 +82,9 @@ REVIEW_COLUMNS = (
     "REVIEWED_PROVIDER_PLAYER_ID",
 )
 ACCEPTED_DECISION = "ACCEPT"
+# Operator token for a person with no identity in the approved artifacts who the
+# availability contract already makes unselectable. See `_resolve_reviewed`.
+EXCLUDED_UNRESOLVED_DECISION = "EXCLUDE_UNRESOLVED_UNAVAILABLE"
 QUANTUM = Decimal("0.000001")
 
 # Positions whose opportunity weights are structurally zero under the model
@@ -1982,7 +1990,7 @@ def propose_prior_package(
 
 def _resolve_reviewed(
     proposals: Sequence[IdentityProposal], decisions: Mapping[str, Mapping[str, str]]
-) -> dict[str, tuple[IdentityProposal, str]]:
+) -> tuple[dict[str, tuple[IdentityProposal, str]], dict[str, str]]:
     by_dk_id = {item.dk_id: item for item in proposals}
     unexpected = sorted(set(decisions) - set(by_dk_id))
     if unexpected:
@@ -1993,6 +2001,7 @@ def _resolve_reviewed(
 
     resolved: dict[str, tuple[IdentityProposal, str]] = {}
     rejected: list[str] = []
+    excluded_unresolved: dict[str, str] = {}
     for dk_id, proposal in sorted(by_dk_id.items()):
         row = decisions[dk_id]
         for column, expected in (
@@ -2004,7 +2013,25 @@ def _resolve_reviewed(
                 raise PriorsBuildError(
                     f"REVIEW_ROW_ALTERED:{dk_id}:{column}:{row.get(column, '')!r}!={expected!r}"
                 )
-        if row.get("DECISION", "").upper() != ACCEPTED_DECISION:
+        decision = row.get("DECISION", "").upper()
+        if decision == EXCLUDED_UNRESOLVED_DECISION:
+            # Ben's ruling, 2026-09-13. A full Classic pool lists deep
+            # practice-squad and UDFA people DraftKings itself flags OUT or IR
+            # and nflverse has no record of under any spelling, so demanding a
+            # complete identity map made the Classic path unpublishable on every
+            # real main slate: an evidence gate no source could ever clear, which
+            # CLAUDE.md classes as a defect rather than a constraint. The
+            # documented rule is that only an unresolved person who is still
+            # SELECTABLE stops a run. This token records that the operator read
+            # the row, found no identity, and is dropping the person from the
+            # map. `freeze_prior_package` re-derives unavailability from the
+            # bound salary bytes before honouring any of it, and names every
+            # drop in the returned report so it stays visible.
+            excluded_unresolved[proposal.underlying_id] = (
+                f"{dk_id}:{proposal.dk_name}:{proposal.dk_team}"
+            )
+            continue
+        if decision != ACCEPTED_DECISION:
             rejected.append(f"{dk_id}:{proposal.dk_name}:{row.get('DECISION', '') or 'BLANK'}")
             continue
         provider_id = row.get("REVIEWED_PROVIDER_PLAYER_ID", "") or proposal.provider_player_id
@@ -2023,7 +2050,7 @@ def _resolve_reviewed(
     if len(set(provider_ids)) != len(provider_ids):
         duplicates = sorted({value for value in provider_ids if provider_ids.count(value) > 1})
         raise PriorsBuildError(f"REVIEWED_PROVIDER_ID_NOT_UNIQUE:{duplicates[:10]}")
-    return resolved
+    return resolved, excluded_unresolved
 
 
 def freeze_prior_package(
@@ -2099,9 +2126,22 @@ def freeze_prior_package(
     if {item.underlying_id for item in proposals} != set(people):
         raise PriorsBuildError("PROPOSAL_POOL_COVERAGE_MISMATCH")
 
-    resolved = _resolve_reviewed(proposals, read_reviewed_decisions(reviewed_path))
-    if set(resolved) != set(people):
+    resolved, excluded_unresolved = _resolve_reviewed(
+        proposals, read_reviewed_decisions(reviewed_path)
+    )
+    excluded_people = set(excluded_unresolved)
+    if set(resolved) | excluded_people != set(people):
         raise PriorsBuildError("REVIEWED_POOL_COVERAGE_MISMATCH")
+    # An identity may be dropped only for a person the salary bytes themselves
+    # flag as unable to play, whom the availability contract already refuses to
+    # select. Re-derived here from the bound salary bytes so the exclusion can
+    # never be widened by the reviewed file alone.
+    still_selectable = sorted(excluded_people - unavailable_people(slate.players))
+    if still_selectable:
+        raise PriorsBuildError(
+            "IDENTITY_EXCLUDED_BUT_SELECTABLE:"
+            + ";".join(excluded_unresolved[person] for person in still_selectable[:10])
+        )
 
     specification_by_name = {
         item.name: item for item in source_specifications(season=season, prior_season=prior_season)
@@ -2411,6 +2451,12 @@ def freeze_prior_package(
         "salary_artifact_id": salary_digest,
         "teams": len(team_records),
         "people": len(player_records),
+        # Every person the operator dropped from the identity map, named rather
+        # than merely counted. A silent drop is the failure this token exists to
+        # avoid, so it travels with the package that was built without them.
+        "excluded_unresolved_people": [
+            excluded_unresolved[person] for person in sorted(excluded_people)
+        ],
         "weather_basis": (
             weather_basis_by_game[slate.games[0].game_id]
             if slate.mode is EngineMode.SHOWDOWN

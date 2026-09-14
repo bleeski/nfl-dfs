@@ -530,3 +530,67 @@ def test_cowork_snapshot_copies_role_sources_for_portable_replay(tmp_path, monke
     )
     assert resolution.evidence_sha256 == sha256_file(copied)
     assert all(Path(path).parent == copied.parent / "sources" for path in resolution.source_paths)
+
+
+# --------------------------------------------------------------------------- #
+# P0-1: the scored-pool export, promoted out of a slate-day debug hook
+# --------------------------------------------------------------------------- #
+
+
+def test_the_scored_pool_export_writes_a_versioned_document(tmp_path):
+    """The engine's real product, written through a named function.
+
+    On 2026-09-13 these scores were the one engine artifact that reached the
+    shipped portfolio, and they left through an unnamed environment variable
+    read in the middle of the scoring path. Backlog P1-4 replaces this with a
+    hash-bound first-class artifact and deletes it.
+    """
+
+    import json
+
+    from nfl_dfs.selection import POOL_SCORES_SCHEMA
+
+    slate, model, contract, splits, starter, _backup = _two_kicker_setup(tmp_path)
+    evidence = _write_evidence(
+        tmp_path / "roles",
+        slate,
+        {"NE": [(starter, 1.0)], "SEA": [("SEA|K|Sea Kicker", 1.0)]},
+    )
+    target = tmp_path / "scores.json"
+    _lineups, scores, _report = select_prior_lineups(
+        slate, model, splits, contract, count=1,
+        role_evidence_json=evidence, as_of=AS_OF, pool_scores_path=target,
+    )
+
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == POOL_SCORES_SCHEMA
+    assert payload["score_version"] == scores.score_version
+    assert payload["by_dk_id"] == scores.by_dk_id
+    # It is a diagnostic. Nothing downstream may read it as an authorization.
+    assert payload["status"] == "DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION"
+
+
+def test_the_scored_pool_export_is_off_unless_asked_for(tmp_path):
+    slate, model, contract, splits, starter, _backup = _two_kicker_setup(tmp_path)
+    evidence = _write_evidence(
+        tmp_path / "roles",
+        slate,
+        {"NE": [(starter, 1.0)], "SEA": [("SEA|K|Sea Kicker", 1.0)]},
+    )
+    select_prior_lineups(
+        slate, model, splits, contract, count=1,
+        role_evidence_json=evidence, as_of=AS_OF,
+    )
+    assert not list(tmp_path.glob("*scores*.json"))
+
+
+def test_the_scored_pool_export_refuses_an_unwritable_destination(tmp_path):
+    """Validated, not just handed to `open`."""
+
+    from nfl_dfs.selection import SelectionError, resolve_pool_scores_path
+
+    with pytest.raises(SelectionError, match="POOL_SCORES_PARENT_MISSING"):
+        resolve_pool_scores_path(tmp_path / "nope" / "scores.json")
+    with pytest.raises(SelectionError, match="POOL_SCORES_PATH_IS_A_DIRECTORY"):
+        resolve_pool_scores_path(tmp_path)
+    assert resolve_pool_scores_path(None) is None

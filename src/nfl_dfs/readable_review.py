@@ -537,7 +537,181 @@ def _html_table(headers: Sequence[str], rows: Iterable[Sequence[object]], css_cl
     return f'<table class="{_escape(css_class)}"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
 
 
+def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
+    """Render the C3 Classic schema without changing SD5 Showdown bytes."""
+
+    truths = _mapping(data.get("truths"), "truths", [])
+    entries = _sequence(data.get("entries"), "entries", [])
+    exposure = _mapping(data.get("exposure"), "exposure", [])
+    scope = _mapping(data.get("portfolio_scope"), "portfolio_scope", [])
+    bank = _mapping(scope.get("candidate_bank"), "candidate_bank", [])
+    joint = _mapping(scope.get("joint_selection"), "joint_selection", [])
+    sections: list[str] = [
+        '<!doctype html><html><head><meta charset="utf-8"><title>Classic prior-only lineup review</title>',
+        "<style>@page{size:landscape;margin:9mm}body{font-family:Aptos,Arial,sans-serif;color:#17223b;margin:22px}"
+        "h1,h2,h3{color:#17324d;margin-bottom:8px}.warning{background:#fce4d6;border:2px solid #c00000;padding:12px;font-weight:700}"
+        ".scope{background:#fff2cc;border-left:5px solid #bf8f00;padding:10px}.truths{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}"
+        ".truth{border:1px solid #9fbad0;padding:9px;background:#eef5fa}.truth b{display:block;font-size:11px}.pass{color:#006100;font-weight:700}"
+        "table{width:100%;border-collapse:collapse;margin:8px 0 20px;font-size:10px;page-break-inside:auto}thead{display:table-header-group}"
+        "th{background:#2f75b5;color:white;text-align:left;padding:5px}td{border:1px solid #ccd6df;padding:4px;vertical-align:top;overflow-wrap:anywhere}"
+        "tr{page-break-inside:avoid}.entry{page-break-before:auto}.small{font-size:9px;color:#555}</style></head><body>",
+        "<h1>DraftKings NFL Classic — prior-only exact-template review</h1>",
+        f'<div class="warning">{_escape(data.get("warning"))}</div>',
+        '<div class="truths">',
+    ]
+    for label in ("FILE_VALID", "EVIDENCE_STATE", "MODEL_STATUS", "RELEASE_DECISION"):
+        sections.append(
+            f'<div class="truth"><b>{_escape(label)}</b>{_escape(truths.get(label))}</div>'
+        )
+    sections.extend(
+        [
+            "</div>",
+            f'<p><b>Display reconciliation:</b> <span class="pass">{_escape(_mapping(data.get("reconciliation"), "reconciliation", []).get("status"))}</span></p>',
+            '<div class="scope"><b>Bounded-bank scope:</b> '
+            f'{_escape(bank.get("status"))}; requested {_escape(bank.get("requested_candidates"))}, '
+            f'produced {_escape(bank.get("produced_candidates"))}; exhaustive={_escape(bank.get("exhaustive"))}. '
+            f'Joint solve {_escape(joint.get("status"))} over {_escape(joint.get("optimality_scope"))}. '
+            'No full-slate optimality, calibrated performance, ownership, field, duplication, payout, economics, or EV claim.</div>',
+            f'<p class="scope"><b>Next operator action:</b> {_escape(data.get("next_action"))}</p>',
+            f'<p class="small">Readable review data SHA-256: {_escape(data_sha256)}</p>',
+            "<h2>Exact Entry-ID assignments in template order</h2>",
+        ]
+    )
+    for raw_entry in entries:
+        entry = _mapping(raw_entry, "entry", [])
+        sections.append(
+            f'<section class="entry"><h3>Entry {_escape(entry.get("entry_id"))} — {_escape(entry.get("contest_name") or "Contest label unavailable")}</h3>'
+            f'<p>Contest ID {_escape(entry.get("contest_id"))} · Salary ${_escape(entry.get("salary_total"))} · '
+            f'Remaining ${_escape(entry.get("salary_remaining"))} · PRIOR_ONLY central estimate '
+            f'{_escape(entry.get("prior_only_central_estimate_points"))} points · Games {_escape(entry.get("games"))} · '
+            f'Groups {_escape(entry.get("group_matches"))} · Stack values {_escape(entry.get("stack_values"))}</p>'
+        )
+        slot_rows = []
+        for raw_slot in _sequence(entry.get("slots"), "entry.slots", []):
+            slot = _mapping(raw_slot, "slot", [])
+            findings = "; ".join(
+                f"{item.get('state')} [{item.get('source_sha256')}]"
+                for item in _sequence(slot.get("role_findings"), "slot.role_findings", [])
+                if isinstance(item, Mapping)
+            )
+            slot_rows.append(
+                (
+                    slot.get("slot"), slot.get("name"), slot.get("dk_roster_id"),
+                    slot.get("underlying_person_id"), slot.get("position"), slot.get("team"),
+                    slot.get("opponent"), slot.get("game_id"), slot.get("salary"),
+                    slot.get("prior_only_central_estimate_points"), slot.get("official_activity"),
+                    slot.get("official_observed_at"), slot.get("role_evidence_state"), findings,
+                )
+            )
+        sections.append(
+            _html_table(
+                (
+                    "Slot", "Player", "Exact DK ID", "Underlying person", "Position", "Team",
+                    "Opponent", "Game", "Salary", "Prior-only points", "Official activity",
+                    "Activity observed", "Current-role evidence", "Role source/hash",
+                ),
+                slot_rows,
+            )
+        )
+        sections.append("</section>")
+
+    sections.append("<h2>Exact audited policy counts and limits</h2>")
+    people_rows = []
+    for raw in _sequence(exposure.get("people"), "exposure.people", []):
+        row = _mapping(raw, "exposure.person", [])
+        if int(row.get("actual_count", 0) or 0) or row.get("excluded") or int(row.get("minimum_count", 0) or 0):
+            people_rows.append(
+                (
+                    row.get("name"), row.get("underlying_person_id"), row.get("team"),
+                    row.get("position"), row.get("actual_count"), row.get("actual_percentage"),
+                    row.get("minimum_count"), row.get("maximum_count"), row.get("excluded"),
+                    row.get("exclusion_source"),
+                )
+            )
+    sections.append(
+        _html_table(
+            ("Player", "Person ID", "Team", "Position", "Actual #", "Actual %", "Min #", "Max #", "Excluded", "Basis"),
+            people_rows,
+        )
+    )
+    for title, key in (("Team counts", "teams"), ("Game counts", "games"), ("Group counts", "groups"), ("Stack-rule counts", "stack_rules")):
+        rows = []
+        for raw in _sequence(exposure.get(key), f"exposure.{key}", []):
+            row = _mapping(raw, f"exposure.{key}.row", [])
+            rows.append(
+                (
+                    row.get("id"), row.get("rule_type"), row.get("strength"),
+                    row.get("actual_count"), row.get("minimum_count"), row.get("maximum_count"),
+                    row.get("minimum_players", row.get("minimum_value")),
+                    row.get("maximum_players", row.get("maximum_value")),
+                )
+            )
+        sections.append(f"<h3>{_escape(title)}</h3>")
+        sections.append(
+            _html_table(("ID", "Type", "Strength", "Actual #", "Min #", "Max #", "Per-lineup min", "Per-lineup max"), rows)
+        )
+    sections.append(
+        f'<p>Canonical uniqueness: {_escape(exposure.get("canonical_uniqueness"))}. '
+        f'Pairwise underlying-person overlap maximum: {_escape(exposure.get("effective_pairwise_person_overlap"))}.</p>'
+    )
+    overlap_rows = [
+        (row.get("entry_id_a"), row.get("entry_id_b"), row.get("actual_people"), row.get("maximum_people"))
+        for row in _sequence(exposure.get("pairwise_overlap"), "exposure.pairwise_overlap", [])
+        if isinstance(row, Mapping)
+    ]
+    sections.append(_html_table(("Entry A", "Entry B", "Actual shared people", "Maximum"), overlap_rows))
+
+    coverage = data.get("pool_coverage")
+    if isinstance(coverage, Mapping):
+        sections.append("<h2>Complete-slate coverage and unallocated volume</h2>")
+        sections.append(
+            f'<p>{_escape(coverage.get("people_in_pool"))} people in the salary pool; '
+            f'{_escape(coverage.get("selectable_people"))} selectable. {_escape(coverage.get("note"))}</p>'
+        )
+        reason_rows = []
+        for reason, values in _mapping(coverage.get("by_reason"), "coverage.by_reason", []).items():
+            if isinstance(values, Mapping):
+                reason_rows.append((reason, values.get("people"), values.get("flex_salary"), values.get("names")))
+        sections.append(_html_table(("Reason", "People", "Salary", "Names"), reason_rows))
+        unallocated_rows = []
+        for team, fields in _mapping(coverage.get("unallocated_by_team"), "coverage.unallocated", []).items():
+            if isinstance(fields, Mapping):
+                unallocated_rows.append((team, *[fields.get(key) for key in ("qb_attempt_share", "carry_share", "target_share", "rushing_td_share", "receiving_td_share")]))
+        sections.append(
+            _html_table(("Team", "QB attempt share", "Carry share", "Target share", "Rushing TD share", "Receiving TD share"), unallocated_rows)
+        )
+
+    sections.append("<h2>Evidence and limitations</h2>")
+    evidence_rows = [
+        (row.get("category"), row.get("state"), row.get("observation"), row.get("observed_at"), row.get("expires_at"), row.get("source"), row.get("next_action"))
+        for row in _sequence(data.get("evidence_observations"), "evidence", [])
+        if isinstance(row, Mapping)
+    ]
+    sections.append(_html_table(("Category", "State", "Observation", "Observed", "Expires", "Source", "Next action"), evidence_rows))
+    sections.append("<ul>" + "".join(f"<li>{_escape(value)}</li>" for value in _sequence(data.get("limitations"), "limitations", [])) + "</ul>")
+    sections.append("<h2>Named blockers</h2><ul>" + "".join(f"<li>{_escape(value)}</li>" for value in _sequence(data.get("blockers"), "blockers", [])) + "</ul>")
+    sections.append("<h2>Artifact provenance and exact hashes</h2>")
+    artifact_rows = []
+    for row in _sequence(data.get("artifacts"), "artifacts", []):
+        if not isinstance(row, Mapping):
+            continue
+        path_text = _escape(row.get("path"))
+        if isinstance(row.get("href"), str):
+            path_text = f'<a href="{_escape(row.get("href"))}">{path_text}</a>'
+        artifact_rows.append((row.get("name"), path_text, row.get("sha256")))
+    head = "<thead><tr><th>Name</th><th>Local artifact</th><th>SHA-256</th></tr></thead>"
+    body = "".join(
+        f"<tr><td>{_escape(name)}</td><td>{path_cell}</td><td>{_escape(digest)}</td></tr>"
+        for name, path_cell, digest in artifact_rows
+    )
+    sections.append(f"<table>{head}<tbody>{body}</tbody></table>")
+    sections.append("</body></html>")
+    return "".join(sections).encode("utf-8")
+
+
 def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
+    if data.get("mode") == "CLASSIC":
+        return _render_classic_html(data, data_sha256=data_sha256)
     truths = _mapping(data.get("truths"), "truths", [])
     entries = _sequence(data.get("entries"), "entries", [])
     exposure = _mapping(data.get("exposure"), "exposure", [])
