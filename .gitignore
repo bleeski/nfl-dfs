@@ -43,3 +43,12 @@ _to_delete/
 # out of the shared repo; .claude/settings.json, rules and skills are tracked.
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Operator run outputs that landed at the repo root instead of under data/runs/.
+# Filled DK entry templates, official-status captures and generated portfolio
+# policies are per-slate artifacts bound to a run's inputs and hashes; the run
+# folder is their home and the copy at root is a convenience duplicate. Anchored
+# to the root only, so the same names stay visible anywhere else in the tree.
+/DKEntries_*.csv
+/*_official_status.csv
+/*_portfolio_policy_v*.json
