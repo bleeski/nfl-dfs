@@ -176,9 +176,9 @@ a gap is the only unrecoverable error. Full text: `docs/COWORK_RUNBOOK.md`.
 
 ### Repo etiquette and gotchas
 
-- `backlog.md`, `changelog.md`, `IMPLEMENTATION_STATUS.md` are CRLF; preserve
-  line endings and append under the existing headings, never delete history.
-  Status vocabulary: `READY`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `DEFERRED`.
+- `backlog.md`, `changelog.md`, `IMPLEMENTATION_STATUS.md` are LF (measured
+  2026-09-16); match the file's endings, append under existing headings, never
+  delete history. Status: `READY`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `DEFERRED`.
 - Every structured input has a versioned contract in `docs/DATA_CONTRACTS.md`;
   a schema change is a new version, v1 is never mutated. Objective, allocation
   and scoring rules are registered `*_version`s with `does_not_establish` text;

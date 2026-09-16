@@ -52,3 +52,17 @@ CLAUDE.local.md
 /DKEntries_*.csv
 /*_official_status.csv
 /*_portfolio_policy_v*.json
+
+# Scaffolding from earlier sessions, verified redundant on 2026-09-16 and kept
+# on disk rather than deleted, per this repo's never-delete posture.
+#   patches/ holds slate-day-engine-changes.patch and its commit script. Every
+#   marker from all six of its hunks is present in main (embedded_pool_start,
+#   EXCLUDE_UNRESOLVED_UNAVAILABLE, write_pool_scores,
+#   DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION, the moved unavailable vocabulary and
+#   the twenty-entry fixture); the work landed under 7edddee, not as its own
+#   commit, which is why the patch no longer applies in either direction.
+#   "Claude outputs/" is a Cowork drop folder. Its two documents are byte-
+#   identical to the tracked copies in docs/session-prompts/; the rest is run
+#   output. Future Cowork runs will keep dropping files here.
+/patches/
+/Claude outputs/

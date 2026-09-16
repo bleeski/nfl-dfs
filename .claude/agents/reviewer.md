@@ -15,7 +15,9 @@ You did not write the code; evaluate the result on its own terms.
    result; nothing outside the brief's file list changed; no test was deleted,
    skipped or loosened; no uploaded bytes, fixtures or run inputs changed; no
    new wording claims EV, ROI, calibration, edge or upload readiness; every new
-   structured input has a versioned contract; CRLF preserved in the ledgers;
+   structured input has a versioned contract; the ledgers' existing LF endings
+   preserved, and no findings document's recorded SHA-256 broken by a line
+   ending change;
    determinism and mutation tests exist for any new writer.
 3. Run only what is cheap and read-only: `git diff --check`, and a focused
    pytest file if the prompt names one. Do not run the complete suite.

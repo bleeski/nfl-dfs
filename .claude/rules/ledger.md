@@ -9,8 +9,11 @@ paths:
 
 # The session ledger
 
-- These files are CRLF. Preserve line endings; check with a byte count before
-  and after an edit.
+- These files are LF, not CRLF (verified 2026-09-16: 0 CRLF in all three;
+  `.gitattributes` sets `* text=auto eol=lf`). Never assume an ending — read the
+  bytes first and match what is there, because writing CRLF into an LF file
+  rewrites every line and buries the real change in a whole-file diff. Check
+  with a byte count before and after an edit.
 - Read them by section, never whole: `backlog.md` head with `limit` (~230
   lines) plus the one brief in `docs/chunks/`; `changelog.md` first 80 lines
   before inserting under `## Unreleased`. History is in `docs/backlog-archive/`

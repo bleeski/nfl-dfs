@@ -4,3 +4,10 @@
 *.csv -text
 *.xlsx -text
 tests/fixtures/supplied/** -text whitespace=cr-at-eol
+
+# Findings documents whose SHA-256 the changelog records are frozen evidence
+# too. Under the default `text=auto eol=lf` a CRLF findings file is normalized
+# on the way into git, which silently breaks the recorded hash: caught on
+# 2026-09-16 committing STANDINGS_GREENFIELD_FINDINGS_2026-09-15.md, whose
+# staged blob hashed 30f69d97... against the d7250f0d... in the changelog.
+docs/*_FINDINGS_*.md -text whitespace=cr-at-eol

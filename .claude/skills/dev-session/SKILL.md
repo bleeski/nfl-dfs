@@ -24,7 +24,7 @@ Start development on chunk `$ARGUMENTS` of `backlog.md`.
    brief lists), tests to add first, the acceptance statement verbatim, open
    `[BEN: ...]` questions, and what is explicitly out of scope. Wait for
    approval before editing.
-7. Set the chunk `IN_PROGRESS` in `backlog.md` (CRLF preserved).
+7. Set the chunk `IN_PROGRESS` in `backlog.md` (LF; match the file's endings).
 
 Never `git add .` or `-A`, never commit, push or open a PR without an explicit
 reviewed path list from Ben.

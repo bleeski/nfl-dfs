@@ -4,6 +4,100 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-16 (repository hygiene): branch consolidation, Showdown scripts tracked, root run outputs ignored
+
+Repository hygiene only. No source module, test, contract, run artifact or
+release truth changed, and no run was executed.
+
+Added:
+
+- `scripts/make_showdown_policy.py` and `scripts/qa_showdown_portfolio.py`,
+  written 2026-09-14 per the SHOWDOWN_RETROSPECTIVE_2026-09-13
+  recommendations but never committed. Unchanged from the versions used on
+  the 2026-09-13 and 2026-09-14 slates. CLAUDE.md cites
+  `make_showdown_policy.py` as encoding the Showdown rung ladder, so a script
+  the lock-clock ladder depends on had been living outside version control
+  while its Classic twins (`make_classic_policy.py`, `qa_classic_portfolio.py`)
+  were tracked.
+- `docs/RUN_RECORD_20260914_DEN_KC.md`,
+  `docs/STANDINGS_GREENFIELD_FINDINGS_2026-09-15.md` and
+  `data/standings/standings_pulls_2026-09-15.html`. The findings document was
+  already recorded as Added by the 2026-09-15 entry above but had never been
+  committed; its SHA-256 was verified to match the
+  `d7250f0d575e1e957c1bad25da7dd9a5ff0edc2aec3c66c463661380d4751543` that
+  entry records. The standings pull follows the tracked
+  `standings_pulls_2026-09-14.html` precedent.
+- `data/standings/inbox/.gitkeep` and `data/standings/normalized/.gitkeep`.
+  Both were present on disk but never tracked, which is why git reported both
+  directories as untracked even though `.gitignore` already un-ignores exactly
+  those two paths. Matches the tracked `.gitkeep` in `data/runs/`, `outputs/`,
+  `data/models/` and `data/registry/`.
+
+Changed:
+
+- `.gitignore`: root-anchored ignores for the 15 operator run outputs that had
+  accumulated at the repo root instead of under `data/runs/`
+  (`/DKEntries_*.csv`, `/*_official_status.csv`, `/*_portfolio_policy_v*.json`),
+  plus `/patches/` and `/Claude outputs/`. The leading slash confines every
+  pattern to the root, so the same filenames stay visible under `data/runs/`,
+  `tests/fixtures/` or anywhere else in the tree.
+- `.gitattributes`: `docs/*_FINDINGS_*.md -text whitespace=cr-at-eol`, extending
+  the existing byte-sensitive section and matching the flags already used for
+  `tests/fixtures/supplied/**`. The `whitespace=cr-at-eol` half is required:
+  without it `git diff --check` reports every line of a preserved CRLF document
+  as trailing whitespace. Under the default `* text=auto eol=lf` a CRLF findings
+  document is normalized on the way into git. Staging
+  `STANDINGS_GREENFIELD_FINDINGS_2026-09-15.md` produced a blob hashing
+  `30f69d9703b4bab6af585b852554fbf9cd724ecd49d2616bc6e0d99a41c4fc12` against the
+  `d7250f0d...` the 2026-09-15 entry records: the commit meant to preserve that
+  document would silently have invalidated its recorded hash. With the rule in
+  place the staged blob hashes `d7250f0d...` again. The already committed
+  `STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md` was LF on disk and is
+  unaffected; its recorded `664e64c3...` verifies both on disk and in git.
+- Corrected a false rule in five places that the 2026-09-15 harness commit had
+  introduced: `CLAUDE.md` "Repo etiquette", `.claude/rules/ledger.md`,
+  `.claude/skills/close-out/SKILL.md` (three references),
+  `.claude/skills/dev-session/SKILL.md` and `.claude/agents/reviewer.md` all
+  stated the three ledgers are CRLF. They are LF, and have been since
+  `.gitattributes` set `* text=auto eol=lf`: measured 0 CRLF against 481, 614
+  and 436 lines respectively. A session obeying the old rule would have rewritten
+  every line of a ledger and buried its real change in a whole-file diff. The
+  rules now say LF, cite the measurement, and tell the session to read the bytes
+  rather than assume. The two CRLF references in
+  `DFS_SYSTEM_GREENFIELD_SPEC.md` are correct and untouched: DK CSVs and
+  `tests/fixtures/supplied/**` really are byte-preserved by `.gitattributes`.
+- PR #14 merged to `main` as `970fea1`; the local checkout moved from
+  `docs/claude-code-setup-2026-09-15` to `main`. The branch still exists on
+  origin and locally; nothing was deleted.
+
+Verification:
+
+- `patches/slate-day-engine-changes.patch` was audited before being ignored,
+  not assumed stale. It applies in neither direction, but every marker from
+  all six of its hunks is present in `main`: `embedded_pool_start` (`dk.py`),
+  `EXCLUDE_UNRESOLVED_UNAVAILABLE` (`priors.py`), `write_pool_scores` and
+  `DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION` (`selection.py`), the unavailable
+  vocabulary in `contracts.py`, and
+  `tests/fixtures/supplied/DKEntries CSV 20 entries.csv`. The work landed
+  under `7edddee`, not as its own commit, which is why the patch no longer
+  lines up in either direction.
+- The two documents in `Claude outputs/` are byte-identical (`diff -q`) to the
+  tracked `docs/session-prompts/QA1-adversarial-qa-agent.md` and
+  `W4-cowork-prior-only-profile.md`.
+- `git ls-files --cached --ignored --exclude-standard` empty after each
+  `.gitignore` change: no tracked file became invisible.
+- `py_compile` clean and `--help` runs on both Showdown scripts;
+  `git diff --check` clean.
+- Full suite NOT run: no `src/` module changed in this work.
+
+Left open:
+
+- Nothing was deleted. `patches/` and `Claude outputs/` remain on disk and are
+  now ignored, per this repo's never-delete posture; they can be removed by
+  hand at any time.
+- `tests/test_w6_live_preflight.py::test_live_check_refuses_once_a_selected_player_has_locked`
+  still fails on its hardcoded 2026-09-14 expiry until `P0` pins its clock.
+
 ### 2026-09-15 (research and reprioritization): standings evidence, the prize-tail program, no code changed
 
 Two research reports were added under `docs/` and the development queue was
