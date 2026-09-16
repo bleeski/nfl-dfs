@@ -124,7 +124,7 @@ selected, and the selected portfolio carried `qb-pass-catcher` on 20 of 20 and
 If a run reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
 `CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, regenerate one rung
 lower and rerun immediately. Do not stop to ask; see "Shipping under a lock
-clock" in `CLAUDE.md`. Rung 4 emits no policy and runs C1 sequential selection,
+clock", summarized in `CLAUDE.md` and reproduced in full at the end of this runbook. Rung 4 emits no policy and runs C1 sequential selection,
 which always produces a legal portfolio and is the floor the ladder guarantees.
 
 C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
@@ -693,3 +693,226 @@ truth for edits.
 on `pass_status` and `registry.py` opens a real database under `data/registry/`.
 Either grant the session delete permission on the folder, or run from a
 local-disk working copy.
+
+## Moved from CLAUDE.md on 2026-09-15 (verbatim)
+
+CLAUDE.md was restructured on 2026-09-15 so that it holds boundaries, release
+truths and the development protocol only. The two operating sections below are
+the exact text it carried until then, headings demoted one level, and remain in
+force for every slate run. Rulings attributed to Ben keep their dates.
+
+### When Ben says “run the slate”
+
+1. Locate the attached salary and reserved-entry CSVs. Do not depend on their
+   filenames. If both are in one attachment directory, run:
+
+   For prior-only Showdown or Classic review generation, use:
+
+   `sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<short-label>'`
+
+   This automatically runs the frozen prior, projection, and selection chain.
+   It produces review lineups with `PRIOR_ONLY / DO_NOT_UPLOAD`.
+   It does not implement calibrated ceiling, ownership leverage, or portfolio
+   drawdown optimization. The default `diagnostic` profile is the older
+   economics workflow and normally stops on missing contest inputs. For Classic,
+   the no-policy C1 compatibility path writes canonical
+   `classic_selection.json` and `classic_complete_slate_coverage.json`. A valid
+   C2 Classic policy adds canonical candidate-bank, exact ordered assignment,
+   and independent selection-audit JSON. C3 independently audits those exact
+   bytes and can write a review-only `DK_REVIEW_ENTRY` CSV plus readable
+   JSON/HTML/eight-sheet workbook. It never writes `DK_UPLOAD`, and remains
+   `PRIOR_ONLY / DO_NOT_UPLOAD`. C3 native Excel save/reopen acceptance is still
+   blocked; do not begin C4 until it passes.
+
+   If they are in different locations, pass `--salaries` and `--entries`
+   explicitly. On Windows outside Cowork, use `./nfl.ps1 cowork-run` with the
+   same arguments.
+2. If the project runtime is absent, run `sh ./nfl.sh setup`, then rerun. Do
+   not use the Windows `.venv` from a Linux Cowork runtime. `nfl.sh` keeps its
+   Linux environment isolated in `.cowork-venv`.
+3. Read the generated `cowork_run.json`, `run_request.json`, and review
+   package. A successful Showdown `prior_review` run includes the readable
+   workbook plus `prior_only_readable_review.json` and a self-contained
+   `prior_only_readable_review.html`. Start with the workbook or HTML, but use
+   the JSON and reported SHA-256 values to identify the exact reviewed bytes.
+   `DISPLAY_RECONCILIATION=PASS` means the display was independently rebuilt
+   from and reconciled to the exact salary, entry, assignment, policy, audit,
+   selection, and review-export artifacts; it is not a release decision. The
+   first pass always freezes and reconciles the supplied files. A successful
+   Classic C3 starts with its canonical policy/bank/assignment/audit/selection/
+   coverage JSON and adds the downstream audit, exact-template review CSV,
+   canonical readable JSON, self-contained HTML, and the eight-sheet workbook.
+   The review CSV is not an upload authorization.
+4. Gather everything discoverable from approved public sources and freeze the
+   artifacts. For an outdoor Showdown game, obtain the forecast through the
+   approved `sources.fetch_public_artifact` adapter from `api.weather.gov`;
+   retain its raw bytes and hash. Use its actual `generatedAt` observation time
+   and game-period conditions to populate `weather_state`,
+   `weather_source_uri`, and `weather_observed_at` in the request, then rerun.
+   For multi-game Classic, use a hash-bound
+   `nfl_classic_weather_evidence_c1_v1` JSON file through
+   `weather_evidence_json`; it must bind the salary hash and contain exactly one
+   source/state/observation record for every game, including the dome games the
+   schedule already resolves. Build it with
+   `scripts/make_classic_weather_evidence.py`, which derives the exact `game_id`
+   set from the salary bytes, content-addresses each capture and reads each
+   forecast's own `generatedAt`. The `game_id` is the `AWAY@HOME` matchup alone,
+   not the whole `Game Info` cell.
+   Do not claim NWS is universally unreachable: test the current session.
+   Weather capture expires after six hours. Use a fresh run before kickoff.
+   `prior_review` already produces its model inputs; the manual fallback is
+   `sh ./nfl.sh project` (or
+   `./nfl.ps1 project` on Windows), supplying the exact expected SHA-256 for
+   the salary, team-prior, player-prior, and frozen identity-map artifacts. If
+   an approved source artifact or exact frozen mapping is unavailable, stop and
+   report the named producer error; never type or infer a numerical substitute.
+5. Do not access DraftKings programmatically or through browser automation.
+   The entry CSV does not contain complete payouts or field size. Ask Ben one
+   concise question for the smallest unavailable contest fact, normally a
+   contest-details screenshot or pasted payout table. Do not ask him for facts
+   that can be obtained safely from approved public evidence.
+6. Update the generated machine-readable `run_request.json` with any supplied
+   or validated auxiliary files and rerun:
+
+   `sh ./nfl.sh cowork-run --request '<full-path-to-run_request.json>'`
+7. Continue through build, independent QA, and certification when the request
+   is complete. If current official activity evidence is missing, still retain
+   useful diagnostic assignments but finish `DO_NOT_UPLOAD`.
+   For `prior_review`, discover or supply `official_status_csv` when official
+   reports are available. The supplied rows must be current, and an INACTIVE
+   row excludes both CPT and FLEX identities before selection. Missing ACTIVE
+   rows remain unknown; salary status alone never establishes current activity.
+   Classic C1/C2 will not publish selection artifacts unless every selected person
+   has a fresh exact-ID row. Classic current-role evidence follows the same rule
+   as Showdown (R17, extended to Classic 2026-09-12 on Ben's ruling): the role
+   resolver decides, so an unresolved or declared-changed role still blocks
+   before selection and a person with no prior-season row is still excluded with
+   zero share, but a history-derived prior is a sufficient basis to select. Every
+   selected offensive person resting on one is named in
+   `selected_evidence_gate.unverified_role_people` and in the review. A
+   source-supported numerical current-team allocation in
+   `nfl_classic_offensive_role_evidence_c1_v1` is still the only thing that makes
+   a role a current fact, and any person the selection gate recorded as
+   source-supported must still be covered by that package at C3.
+   SD2 distinguishes missing and observed-zero offensive history. Rebuild older
+   prior packages without SD2 coverage. A transfer carries his own prior-team
+   share as an unverified cold-start prior (`TRANSFER_PRIOR_UNVERIFIED`,
+   `EVIDENCE_STATE=UNKNOWN`); a person with no prior-season row anywhere is
+   excluded with zero share and named with salary in `pool_coverage`; an
+   unresolved material role change still names the person and the smallest
+   evidence action and stops. Capture approved source bytes, prepare the
+   versioned auxiliary `offensive_role_evidence_json` package in
+   `docs/DATA_CONTRACTS.md`, add it to the generated request and rerun.
+   Qualitative starter/backup evidence cannot invent a numerical share. Without
+   supported replacements, excluded volume stays visibly unallocated. Never ask
+   Ben to author numerical role priors.
+   A versioned Showdown `portfolio_policy_json` may bind exact salary bytes, the game,
+   the complete person/CPT/FLEX map, and all requested Entry IDs. On the
+   Showdown `prior_review` profile, SD4 snapshots and validates the source and
+   normalized bytes, generates a bounded legal candidate bank, jointly selects
+   exactly one lineup per requested Entry ID under every effective integer cap,
+   then independently reparses the canonical normalized-policy artifact and
+   recomputes legality, canonical identities, combined and Captain counts,
+   uniqueness, overlap and all bound hashes immediately before review export.
+   Only `ENFORCED_AND_INDEPENDENTLY_AUDITED` may write a new
+   `DK_REVIEW_ENTRY` CSV. Time/search limits, solver errors, incomplete-bank
+   exhaustion, modeled-bank infeasibility, assignment mismatch, audit failure
+   or input mutation preserve earlier outputs and write no new review CSV.
+   The active bank is stratified by the policy (per-captain, per-capped-person
+   exclusion, a policy-feasible chain, then top-K fill) and bounded to
+   `max(32, 4 x entries)` canonical candidates with a `max(30s, 2s x entries)`
+   generation budget, two seconds per candidate solve and `max(10s, 1s x
+   entries)` for the joint solve; its completeness is reported and is not a
+   full-slate claim.
+   Classic C2 uses a distinct direct-integer policy bound to the exact salary
+   and entry hashes, draft group, complete multi-game identity, registered
+   objective/seed, and ordered Entry IDs. It supports player/team/game bounds,
+   exclusions, hard/advisory groups and registered stack rules, uniqueness and
+   pairwise person overlap. It creates a deterministic bounded legal candidate
+   bank, a policy-feasible chain before top-objective fill, and one joint
+   assignment without cycling. Accept only
+   `OPTIMAL_ACTUAL_CANDIDATE_BANK` and independent audit `PASS`; that status is
+   optimal over the reported actual bank only. C2 writes machine-readable JSON
+   only. C3 independently reparses every bound artifact and proposed/final CSV,
+   recomputes the complete portfolio and every hard limit, and publishes the
+   exact-template review CSV plus readable JSON/HTML/workbook only after audit
+   `PASS`. Only the nine authorized blank roster cells per exact Entry ID may
+   change; all non-roster bytes and physical-line geometry remain exact.
+   Other profiles refuse a supplied policy instead of ignoring it. Requests
+   without the policy retain their existing SD1/SD2 behavior, including the
+   legacy sequential Captain differentiation and assignment cycling.
+   The SD5 review surface lists every exact Entry ID and roster ID, underlying
+   person, slot and salary, prior-only central estimate, actual combined-person
+   and Captain exposure, policy maxima, overlap, uniqueness, evidence/role
+   observations, provenance paths and hashes. It escapes markup and renders
+   spreadsheet-active prefixes inert without changing the exact source bytes.
+   Any byte or semantic disagreement is a named `READABLE_REVIEW_FAILED`
+   blocker, returns exit code 2, preserves earlier artifacts, and does not
+   advertise a new review CSV through the top-level result.
+   Kicker roles are resolved after those exclusions. If more than one kicker
+   remains eligible for a team, capture approved source bytes through
+   `sources.py`, prepare the versioned `role_evidence_json` package documented
+   in `docs/DATA_CONTRACTS.md`, add it to the generated request, and rerun.
+   Never choose by salary, split evenly, or infer inactivity from zero offensive
+   snap share. A one-kicker fallback is reported only as a prior-only sole-listed
+   assumption, not confirmed role or ACTIVE evidence.
+   Never send generated prior assignments to manual-guardrail certification.
+   Use `preflight` immediately before any separately certified manual upload.
+8. Return `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, and
+   `RELEASE_DECISION`, plus the compatibility status, blockers,
+   readable JSON/HTML/workbook paths and SHA-256 values, manifest path,
+   proposed/final SHA-256, display-reconciliation status, and the single next
+   operator action. `FILE_VALID` never implies release. A compatibility
+   `CERTIFIED` status is derived only from
+   `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` and is not a profitability claim.
+
+### Shipping under a lock clock
+
+Ben's ruling, 2026-09-12. **The worst outcome on this project is not a bad
+lineup. It is no lineup.** A weak portfolio can be repaired by late swap; a
+missed lock cannot be repaired at all, and those games are gone. Procedure
+exists to keep the output honest, not to keep it from existing. When the two
+conflict, ship.
+
+Two classes of rule live in this repo and they are not the same thing.
+
+**Construction preferences** are quality choices: stack rules, exposure and
+overlap caps, candidate-bank size and search budgets, uniqueness, the objective's
+tuning. They are opinions about what makes a good portfolio. **Claude may relax
+any of them, on its own authority, without asking Ben**, whenever they are what
+stands between the run and a legal portfolio. Do not stop to request permission,
+do not present a menu of options, and do not spend the last hour before lock
+tuning. Relax, rerun, and report what was relaxed and why in the handoff.
+
+`scripts/make_classic_policy.py` encodes this as a rung ladder. Rung 0 is every
+entry stacked with a bring-back on most of them; each rung relaxes one class; and
+**rung 4 emits no policy at all and runs C1 sequential selection, which is the
+proven floor and always produces a legal portfolio.** Rung 4 is not a failure. It
+is the guarantee. If a run reports `MODELED_BANK_INFEASIBILITY`,
+`INCOMPLETE_BANK_EXHAUSTION`, `CANDIDATE_BANK_TIMEOUT` or
+`CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun immediately rather than
+diagnosing. Diagnose afterwards, in the changelog.
+
+**Evidence gates** are truth claims: official activity, current offensive role,
+weather capture and its expiry, identity resolution, prior-package expiry, and
+every hash binding. These are not preferences and the ladder does not touch them.
+They are also the only things that can genuinely make you miss a lock, so they go
+first in the running order, not last. On a Classic slate that means the per-game
+weather captures and the official-activity observation are the critical path;
+start them before anything else and let the build wait on them.
+
+Three rules bound the autonomy above.
+
+- **Never fabricate an observation to clear a gate.** Not a weather state, not an
+  ACTIVE row, not a role allocation, not a timestamp. An invented observation is
+  worse than a missed slate because it silently poisons every later replay.
+- **Never relax a gate that a real source could still clear.** If the capture
+  exists and you have time, go get it. Relaxation is for the clock and for
+  infeasibility, not for saving effort.
+- **A gate that no real source can ever clear is a defect, not a constraint.**
+  Take it to Ben with a recommendation, the way R21 went. Do not work around it
+  silently and do not loosen it unilaterally.
+
+If the clock beats an evidence gate that a source could have cleared, say so
+plainly, ship whatever the engine will legally produce without it, and name the
+gap in the handoff. Silence about a gap is the only unrecoverable error.

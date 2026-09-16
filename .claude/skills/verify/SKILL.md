@@ -1,0 +1,22 @@
+---
+name: verify
+description: Run the nfl-dfs verification stack (focused tests, complete pinned suite, doctor, compile/import, git diff --check) and paste the evidence. Use before claiming a chunk is done, or whenever Ben asks "is it green".
+disable-model-invocation: true
+---
+
+Run the full verification stack and report evidence, not summaries.
+
+1. Focused: `.\nfl.ps1 test tests/<changed test files>` (Linux: `sh ./nfl.sh test ...`).
+2. Complete pinned suite with an extended tool timeout (600000 ms) or in the
+   background with polling: `.\nfl.ps1 test`. Record the exact
+   `N passed, M skipped[, K failed] in Ns` line. A run killed by the tool timeout
+   is not a result; rerun it.
+3. `.\nfl.ps1 doctor`; expect `pass_status: true`.
+4. `python -m compileall` or a direct import of every changed module.
+5. `git diff --check`.
+6. Compare against the baseline recorded at session start. Any new failure or
+   skip is named with the test id. The only expected skip is the Windows
+   symlink-permission case; the known failure list is in `CLAUDE.md`.
+
+Output: a short table of check → result, then the pasted result lines. If any
+check is red, say the chunk is not `DONE` and what is left.

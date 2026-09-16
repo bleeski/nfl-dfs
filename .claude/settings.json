@@ -1,0 +1,62 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(git checkout -b *)",
+      "Bash(git switch -c *)",
+      "Bash(sh ./nfl.sh test *)",
+      "Bash(sh ./nfl.sh doctor *)",
+      "Bash(.venv/Scripts/python.exe -m pytest *)",
+      "Bash(.venv/Scripts/python.exe -m compileall *)",
+      "Bash(uv run pytest *)",
+      "PowerShell(.\\nfl.ps1 test *)",
+      "PowerShell(.\\nfl.ps1 doctor *)",
+      "PowerShell(./nfl.ps1 test *)",
+      "PowerShell(./nfl.ps1 doctor *)"
+    ],
+    "ask": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(gh pr create *)",
+      "Bash(sh ./nfl.sh setup *)",
+      "PowerShell(.\\nfl.ps1 setup *)",
+      "Read(docs/backlog-archive/**)",
+      "Read(docs/changelog-archive/**)"
+    ],
+    "deny": [
+      "Bash(git add -A *)",
+      "Bash(git add --all *)",
+      "Bash(git add . *)",
+      "Bash(git reset --hard *)",
+      "Bash(git checkout -- *)",
+      "Bash(git restore *)",
+      "Bash(git clean *)",
+      "Bash(git stash *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git commit --amend *)",
+      "Bash(rm -rf *)",
+      "Bash(rm -r *)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(git add -A *)",
+      "PowerShell(git add . *)",
+      "PowerShell(git reset --hard *)",
+      "PowerShell(git clean *)",
+      "PowerShell(git stash *)",
+      "Edit(data/standings/inbox/**)",
+      "Edit(data/runs/**/inputs/**)",
+      "Edit(tests/fixtures/supplied/**)",
+      "Edit(uv.lock)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(data/standings/inbox/**)"
+    ]
+  }
+}
