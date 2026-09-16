@@ -1,6 +1,11 @@
 # Implementation Status
 
-## Validation corpus — 2026-09-14 (Q1B)
+## Validation corpus — 2026-09-14 (Q1B and Q1C)
+
+Both tranches are merged to `main` in `4313455fcd8fd722b699a799dbe19dff19c1be68`
+(PR #13), together with the previously uncommitted C3 tranche. C3 is merged but
+**not accepted**: it stays `BLOCKED` on native Excel acceptance, so it is not
+`DONE`, no C4 prompt is prepared, and no later item is `READY`.
 
 **The validation corpus holds zero settled contests.** Ben has entered 18 real
 contests across three slates since 2026-09-09; all 18 raw DraftKings standings
@@ -84,6 +89,28 @@ it does not block generating and reviewing a Classic package.
 `device_bash` has been unusable since a Windows update released 2026-09-08; the
 other device tools work, so the repo is staged into the cloud container, built
 and tested there, and changed files are written back.
+
+## Current development program — 2026-09-15
+
+The authoritative queue is `Reprioritized development program — 2026-09-15
+(prize tail first)` in `backlog.md`, built on
+`docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md` and
+`docs/STANDINGS_GREENFIELD_FINDINGS_2026-09-15.md`. `P0` (standings grading
+harness) and `P1` (salary-divergence diagnostic and current-team role evidence
+producer) are `READY`. `C3`'s software acceptance passed on 2026-09-14; the
+program proposes splitting its native Excel step out as `C3X` (`DEFERRED`) and
+re-sequencing `C4` behind `P2`, pending Ben's ruling, and until he rules `C3`
+keeps its `BLOCKED` status. Every other item is `BLOCKED` on the chunks named
+there. Nothing in the program
+changes a release truth: all output remains `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD` until Q6 promotion, which still waits on
+settled-slate accrual. What the standings established about the current engine,
+in one line each: the expectation objective cannot target the tail and its
+priors overshoot 1.5 to 2x; a transfer with no current-team evidence can carry a
+backup-level prior while priced as the slate's best player; exposure caps as the
+only diversifier produce single-thesis portfolios; Showdown first place is
+shared 5 to 200 ways and the objective does not know; expectation lineups were
+assigned to first-place contests by construction.
 
 ## Current development program — 2026-09-11
 

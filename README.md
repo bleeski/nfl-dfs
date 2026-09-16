@@ -13,7 +13,9 @@ The primary operator surface is Claude Cowork. Select this repository as the
 Cowork folder, attach one DraftKings salary CSV and one reserved-entry CSV, and
 ask Claude to run the slate. `CLAUDE.md` and `docs/COWORK_RUNBOOK.md` define the
 agent workflow. Cowork uses `sh ./nfl.sh`; the manual Windows fallback uses
-`./nfl.ps1`. `IMPLEMENTATION_STATUS.md` separates working capabilities from
+`./nfl.ps1`. Development happens in Claude Code on the repo checkout, per
+`CLAUDE.md` § Developing in Claude Code, with the queue in `backlog.md` and
+session skills under `.claude/skills/`. `IMPLEMENTATION_STATUS.md` separates working capabilities from
 external-data and calibration gates that cannot be truthfully cleared by code
 alone.
 

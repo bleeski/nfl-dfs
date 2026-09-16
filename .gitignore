@@ -38,3 +38,8 @@ operator_input.xlsx
 
 # Scratch that a session could not delete itself. Safe to remove by hand.
 _to_delete/
+
+# Claude Code: personal instructions and locally saved permission approvals stay
+# out of the shared repo; .claude/settings.json, rules and skills are tracked.
+CLAUDE.local.md
+.claude/settings.local.json
