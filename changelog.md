@@ -62,12 +62,29 @@ Changed:
   matches the mutating verbs (`push`, `save`, `pop`, `apply`, `drop`, `clear`,
   `branch`, `create`, `store`) and bare `git stash` rather than the subcommand
   name. Both failed in the safe direction, so this is a usability repair.
-  The first `-u` pattern written here introduced a third false positive of the
-  same family: it keyed on `-u` being last, so `git add src/x.py -u` (identical
-  to `git add -u src/x.py`) was still refused. Caught reviewing the diff before
-  the push. The pattern now matches `git add` whose arguments are flags and
-  nothing else, so a pathspec on either side of `-u` is ordinary work, and both
-  orders are in the test pairs.
+  Narrowing these took three attempts, and the intermediate versions are worth
+  recording because two of them failed in the *unsafe* direction, which is the
+  opposite of the defect being repaired:
+
+  1. The first `-u` pattern keyed on `-u` being last, so `git add src/x.py -u`
+     (identical in effect to `git add -u src/x.py`) was still refused. A third
+     false positive of the same family. Caught reviewing the diff.
+  2. The second `-u` pattern accepted any trailing pathspec as narrowing, so
+     `git add -u .`, `-u ./`, `-u *` and `-u :/` were all allowed, though from
+     the repository root every one of them stages the whole tree exactly like
+     the bare form. Found by the `reviewer` subagent.
+  3. Naming the mutating stash verbs was the wrong shape outright. Git takes
+     flags in place of the `push` keyword, so `git stash -u`,
+     `--include-untracked`, `-a`, `-p` and `-k` are all `stash push` and all
+     slipped through both the guard and the narrowed deny list. Also found by
+     the `reviewer` subagent, and a genuine regression against the overbroad
+     pattern it replaced.
+
+  The shipped versions: `git stash` is refused unless the next token is `list`
+  or `show`, so an allowlist that fails safe for a subcommand git has not grown
+  yet; and `git add` is refused when `-u` appears among arguments that narrow
+  nothing, counting flags and the whole-tree pathspecs as not narrowing. 15
+  refused and 4 allowed shapes were added to the test pairs to pin all three.
 - `.claude/settings.json` deny list, which was the other half of both. It denied
   `Bash(git add -u:*)` and `Bash(git stash:*)` by prefix, so repairing only the
   guard would have left both still refused. Now `Bash(git add -u)` exactly, and
@@ -122,10 +139,13 @@ Verification:
 - Baseline on this branch before any change, after the launcher repair:
   `790 passed, 1 skipped in 134.44s (0:02:14)`.
 - Complete pinned suite after the chunk:
-  `856 passed, 1 skipped in 130.69s (0:02:10)`. The 66 added tests are the 46 in
-  the new file plus 18 parametrized command shapes and two drift guards in
-  `tests/test_repo_boundaries.py`. The one skip is the expected Windows
-  symlink-permission case.
+  `869 passed, 1 skipped in 135.69s (0:02:15)`. The 79 added tests are the 46 in
+  the new file plus 31 parametrized command shapes and two drift guards in
+  `tests/test_repo_boundaries.py`, which goes from 54 tests to 87. The one skip
+  is the expected Windows symlink-permission case.
+- The `reviewer` subagent ran against the diff before the commit and found the
+  two unsafe-direction regressions recorded above. Both were reproduced
+  independently before being fixed, rather than taken on the report alone.
 - `doctor`: `pass_status: true`. `git diff --check`: clean.
   `python3 -m compileall scripts .claude/hooks`: clean.
 - Focused: `tests/test_harness_orientation.py` `44 passed in 0.24s`; with

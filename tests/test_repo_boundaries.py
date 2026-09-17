@@ -337,12 +337,24 @@ REFUSED_COMMANDS = (
     # `-u` among other flags, in either order, is still the whole tree.
     "git add -v -u",
     "git add -u -v",
+    # A pathspec that is itself the whole tree does not narrow `-u`. From the
+    # repository root `git add -u .` stages every tracked change exactly like
+    # the bare form. An adversarial review found these after the first version
+    # of the narrowed pattern was written.
+    "git add -u .",
+    "git add -u ./",
+    "git add -u *",
+    "git add -u :/",
+    "git add -v -u .",
     "git add .",
     "git rebase origin/main",
     "git filter-branch --tree-filter true HEAD",
     "git reset --hard origin/main",
     "git clean -fd",
-    # Every mutating stash verb, and bare `git stash`, which is `stash push`.
+    # Everything but the two read-only stash verbs. Bare `git stash` is
+    # `stash push`, and so is every flag-first form: git takes flags in place
+    # of the `push` keyword, which is why naming the mutating verbs was the
+    # wrong shape and an allowlist of `list`/`show` is the right one.
     "git stash",
     "git stash push -m wip",
     "git stash save wip",
@@ -350,7 +362,14 @@ REFUSED_COMMANDS = (
     "git stash apply",
     "git stash drop",
     "git stash clear",
+    "git stash branch recovered",
+    "git stash -u",
+    "git stash --include-untracked",
+    "git stash -a",
+    "git stash -p",
+    "git stash -k",
     "git status && git stash push",
+    "git status && git stash -u",
     "git branch -D claude/x",
 )
 
@@ -385,6 +404,7 @@ ALLOWED_COMMANDS = (
     "git stash list",
     "git stash show",
     "git stash show -p stash@{0}",
+    "git stash list -n 5",
     # Writing a document or a test that mentions a refused command. The guard
     # caught this on itself the first time it ran, which is how it was found.
     "cat > docs/rule.md <<'EOF'\nNever run `git push --force`.\nEOF",

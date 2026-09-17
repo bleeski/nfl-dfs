@@ -61,9 +61,14 @@ door that refuses to open. Merging red is possible and is a rule violation, not
 an impossibility. The honest summary is that merge-on-green is a convention
 Claude keeps, not a rule a server enforces.
 
-`protected-paths` is the one place this still bites in the ordinary way: it runs
-as a CI job regardless, and a pull request touching a protected path fails it
-until the `ben-review` label is on. That check is doing real work.
+`protected-paths` is advisory in exactly the same way, and it is worth not
+overclaiming for it: a red `protected-paths` does not stop the merge button any
+more than a red `suite` does. What it does is make the touch visible and
+unambiguous. It runs as a CI job regardless of branch protection, and it turns
+"this pull request changes something Ben decides" from a judgement Claude has to
+make into a check that either passes or names the file. The `ben-review` label
+is how a protected change clears it, and Claude not merging that pull request is
+still a rule Claude keeps rather than a door that is locked.
 
 ## One-time, in GitHub
 

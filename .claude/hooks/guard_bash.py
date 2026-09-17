@@ -91,15 +91,16 @@ FORBIDDEN: tuple[tuple[re.Pattern[str], str], ...] = (
         # `-u` is different: given any pathspec it *is* an explicit path list,
         # and only the bare form stages the whole tree. Refusing
         # `git add -u <path>` was a false positive recorded on 2026-09-17.
-        # So this matches `git add` whose arguments are flags and nothing else,
-        # one of them `-u`, in either order: `git add -u`, `git add -v -u`,
-        # `git add -u -v`. A pathspec anywhere in the list stops the match,
-        # which is what makes both `git add -u src/x.py` and the equivalent
-        # `git add src/x.py -u` ordinary work.
+        # So this matches `git add` whose arguments narrow nothing: flags, and
+        # the pathspecs that are themselves the whole tree. `git add -u`,
+        # `git add -v -u`, `git add -u -v`, and `git add -u .`, which from the
+        # repository root stages every tracked change exactly like the bare
+        # form. Only a pathspec that actually narrows (`git add -u src/x.py`,
+        # or the equivalent `git add src/x.py -u`) stops the match.
         re.compile(
-            r"\bgit\s+add(?:\s+-{1,2}[\w-]+)*"
+            r"\bgit\s+add(?:\s+(?:-{1,2}[\w-]+|\.{1,2}/?|\*|:/))*"
             r"\s+-u(?!\w)"
-            r"(?:\s+-{1,2}[\w-]+)*\s*(?=$|[|;&])"
+            r"(?:\s+(?:-{1,2}[\w-]+|\.{1,2}/?|\*|:/))*\s*(?=$|[|;&])"
         ),
         "stage every tracked change. `git add -u` with no path stages the whole "
         "tree; name the paths instead.",
@@ -122,14 +123,16 @@ FORBIDDEN: tuple[tuple[re.Pattern[str], str], ...] = (
         "discard uncommitted work.",
     ),
     (
-        # The mutating stash verbs, and bare `git stash`, which is `stash push`.
-        # `list` and `show` are read-only; refusing them was a false positive
-        # recorded on 2026-09-17 and is repaired here. The pattern now matches
-        # the verb rather than the subcommand name.
-        re.compile(
-            r"\bgit\s+stash\b\s*"
-            r"(?:(?:push|save|pop|apply|drop|clear|branch|create|store)\b|$|[|;&])"
-        ),
+        # Everything except the two read-only verbs. Refusing `git stash list`
+        # and `git stash show` was a false positive recorded on 2026-09-17; the
+        # repair is to name what is allowed, not what is forbidden.
+        #
+        # Naming the mutating verbs instead was tried first and was wrong: git
+        # takes flags in place of the `push` keyword, so `git stash -u`,
+        # `--include-untracked`, `-a`, `-p` and `-k` are all `stash push` and
+        # all slipped through. An allowlist fails safe, including for a
+        # subcommand git has not grown yet.
+        re.compile(r"\bgit\s+stash\b(?!\s+(?:list|show)\b)"),
         "discard or move uncommitted work. The working tree is often "
         "intentionally dirty with user-owned work. `git stash list` and "
         "`git stash show` are read-only and allowed.",
