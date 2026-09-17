@@ -32,8 +32,11 @@ Brief for chunk `P0` of the prize-tail program. Status, dependencies and hand-ba
     definitions (top-1% rule, tie handling, paid rule, hygiene filters H1/H2,
     concentration bands) live in one registered module the later chunks import,
     so a challenger cannot be graded on a metric defined after the fact.
-  - Repair `test_live_check_refuses_once_a_selected_player_has_locked` by pinning
-    `now` through `monkeypatch` as its docstring already says.
+  - ~~Repair `test_live_check_refuses_once_a_selected_player_has_locked` by pinning
+    `now` through `monkeypatch` as its docstring already says.~~ Done on
+    2026-09-17, outside this chunk, because it blocked CI for every chunk. Every
+    clock in that test now derives from the fixture's own lock times. Drop it
+    from this chunk's acceptance; nothing else in P0 changes.
   - File the DAL@NYG and DEN@KC snapshots with `intake.json` hashes and the
     policy JSON already at the repo root moved in beside them (copy, do not delete
     the root files; that is a later cleanup with Ben's path list).
