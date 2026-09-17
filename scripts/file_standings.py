@@ -114,7 +114,7 @@ except ModuleNotFoundError:  # pragma: no cover - environment guard
         "nfl_dfs is not importable. Run this with the project's own interpreter, "
         "not a bare system python3:\n"
         "  Windows:      .venv\\Scripts\\python.exe scripts\\file_standings.py\n"
-        "  Cowork/Linux: .cowork-venv/bin/python scripts/file_standings.py"
+        "  Linux: .venv-linux/bin/python scripts/file_standings.py"
     )
 
 STANDINGS_DIR = REPO_ROOT / "data" / "standings"

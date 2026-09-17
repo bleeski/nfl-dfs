@@ -1,0 +1,28 @@
+# Paths whose change requires Ben's review.
+#
+# A pull request touching any of these is never merged by Claude. CI fails the
+# `protected-paths` job unless the PR carries the `ben-review` label.
+#
+# One fnmatch-style glob per line, repo-relative. Blank lines and lines starting
+# with `#` are ignored. Read by `.github/workflows/ci.yml` and asserted by
+# `tests/test_repo_boundaries.py`, so the two can never drift.
+
+# The boundaries themselves, and the file that states them.
+CLAUDE.md
+.claude/rules/*.md
+
+# Release truths, certification, and every evidence gate.
+src/nfl_dfs/release.py
+src/nfl_dfs/certification.py
+src/nfl_dfs/preflight.py
+src/nfl_dfs/evidence.py
+src/nfl_dfs/sources.py
+
+# Registered policy: what counts as evidence, and what a metric may promote on.
+config/evidence_policy.json
+config/metric_registry_*.json
+
+# The authority model itself.
+.claude/settings.json
+.github/protected-paths.txt
+.github/workflows/*.yml

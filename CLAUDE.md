@@ -1,24 +1,32 @@
 <!--
 Maintainer notes (stripped from Claude's context). Restructured 2026-09-15 for
-Claude Code as the development surface. The eight-step "run the slate" procedure
-and the full text of the 2026-09-12 lock-clock ruling moved verbatim to
-docs/COWORK_RUNBOOK.md. Path-scoped rules live in .claude/rules/, session skills
-in .claude/skills/, enforcement in .claude/settings.json. Keep this file under
-200 lines; run /doctor before adding a section.
+Claude Code as the development surface; 2026-09-17 for Claude Code as the ONLY
+surface, with commit/push/merge authority moved to .claude/rules/git-authority.md
+and enforcement to .github/workflows/ci.yml plus .github/protected-paths.txt.
+The eight-step "run the slate" procedure and the full text of the 2026-09-12
+lock-clock ruling live verbatim in docs/RUNBOOK.md (was COWORK_RUNBOOK.md).
+Orientation for a cold session: docs/START_HERE.md, injected by
+.claude/hooks/session_start.py. Path-scoped rules in .claude/rules/, session
+skills in .claude/skills/, permissions and hooks in .claude/settings.json.
+Keep the body under 200 lines; run /doctor before adding a section.
 -->
 # nfl-dfs
 
-Ben's personal, evidence-first DraftKings NFL Classic and Showdown engine. Two
-surfaces use this repo, and this file governs both:
+Ben's personal, evidence-first DraftKings NFL Classic and Showdown engine.
+Claude Code is the only surface, on the Windows desktop app and in cloud
+sessions backed by GitHub. Read `docs/START_HERE.md` first; it is one page.
 
-- **Operating a slate** happens in Claude Cowork: Ben attaches a DraftKings salary
-  CSV and a DKEntries CSV and asks to run the slate. Procedure:
-  `docs/COWORK_RUNBOOK.md`; manual PowerShell fallback `docs/OPERATOR_GUIDE.md`.
-- **Developing the engine** happens in Claude Code on the repo checkout. Queue:
-  `backlog.md` (2026-09-15 program) with one brief per chunk in `docs/chunks/`.
-  Protocol below; `/dev-session <ID>`, `/verify` and `/close-out` run it.
+- **Operating a slate**: point at a DraftKings salary CSV and a DKEntries CSV
+  and run the slate. Procedure: `docs/RUNBOOK.md`; command reference
+  `docs/OPERATOR_GUIDE.md`.
+- **Developing the engine**: queue in `backlog.md` (2026-09-15 program) with one
+  brief per chunk in `docs/chunks/`. Protocol below; `/dev-session <ID>`,
+  `/verify` and `/close-out` run it.
+- **Committing, pushing, merging**: Claude's own authority, bounded by CI and
+  `.github/protected-paths.txt`. Rule: `.claude/rules/git-authority.md`. What
+  only Ben can set: `docs/CLAUDE_CODE_SETUP.md`.
 
-Authority, in order: this file; `docs/COWORK_RUNBOOK.md` (operating procedure);
+Authority, in order: this file; `docs/RUNBOOK.md` (operating procedure);
 `docs/DATA_CONTRACTS.md` (every structured input); `plan.md` (architecture and
 safety); `backlog.md` and `changelog.md` (the session ledger);
 `IMPLEMENTATION_STATUS.md` (working code versus unverified claims). The latest
@@ -105,32 +113,34 @@ Three bounds: **never fabricate an observation to clear a gate**; never relax a
 gate a real source could still clear; a gate no real source can ever clear is a
 defect, taken to Ben with a recommendation. If the clock beats a clearable gate, say so
 plainly, ship what the engine legally produces, and name the gap. Silence about
-a gap is the only unrecoverable error. Full text: `docs/COWORK_RUNBOOK.md`.
+a gap is the only unrecoverable error. Full text: `docs/RUNBOOK.md`.
 
 ## Developing in Claude Code
 
 ### Commands
 
-- Windows (Ben's box, PowerShell): `.\nfl.ps1 setup|test <pytest args>|doctor|<cli>`.
-  The launcher pins pytest's temp and cache roots; pass pytest flags after
-  `test`, never a bare `-p`. Linux or a container: `sh ./nfl.sh <same>`, which
-  uses `.cowork-venv`; never mix the two venvs in one session.
-- Focused tests first: `.\nfl.ps1 test tests/test_<module>.py -x --tb=short`. The
-  complete suite runs 200 to 365 seconds on Windows and needs an extended tool
-  timeout (600000 ms) or a background run; a run killed at two minutes is a
-  tooling artifact, not a failure. Do not pass a second `-q` (`pyproject.toml`
-  sets one; `-qq` hides the pass count the changelog records).
-- Python 3.13.7 under `uv.lock`; `uv sync` needs `README.md` present. Container
-  egress: `raw.githubusercontent.com` works, `api.weather.gov` does not;
+- Windows: `.\nfl.ps1 setup|test <pytest args>|doctor|<cli>` on `.venv`. Linux:
+  `sh ./nfl.sh <same>` on `.venv-linux`. Both pin pytest's temp and cache roots;
+  pass pytest flags after `test`, never a bare `-p`, never a second `-q`. Never
+  mix the two venvs in one session.
+- Focused tests first (`-x --tb=short`), then the complete suite: 155s on Linux,
+  200 to 365s on Windows. It needs an extended tool timeout (600000 ms) or a
+  background run; a run killed at two minutes is a tooling artifact, not a
+  failure. Record the result: `python3 scripts/record_verify.py --from-log <log>`.
+- Python 3.13.7 under `uv.lock`; `uv sync` needs `README.md` present.
   `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1` is the approved non-strict-CA opt-in and
-  clears only `VERIFY_X509_STRICT`.
+  clears only `VERIFY_X509_STRICT`. Measured container facts (egress, `doctor`,
+  suite): `docs/CLAUDE_CODE_SETUP.md` § Known environment facts.
+- CI runs the pinned suite, `tests/test_repo_boundaries.py` and the
+  protected-path check on every push. Green CI replaced Ben reading each diff, so
+  never push speculatively.
 
 ### Session protocol
 
 1. Start with `git status --short --branch` and `git log --oneline -15`. The
    tree is often intentionally dirty with user-owned work; never reset, clean,
    stash, or reformat it. Two `READY` chunks run in separate worktrees
-   (`git worktree add ../nfl-dfs-<id> -b codex/<id>-<slug>`), never one session.
+   (`git worktree add ../nfl-dfs-<id> -b claude/<id>-<slug>`), never one session.
 2. Read the head of `backlog.md` (tracker protocol, program basis, queue), then
    the one chunk brief you are assigned in `docs/chunks/<ID>-<slug>.md`, then
    the `Unreleased` head of `changelog.md`. Open the spec, contracts and other
@@ -139,7 +149,7 @@ a gap is the only unrecoverable error. Full text: `docs/COWORK_RUNBOOK.md`.
    tradeoffs. Facts only Ben has (a ruling, a file, a threshold he has not set):
    ask, or leave a `[BEN: ...]` flag and continue. Judgment calls you can
    evaluate: decide, record why.
-4. One chunk per session on branch `codex/<id>-<slug>`. Touch only what the
+4. One chunk per session on branch `claude/<id>-<slug>`. Touch only what the
    chunk names; do not refactor adjacent code or fix unrelated dead code, mention
    it instead.
 5. Acceptance is defined before code. Write or extend tests for the chunk's
@@ -153,26 +163,24 @@ a gap is the only unrecoverable error. Full text: `docs/COWORK_RUNBOOK.md`.
    was relaxed or left open, the next `READY` chunk), `changelog.md` under
    `Unreleased` with exact tests and numbers, `IMPLEMENTATION_STATUS.md` when
    capability changed, and the next prompt in `docs/session-prompts/`.
-8. Commit only with an explicit reviewed path list from Ben; never `git add .`
-   or `-A`; never push, amend, or open a PR unasked. `.claude/settings.json`
-   denies the destructive forms.
+8. Commit, push, open a pull request and merge it on green CI under
+   `.claude/rules/git-authority.md`. Branch `claude/<id>-<slug>`. Never
+   `git add .` or `-A`, never force-push or amend, never push to `main`, and
+   never merge a pull request that touches `.github/protected-paths.txt`'s
+   entries without Ben's `ben-review` label.
 
 ### Token discipline
 
-- Ledgers are read by section, never whole: `backlog.md` with `limit` on the
-  head plus the one chunk file; `changelog.md` first 80 lines before appending.
-  History lives in `docs/backlog-archive/` and `docs/changelog-archive/`; grep
-  them, do not read them. Big references (`DFS_SYSTEM_GREENFIELD_SPEC.md`,
-  `docs/DATA_CONTRACTS.md`, `docs/COWORK_RUNBOOK.md`) are read by grep and
-  `offset`/`limit`, one section at a time.
+- Ledgers by section, never whole: `backlog.md` head plus the one chunk file;
+  `changelog.md` first 80 lines. Big references (`DFS_SYSTEM_GREENFIELD_SPEC.md`,
+  `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md`) and the two archive directories
+  are grepped, never read.
 - Never Read a standings export, salary CSV, run artifact or test fixture into
   context; print a schema-level summary with a script. `.claude/settings.json`
   denies `Read` on the inbox for this reason.
-- An investigation that would touch more than five files goes to the `explorer`
-  subagent (`.claude/agents/`); the pre-close-out diff review goes to
-  `reviewer`. Both run in their own context and return conclusions.
-- `git diff --stat` before `git diff`; one chunk per session, and `/clear`
-  rather than continuing into a second one.
+- More than five files to investigate: `explorer` subagent. Pre-close-out diff
+  review: `reviewer`. Both return conclusions from their own context.
+- `git diff --stat` before `git diff`; one chunk per session, then `/clear`.
 
 ### Repo etiquette and gotchas
 

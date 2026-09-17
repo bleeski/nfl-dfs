@@ -1,0 +1,150 @@
+name: CI
+
+# Every branch and every pull request. `main` is protected and changes only
+# through a merged pull request, so these checks are the gate that replaced
+# Ben reading each diff. See docs/CLAUDE_CODE_SETUP.md.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  # sources.py accepts this to clear VERIFY_X509_STRICT only; CERT_REQUIRED and
+  # hostname checking still apply. No test reaches the network, so it is inert
+  # here and set only to keep the runner identical to a container session.
+  NFL_DFS_VENV_DIR: ${{ github.workspace }}/.venv-linux
+  NFL_DFS_UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache-linux
+
+jobs:
+  boundaries:
+    # Split out from `suite` so a broken permanent boundary is legible without
+    # reading 737 test results.
+    name: boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install pinned environment
+        run: uv sync --all-groups --locked --python 3.13.7
+      - name: Permanent boundaries
+        run: uv run pytest tests/test_repo_boundaries.py -q --no-header
+
+  suite:
+    name: suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install pinned environment
+        run: uv sync --all-groups --locked --python 3.13.7
+
+      # `git diff --check` with no argument compares the working tree to the
+      # index, which is always clean on a runner. It has to be given a range to
+      # mean anything here.
+      - name: Whitespace and conflict markers
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$base" ]; then base=$(git rev-parse "HEAD~1" 2>/dev/null || true); fi
+          if [ -n "$base" ]; then
+            git diff --check "$base" HEAD
+          else
+            echo "No base commit to diff against; skipped."
+          fi
+
+      - name: Compile every module
+        run: uv run python -m compileall -q src scripts
+
+      # `set +e` matters: the default shell is `bash -e`, so a failing suite
+      # would abort the step before the result line is captured, and a red run
+      # would report nothing about why.
+      - name: Complete pinned suite
+        id: suite
+        run: |
+          set +e
+          set -o pipefail
+          started=$(date -u +%s)
+          uv run pytest 2>&1 | tee /tmp/pytest.log
+          status=$?
+          ended=$(date -u +%s)
+          # One definition of "what the summary line is", shared with the local
+          # path, so CI and a developer's terminal can never disagree.
+          line=$(uv run python -c "
+          import pathlib, sys
+          sys.path.insert(0, 'scripts')
+          from record_verify import summary_line
+          print(summary_line(pathlib.Path('/tmp/pytest.log').read_text(errors='replace')) or 'NO_SUMMARY_LINE')
+          ")
+          printf 'result_line=%s\n' "$line" >> "$GITHUB_OUTPUT"
+          printf 'duration=%s\n' "$((ended - started))" >> "$GITHUB_OUTPUT"
+          echo "$line"
+          exit $status
+
+      - name: Record the result
+        if: always()
+        run: |
+          mkdir -p state
+          cat > state/last-ci.json <<JSON
+          {
+            "schema_version": "nfl_ci_result_v1",
+            "commit": "${{ github.sha }}",
+            "ref": "${{ github.ref_name }}",
+            "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "conclusion": "${{ job.status }}",
+            "result_line": "${{ steps.suite.outputs.result_line }}",
+            "duration_seconds": "${{ steps.suite.outputs.duration }}",
+            "observed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          JSON
+          {
+            echo "### Suite"
+            echo ''
+            echo '```'
+            cat state/last-ci.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # An artifact, not a commit. CI never pushes to this repository: a
+      # workflow that writes to `main` would have to bypass the very branch
+      # protection that makes autonomous merge safe.
+      - name: Upload the result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-ci-${{ github.run_id }}
+          path: state/last-ci.json
+          if-no-files-found: warn
+
+  protected-paths:
+    # A pull request touching anything in .github/protected-paths.txt is Ben's
+    # call, not Claude's. The label is the only way through.
+    name: protected-paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the diff against the protected list
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: python3 scripts/check_protected_paths.py

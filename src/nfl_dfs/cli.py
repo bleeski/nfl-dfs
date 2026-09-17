@@ -3295,9 +3295,15 @@ def build_parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run")
     _add_intake_args(run, optional=True)
     run.set_defaults(func=command_run)
+    # `run-slate` is the documented name. `cowork-run` stays as an alias because
+    # renaming it alone would not help: the wire format is
+    # `nfl_cowork_run_request_v1` and `cowork.py` hard-rejects a mismatched
+    # schema_version, so every run_request.json already on disk depends on the
+    # old string. Changing that is a contract version bump, not a rename.
     cowork = subparsers.add_parser(
-        "cowork-run",
-        help="discover attached CSVs by schema and drive the fail-closed Cowork workflow",
+        "run-slate",
+        aliases=["cowork-run"],
+        help="discover the DraftKings CSVs by schema and drive the fail-closed slate workflow",
     )
     cowork.add_argument("--input-dir")
     cowork.add_argument("--request")

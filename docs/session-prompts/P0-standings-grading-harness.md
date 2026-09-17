@@ -1,9 +1,10 @@
 # P0 — standings grading harness, snapshots, and the failing preflight test
 
-Paste this whole file as the first message of a fresh Claude Code session started
-in the `nfl-dfs` repo root on Ben's Windows machine. It touches no selection,
-policy, evidence-gate or export code and is safe on a slate day. Do not start it
-inside the last hour before a lock.
+Paste this whole file as the first message of a fresh Claude Code session in the
+`nfl-dfs` repo root. This chunk needs the standings exports, which live on Ben's
+Windows box and are not in git, so run it there rather than in a cloud session.
+It touches no selection, policy, evidence-gate or export code and is safe on a
+slate day. Do not start it inside the last hour before a lock.
 
 ---
 
@@ -32,12 +33,13 @@ unavailable, do those steps by hand from `CLAUDE.md` § Session protocol.
 
 ## Runtime
 
-Native Windows, `.\nfl.ps1`, the Windows `.venv`. Ignore every Cowork or
-container instruction in older ledger entries (`device_bash`, staging,
-`/mnt/user-data/`, `.cowork-venv`); none of it applies. `git status` is safe.
-The complete suite last ran **735 passed, 1 failed, 1 skipped in 198s** on this
-box on 2026-09-14; the one failure is the preflight clock test this chunk
-repairs. Run the suite with an extended tool timeout (600000 ms) or in the
+Native Windows, `.\nfl.ps1`, the Windows `.venv`. Ignore every Cowork or device
+bridge instruction in older ledger entries (`device_bash`, staging,
+`/mnt/user-data/`, `.cowork-venv`); Cowork is retired and the Linux environment
+is now `.venv-linux`. `git status` is safe. The complete suite last ran
+**735 passed, 1 failed, 1 skipped in 198s** on Windows on 2026-09-14 and
+**1 failed, 735 passed, 1 skipped in 155.56s** in a Linux container on
+2026-09-17; the one failure is the preflight clock test this chunk repairs. Run the suite with an extended tool timeout (600000 ms) or in the
 background; a run killed at two minutes is not a result. No network is needed:
 everything this chunk reads is on disk.
 
