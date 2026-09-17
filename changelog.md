@@ -4,6 +4,72 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-17 (CI unblock): the preflight clock test, and a pytest basetemp collision
+
+Two test-infrastructure repairs. No engine module, contract, run artifact or
+release truth changed, and no run was executed.
+
+The wrong test, named before the fix as `.claude/rules/tests.md` requires:
+`tests/test_w6_live_preflight.py::test_live_check_refuses_once_a_selected_player_has_locked`.
+It hardcoded `expires_at=datetime(2026, 9, 14)`, so from 2026-09-14 onward the
+package it builds could no longer be certified at the live clock and the test
+failed every day after, for a reason unrelated to what it asserts. The test was
+wrong, not the engine. This is the defect its own `_before_fixture_lock` helper
+documents, and the same class as the hardcoded `AS_OF` in `test_priors_adapter.py`.
+
+Changed:
+
+- That test now derives every clock from the fixture's own lock times: certify
+  30 minutes before the earliest lock, expire the evidence six hours after it,
+  run the live check one hour after it. The helper `_before_fixture_lock` and
+  the `monkeypatch`/`now` hook in `_certified` already existed for exactly this
+  and were simply not used here. The evidence deliberately stays valid past the
+  check clock, so the package is refused for the lock and nothing else, and a
+  new assertion pins that (`not any("EXPIRED" in b for b in blockers)`).
+- `nfl.sh` and `nfl.ps1` now give each run its own pytest `--basetemp`
+  (`<temp>/nfl-dfs-pytest/<pid>`). pytest deletes basetemp at the start of every
+  run, so the fixed path introduced on 2026-09-17 meant two concurrent suites
+  wiped each other mid-flight. `cache_dir` stays shared on purpose: pytest does
+  not clear it at startup, and one path is what makes `--lf` and `--ff` work
+  across runs. `nfl.ps1` had carried the same fixed path since before the Linux
+  launcher copied it.
+
+Added:
+
+- `test_launchers_give_each_run_its_own_pytest_basetemp` in
+  `tests/test_repo_boundaries.py`. A grep rather than a behavioural test, and
+  labelled as such in its docstring: racing two real suites would cost five
+  minutes and be flaky by construction.
+
+Evidence for the collision, measured rather than inferred: a suite running in
+the background while a second pytest process started against the same pinned
+basetemp produced `3 failed, 786 passed, 1 skipped in 147.82s` with failures in
+`test_classic_review_c3::test_registered_full_fixture_scale_and_exact_entry_order[20]`,
+the same test at `[150]`, and
+`test_cowork_rerun_regressions::test_review_surface_shows_pool_coverage_and_the_kicker_assumption`.
+All three write into basetemp. None was a real failure. Several Claude Code
+instances work this repository, so that collision is expected rather than exotic.
+
+Verification:
+
+- Before: `1 failed, 788 passed, 1 skipped in 149.38s` locally, and the same
+  result in GitHub Actions run 35178873587 on the pull request for #15, which
+  is what made the new `suite` job permanently red.
+- After the clock repair, on isolated temp roots:
+  `789 passed, 1 skipped in 148.43s (0:02:28)`. First fully green run.
+- After both repairs: `790 passed, 1 skipped in 147.37s (0:02:27)`. The extra
+  test over the previous run is the launcher guard.
+- The repaired test was probed on both sides rather than trusted: at one hour
+  after the earliest fixture lock the decision is `DO_NOT_UPLOAD` with the
+  `SELECTED_PLAYER_ALREADY_LOCKED` blocker and no expiry blocker; at ten minutes
+  before it the same package is `CERTIFIED_UPLOAD_PACKAGE` with no blockers.
+- The one remaining skip is the expected Windows symlink-permission case.
+
+Chunk `P0`'s brief lists the clock repair in its scope. It is done here because
+it blocked CI for every chunk, `P0` included; `P0`'s acceptance loses that one
+item and is otherwise unchanged.
+
+
 ### 2026-09-17 (harness): Claude Code as the only surface, CI, autonomous git authority, session orientation
 
 Phase 1 of the Claude Code migration. No engine module, contract, run artifact
