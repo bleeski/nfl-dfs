@@ -30,7 +30,7 @@ Added:
 - `scripts/check_protected_paths.py`: fails a pull request touching a protected
   path without the `ben-review` label. Exit 2 when the check cannot run, because
   an unrunnable gate is not a passing gate.
-- `tests/test_repo_boundaries.py`: 45 tests (12 plus 33 parametrized) turning
+- `tests/test_repo_boundaries.py`: 53 tests (12 plus 41 parametrized) turning
   `CLAUDE.md` § Permanent boundaries into assertions. Protected-list loadability and matcher behaviour;
   `DK_UPLOAD` confined to a pinned four-module set; `prior_review`'s transitive
   import closure reaching neither a `DK_UPLOAD` writer nor `field.py` /
@@ -40,9 +40,9 @@ Added:
   `win_probability`, `cash_probability`, `edge` or lowercase `calibrated` (the
   uppercase `CALIBRATED` influence tier in `learning.py` is exempt and the test
   says why); the four release truths and the CERTIFIED-requires-
-  PROSPECTIVELY_VALIDATED guard intact. Plus 18 refused and 15 allowed command
+  PROSPECTIVELY_VALIDATED guard intact. Plus 30 refused and 17 allowed command
   shapes against the Bash guard, so its patterns are themselves verified in both
-  directions.
+  directions rather than only against the destructive ones.
 - `.claude/hooks/session_start.py` plus the `SessionStart` hook wiring in
   `.claude/settings.json`, matching `startup|resume|clear|compact`. Emits 33
   lines in 55 ms: boundaries, release truths, branch, recent commits, chunk
@@ -139,7 +139,7 @@ Verification:
 
 - Baseline before any change, Linux container:
   `1 failed, 735 passed, 1 skipped in 155.56s (0:02:35)`.
-- After: `1 failed, 780 passed, 1 skipped in 149.33s (0:02:29)`. The 45 added
+- After: `1 failed, 788 passed, 1 skipped in 149.38s (0:02:29)`. The 53 added
   tests are all in `tests/test_repo_boundaries.py`. The single failure is the
   documented `test_live_check_refuses_once_a_selected_player_has_locked`
   hardcoded-expiry case that chunk P0 repairs; it is unchanged by this work.
@@ -157,6 +157,30 @@ Verification:
 - `python3 .claude/hooks/session_start.py`: 33 lines, 0.055 s.
 - `sh ./nfl.sh run-slate` and `sh ./nfl.sh cowork-run` both reach the same
   handler and return the same four release truths.
+
+Repaired after an adversarial review of the diff, all three findings confirmed
+before acting:
+
+- `ci.yml`'s `suite` job checked out at the default depth 1, so the whitespace
+  and conflict-marker step would have died with `fatal: bad object` under
+  `bash -e` on every pull request (the base commit is not in a shallow clone)
+  and silently skipped on every push (`HEAD~1` does not resolve either). The job
+  now checks out with `fetch-depth: 0`, verifies the base object exists with
+  `git cat-file -e` before using it, and diffs from the merge base. A check that
+  cannot fail is not a check.
+- `guard_bash.py` and the deny list both missed refspec pushes. `git push origin
+  feature:main` reaches `main` with no `main` token after `origin`, and
+  `git push origin +HEAD:main` forces with no `--force` token anywhere. Two
+  patterns added, plus six refused and two allowed shapes in the tests (a
+  non-forced refspec onto a `claude/*` branch, and a branch whose name merely
+  contains "main", both of which must still pass). Prefix rules cannot express
+  the source-ref form at all, so the guard is the only layer that sees it, and
+  the rule now says so.
+- `backlog.md`'s session-conventions paragraph still said `codex/<id>-<slug>`
+  and "commit only on an explicit reviewed path list", contradicting the policy
+  this same commit introduces two sections above it. Consequential rather than
+  cosmetic: the push-allow rules are scoped to `claude/*`, so a session
+  following the stale text would have created a branch it could not push.
 
 Known issues in `guard_bash.py`, found by the guard firing on the session that
 wrote it, and left in place because both fail in the safe direction:

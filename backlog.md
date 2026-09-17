@@ -152,11 +152,16 @@ All new development sessions run in Claude Code on the repo checkout, not in a
 Cowork mount. That removes the mount-specific rules (no `git status` in the
 mount, stage/commit through the bridge, `.cowork-venv`) and restores the
 tracker protocol as written: inspect `git status --short --branch` first, work
-on one chunk, never `git add .`, commit only on an explicit reviewed path list.
-Suite: `./nfl.ps1 test` on Windows or `sh ./nfl.sh test` on Linux, 200 to 365
-seconds; `doctor`, compile/import and `git diff --check` at close-out.
+on one chunk, never `git add .`. Superseded on 2026-09-17 on one point: commit,
+push and merge are no longer gated on Ben, they are gated on green CI under
+`.claude/rules/git-authority.md`. Suite: `.\nfl.ps1 test` on Windows or
+`sh ./nfl.sh test` on Linux, 155s on Linux and 200 to 365 seconds on Windows;
+`doctor`, compile/import and `git diff --check` at close-out.
 
-Each chunk below is one session, one branch `codex/<id>-<slug>`, one PR, and
+Each chunk below is one session, one branch `claude/<id>-<slug>` (the old
+`codex/` prefix is dead: the push-allow rules in `.claude/settings.json` are
+scoped to `claude/*`, so a `codex/` branch cannot be pushed without a prompt),
+one PR, and
 carries: a read list, the files it may touch, the tests it must add, an
 acceptance statement, and a hand-back. Size target is at most ~1,500 changed
 lines including tests; if a chunk is running past that, split at the named seam

@@ -47,7 +47,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # Full history. The default depth-1 checkout has no base commit, so the
+      # whitespace check below would abort with `fatal: bad object` on every
+      # pull request and silently skip on every push.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -57,15 +62,18 @@ jobs:
 
       # `git diff --check` with no argument compares the working tree to the
       # index, which is always clean on a runner. It has to be given a range to
-      # mean anything here.
+      # mean anything here. The base object is verified present before use so a
+      # missing one is a named skip rather than `fatal: bad object` under
+      # `bash -e`.
       - name: Whitespace and conflict markers
         run: |
           base="${{ github.event.pull_request.base.sha }}"
-          if [ -z "$base" ]; then base=$(git rev-parse "HEAD~1" 2>/dev/null || true); fi
-          if [ -n "$base" ]; then
-            git diff --check "$base" HEAD
+          if [ -z "$base" ]; then base=$(git rev-parse HEAD~1 2>/dev/null || true); fi
+          if [ -n "$base" ] && git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            merge_base=$(git merge-base "$base" HEAD 2>/dev/null || echo "$base")
+            git diff --check "$merge_base" HEAD
           else
-            echo "No base commit to diff against; skipped."
+            echo "No usable base commit (first commit, or history unavailable); skipped."
           fi
 
       - name: Compile every module

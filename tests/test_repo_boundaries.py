@@ -318,6 +318,15 @@ REFUSED_COMMANDS = (
     "git push -f origin claude/x",
     "git push origin main",
     "git push origin HEAD:main",
+    # Refspec forms reach main with no `main` token after `origin` and force
+    # with no `--force` token at all. An adversarial review found these after
+    # the first version of the guard shipped without them.
+    "git push origin +HEAD:main",
+    "git push origin feature:main",
+    "git push origin +feature:main",
+    "git push origin feature:refs/heads/main",
+    "git push origin HEAD:refs/heads/main",
+    "git push origin +claude/x:claude/x",
     "git commit --amend --no-edit",
     "git add -A",
     "git add --all src/",
@@ -339,6 +348,10 @@ ALLOWED_COMMANDS = (
     "git commit -m 'Add the thing'",
     "git push -u origin claude/p0-standings-grading-harness",
     "git push origin --delete claude/p0-standings-grading-harness",
+    # A non-forced refspec onto a claude/* branch, and a branch whose name
+    # merely contains "main". Neither may be caught by the refspec patterns.
+    "git push origin HEAD:refs/heads/claude/p0-standings-grading-harness",
+    "git push -u origin claude/main-runbook-rewrite",
     "git branch -d claude/p0-standings-grading-harness",
     "git merge origin/main",
     "git diff --check",

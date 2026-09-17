@@ -58,7 +58,22 @@ FORBIDDEN: tuple[tuple[re.Pattern[str], str], ...] = (
         "commit instead.",
     ),
     (
-        re.compile(r"\bgit\s+push\b[^|;&]*?\borigin\s+(?:HEAD:)?main\b"),
+        # A leading `+` on a refspec is a force push with no `--force` token
+        # anywhere in the command. `git push origin +HEAD:main` is the shape.
+        re.compile(r"\bgit\s+push\b[^|;&]*?(?<![\w/+-])\+[\w./-]+:"),
+        "force push by `+refspec`. A leading `+` forces the update just as "
+        "`--force` does.",
+    ),
+    (
+        # `origin main`, and every refspec form that lands on main whatever the
+        # source ref is called: `HEAD:main`, `feature:main`, `+HEAD:main`,
+        # `feature:refs/heads/main`.
+        re.compile(
+            r"\bgit\s+push\b[^|;&]*?(?:"
+            r"\borigin\s+main\b"
+            r"|(?<![\w/-])\+?[\w./-]*:(?:refs/heads/)?main(?![\w/-])"
+            r")"
+        ),
         "push to main. main changes only through a merged pull request.",
     ),
     (

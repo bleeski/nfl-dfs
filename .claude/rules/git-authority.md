@@ -43,6 +43,13 @@ and here-document bodies first, so writing a document or a test that mentions a
 refused command still works. `tests/test_repo_boundaries.py` checks both halves:
 that the destructive shapes are refused, and that ordinary work is not.
 
+Some shapes only the guard can catch. A refspec push reaches `main` with no
+`main` token after `origin` (`git push origin feature:main`) and forces with no
+`--force` token at all (`git push origin +HEAD:main`). Neither is expressible as
+a prefix, so `.claude/settings.json` cannot see them and only the guard refuses
+them. An adversarial review found both after the first version shipped without
+them; `REFUSED_COMMANDS` now covers them.
+
 The guard fails open on purpose. If it crashes, the normal permission flow
 decides. It catches the destructive command typed by accident; what forbids a
 deliberate bypass is this rule, not the regex. Never phrase a command to slip
