@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup','run','cowork-run','priors-propose','priors-freeze','project','select','review-export','doctor','status','intake','workbook','validate','certify','build','late-swap','settle','learn','audit','preflight','test')]
+    [ValidateSet('setup','run','run-slate','cowork-run','priors-propose','priors-freeze','project','select','review-export','doctor','status','intake','workbook','validate','certify','build','late-swap','settle','learn','audit','preflight','test')]
     [string]$Command = 'run',
 
     [Parameter(ValueFromRemainingArguments = $true)]

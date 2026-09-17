@@ -66,7 +66,7 @@ except ModuleNotFoundError:  # pragma: no cover - environment guard
     sys.exit(
         "nfl_dfs is not importable. Run this with the project's own interpreter:\n"
         "  Windows:      .venv\\Scripts\\python.exe scripts\\make_settlement_request.py\n"
-        "  Cowork/Linux: .cowork-venv/bin/python scripts/make_settlement_request.py"
+        "  Linux: .venv-linux/bin/python scripts/make_settlement_request.py"
     )
 
 RUNS_DIR = REPO_ROOT / "data" / "runs"

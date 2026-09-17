@@ -9,23 +9,22 @@ The application never logs in to DraftKings, enters contests, moves money, or
 uploads lineups. The operator performs those actions manually after reviewing a
 hash-bound package whose certification covers legality and evidence—not profit.
 
-The primary operator surface is Claude Cowork. Select this repository as the
-Cowork folder, attach one DraftKings salary CSV and one reserved-entry CSV, and
-ask Claude to run the slate. `CLAUDE.md` and `docs/COWORK_RUNBOOK.md` define the
-agent workflow. Cowork uses `sh ./nfl.sh`; the manual Windows fallback uses
-`./nfl.ps1`. Development happens in Claude Code on the repo checkout, per
-`CLAUDE.md` § Developing in Claude Code, with the queue in `backlog.md` and
-session skills under `.claude/skills/`. `IMPLEMENTATION_STATUS.md` separates working capabilities from
-external-data and calibration gates that cannot be truthfully cleared by code
-alone.
+The operator surface is Claude Code, on the Windows desktop app and in cloud
+sessions backed by this GitHub repository. Point it at one DraftKings salary CSV
+and one reserved-entry CSV and ask it to run the slate. `docs/START_HERE.md` is
+the orientation page; `CLAUDE.md` and `docs/RUNBOOK.md` define the workflow.
+Windows uses `.\nfl.ps1` and `.venv`; Linux uses `sh ./nfl.sh` and
+`.venv-linux`. Development follows `CLAUDE.md` § Developing in Claude Code, with
+the queue in `backlog.md` and session skills under `.claude/skills/`.
+`IMPLEMENTATION_STATUS.md` separates working capabilities from external-data and
+calibration gates that cannot be truthfully cleared by code alone.
 
-The first Cowork pass discovers the two attachments by schema, snapshots their
-exact bytes, reconciles the slate and authorized entries, and writes a versioned
+The first pass discovers the two files by schema, snapshots their exact bytes, reconciles the slate and authorized entries, and writes a versioned
 review package plus machine-readable run request. Two files alone do not contain
 complete payouts, field size, or current official activity evidence, so that
 first pass normally ends `DO_NOT_UPLOAD` with the smallest missing next action.
 
-For Showdown or Classic prior-only review generation, Cowork should use
+For Showdown or Classic prior-only review generation, use
 `--profile prior_review --build-priors`. Classic C1 without a policy produces
 deterministic machine-readable selection and complete-slate coverage JSON only.
 A governed C2 policy adds the bounded candidate bank, exact Entry-ID assignment
@@ -47,8 +46,11 @@ the system will label field and simulation output diagnostic and will emit
 ## Current verification
 
 - Python 3.13.7 and pinned `uv.lock` environment.
-- A cross-platform Cowork launcher and schema-driven `cowork-run` command; the
-  PowerShell workflow remains available as a fallback.
+- Cross-platform launchers and a schema-driven `run-slate` command (`cowork-run`
+  survives as an alias; the request schema string is unchanged).
+- GitHub Actions CI: the full pinned suite, `tests/test_repo_boundaries.py`, and
+  a protected-path check that keeps release and evidence changes in front of a
+  human.
 - Current test counts and the real NE–SEA two-entry rehearsal are documented in
   `docs/READINESS_REVIEW_2026-09-09.md`. Older fixture counts below describe the
   original acceptance data, not the current real-slate pool.

@@ -6,44 +6,64 @@ enters contests, changes money, or uploads a lineup. A green
 means that the current evidence, exact Entry IDs, roster legality, template, and
 final bytes passed. It does not promise profit and is not an EV label.
 
-## Primary Claude Cowork workflow
+## The two surfaces
 
-The normal workflow no longer requires editing Excel. In Claude Cowork Desktop,
-select `C:\Users\benja\Documents\Claude\nfl-dfs` as the local project folder,
-attach the DraftKings salary CSV and reserved-entry CSV, and ask Claude to run
-the complete slate workflow. Claude follows `CLAUDE.md` and
-`docs/COWORK_RUNBOOK.md`, discovers the files by schema, snapshots them, and
-creates the review package.
+Claude Code, everywhere. Which one you are on decides the launcher and nothing
+else; the commands, gates and release truths are identical.
 
-The two DraftKings files do not contain complete payouts, field size, or current
-official activity evidence. Claude gathers permitted public evidence and asks
-one focused follow-up only for contest facts it cannot safely obtain. Missing
-hard evidence remains `DO_NOT_UPLOAD`.
+| | Windows desktop app | Cloud session, including phone |
+|---|---|---|
+| Launcher | `.\nfl.ps1 <cmd>` | `sh ./nfl.sh <cmd>` |
+| Environment | `.venv` | `.venv-linux` |
+| DraftKings files | any local path | committed under `data/inbox/slates/<slate-id>/` |
+| First run | `.\nfl.ps1 setup` | `sh ./nfl.sh setup` |
 
-The command Claude drives is:
+Never mix the two in one session.
 
-```text
-sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --label '<short-label>'
+## Running a slate
+
+Point the engine at the two DraftKings files and let it discover them by schema.
+Do not depend on their filenames.
+
+Windows:
+
+```powershell
+.\nfl.ps1 run-slate --input-dir '<input-directory>' --label '<short-label>'
 ```
 
+Cloud session:
+
+```sh
+sh ./nfl.sh run-slate --input-dir 'data/inbox/slates/<slate-id>' --label '<short-label>'
+```
+
+`run-slate` is the documented name; `cowork-run` still works as an alias. Claude
+follows `CLAUDE.md` and `docs/RUNBOOK.md`, snapshots the exact bytes, and creates
+the review package.
+
+The two DraftKings files do not contain complete payouts, field size, or current
+official activity evidence. Claude gathers permitted public evidence and asks one
+focused follow-up only for contest facts it cannot safely obtain. Missing hard
+evidence remains `DO_NOT_UPLOAD`.
+
 The generated `run_request.json` is the machine-readable input surface for
-subsequent passes. The workbook is a versioned human review artifact. DraftKings
-upload remains manual.
+subsequent passes. The workbook is a versioned human review artifact. The
+DraftKings upload itself is always manual.
 
-## Manual Windows fallback: first-time setup
+## Windows first-time setup
 
-Open PowerShell in `C:\Users\benja\Documents\Claude\nfl-dfs` and paste:
+Open PowerShell at the repository root and paste:
 
 ```powershell
 .\nfl.ps1 setup
 ```
 
 Setup installs pinned free/open-source packages, checks the Windows machine, and
-creates `operator_input.xlsx`. The current machine has long-path support turned
+creates `operator_input.xlsx`. Ben's Windows machine has long-path support turned
 off, so keep slate/run labels short and do not move the project into a deeper
 folder. The engine checks this every time setup runs.
 
-## Manual Windows fallback: weekly workflow
+## Workbook workflow (Windows, optional)
 
 1. Download the DraftKings salary CSV and reserved-entry CSV yourself.
 2. Open `operator_input.xlsx`.
@@ -71,7 +91,7 @@ overwrites a prior review package.
 
 ## Classic C3 governed prior-only review
 
-Run `cowork-run --profile prior_review --build-priors` with the normal Classic
+Run `run-slate --profile prior_review --build-priors` with the normal Classic
 salary and blank reserved-entry CSVs. Without a policy, the C1 compatibility
 path publishes `classic_selection.json` for
 the exact Entry-ID-to-roster map and `classic_complete_slate_coverage.json` for

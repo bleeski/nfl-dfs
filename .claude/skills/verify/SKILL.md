@@ -18,5 +18,15 @@ Run the full verification stack and report evidence, not summaries.
    skip is named with the test id. The only expected skip is the Windows
    symlink-permission case; the known failure list is in `CLAUDE.md`.
 
+7. Record it so the next session inherits it, whatever the result:
+   `sh ./nfl.sh test 2>&1 | tee /tmp/pytest.log` then
+   `python3 scripts/record_verify.py --from-log /tmp/pytest.log`.
+8. `python3 scripts/check_protected_paths.py` to learn now, not at merge time,
+   whether this work needs Ben's `ben-review` label.
+
 Output: a short table of check → result, then the pasted result lines. If any
 check is red, say the chunk is not `DONE` and what is left.
+
+A local green is what earns the push. CI (`suite`, `boundaries`,
+`protected-paths`) is the gate that actually decides the merge, so never push
+speculatively hoping CI will sort it out.

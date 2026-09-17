@@ -4,6 +4,206 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-17 (harness): Claude Code as the only surface, CI, autonomous git authority, session orientation
+
+Phase 1 of the Claude Code migration. No engine module, contract, run artifact
+or release truth changed; every current path still ends `MODEL_STATUS=PRIOR_ONLY`
+and `RELEASE_DECISION=DO_NOT_UPLOAD`. No run was executed.
+
+Added:
+
+- `.github/workflows/ci.yml`: three jobs on every push and pull request.
+  `suite` (full pinned pytest, `compileall src scripts`, ranged
+  `git diff --check`), `boundaries` (the new boundary file alone, so a broken
+  permanent boundary is legible without reading 747 results), and
+  `protected-paths` (pull requests only). Python 3.13.7 via `astral-sh/setup-uv`
+  with a `uv.lock`-keyed cache. The suite job writes `state/last-ci.json` as an
+  artifact and a job summary; CI never pushes to the repository, because a
+  workflow that writes to `main` would have to bypass the branch protection that
+  makes autonomous merge safe.
+- `.github/protected-paths.txt`: one definition of what Ben still reviews, read
+  by the CI job, by `scripts/check_protected_paths.py` and asserted by
+  `tests/test_repo_boundaries.py`, so the three cannot drift. Covers `CLAUDE.md`,
+  `.claude/rules/*.md`, `release.py`, `certification.py`, `preflight.py`,
+  `evidence.py`, `sources.py`, `config/evidence_policy.json`,
+  `config/metric_registry_*.json`, and the authority model itself.
+- `scripts/check_protected_paths.py`: fails a pull request touching a protected
+  path without the `ben-review` label. Exit 2 when the check cannot run, because
+  an unrunnable gate is not a passing gate.
+- `tests/test_repo_boundaries.py`: 53 tests (12 plus 41 parametrized) turning
+  `CLAUDE.md` § Permanent boundaries into assertions. Protected-list loadability and matcher behaviour;
+  `DK_UPLOAD` confined to a pinned four-module set; `prior_review`'s transitive
+  import closure reaching neither a `DK_UPLOAD` writer nor `field.py` /
+  `economics.py` (previously only claimed as a report string);
+  `AvgPointsPerGame` confined to `dk.py` and `cowork.py`; `ALLOWED_HOSTS` and
+  `PROHIBITED_HOSTS` pinned; no module naming a value `ev`, `roi`,
+  `win_probability`, `cash_probability`, `edge` or lowercase `calibrated` (the
+  uppercase `CALIBRATED` influence tier in `learning.py` is exempt and the test
+  says why); the four release truths and the CERTIFIED-requires-
+  PROSPECTIVELY_VALIDATED guard intact. Plus 30 refused and 17 allowed command
+  shapes against the Bash guard, so its patterns are themselves verified in both
+  directions rather than only against the destructive ones.
+- `.claude/hooks/session_start.py` plus the `SessionStart` hook wiring in
+  `.claude/settings.json`, matching `startup|resume|clear|compact`. Emits 33
+  lines in 55 ms: boundaries, release truths, branch, recent commits, chunk
+  queue, active and stale claims, last suite result, calibration state, open
+  `[BEN: ...]` flags. Exits 0 unconditionally.
+- `scripts/repo_state.py`: derives `state/repo-state.json` from the files that
+  are already authoritative (backlog Queue table, `state/claims.json`, the
+  recorded suite result, `records/slates/`, `[BEN:]` flags). Hand-maintained
+  status rots once two instances disagree; this does not.
+- `scripts/record_verify.py`: records a suite result at
+  `state/last-verify.json`. A log with no recognizable pytest summary is a
+  refusal, not a guess, so a run killed by a tool timeout can never be recorded
+  as a result. `ci.yml` imports its `summary_line` so CI and a local terminal
+  share one definition.
+- `state/claims.json`, the chunk-claim primitive between concurrent instances,
+  tracked; the rest of `state/` is derived and gitignored.
+- `docs/START_HERE.md` (108 lines): the orientation page the hook points at.
+- `docs/CLAUDE_CODE_SETUP.md`: what only Ben can do. Branch protection steps,
+  the `ben-review` label, and the documented constraint that
+  `permissions.defaultMode` values `auto` and `bypassPermissions` are ignored
+  from project settings and must be set in `~/.claude/settings.json`.
+- `.claude/rules/git-authority.md`: replaces the reviewed-path-list rule.
+- `.claude/skills/onboard/SKILL.md`: cold-start orientation when the hook did
+  not run.
+- `.claude/hooks/guard_bash.py`, wired as a `PreToolUse` hook on `Bash`. The
+  permission grammar matches a prefix, which cannot see a flag arriving after an
+  allowed prefix (`git push -u origin claude/x --force` matches the allow rule
+  and no deny rule) or a second command in a chain. The guard reads the whole
+  command and refuses on a pattern wherever it appears, stripping quoted strings
+  and here-document bodies first so that writing a document or a test about a
+  refused command still works. It caught that false positive on itself the first
+  time it ran, which is why the stripping exists and why
+  `ALLOWED_COMMANDS` covers it. Fails open: a crash hands the decision back to
+  the normal permission flow.
+
+Changed:
+
+- `.claude/settings.json`: `defaultMode` `acceptEdits`; commit, push to
+  `claude/*`, pull request creation and merge, and merged-branch deletion moved
+  from `ask` to `allow`. Deny now also covers `git push origin main`,
+  `--force-with-lease`, `branch -D`, `rebase`, `filter-branch`, `reflog expire`,
+  `gc --prune`, `commit -a`, `add -u`, `Edit(.git/**)`, and the GitHub API write
+  tools (`create_or_update_file`, `push_files`, `delete_file`) that would bypass
+  local verification. The 16 `PowerShell(...)` entries were deleted: that is not
+  a Claude Code tool name, so they had never matched anything and the Windows
+  path was unguarded.
+- `docs/COWORK_RUNBOOK.md` renamed to `docs/RUNBOOK.md`. Three sections
+  rewritten against measurement rather than relabelled: Continuity (the device
+  bridge, `git bundle` handoff and PAT discussion are gone; GitHub is the only
+  route, with an explicit list of what a clone does not carry), Prerequisites,
+  and the Linux runtime. The 2026-09-08 bridge-mount notes are kept as a
+  historical subsection because the launcher overrides they produced still work.
+  The 2026-09-12 lock-clock ruling is untouched.
+- `docs/OPERATOR_GUIDE.md`: the Cowork Desktop section is replaced by a
+  two-surface table and a `run-slate` invocation for each. `C:\Users\benja\...`
+  replaced by `<repo root>` in both places.
+- `CLAUDE.md`: single-surface statement; authority pointer; `Commands` and
+  `Token discipline` compressed to stay under the 200-line body limit; session
+  protocol item 8 rewritten; branch prefix `codex/` to `claude/`; corrected
+  container egress claim.
+- `README.md`: Cowork removed from the operating-surface paragraph; CI listed
+  under current verification.
+- `nfl.sh`: `.cowork-venv` and `.cowork-uv-cache` renamed to `.venv-linux` and
+  `.uv-cache-linux`. `test` now pins pytest's basetemp and cache directory under
+  `TMPDIR` the way `nfl.ps1` has always pinned them, closing a live
+  failure-at-fixture-setup mode on Linux. Overridable with
+  `NFL_DFS_PYTEST_TMP` and `NFL_DFS_PYTEST_CACHE`.
+- `cli.py`: the subcommand is `run-slate`, with `cowork-run` kept as an alias.
+  `COWORK_REQUEST_VERSION` is deliberately unchanged: `cowork.py` hard-rejects a
+  mismatched `schema_version`, so renaming the string would invalidate every
+  `run_request.json` on disk. `nfl.ps1`'s ValidateSet gained `run-slate`.
+- `skills/nfl-standings-pull-checklist/` moved to
+  `.claude/skills/standings-checklist/` and renamed to match its directory. It
+  was an orphan: referenced by no document, and predating `.claude/` by a day.
+- `.claude/skills/{dev-session,verify,close-out}/SKILL.md`: claim the chunk
+  before writing code; record the suite result; check protected paths; and at
+  close-out commit, push, open the pull request and merge it on green rather
+  than printing a path list.
+- Three script error strings and `docs/session-prompts/P0-standings-grading-harness.md`
+  repointed at `.venv-linux`. Older session prompts are dated records and were
+  left alone.
+
+Corrected:
+
+- `CLAUDE.md` said `api.weather.gov` is unreachable from a container. It answers
+  HTTP 200. Measured 2026-09-17 alongside `raw.githubusercontent.com` and
+  nflverse GitHub release downloads, all reachable.
+- `docs/RUNBOOK.md` said `doctor` reports `pass_status: false` with
+  `sqlite_probe_error` in a container. It returns `pass_status: true` with an
+  empty probe error and WAL journaling; the bridge-mount symptoms do not
+  reproduce in a Claude Code container.
+
+Verification:
+
+- Baseline before any change, Linux container:
+  `1 failed, 735 passed, 1 skipped in 155.56s (0:02:35)`.
+- After: `1 failed, 788 passed, 1 skipped in 149.38s (0:02:29)`. The 53 added
+  tests are all in `tests/test_repo_boundaries.py`. The single failure is the
+  documented `test_live_check_refuses_once_a_selected_player_has_locked`
+  hardcoded-expiry case that chunk P0 repairs; it is unchanged by this work.
+- Each boundary assertion was mutation-tested: AvgPointsPerGame appended to
+  `ownership.py`, `example.com` added to `ALLOWED_HOSTS`, `_LABEL = "roi"` added
+  to `ownership.py`, an `economics` import added to `prior_review.py`,
+  `DK_UPLOAD` added to `ownership.py`, and a non-existent path added to the
+  protected list. All six failed the intended test and only that test; the tree
+  was restored and `git diff --stat -- src/ .github/` was empty afterwards.
+- `sh ./nfl.sh doctor`: `pass_status: true`.
+- `.venv-linux/bin/python -m compileall -q src scripts .claude/hooks`: clean.
+- `git diff --check`: clean.
+- `.github/workflows/ci.yml` parses; jobs `boundaries`, `suite`,
+  `protected-paths`.
+- `python3 .claude/hooks/session_start.py`: 33 lines, 0.055 s.
+- `sh ./nfl.sh run-slate` and `sh ./nfl.sh cowork-run` both reach the same
+  handler and return the same four release truths.
+
+Repaired after an adversarial review of the diff, all three findings confirmed
+before acting:
+
+- `ci.yml`'s `suite` job checked out at the default depth 1, so the whitespace
+  and conflict-marker step would have died with `fatal: bad object` under
+  `bash -e` on every pull request (the base commit is not in a shallow clone)
+  and silently skipped on every push (`HEAD~1` does not resolve either). The job
+  now checks out with `fetch-depth: 0`, verifies the base object exists with
+  `git cat-file -e` before using it, and diffs from the merge base. A check that
+  cannot fail is not a check.
+- `guard_bash.py` and the deny list both missed refspec pushes. `git push origin
+  feature:main` reaches `main` with no `main` token after `origin`, and
+  `git push origin +HEAD:main` forces with no `--force` token anywhere. Two
+  patterns added, plus six refused and two allowed shapes in the tests (a
+  non-forced refspec onto a `claude/*` branch, and a branch whose name merely
+  contains "main", both of which must still pass). Prefix rules cannot express
+  the source-ref form at all, so the guard is the only layer that sees it, and
+  the rule now says so.
+- `backlog.md`'s session-conventions paragraph still said `codex/<id>-<slug>`
+  and "commit only on an explicit reviewed path list", contradicting the policy
+  this same commit introduces two sections above it. Consequential rather than
+  cosmetic: the push-allow rules are scoped to `claude/*`, so a session
+  following the stale text would have created a branch it could not push.
+
+Known issues in `guard_bash.py`, found by the guard firing on the session that
+wrote it, and left in place because both fail in the safe direction:
+
+- `git add -u <explicit path>` is refused, though a scoped `-u` is an explicit
+  path list and the rule only means to refuse whole-tree staging. Workaround:
+  plain `git add <path>` stages a deletion just as well.
+- `git stash list` and `git stash show` are refused, though both are read-only.
+  The pattern matches the `stash` subcommand rather than its verb.
+
+Neither was repaired in this commit: the Claude Code auto-mode classifier
+refuses to let a session edit the guard that governs it, which is the correct
+posture and not something to work around. Narrowing both patterns is a small
+follow-up that needs Ben's go-ahead.
+
+Not done in this phase, and why: the fragment-ledger migration
+(`changelog.d/`, chunk status in brief frontmatter) is the remaining
+multi-instance collision fix and is deliberately separate, being the most
+invasive change in the plan. Branch protection on `main` and the `ben-review`
+label are Ben's to create; until they exist, "merge only when green" is a
+convention rather than an enforced rule.
+
+
 ### 2026-09-16 (repository hygiene): branch consolidation, Showdown scripts tracked, root run outputs ignored
 
 Repository hygiene only. No source module, test, contract, run artifact or

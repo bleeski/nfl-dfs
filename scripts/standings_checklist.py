@@ -60,7 +60,7 @@ except ImportError:
     sys.exit(
         "nfl_dfs is not importable. Run this with the project's own interpreter, "
         "not a bare system python3:\n"
-        "  Cowork/Linux: .cowork-venv/bin/python scripts/standings_checklist.py\n"
+        "  Linux: .venv-linux/bin/python scripts/standings_checklist.py\n"
         "  Windows:      .venv\\Scripts\\python.exe scripts\\standings_checklist.py\n"
         "If neither venv exists yet, run `sh ./nfl.sh setup` (Cowork) first."
     )

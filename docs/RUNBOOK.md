@@ -1,4 +1,13 @@
-# Claude Cowork Runbook
+# Slate Runbook
+
+Operating a slate in Claude Code, on the Windows desktop app or in a cloud
+session. `docs/OPERATOR_GUIDE.md` is the manual command reference;
+`docs/START_HERE.md` is the orientation page.
+
+Three names in here still say "cowork": the subcommand alias `cowork-run`, the
+artifacts `cowork_run.json` and `NFL_DFS_Cowork_Review_<run-id>.xlsx`, and the
+request schema `nfl_cowork_run_request_v1`. They are bytes on disk and a wire
+format that `cowork.py` validates, not labels. `run-slate` is the name to use.
 
 ## Classic C3 governed prior review: current operating path (2026-09-11)
 
@@ -6,7 +15,7 @@ The same normal two-CSV command now accepts a multi-game DraftKings NFL Classic
 salary file and matching blank reserved-entry file:
 
 ```sh
-sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<slate-label>'
+sh ./nfl.sh run-slate --input-dir '<input-directory>' --profile prior_review --build-priors --label '<slate-label>'
 ```
 
 Classic C1 validates and binds the exact salary and entry bytes, draft group,
@@ -19,7 +28,7 @@ C2 joint selection, supply the exact-input C2 policy on the command line or in
 the generated request:
 
 ```sh
-sh ./nfl.sh cowork-run \
+sh ./nfl.sh run-slate \
   --request '<full-path-to-run_request.json>' \
   --portfolio-policy-json '<full-path-to/classic_portfolio_policy.json>'
 ```
@@ -145,53 +154,49 @@ still operationally blocked on a successful native Excel
 open/recalculate/save/reopen acceptance on this host. Do not treat the package
 as C3-complete or begin C4 until that exact check passes.
 
-## Continuity: getting the repo into a session (2026-09-12)
+## Continuity: getting the repo into a session (2026-09-17)
 
-`device_bash` has been dead since a Windows update released 2026-09-08. The
-working path is `device_stage_files` into the cloud container and
-`device_commit_files` back; that has been used repeatedly with no rejections and
-is the primary route. This section records what the GitHub fallback needs before
-it can be one.
+GitHub is the only route now, and it is the whole answer. The device bridge,
+`git bundle` handoffs and patch-back-through-chat are all retired along with
+Cowork; this section replaces the 2026-09-12 ordering entirely.
 
-**Order of preference.**
+**Every surface clones the same repository.**
 
-1. `device_stage_files` / `device_commit_files`. Proven, needs no credential,
-   and reaches the exact working tree including uncommitted work.
-2. `git clone` from `origin` in the container. Needs the work pushed AND a read
-   credential the container does not currently have. See below.
-3. A `git bundle` attached to the chat. Zero auth, survives a total bridge
-   failure, and carries full history: `git bundle create nfl-dfs.bundle --all`
-   on the Windows side, attach the file, then `git clone nfl-dfs.bundle` in the
-   container. This is the only route that works when every device tool is down.
+- Windows desktop app: the local checkout, `.\nfl.ps1`, `.venv`.
+- Cloud session, including from a phone: a fresh clone, `sh ./nfl.sh`,
+  `.venv-linux`. First command is `sh ./nfl.sh setup`.
 
-**What the GitHub fallback needs.**
+**Push before you rely on a clone.** A cloud session sees committed work and
+nothing else. Uncommitted work on the Windows box is invisible to it. Claude now
+commits and pushes on its own authority to a `claude/*` branch and merges to
+`main` once CI is green, so the gap between the working tree and `origin` should
+be short-lived by default; see `.claude/rules/git-authority.md`. Never
+`git add .` or `-A`; stage an explicit path list.
 
-`git` over HTTPS works from the container; a plain `curl https://github.com`
-returns 400 through the egress proxy but `git ls-remote` against a public repo
-succeeds, so the protocol is not the problem. Two things are.
+**What a clone does not carry.** `.gitignore` excludes `data/runs`,
+`data/registry`, `data/models`, `data/standings/inbox`, `data/standings/normalized`,
+`outputs` and `operator_input.xlsx`. A cloud session therefore starts with the
+engine, the docs and the ledgers, and with none of the bytes any previous run
+produced. Three consequences worth knowing before you plan work in one:
 
-*Content.* `origin/main` is `f2890a6c587b01cede2e07bdcbb3ec1dd0ab0d33`, which is
-C1 plus C2. The entire C3 tranche and everything after it is uncommitted in the
-working tree. A clone today produces an engine that cannot publish a Classic
-review CSV and, without the R21 repair, cannot publish a Classic selection at
-all. **Push before relying on a clone.** Never `git add .`; stage the explicit
-reviewed path list.
+- `scripts/standings_checklist.py` scans `data/runs/*/inputs/` and loose root
+  CSVs. In a fresh clone both are empty, so it returns an empty checklist rather
+  than an error. That is not a finding about the corpus.
+- `data/registry/` is a real SQLite database and does not travel. A cloud
+  session starts with a blank registry.
+- `late-swap --prior-manifest` and `settle --replay` need artifacts from an
+  earlier run. Neither is possible in a fresh clone.
 
-*Credentials.* `github.com/bleeski/nfl-dfs` is private and the container's
-ambient `GITHUB_TOKEN` is not Ben's and is rejected
-(`Invalid username or token`). Claude does not handle tokens: a personal access
-token must not be pasted into a chat transcript and Claude will not enter one.
-The two clean options are to provision a fine-grained, read-only,
-single-repository PAT into the session environment through whatever secret
-mechanism the runtime exposes rather than through conversation, or to make the
-repository public. Nothing sensitive is tracked (`.gitignore` excludes
-`data/runs`, `data/registry`, `data/models`, `outputs` and
-`operator_input.xlsx`), so public is a real option; it exposes the engine and
-the strategy, which is Ben's call and no one else's.
+Derived records under `records/` are tracked on purpose, so grading and
+calibration do work from a clone. Raw standings exports never are: one is 167 MB
+and they carry other DraftKings users' names and lineups.
 
-*Write-back.* A clone gives reads. A dev session that changes code still has to
-return it, which needs either write credentials in the container or a patch
-handed back through the chat. Plan for the patch unless write auth exists.
+**Container facts, measured 2026-09-17.** `uv sync --all-groups --locked
+--python 3.13.7` completes. `sh ./nfl.sh doctor` returns `pass_status: true`
+with an empty `sqlite_probe_error`; the 2026-09-08 bridge-mount failures below
+do not reproduce. Full suite `1 failed, 735 passed, 1 skipped in 155.56s`, the
+one failure being the documented hardcoded-expiry test that chunk P0 repairs.
+
 
 ## Showdown generation: current operating path (2026-09-09)
 
@@ -199,7 +204,7 @@ For the normal request to generate a Showdown portfolio from the two attached
 CSV files, run:
 
 ```sh
-sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<slate-label>'
+sh ./nfl.sh run-slate --input-dir '<input-directory>' --profile prior_review --build-priors --label '<slate-label>'
 ```
 
 This generates prior-only review lineups. It does not implement the full
@@ -223,7 +228,7 @@ For outdoor weather, capture the relevant NWS gridpoint forecast through
 `sources.fetch_public_artifact`, retain the original response and hash, and
 populate the request's `weather_state`, `weather_source_uri`, and
 `weather_observed_at` from that capture. NWS was reachable during the September
-9 Windows rehearsal; availability must be checked in the actual Cowork session.
+9 Windows rehearsal; availability must be checked in the actual session.
 Use the forecast's `generatedAt`, never the time you typed the request. The
 six-hour weather expiry survives freezing, projection, selection and export.
 
@@ -368,24 +373,28 @@ current official activity evidence, or validated opportunity/model inputs.
 Those facts must come from separately frozen evidence. Their absence is a
 normal `DO_NOT_UPLOAD` result, not permission to infer them.
 
-## Cowork prerequisites
+## Prerequisites
 
-- Start the task from Claude Desktop with this repository selected as the local
-  folder and with write access that does not permit deletion when that option is
-  available.
-- Keep Claude Desktop open while the task needs local files.
-- Use the repository's Linux runtime through `nfl.sh`. Never attempt to execute
-  `.venv\Scripts\python.exe` from Cowork's Linux environment. The launcher uses
-  `.cowork-venv` and `.cowork-uv-cache`, leaving the Windows environment intact.
-- Run `sh ./nfl.sh setup` only when the project environment is missing. Setup is
-  pinned by `.python-version`, `pyproject.toml`, and `uv.lock`.
+- Work from a checkout of this repository, on either surface. Windows desktop
+  app uses `.\nfl.ps1` and `.venv`; a cloud session uses `sh ./nfl.sh` and
+  `.venv-linux`. Never mix the two in one session, and never try to execute
+  `.venv\Scripts\python.exe` from Linux.
+- Run `sh ./nfl.sh setup` (or `.\nfl.ps1 setup`) only when the environment is
+  missing. Setup is pinned by `.python-version`, `pyproject.toml` and `uv.lock`.
+- Confirm `doctor` returns `pass_status: true` before a slate run. The run path
+  gates on it.
+- A cloud session needs the DraftKings files committed under
+  `data/inbox/slates/<slate-id>/`; a desktop session can point at any local
+  directory. Either way the two files are Ben's own downloads, and nothing in
+  this repository ever fetches them.
+
 
 ## First pass: discover, freeze, and reconcile
 
 When both attachments are in one directory:
 
 ```sh
-sh ./nfl.sh cowork-run \
+sh ./nfl.sh run-slate \
   --input-dir '/full/path/to/attachments' \
   --label '2026-W02-MAIN'
 ```
@@ -393,7 +402,7 @@ sh ./nfl.sh cowork-run \
 When they are in different locations:
 
 ```sh
-sh ./nfl.sh cowork-run \
+sh ./nfl.sh run-slate \
   --salaries '/full/path/to/salary.csv' \
   --entries '/full/path/to/entries.csv' \
   --label '2026-W02-MAIN'
@@ -459,7 +468,7 @@ Populate only source-backed values:
   transformations of frozen evidence, never by freehand LLM estimates.
 - `ownership_brackets_csv`: optional uncertainty brackets, explicitly treated
   as cold-start priors until calibrated.
-- `source_ledger_json`: required for a Cowork model-assisted build. It must use
+- `source_ledger_json`: required for a model-assisted build. It must use
   schema `nfl_source_ledger_v1`; unknown fields, unapproved source URIs,
   invalid timestamps/license decisions/parser versions, missing or tampered
   artifacts, and missing or mismatched hashes for either model-input CSV fail
@@ -479,7 +488,7 @@ Populate only source-backed values:
   artifact is prior-only review output, never a certified upload package.
 - `assignment_csv`: optional manual lineup path. When present, the workflow
   validates/certifies it instead of running the model-assisted build.
-- `profile`: `diagnostic` uses the bounded Cowork scenario/candidate sizes;
+- `profile`: `diagnostic` uses the bounded scenario/candidate sizes;
   `registered` requests the larger registered banks and may take materially
   longer. Neither setting changes evidence gates.
 
@@ -491,12 +500,12 @@ directory, managed project data, and that run's immutable directory.
 For a prepared role package on the command line, the equivalent rerun is:
 
 ```sh
-sh ./nfl.sh cowork-run \
+sh ./nfl.sh run-slate \
   --request '<full-path-to-run_request.json>' \
   --role-evidence-json '<full-path-to-kicker-role-package/kicker_roles.json>'
 ```
 
-Cowork snapshots both the manifest and its adjacent `sources/` captures before
+The run path snapshots both the manifest and its adjacent `sources/` captures before
 selection. Review `prior_review_reports.selection.prior_scores.kicker_roles` for
 the team allocation, sole-listed assumptions, zero-share exclusions, coverage
 gaps, source hashes and expiry. A source-bound role does not change
@@ -506,7 +515,7 @@ For policy-contract validation, use the generated request or the explicit CLI
 field:
 
 ```sh
-sh ./nfl.sh cowork-run \
+sh ./nfl.sh run-slate \
   --request '<full-path-to-run_request.json>' \
   --portfolio-policy-json '<full-path-to/portfolio_policy.json>'
 ```
@@ -573,7 +582,7 @@ authorize improvising missing data.
 After updating the request:
 
 ```sh
-sh ./nfl.sh cowork-run --request '/full/path/to/run_request.json'
+sh ./nfl.sh run-slate --request '/full/path/to/run_request.json'
 ```
 
 If the request supplies a manual assignment, the workflow validates it and
@@ -586,7 +595,7 @@ fee; split a multi-contest DraftKings export into separate immutable runs.
 ## Governed late swap
 
 Late swap is a separate immutable release decision built on a prior `CERTIFIED`
-package. In Cowork, use the same shared launcher and logic as the Windows
+package. On Linux, use the same shared launcher and logic as the Windows
 fallback:
 
 ```sh
@@ -657,42 +666,45 @@ Always report:
 The operator manually reviews Entry IDs and lineups and performs any DraftKings
 upload. A generated file is never permission to upload by itself.
 
-## Linux/Cowork runtime, measured 2026-09-08
+## Linux runtime, measured 2026-09-17
 
-A Cowork session mounts this repository through a bridge that refuses file
-deletion. `unlink` and `rmdir` return `EPERM`, which breaks three things that
-look unrelated: `uv` cannot extract a managed interpreter, SQLite cannot open a
-database in `WAL` or `DELETE` mode (`disk I/O error`, because `DELETE` journaling
-deletes the journal on commit), and `tempfile.TemporaryDirectory` recurses until
-`RecursionError` because its cleanup handler retries `rmtree` on every
-`PermissionError`.
-
-`nfl.sh` therefore honours three overrides, all defaulting to the previous
-in-repository paths so Windows behaviour is unchanged:
+Current measurements, from a Claude Code cloud container. These supersede the
+2026-09-08 Cowork bridge-mount notes kept below them for history.
 
 ```sh
-export NFL_DFS_VENV_DIR=/tmp/nfl-cowork-venv
+sh ./nfl.sh setup     # uv sync --all-groups --locked --python 3.13.7, completes
+sh ./nfl.sh doctor    # pass_status: true, sqlite_probe_error empty, WAL ok
+sh ./nfl.sh test      # 1 failed, 735 passed, 1 skipped in 155.56s
+```
+
+The one failure is the documented hardcoded-expiry test that chunk P0 repairs.
+Reachable from the container: `raw.githubusercontent.com`, nflverse GitHub
+release downloads, and `api.weather.gov` (HTTP 200; an older note said otherwise
+and was wrong).
+
+`nfl.sh test` pins pytest's basetemp and cache directory under `TMPDIR`, the
+same way `nfl.ps1` does, so a repository mounted on a filesystem that cannot
+host them does not fail every test at fixture setup. Override with
+`NFL_DFS_PYTEST_TMP` and `NFL_DFS_PYTEST_CACHE`.
+
+### Historical: the 2026-09-08 Cowork bridge mount
+
+Kept because the escape hatches it produced are still in the launcher and still
+work. A Cowork session mounted the repository through a bridge that refused file
+deletion: `unlink` and `rmdir` returned `EPERM`, which broke `uv` extracting a
+managed interpreter, SQLite opening a database in `WAL` or `DELETE` mode, and
+`tempfile.TemporaryDirectory` cleanup. `nfl.sh` honours three overrides for
+exactly that case:
+
+```sh
+export NFL_DFS_VENV_DIR=/tmp/nfl-venv
 export NFL_DFS_UV_CACHE_DIR=/tmp/nfl-uv-cache
 export NFL_DFS_UV_PYTHON_DIR=/tmp/nfl-uv-python
 sh ./nfl.sh setup
 ```
 
-With the runtime on local disk, `uv sync` completes in about 17 seconds instead
-of exceeding a 178-second shell limit unfinished.
+None of those symptoms reproduce in a Claude Code container.
 
-Two further constraints follow from the same cause. `.pytest_cache` in the
-mounted repository is unreadable, so the suite needs
-`--ignore=.pytest_cache tests`. And running the suite in place leaves temporary
-directories behind that the session cannot remove, so execute it from a
-local-disk working copy of `src`, `tests`, `templates`, `config`,
-`pyproject.toml` and `uv.lock`, keeping the mounted repository as the source of
-truth for edits.
-
-`nfl.sh doctor` against the mounted repository reports `pass_status: false` with
-`sqlite_probe_error`, which is correct rather than a defect: `cowork-run` gates
-on `pass_status` and `registry.py` opens a real database under `data/registry/`.
-Either grant the session delete permission on the folder, or run from a
-local-disk working copy.
 
 ## Moved from CLAUDE.md on 2026-09-15 (verbatim)
 
@@ -708,7 +720,7 @@ force for every slate run. Rulings attributed to Ben keep their dates.
 
    For prior-only Showdown or Classic review generation, use:
 
-   `sh ./nfl.sh cowork-run --input-dir '<attachment-directory>' --profile prior_review --build-priors --label '<short-label>'`
+   `sh ./nfl.sh run-slate --input-dir '<input-directory>' --profile prior_review --build-priors --label '<short-label>'`
 
    This automatically runs the frozen prior, projection, and selection chain.
    It produces review lineups with `PRIOR_ONLY / DO_NOT_UPLOAD`.
@@ -725,11 +737,11 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    blocked; do not begin C4 until it passes.
 
    If they are in different locations, pass `--salaries` and `--entries`
-   explicitly. On Windows outside Cowork, use `./nfl.ps1 cowork-run` with the
+   explicitly. On Windows, use `.\nfl.ps1 run-slate` with the
    same arguments.
 2. If the project runtime is absent, run `sh ./nfl.sh setup`, then rerun. Do
-   not use the Windows `.venv` from a Linux Cowork runtime. `nfl.sh` keeps its
-   Linux environment isolated in `.cowork-venv`.
+   not use the Windows `.venv` from a Linux runtime. `nfl.sh` keeps its
+   Linux environment isolated in `.venv-linux`.
 3. Read the generated `cowork_run.json`, `run_request.json`, and review
    package. A successful Showdown `prior_review` run includes the readable
    workbook plus `prior_only_readable_review.json` and a self-contained
@@ -774,7 +786,7 @@ force for every slate run. Rulings attributed to Ben keep their dates.
 6. Update the generated machine-readable `run_request.json` with any supplied
    or validated auxiliary files and rerun:
 
-   `sh ./nfl.sh cowork-run --request '<full-path-to-run_request.json>'`
+   `sh ./nfl.sh run-slate --request '<full-path-to-run_request.json>'`
 7. Continue through build, independent QA, and certification when the request
    is complete. If current official activity evidence is missing, still retain
    useful diagnostic assignments but finish `DO_NOT_UPLOAD`.

@@ -1,6 +1,6 @@
 ---
 name: close-out
-description: Close a Claude Code development session in the nfl-dfs repo: verification evidence, ledger updates, next READY prompt, and the reviewed path list for Ben. Use when the chunk is done or the session is ending.
+description: Close a Claude Code development session in the nfl-dfs repo: verification evidence, ledger updates, next READY prompt, then commit, push, open the pull request and merge it on green CI. Use when the chunk is done or the session is ending.
 disable-model-invocation: true
 ---
 
@@ -23,7 +23,18 @@ Close out the current chunk.
 5. Write `docs/session-prompts/<NEXT-ID>-<slug>.md` for the next `READY` chunk in
    the house format (see `Q1B-settlement-intake.md`).
 6. Run the `reviewer` subagent on the diff against the chunk brief; fix or
-   record what it finds before the path list.
-7. Print for Ben: the exact `git status --short` of changed and new paths as a
-   reviewed path list, grouped as source / tests / docs / ledger, plus one line on
-   anything that should not be committed. Do not stage or commit.
+   record what it finds before committing.
+7. Record the suite result where the next session will see it:
+   `python3 scripts/record_verify.py --from-log <log>`.
+8. Release the chunk claim in `state/claims.json`.
+9. Commit and ship, per `.claude/rules/git-authority.md`:
+   - `git add` an explicit path list, grouped as source / tests / docs / ledger.
+     Never `git add .` or `-A`. Say in one line what you deliberately left out.
+   - Commit, push to `claude/<id>-<slug>`, open the pull request.
+   - `python3 scripts/check_protected_paths.py`. If it flags anything, add the
+     `ben-review` label, say so, and stop: that pull request is Ben's to merge.
+   - Otherwise wait for `suite`, `boundaries` and `protected-paths` to go green,
+     then merge and delete the branch. A red check is work, not a reason to stop.
+10. Report to Ben in a few lines: what landed, the exact suite result, the pull
+   request link and whether it merged, anything relaxed, and any open
+   `[BEN: ...]` flag.
