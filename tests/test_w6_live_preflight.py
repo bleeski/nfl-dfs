@@ -320,17 +320,35 @@ def test_live_check_reports_the_clock_and_scope_of_every_check(
 
 
 def test_live_check_refuses_once_a_selected_player_has_locked(
-    tmp_path: Path, classic_slate, classic_entries
+    tmp_path: Path, classic_slate, classic_entries, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A package certified before lock is not uploadable after it."""
+    """A package certified before lock is not uploadable after it.
+
+    Every clock here is derived from the fixture's own lock times. The earlier
+    version hardcoded `expires_at=2026-09-14`, so from 2026-09-14 onward the
+    package could no longer be certified at the live clock and the test failed
+    every day thereafter, for a reason that had nothing to do with what it
+    tests. This is the defect `_before_fixture_lock` documents.
+
+    The evidence deliberately stays valid past the check clock, so the only
+    reason this package is refused is that a selected player has locked.
+    """
+    earliest_lock = min(
+        player.lock_at for player in classic_slate.players
+    ).astimezone(timezone.utc)
+    certified_at = _before_fixture_lock(classic_slate)
     manifest_path, _ = _certified(
         tmp_path, classic_slate, classic_entries,
-        expires_at=datetime(2026, 9, 14, tzinfo=timezone.utc),
+        expires_at=earliest_lock + timedelta(hours=6),
+        monkeypatch=monkeypatch, now=certified_at,
     )
-    after_lock = datetime(2026, 9, 13, 18, 0, tzinfo=timezone.utc)
+
+    after_lock = earliest_lock + timedelta(hours=1)
     report = live_pre_upload_check(manifest_path, salaries=SALARY_CSV, now=after_lock)
     assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
     assert any("SELECTED_PLAYER_ALREADY_LOCKED" in b for b in report["blockers"])
+    # Not merely expired: the package's own evidence is still live at this clock.
+    assert not any("EXPIRED" in blocker for blocker in report["blockers"])
 
 
 def test_live_check_without_a_salary_csv_cannot_certify(
