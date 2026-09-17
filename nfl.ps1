@@ -30,7 +30,11 @@ try {
         # fixed to per-user temp locations: the default basetemp root and the
         # repo-local .pytest_cache have both been left unreadable by bridge
         # mounts before, which fails every test at fixture setup.
-        $PytestTmp = Join-Path $env:TEMP 'nfl-dfs-pytest'
+        # basetemp carries the process id because pytest DELETES basetemp at
+        # the start of every run, so two concurrent suites wipe each other and
+        # the file-writing tests fail for no reason of their own. cache_dir
+        # stays shared so -lf and -ff keep working across runs.
+        $PytestTmp = Join-Path $env:TEMP "nfl-dfs-pytest\$PID"
         $PytestCache = Join-Path $env:TEMP 'nfl-dfs-pytest-cache'
         & $PythonExe -m pytest '--basetemp' $PytestTmp '-o' "cache_dir=$PytestCache" @RemainingArgs
     }

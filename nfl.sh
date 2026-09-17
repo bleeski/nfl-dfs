@@ -43,7 +43,18 @@ if [ "$command_name" = "test" ]; then
     # the same reason nfl.ps1 pins them: a mounted repository has left the
     # default basetemp and the repo-local .pytest_cache unreadable before, which
     # fails every test at fixture setup rather than on its merits.
-    pytest_tmp="${NFL_DFS_PYTEST_TMP:-${TMPDIR:-/tmp}/nfl-dfs-pytest}"
+    #
+    # basetemp carries the process id because pytest DELETES basetemp at the
+    # start of every run. Two suites sharing one path means the second wipes the
+    # first mid-flight, and the file-writing tests fail for a reason that has
+    # nothing to do with the code. Measured 2026-09-17: two concurrent runs
+    # produced three phantom failures in test_classic_review_c3[20], [150] and
+    # test_cowork_rerun_regressions. Several Claude Code instances work this
+    # repository, so that collision is expected rather than exotic.
+    #
+    # cache_dir stays shared. pytest does not clear it at startup, and keeping
+    # one path is what makes `--lf` and `--ff` work across runs.
+    pytest_tmp="${NFL_DFS_PYTEST_TMP:-${TMPDIR:-/tmp}/nfl-dfs-pytest/$$}"
     pytest_cache="${NFL_DFS_PYTEST_CACHE:-${TMPDIR:-/tmp}/nfl-dfs-pytest-cache}"
     exec "$python_exe" -m pytest --basetemp "$pytest_tmp" -o "cache_dir=$pytest_cache" "$@"
 fi

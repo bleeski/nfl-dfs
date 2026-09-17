@@ -379,3 +379,33 @@ def test_bash_guard_allows_ordinary_work(command: str) -> None:
     guard = _load_bash_guard()
     reason = guard.forbidden_reason(command)
     assert reason is None, f"guard wrongly refused {command!r}: {reason}"
+
+
+# --------------------------------------------------------------------------
+# Launcher hygiene. Several instances work this repository at once.
+# --------------------------------------------------------------------------
+
+
+def test_launchers_give_each_run_its_own_pytest_basetemp() -> None:
+    """Two concurrent suites must not share `--basetemp`.
+
+    pytest deletes basetemp at the start of every run, so a fixed path means the
+    second run wipes the first mid-flight. Measured on 2026-09-17: two
+    concurrent runs produced three phantom failures in
+    `test_classic_review_c3[20]`, `[150]` and `test_cowork_rerun_regressions`,
+    none of which were real. A grep, not a behavioural test: actually racing two
+    suites would cost five minutes and be flaky by construction.
+    """
+    posix = (PROJECT_ROOT / "nfl.sh").read_text(encoding="utf-8")
+    powershell = (PROJECT_ROOT / "nfl.ps1").read_text(encoding="utf-8")
+
+    assert "nfl-dfs-pytest/$$" in posix, (
+        "nfl.sh lost the per-process component of --basetemp; concurrent suites "
+        "will delete each other's temp directories"
+    )
+    assert "nfl-dfs-pytest\\$PID" in powershell, (
+        "nfl.ps1 lost the per-process component of --basetemp"
+    )
+    # The cache is deliberately shared, so `--lf` and `--ff` still work.
+    assert "nfl-dfs-pytest-cache" in posix
+    assert "nfl-dfs-pytest-cache" in powershell

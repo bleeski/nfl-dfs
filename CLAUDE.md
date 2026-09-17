@@ -193,8 +193,10 @@ a gap is the only unrecoverable error. Full text: `docs/RUNBOOK.md`.
   `OPTIMAL` is scoped to the reported bank; sample size is declared, not inferred.
 - `data/standings/inbox/`, `data/runs/**/inputs/`, and
   `tests/fixtures/supplied/` are immutable snapshots; a new run is a new folder.
-- Known: `tests/test_w6_live_preflight.py::test_live_check_refuses_once_a_selected_player_has_locked`
-  fails on a hardcoded 2026-09-14 expiry until `P0` pins its clock.
+- No known failing test as of 2026-09-17. The suite is
+  `789 passed, 1 skipped`; the one skip is the expected Windows
+  symlink-permission case. Any other failure or skip is a finding, not a known
+  issue, and `.claude/rules/tests.md` says what to do with it.
 - When Ben corrects the same thing twice, add the rule here or to
   `.claude/rules/`, and say that you did.
 - When compacting, preserve the chunk ID, the branch, the list of modified files,
