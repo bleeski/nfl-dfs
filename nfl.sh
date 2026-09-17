@@ -54,8 +54,13 @@ if [ "$command_name" = "test" ]; then
     #
     # cache_dir stays shared. pytest does not clear it at startup, and keeping
     # one path is what makes `--lf` and `--ff` work across runs.
+    # The parent has to be made first. pytest creates basetemp itself but not
+    # the directories above it, so a nested path whose parent is absent fails
+    # every test at fixture setup with FileNotFoundError. That is the state of
+    # any fresh container, and of any machine whose temp directory was cleaned.
     pytest_tmp="${NFL_DFS_PYTEST_TMP:-${TMPDIR:-/tmp}/nfl-dfs-pytest/$$}"
     pytest_cache="${NFL_DFS_PYTEST_CACHE:-${TMPDIR:-/tmp}/nfl-dfs-pytest-cache}"
+    mkdir -p "$(dirname "$pytest_tmp")" "$pytest_cache"
     exec "$python_exe" -m pytest --basetemp "$pytest_tmp" -o "cache_dir=$pytest_cache" "$@"
 fi
 

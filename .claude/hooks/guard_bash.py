@@ -81,9 +81,28 @@ FORBIDDEN: tuple[tuple[re.Pattern[str], str], ...] = (
         "amend. An amended commit rewrites history a reviewer may already hold.",
     ),
     (
-        re.compile(r"\bgit\s+add\b[^|;&]*?(?:--all\b|(?<!\w)-A(?!\w)|(?<!\w)-u(?!\w))"),
+        # `--all` and `-A` stage the whole tree whatever follows them, so a path
+        # argument does not narrow either one.
+        re.compile(r"\bgit\s+add\b[^|;&]*?(?:--all\b|(?<!\w)-A(?!\w))"),
         "stage everything. Stage an explicit path list so the diff is the one "
         "you reviewed.",
+    ),
+    (
+        # `-u` is different: given any pathspec it *is* an explicit path list,
+        # and only the bare form stages the whole tree. Refusing
+        # `git add -u <path>` was a false positive recorded on 2026-09-17.
+        # So this matches `git add` whose arguments are flags and nothing else,
+        # one of them `-u`, in either order: `git add -u`, `git add -v -u`,
+        # `git add -u -v`. A pathspec anywhere in the list stops the match,
+        # which is what makes both `git add -u src/x.py` and the equivalent
+        # `git add src/x.py -u` ordinary work.
+        re.compile(
+            r"\bgit\s+add(?:\s+-{1,2}[\w-]+)*"
+            r"\s+-u(?!\w)"
+            r"(?:\s+-{1,2}[\w-]+)*\s*(?=$|[|;&])"
+        ),
+        "stage every tracked change. `git add -u` with no path stages the whole "
+        "tree; name the paths instead.",
     ),
     (
         re.compile(r"\bgit\s+add\s+\.\s*$|\bgit\s+add\s+\.\s*[|;&]"),
@@ -99,8 +118,21 @@ FORBIDDEN: tuple[tuple[re.Pattern[str], str], ...] = (
         "user-owned work.",
     ),
     (
-        re.compile(r"\bgit\s+(?:clean|stash)\b"),
+        re.compile(r"\bgit\s+clean\b"),
         "discard uncommitted work.",
+    ),
+    (
+        # The mutating stash verbs, and bare `git stash`, which is `stash push`.
+        # `list` and `show` are read-only; refusing them was a false positive
+        # recorded on 2026-09-17 and is repaired here. The pattern now matches
+        # the verb rather than the subcommand name.
+        re.compile(
+            r"\bgit\s+stash\b\s*"
+            r"(?:(?:push|save|pop|apply|drop|clear|branch|create|store)\b|$|[|;&])"
+        ),
+        "discard or move uncommitted work. The working tree is often "
+        "intentionally dirty with user-owned work. `git stash list` and "
+        "`git stash show` are read-only and allowed.",
     ),
     (
         re.compile(r"\bgit\s+branch\b[^|;&]*?(?<!\w)-D(?!\w)"),
@@ -111,12 +143,58 @@ FORBIDDEN: tuple[tuple[re.Pattern[str], str], ...] = (
 
 
 def forbidden_reason(command: str) -> str | None:
-    """Return why this command is refused, or None if nothing matches."""
+    """Return why this command is refused, or None if nothing matches.
+
+    Pattern matching only. No git, no network, no file system: this is called
+    on every Bash call, and `tests/test_repo_boundaries.py` runs it over every
+    allowed and refused shape, which it could not do offline otherwise.
+    """
     inspectable = strip_literals(command)
     for pattern, reason in FORBIDDEN:
         if pattern.search(inspectable):
             return reason
     return None
+
+
+def stale_push_reason(command: str) -> str | None:
+    """Return why this push is refused as out of date, or None.
+
+    Separate from `forbidden_reason` on purpose. This one can fetch, so it must
+    never run on a command that is not a push, and it is imported lazily so a
+    non-push Bash call does not even pay the import.
+    """
+    if "git" not in command or "push" not in command:
+        return None  # Two substring checks, cheaper than compiling a match.
+    inspectable = strip_literals(command)
+    try:
+        # Imported here, not at module scope: `pathlib` alone costs several
+        # milliseconds on every Bash call, and a non-push call must pay nothing.
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import push_freshness
+
+        if not push_freshness.mentions_push(inspectable):
+            return None
+        return push_freshness.evaluate(inspectable)
+    except Exception:  # noqa: BLE001 - fail open, exactly like the rest of this hook
+        return None
+
+
+def _deny(source: str, reason: str) -> None:
+    json.dump(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": (
+                    f"Refused by .claude/hooks/{source}: {reason} "
+                    "See .claude/rules/git-authority.md. Do not work around this."
+                ),
+            }
+        },
+        sys.stdout,
+    )
 
 
 def main() -> int:
@@ -127,22 +205,13 @@ def main() -> int:
         return 0
 
     reason = forbidden_reason(command)
-    if reason is None:
+    if reason is not None:
+        _deny("guard_bash.py", reason)
         return 0
 
-    json.dump(
-        {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": (
-                    f"Refused by .claude/hooks/guard_bash.py: {reason} "
-                    "See .claude/rules/git-authority.md. Do not work around this."
-                ),
-            }
-        },
-        sys.stdout,
-    )
+    stale = stale_push_reason(command)
+    if stale is not None:
+        _deny("push_freshness.py", stale)
     return 0
 
 

@@ -1,8 +1,8 @@
 # Claude Code setup
 
-Everything in this file is something only Ben can do. Claude cannot set branch
-protection, cannot create a label in a repository it does not administer, and
-cannot change the permission mode that governs itself.
+Everything in this file is something only Ben can do. Claude cannot create a
+label in a repository it does not administer, and cannot change the permission
+mode that governs itself.
 
 ## What changed, in plain terms
 
@@ -10,7 +10,9 @@ Claude now commits, pushes, opens pull requests, and merges them into `main` on
 its own, once CI is green. It deletes its own merged branches. It does not ask
 first.
 
-Three things still stop it:
+Four things still stop it. The last one is mechanical, enforced by a hook on
+this machine. The first three are rules Claude keeps, for the reason in
+"Where the gate actually lives" below.
 
 1. **CI.** `suite`, `boundaries` and `protected-paths` must all pass on the
    pull request's head commit. A red or missing check is a hard stop.
@@ -21,31 +23,49 @@ Three things still stop it:
    rather than relying on you reading the diff.
 4. **A command guard.** `.claude/hooks/guard_bash.py` runs before every Bash
    call and refuses forced pushes, amends, whole-tree staging, rebases, hard
-   resets, `clean`, `stash`, forced branch deletion, and any push to `main`,
-   including when the flag arrives after an allowed prefix or sits in a chained
-   second command. Permission rules match a prefix and can see neither.
+   resets, `clean`, the mutating `stash` verbs, forced branch deletion, and any
+   push to `main`, including when the flag arrives after an allowed prefix or
+   sits in a chained second command. Permission rules match a prefix and can see
+   neither. It also refuses a push whose branch is behind a `main` that moved,
+   which is how a session finds out another instance merged while it worked.
 
 `.claude/rules/git-authority.md` is the full rule.
 
+## Where the gate actually lives
+
+The gate is client-side, and it is worth being exact about that, because a
+reader who assumes a server is watching will draw the wrong conclusion from a
+green check.
+
+This repository is private on a GitHub free plan. Rulesets and branch protection
+are not available there, so **nothing server-side blocks anything**: not a push
+straight to `main`, not a merge over red CI, not a force push. There is no
+setting to turn on, and making the repository public to obtain one is not worth
+the trade.
+
+What does bind, and why it is not nothing:
+
+- `.claude/settings.json` denies the destructive command shapes by prefix.
+- `.claude/hooks/guard_bash.py` denies the shapes a prefix cannot express, and
+  refuses a stale push.
+- `.claude/rules/git-authority.md` states the rules the hooks cannot check.
+
+These bind every instance because every instance clones them. That is a real
+control over the failure this is actually protecting against, which is a Claude
+Code session doing something destructive by accident. It is not a control
+against a determined bypass, and it never was.
+
+So for an instance about to merge its own work: **CI is advisory.** It reports;
+it does not block. The green check is evidence you are meant to act on, not a
+door that refuses to open. Merging red is possible and is a rule violation, not
+an impossibility. The honest summary is that merge-on-green is a convention
+Claude keeps, not a rule a server enforces.
+
+`protected-paths` is the one place this still bites in the ordinary way: it runs
+as a CI job regardless, and a pull request touching a protected path fails it
+until the `ben-review` label is on. That check is doing real work.
+
 ## One-time, in GitHub
-
-### Branch protection on `main`
-
-Without this, "merge only when green" is a promise rather than a rule. Anyone
-with push access, Claude included, could push straight to `main`.
-
-Settings → Branches → Add branch ruleset (or classic branch protection) for
-`main`:
-
-- Require a pull request before merging.
-- Require status checks to pass: add `suite`, `boundaries`, `protected-paths`.
-- Require branches to be up to date before merging.
-- Block force pushes.
-- Do not allow bypassing the above settings.
-
-Leave "require approvals" at zero. Requiring a human approval would put you back
-in the loop on every change, which is the thing this removes. The protected list
-is the targeted version of that control.
 
 ### The review label
 

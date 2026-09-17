@@ -6,10 +6,10 @@ disable-model-invocation: true
 
 Start development on chunk `$ARGUMENTS` of `backlog.md`.
 
-0. `python3 scripts/repo_state.py --stdout`. Another Claude Code instance may be
-   working this repository right now. If the chunk is already claimed and the
-   claim is under six hours old, stop and say so. If it is older, you may take
-   it and must record that you did.
+0. `python3 scripts/repo_state.py --stdout`. It fetches `origin/main` first, so
+   the distance it reports is the real one, and it prints the three most recent
+   changelog headings: that is what the other instances did. Another Claude Code
+   instance may be working this repository right now.
 1. `git status --short --branch` and `git log --oneline -15`. Report the branch and whether the tree is
    dirty. Do not reset, clean, stash or reformat anything.
 2. Read, in this order and nothing else yet: `CLAUDE.md`; `backlog.md` with
@@ -28,10 +28,15 @@ Start development on chunk `$ARGUMENTS` of `backlog.md`.
    brief lists), tests to add first, the acceptance statement verbatim, open
    `[BEN: ...]` questions, and what is explicitly out of scope. Wait for
    approval before editing.
-7. Set the chunk `IN_PROGRESS` in `backlog.md` (LF; match the file's endings),
-   and claim it in `state/claims.json` with the chunk id, branch, an agent
-   label and a UTC `claimed_at`. Push the claim before writing code, so a
-   concurrent instance can see it.
+7. Claim the chunk before writing code, so a concurrent instance can see it:
+
+       python3 scripts/claim.py take $ARGUMENTS --branch claude/<id>-<slug>
+
+   It exits 1 and names the holder if another instance claimed this chunk less
+   than six hours ago: stop there and say so. An older claim is stale; taking it
+   is allowed, records `reclaimed_from` in `state/claims.json`, and goes in the
+   changelog too. Then set the chunk `IN_PROGRESS` in `backlog.md` (LF; match
+   the file's endings), and push the claim.
 
 Never `git add .` or `-A`. Commit, push, pull request and merge authority is in
 `.claude/rules/git-authority.md`; it is yours on green CI, except for the

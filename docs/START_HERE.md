@@ -27,10 +27,14 @@ Never mix the two environments in one session.
 ## You are probably not the only instance
 
 Other Claude Code sessions work this repository without knowing about you.
-Before starting a chunk, check `state/repo-state.json` for an active claim, and
-claim the chunk yourself before you write code. A claim older than six hours is
-stale and you may take it, saying so in the changelog. Never assume a status you
-read in prose; `scripts/repo_state.py` derives the real one.
+Before starting a chunk, run `python3 scripts/claim.py show`, and claim the
+chunk before you write code with `python3 scripts/claim.py take <ID>`. It
+refuses a chunk another instance claimed less than six hours ago. An older claim
+is stale: taking it is allowed, is recorded in `state/claims.json`, and goes in
+the changelog too. The claims live in `state/claims.json`, which is tracked;
+`state/repo-state.json` is the derived digest and is not. Never assume a status
+you read in prose; `scripts/repo_state.py` derives the real one, fetching
+`origin/main` first so the distance it reports is not an hour old.
 
 ## The permanent boundaries
 
