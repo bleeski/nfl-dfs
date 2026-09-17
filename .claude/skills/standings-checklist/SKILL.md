@@ -1,5 +1,5 @@
 ---
-name: nfl-standings-pull-checklist
+name: standings-checklist
 description: Generate the list of DraftKings NFL contests Ben has entered that still need their standings export pulled and dropped in data/standings/inbox/, in the nfl-dfs workspace, and hand it back as a clickable HTML checklist plus a regenerated CONTESTS_AWAITING_STANDINGS.md. Use this whenever Ben asks what NFL standings we need to pull, what contests are missing standings, to regenerate or refresh the awaiting-standings list, for a pull checklist, or says something like "what do we need to pull down", "give me the standings checklist", or "what's left to pull", even if he doesn't name the file or the tool. Also use it to record a contest as unrecoverable (DK's export is gone) or as a placeholder/synthetic ID so future runs stop listing it. This is not nfl-classic-lineups or nfl-showdown-lineups, which build lineups from an uploaded salary/entries CSV, and not `nfl.sh settle`, which scores a complete hash-bound standings artifact: this skill only finds which already-entered contests are missing an export.
 ---
 
@@ -36,7 +36,7 @@ fact; the entry CSV does not contain a contest date, and the outputs say so.
 ## Run it
 
 ```bash
-.cowork-venv/bin/python scripts/standings_checklist.py
+.venv-linux/bin/python scripts/standings_checklist.py
 ```
 
 That's the whole command: it writes the markdown and both HTML files and
@@ -82,7 +82,7 @@ comes back at zero bytes on a second attempt), record it so the tool stops
 asking:
 
 ```bash
-.cowork-venv/bin/python scripts/standings_checklist.py --mark-unrecoverable CONTEST_ID "zero bytes on second pull, <date>"
+.venv-linux/bin/python scripts/standings_checklist.py --mark-unrecoverable CONTEST_ID "zero bytes on second pull, <date>"
 ```
 
 For a synthetic or test contest ID that should stop showing up, use
@@ -139,9 +139,16 @@ This skill's job ends at handing him the checklist.
 
 ## For Ben, if he wants to run it himself
 
+Windows desktop, from the repository root:
+
 ```powershell
-cd C:\Users\benja\Documents\Claude\nfl-dfs
 .venv\Scripts\python.exe scripts\standings_checklist.py
+```
+
+Cloud session, from the repository root:
+
+```sh
+.venv-linux/bin/python scripts/standings_checklist.py
 ```
 
 The checklist lands at `data\standings\standings_pulls_<date>.html` — open it
