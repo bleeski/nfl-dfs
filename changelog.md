@@ -4,6 +4,111 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-17 (slate run): DET@BUF Showdown, 13 entries, prior-only review
+
+First operated slate in a cloud session. `RELEASE_DECISION=DO_NOT_UPLOAD` and
+`MODEL_STATUS=PRIOR_ONLY` throughout; no gate was relaxed and no observation was
+invented. Run id `20260917T232331Z-detbuf917c`.
+
+Inputs, committed under `data/inbox/slates/det-buf-2026-09-17/`:
+
+    salary  2593bb4b54b021a48e614b614f22c7256a5ada3031517f8129842b8fdbc8de89
+    entries f26648d8fff03e6a7fff072ace72955d1377acf13b251bb5d78c6994c21c6d2d
+
+SHOWDOWN, one game, 13 reserved entries, 47 people, classified by schema.
+
+Two evidence gates stopped the first pass at `PRIOR_REVIEW_IDENTITY_BLOCKED`:
+
+- `WEATHER_CAPTURE_REQUIRED:roof=outdoors`. `api.weather.gov` answers 403 at
+  this session's egress proxy (organization policy; confirmed over three
+  attempts and two clients, while `raw.githubusercontent.com` answers 200 and
+  the nflverse fetch succeeded). `api.sleeper.app` is refused the same way.
+  Resolved by operator-supplied state only: Ben attested the Buffalo forecast
+  was not a factor, `--weather-state CLEAR` was passed with no source URI and no
+  `generatedAt`, and the engine recorded it as
+  `OPERATOR_SUPPLIED:roof=outdoors|OPERATOR_SUPPLIED_UNATTRIBUTED`. There are no
+  retained raw bytes or hash behind the weather in this run. That label is the
+  honest record and it travels into the readable review.
+- `IDENTITY_UNRESOLVED_AND_AVAILABLE:44138452:Joshua Palmer`. DraftKings spells
+  him "Joshua Palmer"; the frozen `roster_weekly_2026.csv`
+  (`698183b8...fad9d8`) spells him "Josh Palmer", `00-0036988`, WR, BUF, ACT,
+  week 2, and Buffalo lists no other Palmer. `normalize_person_name` has no
+  given-name-variant rule, so the proposal was `UNMATCHED`. An operator
+  `--exclude` does not reach the identity gate; tested, the blocker survived it.
+  Resolved through the documented reviewed-crosswalk path rather than a code
+  change: `REVIEWED_PROVIDER_PLAYER_ID=00-0036988` with `DECISION=ACCEPT` in the
+  reviewed file (`f09c06a1...26fda`), then `priors-freeze`. `_resolve_reviewed`
+  checks DK name, team and position against the proposal verbatim before
+  accepting the row, and `prior_review.py:1797` then reports identity as
+  `INHERITED_FROM_FROZEN_PACKAGE` instead of re-running the gate.
+
+Portfolio, from a generated `nfl_showdown_portfolio_policy_v1`
+(`scripts/make_showdown_policy.py`, source `93e89238...2ca02`, normalized
+`8edec314...1810a`): combined-person cap 0.62, captain cap 0.25, captains zeroed
+for K/DST and for any FLEX salary at or below 900 (21 people), max pairwise
+person overlap 4, unique lineups required. No rung was dropped; the policy held
+as written on the first solve.
+
+    SELECT                 13 lineups, solver OPTIMAL (kOptimal)
+    enforcement            ENFORCED_AND_INDEPENDENTLY_AUDITED
+    independent audit      PASS (prior_only_showdown_portfolio_audit_sd4_v1)
+    DISPLAY_RECONCILIATION PASS
+    candidate bank         CANDIDATE_LIMIT_REACHED_INCOMPLETE
+    DK_REVIEW_ENTRY        e58a9b0e2a8a50f183fefe56bd7bafeb109ae45545240ec0ce9aa3401e6c3c6e
+    readable JSON          8151e52264e4f8bf7954b7b7cd3430f01889ec74036f3e31ceb4d0cfc41a1454
+    readable HTML          a7d285b45d36d532b1d4ded8bb9ea958171503901cbe4ebde21e9aa15cc85727
+    workbook               d39ba977ee87f17424f2d43b90b6e78093b0ba8f3d88dc760e7bdbdda195b4ac
+
+Captains held at 3 of 13 (Gibbs, St. Brown, Goff), combined at 8 of 13. The bank
+status is not a full-slate search and `OPTIMAL` is scoped to the bank actually
+built.
+
+Named gaps in the delivered portfolio, none of them cleared: no
+`official_status_csv`, so `official_status_coverage` is null and every selected
+person reads `BLANK_NOT_OFFICIAL_ACTIVITY`; Ty Johnson carries DraftKings status
+`Q` and appears in 5 of 13 lineups with nothing confirming him; every selected
+skill player is `CURRENT_ROLE_UNKNOWN`, with two `TRANSFER_PRIOR_UNVERIFIED` and
+one `MISSING_HISTORY`; the kicker rests on
+`PRIOR_ONLY_SOLE_LISTED_ASSUMPTION`; no payout, prize value or field size. The
+prior-score objective buys opportunity share per dollar with no ownership or
+ceiling model, and it salary-dumped into minimum-priced bench players: Greg
+Dortch at $1,000 in 7 of 13, Jackson Hawes at $600 in 3.
+
+Repository change in this session, `.gitattributes` only:
+
+- `data/inbox/** -text whitespace=cr-at-eol`. DraftKings exports are CRLF.
+  `*.csv -text` already preserved the bytes, which is why the committed blobs
+  still hash to the uploads, but it does not tell `git diff --check` that a CR
+  at end of line is expected, so the `suite` job failed at its whitespace step
+  with 394 complaints and exit 2, before `compileall` or pytest ran. Same rule
+  `tests/fixtures/supplied/**` already carries. Before: 394 lines, exit 2.
+  After: 0 lines, exit 0.
+
+Verification: `790 passed, 1 skipped in 244.18s (0:04:04)`, exit 0.
+`compileall src scripts` clean, `doctor` `pass_status` true,
+`git diff --cached --check` clean, `check_protected_paths.py` reports no
+protected path touched.
+
+Three findings for the queue, none fixed here:
+
+- `nfl.sh:57` and the PowerShell twin pass
+  `--basetemp "${TMPDIR:-/tmp}/nfl-dfs-pytest/$$"` but never create that parent,
+  and pytest creates basetemp with `os.mkdir` rather than `makedirs`. The first
+  suite run in a cold container fails 562 tests with `FileNotFoundError` before
+  any test body runs. Introduced by 625e869. CLAUDE.md's
+  `789 passed, 1 skipped` is not reproducible from a fresh clone without
+  `mkdir -p` on that path first. Measured count is now 790.
+- `normalize_person_name` cannot bridge a given-name variant (Joshua/Josh), so a
+  correctly rostered person reaches the identity gate as `UNMATCHED`. Ben
+  declined a matcher change on 2026-09-17 and the reviewed-crosswalk path was
+  used instead; the underlying gap stands and will recur on any slate where
+  DraftKings and nflverse disagree on a first name.
+- This session type's egress policy allows GitHub hosts only.
+  `docs/CLAUDE_CODE_SETUP.md` records `api.weather.gov` answering 200 from a
+  container on 2026-09-17, which was true of that container and is not true of
+  this one. Outdoor weather cannot be captured here at all, so the note should
+  say the reachable set is per-session and must be tested each time.
+
 ### 2026-09-17 (CI unblock): the preflight clock test, and a pytest basetemp collision
 
 Two test-infrastructure repairs. No engine module, contract, run artifact or
