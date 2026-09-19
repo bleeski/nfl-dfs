@@ -5,6 +5,13 @@
 *.xlsx -text
 tests/fixtures/supplied/** -text whitespace=cr-at-eol
 
+# DraftKings operator downloads land here CRLF, and `*.csv -text` above keeps
+# those bytes intact but still lets `git diff --check` read every CR at EOL as
+# trailing whitespace. That failed the `suite` job on the DET@BUF 2026-09-17
+# inputs with 394 complaints and exit 2. Same rule as the supplied fixtures:
+# the bytes are the evidence, so the CR is expected, not a defect to clean.
+data/inbox/** -text whitespace=cr-at-eol
+
 # Findings documents whose SHA-256 the changelog records are frozen evidence
 # too. Under the default `text=auto eol=lf` a CRLF findings file is normalized
 # on the way into git, which silently breaks the recorded hash: caught on

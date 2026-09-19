@@ -37,7 +37,7 @@ alter release gates. Update the applicable tracker at closeout, but do not make
 SD6 absorb Classic, calibration, field, economics, or portfolio-objective work.
 
 - Statuses: `READY`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `DEFERRED`.
-- Harness note (2026-09-17): Claude Code is the only surface; Cowork is retired. `docs/COWORK_RUNBOOK.md` is now `docs/RUNBOOK.md`, the Linux environment is `.venv-linux`, and the slate subcommand is `run-slate` (`cowork-run` still aliases it; the request schema string is unchanged on purpose). CI runs the pinned suite, `tests/test_repo_boundaries.py` and a protected-path check on every push, and green CI is what replaced Ben reading each diff. A cold session is oriented by `.claude/hooks/session_start.py` and `docs/START_HERE.md`; run `python3 scripts/repo_state.py --stdout` to see the live queue, claims and last suite result. Concurrent instances claim a chunk in `state/claims.json` before writing code. Details and verification in `changelog.md` under `Unreleased`. Queue statuses below are unchanged: `P0` and `P1` remain `READY`.
+- Harness note (2026-09-17): Claude Code is the only surface; Cowork is retired. `docs/COWORK_RUNBOOK.md` is now `docs/RUNBOOK.md`, the Linux environment is `.venv-linux`, and the slate subcommand is `run-slate` (`cowork-run` still aliases it; the request schema string is unchanged on purpose). CI runs the pinned suite, `tests/test_repo_boundaries.py` and a protected-path check on every push, and green CI is what replaced Ben reading each diff. A cold session is oriented by `.claude/hooks/session_start.py` and `docs/START_HERE.md`; run `python3 scripts/repo_state.py --stdout` to see the live queue, claims and last suite result. Concurrent instances claim a chunk in `state/claims.json` before writing code. Details and verification in `changelog.md` under `Unreleased`. Queue statuses below were unchanged on that date: `P0` and `P1` were both `READY`. **Superseded 2026-09-19:** `P1` is `DONE`; `P0` is the only `READY` chunk left and cannot run in a cloud session until `X2` lands, because its corpus is gitignored. Claims are now also published as a GitHub issue, since `state/claims.json` reaches another instance only after a push and a session whose container dies never pushes.
 - Token discipline (2026-09-15): this file holds the live queue only. Chunk briefs live in `docs/chunks/<ID>-<slug>.md`; completed briefs, the S/W/DL tranches, the baseline and punch-list history, and every `Next action` entry before 2026-09-14 (including the R16 to R24 rulings) live verbatim in `docs/backlog-archive/backlog-history-through-2026-09-14.md`. Read this file's head and the one chunk you are working; grep the archive, do not read it.
 - At the start of each session, read `CLAUDE.md`, the current program section of this file and the selected chunk's brief, the `Unreleased` head of `changelog.md`, and the files the chunk names. Open `DFS_SYSTEM_GREENFIELD_SPEC.md` when the chunk cites it. In Claude Code, `/dev-session <ID>` performs these reads and the baseline suite.
 - Work on one `READY` item unless an item explicitly groups inseparable changes.
@@ -187,15 +187,20 @@ contest-entry history, and `Rank` equalled history `Place` in 71 of 71.
 
 Chunk briefs are one file each under `docs/chunks/`; the index after the operator items names them. Status is authoritative here, not in the brief.
 
-`READY` chunks are the only ones a session may start. `P0` and `P1` are both
-`READY` because they touch disjoint files and `P1`'s acceptance uses fixtures,
-not standings grading; run them in separate worktrees or in sequence, not in one
-session.
+`READY` chunks are the only ones a session may start.
+
+Updated 2026-09-19: `P1` is `DONE`. `P0` is the one remaining `READY` chunk in
+this program, and it **cannot run in a cloud session**: its only input is the 26
+standings exports in `data/standings/inbox/`, which is gitignored, so a fresh
+clone holds `.gitkeep` and nothing else. The sentence above this one used to say
+that grading data is "in the repo"; it is on Ben's Windows checkout. Chunk `X2`
+below gives the corpus a cloud-reachable home; until it lands, `P0` is a Windows
+chunk or a blocked one. That is why `P1` ran first, inverting this order.
 
 | Order | ID | Status | Depends on | Session outcome | Why it moves the prize tail |
 |---:|---|---|---|---|---|
 | 0 | P0 | `READY` | none (operator item 2 first) | Standings grading harness: one command turns the inbox plus history into the tables every later chunk is graded by; DAL@NYG and DEN@KC snapshots filed; the daily-failing preflight test repaired | Nothing below can be accepted without it; it also grades the next slate in minutes |
-| 1 | P1 | `READY` | none | Salary-divergence diagnostic plus a current-team role evidence producer from approved depth-chart bytes, so a transfer priced as the slate's best player cannot carry a 7-point prior unseen | Removes the failure that made every DEN@KC lineup dead on arrival |
+| 1 | P1 | `DONE` | none | Salary-divergence diagnostic plus a current-team role evidence producer from approved depth-chart bytes, so a transfer priced as the slate's best player cannot carry a 7-point prior unseen | Removes the failure that made every DEN@KC lineup dead on arrival |
 | 1b | P0b | `BLOCKED` | P0 | Provenance completeness: run-folder completeness check before a review CSV is called shipped, a manifest command for hand-built entries, and a pre-registration record per slate | Without it the next slates cannot be attributed to a build or graded as champion vs challenger |
 | 2 | P2 | `BLOCKED` | P0 | Contest-aware assignment order, structural hygiene controls (QB count, pass catchers with QB, salary-left band, K/DST counts) and a portfolio `max_person_share` control in both policy contracts, generators and audits | Hygiene raised P(≥1 top-1%) from 0.19 to 0.28 at k=20 in every game; seat contests stop receiving the weakest lineups |
 | 3 | P3a | `BLOCKED` | P1 | Bounded DESIGN scenario bank on the `prior_review` path with measured within-game covariance and per-lineup p50/p90/p99 reported in the review | The tail cannot be targeted until lineups have a distribution |
@@ -209,6 +214,12 @@ session.
 | 10 | C5 | `BLOCKED` | C4 | Governed Classic late swap | Late swap is the only repair for a portfolio that misses a lock-time script; unchanged scope |
 | 11 | C3X | `DEFERRED` | Ben's ruling | Native Excel open/recalculate/save/reopen acceptance, split out of C3. Until Ben rules, C3 itself keeps its `BLOCKED` status in the 09-10 table; no `P` chunk depends on it | Not on any prize path |
 | 12 | Q2 to Q7, QC1 | `BLOCKED` | as before | Long-run calibration, field, economics, promotion | Q2 absorbs P3a, Q3 absorbs P4, Q4 absorbs P5, Q5 absorbs P3b/P6; Q6 still waits on settled-slate accrual, which is operator work |
+| 13 | P1b | `DONE` | P1 | Wire `qb_depth_role_evidence_json` into the run request: `nfl_cowork_run_request_v2`, the CLI flag, and the hash binding at all three `prior_review` exits | The depth chart resolves the backup-quarterback half of DEN@KC, and until this landed it was reachable only from the library |
+| 14 | X0 | `DONE` | none | Cloud baseline captured (`790 passed, 1 skipped`), egress probed, claim convention established as a GitHub issue | `state/claims.json` is invisible to a session that clones fresh, so a dead container left no trace |
+| 15 | X1 | `BLOCKED` | PR #19 merged | Replace the asserted environment facts in `docs/CLAUDE_CODE_SETUP.md:114-125` with a per-session egress probe on `doctor`, recorded into the run record | Three of six allowlisted hosts are 403 at CONNECT in a cloud session and the document claims otherwise; a wrong fact about evidence reachability costs a lock |
+| 16 | X2 | `BLOCKED` | Ben's choice of A/B/C | Give the 26 standings exports a durable, cloud-reachable home | `data/standings/inbox/` is gitignored, so `P0`, `P0b`, `P4a`, `P4b` and `P5` cannot run in a cloud session at all |
+| 17 | X3 | `BLOCKED` | PR #19 merged | Automatic execution postmortem per run (`PostToolUse` **and** `PostToolUseFailure`), a recovery sweep for abandoned runs, the `PreCompact`/`PostCompact` continuity block, and a rule that MCP output is never evidence | Nothing reviews a run today, and an attached MCP server returns stub weather that is shaped like the answer to a blocked gate |
+| 18 | X4 | `BLOCKED` | X1, X2, X3 | `DFS_SYSTEM_GREENFIELD_SPEC_2026-09-19.md` and the subagent cost contract | The audit's required report; also where the candidate-bank and dead-config findings are filed for P3a |
 
 Operator items, none of them code, in the order they unblock things:
 
@@ -240,8 +251,90 @@ Brief: `docs/chunks/P0b-provenance-completeness.md`.
 
 ### P1 — Salary-divergence diagnostic and current-team role evidence producer
 
-Status: `READY`.
+Status: `DONE` (2026-09-19).
 Brief: `docs/chunks/P1-salary-divergence-role-evidence.md`.
+Ben ruled the gate a **hard stop**: a person in `TRANSFER_PRIOR_UNVERIFIED` who
+also trips `SALARY_RANK_DIVERGENCE` stops the run. Landed with a new contract,
+`nfl_qb_depth_role_evidence_v1`, and its producer
+`scripts/make_offensive_role_evidence.py`. Two brief deviations (both
+populations ranked, not just within position; a scale-aware threshold beside the
+10-place one) and one design change forced by real DET@BUF data (`unlisted`
+quarterbacks) are recorded in `changelog.md`. Suite `821 passed, 1 skipped`.
+
+### P1b — Wire `qb_depth_role_evidence_json` into the run request
+
+Status: `DONE` (2026-09-19). Depends on: `P1` (`DONE`).
+Landed as `nfl_cowork_run_request_v2`: one new field, v1 still accepted and
+unchanged, and a v1 request carrying the v2 field refused by name. Bound at
+all three `prior_review` exits and as an optional C3 immutable binding.
+Suite `828 passed, 1 skipped`.
+
+The seam `P1` stopped at, named rather than half-crossed. The contract, its
+producer and its consumer all work and are tested end to end against real bytes,
+but the package currently reaches the engine only through the
+`select_prior_lineups` keyword. The operating path is `run-slate`, whose request
+is the versioned wire format `nfl_cowork_run_request_v1` (`cowork.py:134`,
+`:192`), and `.claude/rules/contracts.md` says a schema change is a new version.
+`P1`'s brief names `prior_score.py`/`selection.py`, `offensive_roles.py`, the
+new producer and tests — not `cowork.py`, `cli.py` or `prior_review.py` — so the
+plumbing is deliberately out of its scope.
+
+Scope: bump the request contract, add the CLI argument and the request-root
+confinement (`cli.py:2594`), thread the path through
+`prior_review.review_prior_only_package`, and bind the package's hash into the
+artifact manifest and the readable review exactly as
+`offensive_role_evidence_json` is (`prior_review.py:2217`, `:2662`). Register
+the new request version in `docs/DATA_CONTRACTS.md`; v1 is never mutated.
+
+Why it is not urgent: the hard stop `P1` introduced fires on a person with an
+unresolved transfer, and for anyone who is not a quarterback the remedy is the
+full numerical allocation, which is *already* plumbed. The depth chart resolves
+the backup-quarterback half of the DEN@KC failure (Fields at 46% of the
+attempts), not the Walker half. So the gate is clearable on the operating path
+today; this chunk makes the cheaper quarterback remedy reachable there too.
+
+### Cloud-operability chunks — 2026-09-19 (X0 to X4)
+
+Added by the cloud audit. Not part of the prize-tail program's modelling
+sequence; they are what stands between a cloud Claude Code session and that
+program. **Their statuses live in the Queue table above, not here**, so
+`scripts/repo_state.py` derives them and the session-start hook shows them.
+Evidence: `changelog.md` 2026-09-19 and issue #21.
+
+`X1` and `X3` are deliberately unclaimed until PR #19 merges: both would collide
+with it (`docs/CLAUDE_CODE_SETUP.md`, `.claude/hooks/`, `.claude/settings.json`).
+
+### P1b — Wire `qb_depth_role_evidence_json` into the run request
+
+Status: `DONE` (2026-09-19). Depends on: `P1` (`DONE`).
+Landed as `nfl_cowork_run_request_v2`: one new field, v1 still accepted and
+unchanged, and a v1 request carrying the v2 field refused by name. Bound at
+all three `prior_review` exits and as an optional C3 immutable binding.
+Suite `828 passed, 1 skipped`.
+
+The seam `P1` stopped at, named rather than half-crossed. The contract, its
+producer and its consumer all work and are tested end to end against real bytes,
+but the package currently reaches the engine only through the
+`select_prior_lineups` keyword. The operating path is `run-slate`, whose request
+is the versioned wire format `nfl_cowork_run_request_v1` (`cowork.py:134`,
+`:192`), and `.claude/rules/contracts.md` says a schema change is a new version.
+`P1`'s brief names `prior_score.py`/`selection.py`, `offensive_roles.py`, the
+new producer and tests — not `cowork.py`, `cli.py` or `prior_review.py` — so the
+plumbing is deliberately out of its scope.
+
+Scope: bump the request contract, add the CLI argument and the request-root
+confinement (`cli.py:2594`), thread the path through
+`prior_review.review_prior_only_package`, and bind the package's hash into the
+artifact manifest and the readable review exactly as
+`offensive_role_evidence_json` is (`prior_review.py:2217`, `:2662`). Register
+the new request version in `docs/DATA_CONTRACTS.md`; v1 is never mutated.
+
+Why it is not urgent: the hard stop `P1` introduced fires on a person with an
+unresolved transfer, and for anyone who is not a quarterback the remedy is the
+full numerical allocation, which is *already* plumbed. The depth chart resolves
+the backup-quarterback half of the DEN@KC failure (Fields at 46% of the
+attempts), not the Walker half. So the gate is clearable on the operating path
+today; this chunk makes the cheaper quarterback remedy reachable there too.
 
 ### P2 — Contest-aware assignment, structural hygiene, and the concentration control
 
@@ -555,9 +648,21 @@ and `DEFERRED`, pending Ben's ruling in the program section.
 Open for Ben, in the order they unblock work:
 
 1. **[BEN: rule on `C3X`** (Excel acceptance deferred, `C4` re-sequenced behind
-   `P2`) **and on the `P1` gate semantics** (a transfer with no current-team
-   evidence who also trips `SALARY_RANK_DIVERGENCE` stops the run, or stays a
-   diagnostic).]
+   `P2`).] The `P1` gate semantics half of this item was ruled on 2026-09-19 —
+   hard stop — and `P1` is `DONE`; only the `C3X` half is still open, and it
+   blocks nothing on the prize path.
+1a. **[BEN: merge PR #18 and PR #19** (#19 needs the `ben-review` label).
+   Chunks `X1` and `X3` are `BLOCKED` on it, and until it merges the test suite
+   fails in every fresh container: `nfl.sh` hands pytest a `--basetemp` whose
+   parent does not exist, so a cold clone reports `2 failed, 226 passed,
+   1 skipped, 562 errors`. Workaround meanwhile is `NFL_DFS_PYTEST_TMP`.]
+1b. **[BEN: pick where the 26 standings exports live** so `P0` can run in a
+   cloud session. `data/standings/inbox/` is gitignored, so a fresh clone has
+   none of them and `P0`, `P0b`, `P4a`, `P4b` and `P5` are all unrunnable there.
+   (A) private GitHub release assets with authenticated retrieval added to
+   `sources.py` — recommended, one `ben-review` PR, repo stays small;
+   (B) commit the corpus, no engineering, repo goes 1.5MB to ~80MB and grows;
+   (C) `P0` stays a Windows-only chunk. Chunk `X2` implements whichever.]
 2. Copy the DAL@NYG and DEN@KC salary and entry CSVs from Downloads into
    `data/runs/` snapshot folders (exact filenames in operator item 2). `P0`
    cannot grade the two largest Showdown portfolios from the repo without them.

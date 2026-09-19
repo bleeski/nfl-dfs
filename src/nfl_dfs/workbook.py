@@ -756,6 +756,10 @@ def create_operator_input_workbook(path: str | Path) -> Path:
             "Generated captured-source offensive allocation or unresolved-role facts",
         ),
         (
+            "QB_DEPTH_ROLE_EVIDENCE_JSON", "", "BOTH",
+            "Generated depth-chart quarterback order; moves attempt share only",
+        ),
+        (
             "PORTFOLIO_POLICY_JSON", "", "SHOWDOWN",
             "Versioned exact-ID portfolio controls; SD3 validates but SD4 must enforce",
         ),

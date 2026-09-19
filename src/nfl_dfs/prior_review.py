@@ -1209,6 +1209,7 @@ def run_prior_review(
     official_status_csv: str | Path | None = None,
     role_evidence_json: str | Path | None = None,
     offensive_role_evidence_json: str | Path | None = None,
+    qb_depth_role_evidence_json: str | Path | None = None,
     portfolio_policy: NormalizedPortfolioPolicy | NormalizedClassicPortfolioPolicy | None = None,
     portfolio_policy_source_path: str | Path | None = None,
     portfolio_policy_source_sha256: str | None = None,
@@ -2021,6 +2022,7 @@ def run_prior_review(
             max_person_overlap=max_person_overlap,
             role_evidence_json=role_evidence_json,
             offensive_role_evidence_json=offensive_role_evidence_json,
+            qb_depth_role_evidence_json=qb_depth_role_evidence_json,
             as_of=as_of,
             portfolio_policy=portfolio_policy,
         )
@@ -2219,6 +2221,15 @@ def run_prior_review(
         for index, (path, digest) in enumerate(sorted((offensive_resolution.source_hashes or {}).items()), start=1):
             artifacts[f"offensive_role_source:{index}"] = path
             hashes[f"offensive_role_source:{index}"] = digest
+    qb_depth_report = selection.get("qb_depth_roles") or {}
+    if qb_depth_report.get("evidence_path"):
+        artifacts["qb_depth_role_evidence_json"] = str(qb_depth_report["evidence_path"])
+        hashes["qb_depth_role_evidence_json"] = str(qb_depth_report["evidence_sha256"])
+        for index, (path, digest) in enumerate(
+            sorted((qb_depth_report.get("source_hashes") or {}).items()), start=1
+        ):
+            artifacts[f"qb_depth_source:{index}"] = path
+            hashes[f"qb_depth_source:{index}"] = digest
     if role_resolution.evidence_path is not None:
         artifacts["role_evidence_json"] = role_resolution.evidence_path
         hashes["role_evidence_json"] = str(role_resolution.evidence_sha256)
@@ -2548,11 +2559,13 @@ def run_prior_review(
                 if artifact_key in {
                     "official_status_csv",
                     "offensive_role_evidence_json",
+                    "qb_depth_role_evidence_json",
                     "role_evidence_json",
                     "weather_evidence_json",
                 } or artifact_key.startswith(
                     (
                         "offensive_role_source:",
+                        "qb_depth_source:",
                         "role_evidence_source:",
                         "weather_source:",
                     )
@@ -2620,11 +2633,13 @@ def run_prior_review(
                 if artifact_key in {
                     "official_status_csv",
                     "offensive_role_evidence_json",
+                    "qb_depth_role_evidence_json",
                     "role_evidence_json",
                     "weather_evidence_json",
                 } or artifact_key.startswith(
                     (
                         "offensive_role_source:",
+                        "qb_depth_source:",
                         "role_evidence_source:",
                         "weather_source:",
                     )
@@ -2660,6 +2675,7 @@ def run_prior_review(
             "source_ledger_sha256": projection.hashes["source_ledger"],
             "official_status_sha256": hashes.get("official_status_csv"),
             "offensive_role_evidence_sha256": hashes.get("offensive_role_evidence_json"),
+            "qb_depth_role_evidence_sha256": hashes.get("qb_depth_role_evidence_json"),
             "weather_evidence_sha256": hashes.get("weather_evidence_json"),
             "weather_source_sha256_by_game": {
                 key.removeprefix("weather_source:"): value

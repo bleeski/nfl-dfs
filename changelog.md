@@ -4,6 +4,328 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-19: the operator-flag count said 10 when 3 were open
+
+Immediate follow-on from the tracker consolidation below, found by reading the
+digest that consolidation had just made authoritative. Same class of defect: a
+derived number that was wrong and that nothing was checking.
+
+`ben_flags()` scanned `changelog.md` and `IMPLEMENTATION_STATUS.md` as well as
+`backlog.md`. Those two are the historical record — they quote flags that were
+raised, ruled on and closed — and worse, every sentence *about* a flag matched
+as if it were one. The list contained entries whose whole text was `'] flags'`
+and `']\` question:`. It reported 10 open when 3 were genuinely open.
+
+A count wrong in the direction of more is worse than no count: the two blockers
+that gate every remaining chunk were sitting in a list of ten, most of it noise.
+
+**Changed**
+
+- `scripts/repo_state.py:ben_flags()` scans `backlog.md` and the live chunk
+  briefs only. `.claude/rules/ledger.md` says a flag lives in `backlog.md` and
+  is listed again in the handoff, so those are the only places an *open* one
+  can be. The docstring records why, at length, because the next person to
+  "fix" the count by widening the scan will reintroduce it.
+- `docs/chunks/P1-salary-divergence-role-evidence.md`: its gate-semantics flag
+  is marked **RULED 2026-09-19: hard stop** and the literal marker removed. It
+  was closed when Ben ruled; leaving the marker kept it in the open count.
+  Writing the marker out in full even to say it is closed re-raises it, which
+  is noted in the brief so the next edit does not undo this.
+- `state/claims.json` back to `{"claims": []}`. The `P1` claim was stale and
+  `P1` is merged, so the digest was reporting a reclaimable claim on finished
+  work.
+
+Open flags: **10 → 5**, all five in `backlog.md` and all genuinely open (two are
+the same `C3X` ruling referenced twice, which is real cross-referencing).
+
+**Added: 3 tests in `tests/test_backlog_queue.py`** (now 10 there). The count
+must mean "open", not "mentioned": no flag may come from `changelog.md` or
+`IMPLEMENTATION_STATUS.md`; every reported flag must have real text rather than
+a stray bracket; and the two blockers Ben actually owns — merge #18/#19, pick
+where the standings corpus lives — must be present, so they cannot quietly stop
+being visible on startup.
+
+**Verification**
+
+```
+full suite              838 passed, 1 skipped in 151.93s (0:02:31), exit 0
+before this change      835 passed, 1 skipped in 168.64s
+repo_state.py           21 queue rows, READY: P0, 5 [BEN:] flags, 0 claims
+doctor                  pass_status true
+compileall src scripts  clean
+git diff --check        clean
+check_protected_paths   No protected path touched (0 changed)
+```
+
+### 2026-09-19: one tracker, and a test that keeps it one
+
+Ben's point, and he was right: however we track progress against a plan, it has
+to be something I can maintain. The plan artifact I had been keeping lives in
+`/root/.claude/plans/`, outside the repository — a fresh cloud session never
+sees it, no other instance can read it, and it dies with the container. Anything
+I recorded there was a second copy of the truth, maintained by hand.
+
+**It had already drifted, silently.** On 2026-09-19 I added a second status
+table to `backlog.md` — the "Cloud-operability chunks" table — with its own
+column layout. `scripts/repo_state.py`'s `_QUEUE_ROW` requires a leading order
+column, so it matched **none** of those rows. The session-start hook, which is
+the only status a cold session ever sees, kept printing the old queue while
+`X0`, `P1b` and three new blocked chunks came and went. Nothing failed, because
+nothing was checking. `.claude/rules/ledger.md` already says status lives only
+in the queue table; I broke that rule and the drift was the direct consequence.
+
+**Changed**
+
+- The `X0`–`X4` cloud-operability chunks and `P1b` are now rows 13–18 of the one
+  Queue table, in its format, and the second table is gone. All 21 rows parse.
+  The prose section that remains says explicitly that its statuses live in the
+  Queue table, not in it.
+- The two operator blockers are now `[BEN: ...]` flags rather than prose, so the
+  startup hook counts and prints them without anyone remembering to: merge #18
+  and #19, and pick A/B/C for the standings corpus. Flags went 7 → 9.
+- The `P1` gate half of the existing `C3X` flag is marked ruled, since Ben ruled
+  it on 2026-09-19; only the Excel half is still open.
+
+**Added: `tests/test_backlog_queue.py`, 7 tests.** The guard that makes the
+drift impossible rather than merely discouraged. Any markdown row in the live
+program carrying a backticked status must be readable by `_QUEUE_ROW`; every
+queue status must be one of `VALID_STATUSES`; `X0`–`X4` and `P1b` must be
+present; the ledger stays LF. Plus a regression asserting the *exact* invisible
+row shape is caught and its replacement is read — without it the guard could be
+weakened to a tautology and nothing would notice.
+
+**One finding I did not plant.** The guard immediately failed on the superseded
+2026-09-10 program table, whose rows carry an extra `Track` column the parser
+has also never read. Those statuses are historical record, not the tracker, so
+the guard is scoped to the live program and a second test asserts the superseded
+section actually says it is superseded — unreadable-by-design is fine for
+history and dangerous for anything that looks live.
+
+**What the plan file is now.** A pointer: where the tracker lives, the audit's
+F1–F9 findings, and the two blockers. No status. The test of whether this works
+is that `python3 scripts/repo_state.py --stdout` prints the truth without me
+narrating it; a status in prose but not in that output is decoration.
+
+**Verification**
+
+```
+full suite              835 passed, 1 skipped in 168.64s (0:02:48), exit 0
+before this change      828 passed, 1 skipped in 128.35s
+new tests               tests/test_backlog_queue.py, 7 passed
+repo_state.py           21 queue rows parsed, READY: P0, 9 [BEN:] flags
+doctor                  pass_status true
+compileall src scripts  clean
+git diff --check        clean
+check_protected_paths   No protected path touched (0 changed)
+```
+
+### 2026-09-19: P1b — the depth-chart package reaches the operating path
+
+The seam `P1` stopped at, crossed. `P1` shipped
+`nfl_qb_depth_role_evidence_v1` and its producer but left the package reachable
+only through the `select_prior_lineups` keyword, because wiring it into
+`run-slate` means changing a versioned wire format and `P1`'s brief did not
+scope that. It does now. No release truth changed; every path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. No protected
+path touched.
+
+**The contract, and why both versions are accepted**
+
+`nfl_cowork_run_request_v2` adds exactly one field,
+`qb_depth_role_evidence_json`. v1 is still accepted and still has precisely the
+fields it always had, because every `run_request.json` on disk declares v1 and
+must stay replayable — `docs/START_HERE.md` records that the schema string is
+deliberately stable for that reason.
+
+A **v1 request carrying the v2 field is refused**, naming the version that
+introduced it (`cowork.REQUEST_FIELDS_ADDED_AFTER_V1`). That refusal is the
+point: it makes "v1 is never mutated" a property of the code rather than a
+sentence in a document. A v1 request means today what it meant when it was
+written. The same pattern is documented for the next field.
+
+**Bound everywhere the sibling package is bound.**
+`.claude/rules/operating-path.md` requires a change reaching one `prior_review`
+success exit to reach all three, so: the CLI flag
+`--qb-depth-role-evidence-json` on `run-slate` and `select`; request-path
+confinement identical to every other path field; the artifact and its per-source
+hashes bound after selection; re-verification in both hash-recheck sets with the
+`qb_depth_source:` prefix; `qb_depth_role_evidence_sha256` in the pre-lock
+manifest; and on the Classic C3 exit an optional immutable binding beside
+`weather_evidence_sha256`. Deliberately **not** added to
+`classic_review._REQUIRED_ARTIFACTS` — a slate whose quarterbacks need no depth
+chart is a normal slate, not an incomplete one.
+
+**One test expectation changed, named here first.**
+`tests/test_portfolio_policy.py::test_cowork_policy_is_enforced_audited_snapshotted_and_replays_identically`
+asserted the Run Control print area was `$A$1:$D$21`. The sheet gained a
+documented `QB_DEPTH_ROLE_EVIDENCE_JSON` row, so the correct value is `$D$22`.
+The assertion stays hardcoded rather than derived: the print area is what an
+operator sees on paper, and a row appearing or vanishing should fail loudly.
+
+**Verification**
+
+```
+full suite              828 passed, 1 skipped in 128.35s (0:02:08), exit 0
+before this chunk       823 passed, 1 skipped in 151.03s, exit 0
+doctor                  pass_status true
+compileall src scripts  clean
+git diff --check        clean
+check_protected_paths   No protected path touched (0 changed)
+```
+
+Five new tests cover v1 loading unchanged, v1 refusing the v2 field, v2 carrying
+and confining it, an unknown version still refused, and a structural check that
+the package is bound at every site the offensive package is.
+
+### 2026-09-19: P1 — salary-rank divergence, the material-role-change gate, and quarterback depth-chart evidence
+
+Chunk `P1` of the prize-tail program, on `claude/dfs-engine-cloud-audit-617aaj`.
+Ben's ruling of 2026-09-19 on the brief's open `[BEN:]` question: the gate is a
+**hard stop**, not a diagnostic. No release truth changed; every path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. No protected
+path touched.
+
+The failure this closes, from the DEN@KC run record and the 26-contest
+standings: Kenneth Walker III priced at $10,600 (the slate's most expensive
+FLEX) carried a 7.3-point prior because his history was on another team, and
+`opportunity.py` split Kansas City's attempts Mahomes 0.5395 / Fields 0.4605
+from prior-season history. Nothing stopped, and 0 of 18 lineups paid.
+
+**Added**
+
+- `salary_rank_divergence` in `prior_score.py`, reported on `PriorScores`, in
+  `as_report()` and in all five selection-report shapes. Names every scored
+  person whose DraftKings salary rank beats his prior-points rank, carrying both
+  ranks, salary, prior and the evidence state that produced the prior.
+- `enforce_material_role_change_gate` / `material_role_change_blockers` in
+  `offensive_roles.py`, run at the end of `score_pool`. A person in
+  `TRANSFER_PRIOR_UNVERIFIED` who **also** trips divergence stops the run and
+  the message names the script that clears it.
+- `src/nfl_dfs/qb_depth_roles.py`: contract `nfl_qb_depth_role_evidence_v1`,
+  allocation `qb_depth_chart_attempt_share_allocation_v1`, applied before
+  `resolve_offensive_roles` and therefore before `score_pool`. Moves only
+  `qb_attempt_share`, conserving the team's existing total onto the rank-1
+  quarterback. Registered in `docs/DATA_CONTRACTS.md`.
+- `scripts/make_offensive_role_evidence.py`, with `--fetch` (through
+  `nfl_dfs.sources`, no other client) and `--capture` for bytes already on disk.
+- `qb_depth_role_evidence_json` on `select_prior_lineups`, with
+  `verify_qb_depth_resolution` called wherever `verify_offensive_resolution` is.
+
+**Two deviations from the brief, both measured rather than preferred**
+
+1. The brief ranks "within position". That cannot catch the case it was written
+   for: Walker was the dearest FLEX on the board and 29th of 32 by prior points,
+   yet among six running backs he was a place or two out of line, and a
+   ten-place gap cannot occur in a six-person group at all. Both populations are
+   now ranked, both reported, either one trips it.
+2. "At least 10 places" is not scale-free — most of a 15-person Showdown slate,
+   a rounding error on a Classic slate. The rule is now a places floor **or** a
+   share of the population: `gap >= 10`, or `gap >= 3` and `gap/population >=
+   0.25`. Walker is 28 places and 88% of his slate; both arms agree on him.
+
+**One design change forced by real data.** The first version required the
+declared quarterbacks to equal exactly the quarterbacks DraftKings lists. Run
+against the committed DET@BUF salary file and the live depth chart, that
+refused: DraftKings sells three Buffalo quarterbacks and the published chart
+names two. A third-stringer the chart does not place is now declared `unlisted`
+— a weaker claim than "backup", recorded separately, zeroed, and refused if he
+does appear in the capture, so it cannot hide a named starter.
+
+**What the adversarial review caught, before the push**
+
+A `reviewer` pass over the diff found three things worth recording, two of them
+real defects of mine:
+
+1. **Duplicate keys in two of the three selection-report dict literals**
+   (`selection.py:343` and `:480`). Self-inflicted: I applied an 8-space string
+   replacement that is a substring of the 12-space one it had just written, so
+   it matched inside its own output. Python keeps the last value and the values
+   were identical, so nothing behaved wrongly — it was dead duplicated code.
+   Removed, and an AST check now confirms zero dict literals in the file carry a
+   duplicate string key. I had already hit this exact bug once on the
+   `verify_*` lines in the same edit and fixed only that instance.
+2. **A tautological test.** `test_a_capture_mixing_two_snapshots_is_refused`
+   called only `parse_depth_chart_excerpt`, which performs no single-`dt` check,
+   and asserted a trivial property of its own fixture. The refusal it was named
+   for lives in `_derived_order` and was never reached. Rewritten to mutate a
+   real package and assert `QB_DEPTH_EXCERPT_DT_MIXED` actually fires.
+3. **An overclaim in `IMPLEMENTATION_STATUS.md`**, which said all three new
+   capabilities were "on the operating `prior_review` path". Two are; the
+   depth-chart contract is reachable from `select_prior_lineups` only. Corrected
+   per item, and the producer's own stdout now says so rather than pointing at a
+   `run-slate` flag that does not exist.
+
+It also flagged that a declared backup present on the slate but absent from the
+opportunity model was silently skipped — not zeroed, not reported, not scored,
+which looks like success. Now `QB_DEPTH_PRIOR_ROW_MISSING` for any placed
+quarterback, not just the starter, with a test.
+
+**Verification**
+
+```
+full suite            823 passed, 1 skipped in 151.03s (0:02:31), exit 0
+baseline before       790 passed, 1 skipped in 152.53s, exit 0
+new tests             tests/test_qb_depth_roles.py, 33 passed
+doctor                pass_status true, python 3.13.7
+compileall src scripts  clean
+git diff --check      clean
+check_protected_paths No protected path touched (0 changed)
+```
+
+End to end against real bytes, not fixtures: the producer fetched
+`depth_charts_2026.csv` (sha256 `aaa4bc16…78ec`, snapshot
+`2026-09-18T12:12:55Z`) through `sources.fetch_public_artifact`, bound it to the
+committed DET@BUF salary file, and the consumer accepted its own producer's
+output — Josh Allen and Jared Goff to 1.0, Kyle Allen and Joshua Dobbs to 0.0,
+Shane Buechele and Luke Altmyer recorded `UNLISTED_ON_DEPTH_CHART`,
+`verify_qb_depth_resolution` clean.
+
+**Also recorded, from the cloud audit that preceded this chunk**
+
+- `nfl.sh` as shipped fails the whole suite in a fresh container:
+  `2 failed, 226 passed, 1 skipped, 562 errors in 39.75s`, reproducing PR #19's
+  measurement exactly. `--basetemp "${TMPDIR:-/tmp}/nfl-dfs-pytest/$$"` is passed
+  to a pytest whose `TempPathFactory.getbasetemp` calls `basetemp.mkdir(mode=0o700)`
+  with no `parents=True`. Verified against pytest's own source. **Fixed by PR
+  #19, not duplicated here**; every run above used `NFL_DFS_PYTEST_TMP`.
+- Egress in this session refuses three of the six hosts in `sources.ALLOWED_HOSTS`
+  with a 403 at CONNECT: `api.weather.gov`, `api.sleeper.app`,
+  `api.the-odds-api.com`. `docs/CLAUDE_CODE_SETUP.md:122` asserts the first
+  answers 200 from the container; it does not answer 200 from this one. Chunk
+  `X1` replaces the asserted facts with a probe. nflverse over GitHub is
+  reachable, which is why the end-to-end test above could run.
+- `data/standings/inbox/` is gitignored, so a fresh cloud clone holds only
+  `.gitkeep`. `backlog.md` says the 26 exports are "in the repo"; they are on
+  Ben's Windows checkout. `P0`, `P0b`, `P4a`, `P4b` and `P5` all grade against
+  that corpus and cannot run in a cloud session until chunk `X2` lands. This is
+  why `P1` ran before `P0`, inverting the queue order.
+- The `DFS_Architect_MCP` server attached to these sessions returns **stub**
+  weather (`"source": "stub"`, worker `chunk-3-mlb-fetchers`). It is shaped like
+  the answer to the blocked weather gate and must never be used as one. A rule
+  making that explicit lands in `X3`.
+
+**The seam this chunk stopped at, named rather than half-crossed**
+
+`qb_depth_role_evidence_json` reaches the engine through the
+`select_prior_lineups` keyword only. The operating path is `run-slate`, whose
+request is the versioned wire format `nfl_cowork_run_request_v1`, and a schema
+change is a new version. P1's brief names `prior_score.py`/`selection.py`,
+`offensive_roles.py`, the producer and tests — not `cowork.py`, `cli.py` or
+`prior_review.py`. Filed as `P1b`, `READY`.
+
+This does not leave the gate unclearable. The stop fires on an unresolved
+transfer, and for anyone who is not a quarterback the remedy is the full
+numerical allocation, which is already plumbed; the gate message now says so
+per-position rather than offering a depth chart that cannot resolve a running
+back. The depth chart fixes the Fields half of DEN@KC (a backup at 46% of his
+team's attempts), not the Walker half.
+
+**Open**
+
+- `[BEN: C3X]` unchanged and still open; it blocks nothing on the prize path.
+- Hand-back per the brief is `docs/session-prompts/P3a-scenario-bank.md`; P3a
+  stays `BLOCKED` until `P0` also closes. `P1b` is `READY` now.
+
 ### 2026-09-17 (harness, H2): multi-instance orientation, a push freshness gate, and the branch-protection correction
 
 Harness only. No engine module, contract, `config/` file, evidence gate or
@@ -166,6 +488,110 @@ Verification:
 - Hook output is 35 lines against the unchanged 60-line ceiling, asserted by a
   test so it cannot regress silently.
 
+### 2026-09-17 (slate run): DET@BUF Showdown, 13 entries, prior-only review
+
+First operated slate in a cloud session. `RELEASE_DECISION=DO_NOT_UPLOAD` and
+`MODEL_STATUS=PRIOR_ONLY` throughout; no gate was relaxed and no observation was
+invented. Run id `20260917T232331Z-detbuf917c`.
+
+Inputs, committed under `data/inbox/slates/det-buf-2026-09-17/`:
+
+    salary  2593bb4b54b021a48e614b614f22c7256a5ada3031517f8129842b8fdbc8de89
+    entries f26648d8fff03e6a7fff072ace72955d1377acf13b251bb5d78c6994c21c6d2d
+
+SHOWDOWN, one game, 13 reserved entries, 47 people, classified by schema.
+
+Two evidence gates stopped the first pass at `PRIOR_REVIEW_IDENTITY_BLOCKED`:
+
+- `WEATHER_CAPTURE_REQUIRED:roof=outdoors`. `api.weather.gov` answers 403 at
+  this session's egress proxy (organization policy; confirmed over three
+  attempts and two clients, while `raw.githubusercontent.com` answers 200 and
+  the nflverse fetch succeeded). `api.sleeper.app` is refused the same way.
+  Resolved by operator-supplied state only: Ben attested the Buffalo forecast
+  was not a factor, `--weather-state CLEAR` was passed with no source URI and no
+  `generatedAt`, and the engine recorded it as
+  `OPERATOR_SUPPLIED:roof=outdoors|OPERATOR_SUPPLIED_UNATTRIBUTED`. There are no
+  retained raw bytes or hash behind the weather in this run. That label is the
+  honest record and it travels into the readable review.
+- `IDENTITY_UNRESOLVED_AND_AVAILABLE:44138452:Joshua Palmer`. DraftKings spells
+  him "Joshua Palmer"; the frozen `roster_weekly_2026.csv`
+  (`698183b8...fad9d8`) spells him "Josh Palmer", `00-0036988`, WR, BUF, ACT,
+  week 2, and Buffalo lists no other Palmer. `normalize_person_name` has no
+  given-name-variant rule, so the proposal was `UNMATCHED`. An operator
+  `--exclude` does not reach the identity gate; tested, the blocker survived it.
+  Resolved through the documented reviewed-crosswalk path rather than a code
+  change: `REVIEWED_PROVIDER_PLAYER_ID=00-0036988` with `DECISION=ACCEPT` in the
+  reviewed file (`f09c06a1...26fda`), then `priors-freeze`. `_resolve_reviewed`
+  checks DK name, team and position against the proposal verbatim before
+  accepting the row, and `prior_review.py:1797` then reports identity as
+  `INHERITED_FROM_FROZEN_PACKAGE` instead of re-running the gate.
+
+Portfolio, from a generated `nfl_showdown_portfolio_policy_v1`
+(`scripts/make_showdown_policy.py`, source `93e89238...2ca02`, normalized
+`8edec314...1810a`): combined-person cap 0.62, captain cap 0.25, captains zeroed
+for K/DST and for any FLEX salary at or below 900 (21 people), max pairwise
+person overlap 4, unique lineups required. No rung was dropped; the policy held
+as written on the first solve.
+
+    SELECT                 13 lineups, solver OPTIMAL (kOptimal)
+    enforcement            ENFORCED_AND_INDEPENDENTLY_AUDITED
+    independent audit      PASS (prior_only_showdown_portfolio_audit_sd4_v1)
+    DISPLAY_RECONCILIATION PASS
+    candidate bank         CANDIDATE_LIMIT_REACHED_INCOMPLETE
+    DK_REVIEW_ENTRY        e58a9b0e2a8a50f183fefe56bd7bafeb109ae45545240ec0ce9aa3401e6c3c6e
+    readable JSON          8151e52264e4f8bf7954b7b7cd3430f01889ec74036f3e31ceb4d0cfc41a1454
+    readable HTML          a7d285b45d36d532b1d4ded8bb9ea958171503901cbe4ebde21e9aa15cc85727
+    workbook               d39ba977ee87f17424f2d43b90b6e78093b0ba8f3d88dc760e7bdbdda195b4ac
+
+Captains held at 3 of 13 (Gibbs, St. Brown, Goff), combined at 8 of 13. The bank
+status is not a full-slate search and `OPTIMAL` is scoped to the bank actually
+built.
+
+Named gaps in the delivered portfolio, none of them cleared: no
+`official_status_csv`, so `official_status_coverage` is null and every selected
+person reads `BLANK_NOT_OFFICIAL_ACTIVITY`; Ty Johnson carries DraftKings status
+`Q` and appears in 5 of 13 lineups with nothing confirming him; every selected
+skill player is `CURRENT_ROLE_UNKNOWN`, with two `TRANSFER_PRIOR_UNVERIFIED` and
+one `MISSING_HISTORY`; the kicker rests on
+`PRIOR_ONLY_SOLE_LISTED_ASSUMPTION`; no payout, prize value or field size. The
+prior-score objective buys opportunity share per dollar with no ownership or
+ceiling model, and it salary-dumped into minimum-priced bench players: Greg
+Dortch at $1,000 in 7 of 13, Jackson Hawes at $600 in 3.
+
+Repository change in this session, `.gitattributes` only:
+
+- `data/inbox/** -text whitespace=cr-at-eol`. DraftKings exports are CRLF.
+  `*.csv -text` already preserved the bytes, which is why the committed blobs
+  still hash to the uploads, but it does not tell `git diff --check` that a CR
+  at end of line is expected, so the `suite` job failed at its whitespace step
+  with 394 complaints and exit 2, before `compileall` or pytest ran. Same rule
+  `tests/fixtures/supplied/**` already carries. Before: 394 lines, exit 2.
+  After: 0 lines, exit 0.
+
+Verification: `790 passed, 1 skipped in 244.18s (0:04:04)`, exit 0.
+`compileall src scripts` clean, `doctor` `pass_status` true,
+`git diff --cached --check` clean, `check_protected_paths.py` reports no
+protected path touched.
+
+Three findings for the queue, none fixed here:
+
+- `nfl.sh:57` and the PowerShell twin pass
+  `--basetemp "${TMPDIR:-/tmp}/nfl-dfs-pytest/$$"` but never create that parent,
+  and pytest creates basetemp with `os.mkdir` rather than `makedirs`. The first
+  suite run in a cold container fails 562 tests with `FileNotFoundError` before
+  any test body runs. Introduced by 625e869. CLAUDE.md's
+  `789 passed, 1 skipped` is not reproducible from a fresh clone without
+  `mkdir -p` on that path first. Measured count is now 790.
+- `normalize_person_name` cannot bridge a given-name variant (Joshua/Josh), so a
+  correctly rostered person reaches the identity gate as `UNMATCHED`. Ben
+  declined a matcher change on 2026-09-17 and the reviewed-crosswalk path was
+  used instead; the underlying gap stands and will recur on any slate where
+  DraftKings and nflverse disagree on a first name.
+- This session type's egress policy allows GitHub hosts only.
+  `docs/CLAUDE_CODE_SETUP.md` records `api.weather.gov` answering 200 from a
+  container on 2026-09-17, which was true of that container and is not true of
+  this one. Outdoor weather cannot be captured here at all, so the note should
+  say the reachable set is per-session and must be tested each time.
 
 ### 2026-09-17 (CI unblock): the preflight clock test, and a pytest basetemp collision
 

@@ -5,8 +5,32 @@ DraftKings input is CP1252. Times must be timezone-aware ISO 8601 values.
 
 ## Cowork run request
 
-`cowork-run` emits and accepts JSON schema `nfl_cowork_run_request_v1`. Unknown
-keys are rejected. Relative paths resolve inside the explicitly supplied
+`cowork-run` (aliased `run-slate`) emits `nfl_cowork_run_request_v2` and accepts
+both `v1` and `v2`. Unknown keys are rejected.
+
+**v2, added 2026-09-19 (P1b), adds exactly one field:**
+`qb_depth_role_evidence_json`, the optional quarterback depth-chart package
+documented below under *Quarterback depth-chart role evidence*. Nothing else
+changed, and v1 keeps precisely the fields it always had.
+
+Both versions are accepted because every `run_request.json` already on disk
+declares v1 and they must stay replayable; `docs/START_HERE.md` records that the
+schema string is deliberately stable for the same reason. A **v1 request that
+carries `qb_depth_role_evidence_json` is refused**, naming the version that
+introduced the field. That refusal is what makes "v1 is never mutated" a
+property of the code rather than a statement in a document: a v1 request means
+today exactly what it meant when it was written.
+
+New fields follow the same pattern — add the field, bump the emitted version,
+add the old version to the accepted set, and register the field in
+`cowork.REQUEST_FIELDS_ADDED_AFTER_V1` so an older schema cannot carry it.
+
+Where the package is bound: the CLI flag is `--qb-depth-role-evidence-json` on
+both `run-slate` and `select`; the path is confined like every other request
+path; the hash is bound into the pre-lock manifest as
+`qb_depth_role_evidence_sha256` and re-verified at all three `prior_review`
+success exits; and on the Classic C3 exit it is an optional immutable binding
+alongside `weather_evidence_sha256`, not a required artifact. Relative paths resolve inside the explicitly supplied
 attachment/request directory. Absolute paths are accepted only for the exact
 supplied files, managed project data, or the current immutable run; traversal
 and symlink/reparse escapes are rejected before hashing or copying.
@@ -885,6 +909,107 @@ The allocation splits the existing team kicker scoring events before DraftKings
 scoring. The team's base kicker points are conserved exactly once; the Captain
 multiplier is applied afterward to the same person's base allocation. Zero-share
 kickers are scoreless and excluded from selection.
+
+## Quarterback depth-chart role evidence (P1)
+
+`qb_depth_role_evidence_json` is an optional auxiliary package using schema
+`nfl_qb_depth_role_evidence_v1` and allocation
+`qb_depth_chart_attempt_share_allocation_v1`. It exists because a depth chart
+establishes an ordering and nothing else, which the complete
+`nfl_offensive_role_evidence_v1` contract cannot express: that one requires all
+five share fields to total 1.0 across every eligible offensive person on the
+team, so routing a depth chart through it would mean writing target and carry
+numbers no source supports. This contract can only ever move
+`qb_attempt_share`, and the validator enforces that.
+
+It is applied **before** `resolve_offensive_roles` and therefore before
+`score_pool`, which is the point: on 2026-09-14 the only way to stop a backup
+quarterback taking 46% of his team's attempts was a portfolio-policy exclusion
+landing after scoring, where it never reached the projection.
+
+```json
+{
+  "schema_version": "nfl_qb_depth_role_evidence_v1",
+  "allocation_version": "qb_depth_chart_attempt_share_allocation_v1",
+  "transformation_version": "qb_depth_chart_order_v1",
+  "salary_sha256": "aaaa…aaaa",
+  "game_ids": ["DET@BUF"],
+  "sources": [
+    {
+      "path": "sources/bbbb…bbbb.csv",
+      "sha256": "bbbb…bbbb",
+      "upstream_sha256": "cccc…cccc",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "observed_at": "2026-09-18T12:12:55+00:00",
+      "captured_at": "2026-09-18T12:17:55+00:00",
+      "expires_at": "2026-09-20T00:12:55+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "transformation_version": "qb_depth_chart_order_v1",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,…\n2026-09-18T12:12:55Z,BUF,Josh Allen,…,1\n…",
+      "synthetic": false
+    }
+  ],
+  "declarations": [
+    {
+      "team": "BUF",
+      "game_id": "DET@BUF",
+      "declared_observed_at": "2026-09-18T12:12:55+00:00",
+      "starter":  {"underlying_id": "BUF|QB|Josh Allen", "cpt_dk_id": "…", "flex_dk_id": "…",
+                   "provider_player_id": "00-0034857", "player_name": "Josh Allen", "pos_rank": 1},
+      "backups":  [{"underlying_id": "BUF|QB|Kyle Allen", "…": "…", "pos_rank": 2}],
+      "unlisted": [{"underlying_id": "BUF|QB|Shane Buechele", "cpt_dk_id": "…",
+                    "flex_dk_id": "…", "player_name": "Shane Buechele"}],
+      "source_sha256": "bbbb…bbbb"
+    }
+  ]
+}
+```
+
+**The capture is a verbatim slice**, not the whole file: the published season
+artifact is ~50MB holding one snapshot per `dt` (184 of them in the 2026 file on
+2026-09-19) for all 32 teams, and each team needs its own excerpt. The slice is
+the header line plus that team's quarterback rows at one `dt`, in `pos_rank`
+order. `upstream_sha256` and `source_uri` keep it traceable to the exact
+published bytes it was cut from.
+
+**One snapshot, pinned.** `declared_observed_at` names the `dt`, and every row
+in the excerpt must carry it. A capture mixing two snapshots is
+`QB_DEPTH_EXCERPT_DT_MIXED`; a package whose declared order is not the order the
+capture shows is `QB_DEPTH_ORDER_NOT_SUPPORTED_BY_CAPTURE`.
+
+**Three placements, and every listed quarterback gets one.** `starter` is
+`pos_rank` 1. `backups` are ranked below him. `unlisted` are quarterbacks
+DraftKings sells whom the chart does not name at all — measured on the real
+2026-09-17 DET@BUF slate, where DraftKings listed three Buffalo quarterbacks and
+the chart named two. That is a weaker claim than "backup" and is recorded
+separately; the validator refuses a person declared unlisted who does appear in
+the capture (`QB_DEPTH_UNLISTED_IS_ON_THE_CAPTURE`), so it cannot be used to
+hide a named starter. A quarterback placed nowhere is
+`QB_DEPTH_TEAM_COVERAGE_MISMATCH`: omission and a zero share are different
+claims.
+
+**Conservation.** The starter receives exactly the sum of `qb_attempt_share` the
+team's quarterbacks already held; backups and unlisted receive zero. The package
+never increases team passing volume, never reaches a non-quarterback, and never
+invents a fractional split. A real committee needs measured numbers, which is
+the complete contract's job.
+
+**Identity.** The two sides share no identifier, so each entry carries the
+provider's `gsis_id` and the exact DraftKings binding, and the names must match
+under `normalize_person_name` within the one team
+(`QB_DEPTH_PROVIDER_NAME_MISMATCH`). The producer checks this and the consumer
+re-checks it independently.
+
+`does_not_establish`: `TARGET_SHARE`, `CARRY_SHARE`,
+`RUSHING_OR_RECEIVING_TOUCHDOWN_SHARE`, `RECEIVING_EFFICIENCY`,
+`OFFICIAL_ACTIVE_STATUS`, `MODEL_VALIDATION`,
+`HOW_MANY_ATTEMPTS_THE_TEAM_WILL_THROW`.
+
+Producer: `scripts/make_offensive_role_evidence.py`, with `--fetch` (through
+`nfl_dfs.sources`, the only approved retrieval client) or `--capture` for bytes
+already on disk.
 
 ## Ownership brackets
 

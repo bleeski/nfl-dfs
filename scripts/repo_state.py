@@ -309,9 +309,23 @@ def claims(now: datetime) -> dict:
 
 
 def ben_flags() -> list[dict]:
-    """Open `[BEN: ...]` questions, the facts only Ben can supply."""
+    """Open `[BEN: ...]` questions, the facts only Ben can supply.
+
+    `changelog.md` and `IMPLEMENTATION_STATUS.md` are deliberately not scanned.
+    They are the historical record: they quote flags that were raised, ruled on
+    and closed, and every sentence *about* a flag ("the `[BEN: ...]` flags went
+    7 to 9") matched as if it were one. On 2026-09-19 that inflated the count
+    to 10 when three were actually open, with fragments like `'] flags'` and
+    `']` question'` sitting in the list. A count that is wrong in the direction
+    of more is worse than no count: it buries the real blockers.
+
+    `.claude/rules/ledger.md` says a flag lives in `backlog.md` and is listed
+    again in the handoff, so `backlog.md` and the live chunk briefs are the
+    only places an *open* flag can be.
+    """
+
     found: list[dict] = []
-    roots = [BACKLOG, PROJECT_ROOT / "changelog.md", PROJECT_ROOT / "IMPLEMENTATION_STATUS.md"]
+    roots = [BACKLOG]
     roots.extend(sorted(CHUNKS_DIR.glob("*.md")))
     for path in roots:
         if not path.is_file():
