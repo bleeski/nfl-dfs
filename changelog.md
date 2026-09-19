@@ -4,6 +4,68 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-19: one tracker, and a test that keeps it one
+
+Ben's point, and he was right: however we track progress against a plan, it has
+to be something I can maintain. The plan artifact I had been keeping lives in
+`/root/.claude/plans/`, outside the repository — a fresh cloud session never
+sees it, no other instance can read it, and it dies with the container. Anything
+I recorded there was a second copy of the truth, maintained by hand.
+
+**It had already drifted, silently.** On 2026-09-19 I added a second status
+table to `backlog.md` — the "Cloud-operability chunks" table — with its own
+column layout. `scripts/repo_state.py`'s `_QUEUE_ROW` requires a leading order
+column, so it matched **none** of those rows. The session-start hook, which is
+the only status a cold session ever sees, kept printing the old queue while
+`X0`, `P1b` and three new blocked chunks came and went. Nothing failed, because
+nothing was checking. `.claude/rules/ledger.md` already says status lives only
+in the queue table; I broke that rule and the drift was the direct consequence.
+
+**Changed**
+
+- The `X0`–`X4` cloud-operability chunks and `P1b` are now rows 13–18 of the one
+  Queue table, in its format, and the second table is gone. All 21 rows parse.
+  The prose section that remains says explicitly that its statuses live in the
+  Queue table, not in it.
+- The two operator blockers are now `[BEN: ...]` flags rather than prose, so the
+  startup hook counts and prints them without anyone remembering to: merge #18
+  and #19, and pick A/B/C for the standings corpus. Flags went 7 → 9.
+- The `P1` gate half of the existing `C3X` flag is marked ruled, since Ben ruled
+  it on 2026-09-19; only the Excel half is still open.
+
+**Added: `tests/test_backlog_queue.py`, 7 tests.** The guard that makes the
+drift impossible rather than merely discouraged. Any markdown row in the live
+program carrying a backticked status must be readable by `_QUEUE_ROW`; every
+queue status must be one of `VALID_STATUSES`; `X0`–`X4` and `P1b` must be
+present; the ledger stays LF. Plus a regression asserting the *exact* invisible
+row shape is caught and its replacement is read — without it the guard could be
+weakened to a tautology and nothing would notice.
+
+**One finding I did not plant.** The guard immediately failed on the superseded
+2026-09-10 program table, whose rows carry an extra `Track` column the parser
+has also never read. Those statuses are historical record, not the tracker, so
+the guard is scoped to the live program and a second test asserts the superseded
+section actually says it is superseded — unreadable-by-design is fine for
+history and dangerous for anything that looks live.
+
+**What the plan file is now.** A pointer: where the tracker lives, the audit's
+F1–F9 findings, and the two blockers. No status. The test of whether this works
+is that `python3 scripts/repo_state.py --stdout` prints the truth without me
+narrating it; a status in prose but not in that output is decoration.
+
+**Verification**
+
+```
+full suite              835 passed, 1 skipped in 168.64s (0:02:48), exit 0
+before this change      828 passed, 1 skipped in 128.35s
+new tests               tests/test_backlog_queue.py, 7 passed
+repo_state.py           21 queue rows parsed, READY: P0, 9 [BEN:] flags
+doctor                  pass_status true
+compileall src scripts  clean
+git diff --check        clean
+check_protected_paths   No protected path touched (0 changed)
+```
+
 ### 2026-09-19: P1b — the depth-chart package reaches the operating path
 
 The seam `P1` stopped at, crossed. `P1` shipped
