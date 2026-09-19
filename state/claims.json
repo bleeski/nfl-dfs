@@ -1,4 +1,14 @@
 {
   "schema_version": "nfl_chunk_claims_v1",
-  "claims": []
+  "claims": [
+    {
+      "chunk": "P1",
+      "agent": "cloud-audit-617aaj",
+      "branch": "claude/dfs-engine-cloud-audit-617aaj",
+      "claimed_at": "2026-09-19T02:00:00Z",
+      "base_commit": "0b7bdff",
+      "issue": "https://github.com/bleeski/nfl-dfs/issues/21",
+      "note": "X0 done (baseline 790 passed, 1 skipped). X1 and X3 deliberately NOT claimed: both collide with PR #19, which is unmerged."
+    }
+  ]
 }

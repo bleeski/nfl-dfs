@@ -36,7 +36,11 @@ from .kicker_roles import (
     validate_kicker_scoring_allocation,
 )
 from .opportunity import OpportunityModel, PlayerOpportunity
-from .offensive_roles import OffensiveResolution, resolve_offensive_roles
+from .offensive_roles import (
+    OffensiveResolution,
+    enforce_material_role_change_gate,
+    resolve_offensive_roles,
+)
 from .participation import build_participation_contract
 from .scoring import (
     DefenseStatLine,
@@ -84,6 +88,31 @@ _BONUS_THRESHOLDS = (
 )
 _BONUS_WINDOW = 20.0
 RECEIVING_POSITIONS = frozenset({"RB", "WR", "TE"})
+
+# P1: the market prices a person near the top of the slate and this scorer puts
+# him near the bottom. That disagreement is never resolved here — the scorer has
+# no way to know which side is right — but it is never silent either.
+#
+# Two deviations from the brief, both measured rather than preferred.
+#
+# First, the brief compares ranks "within position". That alone cannot catch the
+# failure it was written for: on the DEN@KC Showdown slate Kenneth Walker III
+# was the most expensive FLEX on the board at $10,600 and 29th of 32 by prior
+# points, yet among six running backs he was only a place or two out of line,
+# and a ten-place gap cannot occur in a six-person group at all. So both
+# populations are ranked and the wider gap decides.
+#
+# Second, "at least 10 places" is not scale-free. Ten places is most of a
+# fifteen-person Showdown slate and a rounding error on a two-hundred-person
+# Classic slate, so one number cannot mean the same thing on both. The rule is
+# therefore a places floor OR a share of the population, whichever fires: the
+# absolute arm keeps the brief's literal rule on large slates, and the
+# proportional arm makes it mean something on small ones. Walker is 28 places
+# and 88% of his slate; both arms agree on him, which is the point.
+SALARY_RANK_DIVERGENCE_VERSION = "salary_rank_divergence_v1"
+SALARY_RANK_DIVERGENCE_PLACES = 10
+SALARY_RANK_DIVERGENCE_MIN_PLACES = 3
+SALARY_RANK_DIVERGENCE_FRACTION = 0.25
 
 
 class PriorScoreError(ValueError):
@@ -293,6 +322,134 @@ def _defense_stat_line(opponent: TeamVolume) -> DefenseStatLine:
     )
 
 
+def _base_salary_row(slate: SlateContract) -> dict[str, object]:
+    """One salary row per person: always the cheapest, never an inflated CPT row.
+
+    Showdown lists everybody twice and the CPT row is 1.5x, so ranking on the
+    raw rows would rank a person against his own captain price. Classic can list
+    one person under several roster slots at the same salary; the tie breaks on
+    DK ID so the choice is deterministic rather than dict-order dependent.
+    """
+
+    rows: dict[str, object] = {}
+    for player in slate.players:
+        current = rows.get(player.underlying_id)
+        if current is None or (player.salary, player.dk_id) < (
+            current.salary,
+            current.dk_id,
+        ):
+            rows[player.underlying_id] = player
+    return rows
+
+
+def _ordinal_ranks(values: Mapping[str, float]) -> dict[str, int]:
+    """Dense-free ordinal ranks, 1 = largest. Ties break on person ID."""
+
+    order = sorted(values.items(), key=lambda item: (-item[1], item[0]))
+    return {person: index + 1 for index, (person, _value) in enumerate(order)}
+
+
+def salary_rank_divergence(
+    slate: SlateContract,
+    by_person: Mapping[str, float],
+    offensive_report: Mapping[str, object] | None = None,
+    *,
+    places: int = SALARY_RANK_DIVERGENCE_PLACES,
+) -> tuple[dict[str, object], ...]:
+    """Name every scored person the market prices far above this prior.
+
+    Reports rather than decides. The evidence state that produced the prior
+    travels with each finding, because "expensive and low-scoring" means one
+    thing for a person whose role is confirmed and quite another for a transfer
+    carrying his old team's share.
+    """
+
+    rows = _base_salary_row(slate)
+    scored = {
+        person: float(points)
+        for person, points in by_person.items()
+        if person in rows
+    }
+    if not scored:
+        return ()
+    salaries = {person: float(rows[person].salary) for person in scored}
+    overall_salary_rank = _ordinal_ranks(salaries)
+    overall_prior_rank = _ordinal_ranks(scored)
+
+    grouped: dict[str, list[str]] = {}
+    for person in scored:
+        grouped.setdefault(rows[person].position, []).append(person)
+    position_salary_rank: dict[str, int] = {}
+    position_prior_rank: dict[str, int] = {}
+    for people in grouped.values():
+        position_salary_rank.update(
+            _ordinal_ranks({person: salaries[person] for person in people})
+        )
+        position_prior_rank.update(
+            _ordinal_ranks({person: scored[person] for person in people})
+        )
+
+    states = {
+        str(finding.get("person")): finding
+        for finding in (offensive_report or {}).get("findings", ())
+        if isinstance(finding, Mapping)
+    }
+
+    def trips(gap: int, population: int) -> bool:
+        if population < 2:
+            return False
+        if gap >= places:
+            return True
+        return (
+            gap >= SALARY_RANK_DIVERGENCE_MIN_PLACES
+            and gap / population >= SALARY_RANK_DIVERGENCE_FRACTION
+        )
+
+    findings: list[dict[str, object]] = []
+    for person in sorted(scored):
+        row = rows[person]
+        position_gap = position_prior_rank[person] - position_salary_rank[person]
+        overall_gap = overall_prior_rank[person] - overall_salary_rank[person]
+        group_size = len(grouped[row.position])
+        position_trips = trips(position_gap, group_size)
+        overall_trips = trips(overall_gap, len(scored))
+        if not position_trips and not overall_trips:
+            continue
+        gap = max(
+            position_gap if position_trips else overall_gap,
+            overall_gap if overall_trips else position_gap,
+        )
+        basis = states.get(person, {})
+        findings.append(
+            {
+                "person": person,
+                "name": row.name,
+                "team": row.team,
+                "position": row.position,
+                "dk_id": row.dk_id,
+                "salary": int(row.salary),
+                "prior_points": round(scored[person], 3),
+                "position_salary_rank": position_salary_rank[person],
+                "position_prior_rank": position_prior_rank[person],
+                "position_group_size": group_size,
+                "overall_salary_rank": overall_salary_rank[person],
+                "overall_prior_rank": overall_prior_rank[person],
+                "scored_people": len(scored),
+                "divergence_places": gap,
+                "divergence_share_of_slate": round(overall_gap / len(scored), 4),
+                "tripped_on": (
+                    "POSITION_AND_SLATE"
+                    if position_trips and overall_trips
+                    else ("POSITION" if position_trips else "SLATE")
+                ),
+                "evidence_state": basis.get("state", "UNSCORED_BY_ROLE_RESOLUTION"),
+                "history_state": basis.get("history_state"),
+                "finding": basis.get("finding"),
+            }
+        )
+    return tuple(findings)
+
+
 @dataclass(frozen=True)
 class PriorScores:
     score_version: str
@@ -304,6 +461,7 @@ class PriorScores:
     kicker_roles: dict[str, object]
     kicker_role_resolution: KickerRoleResolution
     offensive_role_resolution: OffensiveResolution
+    salary_rank_divergence: tuple[dict[str, object], ...] = ()
 
     def as_report(self) -> dict[str, object]:
         ranked = sorted(self.by_person.items(), key=lambda item: -item[1])
@@ -326,6 +484,27 @@ class PriorScores:
             "omissions": list(self.omissions),
             "kicker_roles": self.kicker_roles,
             "offensive_roles": self.offensive_role_resolution.report,
+            "salary_rank_divergence": {
+                "version": SALARY_RANK_DIVERGENCE_VERSION,
+                "places_threshold": SALARY_RANK_DIVERGENCE_PLACES,
+                "minimum_places": SALARY_RANK_DIVERGENCE_MIN_PLACES,
+                "share_threshold": SALARY_RANK_DIVERGENCE_FRACTION,
+                "definition": (
+                    "A scored person whose DraftKings salary rank beats his"
+                    " prior-points rank by at least `places_threshold`, or by at"
+                    " least `minimum_places` and `share_threshold` of the"
+                    " population. Measured twice, within his position and across"
+                    " the scored slate; either one trips it."
+                ),
+                "does_not_establish": [
+                    "WHICH_SIDE_IS_WRONG",
+                    "OFFICIAL_ACTIVE_STATUS",
+                    "OWNERSHIP_OR_LEVERAGE",
+                    "MODEL_VALIDATION",
+                ],
+                "count": len(self.salary_rank_divergence),
+                "findings": [dict(finding) for finding in self.salary_rank_divergence],
+            },
         }
 
 
@@ -454,6 +633,13 @@ def score_pool(
     if not by_dk_id:
         raise PriorScoreError("NO_SALARY_ROW_COULD_BE_SCORED")
 
+    divergence = salary_rank_divergence(slate, by_person, offense.report)
+    # Ben's ruling, 2026-09-19: a person the market prices as the slate's best
+    # who is also carrying another team's share is an unresolved material role
+    # change, and the run stops. It is the same treatment a declared role change
+    # already gets, and one script clears it.
+    enforce_material_role_change_gate(offense.report, divergence)
+
     return PriorScores(
         score_version=SCORE_VERSION,
         by_dk_id=by_dk_id,
@@ -473,4 +659,5 @@ def score_pool(
         },
         kicker_role_resolution=roles,
         offensive_role_resolution=offense,
+        salary_rank_divergence=divergence,
     )

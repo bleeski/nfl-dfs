@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Iterable, Literal, Mapping
 
 from pydantic import Field, field_validator, model_validator
 
@@ -468,6 +468,91 @@ def resolve_offensive_roles(
     if blocked:
         raise OffensiveRoleError(";".join(blocked), report)
     return OffensiveResolution(replace(model, players=survivors), tuple(sorted(excluded)), report, manifest, digest, hashes, expiry)
+
+
+# Ben's ruling, 2026-09-19. Before it, a transfer with no current-team evidence
+# was selectable on his old team's share and the run said so only in a
+# diagnostic. On DEN@KC that produced a $10,600 running back carrying a
+# 7.3-point prior, 0 of 18 lineups paid, and nothing stopped. A person in one of
+# these states who is *also* priced far above his prior is not a person we are
+# merely uncertain about; he is a person whose role we can see has changed and
+# have not resolved. That is the same thing a declared MATERIAL_ROLE_CHANGE is,
+# and it gets the same answer: stop, and name the one action that clears it.
+#
+# The gate is deliberately conjunctive. An unverified transfer priced where his
+# prior puts him is still a diagnostic, because nothing observable disagrees.
+UNRESOLVED_ROLE_CHANGE_STATES = frozenset({"TRANSFER_PRIOR_UNVERIFIED"})
+MATERIAL_ROLE_CHANGE_GATE_VERSION = "unresolved_material_role_change_gate_v1"
+
+
+def material_role_change_blockers(
+    report: Mapping[str, object],
+    divergence: Iterable[Mapping[str, object]],
+) -> tuple[str, ...]:
+    """Name every person who is both role-unresolved and priced against it."""
+
+    diverging = {
+        str(finding.get("person")): finding
+        for finding in divergence
+        if isinstance(finding, Mapping)
+    }
+    blockers: list[str] = []
+    for finding in report.get("findings", ()) or ():
+        if not isinstance(finding, Mapping):
+            continue
+        person = str(finding.get("person"))
+        if finding.get("state") not in UNRESOLVED_ROLE_CHANGE_STATES:
+            continue
+        diverged = diverging.get(person)
+        if diverged is None:
+            continue
+        old_teams = ",".join(
+            str(team)
+            for team in ((finding.get("history_basis") or {}).get("transfer_prior") or {}).get(
+                "old_teams", ()
+            )
+        )
+        position = str(finding.get("position") or diverged.get("position") or "")
+        # The remedy depends on the position, and saying otherwise would send an
+        # operator to a script that cannot help him. A depth chart establishes a
+        # quarterback order and nothing else; for anyone else the only thing
+        # that resolves a role is a measured numerical allocation.
+        remedy = (
+            "Capture his current-team quarterback order with"
+            " scripts/make_offensive_role_evidence.py and pass it as"
+            " qb_depth_role_evidence_json"
+            if position == "QB"
+            else "Capture a numerical current-team allocation for his team and pass"
+            " it as offensive_role_evidence_json"
+        )
+        blockers.append(
+            f"OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE:{person}:"
+            f"salary={diverged.get('salary')}:prior_points={diverged.get('prior_points')}:"
+            f"places={diverged.get('divergence_places')}:old_teams={old_teams or 'UNKNOWN'}:"
+            "the market prices this person far above a prior carried from his previous"
+            f" team. {remedy}, or --exclude him."
+            " Do not select him on the old-team share."
+        )
+    return tuple(sorted(blockers))
+
+
+def enforce_material_role_change_gate(
+    report: Mapping[str, object],
+    divergence: Iterable[Mapping[str, object]],
+) -> None:
+    """Fail closed on an unresolved role change the market disagrees with."""
+
+    blockers = material_role_change_blockers(report, divergence)
+    if blockers:
+        raise OffensiveRoleError(
+            ";".join(blockers),
+            {
+                **dict(report),
+                "evidence_state": "UNKNOWN",
+                "gate_version": MATERIAL_ROLE_CHANGE_GATE_VERSION,
+                "blockers": list(blockers),
+            },
+        )
 
 
 def verify_offensive_resolution(resolution: OffensiveResolution, *, at: datetime) -> None:

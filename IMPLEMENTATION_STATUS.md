@@ -1,5 +1,67 @@
 # Implementation Status
 
+## Capability added — 2026-09-19 (P1)
+
+Three things work that did not, none of them changing a release truth. Suite
+`822 passed, 1 skipped in 149.40s` before the review fixes below; see
+`changelog.md` for the final figure.
+
+**Read the reachability line on each item.** Two of the three are live on the
+operating `prior_review` path. The third, the depth-chart contract, is reachable
+only from the `select_prior_lineups` library entry point: there is no
+`run-slate` flag for it, because that request is a versioned wire format and
+bumping it is chunk `P1b`. An adversarial review caught this being overstated
+here; the correction is the point of this paragraph.
+
+- **`SALARY_RANK_DIVERGENCE`.** Every scored person the market prices far above
+  this scorer is named in `PriorScores`, in `score_pool`'s report and in the
+  selection report, with both ranks, salary, prior, and the evidence state that
+  produced the prior. Implemented and tested. Live on the operating path. It
+  decides nothing: `does_not_establish` includes `WHICH_SIDE_IS_WRONG`.
+- **The unresolved-material-role-change gate.** A person in
+  `TRANSFER_PRIOR_UNVERIFIED` who also trips that divergence now stops the run
+  and the message names the action that clears it, chosen by position. Ben's
+  ruling of 2026-09-19. Implemented and tested. Live on the operating path: it
+  runs at the tail of `score_pool`, and both callers that produce lineups go
+  through it. This is the Kenneth Walker failure, previously silent and now a
+  named stop. For anyone who is not a quarterback the remedy it names is the
+  full numerical allocation, which is already plumbed.
+- **Quarterback depth-chart evidence**, contract
+  `nfl_qb_depth_role_evidence_v1`, producer
+  `scripts/make_offensive_role_evidence.py`. Binds `qb_attempt_share` to a
+  published depth chart, conserving the team's existing total onto the rank-1
+  quarterback and zeroing backups, applied before `score_pool` rather than after
+  it. Implemented, tested, and **verified end to end against real bytes**: the
+  live nflverse artifact and the committed DET@BUF salary file, producer to
+  consumer, through `resolve_qb_depth_roles`. **Not reachable from `run-slate`.**
+  That is chunk `P1b` and it is a request-contract version bump, not an
+  oversight; until it lands this is a library-level capability.
+
+What it does not do. It moves `qb_attempt_share` and nothing else — a depth
+chart establishes who starts, not target or carry share, and the contract says
+so and enforces it. It does not touch the objective, ownership, the candidate
+bank, or `MODEL_STATUS`. Output remains `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+### Known environment limits, measured the same day
+
+These bound what a cloud session can do and are not claims about Ben's Windows
+box. Evidence in `changelog.md` 2026-09-19 and issue #21.
+
+- `data/standings/inbox/` is gitignored, so a fresh cloud clone has no standings
+  corpus. `P0`, `P0b`, `P4a`, `P4b` and `P5` cannot run in a cloud session until
+  chunk `X2` lands. `backlog.md`'s claim that the corpus is "in the repo" is
+  true only on the Windows checkout.
+- Three of the six hosts in `sources.ALLOWED_HOSTS` answer 403 at CONNECT in a
+  cloud session: `api.weather.gov`, `api.sleeper.app`, `api.the-odds-api.com`.
+  `docs/CLAUDE_CODE_SETUP.md:114-125` asserts otherwise and is being replaced by
+  a per-session probe in chunk `X1`. nflverse over GitHub is reachable.
+- `nfl.sh` as shipped fails the entire suite in a fresh container
+  (`2 failed, 226 passed, 1 skipped, 562 errors`) because pytest does not create
+  the parent of the `--basetemp` it is handed. Fixed in PR #19, unmerged at the
+  time of writing; `NFL_DFS_PYTEST_TMP` is the documented workaround.
+- The `DFS_Architect_MCP` server attached to these sessions returns **stub**
+  weather. It is never a model input.
+
 ## Validation corpus — 2026-09-14 (Q1B and Q1C)
 
 Both tranches are merged to `main` in `4313455fcd8fd722b699a799dbe19dff19c1be68`
@@ -97,7 +159,9 @@ The authoritative queue is `Reprioritized development program — 2026-09-15
 `docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md` and
 `docs/STANDINGS_GREENFIELD_FINDINGS_2026-09-15.md`. `P0` (standings grading
 harness) and `P1` (salary-divergence diagnostic and current-team role evidence
-producer) are `READY`. `C3`'s software acceptance passed on 2026-09-14; the
+producer) were `READY` on that date. **Superseded 2026-09-19:** `P1` is `DONE`
+(see the section at the head of this file); `P0` is the only `READY` chunk left
+and is blocked in cloud sessions on chunk `X2`. `C3`'s software acceptance passed on 2026-09-14; the
 program proposes splitting its native Excel step out as `C3X` (`DEFERRED`) and
 re-sequencing `C4` behind `P2`, pending Ben's ruling, and until he rules `C3`
 keeps its `BLOCKED` status. Every other item is `BLOCKED` on the chunks named

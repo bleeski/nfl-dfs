@@ -37,6 +37,7 @@ from .kicker_roles import resolve_kicker_roles
 from .lineups import validate_lineup
 from .opportunity import OpportunityModel
 from .offensive_roles import resolve_offensive_roles, verify_offensive_resolution
+from .qb_depth_roles import resolve_qb_depth_roles, verify_qb_depth_resolution
 from .optimizer import LineupOptimizer
 from .participation import ParticipationContract, excluded_dk_ids, selectable_pool_problems
 from .portfolio_enforcement import (
@@ -157,6 +158,7 @@ def select_prior_lineups(
     time_limit_seconds: float = 10.0,
     role_evidence_json: str | Path | None = None,
     offensive_role_evidence_json: str | Path | None = None,
+    qb_depth_role_evidence_json: str | Path | None = None,
     as_of: datetime | None = None,
     portfolio_policy: NormalizedPortfolioPolicy | NormalizedClassicPortfolioPolicy | None = None,
     policy_candidate_limit: int | None = None,
@@ -208,8 +210,19 @@ def select_prior_lineups(
         evidence_path=role_evidence_json,
         as_of=as_of,
     )
+    # The depth chart moves quarterback attempts onto the named starter before
+    # anything reads a share, so a backup cannot carry his prior-season split
+    # into the projection and then be removed by a policy exclusion that lands
+    # after scoring. It touches `qb_attempt_share` and nothing else.
+    qb_depth = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=qb_depth_role_evidence_json, as_of=as_of,
+    )
     offense = resolve_offensive_roles(
-        slate, model, contract, evidence_path=offensive_role_evidence_json, as_of=as_of,
+        slate,
+        qb_depth.model,
+        contract,
+        evidence_path=offensive_role_evidence_json,
+        as_of=as_of,
     )
     scores = score_pool(slate, offense.model, splits, kicker_roles=kicker_roles, offensive_roles=offense)
     pool_scores_target = resolve_pool_scores_path(pool_scores_path)
@@ -327,6 +340,8 @@ def select_prior_lineups(
             "kicker_role_excluded_people": sorted(zero_share_people),
             "kicker_roles": kicker_roles.as_report(),
             "offensive_roles": offense.report,
+            "qb_depth_roles": qb_depth.report,
+            "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
             "selectable_people": len(contract.selectable_people),
             "person_exposure": dict(sorted(exposure.items())),
             "team_exposure": dict(sorted(team_exposure.items())),
@@ -355,6 +370,7 @@ def select_prior_lineups(
             ],
         }
         verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
+        verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
         return tuple(selected), scores, report
 
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
@@ -459,6 +475,8 @@ def select_prior_lineups(
             "kicker_role_excluded_people": sorted(zero_share_people),
             "kicker_roles": kicker_roles.as_report(),
             "offensive_roles": offense.report,
+            "qb_depth_roles": qb_depth.report,
+            "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
             "selectable_people": len(contract.selectable_people),
             "person_exposure": dict(sorted(exposure.items())),
             "captain_exposure": dict(sorted(captain_exposure.items())),
@@ -477,6 +495,7 @@ def select_prior_lineups(
             "never_calls": ["field.py", "economics.py", "portfolio economics"],
         }
         verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
+        verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
         return tuple(selected), scores, report
 
     optimizer = LineupOptimizer(
@@ -637,6 +656,8 @@ def select_prior_lineups(
         "kicker_role_excluded_people": sorted(zero_share_people),
         "kicker_roles": kicker_roles.as_report(),
         "offensive_roles": offense.report,
+        "qb_depth_roles": qb_depth.report,
+        "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
         "selectable_people": len(contract.selectable_people),
         "person_exposure": dict(
             sorted(exposure.items(), key=lambda item: (-item[1], item[0]))
@@ -650,6 +671,7 @@ def select_prior_lineups(
         "never_calls": ["field.py", "economics.py", "portfolio economics"],
     }
     verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
+    verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
     return tuple(selected), scores, report
 
 

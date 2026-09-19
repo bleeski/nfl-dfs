@@ -4,6 +4,155 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-19: P1 — salary-rank divergence, the material-role-change gate, and quarterback depth-chart evidence
+
+Chunk `P1` of the prize-tail program, on `claude/dfs-engine-cloud-audit-617aaj`.
+Ben's ruling of 2026-09-19 on the brief's open `[BEN:]` question: the gate is a
+**hard stop**, not a diagnostic. No release truth changed; every path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. No protected
+path touched.
+
+The failure this closes, from the DEN@KC run record and the 26-contest
+standings: Kenneth Walker III priced at $10,600 (the slate's most expensive
+FLEX) carried a 7.3-point prior because his history was on another team, and
+`opportunity.py` split Kansas City's attempts Mahomes 0.5395 / Fields 0.4605
+from prior-season history. Nothing stopped, and 0 of 18 lineups paid.
+
+**Added**
+
+- `salary_rank_divergence` in `prior_score.py`, reported on `PriorScores`, in
+  `as_report()` and in all five selection-report shapes. Names every scored
+  person whose DraftKings salary rank beats his prior-points rank, carrying both
+  ranks, salary, prior and the evidence state that produced the prior.
+- `enforce_material_role_change_gate` / `material_role_change_blockers` in
+  `offensive_roles.py`, run at the end of `score_pool`. A person in
+  `TRANSFER_PRIOR_UNVERIFIED` who **also** trips divergence stops the run and
+  the message names the script that clears it.
+- `src/nfl_dfs/qb_depth_roles.py`: contract `nfl_qb_depth_role_evidence_v1`,
+  allocation `qb_depth_chart_attempt_share_allocation_v1`, applied before
+  `resolve_offensive_roles` and therefore before `score_pool`. Moves only
+  `qb_attempt_share`, conserving the team's existing total onto the rank-1
+  quarterback. Registered in `docs/DATA_CONTRACTS.md`.
+- `scripts/make_offensive_role_evidence.py`, with `--fetch` (through
+  `nfl_dfs.sources`, no other client) and `--capture` for bytes already on disk.
+- `qb_depth_role_evidence_json` on `select_prior_lineups`, with
+  `verify_qb_depth_resolution` called wherever `verify_offensive_resolution` is.
+
+**Two deviations from the brief, both measured rather than preferred**
+
+1. The brief ranks "within position". That cannot catch the case it was written
+   for: Walker was the dearest FLEX on the board and 29th of 32 by prior points,
+   yet among six running backs he was a place or two out of line, and a
+   ten-place gap cannot occur in a six-person group at all. Both populations are
+   now ranked, both reported, either one trips it.
+2. "At least 10 places" is not scale-free — most of a 15-person Showdown slate,
+   a rounding error on a Classic slate. The rule is now a places floor **or** a
+   share of the population: `gap >= 10`, or `gap >= 3` and `gap/population >=
+   0.25`. Walker is 28 places and 88% of his slate; both arms agree on him.
+
+**One design change forced by real data.** The first version required the
+declared quarterbacks to equal exactly the quarterbacks DraftKings lists. Run
+against the committed DET@BUF salary file and the live depth chart, that
+refused: DraftKings sells three Buffalo quarterbacks and the published chart
+names two. A third-stringer the chart does not place is now declared `unlisted`
+— a weaker claim than "backup", recorded separately, zeroed, and refused if he
+does appear in the capture, so it cannot hide a named starter.
+
+**What the adversarial review caught, before the push**
+
+A `reviewer` pass over the diff found three things worth recording, two of them
+real defects of mine:
+
+1. **Duplicate keys in two of the three selection-report dict literals**
+   (`selection.py:343` and `:480`). Self-inflicted: I applied an 8-space string
+   replacement that is a substring of the 12-space one it had just written, so
+   it matched inside its own output. Python keeps the last value and the values
+   were identical, so nothing behaved wrongly — it was dead duplicated code.
+   Removed, and an AST check now confirms zero dict literals in the file carry a
+   duplicate string key. I had already hit this exact bug once on the
+   `verify_*` lines in the same edit and fixed only that instance.
+2. **A tautological test.** `test_a_capture_mixing_two_snapshots_is_refused`
+   called only `parse_depth_chart_excerpt`, which performs no single-`dt` check,
+   and asserted a trivial property of its own fixture. The refusal it was named
+   for lives in `_derived_order` and was never reached. Rewritten to mutate a
+   real package and assert `QB_DEPTH_EXCERPT_DT_MIXED` actually fires.
+3. **An overclaim in `IMPLEMENTATION_STATUS.md`**, which said all three new
+   capabilities were "on the operating `prior_review` path". Two are; the
+   depth-chart contract is reachable from `select_prior_lineups` only. Corrected
+   per item, and the producer's own stdout now says so rather than pointing at a
+   `run-slate` flag that does not exist.
+
+It also flagged that a declared backup present on the slate but absent from the
+opportunity model was silently skipped — not zeroed, not reported, not scored,
+which looks like success. Now `QB_DEPTH_PRIOR_ROW_MISSING` for any placed
+quarterback, not just the starter, with a test.
+
+**Verification**
+
+```
+full suite            823 passed, 1 skipped in 151.03s (0:02:31), exit 0
+baseline before       790 passed, 1 skipped in 152.53s, exit 0
+new tests             tests/test_qb_depth_roles.py, 33 passed
+doctor                pass_status true, python 3.13.7
+compileall src scripts  clean
+git diff --check      clean
+check_protected_paths No protected path touched (0 changed)
+```
+
+End to end against real bytes, not fixtures: the producer fetched
+`depth_charts_2026.csv` (sha256 `aaa4bc16…78ec`, snapshot
+`2026-09-18T12:12:55Z`) through `sources.fetch_public_artifact`, bound it to the
+committed DET@BUF salary file, and the consumer accepted its own producer's
+output — Josh Allen and Jared Goff to 1.0, Kyle Allen and Joshua Dobbs to 0.0,
+Shane Buechele and Luke Altmyer recorded `UNLISTED_ON_DEPTH_CHART`,
+`verify_qb_depth_resolution` clean.
+
+**Also recorded, from the cloud audit that preceded this chunk**
+
+- `nfl.sh` as shipped fails the whole suite in a fresh container:
+  `2 failed, 226 passed, 1 skipped, 562 errors in 39.75s`, reproducing PR #19's
+  measurement exactly. `--basetemp "${TMPDIR:-/tmp}/nfl-dfs-pytest/$$"` is passed
+  to a pytest whose `TempPathFactory.getbasetemp` calls `basetemp.mkdir(mode=0o700)`
+  with no `parents=True`. Verified against pytest's own source. **Fixed by PR
+  #19, not duplicated here**; every run above used `NFL_DFS_PYTEST_TMP`.
+- Egress in this session refuses three of the six hosts in `sources.ALLOWED_HOSTS`
+  with a 403 at CONNECT: `api.weather.gov`, `api.sleeper.app`,
+  `api.the-odds-api.com`. `docs/CLAUDE_CODE_SETUP.md:122` asserts the first
+  answers 200 from the container; it does not answer 200 from this one. Chunk
+  `X1` replaces the asserted facts with a probe. nflverse over GitHub is
+  reachable, which is why the end-to-end test above could run.
+- `data/standings/inbox/` is gitignored, so a fresh cloud clone holds only
+  `.gitkeep`. `backlog.md` says the 26 exports are "in the repo"; they are on
+  Ben's Windows checkout. `P0`, `P0b`, `P4a`, `P4b` and `P5` all grade against
+  that corpus and cannot run in a cloud session until chunk `X2` lands. This is
+  why `P1` ran before `P0`, inverting the queue order.
+- The `DFS_Architect_MCP` server attached to these sessions returns **stub**
+  weather (`"source": "stub"`, worker `chunk-3-mlb-fetchers`). It is shaped like
+  the answer to the blocked weather gate and must never be used as one. A rule
+  making that explicit lands in `X3`.
+
+**The seam this chunk stopped at, named rather than half-crossed**
+
+`qb_depth_role_evidence_json` reaches the engine through the
+`select_prior_lineups` keyword only. The operating path is `run-slate`, whose
+request is the versioned wire format `nfl_cowork_run_request_v1`, and a schema
+change is a new version. P1's brief names `prior_score.py`/`selection.py`,
+`offensive_roles.py`, the producer and tests — not `cowork.py`, `cli.py` or
+`prior_review.py`. Filed as `P1b`, `READY`.
+
+This does not leave the gate unclearable. The stop fires on an unresolved
+transfer, and for anyone who is not a quarterback the remedy is the full
+numerical allocation, which is already plumbed; the gate message now says so
+per-position rather than offering a depth chart that cannot resolve a running
+back. The depth chart fixes the Fields half of DEN@KC (a backup at 46% of his
+team's attempts), not the Walker half.
+
+**Open**
+
+- `[BEN: C3X]` unchanged and still open; it blocks nothing on the prize path.
+- Hand-back per the brief is `docs/session-prompts/P3a-scenario-bank.md`; P3a
+  stays `BLOCKED` until `P0` also closes. `P1b` is `READY` now.
+
 ### 2026-09-17 (slate run): DET@BUF Showdown, 13 entries, prior-only review
 
 First operated slate in a cloud session. `RELEASE_DECISION=DO_NOT_UPLOAD` and
