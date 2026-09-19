@@ -4,6 +4,64 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-19: P1b — the depth-chart package reaches the operating path
+
+The seam `P1` stopped at, crossed. `P1` shipped
+`nfl_qb_depth_role_evidence_v1` and its producer but left the package reachable
+only through the `select_prior_lineups` keyword, because wiring it into
+`run-slate` means changing a versioned wire format and `P1`'s brief did not
+scope that. It does now. No release truth changed; every path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. No protected
+path touched.
+
+**The contract, and why both versions are accepted**
+
+`nfl_cowork_run_request_v2` adds exactly one field,
+`qb_depth_role_evidence_json`. v1 is still accepted and still has precisely the
+fields it always had, because every `run_request.json` on disk declares v1 and
+must stay replayable — `docs/START_HERE.md` records that the schema string is
+deliberately stable for that reason.
+
+A **v1 request carrying the v2 field is refused**, naming the version that
+introduced it (`cowork.REQUEST_FIELDS_ADDED_AFTER_V1`). That refusal is the
+point: it makes "v1 is never mutated" a property of the code rather than a
+sentence in a document. A v1 request means today what it meant when it was
+written. The same pattern is documented for the next field.
+
+**Bound everywhere the sibling package is bound.**
+`.claude/rules/operating-path.md` requires a change reaching one `prior_review`
+success exit to reach all three, so: the CLI flag
+`--qb-depth-role-evidence-json` on `run-slate` and `select`; request-path
+confinement identical to every other path field; the artifact and its per-source
+hashes bound after selection; re-verification in both hash-recheck sets with the
+`qb_depth_source:` prefix; `qb_depth_role_evidence_sha256` in the pre-lock
+manifest; and on the Classic C3 exit an optional immutable binding beside
+`weather_evidence_sha256`. Deliberately **not** added to
+`classic_review._REQUIRED_ARTIFACTS` — a slate whose quarterbacks need no depth
+chart is a normal slate, not an incomplete one.
+
+**One test expectation changed, named here first.**
+`tests/test_portfolio_policy.py::test_cowork_policy_is_enforced_audited_snapshotted_and_replays_identically`
+asserted the Run Control print area was `$A$1:$D$21`. The sheet gained a
+documented `QB_DEPTH_ROLE_EVIDENCE_JSON` row, so the correct value is `$D$22`.
+The assertion stays hardcoded rather than derived: the print area is what an
+operator sees on paper, and a row appearing or vanishing should fail loudly.
+
+**Verification**
+
+```
+full suite              828 passed, 1 skipped in 128.35s (0:02:08), exit 0
+before this chunk       823 passed, 1 skipped in 151.03s, exit 0
+doctor                  pass_status true
+compileall src scripts  clean
+git diff --check        clean
+check_protected_paths   No protected path touched (0 changed)
+```
+
+Five new tests cover v1 loading unchanged, v1 refusing the v2 field, v2 carrying
+and confining it, an unknown version still refused, and a structural check that
+the package is bound at every site the offensive package is.
+
 ### 2026-09-19: P1 — salary-rank divergence, the material-role-change gate, and quarterback depth-chart evidence
 
 Chunk `P1` of the prize-tail program, on `claude/dfs-engine-cloud-audit-617aaj`.

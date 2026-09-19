@@ -257,7 +257,11 @@ quarterbacks) are recorded in `changelog.md`. Suite `821 passed, 1 skipped`.
 
 ### P1b — Wire `qb_depth_role_evidence_json` into the run request
 
-Status: `READY`. Depends on: `P1` (`DONE`).
+Status: `DONE` (2026-09-19). Depends on: `P1` (`DONE`).
+Landed as `nfl_cowork_run_request_v2`: one new field, v1 still accepted and
+unchanged, and a v1 request carrying the v2 field refused by name. Bound at
+all three `prior_review` exits and as an optional C3 immutable binding.
+Suite `828 passed, 1 skipped`.
 
 The seam `P1` stopped at, named rather than half-crossed. The contract, its
 producer and its consumer all work and are tested end to end against real bytes,

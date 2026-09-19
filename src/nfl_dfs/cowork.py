@@ -8,7 +8,22 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Iterable, Mapping
 
-COWORK_REQUEST_VERSION = "nfl_cowork_run_request_v1"
+# v2 adds exactly one field, `qb_depth_role_evidence_json`, so the quarterback
+# depth-chart package P1 landed can reach the operating path.
+#
+# v1 stays readable and stays v1. Every `run_request.json` already on disk says
+# v1, and `docs/START_HERE.md` records that the schema string is deliberately
+# stable because renaming it would invalidate all of them. So both versions are
+# accepted, v1 keeps exactly the fields it always had, and a v1 request carrying
+# the new field is refused rather than silently upgraded — that refusal is what
+# makes "v1 is never mutated" true rather than merely stated.
+COWORK_REQUEST_VERSION = "nfl_cowork_run_request_v2"
+COWORK_REQUEST_VERSION_V1 = "nfl_cowork_run_request_v1"
+SUPPORTED_REQUEST_VERSIONS = (COWORK_REQUEST_VERSION_V1, COWORK_REQUEST_VERSION)
+# Fields introduced after v1, and the first version that may carry each.
+REQUEST_FIELDS_ADDED_AFTER_V1 = {
+    "qb_depth_role_evidence_json": COWORK_REQUEST_VERSION,
+}
 
 ENTRY_HEADER_PREFIX = ("Entry ID", "Contest Name", "Contest ID", "Entry Fee")
 SALARY_HEADER = {
@@ -132,6 +147,7 @@ PATH_FIELDS = (
     "weather_evidence_json",
     "role_evidence_json",
     "offensive_role_evidence_json",
+    "qb_depth_role_evidence_json",
     "portfolio_policy_json",
     "ownership_brackets_csv",
     "source_ledger_json",
@@ -190,6 +206,7 @@ class CoworkRunRequest:
     weather_evidence_json: str | None = None
     role_evidence_json: str | None = None
     offensive_role_evidence_json: str | None = None
+    qb_depth_role_evidence_json: str | None = None
     portfolio_policy_json: str | None = None
     ownership_brackets_csv: str | None = None
     source_ledger_json: str | None = None
@@ -228,11 +245,20 @@ class CoworkRunRequest:
             raise CoworkInputError(f"unknown Cowork request fields: {unknown}")
         payload = dict(value)
         version = payload.get("schema_version", COWORK_REQUEST_VERSION)
-        if version != COWORK_REQUEST_VERSION:
+        if version not in SUPPORTED_REQUEST_VERSIONS:
             raise CoworkInputError(
                 f"unsupported Cowork request schema: {version!r}; "
-                f"expected {COWORK_REQUEST_VERSION!r}"
+                f"expected one of {', '.join(repr(v) for v in SUPPORTED_REQUEST_VERSIONS)}"
             )
+        for name, introduced_in in sorted(REQUEST_FIELDS_ADDED_AFTER_V1.items()):
+            if payload.get(name) in (None, ""):
+                continue
+            if version != introduced_in:
+                raise CoworkInputError(
+                    f"{name} was introduced in {introduced_in!r} and this request "
+                    f"declares {version!r}; set schema_version to {introduced_in!r} "
+                    "rather than adding the field to an older schema"
+                )
         root = Path(base_dir).resolve() if base_dir is not None else None
         roots = tuple(allowed_roots) if allowed_roots is not None else ((root,) if root else ())
         for name in (*DIR_FIELDS, *PATH_FIELDS):

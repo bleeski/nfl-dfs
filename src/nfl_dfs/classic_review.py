@@ -69,6 +69,11 @@ _IMMUTABLE_BINDING_ARTIFACTS = {
     "source_ledger_sha256": "source_ledger",
     "official_status_sha256": "official_status_csv",
     "offensive_role_evidence_sha256": "offensive_role_evidence_json",
+    # Optional, exactly like the weather package below it: bound when the run
+    # carried one, `None` when it did not. It is deliberately not in
+    # `_REQUIRED_ARTIFACTS` — a slate whose quarterbacks need no depth chart is
+    # a normal slate, not an incomplete one.
+    "qb_depth_role_evidence_sha256": "qb_depth_role_evidence_json",
     "weather_evidence_sha256": "weather_evidence_json",
     "source_policy_sha256": "portfolio_policy_source",
     "normalized_policy_sha256": "portfolio_policy_normalized",
