@@ -4,6 +4,59 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-19: the operator-flag count said 10 when 3 were open
+
+Immediate follow-on from the tracker consolidation below, found by reading the
+digest that consolidation had just made authoritative. Same class of defect: a
+derived number that was wrong and that nothing was checking.
+
+`ben_flags()` scanned `changelog.md` and `IMPLEMENTATION_STATUS.md` as well as
+`backlog.md`. Those two are the historical record — they quote flags that were
+raised, ruled on and closed — and worse, every sentence *about* a flag matched
+as if it were one. The list contained entries whose whole text was `'] flags'`
+and `']\` question:`. It reported 10 open when 3 were genuinely open.
+
+A count wrong in the direction of more is worse than no count: the two blockers
+that gate every remaining chunk were sitting in a list of ten, most of it noise.
+
+**Changed**
+
+- `scripts/repo_state.py:ben_flags()` scans `backlog.md` and the live chunk
+  briefs only. `.claude/rules/ledger.md` says a flag lives in `backlog.md` and
+  is listed again in the handoff, so those are the only places an *open* one
+  can be. The docstring records why, at length, because the next person to
+  "fix" the count by widening the scan will reintroduce it.
+- `docs/chunks/P1-salary-divergence-role-evidence.md`: its gate-semantics flag
+  is marked **RULED 2026-09-19: hard stop** and the literal marker removed. It
+  was closed when Ben ruled; leaving the marker kept it in the open count.
+  Writing the marker out in full even to say it is closed re-raises it, which
+  is noted in the brief so the next edit does not undo this.
+- `state/claims.json` back to `{"claims": []}`. The `P1` claim was stale and
+  `P1` is merged, so the digest was reporting a reclaimable claim on finished
+  work.
+
+Open flags: **10 → 5**, all five in `backlog.md` and all genuinely open (two are
+the same `C3X` ruling referenced twice, which is real cross-referencing).
+
+**Added: 3 tests in `tests/test_backlog_queue.py`** (now 10 there). The count
+must mean "open", not "mentioned": no flag may come from `changelog.md` or
+`IMPLEMENTATION_STATUS.md`; every reported flag must have real text rather than
+a stray bracket; and the two blockers Ben actually owns — merge #18/#19, pick
+where the standings corpus lives — must be present, so they cannot quietly stop
+being visible on startup.
+
+**Verification**
+
+```
+full suite              838 passed, 1 skipped in 151.93s (0:02:31), exit 0
+before this change      835 passed, 1 skipped in 168.64s
+repo_state.py           21 queue rows, READY: P0, 5 [BEN:] flags, 0 claims
+doctor                  pass_status true
+compileall src scripts  clean
+git diff --check        clean
+check_protected_paths   No protected path touched (0 changed)
+```
+
 ### 2026-09-19: one tracker, and a test that keeps it one
 
 Ben's point, and he was right: however we track progress against a plan, it has

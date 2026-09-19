@@ -36,13 +36,17 @@ Brief for chunk `P1` of the prize-tail program. Status, dependencies and hand-ba
   - Route the QB attempt-share allocation through that package before
     `score_pool`, so a policy exclusion is no longer the only way to stop a
     backup QB from taking 46% of the attempts.
-  - **[BEN: gate semantics.** Today a transfer with no current-team evidence is
-    selectable on his old-team share (R17/R21). Proposed: when such a person
-    also trips `SALARY_RANK_DIVERGENCE`, the run treats it as an unresolved
-    material role change and stops with the smallest evidence action (run the
-    new script), which is the same treatment a declared role change already
-    gets. This turns a Walker-class miss from silent into a named stop that a
-    30-second script clears. Say no and it stays a diagnostic.]
+  - **Gate semantics — RULED 2026-09-19: hard stop.** (This was an open operator
+    flag; the ruling closed it, and the marker is removed rather than left to
+    inflate the open count. Writing the marker out in full here, even to say it
+    is closed, would re-raise it: the scanner matches the literal token.)
+    Before the ruling, a transfer with no current-team evidence was
+    selectable on his old-team share (R17/R21). Now: when such a person also
+    trips `SALARY_RANK_DIVERGENCE`, the run treats it as an unresolved material
+    role change and stops, naming the smallest evidence action — the same
+    treatment a declared role change already gets. The gate is conjunctive, so
+    an unverified transfer priced where his prior puts him stays a diagnostic.
+    Shipped in `offensive_roles.enforce_material_role_change_gate`.
 - Non-goals: no numerical share typed by anyone; no change to kicker roles; no
   retrospective forcing of Walker or anyone else into a lineup; no ownership.
 - Acceptance: a fixture reproducing DEN@KC (Walker on KC with SEA history, Fields
