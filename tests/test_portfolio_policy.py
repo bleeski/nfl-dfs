@@ -544,8 +544,12 @@ def test_cowork_policy_is_enforced_audited_snapshotted_and_replays_identically(
     assert workbook["Upload"]["B5"].value == "TRUE"
     assert workbook["Upload"]["B7"].value == "PRIOR_ONLY"
     assert workbook["Upload"]["B8"].value == "DO_NOT_UPLOAD"
+    # 22 rows since P1b added the QB_DEPTH_ROLE_EVIDENCE_JSON control. The
+    # number is asserted rather than derived on purpose: the print area is what
+    # an operator actually sees on paper, so a row appearing or vanishing should
+    # fail here and be looked at, not pass silently.
     assert str(workbook["Run Control"].print_area) == (
-        "'Run Control'!$A$1:$D$21"
+        "'Run Control'!$A$1:$D$22"
     )
     assert str(workbook["Evidence Paste"].print_area) == (
         "'Evidence Paste'!$A$1:$E$105,'Evidence Paste'!$G$4:$J$108,"

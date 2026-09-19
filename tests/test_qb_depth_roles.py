@@ -895,3 +895,102 @@ def test_the_stop_names_the_depth_chart_only_for_a_quarterback():
     assert "make_offensive_role_evidence.py" in blockers["qb"]
     assert "offensive_role_evidence_json" in blockers["rb"]
     assert "qb_depth_role_evidence_json" not in blockers["rb"]
+
+
+# --- P1b: the request contract ------------------------------------------
+
+
+def test_a_v1_request_still_loads_unchanged():
+    from nfl_dfs.cowork import (
+        COWORK_REQUEST_VERSION,
+        COWORK_REQUEST_VERSION_V1,
+        SUPPORTED_REQUEST_VERSIONS,
+        CoworkRunRequest,
+    )
+
+    assert COWORK_REQUEST_VERSION == "nfl_cowork_run_request_v2"
+    assert COWORK_REQUEST_VERSION_V1 == "nfl_cowork_run_request_v1"
+    assert SUPPORTED_REQUEST_VERSIONS == (
+        COWORK_REQUEST_VERSION_V1,
+        COWORK_REQUEST_VERSION,
+    )
+    request = CoworkRunRequest.from_mapping(
+        {"schema_version": COWORK_REQUEST_VERSION_V1, "label": "archived"}
+    )
+    assert request.schema_version == COWORK_REQUEST_VERSION_V1
+    assert request.qb_depth_role_evidence_json is None
+
+
+def test_a_v1_request_may_not_carry_the_v2_field(tmp_path):
+    from nfl_dfs.cowork import COWORK_REQUEST_VERSION_V1, CoworkInputError, CoworkRunRequest
+
+    package = tmp_path / "qb_depth_roles.json"
+    package.write_text("{}", encoding="utf-8")
+    with pytest.raises(CoworkInputError) as error:
+        CoworkRunRequest.from_mapping(
+            {
+                "schema_version": COWORK_REQUEST_VERSION_V1,
+                "qb_depth_role_evidence_json": str(package),
+            },
+            base_dir=tmp_path,
+            allowed_roots=[tmp_path],
+        )
+    assert "introduced in 'nfl_cowork_run_request_v2'" in str(error.value)
+
+
+def test_a_v2_request_carries_and_confines_the_package(tmp_path):
+    from nfl_dfs.cowork import COWORK_REQUEST_VERSION, CoworkInputError, CoworkRunRequest
+
+    package = tmp_path / "qb_depth_roles.json"
+    package.write_text("{}", encoding="utf-8")
+    request = CoworkRunRequest.from_mapping(
+        {
+            "schema_version": COWORK_REQUEST_VERSION,
+            "qb_depth_role_evidence_json": str(package),
+        },
+        base_dir=tmp_path,
+        allowed_roots=[tmp_path],
+    )
+    assert request.qb_depth_role_evidence_json == str(package.resolve())
+    # The same confinement every other request path gets.
+    outside = tmp_path.parent / "elsewhere.json"
+    outside.write_text("{}", encoding="utf-8")
+    with pytest.raises(CoworkInputError, match="outside the supplied"):
+        CoworkRunRequest.from_mapping(
+            {
+                "schema_version": COWORK_REQUEST_VERSION,
+                "qb_depth_role_evidence_json": str(outside),
+            },
+            base_dir=tmp_path,
+            allowed_roots=[tmp_path],
+        )
+
+
+def test_an_unknown_schema_version_is_still_refused():
+    from nfl_dfs.cowork import CoworkInputError, CoworkRunRequest
+
+    with pytest.raises(CoworkInputError, match="unsupported Cowork request schema"):
+        CoworkRunRequest.from_mapping({"schema_version": "nfl_cowork_run_request_v9"})
+
+
+def test_the_package_is_bound_wherever_the_offensive_package_is():
+    """Every exit that binds the sibling package must bind this one too."""
+
+    import inspect
+
+    from nfl_dfs import classic_review, cli, prior_review
+
+    review_source = inspect.getsource(prior_review)
+    # Artifact and hash binding, both re-verification sets, and the manifest.
+    assert review_source.count('"qb_depth_role_evidence_json",') == 2
+    assert review_source.count('"qb_depth_source:",') == 2
+    assert '"qb_depth_role_evidence_sha256"' in review_source
+    # The C3 exit binds it as an optional immutable artifact, like weather.
+    assert (
+        classic_review._IMMUTABLE_BINDING_ARTIFACTS["qb_depth_role_evidence_sha256"]
+        == "qb_depth_role_evidence_json"
+    )
+    assert "qb_depth_role_evidence_json" not in classic_review._REQUIRED_ARTIFACTS
+    cli_source = inspect.getsource(cli)
+    assert '"--qb-depth-role-evidence-json"' in cli_source
+    assert "qb_depth_role_evidence_json=request.qb_depth_role_evidence_json," in cli_source

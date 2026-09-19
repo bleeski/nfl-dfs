@@ -6,12 +6,11 @@ Three things work that did not, none of them changing a release truth. Suite
 `822 passed, 1 skipped in 149.40s` before the review fixes below; see
 `changelog.md` for the final figure.
 
-**Read the reachability line on each item.** Two of the three are live on the
-operating `prior_review` path. The third, the depth-chart contract, is reachable
-only from the `select_prior_lineups` library entry point: there is no
-`run-slate` flag for it, because that request is a versioned wire format and
-bumping it is chunk `P1b`. An adversarial review caught this being overstated
-here; the correction is the point of this paragraph.
+**All three are now live on the operating `prior_review` path.** The
+depth-chart contract reached it in chunk `P1b` (same day) via
+`nfl_cowork_run_request_v2` and the `--qb-depth-role-evidence-json` flag; before
+that it was library-only, and an adversarial review rightly caught this
+paragraph overstating it.
 
 - **`SALARY_RANK_DIVERGENCE`.** Every scored person the market prices far above
   this scorer is named in `PriorScores`, in `score_pool`'s report and in the
@@ -33,9 +32,9 @@ here; the correction is the point of this paragraph.
   quarterback and zeroing backups, applied before `score_pool` rather than after
   it. Implemented, tested, and **verified end to end against real bytes**: the
   live nflverse artifact and the committed DET@BUF salary file, producer to
-  consumer, through `resolve_qb_depth_roles`. **Not reachable from `run-slate`.**
-  That is chunk `P1b` and it is a request-contract version bump, not an
-  oversight; until it lands this is a library-level capability.
+  consumer, through `resolve_qb_depth_roles`. Reachable from `run-slate` and
+  `select` since `P1b`, with its hash bound into the pre-lock manifest at all
+  three exits.
 
 What it does not do. It moves `qb_attempt_share` and nothing else — a depth
 chart establishes who starts, not target or carry share, and the contract says

@@ -1768,6 +1768,7 @@ def command_select(args: argparse.Namespace) -> int:
         max_person_overlap=args.max_person_overlap,
         role_evidence_json=getattr(args, "role_evidence_json", None),
         offensive_role_evidence_json=getattr(args, "offensive_role_evidence_json", None),
+        qb_depth_role_evidence_json=getattr(args, "qb_depth_role_evidence_json", None),
         as_of=selection_as_of,
     )
     assignments = assignments_for_entries(entry_ids, lineups)
@@ -2137,6 +2138,7 @@ def _cowork_run_control_values(request: CoworkRunRequest) -> dict[str, object]:
         "OFFICIAL_STATUS_CSV": request.official_status_csv or "",
         "ROLE_EVIDENCE_JSON": request.role_evidence_json or "",
         "OFFENSIVE_ROLE_EVIDENCE_JSON": request.offensive_role_evidence_json or "",
+        "QB_DEPTH_ROLE_EVIDENCE_JSON": request.qb_depth_role_evidence_json or "",
         "PORTFOLIO_POLICY_JSON": request.portfolio_policy_json or "",
         "FIELD_SIZE": request.field_size,
         "MAX_ENTRIES": None,
@@ -2237,6 +2239,7 @@ def _run_prior_review_profile(
         official_status_csv=request.official_status_csv,
         role_evidence_json=request.role_evidence_json,
         offensive_role_evidence_json=request.offensive_role_evidence_json,
+        qb_depth_role_evidence_json=request.qb_depth_role_evidence_json,
         portfolio_policy=portfolio_policy,
         portfolio_policy_source_path=portfolio_policy_source_path,
         portfolio_policy_source_sha256=portfolio_policy_source_sha256,
@@ -2593,6 +2596,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         request_roots.append(Path(args.role_evidence_json).resolve().parent)
     if getattr(args, "offensive_role_evidence_json", None):
         request_roots.append(Path(args.offensive_role_evidence_json).resolve().parent)
+    if getattr(args, "qb_depth_role_evidence_json", None):
+        request_roots.append(Path(args.qb_depth_role_evidence_json).resolve().parent)
     if getattr(args, "portfolio_policy_json", None):
         request_roots.append(Path(args.portfolio_policy_json).resolve().parent)
     if getattr(args, "official_status_csv", None):
@@ -2631,6 +2636,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         ("weather_evidence_json", "weather_evidence_json"),
         ("role_evidence_json", "role_evidence_json"),
         ("offensive_role_evidence_json", "offensive_role_evidence_json"),
+        ("qb_depth_role_evidence_json", "qb_depth_role_evidence_json"),
         ("portfolio_policy_json", "portfolio_policy_json"),
         ("official_status_csv", "official_status_csv"),
         ("lineup_count", "lineup_count"),
@@ -3336,6 +3342,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cowork.add_argument("--role-evidence-json")
     cowork.add_argument("--offensive-role-evidence-json")
+    cowork.add_argument("--qb-depth-role-evidence-json")
     cowork.add_argument("--portfolio-policy-json")
     cowork.add_argument("--official-status-csv")
     cowork.add_argument("--lineup-count", type=int)
@@ -3358,6 +3365,7 @@ def build_parser() -> argparse.ArgumentParser:
     select.add_argument("--prior-season", type=int, required=True)
     select.add_argument("--role-evidence-json")
     select.add_argument("--offensive-role-evidence-json")
+    select.add_argument("--qb-depth-role-evidence-json")
     select.add_argument("--as-of")
     select.add_argument("--count", type=int)
     select.add_argument("--max-person-overlap", type=int, default=4)

@@ -5,8 +5,32 @@ DraftKings input is CP1252. Times must be timezone-aware ISO 8601 values.
 
 ## Cowork run request
 
-`cowork-run` emits and accepts JSON schema `nfl_cowork_run_request_v1`. Unknown
-keys are rejected. Relative paths resolve inside the explicitly supplied
+`cowork-run` (aliased `run-slate`) emits `nfl_cowork_run_request_v2` and accepts
+both `v1` and `v2`. Unknown keys are rejected.
+
+**v2, added 2026-09-19 (P1b), adds exactly one field:**
+`qb_depth_role_evidence_json`, the optional quarterback depth-chart package
+documented below under *Quarterback depth-chart role evidence*. Nothing else
+changed, and v1 keeps precisely the fields it always had.
+
+Both versions are accepted because every `run_request.json` already on disk
+declares v1 and they must stay replayable; `docs/START_HERE.md` records that the
+schema string is deliberately stable for the same reason. A **v1 request that
+carries `qb_depth_role_evidence_json` is refused**, naming the version that
+introduced the field. That refusal is what makes "v1 is never mutated" a
+property of the code rather than a statement in a document: a v1 request means
+today exactly what it meant when it was written.
+
+New fields follow the same pattern — add the field, bump the emitted version,
+add the old version to the accepted set, and register the field in
+`cowork.REQUEST_FIELDS_ADDED_AFTER_V1` so an older schema cannot carry it.
+
+Where the package is bound: the CLI flag is `--qb-depth-role-evidence-json` on
+both `run-slate` and `select`; the path is confined like every other request
+path; the hash is bound into the pre-lock manifest as
+`qb_depth_role_evidence_sha256` and re-verified at all three `prior_review`
+success exits; and on the Classic C3 exit it is an optional immutable binding
+alongside `weather_evidence_sha256`, not a required artifact. Relative paths resolve inside the explicitly supplied
 attachment/request directory. Absolute paths are accepted only for the exact
 supplied files, managed project data, or the current immutable run; traversal
 and symlink/reparse escapes are rejected before hashing or copying.
