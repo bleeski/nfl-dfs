@@ -4,6 +4,111 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-20: X5 — the Classic fallback path becomes real, correct and findable
+
+Second post-mortem tranche on the lost Week 2 slate. No engine module, contract,
+`config/` file or evidence gate changed; `scripts/**`, `docs/**` and `tests/**`
+only. `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD` throughout.
+
+The first tranche fixed the network half of "did not look at what was already
+there". This fixes the repository half, which turned out to be worse.
+
+#### What the inventory found
+
+- **The fallback path existed and was invisible.**
+  `scripts/build_classic_portfolio.py`, `scripts/qa_classic_portfolio.py` and
+  `scripts/write_dk_entries.py` appear in
+  `docs/CLASSIC_C4_RETROSPECTIVE_2026-09-13.md` and in no operating document at
+  all: not `docs/RUNBOOK.md`, not `docs/OPERATOR_GUIDE.md`, not the
+  `nfl-classic-lineups` skill. The Week 1 session solved "engine blocked, ship
+  anyway" and wrote it into a ~900-line file nothing tells the next operator to
+  open. That is the structural cause of finding 3 in the entry below.
+- **The pipeline was broken in the middle.** The builder emitted
+  `"assignments_by_entry_id": {}` as a literal empty dict while
+  `write_dk_entries.py` reads exactly that key and iterates it. There was no
+  entry-ID assignment step anywhere in `scripts/`, so both live slates filled
+  the mapping by hand.
+- **The QA gate would have caught the Week 2 portfolio and was never run.** Its
+  Tier 2 already scores bring-back rate against a suggested 70% floor; the
+  shipped portfolio was 12/18 = 67%.
+- **Its backup-quarterback check was dead code.** It looked for a second
+  `Position == "QB"` on the same team, which legal DK Classic cannot produce
+  (FLEX is RB/WR/TE only) and which the `exactly one QB` check already rejects.
+  Nothing verified that the rostered quarterback was his team's starter — the
+  exact hole the Wentz miss went through.
+- **`qb_vs_opposing_dst` was declared and never appended to**, so it printed 0
+  on every run since it was written. In a nine-man lineup with one QB and one
+  DST it is the same relation as `dst_vs_own_qb`.
+- **Three slate-specific tables were hardcoded** in the builder: `ITT` (24
+  teams), `OWN` (31 names) and `BOOST` (7 names), all literal 2026-09-13 values
+  including role boosts keyed to Week 1 absences. Retyping them weekly is where
+  a mistake gets made; on 2026-09-20 they were patched with a regex that
+  silently removed eight lines of code.
+- **None of the three scripts had a single test.**
+
+#### Changed
+
+- `docs/RUNBOOK.md`: new **step 0** in the binding running order — run
+  `scripts/session_probe.py --salaries <csv>` before anything else, with what
+  exit 2 means and what to do about it. A matching bullet in `## Prerequisites`
+  beside the existing `doctor` line. A new section, **"The Classic fallback
+  path: a blocked engine is not a blocked slate"**, naming the four-script chain
+  and making `qa_classic_portfolio.py` a required pre-handoff step with Tier 2
+  shown. The existing "Do not claim NWS is universally unreachable: test the
+  current session" is generalised to every source, with the depth-chart miss as
+  the worked example.
+- `scripts/build_classic_portfolio.py`: argparse; emits a populated
+  `assignments_by_entry_id` from the DKEntries template in template order;
+  `--slate-context` replaces the three hardcoded tables and defaults to empty
+  rather than to last week; `--lineups`, `--seed`, `--min-salary`,
+  `--max-exposure`, `--max-overlap` and `--require-bringback` are flags; records
+  what it landed on in a `construction` block. The construction algorithm is
+  unchanged — it ran on two live slates and was not touched.
+- `scripts/qa_classic_portfolio.py`: `--backup-pairs STARTER>BACKUP` replaces
+  the dead check; byte fidelity against the template, duplicate-lineup
+  detection and entry-ID coverage ported from the Showdown twin; `--min-salary`,
+  `--max-overlap` and `--max-exposure` enforced when given; exit 2 on an
+  enforcement defect, 1 on a legality failure, 0 on pass; `qb_vs_opposing_dst`
+  removed rather than faked; absent ownership is now stated as a named gap.
+- `scripts/make_slate_context.py`, new: derives implied team totals from the
+  run's own frozen `nfldata` `games.csv` (`total_line`, `spread_line`). It never
+  invents ownership or a role boost, because no approved source carries either.
+- `backlog.md`: `X5` (this work) and `P7` added to the Queue; `P7` chunk stanza
+  and the new `R25` ruling proposal; the `### P1b` stanza that was duplicated
+  verbatim at two places is reduced to the one in the P-series index.
+- `docs/chunks/P7-current-role-depth.md` and
+  `docs/session-prompts/P7-current-role-depth.md`, new.
+
+#### Verification
+
+- **End-to-end on the real 2026-09-20 slate, which is the honest test.** The
+  rewired chain — `make_slate_context.py` → `build_classic_portfolio.py`
+  (`--entries --slate-context --min-salary 47500 --require-bringback`) →
+  `write_dk_entries.py` — reproduced the portfolio that had been assembled by
+  hand **byte for byte**:
+  `de5a6d4d348e55ae1cccdc7eb27a35e0dab529ffa0c760ef088256a391b7bddc`. That one
+  hash verifies the entry-ID mapping, the derived slate context and determinism
+  under the seed at once.
+- Implied totals derived for all 26 teams on the slate, matching the values
+  computed by hand during the slate.
+- `qa_classic_portfolio.py` on that portfolio: 0 legality failures, 0
+  enforcement defects, bring-back 18/18, anti-correlation 0/0, top-3 union
+  13/18, max overlap 4, exit 0.
+- The same gate run against the portfolio actually shipped first on 2026-09-20
+  returns exit 1 and names all four backup-quarterback starts (Mac Jones,
+  Carson Wentz, Tyler Huntley, Quinn Ewers) plus eight lineups under a 47,500
+  floor. It would have blocked that handoff.
+- New tests: `tests/test_make_slate_context.py` (8),
+  `tests/test_build_classic_portfolio.py` (12),
+  `tests/test_qa_classic_portfolio.py` (19),
+  `tests/test_write_dk_entries.py` (8).
+- Full suite, watched to completion: `983 passed, 1 skipped in 165.36s
+  (0:02:45)`, recorded with `scripts/record_verify.py --from-log`. Exactly 47
+  above the `936 passed, 1 skipped` baseline, matching 8 + 12 + 19 + 8 added
+  here. The one skip remains the expected Windows symlink-permission case.
+- `scripts/check_protected_paths.py`: `No protected path touched (0 changed)`.
+  `git diff --check` clean; `backlog.md` and `changelog.md` remain LF.
+
 ### 2026-09-20: a pre-run capability probe, and a weather capture that can run elsewhere
 
 Post-mortem work on the lost Week 2 Classic slate recorded in the entry below.

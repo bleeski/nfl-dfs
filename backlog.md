@@ -220,6 +220,8 @@ chunk or a blocked one. That is why `P1` ran first, inverting this order.
 | 16 | X2 | `BLOCKED` | Ben's choice of A/B/C | Give the 26 standings exports a durable, cloud-reachable home | `data/standings/inbox/` is gitignored, so `P0`, `P0b`, `P4a`, `P4b` and `P5` cannot run in a cloud session at all |
 | 17 | X3 | `READY` | none (PR #19 merged 2026-09-20) | Automatic execution postmortem per run (`PostToolUse` **and** `PostToolUseFailure`), a recovery sweep for abandoned runs, the `PreCompact`/`PostCompact` continuity block, and a rule that MCP output is never evidence | Nothing reviews a run today, and an attached MCP server returns stub weather that is shaped like the answer to a blocked gate |
 | 18 | X4 | `BLOCKED` | X1, X2, X3 | `DFS_SYSTEM_GREENFIELD_SPEC_2026-09-19.md` and the subagent cost contract | The audit's required report; also where the candidate-bank and dead-config findings are filed for P3a |
+| 19 | X5 | `DONE` | none | Wire the Classic fallback path into `docs/RUNBOOK.md`, close the builder-to-export pipeline break, port the Showdown QA superset into the Classic gate, derive the slate context from captured market bytes, and give all four scripts their first tests | The fallback existed, had run on two live slates, and was documented only in a 900-line retrospective nothing told the operator to open; on 2026-09-20 it was found ninety minutes in |
+| 20 | P7 | `BLOCKED` | Ben's ruling on R25 | Current-role depth resolution: register `depth_charts` as a source, effective depth rank for every skill position, and OUT-promotion in place of `QB_DEPTH_STARTER_NOT_SELECTABLE` | The engine cannot tell who is starting today; on 2026-09-20 three starting quarterbacks were rejected and the refusal's own remedy is unpublishable inside the pre-lock window |
 
 Operator items, none of them code, in the order they unblock things:
 
@@ -304,38 +306,6 @@ Evidence: `changelog.md` 2026-09-19 and issue #21.
 `X1` and `X3` are deliberately unclaimed until PR #19 merges: both would collide
 with it (`docs/CLAUDE_CODE_SETUP.md`, `.claude/hooks/`, `.claude/settings.json`).
 
-### P1b — Wire `qb_depth_role_evidence_json` into the run request
-
-Status: `DONE` (2026-09-19). Depends on: `P1` (`DONE`).
-Landed as `nfl_cowork_run_request_v2`: one new field, v1 still accepted and
-unchanged, and a v1 request carrying the v2 field refused by name. Bound at
-all three `prior_review` exits and as an optional C3 immutable binding.
-Suite `828 passed, 1 skipped`.
-
-The seam `P1` stopped at, named rather than half-crossed. The contract, its
-producer and its consumer all work and are tested end to end against real bytes,
-but the package currently reaches the engine only through the
-`select_prior_lineups` keyword. The operating path is `run-slate`, whose request
-is the versioned wire format `nfl_cowork_run_request_v1` (`cowork.py:134`,
-`:192`), and `.claude/rules/contracts.md` says a schema change is a new version.
-`P1`'s brief names `prior_score.py`/`selection.py`, `offensive_roles.py`, the
-new producer and tests — not `cowork.py`, `cli.py` or `prior_review.py` — so the
-plumbing is deliberately out of its scope.
-
-Scope: bump the request contract, add the CLI argument and the request-root
-confinement (`cli.py:2594`), thread the path through
-`prior_review.review_prior_only_package`, and bind the package's hash into the
-artifact manifest and the readable review exactly as
-`offensive_role_evidence_json` is (`prior_review.py:2217`, `:2662`). Register
-the new request version in `docs/DATA_CONTRACTS.md`; v1 is never mutated.
-
-Why it is not urgent: the hard stop `P1` introduced fires on a person with an
-unresolved transfer, and for anyone who is not a quarterback the remedy is the
-full numerical allocation, which is *already* plumbed. The depth chart resolves
-the backup-quarterback half of the DEN@KC failure (Fields at 46% of the
-attempts), not the Walker half. So the gate is clearable on the operating path
-today; this chunk makes the cheaper quarterback remedy reachable there too.
-
 ### P2 — Contest-aware assignment, structural hygiene, and the concentration control
 
 Status: `BLOCKED` on P0.
@@ -375,6 +345,43 @@ Brief: `docs/chunks/P5-dilution-economics.md`.
 
 Status: `BLOCKED` on P3b.
 Brief: `docs/chunks/P6-survival-controls.md`.
+
+### P7 — Current-role depth resolution
+
+Status: `BLOCKED` on Ben's ruling on R25. Depends on: nothing else.
+Brief: `docs/chunks/P7-current-role-depth.md`.
+Prompt: `docs/session-prompts/P7-current-role-depth.md`.
+
+### R25 (proposed, needs Ben's ruling): promote a backup when the depth-chart starter is OUT
+
+Raised by the 2026-09-20 Week 2 slate. `qb_depth_roles.py:382-386` refuses with
+`QB_DEPTH_STARTER_NOT_SELECTABLE` when the rank-1 quarterback is not selectable,
+and names the remedy: "refresh the depth chart after the inactive or exclusion
+change."
+
+Measured, from `depth_charts_2026.csv`: the last snapshot published on Week 1
+Sunday was 08:42 ET and on Week 2 Sunday 08:14 ET. Official inactives publish
+about 11:30 ET for a 13:00 lock. **No depth chart is ever published between the
+inactive announcement and lock**, so the remedy cannot be met in the window
+where it is needed. That is CLAUDE.md's definition of a defect rather than a
+constraint, and it is the same shape as R21, which Ben ruled on 2026-09-12.
+
+The proposal: derive an *effective* depth rank by removing from above anyone the
+**bound salary bytes** flag unavailable, exactly as `freeze_prior_package` does
+at `priors.py:2139` so the exclusion can never be widened by a supplied file
+alone; promote the survivor; and report every promotion in the run record.
+
+Bounds if approved: availability is re-derived from the salary bytes and never
+taken from the depth package; no person becomes selectable who was not already;
+the identity gate's auto-accept rule is untouched. On the 2026-09-20 snapshot
+this promotes Carson Wentz (MIN) and Drew Lock (SEA) to effective QB1, both
+correct, and surfaces Michael Mayer, Xavier Hutchinson and Rashod Bateman at
+their positions.
+
+If Ben declines, `P7` still registers the source and adds non-QB depth ranking,
+and the refusal stays: a Classic slate with an `OUT` starting quarterback then
+cannot use a depth package at all, which should be a chosen position rather than
+an inherited one.
 
 ### Findings absorbed into existing items
 
