@@ -5,8 +5,12 @@ started in the `nfl-dfs` repo root. It changes an evidence-adjacent refusal and
 registers a new approved source, so it is a full dev tranche and must not be
 started under a lock clock.
 
-**Do not begin until Ben has ruled on R25** (`backlog.md`, the R25 stanza). The
-whole design turns on that ruling. If it is still open, say so and stop.
+**R25 was ruled APPROVED by Ben on 2026-09-20.** Implement the OUT-promotion.
+The bounds in the R25 stanza of `backlog.md` are binding on this chunk, not
+advisory: availability is re-derived from the bound salary bytes every run, a
+supplied depth package can never widen it, nobody becomes selectable who was not
+already, the identity gate's auto-accept rule is untouched, and every promotion
+is named in the run record and the handoff.
 
 ---
 
@@ -57,7 +61,7 @@ lock, so "refresh the depth chart" cannot be done.
 
 As `docs/chunks/P7-current-role-depth.md` § Scope. In short: register the source,
 compute an effective depth rank for QB/RB/WR/TE keyed by `(person, position)`,
-promote on `OUT` if R25 was ruled in favour, and feed the rank to
+promote on `OUT` under the R25 bounds, and feed the rank to
 `redistribute_opportunity`.
 
 ## Out of scope

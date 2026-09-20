@@ -50,10 +50,12 @@ remedy does not exist inside the window where it is needed.
   the bound salary bytes flag unavailable removed from above. Key the rank by
   `(person, position)`, never by person alone — a player's first depth row is
   sometimes his kick-return line, and using it silently mis-slots him.
-- **OUT-promotion**, replacing the refusal, **only if Ben rules R25 in favour**.
-  The promotion must re-derive availability from the bound salary bytes, exactly
-  as `freeze_prior_package` does at `priors.py:2139`, so it can never be widened
-  by a supplied file alone. Report every promotion in the run record.
+- **OUT-promotion**, replacing the refusal. **R25 was ruled APPROVED on
+  2026-09-20**; its bounds are binding here. The promotion re-derives
+  availability from the bound salary bytes, exactly as `freeze_prior_package`
+  does at `priors.py:2139`, so it can never be widened by a supplied file alone;
+  nobody becomes selectable who was not already; the identity gate's auto-accept
+  rule is untouched. Report every promotion in the run record and the handoff.
 - **Feed `redistribute_opportunity`** the effective rank so a vacated share goes
   to the person who inherits the role rather than proportionally to everyone at
   the position.
@@ -81,6 +83,8 @@ remedy does not exist inside the window where it is needed.
 
 ## Hand-back
 
-`docs/session-prompts/P7-current-role-depth.md`. On close-out, record whether
-R25 was ruled and which way, and update `backlog.md` and `changelog.md` with the
-exact suite line.
+`docs/session-prompts/P7-current-role-depth.md`. On close-out, update
+`backlog.md` (P7 status, and the next dependency-satisfied chunk set `READY`
+with its prompt written) and `changelog.md` with the exact suite line and wall
+time. Name every promotion the acceptance snapshot produced, so the first
+reader of that entry can see which players the ruling actually moved.
