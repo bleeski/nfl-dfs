@@ -376,6 +376,28 @@ Brief: `docs/chunks/P5-dilution-economics.md`.
 Status: `BLOCKED` on P3b.
 Brief: `docs/chunks/P6-survival-controls.md`.
 
+### X1 — Per-session egress probe
+
+Status: `READY`.
+Brief: `docs/chunks/X1-egress-probe.md`.
+Session prompt: `docs/session-prompts/X1-egress-probe.md`.
+
+### X2 — Standings corpus transport
+
+Status: `BLOCKED` on Ben's choice of A/B/C (operator item 1b).
+Brief: `docs/chunks/X2-standings-corpus-transport.md`.
+
+### X3 — Execution postmortem, recovery sweep, compaction continuity
+
+Status: `READY`. Carries the rule that MCP output is never evidence, so it will
+need Ben's `ben-review` label.
+Brief: `docs/chunks/X3-execution-postmortem.md`.
+
+### X4 — Greenfield spec report and subagent cost contract
+
+Status: `BLOCKED` on X1, X2, X3.
+Brief: `docs/chunks/X4-greenfield-spec.md`.
+
 ### Findings absorbed into existing items
 
 - Q2 (calibrated distributions) absorbs P3a's correlation acceptance and gains
