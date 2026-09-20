@@ -197,9 +197,16 @@ def test_every_reported_flag_has_real_text():
         assert not text.startswith(("]", "`", "*")), flag
 
 
-def test_the_blockers_ben_actually_owns_are_flagged():
-    """The two that gate every remaining chunk must be visible on startup."""
+def test_the_blocker_ben_actually_owns_is_flagged():
+    """A chunk BLOCKED on Ben must have a flag a startup digest can show.
+
+    This asserted a pull-request number until 2026-09-20, which made it fail
+    the moment that pull request merged and the ledger became correct. A
+    specific PR is a fact with an expiry date; the invariant underneath it is
+    not. `X2` is `BLOCKED` on Ben's choice of where the standings corpus lives,
+    and `P0` waits behind `X2`, so that choice has to be visible on every
+    session start or the queue stalls with nothing saying why.
+    """
 
     joined = " ".join(flag["text"] for flag in _repo_state().ben_flags()).lower()
-    assert "#19" in joined, "merging #18/#19 unblocks X1 and X3 and repairs the suite"
     assert "standings exports" in joined, "the corpus choice unblocks X2, then P0"
