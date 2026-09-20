@@ -7,7 +7,7 @@ specification. Written 2026-09-20 from the cloud audit's finding F2.
 - Goal: a session learns which approved sources it can actually reach *now*,
   by probing, instead of reading a sentence somebody measured once.
 - Evidence: `docs/CLAUDE_CODE_SETUP.md` § "Known environment facts" (lines
-  139-150 as of `c6c73e7`) asserts reachability as settled fact, dated
+  152-163 as of `ebf5797`) asserts reachability as settled fact, dated
   2026-09-17. In the audit's own cloud container on 2026-09-19, three of the six
   entries in `sources.ALLOWED_HOSTS` answered **403 at CONNECT** through the
   agent proxy. The document says the opposite. That section also still reports
@@ -26,9 +26,9 @@ specification. Written 2026-09-20 from the cloud audit's finding F2.
   release-asset hop), the `doctor` subcommand in `src/nfl_dfs/cli.py`, and
   `docs/CLAUDE_CODE_SETUP.md` § Known environment facts.
 - Files: `src/nfl_dfs/cli.py` (the `doctor` path), a new probe module or a
-  function beside it, `docs/CLAUDE_CODE_SETUP.md`, tests. **`sources.py` is a
-  protected path**; touch it only if the probe genuinely needs to live there,
-  and expect the `ben-review` label if you do.
+  function beside it, `docs/CLAUDE_CODE_SETUP.md`, tests. `sources.py` came off
+  the protected list on 2026-09-20 and now merges on green, but it is still the
+  allowlist: touch it only if the probe genuinely needs to live there.
 
 ## Scope
 

@@ -4,6 +4,455 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-20: the protected list narrows from twelve entries to three
+
+Ben's instruction: "remove the ben-review label requirement since I am not a
+software engineer. I'd like Claude to be more autonomous and use its
+judgement." This implements it, with one disagreement stated and kept.
+
+No engine module, contract, `config/` file or evidence gate changed. Every path
+still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+#### What came off the list, and why he was right
+
+`src/nfl_dfs/release.py`, `certification.py`, `preflight.py`, `evidence.py`,
+`sources.py`, `config/evidence_policy.json`, `config/metric_registry_*.json`,
+`.github/workflows/*.yml` and `.claude/rules/*.md`. Nine of twelve.
+
+The gate asked a non-engineer to review a diff to an evidence module. That
+produces a signature, not a check. The real gate on that code is CI,
+`tests/test_repo_boundaries.py` and the pinned suite, and those are stronger
+than a signature. The label had become a queue Ben serviced without being able
+to add signal to it, which is the definition of a bottleneck.
+
+The rules directory coming off means **Claude may now write, edit and merge its
+own behavioural rules without asking.** That is deliberate and it is bounded:
+`CLAUDE.md` stays on the list, so a rule file can refine how Claude works but
+cannot loosen a permanent boundary, because the file stating those boundaries is
+one Claude cannot merge alone. A rule change that would in effect relax a
+boundary belongs in `CLAUDE.md`, where it gets the label.
+
+#### What stayed, and the disagreement
+
+`CLAUDE.md`, `.github/protected-paths.txt`, `.claude/settings.json`.
+
+Ben asked whether to drop all three. The recommendation was to keep them and he
+took it. The reason is not caution in the abstract and not code review: it is
+that **Claude must not be able to quietly change what Claude is not allowed to
+do.** Reviewing these three is one plain-English question — do I want the
+machine to be allowed to do this — which is the judgement he is qualified to
+make and the only one on the old list that was ever load-bearing.
+
+The concrete case is from the same day. A session three messages into being told
+to ship a portfolio could have produced one in ninety seconds by typing twelve
+`api.weather.gov` observations it had not made. What stopped it was a sentence
+in `CLAUDE.md` it treated as binding. A self-editable boundary is a suggestion.
+
+Two harness refusals landed on this work before the permission was granted, both
+classifying it as self-modification: one on running the tests that validate the
+narrowed list, one on editing `.claude/rules/git-authority.md`. The partial
+state was reverted rather than shipped, because a list saying three while the
+governing rule said twelve is worse than either. Recorded because a second,
+independent system reaching the same conclusion is evidence worth keeping.
+
+#### Changed
+
+- `.github/protected-paths.txt`: twelve entries to three, with the reasoning
+  inline so the next reader does not have to reconstruct it.
+- `tests/test_repo_boundaries.py`: the three assertions that required
+  `release.py`, `evidence_policy.json` and `.claude/rules/ledger.md` to be
+  flagged are **inverted, not deleted**, so the narrowing is pinned in both
+  directions. A new test,
+  `test_the_protected_list_stays_short_enough_to_actually_read`, pins the exact
+  three-entry set so a fourth has to be justified in the same commit rather than
+  accreting quietly. Per `.claude/rules/tests.md`, the changed test is named
+  here with its reason ahead of the change.
+- `.claude/rules/git-authority.md` § The protected list: rewritten to name the
+  three, say what came off and why, and state plainly that Claude may now merge
+  its own rule changes and what bounds that.
+- `CLAUDE.md` step 8, `backlog.md` tracker protocol,
+  `docs/CLAUDE_CODE_SETUP.md` § Where the gate lives, and
+  `docs/session-prompts/P7-current-role-depth.md` close-out: all four described
+  the old list and now name the three.
+
+#### Verification
+
+- `tests/test_repo_boundaries.py`: `88 passed in 1.16s`, up one for the new
+  pinning test.
+- Full suite, watched to completion: `984 passed, 1 skipped in 156.97s
+  (0:02:36)`, recorded with `scripts/record_verify.py --from-log`. Exactly one
+  above the `983 passed, 1 skipped` baseline, which is the pinning test added
+  here.
+- `scripts/check_protected_paths.py` is expected to exit 1 on this branch naming
+  `CLAUDE.md` and `.github/protected-paths.txt`, which is the gate working on
+  its own narrowing. This pull request carries `ben-review` and Ben merges it.
+- `git diff --check` clean; ledgers LF.
+
+### 2026-09-20: R25 ruled, and P7 goes READY
+
+Ben ruled on three open items in one message: merge PR #30, approve R25, and
+narrow the protected-path list. This entry covers the R25 ruling. The narrowing
+is a separate pull request because it touches protected paths and therefore
+needs his label one last time.
+
+No engine module, contract, `config/` file or evidence gate changed here. This
+is `backlog.md` and two `docs/` files: a ruling recorded and a chunk unblocked.
+
+#### R25: APPROVED
+
+**Promote a backup to effective rank 1 when the depth-chart starter is flagged
+`OUT` by the bound salary bytes.** This replaces the
+`QB_DEPTH_STARTER_NOT_SELECTABLE` refusal at `qb_depth_roles.py:382-386`.
+
+The measurement the ruling rests on, restated because it is the whole argument:
+the refusal tells the operator to "refresh the depth chart after the inactive or
+exclusion change", and the last `depth_charts_2026.csv` snapshot published on
+Week 1 Sunday was 08:42 ET and on Week 2 Sunday 08:14 ET, while official
+inactives publish about 11:30 ET for a 13:00 lock. No depth chart is ever
+published inside the window. The refusal named a remedy that cannot be
+performed, which `CLAUDE.md` classes as a defect rather than a constraint, the
+same shape as R21.
+
+This is not an evidence gate being weakened. The replacement is stricter in the
+direction that matters: it re-derives availability from the bound salary bytes
+rather than trusting the supplied package. Bounds, binding on P7:
+
+- Availability re-derived from the bound salary bytes every run, exactly as
+  `freeze_prior_package` does at `priors.py:2139`. A supplied depth package can
+  never widen it.
+- Nobody becomes selectable who was not already. Promotion changes which
+  available person holds a role; it never adds a person to the pool.
+- The identity gate's auto-accept rule is untouched.
+- Every promotion is named in the run record and in the handoff.
+
+On the 2026-09-20 snapshot the ruling promotes Carson Wentz (MIN) and Drew Lock
+(SEA) to effective QB1, both correct on the day, and surfaces Michael Mayer
+(LV TE 2→1), Xavier Hutchinson (HOU WR 2→1) and Rashod Bateman (BAL WR 2→1).
+
+#### Changed
+
+- `backlog.md`: the R25 stanza records the ruling and makes its bounds binding
+  rather than proposed; `P7` moves `BLOCKED` to `READY` in the Queue table and
+  the chunk index.
+- `docs/session-prompts/P7-current-role-depth.md`: the "do not begin until Ben
+  has ruled" stop is replaced by the ruling and its bounds, so the prompt is
+  paste-ready.
+- `docs/chunks/P7-current-role-depth.md`: the conditional in § Scope becomes
+  unconditional; § Hand-back now asks the closing session to name the promotions
+  its acceptance snapshot produced.
+
+#### Verification
+
+- Full suite, watched to completion: `983 passed, 1 skipped in 158.15s
+  (0:02:38)`, recorded with `scripts/record_verify.py --from-log`. Unchanged
+  count against the `983 passed, 1 skipped` baseline, which is the expectation:
+  no code changed.
+- `scripts/check_protected_paths.py` exits 0; `git diff --check` clean; ledgers
+  LF.
+
+### 2026-09-20: X5 — the Classic fallback path becomes real, correct and findable
+
+Second post-mortem tranche on the lost Week 2 slate. No engine module, contract,
+`config/` file or evidence gate changed; `scripts/**`, `docs/**` and `tests/**`
+only. `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD` throughout.
+
+The first tranche fixed the network half of "did not look at what was already
+there". This fixes the repository half, which turned out to be worse.
+
+#### What the inventory found
+
+- **The fallback path existed and was invisible.**
+  `scripts/build_classic_portfolio.py`, `scripts/qa_classic_portfolio.py` and
+  `scripts/write_dk_entries.py` appear in
+  `docs/CLASSIC_C4_RETROSPECTIVE_2026-09-13.md` and in no operating document at
+  all: not `docs/RUNBOOK.md`, not `docs/OPERATOR_GUIDE.md`, not the
+  `nfl-classic-lineups` skill. The Week 1 session solved "engine blocked, ship
+  anyway" and wrote it into a ~900-line file nothing tells the next operator to
+  open. That is the structural cause of finding 3 in the entry below.
+- **The pipeline was broken in the middle.** The builder emitted
+  `"assignments_by_entry_id": {}` as a literal empty dict while
+  `write_dk_entries.py` reads exactly that key and iterates it. There was no
+  entry-ID assignment step anywhere in `scripts/`, so both live slates filled
+  the mapping by hand.
+- **The QA gate would have caught the Week 2 portfolio and was never run.** Its
+  Tier 2 already scores bring-back rate against a suggested 70% floor; the
+  shipped portfolio was 12/18 = 67%.
+- **Its backup-quarterback check was dead code.** It looked for a second
+  `Position == "QB"` on the same team, which legal DK Classic cannot produce
+  (FLEX is RB/WR/TE only) and which the `exactly one QB` check already rejects.
+  Nothing verified that the rostered quarterback was his team's starter — the
+  exact hole the Wentz miss went through.
+- **`qb_vs_opposing_dst` was declared and never appended to**, so it printed 0
+  on every run since it was written. In a nine-man lineup with one QB and one
+  DST it is the same relation as `dst_vs_own_qb`.
+- **Three slate-specific tables were hardcoded** in the builder: `ITT` (24
+  teams), `OWN` (31 names) and `BOOST` (7 names), all literal 2026-09-13 values
+  including role boosts keyed to Week 1 absences. Retyping them weekly is where
+  a mistake gets made; on 2026-09-20 they were patched with a regex that
+  silently removed eight lines of code.
+- **None of the three scripts had a single test.**
+
+#### Changed
+
+- `docs/RUNBOOK.md`: new **step 0** in the binding running order — run
+  `scripts/session_probe.py --salaries <csv>` before anything else, with what
+  exit 2 means and what to do about it. A matching bullet in `## Prerequisites`
+  beside the existing `doctor` line. A new section, **"The Classic fallback
+  path: a blocked engine is not a blocked slate"**, naming the four-script chain
+  and making `qa_classic_portfolio.py` a required pre-handoff step with Tier 2
+  shown. The existing "Do not claim NWS is universally unreachable: test the
+  current session" is generalised to every source, with the depth-chart miss as
+  the worked example.
+- `scripts/build_classic_portfolio.py`: argparse; emits a populated
+  `assignments_by_entry_id` from the DKEntries template in template order;
+  `--slate-context` replaces the three hardcoded tables and defaults to empty
+  rather than to last week; `--lineups`, `--seed`, `--min-salary`,
+  `--max-exposure`, `--max-overlap` and `--require-bringback` are flags; records
+  what it landed on in a `construction` block. The construction algorithm is
+  unchanged — it ran on two live slates and was not touched.
+- `scripts/qa_classic_portfolio.py`: `--backup-pairs STARTER>BACKUP` replaces
+  the dead check; byte fidelity against the template, duplicate-lineup
+  detection and entry-ID coverage ported from the Showdown twin; `--min-salary`,
+  `--max-overlap` and `--max-exposure` enforced when given; exit 2 on an
+  enforcement defect, 1 on a legality failure, 0 on pass; `qb_vs_opposing_dst`
+  removed rather than faked; absent ownership is now stated as a named gap.
+- `scripts/make_slate_context.py`, new: derives implied team totals from the
+  run's own frozen `nfldata` `games.csv` (`total_line`, `spread_line`). It never
+  invents ownership or a role boost, because no approved source carries either.
+- `backlog.md`: `X5` (this work) and `P7` added to the Queue; `P7` chunk stanza
+  and the new `R25` ruling proposal; the `### P1b` stanza that was duplicated
+  verbatim at two places is reduced to the one in the P-series index.
+- `docs/chunks/P7-current-role-depth.md` and
+  `docs/session-prompts/P7-current-role-depth.md`, new.
+
+#### Verification
+
+- **End-to-end on the real 2026-09-20 slate, which is the honest test.** The
+  rewired chain — `make_slate_context.py` → `build_classic_portfolio.py`
+  (`--entries --slate-context --min-salary 47500 --require-bringback`) →
+  `write_dk_entries.py` — reproduced the portfolio that had been assembled by
+  hand **byte for byte**:
+  `de5a6d4d348e55ae1cccdc7eb27a35e0dab529ffa0c760ef088256a391b7bddc`. That one
+  hash verifies the entry-ID mapping, the derived slate context and determinism
+  under the seed at once.
+- Implied totals derived for all 26 teams on the slate, matching the values
+  computed by hand during the slate.
+- `qa_classic_portfolio.py` on that portfolio: 0 legality failures, 0
+  enforcement defects, bring-back 18/18, anti-correlation 0/0, top-3 union
+  13/18, max overlap 4, exit 0.
+- The same gate run against the portfolio actually shipped first on 2026-09-20
+  returns exit 1 and names all four backup-quarterback starts (Mac Jones,
+  Carson Wentz, Tyler Huntley, Quinn Ewers) plus eight lineups under a 47,500
+  floor. It would have blocked that handoff.
+- New tests: `tests/test_make_slate_context.py` (8),
+  `tests/test_build_classic_portfolio.py` (12),
+  `tests/test_qa_classic_portfolio.py` (19),
+  `tests/test_write_dk_entries.py` (8).
+- Full suite, watched to completion: `983 passed, 1 skipped in 165.36s
+  (0:02:45)`, recorded with `scripts/record_verify.py --from-log`. Exactly 47
+  above the `936 passed, 1 skipped` baseline, matching 8 + 12 + 19 + 8 added
+  here. The one skip remains the expected Windows symlink-permission case.
+- `scripts/check_protected_paths.py`: `No protected path touched (0 changed)`.
+  `git diff --check` clean; `backlog.md` and `changelog.md` remain LF.
+
+### 2026-09-20: a pre-run capability probe, and a weather capture that can run elsewhere
+
+Post-mortem work on the lost Week 2 Classic slate recorded in the entry below.
+Two new scripts and their tests. No engine module, contract, `config/` file or
+evidence gate changed, and no gate was relaxed: both additions make a gate
+easier to *clear*, never easier to *pass*.
+
+#### What actually cost the slate
+
+The egress block was the constraint. These were the process failures on top of
+it, recorded because they are the reusable part:
+
+1. **Session capability was never established first.** The block was found by
+   walking into it about twenty minutes in. Nothing in the repository answered
+   "can this session reach the hosts its gates need", and
+   `src/nfl_dfs/preflight.py` answers a different question: it is a pre-upload
+   check on a built package, not a pre-run check on session capability.
+2. **The lock clock was estimated rather than measured.** After one real
+   reading at 11:05 ET, elapsed time was extrapolated and drifted about 45
+   minutes, and the drifted figure was reported to Ben as fact. Every clock
+   statement must come from a measurement taken at that moment.
+3. **`scripts/build_classic_portfolio.py` was not found until far too late.**
+   It is the construction layer that shipped the Week 1 portfolio when the C2
+   solver failed, it is named for the job, and it has a retrospective attached.
+   Survey `scripts/` before concluding a path does not exist.
+4. **A structural defect was reported before it was verified.** Three of the six
+   identity blockers were called genuinely absent from nflverse; a later grep
+   found all six under name variants. See F8 in the entry below.
+
+#### The design flaw the loss exposed
+
+`weather_state` reaches no arithmetic. It is written to a row in
+`projection.py:651` and validated in `opportunity.py:188`, and nothing else
+reads it (R23, open). Yet a missing weather enum has total veto power over
+output: every route to lineups runs through the freeze, the freeze requires the
+enum for each non-dome game, and `priors.resolve_weather_state` raises.
+
+So a field that moves no number can stop the engine producing anything. The
+gate is right to block release, which is `DO_NOT_UPLOAD` on every path anyway.
+It should not also block construction. A proposal to separate the two is filed
+in `backlog.md` and is **not** implemented here, because it changes deliberate
+fail-closed behaviour and is Ben's ruling to make.
+
+#### Added
+
+- **`scripts/session_probe.py`.** Standard library only, imports nothing from
+  `nfl_dfs`, runs in a cold container in about three seconds. Reads
+  `ALLOWED_HOSTS` out of `src/nfl_dfs/sources.py` by parsing the source rather
+  than importing it, probes every host concurrently, and separates an egress
+  policy refusal from a TLS misconfiguration from a dead host. With
+  `--salaries` it also reports slate shape and the measured minutes to lock,
+  taking the lock from the **earliest** kickoff. Exit 2 means a full run cannot
+  complete in this session.
+  Run against the lost slate it returns `CANNOT_COMPLETE_A_RUN`, naming
+  `api.weather.gov` and the gate it feeds, in three seconds.
+- **`scripts/fetch_weather_captures.py`.** Companion to
+  `make_classic_weather_evidence.py`, which formats captures but never fetches.
+  This fetches and never judges. Standard library only, so it runs on any
+  machine that can reach the host: the capture does not have to happen in the
+  session that builds, which is what makes a blocked build session survivable.
+  Carries coordinates for all 32 DraftKings teams, prefers the already-checked
+  gridpoints in `scripts/nws_gridpoints.json`, reports the city NWS returned for
+  every point it resolves, and writes `REPLACE_ME` for retractable roofs rather
+  than guessing whether a roof is open. A fetch failure is a named stop.
+
+#### Verification
+
+- `tests/test_session_probe.py`: 9 tests. Asserts the parsed host list equals
+  the real `ALLOWED_HOSTS` so the two cannot drift, that every allowlisted host
+  has a declared role, that `api.weather.gov` is required for Classic, that a
+  proxy 403 reports as `EGRESS_BLOCKED` rather than a dead host, and that the
+  lock is the earliest kickoff.
+- `tests/test_fetch_weather_captures.py`: 10 tests. Asserts coverage of all 32
+  DraftKings teams, that the home team comes from the `AWAY@HOME` matchup and
+  not the whole `Game Info` cell, that retractables are flagged for a human,
+  that the enum has no `UNKNOWN` member, and that a fetch failure raises with
+  "Never invent a value" in the message.
+- Both files together: `19 passed in 0.30s`.
+- Full suite, watched to completion: `936 passed, 1 skipped in 155.10s
+  (0:02:35)`, recorded with `scripts/record_verify.py --from-log`. Exactly 19
+  above the `917 passed, 1 skipped` baseline, which is the count added here.
+  The one skip remains the expected Windows symlink-permission case.
+- `scripts/check_protected_paths.py` exits 0; `git diff --check` clean.
+
+### 2026-09-20: Week 2 Classic slate attempt, stopped by an unreachable weather host
+
+Second live Classic attempt, and the first run of any kind from a cloud session
+whose egress policy blocks `api.weather.gov`. No portfolio was produced. No
+engine module, contract, `config/` file or evidence gate was changed; the
+findings below are recorded, not acted on. `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD` throughout.
+
+#### The slate and the run
+
+- DraftKings Classic main slate, 13 games, 670 salary rows, 26 teams. Earliest
+  kickoff `CAR@ATL 09/20/2026 01:00PM ET`, which is the lock. `DKEntries`
+  carried exactly 18 reserved Entry IDs, all nine roster cells blank, spread
+  across 12 contests from `$0` to `$1`.
+- Input hashes: salary
+  `d0adb9dee552e89967ef6c51b60694f2dcb325969377a605dea5848c2972ee78`, entries
+  `6b3292ee34b4b23bf0efef439c007323fa8b1b52d3ba921d68973a65e3f091d7`.
+- `run-slate --profile prior_review --build-priors`, `run_id`
+  `20260920T150819Z-week2`. Reached `PRIOR_REVIEW_IDENTITY_BLOCKED` with
+  `FILE_VALID=false`, `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`,
+  `RELEASE_DECISION=DO_NOT_UPLOAD` and 36 blockers: 24 weather (12 games times
+  two codes), 6 identity, and 6 belonging to the certification path the
+  prior-only chain never reaches.
+- The nflverse prior build itself succeeded. Seven artifacts captured from
+  `raw.githubusercontent.com` and the GitHub release-asset hop, hash-bound,
+  license-decided, at `2026-09-20T15:08:20Z` and after.
+
+#### Finding F7: `api.weather.gov` is blocked by this session's egress policy
+
+The host answers `403` to `CONNECT` at the agent proxy. Confirmed three ways:
+`curl` returned `CONNECT tunnel failed, response 403`; the proxy's own
+`recentRelayFailures` recorded `connect_rejected … api.weather.gov:443`; and
+`WebFetch` returned `EGRESS_BLOCKED`. `list_environments` returns exactly one
+environment, so a sibling session cannot route around it.
+
+This contradicts the note in `docs/CLAUDE_CODE_SETUP.md` § Known environment
+facts, measured 2026-09-17, which records `api.weather.gov` answering HTTP 200
+from a container. Both measurements are recorded rather than reconciled: the
+2026-09-17 one is not re-run here, and which of policy, environment or date
+changed is not established. `github.com`, `raw.githubusercontent.com` and
+`api.github.com` all remain reachable, so the prior build is unaffected.
+
+Every route to a Classic portfolio was tested and each one stops at the same
+gate:
+
+1. `run-slate --profile prior_review` stops at `WEATHER`.
+2. `priors-freeze` with a scalar `--weather-state` stops at
+   `WEATHER_STATE_REQUIRED:roof=blank`, and would in any case be refused by
+   `CLASSIC_WEATHER_SCOPE_AMBIGUOUS`, since this slate has 12 non-dome games
+   and one scalar cannot bind to more than one.
+3. Per-game evidence needs `api.weather.gov` captures, which is F7.
+4. The frozen `nfldata` `games.csv` carries `temp` and `wind` columns, but both
+   are empty for every 2026-09-20 row; nfldata populates them after kickoff.
+   `total_line` and `spread_line` are populated.
+5. `scripts/build_classic_portfolio.py` consumes `scores.json`, which requires
+   a frozen prior package, which requires 1 or 2.
+
+`priors.resolve_weather_state` fails closed here by explicit design; its
+docstring states the intent as "rather than invent a value". The one remaining
+door, `_weather_evidence_basis` returning `OPERATOR_SUPPLIED_UNATTRIBUTED` for a
+state supplied with no source URI, requires stating a weather enum nobody
+observed. It was not used. Twelve invented observations would have produced a
+portfolio in about ninety seconds and made every hash in the package a false
+claim.
+
+#### Finding F8: the identity proposer matches display name only, and it is brittle
+
+All six identity blockers resolved to real nflverse people under spelling
+variants, verified against the frozen artifacts by `gsis_id`, position and 2025
+game rows. None was a missing person:
+
+| DK name | DK ID | nflverse name | gsis_id | variant |
+|---|---|---|---|---|
+| Matt Hibner | 44133630 | Matthew Hibner | `00-0040879` | full legal name |
+| Scotty Miller | 44133214 | Scott Miller | `00-0035298` | nickname |
+| Mitch Tinsley | 44133436 | Mitchell Tinsley | `00-0038839` | full legal name |
+| Audric Estime | 44132872 | Audric Estimé | `00-0039373` | diacritic |
+| Hollywood Brown | 44133108 | Marquise Brown | `00-0035662` | known alias |
+| Nick Singleton | 44132762 | Nicholas Singleton | `00-0040886` | full legal name |
+
+`00-0035298` is a judgment call and is recorded as one: nflverse carries two
+`Scott Miller` WRs, and the other was born 1968. The 2025 PIT game rows
+distinguish them.
+
+Two mechanical facts came out of the attempt. `--exclude` does not clear the
+identity gate: `apply_identity_gate` runs over every proposal from
+`priors-propose` (`prior_review.py:1673`) and operator exclusions never reach
+it. `EXCLUDE_UNRESOLVED_UNAVAILABLE` does not help either, because
+`priors.py:2139` re-derives availability from the bound salary bytes and
+refuses the token for anyone still selectable; five of the six carried a blank
+DraftKings status.
+
+A reviewed crosswalk covering all 670 rows with these six set to `ACCEPT` was
+produced and hashed
+(`17452ea562e243b10597c21ff8bddad99380c6bd814b2b97ee19c76ccd3fbe4a`). It was
+never frozen, because the freeze stops at F7.
+
+#### Verification
+
+- `run-slate` exit 0, `run_id` `20260920T150819Z-week2`, report at
+  `outputs/20260920T150819Z-week2/cowork_run.json`, review workbook
+  `59d39383badce3f6ec950db0a27240e862e06f3da6b9323354b70a7da5b64329`.
+- `priors-freeze` with the reviewed crosswalk: `PriorsBuildError`,
+  `WEATHER_STATE_REQUIRED:roof=blank`, `stage=CLI_FAILED`,
+  `RELEASE_DECISION=DO_NOT_UPLOAD`.
+- Six `gsis_id` values checked present in the frozen artifacts and checked for
+  collisions against the 664 already-accepted rows; zero collisions.
+- Full suite on this branch: `917 passed, 1 skipped in 160.22s (0:02:40)`,
+  recorded with `scripts/record_verify.py --from-log`. Matches the 2026-09-20
+  baseline of `917 passed, 1 skipped`; the one skip is the expected Windows
+  symlink-permission case.
+- No test was written, changed, skipped or weakened. Only `changelog.md` and
+  `backlog.md` changed, so the suite result confirms the branch is clean rather
+  than exercising anything new.
 ### 2026-09-20: the X-track chunks get briefs, so the audit survives the session
 
 No code changed. Documentation, ledgers and one state file only; every current
@@ -65,6 +514,40 @@ rather than "open"): work recorded somewhere the next session does not look.
   live chunk.
 - The stale-claim line is gone from the session-start digest.
 - Open `[BEN:]` flags remain 4; no flag was added or removed by this entry.
+
+#### Brought current on 2026-09-20 before merge
+
+The branch was opened at `c6c73e7` and sat eleven commits behind. `origin/main`
+was merged in; `backlog.md` and `changelog.md` both conflicted and both were
+additive on each side, so both sides were kept rather than either discarded. In
+`backlog.md` the chunk index now reads P6, P7, X1-X4, then the R25 ruling. In
+`changelog.md` this entry sits after the five entries `main` added later the
+same day, since the file is newest first and this branch was opened at 14:58Z.
+
+Four claims in the X-track briefs went stale between `c6c73e7` and the merge,
+all from the protected list narrowing to three entries that afternoon. They were
+true when written and are corrected here rather than left to mislead the session
+that runs the chunk:
+
+- `docs/chunks/X1-egress-probe.md` said `sources.py` is a protected path needing
+  `ben-review`. It came off the list; it now merges on green. Its pointer at
+  `docs/CLAUDE_CODE_SETUP.md` § Known environment facts is re-pinned from lines
+  139-150 at `c6c73e7` to 152-163 at `ebf5797`. Both defects that section is
+  cited for are still present, so the chunk's premise is unchanged: the stale
+  `1 failed, 735 passed, 1 skipped in 155.56s` line, and the claim that
+  `api.weather.gov` answers HTTP 200, which this session measured as 403 at the
+  agent proxy.
+- `docs/chunks/X2-standings-corpus-transport.md` costed option (A) partly on
+  `sources.py` being protected. That cost is gone; the remaining cost, new
+  authenticated-retrieval surface in the allowlist module, is unchanged.
+- `docs/chunks/X3-execution-postmortem.md` said a rule file and `CLAUDE.md` are
+  both protected. Only `CLAUDE.md` is now, so the `.claude/rules/` route merges
+  on green and only the `CLAUDE.md` route carries the label. The `backlog.md`
+  X3 entry said the same thing and is corrected with it.
+- `docs/session-prompts/X1-egress-probe.md` carried the same `sources.py` claim.
+
+No brief's scope, acceptance or constraints changed. Nothing was added to any
+chunk and no status moved.
 
 ### 2026-09-20: PR #18 and PR #19 merged, and the fresh-container suite is repaired
 

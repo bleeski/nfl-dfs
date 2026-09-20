@@ -24,11 +24,11 @@ choice is recorded. The open flag is operator item 1b in `backlog.md`.
 Recorded verbatim from operator item 1b:
 
 - **(A) Private GitHub release assets, with authenticated retrieval added to
-  `sources.py`.** Recommended in the audit. One `ben-review` pull request; the
+  `sources.py`.** Recommended in the audit. One pull request; the
   repository stays at its current ~1.5MB; the corpus gets the same treatment as
   every other source, meaning raw bytes, hash, source URI, observed time, parser
-  version and a license decision. The cost is that `sources.py` is a protected
-  path and authenticated retrieval is new surface there.
+  version and a license decision. The cost is that authenticated retrieval is
+  new surface in the allowlist module.
 - **(B) Commit the corpus.** No engineering. The repository goes from ~1.5MB to
   roughly 80MB and grows with every slate, and clone time grows with it for
   every session forever.

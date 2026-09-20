@@ -79,10 +79,10 @@ No new approved host. No change to any evidence gate, release truth or
 `EVIDENCE_STATE` computation. No retrieval of real artifacts during the probe.
 No change to `PROHIBITED_HOSTS`. Do not start `X2`, `X3` or `X4`.
 
-Touching `src/nfl_dfs/sources.py` is possible but not expected — it is a
-**protected path**, so if the probe genuinely belongs there, the pull request
-carries Ben's `ben-review` label and you say plainly in the description what
-changed and why. Prefer putting the probe beside `doctor` instead.
+Touching `src/nfl_dfs/sources.py` is possible but not expected. It came off the
+protected list on 2026-09-20, so it merges on green, but it is still the
+allowlist and the probe does not obviously belong in it. Prefer putting the
+probe beside `doctor` instead.
 
 ## Acceptance
 

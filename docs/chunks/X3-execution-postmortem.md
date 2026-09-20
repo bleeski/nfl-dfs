@@ -39,9 +39,10 @@ specification. Written 2026-09-20 from the cloud audit's findings F7 and F8.
    the shape that actually survives.
 4. **A rule that MCP output is never a model input and never evidence.** This is
    the F8 fix. It belongs in `.claude/rules/` with `paths:` frontmatter, or in
-   `CLAUDE.md` if it must be universal. Both are **protected paths**, so this
-   pull request carries `ben-review`. Say plainly in the description that the
-   trigger was a live MCP server returning stub weather.
+   `CLAUDE.md` if it must be universal. Since the protected list narrowed on
+   2026-09-20 only `CLAUDE.md` is protected, so a rule file merges on green and
+   only the `CLAUDE.md` route carries `ben-review`. Say plainly in the
+   description that the trigger was a live MCP server returning stub weather.
 
 ## Constraints
 
