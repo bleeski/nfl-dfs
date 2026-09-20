@@ -111,8 +111,13 @@ never frozen, because the freeze stops at F7.
   `RELEASE_DECISION=DO_NOT_UPLOAD`.
 - Six `gsis_id` values checked present in the frozen artifacts and checked for
   collisions against the 664 already-accepted rows; zero collisions.
-- No test was written, changed, skipped or weakened. No suite run is claimed for
-  this entry: no repository code changed, only `changelog.md` and `backlog.md`.
+- Full suite on this branch: `917 passed, 1 skipped in 160.22s (0:02:40)`,
+  recorded with `scripts/record_verify.py --from-log`. Matches the 2026-09-20
+  baseline of `917 passed, 1 skipped`; the one skip is the expected Windows
+  symlink-permission case.
+- No test was written, changed, skipped or weakened. Only `changelog.md` and
+  `backlog.md` changed, so the suite result confirms the branch is clean rather
+  than exercising anything new.
 
 ### 2026-09-20: PR #18 and PR #19 merged, and the fresh-container suite is repaired
 
