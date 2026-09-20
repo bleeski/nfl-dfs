@@ -352,6 +352,29 @@ Status: `READY` (2026-09-20, R25 ruled in favour). Depends on: nothing.
 Brief: `docs/chunks/P7-current-role-depth.md`.
 Prompt: `docs/session-prompts/P7-current-role-depth.md`.
 
+### X1 — Per-session egress probe
+
+Status: `READY`.
+Brief: `docs/chunks/X1-egress-probe.md`.
+Session prompt: `docs/session-prompts/X1-egress-probe.md`.
+
+### X2 — Standings corpus transport
+
+Status: `BLOCKED` on Ben's choice of A/B/C (operator item 1b).
+Brief: `docs/chunks/X2-standings-corpus-transport.md`.
+
+### X3 — Execution postmortem, recovery sweep, compaction continuity
+
+Status: `READY`. Carries the rule that MCP output is never evidence. Since the
+protected list narrowed on 2026-09-20 that rule merges on green if it lands in
+`.claude/rules/`, and needs `ben-review` only if it must go in `CLAUDE.md`.
+Brief: `docs/chunks/X3-execution-postmortem.md`.
+
+### X4 — Greenfield spec report and subagent cost contract
+
+Status: `BLOCKED` on X1, X2, X3.
+Brief: `docs/chunks/X4-greenfield-spec.md`.
+
 ### R25 (Ben's ruling, 2026-09-20: APPROVED): promote a backup when the depth-chart starter is OUT
 
 Raised by the 2026-09-20 Week 2 slate. `qb_depth_roles.py:382-386` refuses with
