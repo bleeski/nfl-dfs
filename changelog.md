@@ -4,6 +4,90 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-20: a pre-run capability probe, and a weather capture that can run elsewhere
+
+Post-mortem work on the lost Week 2 Classic slate recorded in the entry below.
+Two new scripts and their tests. No engine module, contract, `config/` file or
+evidence gate changed, and no gate was relaxed: both additions make a gate
+easier to *clear*, never easier to *pass*.
+
+#### What actually cost the slate
+
+The egress block was the constraint. These were the process failures on top of
+it, recorded because they are the reusable part:
+
+1. **Session capability was never established first.** The block was found by
+   walking into it about twenty minutes in. Nothing in the repository answered
+   "can this session reach the hosts its gates need", and
+   `src/nfl_dfs/preflight.py` answers a different question: it is a pre-upload
+   check on a built package, not a pre-run check on session capability.
+2. **The lock clock was estimated rather than measured.** After one real
+   reading at 11:05 ET, elapsed time was extrapolated and drifted about 45
+   minutes, and the drifted figure was reported to Ben as fact. Every clock
+   statement must come from a measurement taken at that moment.
+3. **`scripts/build_classic_portfolio.py` was not found until far too late.**
+   It is the construction layer that shipped the Week 1 portfolio when the C2
+   solver failed, it is named for the job, and it has a retrospective attached.
+   Survey `scripts/` before concluding a path does not exist.
+4. **A structural defect was reported before it was verified.** Three of the six
+   identity blockers were called genuinely absent from nflverse; a later grep
+   found all six under name variants. See F8 in the entry below.
+
+#### The design flaw the loss exposed
+
+`weather_state` reaches no arithmetic. It is written to a row in
+`projection.py:651` and validated in `opportunity.py:188`, and nothing else
+reads it (R23, open). Yet a missing weather enum has total veto power over
+output: every route to lineups runs through the freeze, the freeze requires the
+enum for each non-dome game, and `priors.resolve_weather_state` raises.
+
+So a field that moves no number can stop the engine producing anything. The
+gate is right to block release, which is `DO_NOT_UPLOAD` on every path anyway.
+It should not also block construction. A proposal to separate the two is filed
+in `backlog.md` and is **not** implemented here, because it changes deliberate
+fail-closed behaviour and is Ben's ruling to make.
+
+#### Added
+
+- **`scripts/session_probe.py`.** Standard library only, imports nothing from
+  `nfl_dfs`, runs in a cold container in about three seconds. Reads
+  `ALLOWED_HOSTS` out of `src/nfl_dfs/sources.py` by parsing the source rather
+  than importing it, probes every host concurrently, and separates an egress
+  policy refusal from a TLS misconfiguration from a dead host. With
+  `--salaries` it also reports slate shape and the measured minutes to lock,
+  taking the lock from the **earliest** kickoff. Exit 2 means a full run cannot
+  complete in this session.
+  Run against the lost slate it returns `CANNOT_COMPLETE_A_RUN`, naming
+  `api.weather.gov` and the gate it feeds, in three seconds.
+- **`scripts/fetch_weather_captures.py`.** Companion to
+  `make_classic_weather_evidence.py`, which formats captures but never fetches.
+  This fetches and never judges. Standard library only, so it runs on any
+  machine that can reach the host: the capture does not have to happen in the
+  session that builds, which is what makes a blocked build session survivable.
+  Carries coordinates for all 32 DraftKings teams, prefers the already-checked
+  gridpoints in `scripts/nws_gridpoints.json`, reports the city NWS returned for
+  every point it resolves, and writes `REPLACE_ME` for retractable roofs rather
+  than guessing whether a roof is open. A fetch failure is a named stop.
+
+#### Verification
+
+- `tests/test_session_probe.py`: 9 tests. Asserts the parsed host list equals
+  the real `ALLOWED_HOSTS` so the two cannot drift, that every allowlisted host
+  has a declared role, that `api.weather.gov` is required for Classic, that a
+  proxy 403 reports as `EGRESS_BLOCKED` rather than a dead host, and that the
+  lock is the earliest kickoff.
+- `tests/test_fetch_weather_captures.py`: 10 tests. Asserts coverage of all 32
+  DraftKings teams, that the home team comes from the `AWAY@HOME` matchup and
+  not the whole `Game Info` cell, that retractables are flagged for a human,
+  that the enum has no `UNKNOWN` member, and that a fetch failure raises with
+  "Never invent a value" in the message.
+- Both files together: `19 passed in 0.30s`.
+- Full suite, watched to completion: `936 passed, 1 skipped in 155.10s
+  (0:02:35)`, recorded with `scripts/record_verify.py --from-log`. Exactly 19
+  above the `917 passed, 1 skipped` baseline, which is the count added here.
+  The one skip remains the expected Windows symlink-permission case.
+- `scripts/check_protected_paths.py` exits 0; `git diff --check` clean.
+
 ### 2026-09-20: Week 2 Classic slate attempt, stopped by an unreachable weather host
 
 Second live Classic attempt, and the first run of any kind from a cloud session

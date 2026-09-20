@@ -394,6 +394,64 @@ Brief: `docs/chunks/P6-survival-controls.md`.
   fractional cents in 193391013. P0's harness reads the raw exports directly and
   is not blocked by them; settlement still is.
 
+### R24 (proposed, needs Ben's ruling): a blocked gate should stop release, not construction
+
+Raised by the 2026-09-20 loss. Status `BLOCKED` on Ben; **do not implement
+without his word**, because it changes behaviour that fails closed on purpose.
+
+The facts it rests on, verified in code rather than taken from the docs:
+`weather_state` is written to a row in `projection.py:651` and validated in
+`opportunity.py:188`, and no arithmetic anywhere reads it (this is R23, still
+open). Despite moving no number, a missing weather enum prevents the engine
+producing any lineups at all, because every route to a portfolio runs through
+the prior freeze and `priors.resolve_weather_state` raises for a non-dome game
+with no operator state.
+
+The proposal. Let the chain run to completion with an unmet **non-numerical**
+gate, and carry the failure in the four truths instead of in an exception:
+`EVIDENCE_STATE=INCOMPLETE`, `RELEASE_DECISION=DO_NOT_UPLOAD` (already true on
+every path), and the unmet-gate list written into the portfolio artifact itself
+and repeated in the handoff. The portfolio becomes a labelled diagnostic rather
+than an absence.
+
+Why this is not weakening a gate: the gate's output is unchanged. It still
+refuses, still names what is missing, still forbids upload. What changes is that
+its refusal stops publication rather than stopping the pipeline. Ben's standing
+ruling is that the worst outcome is no lineup, and the engine currently cannot
+honour that ruling when a zero-impact field is unavailable.
+
+Bounds that must hold if it is approved:
+
+- It applies only to a gate that reaches no number. Identity, official activity,
+  prior-package expiry and hash binding all change what is selected or whether
+  the selection means anything, and must keep failing closed.
+- No artifact produced this way may ever read `CERTIFIED`, and none may enter
+  the manual-guardrail path.
+- The unmet gate list travels with the artifact, not only with the chat message,
+  so the gap survives the conversation.
+- `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD` stay.
+
+If Ben declines, the fallback ladder stops at running the capture elsewhere, and
+a session that cannot reach `api.weather.gov` simply cannot build Classic. That
+is a defensible position; it should be a chosen one rather than an inherited
+one.
+
+### Root fix for the 2026-09-20 loss, in preference order
+
+1. **Allow `api.weather.gov` in the environment's egress policy.** One setting,
+   and the cloud session becomes self-sufficient for Classic forever. Every
+   other item here is a workaround for this one being closed. `api.sleeper.app`
+   and `api.the-odds-api.com` are also refused today; neither is required by the
+   prior-only Classic path, so they are not urgent.
+2. **Run `scripts/fetch_weather_captures.py` where the host is reachable**, on a
+   schedule inside the six-hour capture window before a slate. Removes the
+   dependency on the build session's egress at the cost of one-time setup.
+3. **R24 above**, which is what makes a portfolio exist even when 1 and 2 have
+   both failed.
+4. **Always run `scripts/session_probe.py --salaries <csv>` first.** It does not
+   fix anything; it converts a ninety-minute discovery into a three-second one,
+   which is what buys the room to use 1 through 3.
+
 ### Findings from the 2026-09-20 Week 2 Classic attempt
 
 Full evidence in `changelog.md` under `Unreleased`. Neither finding was acted
