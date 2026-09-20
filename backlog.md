@@ -221,7 +221,7 @@ chunk or a blocked one. That is why `P1` ran first, inverting this order.
 | 17 | X3 | `READY` | none (PR #19 merged 2026-09-20) | Automatic execution postmortem per run (`PostToolUse` **and** `PostToolUseFailure`), a recovery sweep for abandoned runs, the `PreCompact`/`PostCompact` continuity block, and a rule that MCP output is never evidence | Nothing reviews a run today, and an attached MCP server returns stub weather that is shaped like the answer to a blocked gate |
 | 18 | X4 | `BLOCKED` | X1, X2, X3 | `DFS_SYSTEM_GREENFIELD_SPEC_2026-09-19.md` and the subagent cost contract | The audit's required report; also where the candidate-bank and dead-config findings are filed for P3a |
 | 19 | X5 | `DONE` | none | Wire the Classic fallback path into `docs/RUNBOOK.md`, close the builder-to-export pipeline break, port the Showdown QA superset into the Classic gate, derive the slate context from captured market bytes, and give all four scripts their first tests | The fallback existed, had run on two live slates, and was documented only in a 900-line retrospective nothing told the operator to open; on 2026-09-20 it was found ninety minutes in |
-| 20 | P7 | `BLOCKED` | Ben's ruling on R25 | Current-role depth resolution: register `depth_charts` as a source, effective depth rank for every skill position, and OUT-promotion in place of `QB_DEPTH_STARTER_NOT_SELECTABLE` | The engine cannot tell who is starting today; on 2026-09-20 three starting quarterbacks were rejected and the refusal's own remedy is unpublishable inside the pre-lock window |
+| 20 | P7 | `READY` | none (R25 ruled 2026-09-20) | Current-role depth resolution: register `depth_charts` as a source, effective depth rank for every skill position, and OUT-promotion in place of `QB_DEPTH_STARTER_NOT_SELECTABLE` | The engine cannot tell who is starting today; on 2026-09-20 three starting quarterbacks were rejected and the refusal's own remedy is unpublishable inside the pre-lock window |
 
 Operator items, none of them code, in the order they unblock things:
 
@@ -348,11 +348,11 @@ Brief: `docs/chunks/P6-survival-controls.md`.
 
 ### P7 — Current-role depth resolution
 
-Status: `BLOCKED` on Ben's ruling on R25. Depends on: nothing else.
+Status: `READY` (2026-09-20, R25 ruled in favour). Depends on: nothing.
 Brief: `docs/chunks/P7-current-role-depth.md`.
 Prompt: `docs/session-prompts/P7-current-role-depth.md`.
 
-### R25 (proposed, needs Ben's ruling): promote a backup when the depth-chart starter is OUT
+### R25 (Ben's ruling, 2026-09-20: APPROVED): promote a backup when the depth-chart starter is OUT
 
 Raised by the 2026-09-20 Week 2 slate. `qb_depth_roles.py:382-386` refuses with
 `QB_DEPTH_STARTER_NOT_SELECTABLE` when the rank-1 quarterback is not selectable,
@@ -378,10 +378,24 @@ this promotes Carson Wentz (MIN) and Drew Lock (SEA) to effective QB1, both
 correct, and surfaces Michael Mayer, Xavier Hutchinson and Rashod Bateman at
 their positions.
 
-If Ben declines, `P7` still registers the source and adds non-QB depth ranking,
-and the refusal stays: a Classic slate with an `OUT` starting quarterback then
-cannot use a depth package at all, which should be a chosen position rather than
-an inherited one.
+**Ruled APPROVED by Ben on 2026-09-20.** `P7` implements the promotion, and the
+bounds above are binding on it, not advisory:
+
+- Availability is re-derived from the bound salary bytes on every run, exactly as
+  `freeze_prior_package` does at `priors.py:2139`. A supplied depth package can
+  never widen it.
+- Nobody becomes selectable who was not already selectable. Promotion changes
+  which available person holds the role; it never adds a person to the pool.
+- The identity gate's auto-accept rule is untouched.
+- Every promotion is named in the run record and in the handoff, so a portfolio
+  built on one says so.
+
+This replaces the `QB_DEPTH_STARTER_NOT_SELECTABLE` refusal. That refusal is not
+being weakened in the sense CLAUDE.md forbids: it demanded a refreshed depth
+chart inside a window in which no depth chart is ever published, so it was a
+gate no real source could clear, which CLAUDE.md classes as a defect. Its
+replacement is stricter in the one direction that matters, because it re-derives
+availability from bytes rather than trusting the supplied file.
 
 ### Findings absorbed into existing items
 

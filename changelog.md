@@ -4,6 +4,68 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-20: R25 ruled, and P7 goes READY
+
+Ben ruled on three open items in one message: merge PR #30, approve R25, and
+narrow the protected-path list. This entry covers the R25 ruling. The narrowing
+is a separate pull request because it touches protected paths and therefore
+needs his label one last time.
+
+No engine module, contract, `config/` file or evidence gate changed here. This
+is `backlog.md` and two `docs/` files: a ruling recorded and a chunk unblocked.
+
+#### R25: APPROVED
+
+**Promote a backup to effective rank 1 when the depth-chart starter is flagged
+`OUT` by the bound salary bytes.** This replaces the
+`QB_DEPTH_STARTER_NOT_SELECTABLE` refusal at `qb_depth_roles.py:382-386`.
+
+The measurement the ruling rests on, restated because it is the whole argument:
+the refusal tells the operator to "refresh the depth chart after the inactive or
+exclusion change", and the last `depth_charts_2026.csv` snapshot published on
+Week 1 Sunday was 08:42 ET and on Week 2 Sunday 08:14 ET, while official
+inactives publish about 11:30 ET for a 13:00 lock. No depth chart is ever
+published inside the window. The refusal named a remedy that cannot be
+performed, which `CLAUDE.md` classes as a defect rather than a constraint, the
+same shape as R21.
+
+This is not an evidence gate being weakened. The replacement is stricter in the
+direction that matters: it re-derives availability from the bound salary bytes
+rather than trusting the supplied package. Bounds, binding on P7:
+
+- Availability re-derived from the bound salary bytes every run, exactly as
+  `freeze_prior_package` does at `priors.py:2139`. A supplied depth package can
+  never widen it.
+- Nobody becomes selectable who was not already. Promotion changes which
+  available person holds a role; it never adds a person to the pool.
+- The identity gate's auto-accept rule is untouched.
+- Every promotion is named in the run record and in the handoff.
+
+On the 2026-09-20 snapshot the ruling promotes Carson Wentz (MIN) and Drew Lock
+(SEA) to effective QB1, both correct on the day, and surfaces Michael Mayer
+(LV TE 2→1), Xavier Hutchinson (HOU WR 2→1) and Rashod Bateman (BAL WR 2→1).
+
+#### Changed
+
+- `backlog.md`: the R25 stanza records the ruling and makes its bounds binding
+  rather than proposed; `P7` moves `BLOCKED` to `READY` in the Queue table and
+  the chunk index.
+- `docs/session-prompts/P7-current-role-depth.md`: the "do not begin until Ben
+  has ruled" stop is replaced by the ruling and its bounds, so the prompt is
+  paste-ready.
+- `docs/chunks/P7-current-role-depth.md`: the conditional in § Scope becomes
+  unconditional; § Hand-back now asks the closing session to name the promotions
+  its acceptance snapshot produced.
+
+#### Verification
+
+- Full suite, watched to completion: `983 passed, 1 skipped in 158.15s
+  (0:02:38)`, recorded with `scripts/record_verify.py --from-log`. Unchanged
+  count against the `983 passed, 1 skipped` baseline, which is the expectation:
+  no code changed.
+- `scripts/check_protected_paths.py` exits 0; `git diff --check` clean; ledgers
+  LF.
+
 ### 2026-09-20: X5 — the Classic fallback path becomes real, correct and findable
 
 Second post-mortem tranche on the lost Week 2 slate. No engine module, contract,
