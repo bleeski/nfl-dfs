@@ -394,6 +394,49 @@ Brief: `docs/chunks/P6-survival-controls.md`.
   fractional cents in 193391013. P0's harness reads the raw exports directly and
   is not blocked by them; settlement still is.
 
+### Findings from the 2026-09-20 Week 2 Classic attempt
+
+Full evidence in `changelog.md` under `Unreleased`. Neither finding was acted
+on; both need Ben's ruling before any code moves, because both sit on or beside
+an evidence gate.
+
+- **F7: a cloud session can be unable to reach `api.weather.gov` at all.** The
+  egress proxy answers `403` to `CONNECT`, and only one environment exists, so
+  no sibling session routes around it. Every path to a Classic portfolio passes
+  through a frozen prior package, every frozen package needs a weather enum for
+  each non-dome game, and this slate had 12 of them. The scalar
+  `--weather-state` path is additionally refused by
+  `CLASSIC_WEATHER_SCOPE_AMBIGUOUS` whenever more than one game is outdoors,
+  which is every real main slate. The consequence is worth stating plainly: on
+  the current code a cloud session cannot operate a Classic slate at all unless
+  it can reach that one host. This is a capability gap, not a defect in the
+  gate; `resolve_weather_state` failing closed is correct and must stay. What is
+  worth ruling on is whether an operator-supplied per-game enum should have a
+  route that does not require the session itself to hold the capture, given that
+  `weather_state` reaches no projection, opportunity or scoring path (R23, still
+  open). **Do not close R23 by making the gate optional.**
+- **F8: the identity proposer matches on exact DraftKings display name.** All
+  six blockers on this slate were real nflverse people under spelling variants:
+  a nickname, a diacritic, a known alias and three full legal names. Six
+  operator decisions cleared what looked like six missing people. Since a
+  670-row Classic pool carries several such variants every week, the current
+  matcher makes an operator crosswalk edit mandatory on essentially every
+  Classic slate. Candidate fix is to propose against the alternate name fields
+  nflverse already ships (`first_name`/`last_name`, `football_name`, accent-
+  folded forms) and surface them as **candidates for review**, not as
+  auto-accepts. The auto-accept rule must stay where it is: unique league-wide
+  name and position, and only for a DraftKings status the availability contract
+  already makes unselectable. Widening auto-accept would let a wrong match carry
+  a prior into a rostered player, which is the exact failure the rule exists to
+  prevent.
+- Two mechanical facts worth not rediscovering: `--exclude` does not clear the
+  identity gate (`apply_identity_gate` runs over every proposal;
+  `prior_review.py:1673`), and `EXCLUDE_UNRESOLVED_UNAVAILABLE` is refused for
+  anyone the salary bytes still show as selectable (`priors.py:2139`).
+- `scripts/nws_gridpoints.json` covers 14 stadiums, only 2 of which appeared in
+  this 13-game slate. Resolving the missing 10 needs `api.weather.gov`, so it
+  could not be done here and no unverified gridpoint was added.
+
 ## Reprioritized development program — 2026-09-10
 
 ### Outcomes and authority

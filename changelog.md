@@ -4,6 +4,116 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-20: Week 2 Classic slate attempt, stopped by an unreachable weather host
+
+Second live Classic attempt, and the first run of any kind from a cloud session
+whose egress policy blocks `api.weather.gov`. No portfolio was produced. No
+engine module, contract, `config/` file or evidence gate was changed; the
+findings below are recorded, not acted on. `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD` throughout.
+
+#### The slate and the run
+
+- DraftKings Classic main slate, 13 games, 670 salary rows, 26 teams. Earliest
+  kickoff `CAR@ATL 09/20/2026 01:00PM ET`, which is the lock. `DKEntries`
+  carried exactly 18 reserved Entry IDs, all nine roster cells blank, spread
+  across 12 contests from `$0` to `$1`.
+- Input hashes: salary
+  `d0adb9dee552e89967ef6c51b60694f2dcb325969377a605dea5848c2972ee78`, entries
+  `6b3292ee34b4b23bf0efef439c007323fa8b1b52d3ba921d68973a65e3f091d7`.
+- `run-slate --profile prior_review --build-priors`, `run_id`
+  `20260920T150819Z-week2`. Reached `PRIOR_REVIEW_IDENTITY_BLOCKED` with
+  `FILE_VALID=false`, `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`,
+  `RELEASE_DECISION=DO_NOT_UPLOAD` and 36 blockers: 24 weather (12 games times
+  two codes), 6 identity, and 6 belonging to the certification path the
+  prior-only chain never reaches.
+- The nflverse prior build itself succeeded. Seven artifacts captured from
+  `raw.githubusercontent.com` and the GitHub release-asset hop, hash-bound,
+  license-decided, at `2026-09-20T15:08:20Z` and after.
+
+#### Finding F7: `api.weather.gov` is blocked by this session's egress policy
+
+The host answers `403` to `CONNECT` at the agent proxy. Confirmed three ways:
+`curl` returned `CONNECT tunnel failed, response 403`; the proxy's own
+`recentRelayFailures` recorded `connect_rejected … api.weather.gov:443`; and
+`WebFetch` returned `EGRESS_BLOCKED`. `list_environments` returns exactly one
+environment, so a sibling session cannot route around it.
+
+This contradicts the note in `docs/CLAUDE_CODE_SETUP.md` § Known environment
+facts, measured 2026-09-17, which records `api.weather.gov` answering HTTP 200
+from a container. Both measurements are recorded rather than reconciled: the
+2026-09-17 one is not re-run here, and which of policy, environment or date
+changed is not established. `github.com`, `raw.githubusercontent.com` and
+`api.github.com` all remain reachable, so the prior build is unaffected.
+
+Every route to a Classic portfolio was tested and each one stops at the same
+gate:
+
+1. `run-slate --profile prior_review` stops at `WEATHER`.
+2. `priors-freeze` with a scalar `--weather-state` stops at
+   `WEATHER_STATE_REQUIRED:roof=blank`, and would in any case be refused by
+   `CLASSIC_WEATHER_SCOPE_AMBIGUOUS`, since this slate has 12 non-dome games
+   and one scalar cannot bind to more than one.
+3. Per-game evidence needs `api.weather.gov` captures, which is F7.
+4. The frozen `nfldata` `games.csv` carries `temp` and `wind` columns, but both
+   are empty for every 2026-09-20 row; nfldata populates them after kickoff.
+   `total_line` and `spread_line` are populated.
+5. `scripts/build_classic_portfolio.py` consumes `scores.json`, which requires
+   a frozen prior package, which requires 1 or 2.
+
+`priors.resolve_weather_state` fails closed here by explicit design; its
+docstring states the intent as "rather than invent a value". The one remaining
+door, `_weather_evidence_basis` returning `OPERATOR_SUPPLIED_UNATTRIBUTED` for a
+state supplied with no source URI, requires stating a weather enum nobody
+observed. It was not used. Twelve invented observations would have produced a
+portfolio in about ninety seconds and made every hash in the package a false
+claim.
+
+#### Finding F8: the identity proposer matches display name only, and it is brittle
+
+All six identity blockers resolved to real nflverse people under spelling
+variants, verified against the frozen artifacts by `gsis_id`, position and 2025
+game rows. None was a missing person:
+
+| DK name | DK ID | nflverse name | gsis_id | variant |
+|---|---|---|---|---|
+| Matt Hibner | 44133630 | Matthew Hibner | `00-0040879` | full legal name |
+| Scotty Miller | 44133214 | Scott Miller | `00-0035298` | nickname |
+| Mitch Tinsley | 44133436 | Mitchell Tinsley | `00-0038839` | full legal name |
+| Audric Estime | 44132872 | Audric Estimé | `00-0039373` | diacritic |
+| Hollywood Brown | 44133108 | Marquise Brown | `00-0035662` | known alias |
+| Nick Singleton | 44132762 | Nicholas Singleton | `00-0040886` | full legal name |
+
+`00-0035298` is a judgment call and is recorded as one: nflverse carries two
+`Scott Miller` WRs, and the other was born 1968. The 2025 PIT game rows
+distinguish them.
+
+Two mechanical facts came out of the attempt. `--exclude` does not clear the
+identity gate: `apply_identity_gate` runs over every proposal from
+`priors-propose` (`prior_review.py:1673`) and operator exclusions never reach
+it. `EXCLUDE_UNRESOLVED_UNAVAILABLE` does not help either, because
+`priors.py:2139` re-derives availability from the bound salary bytes and
+refuses the token for anyone still selectable; five of the six carried a blank
+DraftKings status.
+
+A reviewed crosswalk covering all 670 rows with these six set to `ACCEPT` was
+produced and hashed
+(`17452ea562e243b10597c21ff8bddad99380c6bd814b2b97ee19c76ccd3fbe4a`). It was
+never frozen, because the freeze stops at F7.
+
+#### Verification
+
+- `run-slate` exit 0, `run_id` `20260920T150819Z-week2`, report at
+  `outputs/20260920T150819Z-week2/cowork_run.json`, review workbook
+  `59d39383badce3f6ec950db0a27240e862e06f3da6b9323354b70a7da5b64329`.
+- `priors-freeze` with the reviewed crosswalk: `PriorsBuildError`,
+  `WEATHER_STATE_REQUIRED:roof=blank`, `stage=CLI_FAILED`,
+  `RELEASE_DECISION=DO_NOT_UPLOAD`.
+- Six `gsis_id` values checked present in the frozen artifacts and checked for
+  collisions against the 664 already-accepted rows; zero collisions.
+- No test was written, changed, skipped or weakened. No suite run is claimed for
+  this entry: no repository code changed, only `changelog.md` and `backlog.md`.
+
 ### 2026-09-20: PR #18 and PR #19 merged, and the fresh-container suite is repaired
 
 No engine module, contract, `config/` file or evidence gate changed in this
