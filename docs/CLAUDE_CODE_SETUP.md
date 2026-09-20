@@ -19,6 +19,19 @@ this machine. The first three are rules Claude keeps, for the reason in
 2. **The protected list.** A pull request touching anything in
    `.github/protected-paths.txt` is never merged by Claude, green or not. It
    gets the `ben-review` label and waits for you.
+
+   Narrowed from twelve entries to three on 2026-09-20, on your instruction:
+   `CLAUDE.md`, `.github/protected-paths.txt` and `.claude/settings.json`. The
+   release and evidence modules, the registered policy JSON, the workflows and
+   `.claude/rules/*.md` came off it and now merge on green like everything else.
+   You were right that a diff to `evidence.py` is not something you can
+   meaningfully review, and a signature is a weaker gate than the suite.
+
+   What the three have in common is not that they are hard to review. It is the
+   opposite: each one is a plain-English question about what the machine may do,
+   which is the judgement you are qualified to make. They exist so that Claude
+   cannot quietly change what Claude is not allowed to do. Expect to see them
+   rarely — three files, a paragraph of explanation, yes or no.
 3. **The permanent boundaries**, now asserted by `tests/test_repo_boundaries.py`
    rather than relying on you reading the diff.
 4. **A command guard.** `.claude/hooks/guard_bash.py` runs before every Bash

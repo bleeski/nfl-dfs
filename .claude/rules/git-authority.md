@@ -91,14 +91,43 @@ checks passed. Look at them.
 
 `.github/protected-paths.txt` is the single definition, read by the CI job, by
 `scripts/check_protected_paths.py`, and asserted by
-`tests/test_repo_boundaries.py`. It covers `CLAUDE.md`, the rules directory,
-the release and evidence modules, the registered policy JSON, and the authority
-model itself.
+`tests/test_repo_boundaries.py`. Since 2026-09-20 it is three entries:
 
-Touching one of those is not forbidden. It means the pull request carries
+    CLAUDE.md
+    .github/protected-paths.txt
+    .claude/settings.json
+
+It was twelve. Ben narrowed it on 2026-09-20: "remove the ben-review label
+requirement since I am not a software engineer. I'd like Claude to be more
+autonomous and use its judgement." Off the list went the release and evidence
+modules, the registered policy JSON, the workflows, and this rules directory.
+
+He was right about those. Asking a non-engineer to review a diff to
+`evidence.py` produced a signature rather than a check, and CI, the boundary
+tests and the pinned suite are a stronger gate than a signature. That work now
+merges on green like everything else, and the label is no longer a queue Ben
+has to service.
+
+The three that remain are not there for code review. They are there because
+**Claude must not be able to quietly change what Claude is not allowed to do.**
+Reviewing them is one plain-English question — do I want the machine to be
+allowed to do this — which is the judgement Ben is qualified to make, and the
+only one on the old list that was ever load-bearing.
+
+Note what this means for this directory, including this file: **Claude may now
+write, edit and merge its own behavioural rules without asking.** That is
+deliberate. It is bounded by `CLAUDE.md` staying on the list, so a rule file can
+refine how Claude works but can never loosen a permanent boundary, because the
+file stating those boundaries is one Claude cannot merge alone. A rule change
+that would in effect relax a boundary belongs in `CLAUDE.md`, where it gets the
+label, not in here where it does not.
+
+Touching one of the three is not forbidden. It means the pull request carries
 `ben-review`, Claude says plainly in the description what changed and why, and
-Ben merges it. Do not split a protected change across pull requests to avoid
-the label.
+Ben merges it. Do not split a protected change across pull requests to avoid the
+label, and do not put an entry back on the list without saying why in
+`changelog.md` in the same commit — `tests/test_repo_boundaries.py` pins the
+exact set, so the test and the reason move together.
 
 ## Commit messages
 

@@ -86,6 +86,8 @@ Update `backlog.md` (P7 status, R25 outcome), `changelog.md` under `Unreleased`
 with the exact suite line and wall time, `IMPLEMENTATION_STATUS.md` if working
 capability changed, and write the next `READY` chunk's prompt. Commit, push,
 open a pull request and merge it on green CI under
-`.claude/rules/git-authority.md`. `docs/DATA_CONTRACTS.md` is not a protected
-path; `CLAUDE.md` and `.claude/rules/*.md` are, and a pull request touching them
-waits for Ben's `ben-review` label.
+`.claude/rules/git-authority.md`. Nothing this chunk touches is a protected
+path: since 2026-09-20 that list is three files (`CLAUDE.md`,
+`.github/protected-paths.txt`, `.claude/settings.json`), so
+`docs/DATA_CONTRACTS.md`, `src/nfl_dfs/**` and `.claude/rules/*.md` all merge on
+green without a label.

@@ -167,7 +167,11 @@ a gap is the only unrecoverable error. Full text: `docs/RUNBOOK.md`.
    `.claude/rules/git-authority.md`. Branch `claude/<id>-<slug>`. Never
    `git add .` or `-A`, never force-push or amend, never push to `main`, and
    never merge a pull request that touches `.github/protected-paths.txt`'s
-   entries without Ben's `ben-review` label.
+   entries without Ben's `ben-review` label. Since 2026-09-20 that list is three
+   files: this one, `.github/protected-paths.txt`, and `.claude/settings.json`.
+   Everything else, including `.claude/rules/*.md` and the evidence modules,
+   merges on green without asking. The three are not a code review; they are the
+   rule that Claude cannot quietly change what Claude is not allowed to do.
 
 ### Token discipline
 

@@ -92,28 +92,79 @@ def test_protected_path_list_is_loadable_and_covers_the_named_files() -> None:
 
 
 def test_protected_path_matcher_flags_a_boundary_change_and_ignores_a_test() -> None:
+    """The list was narrowed from twelve entries to three on 2026-09-20.
+
+    This test changed with it, and the changed assertions are named rather than
+    deleted. It used to require `src/nfl_dfs/release.py`,
+    `config/evidence_policy.json` and `.claude/rules/ledger.md` to be flagged.
+    Ben's instruction that day was to stop requiring his label, because a
+    non-engineer reviewing a diff to an evidence module produces a signature
+    rather than a check. Those three assertions are inverted, not removed, so
+    the narrowing is pinned in both directions and cannot drift back silently.
+
+    What stayed is not code review. It is that Claude must not be able to
+    quietly change what Claude is not allowed to do.
+    """
+
     module = _load_protected_paths_module()
     globs = module.load_protected_globs()
 
     flagged = module.protected_matches(
         [
             "CLAUDE.md",
+            ".github/protected-paths.txt",
+            ".claude/settings.json",
             "src/nfl_dfs/release.py",
+            "src/nfl_dfs/evidence.py",
             "config/evidence_policy.json",
             ".claude/rules/ledger.md",
+            ".claude/rules/git-authority.md",
+            ".github/workflows/ci.yml",
             "tests/test_repo_boundaries.py",
             "src/nfl_dfs/ownership.py",
         ],
         globs,
     )
+    # Claude may not quietly rewrite its own boundaries, shorten this list, or
+    # lift its own deny rules.
     assert "CLAUDE.md" in flagged
-    assert "src/nfl_dfs/release.py" in flagged
-    assert "config/evidence_policy.json" in flagged
-    assert ".claude/rules/ledger.md" in flagged
+    assert ".github/protected-paths.txt" in flagged
+    assert ".claude/settings.json" in flagged
+
+    # Everything else is Claude's call on green CI. A label there was theatre:
+    # the person signing it could not evaluate the diff.
+    assert "src/nfl_dfs/release.py" not in flagged
+    assert "src/nfl_dfs/evidence.py" not in flagged
+    assert "config/evidence_policy.json" not in flagged
+    assert ".claude/rules/ledger.md" not in flagged
+    assert ".claude/rules/git-authority.md" not in flagged
+    assert ".github/workflows/ci.yml" not in flagged
+
     # Ordinary work must stay mergeable without Ben, or the gate is just the old
     # bottleneck wearing a label.
     assert "tests/test_repo_boundaries.py" not in flagged
     assert "src/nfl_dfs/ownership.py" not in flagged
+
+
+def test_the_protected_list_stays_short_enough_to_actually_read() -> None:
+    """The narrowing only holds if the list does not grow back by accretion.
+
+    Three entries, each answering one question: may Claude change what Claude is
+    allowed to do. A fourth is not forbidden, but it is a decision, and pinning
+    the exact set forces it to be justified in the same commit instead of added
+    quietly.
+    """
+
+    module = _load_protected_paths_module()
+    globs = module.load_protected_globs()
+    assert set(globs) == {
+        "CLAUDE.md",
+        ".github/protected-paths.txt",
+        ".claude/settings.json",
+    }, (
+        "The protected list changed. That is allowed, but say why in "
+        "changelog.md and update this test in the same commit."
+    )
 
 
 # --------------------------------------------------------------------------
