@@ -383,6 +383,11 @@ normal `DO_NOT_UPLOAD` result, not permission to infer them.
   missing. Setup is pinned by `.python-version`, `pyproject.toml` and `uv.lock`.
 - Confirm `doctor` returns `pass_status: true` before a slate run. The run path
   gates on it.
+- Run `python3 scripts/session_probe.py --salaries '<salary CSV>'` first, before
+  the run itself. `doctor` checks the environment; this checks whether the
+  session can reach the hosts its evidence gates need, and reports the measured
+  minutes to lock. Exit 2 means a full run cannot complete here. See step 0 of
+  “When Ben says ‘run the slate’”.
 - A cloud session needs the DraftKings files committed under
   `data/inbox/slates/<slate-id>/`; a desktop session can point at any local
   directory. Either way the two files are Ben's own downloads, and nothing in
@@ -715,6 +720,32 @@ force for every slate run. Rulings attributed to Ben keep their dates.
 
 ### When Ben says “run the slate”
 
+0. **Establish what this session can do, before doing anything else.** Run
+
+   `python3 scripts/session_probe.py --salaries '<the salary CSV>'`
+
+   It takes about three seconds, imports nothing from `nfl_dfs`, and answers the
+   question nothing in this repository answered before 2026-09-20: can this
+   session reach the hosts its gates need. It reads `ALLOWED_HOSTS` out of
+   `src/nfl_dfs/sources.py` by parsing the source, so it cannot drift from the
+   real allowlist; it separates an organization egress refusal from a TLS
+   misconfiguration from a dead host; and with `--salaries` it reports the slate
+   shape and the **measured** minutes to lock, taken from the earliest kickoff.
+
+   Exit 0 means a full run can complete here. **Exit 2 means it cannot**, and
+   the route has to be decided now rather than discovered at the gate ninety
+   minutes later. On 2026-09-20 a thirteen-game Classic slate was lost that way:
+   `api.weather.gov` was refused by the egress proxy, the block was found by
+   walking into it, and most of the working window went with it.
+
+   `src/nfl_dfs/preflight.py` is a different check and does not substitute: it
+   is a pre-**upload** check on an already-built package.
+
+   When exit 2 names a host you cannot reach, the capture does not have to
+   happen in the session that builds. `scripts/fetch_weather_captures.py` is
+   standard library only and runs anywhere the host is reachable; its output
+   feeds `scripts/make_classic_weather_evidence.py` as normal.
+
 1. Locate the attached salary and reserved-entry CSVs. Do not depend on their
    filenames. If both are in one attachment directory, run:
 
@@ -770,7 +801,14 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    set from the salary bytes, content-addresses each capture and reads each
    forecast's own `generatedAt`. The `game_id` is the `AWAY@HOME` matchup alone,
    not the whole `Game Info` cell.
-   Do not claim NWS is universally unreachable: test the current session.
+   Do not claim NWS is universally unreachable: test the current session. The
+   same rule binds for **every** source, not only NWS: probe it, never assert
+   from memory that it is out of reach. On 2026-09-20 a session reported "I have
+   no depth chart to check against" and built a quarterback filter out of
+   prior-season workload instead. The nflverse depth chart was on `github.com`,
+   already proven reachable by that same run's own prior build minutes earlier,
+   and carried a snapshot from that morning naming three starters the filter had
+   rejected. An unprobed absence is a guess.
    Weather capture expires after six hours. Use a fresh run before kickoff.
    `prior_review` already produces its model inputs; the manual fallback is
    `sh ./nfl.sh project` (or
@@ -877,6 +915,50 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    operator action. `FILE_VALID` never implies release. A compatibility
    `CERTIFIED` status is derived only from
    `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` and is not a profitability claim.
+
+### The Classic fallback path: a blocked engine is not a blocked slate
+
+Added 2026-09-20. This chain exists, has run on two live slates, and was
+documented only inside `docs/CLASSIC_C4_RETROSPECTIVE_2026-09-13.md` — a file
+nothing told the next operator to open. On 2026-09-13 the C2 candidate-bank
+solver failed six times across 43 minutes and produced nothing; on 2026-09-20 an
+unreachable `api.weather.gov` blocked every route to a frozen prior package. In
+both cases the engine could not certify and construction could still build.
+
+The split: the **engine** owns evidence (priors, identity, weather, official
+activity, participation) and emits a scored pool. **These scripts** own
+construction, which the lock-clock ruling below classes as preferences Claude
+may set. Output stays `PRIOR_ONLY / DO_NOT_UPLOAD`; nothing here certifies
+anything, and none of it is an upload package.
+
+```
+scripts/make_slate_context.py    implied team totals from the run's own frozen
+                                 games.csv; never invents ownership or a boost
+scripts/build_classic_portfolio.py   stacks, bring-backs, exposure and overlap
+                                 caps, anti-correlation; assigns reserved
+                                 Entry IDs in template order
+scripts/qa_classic_portfolio.py  two-tier gate, REQUIRED before handoff
+scripts/write_dk_entries.py      exact-template fill plus a byte audit
+```
+
+Three things that are not optional:
+
+- **Run `qa_classic_portfolio.py` before every handoff**, and show Tier 2. Tier 1
+  is legality and enforcement and exits 1 or 2. Tier 2 does not block and is the
+  half that matters: on 2026-09-13 a portfolio passed every legality check with
+  three players covering 17 of 20 lineups, and on 2026-09-20 one shipped with
+  bring-back at 12 of 18 against a suggested floor of 70%. Tier 2 measured that
+  and the script was simply never run.
+- **Pass `--backup-pairs STARTER>BACKUP`.** Nothing else checks that the
+  rostered quarterback is his team's starter. Build the pairs from the depth
+  chart, and leave out any pair whose starter is DraftKings-`OUT`, because then
+  the backup *is* the starter.
+- **Say what the portfolio does not have.** With no `--ownership` there is no
+  leverage model, and mean-max in a large field is chalk. The gate prints this;
+  repeat it in the handoff.
+
+Suggested limits, to argue about rather than adopt silently: max exposure ≤ 40%,
+top-3 union ≤ 75%, anti-correlation exactly 0, stacked 100%, bring-back ≥ 70%.
 
 ### Shipping under a lock clock
 
