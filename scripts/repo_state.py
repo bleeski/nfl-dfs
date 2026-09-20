@@ -6,8 +6,13 @@ other. Hand-maintained status rots the moment two of them disagree; this script
 reads the state back out of the files that are already authoritative and writes
 one small machine-readable summary at ``state/repo-state.json``.
 
-It is a reader. It never edits a ledger, never touches ``data/``, and never
-reaches the network.
+It is a reader of the repository's own files. It edits no ledger and never
+touches ``data/``. The one network call it makes is a ``git fetch`` of
+``origin/main``, because the number this script exists to report is a distance
+from a remote-tracking ref, and such a ref only moves on fetch. Without it the
+single number meant to say "another instance changed things" is the one number
+guaranteed to be stale. The fetch is bounded, cached, and never fatal: when it
+cannot run, the digest says so rather than reporting a false zero.
 
     python3 scripts/repo_state.py            # write state/repo-state.json
     python3 scripts/repo_state.py --print    # write it and print the digest
@@ -20,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -31,13 +37,41 @@ STATE_DIR = PROJECT_ROOT / "state"
 STATE_FILE = STATE_DIR / "repo-state.json"
 CLAIMS_FILE = STATE_DIR / "claims.json"
 LAST_VERIFY_FILE = STATE_DIR / "last-verify.json"
+LAST_FETCH_FILE = STATE_DIR / "last-fetch.json"
 BACKLOG = PROJECT_ROOT / "backlog.md"
+CHANGELOG = PROJECT_ROOT / "changelog.md"
 CHUNKS_DIR = PROJECT_ROOT / "docs" / "chunks"
 RECORDS_DIR = PROJECT_ROOT / "records" / "slates"
 
 SCHEMA_VERSION = "nfl_repo_state_v1"
 VALID_STATUSES = ("READY", "IN_PROGRESS", "BLOCKED", "DONE", "DEFERRED")
 STALE_CLAIM_HOURS = 6
+
+# Fetch bounds. A session start runs on `startup|resume|clear|compact`, so the
+# TTL is what keeps a `/clear` from paying for the network again; the timeout is
+# what keeps a bad network from eating the hook's 10-second budget. Measured
+# 2026-09-17 in a container: a network read of `origin/main` costs 0.62 to
+# 0.89 s, so 3 s is roughly four times the worst case seen.
+FETCH_TTL_SECONDS = 300.0
+FETCH_TIMEOUT_SECONDS = 3.0
+# Only `main`, and explicitly onto the tracking ref. Relying on git's
+# opportunistic update of `refs/remotes/*` would be an assumption; this is not.
+FETCH_ARGS = (
+    "fetch",
+    "--quiet",
+    "--no-tags",
+    "origin",
+    "+refs/heads/main:refs/remotes/origin/main",
+)
+
+# Changelog headings: `### 2026-09-17 (harness): what changed`. The prose record
+# a new instance needs is written by the instance that made the change, and
+# nothing surfaced it before.
+_UNRELEASED = re.compile(r"^##\s+Unreleased\s*$")
+_SECTION = re.compile(r"^##(?!#)")
+_ENTRY = re.compile(r"^###\s+(?P<heading>.+?)\s*$")
+CHANGELOG_HEADINGS = 3
+CHANGELOG_HEADING_WIDTH = 78
 
 # `| 0 | P0 | `READY` | none (operator item 2 first) | ... |`
 _QUEUE_ROW = re.compile(
@@ -73,7 +107,107 @@ def _read_json(path: Path):
         return None
 
 
-def git_state() -> dict:
+def _env_float(name: str, fallback: float) -> float:
+    try:
+        return float(os.environ[name])
+    except (KeyError, TypeError, ValueError):
+        return fallback
+
+
+def _run_fetch(timeout_seconds: float) -> tuple[bool, str | None]:
+    """Run the fetch. Returns (ok, reason-it-failed).
+
+    Separated from :func:`fetch_origin_main` so a test can replace the one
+    function that touches the network, per `.claude/rules/tests.md`.
+    """
+    try:
+        result = subprocess.run(
+            ("git", *FETCH_ARGS),
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"timeout after {timeout_seconds:g}s"
+    except (OSError, subprocess.SubprocessError) as error:
+        return False, f"{type(error).__name__}: {error}"
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip().splitlines()
+        return False, (detail[-1][:120] if detail else f"git exit {result.returncode}")
+    return True, None
+
+
+def fetch_origin_main(
+    now: datetime | None = None,
+    ttl_seconds: float | None = None,
+    timeout_seconds: float | None = None,
+    runner=_run_fetch,
+) -> dict:
+    """Refresh `origin/main`, at most once per TTL, and never fatally.
+
+    `origin/main` is a remote-tracking ref: it moves on fetch and on nothing
+    else. A session that cloned an hour ago therefore measures its distance
+    against an hour-old answer and reports `behind origin/main by 0` while
+    another instance has merged three pull requests.
+
+    Three bounds keep this affordable. The TTL means `/clear` and a compaction
+    inside five minutes pay nothing, which matters because the session-start
+    hook fires on `startup|resume|clear|compact`. The timeout means a bad
+    network cannot eat the hook's budget. And a failure is reported, never
+    raised: an offline session must still start, with the staleness labelled
+    rather than silently wrong.
+    """
+    now = now or datetime.now(timezone.utc)
+    if ttl_seconds is None:
+        ttl_seconds = _env_float("NFL_DFS_FETCH_TTL", FETCH_TTL_SECONDS)
+    if timeout_seconds is None:
+        timeout_seconds = _env_float("NFL_DFS_FETCH_TIMEOUT", FETCH_TIMEOUT_SECONDS)
+
+    previous = _read_json(LAST_FETCH_FILE)
+    previous = previous if isinstance(previous, dict) else {}
+    last_ok_at = previous.get("fetched_at")
+    age_seconds = None
+    if isinstance(last_ok_at, str):
+        try:
+            when = datetime.fromisoformat(last_ok_at.replace("Z", "+00:00"))
+            age_seconds = (now - when).total_seconds()
+        except ValueError:
+            age_seconds = None
+
+    def record(attempted: bool, ok: bool, reason: str | None) -> dict:
+        return {
+            "attempted": attempted,
+            "ok": ok,
+            "reason": reason,
+            "fetched_at": last_ok_at,
+            "age_seconds": age_seconds,
+        }
+
+    if os.environ.get("NFL_DFS_NO_FETCH"):
+        return record(False, False, "disabled by NFL_DFS_NO_FETCH")
+    if age_seconds is not None and 0 <= age_seconds < ttl_seconds:
+        return record(False, True, None)
+
+    ok, reason = runner(timeout_seconds)
+    if not ok:
+        return record(True, False, reason)
+
+    stamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        LAST_FETCH_FILE.write_text(
+            json.dumps({"fetched_at": stamp}, indent=2) + "\n", encoding="utf-8", newline="\n"
+        )
+    except OSError:
+        pass  # A read-only checkout still gets the fetch; it just pays every time.
+    last_ok_at, age_seconds = stamp, 0.0
+    return record(True, True, None)
+
+
+def git_state(now: datetime | None = None, fetcher=fetch_origin_main) -> dict:
+    fetch = fetcher(now)
     dirty = [line for line in _git("status", "--porcelain").splitlines() if line.strip()]
     branch = _git("rev-parse", "--abbrev-ref", "HEAD", default="unknown")
     ahead_behind = _git("rev-list", "--left-right", "--count", "origin/main...HEAD")
@@ -88,8 +222,47 @@ def git_state() -> dict:
         "untracked_paths": sum(1 for line in dirty if line.startswith("??")),
         "behind_origin_main": behind,
         "ahead_of_origin_main": ahead,
+        "origin_main_fetch": fetch,
         "recent_commits": _git("log", "--oneline", "-5").splitlines(),
     }
+
+
+def changelog_headings(limit: int = CHANGELOG_HEADINGS, path: Path | None = None) -> list[str]:
+    """The most recent dated `###` headings under `## Unreleased`, newest first.
+
+    Every session writes one of these saying what it changed and why. That is
+    exactly the artifact a starting instance needs, written by the instance that
+    made the change, and nothing surfaced it before; a commit subject is not a
+    substitute.
+
+    Headings only. The file is streamed and abandoned at the first heading past
+    the `Unreleased` block or at `limit`, so this never reads the whole
+    changelog into memory, per `CLAUDE.md` § Token discipline.
+    """
+    path = path or CHANGELOG
+    found: list[str] = []
+    try:
+        with path.open(encoding="utf-8") as handle:
+            in_unreleased = False
+            for line in handle:
+                line = line.rstrip("\n")
+                if not in_unreleased:
+                    in_unreleased = bool(_UNRELEASED.match(line))
+                    continue
+                if _SECTION.match(line):
+                    break  # Past `Unreleased`, into a released version.
+                match = _ENTRY.match(line)
+                if not match:
+                    continue
+                heading = match.group("heading").strip()
+                if len(heading) > CHANGELOG_HEADING_WIDTH:
+                    heading = heading[: CHANGELOG_HEADING_WIDTH - 1].rstrip() + "…"
+                found.append(heading)
+                if len(found) >= limit:
+                    break
+    except OSError:
+        return []
+    return found
 
 
 def chunk_queue() -> list[dict]:
@@ -211,7 +384,8 @@ def build_state(now: datetime | None = None) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "git": git_state(),
+        "git": git_state(now),
+        "changelog_headings": changelog_headings(),
         "queue": queue,
         "ready_chunks": [row["chunk"] for row in queue if row["status"] == "READY"],
         "in_progress_chunks": [row["chunk"] for row in queue if row["status"] == "IN_PROGRESS"],
@@ -222,6 +396,30 @@ def build_state(now: datetime | None = None) -> dict:
     }
 
 
+def _staleness_line(fetch: dict) -> str | None:
+    """Say so when the distance below was measured against an unrefreshed ref.
+
+    A digest that cannot stand behind `behind origin/main by 0` has to say
+    that, because a false zero is exactly the failure this script exists to
+    prevent.
+    """
+    if not isinstance(fetch, dict) or fetch.get("ok"):
+        return None
+    reason = str(fetch.get("reason") or "unknown reason")
+    # git's own error can run to a paragraph; the digest has a line budget.
+    reason = reason.removeprefix("fatal: ")
+    if len(reason) > 60:
+        reason = reason[:59].rstrip() + "…"
+    age = fetch.get("age_seconds")
+    if not isinstance(age, (int, float)):
+        as_of = "origin/main has never been fetched in this clone"
+    elif age < 5400:
+        as_of = f"last fetched {age / 60:.0f}m ago"
+    else:
+        as_of = f"last fetched {age / 3600:.1f}h ago"
+    return f"origin/main NOT fetched ({reason}); distance is {as_of}"
+
+
 def digest(state: dict) -> str:
     git = state["git"]
     lines = [
@@ -229,6 +427,9 @@ def digest(state: dict) -> str:
         f"  dirty {git['dirty_paths']} ({git['untracked_paths']} untracked)"
         + (f"  behind origin/main by {git['behind_origin_main']}" if git.get("behind_origin_main") not in (None, "0") else ""),
     ]
+    stale = _staleness_line(git.get("origin_main_fetch", {}))
+    if stale:
+        lines.append(f"  {stale}")
     for commit in git["recent_commits"][:5]:
         lines.append(f"  {commit}")
 
@@ -247,6 +448,11 @@ def digest(state: dict) -> str:
     stale = state["claims"]["stale"]
     if stale:
         lines.append(f"  {len(stale)} stale claim(s), reclaimable")
+
+    headings = state.get("changelog_headings") or []
+    if headings:
+        lines.append("recent changelog entries (newest first):")
+        lines.extend(f"  {heading}" for heading in headings)
 
     verify = state["verification"]
     lines.append(

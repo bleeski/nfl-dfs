@@ -34,8 +34,12 @@ try {
         # the start of every run, so two concurrent suites wipe each other and
         # the file-writing tests fail for no reason of their own. cache_dir
         # stays shared so -lf and -ff keep working across runs.
+        # The parent is made first: pytest creates basetemp but not the
+        # directories above it, so a nested path whose parent is absent fails
+        # every test at fixture setup with FileNotFoundError.
         $PytestTmp = Join-Path $env:TEMP "nfl-dfs-pytest\$PID"
         $PytestCache = Join-Path $env:TEMP 'nfl-dfs-pytest-cache'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $PytestTmp), $PytestCache | Out-Null
         & $PythonExe -m pytest '--basetemp' $PytestTmp '-o' "cache_dir=$PytestCache" @RemainingArgs
     }
     else {

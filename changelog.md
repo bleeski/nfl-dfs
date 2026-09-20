@@ -326,6 +326,168 @@ team's attempts), not the Walker half.
 - Hand-back per the brief is `docs/session-prompts/P3a-scenario-bank.md`; P3a
   stays `BLOCKED` until `P0` also closes. `P1b` is `READY` now.
 
+### 2026-09-17 (harness, H2): multi-instance orientation, a push freshness gate, and the branch-protection correction
+
+Harness only. No engine module, contract, `config/` file, evidence gate or
+release truth changed; every current path still ends `MODEL_STATUS=PRIOR_ONLY`
+and `RELEASE_DECISION=DO_NOT_UPLOAD`. No run was executed.
+
+Several Claude Code instances work this repository. A starting instance was
+supposed to learn what the others changed before writing code, and mostly could
+not.
+
+Added:
+
+- `scripts/repo_state.py` fetches `origin/main` before measuring distance from
+  it. `origin/main` is a remote-tracking ref: it moves on fetch and on nothing
+  else, so a session that cloned an hour ago printed `behind origin/main by 0`
+  while another instance had merged three pull requests. The single number meant
+  to say "someone else changed things" was the one number guaranteed to be
+  stale. Demonstrated in an isolated clone with a real moving remote: with the
+  local ref rewound the digest printed no distance at all, and after the fetch
+  `behind origin/main by 3`.
+- The staleness is labelled rather than absorbed. When the fetch fails the digest
+  prints `origin/main NOT fetched (<reason>); distance is last fetched <age>`,
+  and a clone that never fetched says so. Measured against an unreachable remote
+  (`https://10.255.255.1/...`, 2 s timeout): the digest still printed and the
+  script still exited 0.
+- `changelog_headings()`, and three headings in the digest under
+  `recent changelog entries (newest first)`. Every session writes a dated
+  `###` entry saying what changed and why; that is the artifact a new instance
+  needs, written by the instance that made the change, and nothing surfaced it.
+  The file is streamed and abandoned at the first heading past `Unreleased`, so
+  it is never read whole.
+- `.claude/hooks/push_freshness.py`: refuses a push when `origin/main` has moved
+  past this branch's merge base, naming the commits and saying
+  `git merge origin/main`. Startup orientation cannot help when another instance
+  merges forty minutes into a session. Demonstrated both directions in an
+  isolated clone: refused naming three commits, then allowed after the merge.
+  A deletion, a `--dry-run` and a failed fetch all pass: the gate fails open,
+  because a gate that blocks work when it cannot see is worse than no gate.
+- `scripts/claim.py`: the writer for `state/claims.json`. The reader in
+  `repo_state.py` and the `dev-session` instruction to claim a chunk have both
+  existed since 2026-09-17, and nothing ever wrote a claim, so the file stayed
+  `{"claims": []}` and the instruction was decorative. `take` refuses a chunk
+  another instance holds (exit 1, naming holder, branch and age); a claim older
+  than six hours is reclaimable and records `reclaimed_from` in the tracked
+  file. Wired into `/dev-session` step 7 and `/close-out` step 8.
+- `tests/test_harness_orientation.py`: 44 tests. Every one offline, with the one
+  function that would reach the network injected, per `.claude/rules/tests.md`,
+  and every clock passed in rather than hardcoded.
+
+Changed:
+
+- `.claude/hooks/guard_bash.py`, the two false positives recorded in the
+  2026-09-17 entry below. `git add -u <path>` is allowed, because a scoped `-u`
+  is an explicit path list; bare `git add -u` is still refused. `git stash list`
+  and `git stash show` are allowed, because both are read-only; the pattern now
+  matches the mutating verbs (`push`, `save`, `pop`, `apply`, `drop`, `clear`,
+  `branch`, `create`, `store`) and bare `git stash` rather than the subcommand
+  name. Both failed in the safe direction, so this is a usability repair.
+  Narrowing these took three attempts, and the intermediate versions are worth
+  recording because two of them failed in the *unsafe* direction, which is the
+  opposite of the defect being repaired:
+
+  1. The first `-u` pattern keyed on `-u` being last, so `git add src/x.py -u`
+     (identical in effect to `git add -u src/x.py`) was still refused. A third
+     false positive of the same family. Caught reviewing the diff.
+  2. The second `-u` pattern accepted any trailing pathspec as narrowing, so
+     `git add -u .`, `-u ./`, `-u *` and `-u :/` were all allowed, though from
+     the repository root every one of them stages the whole tree exactly like
+     the bare form. Found by the `reviewer` subagent.
+  3. Naming the mutating stash verbs was the wrong shape outright. Git takes
+     flags in place of the `push` keyword, so `git stash -u`,
+     `--include-untracked`, `-a`, `-p` and `-k` are all `stash push` and all
+     slipped through both the guard and the narrowed deny list. Also found by
+     the `reviewer` subagent, and a genuine regression against the overbroad
+     pattern it replaced.
+
+  The shipped versions: `git stash` is refused unless the next token is `list`
+  or `show`, so an allowlist that fails safe for a subcommand git has not grown
+  yet; and `git add` is refused when `-u` appears among arguments that narrow
+  nothing, counting flags and the whole-tree pathspecs as not narrowing. 15
+  refused and 4 allowed shapes were added to the test pairs to pin all three.
+- `.claude/settings.json` deny list, which was the other half of both. It denied
+  `Bash(git add -u:*)` and `Bash(git stash:*)` by prefix, so repairing only the
+  guard would have left both still refused. Now `Bash(git add -u)` exactly, and
+  the ten mutating stash verbs individually.
+- The freshness gate rides the existing `guard_bash.py` wiring rather than a
+  second `PreToolUse` entry. The matcher is tool-level, so a second hook would
+  mean a second `python3` process on every Bash call: measured ~20 ms, of which
+  ~10 ms is interpreter startup. `guard_bash.py` instead runs two substring
+  checks and imports the gate only on a push. `forbidden_reason()` stays pure
+  and network-free, which is load-bearing: `tests/test_repo_boundaries.py` runs
+  it over every allowed shape including `git push -u origin claude/...`, so
+  merging the two would have put the network in the suite.
+
+Corrected, and this one was false rather than stale:
+
+- Branch protection on `main` does not exist and never will. This repository is
+  private on a GitHub free plan, where rulesets and branch protection are
+  unavailable. Three places asserted or implied otherwise:
+  `docs/CLAUDE_CODE_SETUP.md` (the whole "Branch protection on `main`" section,
+  replaced by "Where the gate actually lives"), `.github/workflows/ci.yml`'s
+  header comment, and the framing in `.claude/rules/git-authority.md`. What is
+  true: nothing server-side blocks a push to `main` or a merge over red CI. The
+  controls are entirely client-side (the deny list, the two hooks, the rules
+  documents) and they bind every instance because every instance clones them.
+  CI is advisory: it reports, it does not block. The `ben-review` label is
+  unchanged and still needed, because `protected-paths` runs as a CI job
+  regardless of branch protection.
+  `grep -rni "branch protection" docs/ .claude/ .github/` now returns two hits,
+  both stating it is unavailable.
+- `docs/START_HERE.md` pointed at `state/repo-state.json` for an active claim.
+  Claims live in `state/claims.json`, which is tracked; `repo-state.json` is the
+  derived digest and is gitignored, so it could never have carried another
+  instance's claim.
+
+Repaired outside the brief, because it blocked every verification in this
+chunk and every fresh clone:
+
+- `nfl.sh` and `nfl.ps1` now create the parent of pytest's `--basetemp`. pytest
+  creates basetemp itself but not the directories above it, so the per-process
+  path introduced on 2026-09-17 (`<temp>/nfl-dfs-pytest/<pid>`) fails every test
+  at fixture setup with `FileNotFoundError` whenever `<temp>/nfl-dfs-pytest` is
+  absent, which is the state of any fresh container. Measured here on a fresh
+  container before the repair: `2 failed, 226 passed, 1 skipped, 562 errors in
+  35.16s`, all 562 being `FileNotFoundError: .../nfl-dfs-pytest/442` at fixture
+  setup. Probed both directions afterwards: raw pytest with a nested basetemp
+  whose parent is absent still errors, and the same path through `nfl.sh`
+  passes. This is the same class of defect as the basetemp collision recorded
+  below, and from the same commit.
+
+Verification:
+
+- Baseline on this branch before any change, after the launcher repair:
+  `790 passed, 1 skipped in 134.44s (0:02:14)`.
+- Complete pinned suite after the chunk:
+  `869 passed, 1 skipped in 135.69s (0:02:15)`. The 79 added tests are the 46 in
+  the new file plus 31 parametrized command shapes and two drift guards in
+  `tests/test_repo_boundaries.py`, which goes from 54 tests to 87. The one skip
+  is the expected Windows symlink-permission case.
+- The `reviewer` subagent ran against the diff before the commit and found the
+  two unsafe-direction regressions recorded above. Both were reproduced
+  independently before being fixed, rather than taken on the report alone.
+- `doctor`: `pass_status: true`. `git diff --check`: clean.
+  `python3 -m compileall scripts .claude/hooks`: clean.
+- Focused: `tests/test_harness_orientation.py` `44 passed in 0.24s`; with
+  `tests/test_repo_boundaries.py`, `118 passed in 1.14s`.
+- Latency, measured rather than asserted. Non-push Bash call through the hook:
+  19 to 22 ms across 12 runs, against a 19 to 22 ms measurement of the same
+  hook before this chunk and a 10 to 14 ms bare interpreter floor. The first
+  version of the change put `from pathlib import Path` at module scope and cost
+  25 to 30 ms; making it lazy returned it to the floor.
+- Session start: 42 to 46 ms warm (fetch inside the TTL) and offline, against
+  43 to 46 ms before this chunk; 515 to 812 ms cold, when the TTL has expired
+  and the fetch actually runs. The strategy is a synchronous fetch, TTL-gated at
+  300 s and timed out at 3 s, overridable with `NFL_DFS_FETCH_TTL`,
+  `NFL_DFS_FETCH_TIMEOUT` and `NFL_DFS_NO_FETCH`. A background fetch was
+  rejected: the acceptance is that rewinding the ref and running the script
+  *now* recovers the true number, and a background fetch consumed by the next
+  startup leaves this run wrong, which is the bug.
+- Hook output is 35 lines against the unchanged 60-line ceiling, asserted by a
+  test so it cannot regress silently.
+
 ### 2026-09-17 (slate run): DET@BUF Showdown, 13 entries, prior-only review
 
 First operated slate in a cloud session. `RELEASE_DECISION=DO_NOT_UPLOAD` and

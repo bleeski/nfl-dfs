@@ -7,8 +7,21 @@ paths:
 
 Replaces the old rule that every commit needed a reviewed path list from Ben.
 Ben is not a software engineer and does not want to be the gate. The gate is now
-automated, and it is real: see `.github/workflows/ci.yml` and
-`.github/protected-paths.txt`.
+automated: see `.github/workflows/ci.yml` and `.github/protected-paths.txt`.
+
+It is a client-side gate, and that distinction matters enough to state before
+anything else. This repository is private on a GitHub free plan, where branch
+protection and rulesets do not exist, so no server refuses a merge over red CI
+and no server refuses a push to `main`. Every control below lives in files this
+repository ships: the deny list in `.claude/settings.json`,
+`.claude/hooks/guard_bash.py`, `.claude/hooks/push_freshness.py`, and this
+document. They bind every instance because every instance clones them.
+
+What follows from that: the rules here are kept, not enforced. "Merge only when
+green" is something Claude does because it is written here, not something that
+becomes impossible otherwise. Breaking one of these is a rule violation that
+will succeed. That is exactly why they are written as rules rather than left to
+judgement.
 
 ## What Claude may do without asking
 
@@ -43,6 +56,13 @@ and here-document bodies first, so writing a document or a test that mentions a
 refused command still works. `tests/test_repo_boundaries.py` checks both halves:
 that the destructive shapes are refused, and that ordinary work is not.
 
+A third check rides the same hook. `.claude/hooks/push_freshness.py` refuses a
+push when `origin/main` has moved past this branch's merge base, naming the
+commits and telling you to `git merge origin/main` first. Startup orientation
+cannot see a merge that happens forty minutes into a session; this can. It
+fetches only on a command that is actually a push, and fails open when the
+network is unavailable, so an offline session is never blocked by it.
+
 Some shapes only the guard can catch. A refspec push reaches `main` with no
 `main` token after `origin` (`git push origin feature:main`) and forces with no
 `--force` token at all (`git push origin +HEAD:main`). Neither is expressible as
@@ -62,6 +82,10 @@ have all passed on its head commit, and the branch has no conflict with `main`.
 Nothing else counts. A test that fails is never skipped, quarantined or
 loosened to get there; if a test is wrong, fix the test as its own visible
 change and say so in the changelog.
+
+Read that as a rule Claude keeps, not a door that stays shut. Nothing stops the
+merge button on a red pull request, so "it went through" is never evidence the
+checks passed. Look at them.
 
 ## The protected list
 

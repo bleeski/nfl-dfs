@@ -26,7 +26,9 @@ Close out the current chunk.
    record what it finds before committing.
 7. Record the suite result where the next session will see it:
    `python3 scripts/record_verify.py --from-log <log>`.
-8. Release the chunk claim in `state/claims.json`.
+8. Release the chunk claim: `python3 scripts/claim.py release <ID>`. Commit the
+   changed `state/claims.json` with the rest, or the next instance still sees
+   the chunk held.
 9. Commit and ship, per `.claude/rules/git-authority.md`:
    - `git add` an explicit path list, grouped as source / tests / docs / ledger.
      Never `git add .` or `-A`. Say in one line what you deliberately left out.

@@ -1,4 +1,12 @@
 {
-  "schema_version": "nfl_chunk_claims_v1",
-  "claims": []
+  "claims": [
+    {
+      "agent": "9e23e5d9-e3b2-5780-aa59-b0c1fbee1944",
+      "branch": "claude/h2-multi-instance-orientation",
+      "chunk": "H2",
+      "claimed_at": "2026-09-17T18:39:47Z",
+      "note": "H2 harness chunk: multi-instance orientation"
+    }
+  ],
+  "schema_version": "nfl_chunk_claims_v1"
 }

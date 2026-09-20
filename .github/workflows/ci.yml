@@ -1,8 +1,13 @@
 name: CI
 
-# Every branch and every pull request. `main` is protected and changes only
-# through a merged pull request, so these checks are the gate that replaced
-# Ben reading each diff. See docs/CLAUDE_CODE_SETUP.md.
+# Every branch and every pull request. These checks replaced Ben reading each
+# diff, and they are advisory: this repository is private on a GitHub free plan,
+# where branch protection is unavailable, so nothing server-side blocks a merge
+# over a red check or a push straight to `main`. What holds is the convention in
+# .claude/rules/git-authority.md and the client-side deny list and hooks that
+# every instance clones. See docs/CLAUDE_CODE_SETUP.md § Where the gate actually
+# lives. `protected-paths` is the exception that still bites: it fails until the
+# `ben-review` label is on.
 on:
   push:
     branches: ['**']

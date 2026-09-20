@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -331,12 +332,44 @@ REFUSED_COMMANDS = (
     "git add -A",
     "git add --all src/",
     "git add -u",
+    "git add -u; echo done",
+    "git add -u && git commit -m x",
+    # `-u` among other flags, in either order, is still the whole tree.
+    "git add -v -u",
+    "git add -u -v",
+    # A pathspec that is itself the whole tree does not narrow `-u`. From the
+    # repository root `git add -u .` stages every tracked change exactly like
+    # the bare form. An adversarial review found these after the first version
+    # of the narrowed pattern was written.
+    "git add -u .",
+    "git add -u ./",
+    "git add -u *",
+    "git add -u :/",
+    "git add -v -u .",
     "git add .",
     "git rebase origin/main",
     "git filter-branch --tree-filter true HEAD",
     "git reset --hard origin/main",
     "git clean -fd",
+    # Everything but the two read-only stash verbs. Bare `git stash` is
+    # `stash push`, and so is every flag-first form: git takes flags in place
+    # of the `push` keyword, which is why naming the mutating verbs was the
+    # wrong shape and an allowlist of `list`/`show` is the right one.
+    "git stash",
     "git stash push -m wip",
+    "git stash save wip",
+    "git stash pop",
+    "git stash apply",
+    "git stash drop",
+    "git stash clear",
+    "git stash branch recovered",
+    "git stash -u",
+    "git stash --include-untracked",
+    "git stash -a",
+    "git stash -p",
+    "git stash -k",
+    "git status && git stash push",
+    "git status && git stash -u",
     "git branch -D claude/x",
 )
 
@@ -360,6 +393,18 @@ ALLOWED_COMMANDS = (
     # `-f` as part of another word, and a filename that merely contains "main".
     "grep -rn --include=*.py -f patterns.txt src/",
     "git add docs/main-runbook.md",
+    # Two false positives recorded on 2026-09-17 and repaired in H2. A scoped
+    # `-u` is an explicit path list, and both read-only stash verbs are
+    # read-only. Neither ever risked anything; both cost a workaround.
+    "git add -u src/nfl_dfs/ownership.py",
+    "git add -u src/ tests/",
+    # A pathspec makes `-u` scoped whichever side of it the flag sits on.
+    "git add src/nfl_dfs/ownership.py -u",
+    "git add -v -u src/nfl_dfs/ownership.py",
+    "git stash list",
+    "git stash show",
+    "git stash show -p stash@{0}",
+    "git stash list -n 5",
     # Writing a document or a test that mentions a refused command. The guard
     # caught this on itself the first time it ran, which is how it was found.
     "cat > docs/rule.md <<'EOF'\nNever run `git push --force`.\nEOF",
@@ -379,6 +424,45 @@ def test_bash_guard_allows_ordinary_work(command: str) -> None:
     guard = _load_bash_guard()
     reason = guard.forbidden_reason(command)
     assert reason is None, f"guard wrongly refused {command!r}: {reason}"
+
+
+def test_the_deny_list_does_not_reinstate_the_repaired_false_positives() -> None:
+    """Two layers, one answer.
+
+    `.claude/settings.json` denies by prefix and the guard denies by pattern.
+    Repairing only the guard would leave `git add -u <path>` and
+    `git stash list` refused by the prefix rule, so the settings file has to be
+    narrowed with it. This is what keeps the two halves from drifting again.
+    """
+    settings = json.loads((PROJECT_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    deny = settings["permissions"]["deny"]
+
+    assert "Bash(git add -u:*)" not in deny, "the prefix rule would refuse `git add -u <path>` again"
+    assert "Bash(git stash:*)" not in deny, "the prefix rule would refuse `git stash list` again"
+    # The bare forms stay refused in both layers.
+    assert "Bash(git add -u)" in deny
+    assert "Bash(git stash)" in deny
+    for verb in ("push", "save", "pop", "apply", "drop", "clear"):
+        assert f"Bash(git stash {verb}:*)" in deny, f"`git stash {verb}` must stay denied by prefix"
+
+
+def test_the_bash_guard_never_reaches_the_network_on_an_ordinary_command() -> None:
+    """`forbidden_reason` is called on every Bash call and must stay pure.
+
+    The freshness gate can fetch, so it lives behind a separate entry point that
+    a non-push command never reaches. If the two were ever merged, this file's
+    own parametrized tests would start making network calls.
+    """
+    guard = _load_bash_guard()
+    source = (PROJECT_ROOT / ".claude" / "hooks" / "guard_bash.py").read_text(encoding="utf-8")
+    body = source.split("def forbidden_reason")[1].split("\ndef ")[0]
+
+    assert "subprocess" not in body and "push_freshness" not in body
+    assert hasattr(guard, "stale_push_reason"), "the fetching half must be its own function"
+    # A non-push command must not even import the gate.
+    sys.modules.pop("push_freshness", None)
+    assert guard.stale_push_reason("ls -la") is None
+    assert "push_freshness" not in sys.modules
 
 
 # --------------------------------------------------------------------------
