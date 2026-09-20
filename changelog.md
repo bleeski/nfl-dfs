@@ -549,6 +549,21 @@ that runs the chunk:
 No brief's scope, acceptance or constraints changed. Nothing was added to any
 chunk and no status moved.
 
+Verified after the merge, on `.venv-linux` in a rebuilt container:
+
+- Complete pinned suite: `984 passed, 1 skipped in 160.94s (0:02:40)`. Identical
+  pass count to `main` at `ebf5797`, which is the expected result for a branch
+  that changes no code.
+- `sh ./nfl.sh doctor`: `pass_status: true`, Python 3.13.7, SQLite integrity ok.
+- `python3 scripts/repo_state.py`: `X1`, `X2`, `X3` and `X4` each bind to their
+  brief; `READY` is unchanged at P0, X1, X3, P7. Seven queue rows still report
+  `brief=None`, none of them this branch's: `P1b`, `X0` and `X5` are `DONE`,
+  `C3X` is `DEFERRED`, and `C4`, `C5` and the aggregate `Q2 to Q7, QC1` row are
+  `BLOCKED` without briefs. That last group is a live gap of the same kind this
+  entry closed for the X track, and it is recorded here rather than fixed,
+  because it is outside this branch.
+- `git diff --check` clean; `backlog.md` and `changelog.md` both still LF.
+
 ### 2026-09-20: PR #18 and PR #19 merged, and the fresh-container suite is repaired
 
 No engine module, contract, `config/` file or evidence gate changed in this
