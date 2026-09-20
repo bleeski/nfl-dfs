@@ -4,6 +4,71 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-20: PR #18 and PR #19 merged, and the fresh-container suite is repaired
+
+No engine module, contract, `config/` file or evidence gate changed in this
+entry's own work; every current path still ends `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`. No run was executed.
+
+#### Changed
+
+- **PR #18** (`4ee1654`) merged: the H2 session prompt,
+  `docs/session-prompts/H2-multi-instance-orientation.md`, one added file,
+  no protected path, clean against `main`, all three checks green.
+- **PR #19** (`0caec47`) merged carrying Ben's `ben-review` label. It touches
+  three protected paths (`.claude/rules/git-authority.md`,
+  `.claude/settings.json`, `.github/workflows/ci.yml`), which is why the label
+  is on it. Ben applied the label and directed the merge.
+- #19 was branched from `44bff83` and `main` had moved to `b21351d`, so
+  `origin/main` was merged into its head first (`1f3aafd`). One conflict, in
+  `changelog.md`: both sides had appended under `## Unreleased`. Resolved by
+  date order, newest first, with the 2026-09-17 H2 entry placed above the
+  2026-09-17 slate-run entry. `scripts/repo_state.py` auto-merged: the
+  fetch-before-deriving work from #19 and the `ben_flags()` scoping from
+  `abb1f3e` are both present and do not overlap.
+- `backlog.md`: `X1` and `X3` move `BLOCKED` to `READY`. Operator item 1a is
+  closed and its marker written out, so the open-flag count drops from 5 to 4.
+
+#### Verification
+
+- Full suite on the merged head, with the `NFL_DFS_PYTEST_TMP` workaround:
+  `917 passed, 1 skipped in 152.15s (0:02:32)`.
+- Full suite on the same head **without** the workaround, which is what #19's
+  `nfl.sh` `mkdir -p` fix exists to make possible:
+  `917 passed, 1 skipped in 152.82s (0:02:32)`. The fresh-container failure
+  recorded on 2026-09-19 (`2 failed, 226 passed, 1 skipped, 562 errors`) does
+  not reproduce. Finding F6 is closed.
+- `doctor`: `"pass_status": true`, python 3.13.7, sqlite integrity `ok`,
+  journal mode WAL, workspace probe `REMOVED`.
+- `git diff --check` clean.
+- `scripts/check_protected_paths.py` exits 1 locally on #19's branch, naming
+  the three protected files, which is correct: the local script cannot see the
+  label. The CI `protected-paths` job, which does read it, passed on `1f3aafd`.
+- CI on `1f3aafd`: `suite`, `boundaries` and `protected-paths` all green
+  (run 35468597692).
+
+#### Test corrected, named before the fix
+
+`tests/test_backlog_queue.py::test_the_blockers_ben_actually_owns_are_flagged`
+asserted that `#19` appears in the open-flag text. That was true on 2026-09-19
+and became false the moment #19 merged, so the test failed on a ledger that is
+now correct. The test was wrong, not the ledger. It is narrowed to the one
+operator blocker that still gates a chunk, the standings corpus choice behind
+`X2` and `P0`, and renamed
+`test_the_blocker_ben_actually_owns_is_flagged`. It was not deleted, skipped or
+loosened past that: it still fails if the standings flag disappears while `X2`
+is `BLOCKED`, which is the invariant worth keeping. A named pull-request number
+does not belong in a standing assertion; the thing it was really guarding is
+that a chunk `BLOCKED` on Ben has a visible flag.
+
+#### Left open
+
+- `git push origin --delete` for the two merged branches returned HTTP 403
+  through the session's git proxy, so `claude/h2-multi-instance-orientation`
+  and `claude/multi-instance-orientation` still exist on the remote. Both are
+  fully merged into `main`; deleting them is cosmetic.
+- `state/claims.json` carries one stale claim, reclaimable.
+
 ### 2026-09-19: the operator-flag count said 10 when 3 were open
 
 Immediate follow-on from the tracker consolidation below, found by reading the

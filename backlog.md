@@ -216,9 +216,9 @@ chunk or a blocked one. That is why `P1` ran first, inverting this order.
 | 12 | Q2 to Q7, QC1 | `BLOCKED` | as before | Long-run calibration, field, economics, promotion | Q2 absorbs P3a, Q3 absorbs P4, Q4 absorbs P5, Q5 absorbs P3b/P6; Q6 still waits on settled-slate accrual, which is operator work |
 | 13 | P1b | `DONE` | P1 | Wire `qb_depth_role_evidence_json` into the run request: `nfl_cowork_run_request_v2`, the CLI flag, and the hash binding at all three `prior_review` exits | The depth chart resolves the backup-quarterback half of DEN@KC, and until this landed it was reachable only from the library |
 | 14 | X0 | `DONE` | none | Cloud baseline captured (`790 passed, 1 skipped`), egress probed, claim convention established as a GitHub issue | `state/claims.json` is invisible to a session that clones fresh, so a dead container left no trace |
-| 15 | X1 | `BLOCKED` | PR #19 merged | Replace the asserted environment facts in `docs/CLAUDE_CODE_SETUP.md:114-125` with a per-session egress probe on `doctor`, recorded into the run record | Three of six allowlisted hosts are 403 at CONNECT in a cloud session and the document claims otherwise; a wrong fact about evidence reachability costs a lock |
+| 15 | X1 | `READY` | none (PR #19 merged 2026-09-20) | Replace the asserted environment facts in `docs/CLAUDE_CODE_SETUP.md:114-125` with a per-session egress probe on `doctor`, recorded into the run record | Three of six allowlisted hosts are 403 at CONNECT in a cloud session and the document claims otherwise; a wrong fact about evidence reachability costs a lock |
 | 16 | X2 | `BLOCKED` | Ben's choice of A/B/C | Give the 26 standings exports a durable, cloud-reachable home | `data/standings/inbox/` is gitignored, so `P0`, `P0b`, `P4a`, `P4b` and `P5` cannot run in a cloud session at all |
-| 17 | X3 | `BLOCKED` | PR #19 merged | Automatic execution postmortem per run (`PostToolUse` **and** `PostToolUseFailure`), a recovery sweep for abandoned runs, the `PreCompact`/`PostCompact` continuity block, and a rule that MCP output is never evidence | Nothing reviews a run today, and an attached MCP server returns stub weather that is shaped like the answer to a blocked gate |
+| 17 | X3 | `READY` | none (PR #19 merged 2026-09-20) | Automatic execution postmortem per run (`PostToolUse` **and** `PostToolUseFailure`), a recovery sweep for abandoned runs, the `PreCompact`/`PostCompact` continuity block, and a rule that MCP output is never evidence | Nothing reviews a run today, and an attached MCP server returns stub weather that is shaped like the answer to a blocked gate |
 | 18 | X4 | `BLOCKED` | X1, X2, X3 | `DFS_SYSTEM_GREENFIELD_SPEC_2026-09-19.md` and the subagent cost contract | The audit's required report; also where the candidate-bank and dead-config findings are filed for P3a |
 
 Operator items, none of them code, in the order they unblock things:
@@ -651,11 +651,15 @@ Open for Ben, in the order they unblock work:
    `P2`).] The `P1` gate semantics half of this item was ruled on 2026-09-19 —
    hard stop — and `P1` is `DONE`; only the `C3X` half is still open, and it
    blocks nothing on the prize path.
-1a. **[BEN: merge PR #18 and PR #19** (#19 needs the `ben-review` label).
-   Chunks `X1` and `X3` are `BLOCKED` on it, and until it merges the test suite
-   fails in every fresh container: `nfl.sh` hands pytest a `--basetemp` whose
-   parent does not exist, so a cold clone reports `2 failed, 226 passed,
-   1 skipped, 562 errors`. Workaround meanwhile is `NFL_DFS_PYTEST_TMP`.]
+1a. **Closed 2026-09-20: PR #18 and PR #19 are merged** (`4ee1654`, `0caec47`).
+   Ben applied the `ben-review` label to #19 and directed the merge. #19 was
+   rebuilt on current `main` first (merge commit `1f3aafd`, one conflict in
+   `changelog.md`, resolved by date order) and all three checks passed on that
+   head. `X1` and `X3` are now `READY`. The fresh-container suite failure is
+   repaired: `nfl.sh` creates the `--basetemp` parent, and the full suite runs
+   without `NFL_DFS_PYTEST_TMP` at `917 passed, 1 skipped in 152.82s`. The
+   operator marker is written out rather than left in place, because the
+   scanner counts the literal token whatever the surrounding sentence says.
 1b. **[BEN: pick where the 26 standings exports live** so `P0` can run in a
    cloud session. `data/standings/inbox/` is gitignored, so a fresh clone has
    none of them and `P0`, `P0b`, `P4a`, `P4b` and `P5` are all unrunnable there.
