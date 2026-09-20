@@ -4,6 +4,94 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-20: session close-out — two pull requests merged, R24 recommended, X3 and H3 made runnable
+
+No code changed. Documentation and ledgers only; every current path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. No run was
+executed.
+
+#### Merged
+
+- **PR #32** (`ebf5797`), the protected list narrowed from twelve entries to
+  three, on Ben's label and his explicit instruction to merge.
+- **PR #27** (`baf19a0`), the X-track chunk briefs, brought current from
+  `c6c73e7` after sitting eleven commits behind.
+
+Both were open at the start of this stretch; neither is now. No pull request is
+open against this repository.
+
+#### A defect in the protected-path gate, filed as `H3`
+
+PR #32 could not reach a green `protected-paths` check. The job passes
+`PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}` and
+`scripts/check_protected_paths.py:113` reads it. Both are the pull-request
+**event payload**, which GitHub freezes at event time and replays verbatim on a
+re-run, and `on: pull_request` without a `types:` list does not fire on
+`labeled`. So a label applied after CI ran can never turn that check green.
+
+Measured: `suite` and `boundaries` green on `f78390b`; `protected-paths` failed
+at 18:29:44; Ben labelled at 18:36:55; the check stayed red. Both re-run calls
+returned 403, the session token carrying Actions read-only, and a re-run would
+have replayed the same label-free payload regardless.
+
+This puts two rules in `.claude/rules/git-authority.md` in direct conflict:
+never merge a protected-path pull request without the label, and never merge
+with a red check. The merge went ahead on the label plus green `suite` and
+`boundaries`, with the reason stated in the merge commit rather than glossed.
+`H3` makes the label do what every document here says it does, and is `READY`
+with both a brief and a session prompt.
+
+#### Ledger and handoff gaps closed
+
+- `docs/session-prompts/X3-execution-postmortem.md` written. `X3` was `READY`
+  with a brief and no prompt, the only `READY` chunk in that state.
+- `backlog.md` X1 queue row re-pinned from
+  `docs/CLAUDE_CODE_SETUP.md:114-125` to `152-163` at `ebf5797`. The row had
+  been stale since H2 rewrote that file, independently of the brief's own
+  pointer, which PR #27 corrected.
+- R24 gains a recorded recommendation. Ben asked for one in conversation; a
+  recommendation that lives only in a conversation is the exact defect the
+  X-track briefs were created to fix, so it is written into the stanza. R24
+  remains `BLOCKED` on Ben and nothing is implemented against it.
+
+#### An open gap recorded rather than fixed
+
+Regenerating `state/repo-state.json` shows seven queue rows with `brief=None`.
+`P1b`, `X0` and `X5` are `DONE` and `C3X` is `DEFERRED`, which is fine. But
+`C4`, `C5` and the aggregate `Q2 to Q7, QC1` row are `BLOCKED` **without
+briefs**. That is the same defect the X track just closed, still open on the C
+and Q tracks: when those unblock, whoever runs them inherits a table cell. It is
+outside every branch merged today and is recorded here so it is not rediscovered
+a third time.
+
+#### Verification
+
+- Complete pinned suite, watched to completion on `.venv-linux`, twice: at the
+  #27 merge `984 passed, 1 skipped in 160.94s (0:02:40)`, and again on this
+  close-out `984 passed, 1 skipped in 155.21s (0:02:35)`.
+- `python3 scripts/repo_state.py`: all five `READY` chunks (P0, X1, X3, P7, H3)
+  bind to both a brief and a session prompt that exist on disk. Checked
+  mechanically, not by eye.
+- CI on PR #27 head `cf17421`: `suite`, `boundaries` and `protected-paths` all
+  green; `suite` completed 19:12:26Z.
+- CI on PR #32 head `f78390b`: `suite` and `boundaries` green,
+  `protected-paths` red for the reason above.
+- `sh ./nfl.sh doctor`: `pass_status: true`, Python 3.13.7, SQLite integrity ok.
+- `git diff --check` clean; `backlog.md` and `changelog.md` both still LF.
+
+A fresh container needed `sh ./nfl.sh setup` before the suite would run at all;
+without it `nfl.sh test` exits 0 and prints `project environment is missing`,
+which is not a suite result and must not be recorded as one. It was nearly
+recorded as one here.
+
+#### Left open
+
+- `git push origin --delete claude/narrow-protected-paths` fails with
+  `the remote end hung up unexpectedly` on every attempt through this session's
+  proxy, and the GitHub MCP server exposes no delete-branch tool. That merged
+  branch is still on the remote. Cosmetic; it needs the GitHub UI.
+- R24 and the `C3X` and standings-corpus items remain `BLOCKED` on Ben.
+
 ### 2026-09-20: the protected list narrows from twelve entries to three
 
 Ben's instruction: "remove the ben-review label requirement since I am not a

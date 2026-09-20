@@ -216,12 +216,13 @@ chunk or a blocked one. That is why `P1` ran first, inverting this order.
 | 12 | Q2 to Q7, QC1 | `BLOCKED` | as before | Long-run calibration, field, economics, promotion | Q2 absorbs P3a, Q3 absorbs P4, Q4 absorbs P5, Q5 absorbs P3b/P6; Q6 still waits on settled-slate accrual, which is operator work |
 | 13 | P1b | `DONE` | P1 | Wire `qb_depth_role_evidence_json` into the run request: `nfl_cowork_run_request_v2`, the CLI flag, and the hash binding at all three `prior_review` exits | The depth chart resolves the backup-quarterback half of DEN@KC, and until this landed it was reachable only from the library |
 | 14 | X0 | `DONE` | none | Cloud baseline captured (`790 passed, 1 skipped`), egress probed, claim convention established as a GitHub issue | `state/claims.json` is invisible to a session that clones fresh, so a dead container left no trace |
-| 15 | X1 | `READY` | none (PR #19 merged 2026-09-20) | Replace the asserted environment facts in `docs/CLAUDE_CODE_SETUP.md:114-125` with a per-session egress probe on `doctor`, recorded into the run record | Three of six allowlisted hosts are 403 at CONNECT in a cloud session and the document claims otherwise; a wrong fact about evidence reachability costs a lock |
+| 15 | X1 | `READY` | none (PR #19 merged 2026-09-20) | Replace the asserted environment facts in `docs/CLAUDE_CODE_SETUP.md:152-163` (as of `ebf5797`) with a per-session egress probe on `doctor`, recorded into the run record | Three of six allowlisted hosts are 403 at CONNECT in a cloud session and the document claims otherwise; a wrong fact about evidence reachability costs a lock |
 | 16 | X2 | `BLOCKED` | Ben's choice of A/B/C | Give the 26 standings exports a durable, cloud-reachable home | `data/standings/inbox/` is gitignored, so `P0`, `P0b`, `P4a`, `P4b` and `P5` cannot run in a cloud session at all |
 | 17 | X3 | `READY` | none (PR #19 merged 2026-09-20) | Automatic execution postmortem per run (`PostToolUse` **and** `PostToolUseFailure`), a recovery sweep for abandoned runs, the `PreCompact`/`PostCompact` continuity block, and a rule that MCP output is never evidence | Nothing reviews a run today, and an attached MCP server returns stub weather that is shaped like the answer to a blocked gate |
 | 18 | X4 | `BLOCKED` | X1, X2, X3 | `DFS_SYSTEM_GREENFIELD_SPEC_2026-09-19.md` and the subagent cost contract | The audit's required report; also where the candidate-bank and dead-config findings are filed for P3a |
 | 19 | X5 | `DONE` | none | Wire the Classic fallback path into `docs/RUNBOOK.md`, close the builder-to-export pipeline break, port the Showdown QA superset into the Classic gate, derive the slate context from captured market bytes, and give all four scripts their first tests | The fallback existed, had run on two live slates, and was documented only in a 900-line retrospective nothing told the operator to open; on 2026-09-20 it was found ninety minutes in |
 | 20 | P7 | `READY` | none (R25 ruled 2026-09-20) | Current-role depth resolution: register `depth_charts` as a source, effective depth rank for every skill position, and OUT-promotion in place of `QB_DEPTH_STARTER_NOT_SELECTABLE` | The engine cannot tell who is starting today; on 2026-09-20 three starting quarterbacks were rejected and the refusal's own remedy is unpublishable inside the pre-lock window |
+| 21 | H3 | `READY` | none | Make the `ben-review` label actually clear the `protected-paths` check: read labels at job runtime instead of from the frozen event payload, and add the `labeled`/`unlabeled` pull-request types | The check reads `github.event.pull_request.labels`, which GitHub freezes at event time, so a label applied after CI ran can never turn it green; measured on PR #32 |
 
 Operator items, none of them code, in the order they unblock things:
 
@@ -369,11 +370,18 @@ Status: `READY`. Carries the rule that MCP output is never evidence. Since the
 protected list narrowed on 2026-09-20 that rule merges on green if it lands in
 `.claude/rules/`, and needs `ben-review` only if it must go in `CLAUDE.md`.
 Brief: `docs/chunks/X3-execution-postmortem.md`.
+Prompt: `docs/session-prompts/X3-execution-postmortem.md`.
 
 ### X4 — Greenfield spec report and subagent cost contract
 
 Status: `BLOCKED` on X1, X2, X3.
 Brief: `docs/chunks/X4-greenfield-spec.md`.
+
+### H3 — The `ben-review` label cannot clear the check that demands it
+
+Status: `READY`. Depends on: nothing.
+Brief: `docs/chunks/H3-protected-paths-label-freshness.md`.
+Prompt: `docs/session-prompts/H3-protected-paths-label-freshness.md`.
 
 ### R25 (Ben's ruling, 2026-09-20: APPROVED): promote a backup when the depth-chart starter is OUT
 
@@ -479,6 +487,53 @@ If Ben declines, the fallback ladder stops at running the capture elsewhere, and
 a session that cannot reach `api.weather.gov` simply cannot build Classic. That
 is a defensible position; it should be a chosen one rather than an inherited
 one.
+
+#### Claude's recommendation, 2026-09-20: approve, conditional on a registry
+
+Ben asked for a recommendation rather than a menu. It is **approve**, and the
+argument that decides it is not the lock clock.
+
+`CLAUDE.md` already specifies the right consequence: "Missing, stale,
+conflicted, partial, ambiguous, or unbound hard evidence is `DO_NOT_UPLOAD`."
+It says `DO_NOT_UPLOAD`. It does not say "no artifact." Today a missing weather
+enum produces no artifact at all. R24 does not weaken that rule; it makes the
+code implement the rule as written. This matters because relaxing an evidence
+gate is the one thing the lock-clock ruling forbids outright, and this is not
+that: the gate still refuses, still names what is missing, still forbids upload.
+Only its blast radius changes.
+
+The premise was re-verified in code on 2026-09-20 at `ebf5797`, not taken from
+this stanza. Across all 42 `weather_state` references in `src/nfl_dfs/`:
+`projection.py:651` writes it into a CSV row, `opportunity.py:188` validates it
+against an enum, and `prior_review.py` normalizes it, passes it through dicts,
+summarizes it into a sorted set, and raises `WEATHER_STATE_REQUIRED` at `:714`.
+No arithmetic reads it anywhere.
+
+**The condition: a test-backed registry of non-numerical gates ships in the same
+chunk, or the recommendation is to decline.** R24's whole justification is that
+this gate reaches no number, which is a property of today's code and exactly the
+kind of claim that decays silently. If a later chunk wires `weather_state` into
+a projection, plausibly Q2, R24 becomes wrong and nothing would catch it: a
+portfolio would then be built on a missing input that does move numbers, which
+is the failure the gate exists to prevent. The registry names each gate
+permitted to stop release rather than construction, and a test asserts its field
+is read by no scoring or projection path. Without it, "non-numerical gate"
+becomes a category under permanent pressure to grow, because every future
+blocked gate will have someone arguing it reaches no number.
+
+One tightening on the bounds above: "the unmet gate list travels with the
+artifact" should be a named structured field, not prose, so
+`scripts/qa_classic_portfolio.py` can refuse a handoff whose gap list is
+non-empty and unacknowledged. Prose in a header gets skimmed. The other four
+bounds stand verbatim.
+
+R24 stays third in the preference order below. It is what makes a portfolio
+exist when 1 and 2 have both failed, and it is not a substitute for either.
+Approving it should not reduce the priority of item 1, which is one environment
+setting and makes cloud sessions self-sufficient for Classic permanently.
+
+**Still `BLOCKED` on Ben.** This is a recommendation, not a ruling, and nothing
+is implemented against it.
 
 ### Root fix for the 2026-09-20 loss, in preference order
 
