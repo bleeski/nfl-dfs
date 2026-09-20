@@ -6,23 +6,39 @@
 # One fnmatch-style glob per line, repo-relative. Blank lines and lines starting
 # with `#` are ignored. Read by `.github/workflows/ci.yml` and asserted by
 # `tests/test_repo_boundaries.py`, so the two can never drift.
+#
+# ---------------------------------------------------------------------------
+# Narrowed from twelve entries to three on 2026-09-20, on Ben's instruction:
+# "remove the ben-review label requirement since I am not a software engineer.
+# I'd like Claude to be more autonomous and use its judgement."
+#
+# He is right about most of what used to be here. Asking a non-engineer to
+# review a diff to `evidence.py` produced a signature, not a check, and the real
+# gate on that code is CI, `tests/test_repo_boundaries.py` and the pinned suite,
+# which are stronger than a signature. Nine entries came off and Claude merges
+# that work on green: the release and evidence modules, the registered policy
+# JSON, the workflows, and the rules directory.
+#
+# Three stay, and not for code review. They are here because Claude must not be
+# able to quietly change what Claude is not allowed to do. Reviewing them is one
+# plain-English question - do I want the machine to be allowed to do this -
+# which is the judgement Ben is qualified to make and the only one here that was
+# ever load-bearing.
+#
+# The concrete case, from the day this was narrowed: a session three messages
+# into being told to ship a portfolio could have produced one by typing twelve
+# weather observations it had not made. What stopped it was a sentence in
+# CLAUDE.md it treated as binding. A self-editable boundary is a suggestion.
+#
+# `tests/test_repo_boundaries.py` pins this exact set, so a fourth entry has to
+# be justified in the same commit rather than accreting quietly.
+# ---------------------------------------------------------------------------
 
-# The boundaries themselves, and the file that states them.
+# The permanent boundaries themselves: what Claude may never do, in prose.
 CLAUDE.md
-.claude/rules/*.md
 
-# Release truths, certification, and every evidence gate.
-src/nfl_dfs/release.py
-src/nfl_dfs/certification.py
-src/nfl_dfs/preflight.py
-src/nfl_dfs/evidence.py
-src/nfl_dfs/sources.py
-
-# Registered policy: what counts as evidence, and what a metric may promote on.
-config/evidence_policy.json
-config/metric_registry_*.json
-
-# The authority model itself.
-.claude/settings.json
+# This list. Without it, every other protection is self-removable in one commit.
 .github/protected-paths.txt
-.github/workflows/*.yml
+
+# The deny list and the hooks: the mechanical half of the same question.
+.claude/settings.json

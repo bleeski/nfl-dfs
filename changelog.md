@@ -4,6 +4,90 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-20: the protected list narrows from twelve entries to three
+
+Ben's instruction: "remove the ben-review label requirement since I am not a
+software engineer. I'd like Claude to be more autonomous and use its
+judgement." This implements it, with one disagreement stated and kept.
+
+No engine module, contract, `config/` file or evidence gate changed. Every path
+still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+#### What came off the list, and why he was right
+
+`src/nfl_dfs/release.py`, `certification.py`, `preflight.py`, `evidence.py`,
+`sources.py`, `config/evidence_policy.json`, `config/metric_registry_*.json`,
+`.github/workflows/*.yml` and `.claude/rules/*.md`. Nine of twelve.
+
+The gate asked a non-engineer to review a diff to an evidence module. That
+produces a signature, not a check. The real gate on that code is CI,
+`tests/test_repo_boundaries.py` and the pinned suite, and those are stronger
+than a signature. The label had become a queue Ben serviced without being able
+to add signal to it, which is the definition of a bottleneck.
+
+The rules directory coming off means **Claude may now write, edit and merge its
+own behavioural rules without asking.** That is deliberate and it is bounded:
+`CLAUDE.md` stays on the list, so a rule file can refine how Claude works but
+cannot loosen a permanent boundary, because the file stating those boundaries is
+one Claude cannot merge alone. A rule change that would in effect relax a
+boundary belongs in `CLAUDE.md`, where it gets the label.
+
+#### What stayed, and the disagreement
+
+`CLAUDE.md`, `.github/protected-paths.txt`, `.claude/settings.json`.
+
+Ben asked whether to drop all three. The recommendation was to keep them and he
+took it. The reason is not caution in the abstract and not code review: it is
+that **Claude must not be able to quietly change what Claude is not allowed to
+do.** Reviewing these three is one plain-English question — do I want the
+machine to be allowed to do this — which is the judgement he is qualified to
+make and the only one on the old list that was ever load-bearing.
+
+The concrete case is from the same day. A session three messages into being told
+to ship a portfolio could have produced one in ninety seconds by typing twelve
+`api.weather.gov` observations it had not made. What stopped it was a sentence
+in `CLAUDE.md` it treated as binding. A self-editable boundary is a suggestion.
+
+Two harness refusals landed on this work before the permission was granted, both
+classifying it as self-modification: one on running the tests that validate the
+narrowed list, one on editing `.claude/rules/git-authority.md`. The partial
+state was reverted rather than shipped, because a list saying three while the
+governing rule said twelve is worse than either. Recorded because a second,
+independent system reaching the same conclusion is evidence worth keeping.
+
+#### Changed
+
+- `.github/protected-paths.txt`: twelve entries to three, with the reasoning
+  inline so the next reader does not have to reconstruct it.
+- `tests/test_repo_boundaries.py`: the three assertions that required
+  `release.py`, `evidence_policy.json` and `.claude/rules/ledger.md` to be
+  flagged are **inverted, not deleted**, so the narrowing is pinned in both
+  directions. A new test,
+  `test_the_protected_list_stays_short_enough_to_actually_read`, pins the exact
+  three-entry set so a fourth has to be justified in the same commit rather than
+  accreting quietly. Per `.claude/rules/tests.md`, the changed test is named
+  here with its reason ahead of the change.
+- `.claude/rules/git-authority.md` § The protected list: rewritten to name the
+  three, say what came off and why, and state plainly that Claude may now merge
+  its own rule changes and what bounds that.
+- `CLAUDE.md` step 8, `backlog.md` tracker protocol,
+  `docs/CLAUDE_CODE_SETUP.md` § Where the gate lives, and
+  `docs/session-prompts/P7-current-role-depth.md` close-out: all four described
+  the old list and now name the three.
+
+#### Verification
+
+- `tests/test_repo_boundaries.py`: `88 passed in 1.16s`, up one for the new
+  pinning test.
+- Full suite, watched to completion: `984 passed, 1 skipped in 156.97s
+  (0:02:36)`, recorded with `scripts/record_verify.py --from-log`. Exactly one
+  above the `983 passed, 1 skipped` baseline, which is the pinning test added
+  here.
+- `scripts/check_protected_paths.py` is expected to exit 1 on this branch naming
+  `CLAUDE.md` and `.github/protected-paths.txt`, which is the gate working on
+  its own narrowing. This pull request carries `ben-review` and Ben merges it.
+- `git diff --check` clean; ledgers LF.
+
 ### 2026-09-20: R25 ruled, and P7 goes READY
 
 Ben ruled on three open items in one message: merge PR #30, approve R25, and
