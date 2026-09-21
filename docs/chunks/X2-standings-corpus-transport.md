@@ -4,9 +4,11 @@ Brief for chunk `X2` of the cloud-operability track. Status and dependencies are
 tracked in `backlog.md` (Queue table and chunk index); this file is the
 specification. Written 2026-09-20 from the cloud audit's finding F1.
 
-**This chunk is `BLOCKED` on a decision only Ben can make.** The engineering is
-straightforward once the option is chosen; do not start building until the
-choice is recorded. The open flag is operator item 1b in `backlog.md`.
+**The decision is made. Ben ruled option (A) on 2026-09-21**, recorded as `R27`
+in `backlog.md`; operator item 1b is closed. Build (A) and only (A): private
+GitHub release assets with authenticated retrieval added to `sources.py`. The
+R27 stanza carries the bounds and they are binding. Options (B) and (C) below
+are kept for the reasoning, not as live choices.
 
 - Goal: the 26 DraftKings standings exports are reachable from a cloud session,
   so the chunks that grade against them can run anywhere.
@@ -19,9 +21,9 @@ choice is recorded. The open flag is operator item 1b in `backlog.md`.
   `PRIOR_ONLY` and no promotion claim is available at any horizon. Everything
   downstream of calibration waits behind this transport question.
 
-## The choice Ben has to make
+## The choice, and what was ruled
 
-Recorded verbatim from operator item 1b:
+Recorded verbatim from operator item 1b. **(A) was ruled on 2026-09-21.**
 
 - **(A) Private GitHub release assets, with authenticated retrieval added to
   `sources.py`.** Recommended in the audit. One pull request; the
