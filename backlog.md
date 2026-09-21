@@ -203,7 +203,7 @@ chunk or a blocked one. That is why `P1` ran first, inverting this order.
 | 1 | P1 | `DONE` | none | Salary-divergence diagnostic plus a current-team role evidence producer from approved depth-chart bytes, so a transfer priced as the slate's best player cannot carry a 7-point prior unseen | Removes the failure that made every DEN@KC lineup dead on arrival |
 | 1b | P0b | `BLOCKED` | P0 | Provenance completeness: run-folder completeness check before a review CSV is called shipped, a manifest command for hand-built entries, and a pre-registration record per slate | Without it the next slates cannot be attributed to a build or graded as champion vs challenger |
 | 2 | P2 | `BLOCKED` | P0 | Contest-aware assignment order, structural hygiene controls (QB count, pass catchers with QB, salary-left band, K/DST counts) and a portfolio `max_person_share` control in both policy contracts, generators and audits | Hygiene raised P(≥1 top-1%) from 0.19 to 0.28 at k=20 in every game; seat contests stop receiving the weakest lineups |
-| 3 | P3a | `BLOCKED` | P1 | Bounded DESIGN scenario bank on the `prior_review` path with measured within-game covariance and per-lineup p50/p90/p99 reported in the review | The tail cannot be targeted until lineups have a distribution |
+| 3 | P3a | `READY` | none (P1 `DONE` 2026-09-19) | Bounded DESIGN scenario bank on the `prior_review` path with measured within-game covariance and per-lineup p50/p90/p99 reported in the review | The tail cannot be targeted until lineups have a distribution |
 | 4 | P3b | `BLOCKED` | P3a, P2 | Registered tail objective (upper-quantile of the bank) and a policy-sized tail sleeve inside `select_prior_lineups`; REFEREE re-scores; still `PRIOR_ONLY` | This is the objective change; the sleeve gives the tail its shots without betting the core |
 | 5 | P4a | `BLOCKED` | P0 | Mass-conserving ownership challenger (salary baseline plus eligibility) graded by slate on the standings | Prerequisite for duplication; also the first ownership number the engine has ever had on the operating path |
 | 6 | P4b | `BLOCKED` | P4a | Exact-lineup copy-count predictor graded against our lineups' observed copies | Showdown first place is worth 5% to 100% of face depending on this number |
@@ -221,7 +221,7 @@ chunk or a blocked one. That is why `P1` ran first, inverting this order.
 | 17 | X3 | `READY` | none (PR #19 merged 2026-09-20) | Automatic execution postmortem per run (`PostToolUse` **and** `PostToolUseFailure`), a recovery sweep for abandoned runs, the `PreCompact`/`PostCompact` continuity block, and a rule that MCP output is never evidence | Nothing reviews a run today, and an attached MCP server returns stub weather that is shaped like the answer to a blocked gate |
 | 18 | X4 | `BLOCKED` | X1, X2, X3 | `DFS_SYSTEM_GREENFIELD_SPEC_2026-09-19.md` and the subagent cost contract | The audit's required report; also where the candidate-bank and dead-config findings are filed for P3a |
 | 19 | X5 | `DONE` | none | Wire the Classic fallback path into `docs/RUNBOOK.md`, close the builder-to-export pipeline break, port the Showdown QA superset into the Classic gate, derive the slate context from captured market bytes, and give all four scripts their first tests | The fallback existed, had run on two live slates, and was documented only in a 900-line retrospective nothing told the operator to open; on 2026-09-20 it was found ninety minutes in |
-| 20 | P7 | `IN_PROGRESS` | none (R25 ruled 2026-09-20) | Current-role depth resolution: register `depth_charts` as a source, effective depth rank for every skill position, and OUT-promotion in place of `QB_DEPTH_STARTER_NOT_SELECTABLE` | The engine cannot tell who is starting today; on 2026-09-20 three starting quarterbacks were rejected and the refusal's own remedy is unpublishable inside the pre-lock window |
+| 20 | P7 | `DONE` | none (R25 ruled 2026-09-20) | Current-role depth resolution: register `depth_charts` as a source, effective depth rank for every skill position, and OUT-promotion in place of `QB_DEPTH_STARTER_NOT_SELECTABLE` | The engine cannot tell who is starting today; on 2026-09-20 three starting quarterbacks were rejected and the refusal's own remedy is unpublishable inside the pre-lock window |
 | 21 | H3 | `READY` | none | Make the `ben-review` label actually clear the `protected-paths` check: read labels at job runtime instead of from the frozen event payload, and add the `labeled`/`unlabeled` pull-request types | The check reads `github.event.pull_request.labels`, which GitHub freezes at event time, so a label applied after CI ran can never turn it green; measured on PR #32 |
 
 Operator items, none of them code, in the order they unblock things:
@@ -238,6 +238,14 @@ Operator items, none of them code, in the order they unblock things:
 4. Paste every payout ladder at intake into `contest/payouts_<id>.csv` in the run
    folder, on the 193391013 schema. 25 of 26 contests have none; `P5` cannot
    start without a body of them.
+6. **Replay `P7` on the 2026-09-20 salary snapshot, on Windows.** The chunk's
+   promotion logic is verified against the real published depth chart but with
+   fixture DraftKings availability, because `data/runs/` is gitignored and that
+   export exists only on Ben's checkout. Run the resolver against the real
+   snapshot and confirm Carson Wentz (MIN) and Drew Lock (SEA) resolve to
+   effective QB1, that Michael Mayer, Xavier Hutchinson and Rashod Bateman
+   resolve to effective rank 1, and that replay is byte-identical. This is the
+   same transport gap `X2` closes for standings, on a different corpus.
 5. Enter at least one contest per slate from a single-contest reserved-entry
    file so Q6's settlement accrual can begin; 16 of the 18 first files were
    multi-contest and `settlement.require_single_contest` refuses them.
@@ -314,8 +322,13 @@ Brief: `docs/chunks/P2-contest-aware-policy.md`.
 
 ### P3a — Bounded scenario bank on the prior_review path
 
-Status: `BLOCKED` on P1.
+Status: `READY` (corrected 2026-09-21). Depends on: nothing. Its only
+dependency was `P1`, which has been `DONE` since 2026-09-19; the `BLOCKED`
+status was stale for two days and no session noticed, because the queue row and
+the chunk index both said `BLOCKED` and nobody re-read the dependency. Found
+while closing out `P7`.
 Brief: `docs/chunks/P3a-scenario-bank.md`.
+Prompt: `docs/session-prompts/P3a-scenario-bank.md` (already written).
 
 ### P3b — Registered tail objective and the tail sleeve
 
@@ -349,9 +362,18 @@ Brief: `docs/chunks/P6-survival-controls.md`.
 
 ### P7 — Current-role depth resolution
 
-Status: `IN_PROGRESS` (claimed 2026-09-21 on
-`claude/next-implementation-priorities-ptjksf`). `READY` since 2026-09-20, R25
-ruled in favour. Depends on: nothing.
+Status: `DONE` for software acceptance (2026-09-21). Two acceptance lines are
+**not** met and are not claimed: the resolver was never replayed against the
+2026-09-20 DraftKings salary snapshot, and byte-identical replay on that frozen
+snapshot is unverified. `data/runs/` is gitignored, so that export is on Ben's
+Windows checkout and no cloud session can reach it; DraftKings is never fetched.
+They are operator item 6 below, not a reason to hold the chunk.
+
+What is verified: the effective-rank and promotion logic against the real
+published depth chart (sha256 `e6ba0a08…0494c02`, snapshot
+`2026-09-20T12:14:30Z`), with DraftKings availability supplied as fixture bytes.
+Every promotion the `R25` stanza named is reproduced. Suite
+`1048 passed, 1 skipped in 159.46s`. Detail in `changelog.md`.
 Brief: `docs/chunks/P7-current-role-depth.md`.
 Prompt: `docs/session-prompts/P7-current-role-depth.md`.
 

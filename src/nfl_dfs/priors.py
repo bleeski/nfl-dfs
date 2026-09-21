@@ -276,6 +276,40 @@ def source_specifications(*, season: int, prior_season: int) -> tuple[NflverseSo
                 "status",
             ),
         ),
+        NflverseSource(
+            name="depth_charts",
+            url=f"{_NFLVERSE_RELEASE}/depth_charts/depth_charts_{season}.csv",
+            parser_version="nflverse_depth_charts_csv_v1",
+            # P7. Measured on the published 2026 artifact on 2026-09-21: 190
+            # snapshots, two on most days (2026-09-20 carries 06:02:02Z and
+            # 12:14:30Z). 36 hours is the expiry the producer script
+            # `make_offensive_role_evidence.py` has always used, kept rather
+            # than tightened so the two paths cannot disagree about whether the
+            # same capture is fresh.
+            #
+            # Expiry is not the interesting staleness here and must not be read
+            # as a freshness guarantee. The last chart before a 13:00 ET Sunday
+            # lock is 08:14 ET and official inactives publish about 11:30 ET, so
+            # a perfectly unexpired chart is still blind to the only news that
+            # decides who starts. That gap is what effective depth rank exists
+            # to close; see `depth_roles.py`.
+            expires_after=timedelta(hours=36),
+            staleness_basis="DEPTH_CHART_REPUBLISHED_ABOUT_TWICE_DAILY_NEVER_BETWEEN_INACTIVES_AND_LOCK",
+            required_columns=(
+                "dt",
+                "team",
+                "player_name",
+                "espn_id",
+                "gsis_id",
+                "pos_grp_id",
+                "pos_grp",
+                "pos_id",
+                "pos_name",
+                "pos_abb",
+                "pos_slot",
+                "pos_rank",
+            ),
+        ),
     )
 
 

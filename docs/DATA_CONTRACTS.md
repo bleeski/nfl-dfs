@@ -1035,6 +1035,79 @@ Producer: `scripts/make_offensive_role_evidence.py`, with `--fetch` (through
 `nfl_dfs.sources`, the only approved retrieval client) or `--capture` for bytes
 already on disk.
 
+### Effective depth rank (P7, R25, 2026-09-21)
+
+`effective_depth_rank_v1`, in `src/nfl_dfs/depth_roles.py`. Not a new input
+contract: `nfl_qb_depth_role_evidence_v1` is unchanged and is never mutated. A
+supplied package still declares the **published** order, exactly as before. What
+is new is what the engine derives from it, and two report keys that carry the
+derivation.
+
+**The rank.** The published `pos_rank` at one `(team, position)`, with everyone
+the bound salary bytes flag unavailable removed from above and the survivors
+renumbered from 1 in the same relative order. Positions: `QB`, `RB`, `WR`, `TE`.
+
+**Why it exists.** `qb_depth_roles.py` refused with
+`QB_DEPTH_STARTER_NOT_SELECTABLE` when the rank-1 quarterback was not
+selectable, and named the remedy "refresh the depth chart after the inactive or
+exclusion change". Measured on the published 2026 artifact (sha256
+`e6ba0a08dc40c164eb02ce7654a247c8eb5c2d189c92d993d028524eb0494c02`, read
+2026-09-21): 190 snapshots, the last before the 2026-09-20 13:00 ET lock at
+`2026-09-20T12:14:30Z`, which is 08:14 ET. Official inactives publish about
+11:30 ET. No depth chart is ever published between the two, so the remedy did
+not exist inside the window where it was needed. `CLAUDE.md` classes a gate no
+real source can clear as a defect; Ben ruled it one on 2026-09-20 (`R25`).
+
+**Keyed `(person, position)`, never person alone.** The published file gives one
+row per position a person appears at, and return lines carry their own
+`pos_rank`. On the 2026-09-20T12:14:30Z snapshot Brian Robinson Jr. is `KR` 1
+and `RB` 2; Devin Duvernay is `KR` 1, `PR` 1 and `WR` 6. Taking a person's best
+row would make them a lead back and a WR1 on the strength of a kick-return line.
+Only the four skill positions are read.
+
+**Bounds, from R25 and binding.**
+
+- Availability is re-derived from the bound salary bytes on every run
+  (`ParticipationContract.unavailable_people`), never from the supplied package,
+  so a package can never widen the set stepped over.
+- Nobody becomes selectable who was not already. Promotion changes which
+  available person holds a role; it never adds a person to the pool.
+- A person the salary bytes still show as available is never promoted past, even
+  when an operator exclusion made him unselectable. Availability is a fact;
+  an exclusion is a preference, and a preference must not reassign a job.
+  Refusal: `QB_DEPTH_PROMOTION_OVER_AVAILABLE_PERSON`.
+- Nobody selectable anywhere in the order is still a refusal:
+  `QB_DEPTH_NO_SELECTABLE_PERSON_AT_POSITION`.
+- The identity gate's auto-accept rule is untouched.
+
+**Report keys** added to the `qb_depth_roles` block of the run record:
+`effective_starter_promotions` (one row per promotion, carrying `team`,
+`position`, `published_starter`, `effective_starter`, `promoted_over` and
+`basis=SALARY_STATUS_UNAVAILABLE_ABOVE`) and `promotion_rule`. Both are present
+and empty on an ordinary slate, so a portfolio built on a promotion says so.
+
+**Redistribution.** `participation.redistribute_opportunity` takes an optional
+`depth_ranks`. Supplied, a vacated share goes to the effective-rank-1 survivor
+at the vacating position (`vacancy_rule=DEPTH_CHART_SUCCESSOR_INHERITS_V1`);
+omitted, the measured proportional rule is unchanged
+(`PROPORTIONAL_TO_PRIOR_NO_SUCCESSOR_KNOWN`). It is off by default because the
+proportional rule was forced by measurements on the real NE@SEA pool and nothing
+has yet graded inheritance against it; that needs `P0`.
+
+### `depth_charts` registered as a frozen source (P7)
+
+`depth_charts` is the eighth entry in `priors.source_specifications()`:
+`https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_<season>.csv`,
+`parser_version=nflverse_depth_charts_csv_v1`, `expires_after=36h`,
+`staleness_basis=DEPTH_CHART_REPUBLISHED_ABOUT_TWICE_DAILY_NEVER_BETWEEN_INACTIVES_AND_LOCK`,
+required columns the twelve in `qb_depth_roles.DEPTH_CHART_COLUMNS`. It is now
+frozen into the prior package and hash-bound like the other seven, rather than
+living only in the producer script with its own expiry. The 36-hour expiry is
+the producer's existing number, kept rather than tightened so the two paths
+cannot disagree about whether one capture is fresh. Expiry is not a freshness
+guarantee here and must not be read as one: an unexpired chart is still blind to
+inactives, which is what the effective rank above exists to handle.
+
 ## Ownership brackets
 
 ```text

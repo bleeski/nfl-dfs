@@ -39,6 +39,7 @@ from typing import Literal, Mapping
 from pydantic import Field, field_validator, model_validator
 
 from .contracts import EngineMode, FrozenModel, SlateContract
+from .depth_roles import DepthRoleError, promote_to_effective_starter
 from .hashing import sha256_file
 from .kicker_roles import KickerRoleError, KickerRoleSource, _validate_source
 from .offensive_roles import PersonBinding
@@ -341,6 +342,10 @@ def resolve_qb_depth_roles(
 
     quarterbacks = _slate_quarterbacks(slate)
     selectable = set(contract.selectable_people)
+    # The salary file's own Status bytes, not the participation contract's
+    # selectable set. `selectable_people` also removes anyone the operator
+    # excluded by hand, and an operator preference must never promote a backup.
+    salary_unavailable = set(contract.unavailable_people)
     by_team: dict[str, set[str]] = {}
     for person, detail in quarterbacks.items():
         by_team.setdefault(str(detail["team"]), set()).add(person)
@@ -348,6 +353,7 @@ def resolve_qb_depth_roles(
     declared_teams: set[str] = set()
     used_sources: set[str] = set()
     starters: dict[str, str] = {}
+    promotions: list[dict[str, object]] = []
     unlisted_people: set[str] = set()
     observed: list[datetime] = []
     for declaration in evidence.declarations:
@@ -379,10 +385,44 @@ def resolve_qb_depth_roles(
                 f"QB_DEPTH_TEAM_COVERAGE_MISMATCH:team={team}:"
                 f"declared={sorted(placed)}:on_the_slate={sorted(by_team[team])}"
             )
-        if declaration.starter.underlying_id not in selectable:
+        # R25, ruled 2026-09-20. This used to refuse with
+        # QB_DEPTH_STARTER_NOT_SELECTABLE and tell the operator to refresh the
+        # depth chart after the inactive change. Measured on the published
+        # artifact, the last chart before a 13:00 ET Sunday lock is 08:14 ET and
+        # inactives publish about 11:30 ET, so no chart is ever published inside
+        # that window and the remedy did not exist. Ben ruled it a defect and
+        # authorised promotion in its place.
+        #
+        # The replacement is stricter in the one direction that matters: it
+        # re-derives availability from the bound salary bytes
+        # (`contract.unavailable_people`) rather than trusting the supplied
+        # package, so a depth package can never widen the set it steps over.
+        # A rank-1 person the salary bytes still show as available is never
+        # promoted past, even when an operator exclusion made him unselectable.
+        try:
+            effective_starter_person, stepped_over = promote_to_effective_starter(
+                [
+                    (entry.pos_rank, entry.underlying_id)
+                    for entry in entries
+                ],
+                unavailable_people=salary_unavailable,
+                selectable_people=selectable,
+                team=team,
+            )
+        except DepthRoleError as exc:
             raise QbDepthRoleError(
-                f"QB_DEPTH_STARTER_NOT_SELECTABLE:{declaration.starter.underlying_id}:"
-                "refresh the depth chart after the inactive or exclusion change"
+                str(exc).replace("DEPTH_", "QB_DEPTH_", 1)
+            ) from exc
+        if stepped_over:
+            promotions.append(
+                {
+                    "team": team,
+                    "position": QUARTERBACK_ABBREVIATION,
+                    "published_starter": declaration.starter.underlying_id,
+                    "effective_starter": effective_starter_person,
+                    "promoted_over": list(stepped_over),
+                    "basis": "SALARY_STATUS_UNAVAILABLE_ABOVE",
+                }
             )
         derived = _derived_order(
             parse_depth_chart_excerpt(source.supporting_excerpt),
@@ -413,7 +453,7 @@ def resolve_qb_depth_roles(
                 f"QB_DEPTH_ORDER_NOT_SUPPORTED_BY_CAPTURE:team={team}:"
                 f"capture={derived}:declared={claimed}"
             )
-        starters[team] = declaration.starter.underlying_id
+        starters[team] = effective_starter_person
         unlisted_people.update(
             absent.underlying_id for absent in declaration.unlisted
         )
@@ -493,6 +533,7 @@ def resolve_qb_depth_roles(
             supplied=True,
             starters=starters,
             unlisted=tuple(sorted(unlisted_people)),
+            promotions=tuple(promotions),
             expires_at=expiry,
             synthetic=tuple(
                 sorted(s.sha256 for s in sources.values() if s.synthetic)
@@ -516,6 +557,7 @@ def _report(
     supplied: bool,
     starters: Mapping[str, str] | None = None,
     unlisted: tuple[str, ...] = (),
+    promotions: tuple[dict[str, object], ...] = (),
     expires_at: datetime | None = None,
     synthetic: tuple[str, ...] = (),
     upstream: tuple[str, ...] = (),
@@ -546,6 +588,17 @@ def _report(
             " passing volume is unchanged and no other share is touched."
         ),
         "starters_by_team": dict(sorted((starters or {}).items())),
+        # R25 promotions. Empty on a slate where every published rank-1
+        # quarterback is available, which is the ordinary case; a portfolio
+        # built on a promotion says so here and in the handoff.
+        "effective_starter_promotions": [dict(row) for row in promotions],
+        "promotion_rule": (
+            "EFFECTIVE_DEPTH_RANK_V1:the published order with everyone the bound"
+            " salary bytes flag unavailable removed from above. Availability is"
+            " re-derived from those bytes on every run, nobody becomes selectable"
+            " who was not already, and a person the salary file still shows as"
+            " available is never promoted past."
+        ),
         "unlisted_on_depth_chart": list(unlisted),
         "changed_people": [dict(row) for row in moved],
         "evidence_path": manifest,

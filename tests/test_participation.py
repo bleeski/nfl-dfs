@@ -520,3 +520,84 @@ def test_a_missing_person_the_site_flags_out_is_tolerated(tmp_path):
     assert "SEA|RB|Sea Third RB" not in {
         player.underlying_id for player in model.players
     }
+
+
+# --- P7: the depth chart names a successor -------------------------------
+
+
+def _seattle_back_ranks():
+    """Effective ranks after the OUT lead back is removed from above.
+
+    Shaped exactly as `depth_roles.effective_depth_ranks` returns them, keyed
+    `(person, position)`, so the wiring under test is the real one.
+    """
+
+    from nfl_dfs.depth_roles import DepthRow, effective_depth_ranks
+
+    rows = [
+        DepthRow(person="SEA|RB|Sea Lead RB", team="SEA", position="RB",
+                 published_rank=1, player_name="Sea Lead RB"),
+        DepthRow(person="SEA|RB|Sea Backup RB", team="SEA", position="RB",
+                 published_rank=2, player_name="Sea Backup RB"),
+        DepthRow(person="SEA|RB|Sea Third RB", team="SEA", position="RB",
+                 published_rank=3, player_name="Sea Third RB"),
+    ]
+    return effective_depth_ranks(rows, unavailable_people={"SEA|RB|Sea Lead RB"})
+
+
+def test_the_named_successor_inherits_the_whole_vacated_share(tmp_path):
+    slate = _slate(tmp_path)
+    model = _model(tmp_path, slate)
+    contract = build_participation_contract(slate)
+    before = {p.underlying_id: p.carry_share for p in model.players}
+    reduced, report = redistribute_opportunity(
+        model, contract, depth_ranks=_seattle_back_ranks()
+    )
+    after = {p.underlying_id: p.carry_share for p in reduced.players}
+
+    vacated = before["SEA|RB|Sea Lead RB"]
+    assert after["SEA|RB|Sea Backup RB"] == pytest.approx(
+        before["SEA|RB|Sea Backup RB"] + vacated
+    )
+    # The third back is behind him on the chart and inherits nothing.
+    assert after["SEA|RB|Sea Third RB"] == pytest.approx(before["SEA|RB|Sea Third RB"])
+    assert report["vacancy_rule"] == "DEPTH_CHART_SUCCESSOR_INHERITS_V1"
+    assert report["unallocated_by_team"] == {}
+
+
+def test_without_depth_ranks_the_measured_proportional_rule_is_unchanged(tmp_path):
+    """The default is not touched by P7. Supplying ranks is an explicit choice."""
+
+    slate = _slate(tmp_path)
+    model = _model(tmp_path, slate)
+    contract = build_participation_contract(slate)
+    before = {p.underlying_id: p.carry_share for p in model.players}
+    reduced, report = redistribute_opportunity(model, contract)
+    after = {p.underlying_id: p.carry_share for p in reduced.players}
+
+    assert report["vacancy_rule"] == "PROPORTIONAL_TO_PRIOR_NO_SUCCESSOR_KNOWN"
+    # Both survivors gain, which is the behaviour the NE@SEA measurement forced.
+    assert after["SEA|RB|Sea Third RB"] > before["SEA|RB|Sea Third RB"]
+    assert after["SEA|RB|Sea Backup RB"] > before["SEA|RB|Sea Backup RB"]
+
+
+def test_a_position_the_chart_does_not_place_keeps_the_proportional_rule(tmp_path):
+    """No successor is invented when the depth chart places nobody who survived."""
+
+    slate = _slate(tmp_path)
+    model = _model(tmp_path, slate)
+    contract = build_participation_contract(slate)
+    before = {p.underlying_id: p.carry_share for p in model.players}
+    # Ranks that name only the person who is already OUT.
+    from nfl_dfs.depth_roles import DepthRow, effective_depth_ranks
+
+    ranks = effective_depth_ranks(
+        [
+            DepthRow(person="SEA|RB|Sea Lead RB", team="SEA", position="RB",
+                     published_rank=1, player_name="Sea Lead RB")
+        ],
+        unavailable_people=set(),
+    )
+    reduced, _report = redistribute_opportunity(model, contract, depth_ranks=ranks)
+    after = {p.underlying_id: p.carry_share for p in reduced.players}
+    assert after["SEA|RB|Sea Third RB"] > before["SEA|RB|Sea Third RB"]

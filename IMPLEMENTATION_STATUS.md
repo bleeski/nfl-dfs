@@ -41,6 +41,29 @@ chart establishes who starts, not target or carry share, and the contract says
 so and enforces it. It does not touch the objective, ownership, the candidate
 bank, or `MODEL_STATUS`. Output remains `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
 
+- **Effective depth rank and OUT-promotion**, `src/nfl_dfs/depth_roles.py`,
+  chunk `P7` (2026-09-21), under Ben's `R25` ruling. A published rank-1 who the
+  salary bytes flag unavailable no longer stops the run: the next available
+  person in the published order inherits the role, and every promotion is named
+  in the run record. Ranks are derived for `QB`, `RB`, `WR` and `TE`, keyed
+  `(person, position)` so a kick-return line cannot become an offensive role.
+  `depth_charts` is now the eighth registered `NflverseSource`, frozen and
+  hash-bound into the prior package.
+
+  Verified against real published bytes (artifact sha256 `e6ba0a08…0494c02`,
+  snapshot `2026-09-20T12:14:30Z`) for the depth-chart half. **The DraftKings
+  half is fixture bytes, not the 2026-09-20 salary export**, which is under a
+  gitignored path on Ben's Windows checkout. So this is verified to the same
+  standard as a unit-tested contract, not "end to end against real bytes" in the
+  sense the entry above means it. The snapshot replay is operator item 6 in
+  `backlog.md`.
+
+  Only the quarterback path is wired into the resolver today. The non-quarterback
+  ranks are derived and tested but reach a projection only through
+  `redistribute_opportunity`'s optional `depth_ranks`, which is **off by
+  default**: the proportional rule it would replace was set by measurement and
+  inheritance has not been graded against it. That grading is `P0`.
+
 ### Known environment limits, measured the same day
 
 These bound what a cloud session can do and are not claims about Ben's Windows
