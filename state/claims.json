@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "a4e16bb0-4845-5c68-a977-80d659d45775",
-      "branch": "claude/next-implementation-priorities-ptjksf",
-      "chunk": "P7",
-      "claimed_at": "2026-09-21T16:19:32Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
