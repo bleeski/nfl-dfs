@@ -79,6 +79,36 @@ blocked row rather than one hardcoded phrase.
 No test asserted `QB_DEPTH_STARTER_NOT_SELECTABLE`, so replacing that refusal
 weakened no existing coverage. The behaviour had none.
 
+#### A regression this chunk introduced, caught in review and fixed
+
+Registering `depth_charts` put a real cost on the lock-critical path.
+`freeze_sources` fetches every specification and then calls `read_csv_rows`,
+which materializes every row. Measured on the captured artifact:
+
+```
+read_csv_rows("depth_charts")    545,184 rows   14.91s   519 MB peak
+count_csv_rows("depth_charts")   545,184 rows    6.68s     0 MB retained
+```
+
+So the first version of this change added a 52MB download, a 14.91-second parse
+and a 519MB memory spike to every proposal build, for a file nothing reads: the
+adapter joins on no depth-chart row, and the resolution path reads its own
+capture from `make_offensive_role_evidence.py`. On a project whose worst outcome
+is no lineup, that is the wrong trade to make silently.
+
+`NflverseSource` now carries `rows_are_joined_on`, true for the seven sources
+the adapter joins on and false for `depth_charts`. A provenance-only source is
+still fetched, hashed, expiry-bound, license-bound and column-checked, and an
+empty one is still refused; only the retention is dropped.
+`test_only_the_depth_chart_is_provenance_only` fails first if a later chunk
+makes the adapter join on it.
+
+Worth stating plainly, because the binding reads stronger than it is: nothing
+cross-checks the frozen copy against the capture the resolver actually uses. The
+hash binding is provenance, not proof, until something does. That is a design
+point for a later chunk, not a defect in this one, and it is recorded here so it
+is not mistaken for a guarantee.
+
 #### What this does not prove
 
 The acceptance line "on the 2026-09-20 salary snapshot" is **not** met here and
@@ -92,10 +122,12 @@ acceptance items and are recorded as such in `backlog.md`.
 
 #### Verification
 
-- Complete pinned suite on `.venv-linux`, watched to completion:
-  `1048 passed, 1 skipped in 159.46s (0:02:39)`. That is the 1023 the branch
-  inherited from PR #34 plus the 25 tests this chunk adds, and the one skip is
-  the expected Windows symlink-permission case.
+- Complete pinned suite on `.venv-linux`, watched to completion. First green
+  head: `1048 passed, 1 skipped in 159.46s (0:02:39)`, the 1023 the branch
+  inherited from PR #34 plus 25 tests. After the provenance-source fix above,
+  `1052 passed, 1 skipped in 158.14s (0:02:38)`, adding the four tests
+  that pin it. The one skip is the expected Windows
+  symlink-permission case in both.
 - Focused first: `tests/test_depth_roles.py` 17 passed;
   `tests/test_qb_depth_roles.py` 43 passed; `tests/test_participation.py`
   26 passed; `tests/test_priors_adapter.py` and
