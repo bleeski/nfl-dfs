@@ -410,11 +410,37 @@ def vacated_opportunity_by_position(
     return vacated
 
 
+def _successor_at(
+    depth_ranks: Mapping[tuple[str, str], object],
+    pool: Mapping[str, float],
+    *,
+    position: str,
+) -> str | None:
+    """The lowest effective rank among the survivors holding this position.
+
+    Returns `None` when the depth chart places none of them, which leaves the
+    proportional rule in charge rather than inventing a successor. A rank is
+    keyed `(person, position)` so a kick-return line can never nominate one.
+    """
+
+    ranked: list[tuple[int, str]] = []
+    for person in pool:
+        rank = depth_ranks.get((person, position))
+        effective = getattr(rank, "effective_rank", None)
+        if effective is None:
+            continue
+        ranked.append((int(effective), person))
+    if not ranked:
+        return None
+    return min(ranked)[1]
+
+
 def redistribute_opportunity(
     model: OpportunityModel,
     contract: ParticipationContract,
     *,
     redistribute: bool = True,
+    depth_ranks: Mapping[tuple[str, str], object] | None = None,
 ) -> tuple[OpportunityModel, dict[str, object]]:
     """Drop unavailable people and, by default, reallocate what they vacate.
 
@@ -441,6 +467,21 @@ def redistribute_opportunity(
     keep unmodified prior shares and nothing is reallocated. That understates a
     promoted survivor, and unevenly between the two teams, so it is not the
     default.
+
+    `depth_ranks` is P7's inheritance route: the effective depth ranks from
+    `depth_roles.effective_depth_ranks`, keyed `(person, position)`. When it is
+    supplied, a vacated share goes to the person who actually inherits the role
+    (effective rank 1 among the survivors at the vacating position) instead of
+    proportionally to everyone at that position. A depth chart names a
+    successor; proportional-to-prior does not know there is one, which is how a
+    third-string back drew a share of a vacated workload he will not see.
+
+    It is off by default, deliberately. The proportional rule above was forced
+    by measurements on the real NE@SEA pool, and nothing has yet measured
+    inheritance against it: that needs the standings grading harness, which is
+    chunk `P0` and is blocked on the corpus transport. Switching the default is
+    a modelling change that should follow a number, not precede one. Supplying
+    the ranks is an explicit caller decision until then.
     """
 
     from dataclasses import replace
@@ -465,6 +506,11 @@ def redistribute_opportunity(
         "surviving_people": len(survivors),
         "vacated_by_team": vacated,
         "capacity_data_quality": capacity_data_quality(model),
+        "vacancy_rule": (
+            "DEPTH_CHART_SUCCESSOR_INHERITS_V1"
+            if depth_ranks
+            else "PROPORTIONAL_TO_PRIOR_NO_SUCCESSOR_KNOWN"
+        ),
         "capacity_treatment": (
             "DIAGNOSTIC_ONLY:role_capacity is a mean prior-season snap share and is"
             " not a forward ceiling; a promoted survivor is expected to exceed it"
@@ -509,6 +555,18 @@ def redistribute_opportunity(
                         if position_of[person] in tier
                         and position_of[person] in absorbers
                     }
+                    # P7. The depth chart names who inherits the role, so when
+                    # the caller supplied effective ranks the vacated share goes
+                    # to that person rather than being split across the room.
+                    # Scoped to the vacating position only: a successor at RB
+                    # inherits vacated carries, and nothing about him says he
+                    # absorbs a spill from another position group.
+                    if depth_ranks and tier == frozenset({source_position}):
+                        successor = _successor_at(
+                            depth_ranks, pool, position=source_position
+                        )
+                        if successor is not None:
+                            pool = {successor: 1.0}
                     weight = sum(pool.values())
                     if not pool or weight <= 0:
                         continue

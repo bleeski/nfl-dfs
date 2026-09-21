@@ -198,15 +198,30 @@ def test_every_reported_flag_has_real_text():
 
 
 def test_the_blocker_ben_actually_owns_is_flagged():
-    """A chunk BLOCKED on Ben must have a flag a startup digest can show.
+    """Every chunk BLOCKED on Ben must have a flag a startup digest can show.
 
-    This asserted a pull-request number until 2026-09-20, which made it fail
-    the moment that pull request merged and the ledger became correct. A
-    specific PR is a fact with an expiry date; the invariant underneath it is
-    not. `X2` is `BLOCKED` on Ben's choice of where the standings corpus lives,
-    and `P0` waits behind `X2`, so that choice has to be visible on every
-    session start or the queue stalls with nothing saying why.
+    Twice now this test has pinned the wrong thing. It asserted a pull-request
+    number until 2026-09-20 and failed the moment that pull request merged; it
+    then asserted the words "standings exports" and failed on 2026-09-21 the
+    moment Ben ruled `R27` and `X2` stopped being blocked on him. Both times the
+    ledger was correct and the test was wrong, because both pinned a fact with
+    an expiry date instead of the invariant underneath it.
+
+    The invariant does not expire: if the queue says a chunk waits on Ben, a
+    session start has to be able to show him what the question is, or the queue
+    stalls with nothing saying why. A ruling closes the flag and the row
+    together, so a chunk that is no longer blocked on him needs no flag at all.
     """
 
-    joined = " ".join(flag["text"] for flag in _repo_state().ben_flags()).lower()
-    assert "standings exports" in joined, "the corpus choice unblocks X2, then P0"
+    module = _repo_state()
+    joined = " ".join(flag["text"] for flag in module.ben_flags()).lower()
+    waiting = [
+        row
+        for row in module.chunk_queue()
+        if row["status"] == "BLOCKED" and "ben" in row["depends_on"].lower()
+    ]
+    for row in waiting:
+        assert joined, (
+            f"{row['chunk']} is BLOCKED on {row['depends_on']!r} and no [BEN: ...]"
+            " flag is open, so a session start cannot show the question"
+        )

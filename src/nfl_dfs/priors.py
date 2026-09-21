@@ -133,6 +133,11 @@ class NflverseSource:
     staleness_basis: str
     required_columns: tuple[str, ...]
     license_decision: str = "PERMITTED_REPOSITORY_LICENSE"
+    # True when the adapter joins on this artifact's rows, which is every
+    # source but one. A provenance-only source is still fetched, hashed,
+    # expiry-bound and column-checked; its rows are counted rather than kept,
+    # because keeping them costs the lock path and nothing reads them.
+    rows_are_joined_on: bool = True
 
 
 _NFLDATA_RAW = "https://raw.githubusercontent.com/nflverse/nfldata/master/data"
@@ -276,6 +281,48 @@ def source_specifications(*, season: int, prior_season: int) -> tuple[NflverseSo
                 "status",
             ),
         ),
+        NflverseSource(
+            name="depth_charts",
+            url=f"{_NFLVERSE_RELEASE}/depth_charts/depth_charts_{season}.csv",
+            parser_version="nflverse_depth_charts_csv_v1",
+            # P7. Measured on the published 2026 artifact on 2026-09-21: 190
+            # snapshots, two on most days (2026-09-20 carries 06:02:02Z and
+            # 12:14:30Z). 36 hours is the expiry the producer script
+            # `make_offensive_role_evidence.py` has always used, kept rather
+            # than tightened so the two paths cannot disagree about whether the
+            # same capture is fresh.
+            #
+            # Expiry is not the interesting staleness here and must not be read
+            # as a freshness guarantee. The last chart before a 13:00 ET Sunday
+            # lock is 08:14 ET and official inactives publish about 11:30 ET, so
+            # a perfectly unexpired chart is still blind to the only news that
+            # decides who starts. That gap is what effective depth rank exists
+            # to close; see `depth_roles.py`.
+            expires_after=timedelta(hours=36),
+            staleness_basis="DEPTH_CHART_REPUBLISHED_ABOUT_TWICE_DAILY_NEVER_BETWEEN_INACTIVES_AND_LOCK",
+            # Provenance only. The adapter joins on no depth-chart row; the
+            # resolution path reads its own capture, produced by
+            # `scripts/make_offensive_role_evidence.py`. Binding it here records
+            # which chart the run had available. Until something cross-checks
+            # the two captures that binding is provenance and not proof, and it
+            # must not cost the lock path a 545,184-row materialization to
+            # provide.
+            rows_are_joined_on=False,
+            required_columns=(
+                "dt",
+                "team",
+                "player_name",
+                "espn_id",
+                "gsis_id",
+                "pos_grp_id",
+                "pos_grp",
+                "pos_id",
+                "pos_name",
+                "pos_abb",
+                "pos_slot",
+                "pos_rank",
+            ),
+        ),
     )
 
 
@@ -388,6 +435,37 @@ def read_csv_rows(path: Path, required_columns: Sequence[str], *, label: str) ->
             if missing:
                 raise PriorsBuildError(f"SOURCE_COLUMNS_MISSING:{label}:{sorted(missing)}")
             return [row for row in reader if any((value or "").strip() for value in row.values())]
+    except OSError as exc:
+        raise PriorsBuildError(f"SOURCE_UNREADABLE:{label}:{exc}") from exc
+
+
+def count_csv_rows(path: Path, required_columns: Sequence[str], *, label: str) -> int:
+    """Check the header and count non-blank rows without retaining any of them.
+
+    `read_csv_rows` materializes every row, which is right for the six sources
+    the adapter joins on. It is wrong for one bound purely for provenance: the
+    published `depth_charts` artifact is 51,864,767 bytes and 545,184 rows, and
+    materializing it costs 14.91s and a 519MB peak on a path that has to finish
+    before a lock. Measured on 2026-09-21 against artifact sha256
+    `e6ba0a08dc40c164eb02ce7654a247c8eb5c2d189c92d993d028524eb0494c02`.
+
+    Every check `read_csv_rows` performs is performed here: the required columns
+    must be present, the file must be readable, and the caller still refuses an
+    empty source. Only the retention is dropped.
+    """
+
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = tuple(reader.fieldnames or ())
+            missing = [column for column in required_columns if column not in fieldnames]
+            if missing:
+                raise PriorsBuildError(f"SOURCE_COLUMNS_MISSING:{label}:{sorted(missing)}")
+            return sum(
+                1
+                for row in reader
+                if any((value or "").strip() for value in row.values())
+            )
     except OSError as exc:
         raise PriorsBuildError(f"SOURCE_UNREADABLE:{label}:{exc}") from exc
 
@@ -525,8 +603,15 @@ def freeze_sources(
         captured = artifact.captured_at.astimezone(timezone.utc)
         if captured > as_of + timedelta(minutes=5):
             raise PriorsBuildError(f"FETCH_CLOCK_AHEAD_OF_AS_OF:{specification.name}")
-        rows = read_csv_rows(path, specification.required_columns, label=specification.name)
-        if not rows:
+        if specification.rows_are_joined_on:
+            row_count = len(
+                read_csv_rows(path, specification.required_columns, label=specification.name)
+            )
+        else:
+            row_count = count_csv_rows(
+                path, specification.required_columns, label=specification.name
+            )
+        if not row_count:
             raise PriorsBuildError(f"SOURCE_EMPTY:{specification.name}")
         frozen[specification.name] = FrozenArtifact(
             name=specification.name,
@@ -543,7 +628,7 @@ def freeze_sources(
             license_decision=specification.license_decision,
             parser_version=specification.parser_version,
             staleness_basis=specification.staleness_basis,
-            coverage={**dict(artifact.coverage), "rows": len(rows)},
+            coverage={**dict(artifact.coverage), "rows": row_count},
         )
     return frozen
 

@@ -4,6 +4,169 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-21: P7, the engine can tell who is starting today
+
+Chunk `P7`, on `claude/next-implementation-priorities-ptjksf`. Release truths
+unchanged: every path still ends `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`. No run was executed and no gate's authority
+changed.
+
+#### What landed
+
+- **`src/nfl_dfs/depth_roles.py`** (new). Effective depth rank for `QB`, `RB`,
+  `WR` and `TE`: the published `pos_rank` at one `(team, position)` with
+  everyone the bound salary bytes flag unavailable removed from above, and the
+  survivors renumbered from 1. Keyed `(person, position)` and never by person
+  alone, so a return line cannot become an offensive role.
+- **`qb_depth_roles.py`**: `QB_DEPTH_STARTER_NOT_SELECTABLE` is replaced by
+  promotion, under `R25`'s bounds. Availability is re-derived from
+  `contract.unavailable_people` (the salary Status bytes) rather than from
+  `selectable_people`, so an operator exclusion can never promote a backup; that
+  case keeps a refusal, now `QB_DEPTH_PROMOTION_OVER_AVAILABLE_PERSON`. A team
+  with nobody selectable anywhere in the order still refuses, as
+  `QB_DEPTH_NO_SELECTABLE_PERSON_AT_POSITION`. Every promotion is reported in
+  `effective_starter_promotions` alongside a `promotion_rule` string.
+- **`priors.py`**: `depth_charts` registered as the eighth `NflverseSource`, so
+  the chart is frozen into the prior package and hash-bound like the other
+  seven instead of living only in a producer script. 36-hour expiry, matching
+  the producer's existing number so the two paths cannot disagree about whether
+  one capture is fresh.
+- **`participation.py`**: `redistribute_opportunity` takes an optional
+  `depth_ranks`. Supplied, a vacated share goes to the effective-rank-1 survivor
+  at the vacating position; omitted, the measured proportional rule is
+  unchanged. **Off by default on purpose.** The proportional rule was forced by
+  measurements on the real NE@SEA pool and nothing has graded inheritance
+  against it; that needs `P0`. Switching the default should follow a number.
+- **`docs/DATA_CONTRACTS.md`**: `effective_depth_rank_v1` and the
+  `depth_charts` registration documented. `nfl_qb_depth_role_evidence_v1` is
+  **not** mutated; a package still declares the published order and the engine
+  derives the effective one.
+
+#### Evidence, measured rather than recalled
+
+The real nflverse artifact was captured on 2026-09-21 through
+`sources.fetch_public_artifact` (the only approved client), 51,864,767 bytes,
+sha256 `e6ba0a08dc40c164eb02ce7654a247c8eb5c2d189c92d993d028524eb0494c02`. It
+holds 190 snapshots. The fetch needed `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1`, the
+approved opt-in, because this container's proxy CA has no key-usage extension.
+
+Confirming the chunk's premise: the last snapshot before the 2026-09-20 13:00 ET
+lock is `2026-09-20T12:14:30Z`, which is 08:14:30 ET, against inactives at about
+11:30 ET. The brief's cadence table is correct.
+
+At that snapshot: `SEA` QB Darnold 1, Lock 2, Milroe 3; `MIN` QB Murray 1,
+Wentz 2, McCarthy 3; `LV` TE Bowers 1, Mayer 2; `HOU` WR Collins 1,
+Hutchinson 2; `BAL` WR Flowers 1, Bateman 2. Every promotion the `R25` stanza
+named is reproduced by the resolver from those ranks.
+
+The kick-return hazard is real and is now covered: Brian Robinson Jr. (ATL) is
+`KR` 1 and `RB` 2, and Devin Duvernay (ARI) is `KR` 1, `PR` 1 and `WR` 6.
+Keying by person and taking the best row would have made them a lead back and a
+WR1.
+
+#### A test this changed, and why
+
+`tests/test_backlog_queue.py::test_the_blocker_ben_actually_owns_is_flagged`
+failed after `R27` closed operator item 1b. It asserted the literal words
+"standings exports" appeared in an open `[BEN: ...]` flag. That assertion was
+wrong once Ben ruled, in the same way its previous version was wrong once the
+pull request it named merged: both pinned a fact with an expiry date rather than
+the invariant. It now asserts the invariant that does not expire, that any
+queue row `BLOCKED` on Ben has a flag a session start can show. The test was not
+deleted, skipped or loosened; it asserts strictly more than before, across every
+blocked row rather than one hardcoded phrase.
+
+No test asserted `QB_DEPTH_STARTER_NOT_SELECTABLE`, so replacing that refusal
+weakened no existing coverage. The behaviour had none.
+
+#### A regression this chunk introduced, caught in review and fixed
+
+Registering `depth_charts` put a real cost on the lock-critical path.
+`freeze_sources` fetches every specification and then calls `read_csv_rows`,
+which materializes every row. Measured on the captured artifact:
+
+```
+read_csv_rows("depth_charts")    545,184 rows   14.91s   519 MB peak
+count_csv_rows("depth_charts")   545,184 rows    6.68s     0 MB retained
+```
+
+So the first version of this change added a 52MB download, a 14.91-second parse
+and a 519MB memory spike to every proposal build, for a file nothing reads: the
+adapter joins on no depth-chart row, and the resolution path reads its own
+capture from `make_offensive_role_evidence.py`. On a project whose worst outcome
+is no lineup, that is the wrong trade to make silently.
+
+`NflverseSource` now carries `rows_are_joined_on`, true for the seven sources
+the adapter joins on and false for `depth_charts`. A provenance-only source is
+still fetched, hashed, expiry-bound, license-bound and column-checked, and an
+empty one is still refused; only the retention is dropped.
+`test_only_the_depth_chart_is_provenance_only` fails first if a later chunk
+makes the adapter join on it.
+
+Worth stating plainly, because the binding reads stronger than it is: nothing
+cross-checks the frozen copy against the capture the resolver actually uses. The
+hash binding is provenance, not proof, until something does. That is a design
+point for a later chunk, not a defect in this one, and it is recorded here so it
+is not mistaken for a guarantee.
+
+#### What this does not prove
+
+The acceptance line "on the 2026-09-20 salary snapshot" is **not** met here and
+is not claimed. `data/runs/` is gitignored, so that salary export is on Ben's
+Windows checkout and is not in this container; DraftKings is never fetched. The
+`Status` bytes in these fixtures are chosen to reproduce the documented
+situation, not read from that export. The depth-chart half is real published
+bytes; the DraftKings half is a fixture. The snapshot-bound replay and the
+byte-identical-replay-on-the-frozen-snapshot line stay open as Windows-session
+acceptance items and are recorded as such in `backlog.md`.
+
+#### Verification
+
+- Complete pinned suite on `.venv-linux`, watched to completion. First green
+  head: `1048 passed, 1 skipped in 159.46s (0:02:39)`, the 1023 the branch
+  inherited from PR #34 plus 25 tests. After the provenance-source fix above,
+  `1052 passed, 1 skipped in 158.14s (0:02:38)`, adding the four tests
+  that pin it. The one skip is the expected Windows
+  symlink-permission case in both.
+- Focused first: `tests/test_depth_roles.py` 17 passed;
+  `tests/test_qb_depth_roles.py` 43 passed; `tests/test_participation.py`
+  26 passed; `tests/test_priors_adapter.py` and
+  `tests/test_classic_prior_review.py` 66 passed together.
+- `sh ./nfl.sh doctor`: `pass_status: true`.
+- `git diff --check` clean; `python3 scripts/check_protected_paths.py` reports
+  `No protected path touched (3 changed)`; changed modules compile.
+
+### 2026-09-21: R27 ruled, X2 unblocked, and PR #34 merged
+
+Ledger only, no code.
+
+- **PR #34 merged** (`803618a`) on green CI for head `f4165ef`: `suite`,
+  `boundaries` and `protected-paths` all success on run 35553889624. It brought
+  `R26` (a retractable venue's blank `roof` resolved from the venue's own
+  completed-game history) and the session probe at the head of `run-slate`.
+- **`R27` ruled by Ben**: the 26 standings exports live as private GitHub
+  release assets with authenticated retrieval added to `sources.py`. Options B
+  (commit the corpus, 1.5MB to ~80MB and growing) and C (leave `P0`
+  Windows-only) rejected. `X2` moves `BLOCKED` to `READY`; operator item 1b is
+  closed. Its bounds are in the `R27` stanza and are binding on the chunk.
+- The flag's claim that option A needs a `ben-review` pull request is corrected.
+  `src/nfl_dfs/sources.py` left the protected list on 2026-09-20, so `X2` merges
+  on green like any other chunk.
+
+#### Egress measured, and it contradicts a document and a sibling session
+
+`scripts/session_probe.py` in this container, 2026-09-21: all six allowlisted
+hosts reachable, `VERDICT: CAN_COMPLETE_A_RUN`. PR #34, written the same day,
+measured `api.weather.gov` at 403 on CONNECT and called it "organization policy,
+not routable around". Both measurements are correct; egress varies per session.
+
+That is `X1`'s whole case, now with same-day evidence on both sides, and it
+means `docs/CLAUDE_CODE_SETUP.md` § Known environment facts cannot be fixed by
+editing the value: it asserts a per-session fact as a standing one. It is also
+stale on a second count, claiming a suite of `1 failed, 735 passed, 1 skipped`
+against a measured 984 passed at that commit. `X1` owns both.
+
+
 ### 2026-09-21: the weather gate stops demanding a forecast for a game played under a roof
 
 Raised by Ben after the Week 2 afternoon Classic slate: "why do we keep having

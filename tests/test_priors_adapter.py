@@ -1457,3 +1457,74 @@ def test_a_retractable_venue_with_one_open_game_still_blocks_the_freeze(tmp_path
             output_dir=tmp_path / "mixed_out",
         )
     assert not (tmp_path / "mixed_out").exists()
+
+
+# --- P7: a provenance-only source must not cost the lock path ------------
+
+
+def _depth_chart_csv(tmp_path, rows=2):
+    columns = priors.source_specifications(
+        season=2026, prior_season=2025
+    )
+    spec = {item.name: item for item in columns}["depth_charts"]
+    path = tmp_path / "depth_charts.csv"
+    body = [",".join(spec.required_columns)]
+    for index in range(rows):
+        body.append(
+            ",".join(
+                [
+                    "2026-09-20T12:14:30Z", "SEA", f"Player {index}", str(index),
+                    f"00-00{index:05d}", "1", "OFF", "1", "Quarterback", "QB",
+                    "1", str(index + 1),
+                ]
+            )
+        )
+    path.write_text("\n".join(body) + "\n", encoding="utf-8")
+    return path, spec
+
+
+def test_counting_a_provenance_source_agrees_with_reading_it(tmp_path):
+    """The cheap path and the retaining path must not disagree about a file."""
+
+    path, spec = _depth_chart_csv(tmp_path, rows=5)
+    counted = priors.count_csv_rows(path, spec.required_columns, label="depth_charts")
+    read = priors.read_csv_rows(path, spec.required_columns, label="depth_charts")
+    assert counted == len(read) == 5
+
+
+def test_counting_still_refuses_a_missing_column(tmp_path):
+    path, spec = _depth_chart_csv(tmp_path)
+    with pytest.raises(priors.PriorsBuildError, match="SOURCE_COLUMNS_MISSING:depth_charts"):
+        priors.count_csv_rows(path, (*spec.required_columns, "not_a_column"), label="depth_charts")
+
+
+def test_counting_skips_blank_rows_exactly_as_reading_does(tmp_path):
+    path, spec = _depth_chart_csv(tmp_path, rows=3)
+    path.write_text(
+        path.read_text(encoding="utf-8") + "," * (len(spec.required_columns) - 1) + "\n",
+        encoding="utf-8",
+    )
+    counted = priors.count_csv_rows(path, spec.required_columns, label="depth_charts")
+    read = priors.read_csv_rows(path, spec.required_columns, label="depth_charts")
+    assert counted == len(read) == 3
+
+
+def test_only_the_depth_chart_is_provenance_only():
+    """Every source the adapter actually joins on still materializes its rows.
+
+    `depth_charts` is 51,864,767 bytes and 545,184 rows; materializing it cost
+    14.91s and a 519MB peak on the path that has to finish before a lock, for a
+    file nothing reads. Counting instead costs 6.68s and no retained memory.
+    If a later chunk makes the adapter join on it, this test is the one that
+    should fail first.
+    """
+
+    specs = {
+        item.name: item
+        for item in priors.source_specifications(season=2026, prior_season=2025)
+    }
+    provenance_only = {
+        name for name, item in specs.items() if not item.rows_are_joined_on
+    }
+    assert provenance_only == {"depth_charts"}
+    assert len(specs) == 8

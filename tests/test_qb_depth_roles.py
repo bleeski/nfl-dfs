@@ -994,3 +994,97 @@ def test_the_package_is_bound_wherever_the_offensive_package_is():
     cli_source = inspect.getsource(cli)
     assert '"--qb-depth-role-evidence-json"' in cli_source
     assert "qb_depth_role_evidence_json=request.qb_depth_role_evidence_json," in cli_source
+
+
+# --- P7 / R25: the published starter is OUT and the backup inherits -------
+
+
+_STARTER_OUT_POOL = tuple(
+    (team, position, name, "OUT" if name == "KC Starter QB" else status, salary)
+    for team, position, name, status, salary in _POOL
+)
+
+
+def test_a_published_starter_flagged_out_promotes_the_backup_instead_of_stopping(tmp_path):
+    """R25, ruled 2026-09-20. This used to raise QB_DEPTH_STARTER_NOT_SELECTABLE.
+
+    The refusal told the operator to refresh the depth chart after the inactive
+    change. Measured on the real published artifact, the last chart before a
+    13:00 ET Sunday lock is 08:14 ET and inactives publish about 11:30 ET, so
+    that remedy does not exist inside the window where it is needed. Ben ruled
+    it a defect; the backup inherits the job instead.
+    """
+
+    slate, model, contract, _splits_ = _setup(tmp_path, pool=_STARTER_OUT_POOL)
+    package = _package(tmp_path / "qb", slate, _orders())
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=package, as_of=AS_OF
+    )
+    backup = _person(slate, "KC Backup QB")
+    starter = _person(slate, "KC Starter QB")
+    assert resolution.report["starters_by_team"]["KC"] == backup
+    # Conservation is unchanged: the pool moves whole onto whoever holds the
+    # job, and the person the salary bytes flag OUT keeps nothing.
+    assert resolution.shares_by_person[backup] == pytest.approx(1.0)
+    assert resolution.shares_by_person[starter] == 0.0
+
+
+def test_every_promotion_is_named_in_the_run_record(tmp_path):
+    slate, model, contract, _splits_ = _setup(tmp_path, pool=_STARTER_OUT_POOL)
+    package = _package(tmp_path / "qb", slate, _orders())
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=package, as_of=AS_OF
+    )
+    promotions = resolution.report["effective_starter_promotions"]
+    assert len(promotions) == 1
+    row = promotions[0]
+    assert row["team"] == "KC"
+    assert row["published_starter"] == _person(slate, "KC Starter QB")
+    assert row["effective_starter"] == _person(slate, "KC Backup QB")
+    assert row["promoted_over"] == [_person(slate, "KC Starter QB")]
+    assert row["basis"] == "SALARY_STATUS_UNAVAILABLE_ABOVE"
+
+
+def test_an_ordinary_slate_reports_no_promotion(tmp_path):
+    slate, model, contract, _splits_ = _setup(tmp_path)
+    package = _package(tmp_path / "qb", slate, _orders())
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=package, as_of=AS_OF
+    )
+    assert resolution.report["effective_starter_promotions"] == []
+    assert resolution.report["starters_by_team"]["KC"] == _person(slate, "KC Starter QB")
+
+
+def test_an_operator_exclusion_does_not_promote_and_still_refuses(tmp_path):
+    """The salary bytes still show the starter available, so nobody inherits.
+
+    R25's bound: availability is re-derived from the bound salary bytes. An
+    operator exclusion is a preference, and a preference must never be able to
+    hand the job to somebody else.
+    """
+
+    slate, model, _contract, _splits_ = _setup(tmp_path)
+    excluded = build_participation_contract(
+        slate,
+        operator_excluded_dk_ids=[
+            p.dk_id for p in slate.players if p.name == "KC Starter QB"
+        ],
+    )
+    package = _package(tmp_path / "qb", slate, _orders())
+    with pytest.raises(QbDepthRoleError, match="QB_DEPTH_PROMOTION_OVER_AVAILABLE_PERSON"):
+        resolve_qb_depth_roles(
+            slate, model, excluded, evidence_path=package, as_of=AS_OF
+        )
+
+
+def test_a_team_with_no_selectable_quarterback_is_still_refused(tmp_path):
+    pool = tuple(
+        (team, position, name, "OUT" if team == "KC" and position == "QB" else status, salary)
+        for team, position, name, status, salary in _POOL
+    )
+    slate, model, contract, _splits_ = _setup(tmp_path, pool=pool)
+    package = _package(tmp_path / "qb", slate, _orders())
+    with pytest.raises(QbDepthRoleError, match="QB_DEPTH_NO_SELECTABLE_PERSON_AT_POSITION"):
+        resolve_qb_depth_roles(
+            slate, model, contract, evidence_path=package, as_of=AS_OF
+        )
