@@ -235,6 +235,21 @@ def main() -> int:
             "\n  - run the slate from a session that can."
             "\nNever invent an observation to clear the gate."
         )
+        if any(b["host"] == "api.weather.gov" for b in report["blocking_hosts"]):
+            # The one blocked host with a ready answer. Naming the commands beats
+            # describing the idea: on 2026-09-20 this chain existed, was stdlib
+            # only, and went unused on two lost slates.
+            print(
+                "\nFor api.weather.gov specifically, the capture does not have to"
+                "\nhappen here. On a machine that reaches the host (the Windows"
+                "\ndesktop), inside six hours of lock:"
+                "\n  python3 scripts/fetch_weather_captures.py \\"
+                "\n      --salaries <the salary CSV> --out-dir <run>/weather"
+                "\n  python3 scripts/make_classic_weather_evidence.py \\"
+                "\n      --salaries <the salary CSV> --plan <run>/weather/plan.json \\"
+                "\n      --out-dir <run>/weather"
+                "\nthen pass the result to run-slate as --weather-evidence-json."
+            )
     return 2 if blocking else 0
 
 

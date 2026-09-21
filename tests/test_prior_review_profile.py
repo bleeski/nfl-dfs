@@ -1098,3 +1098,67 @@ def test_an_unclassified_draftkings_status_stops_the_run_by_name(tmp_path: Path)
     )
     assert not cleared.blocked
     assert cleared.file_valid
+
+
+# --------------------------------------------------------------------------- #
+# R26: a retractable venue's blank roof
+# --------------------------------------------------------------------------- #
+
+
+def test_a_retractable_venue_blank_roof_resolves_from_its_own_history() -> None:
+    """The 2026-09-20 afternoon slate sent SEA@ARI and WAS@DAL to the gate.
+
+    Both are played under a roof. nflverse writes the `roof` cell only after the
+    game, so both carried a blank, and a blank asked for an api.weather.gov
+    capture that this session's egress proxy refuses.
+    """
+
+    decision = decide_weather(
+        "",
+        game_id="WAS@DAL",
+        venue_roof_history={"DAL": {"closed": 17}},
+        venue_roof_seasons=(2025, 2026),
+    )
+    assert decision.blockers == ()
+    assert decision.freeze_weather_state is None
+    assert decision.basis == (
+        "DERIVED_FROM_VENUE_ROOF_HISTORY:retractable:closed=17/17:seasons=2025,2026"
+    )
+
+
+def test_a_blank_roof_with_no_history_still_asks_for_the_capture() -> None:
+    decision = decide_weather("", game_id="WAS@DAL")
+    assert any(value.startswith("WEATHER_CAPTURE_REQUIRED:") for value in decision.blockers)
+
+
+def test_an_outdoor_venue_blank_roof_still_asks_for_the_capture() -> None:
+    decision = decide_weather(
+        "",
+        game_id="MIA@SF",
+        venue_roof_history={"SF": {"outdoors": 17}},
+    )
+    assert any(value.startswith("WEATHER_CAPTURE_REQUIRED:") for value in decision.blockers)
+
+
+def test_a_mixed_retractable_history_still_asks_for_the_capture() -> None:
+    decision = decide_weather(
+        "",
+        game_id="JAX@HOU",
+        venue_roof_history={"HOU": {"closed": 16, "open": 1}},
+    )
+    assert any(value.startswith("WEATHER_CAPTURE_REQUIRED:") for value in decision.blockers)
+
+
+def test_an_attributed_capture_still_wins_at_a_retractable_venue() -> None:
+    # A human who went and looked outranks a count of what the roof usually does.
+    decision = decide_weather(
+        "",
+        game_id="WAS@DAL",
+        venue_roof_history={"DAL": {"closed": 17}},
+        weather_state="RAIN",
+        weather_source_uri="https://api.weather.gov/gridpoints/FWD/89,104/forecast",
+        weather_observed_at="2026-09-20T18:00:00+00:00",
+    )
+    assert decision.blockers == ()
+    assert decision.freeze_weather_state == "RAIN"
+    assert decision.basis.startswith("OPERATOR_CAPTURE")

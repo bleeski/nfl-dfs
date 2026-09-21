@@ -720,7 +720,14 @@ force for every slate run. Rulings attributed to Ben keep their dates.
 
 ### When Ben says “run the slate”
 
-0. **Establish what this session can do, before doing anything else.** Run
+0. **Establish what this session can do, before doing anything else.** Since
+   2026-09-21 `run-slate` runs the probe itself at the head of every slate,
+   writes it to `data/runs/<run_id>/session_probe.json` and prints the verdict to
+   stderr, so the answer arrives whether or not anybody remembered to ask.
+   `--no-session-probe` skips it; the suite skips it through
+   `NFL_DFS_SKIP_SESSION_PROBE=1`, set in `tests/conftest.py`, because the probe
+   is a network call. Run it by hand first anyway when the clock is short, because
+   three seconds before the run beats finding out inside it:
 
    `python3 scripts/session_probe.py --salaries '<the salary CSV>'`
 
@@ -744,7 +751,33 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    When exit 2 names a host you cannot reach, the capture does not have to
    happen in the session that builds. `scripts/fetch_weather_captures.py` is
    standard library only and runs anywhere the host is reachable; its output
-   feeds `scripts/make_classic_weather_evidence.py` as normal.
+   feeds `scripts/make_classic_weather_evidence.py` as normal. The probe now
+   prints both commands when `api.weather.gov` is the blocked host, because on
+   2026-09-20 that chain already existed and went unused on two lost slates.
+
+   **Capture the weather before the session, not inside it.** This is the whole
+   fix for a blocked `api.weather.gov`, and it is operator work on a machine that
+   reaches the host (the Windows desktop). A capture expires six hours after it is
+   taken, capped at lock, so the window for a 1pm ET slate opens at 7am ET. One
+   pass, in that window:
+
+       python3 scripts/fetch_weather_captures.py \
+           --salaries '<the salary CSV>' --out-dir '<run>/weather'
+       python3 scripts/make_classic_weather_evidence.py \
+           --salaries '<the salary CSV>' --plan '<run>/weather/plan.json' \
+           --out-dir '<run>/weather'
+
+   Then hand `<run>/weather/weather_evidence.json` to `run-slate` as
+   `--weather-evidence-json`. Both scripts are standard library only, so neither
+   needs `setup` or the project venv on that machine. Neither invents a state: a
+   retractable roof left open is written `REPLACE_ME` for a human to decide, and
+   the count of games needing a decision is the script's own output.
+
+   Since R26 the retractable venues (ARI, ATL, DAL, HOU, IND) no longer reach this
+   step at all. Their blank `roof` cell resolves from the frozen artifact's own
+   record of that venue; `docs/DATA_CONTRACTS.md` § The `roof` column is
+   retrospective has the counts and the three bounds. On the 2026-09-20 afternoon
+   slate that took the captures required from four of five games to two of five.
 
 1. Locate the attached salary and reserved-entry CSVs. Do not depend on their
    filenames. If both are in one attachment directory, run:

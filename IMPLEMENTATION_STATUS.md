@@ -54,6 +54,20 @@ box. Evidence in `changelog.md` 2026-09-19 and issue #21.
   cloud session: `api.weather.gov`, `api.sleeper.app`, `api.the-odds-api.com`.
   `docs/CLAUDE_CODE_SETUP.md:114-125` asserts otherwise and is being replaced by
   a per-session probe in chunk `X1`. nflverse over GitHub is reachable.
+  Re-measured 2026-09-20 and 2026-09-21: unchanged. Since 2026-09-21 `run-slate`
+  runs `scripts/session_probe.py` itself and writes
+  `data/runs/<run_id>/session_probe.json`, so a run records what it could reach
+  instead of leaving it in scrollback. The `doctor` half of `X1` is still open.
+- A blank `roof` cell at a retractable-roof venue (ARI, ATL, DAL, HOU, IND) no
+  longer demands an `api.weather.gov` capture. nflverse writes `roof` only after
+  the game, and `src/nfl_dfs/venues.py` resolves the blank from that venue's own
+  completed history in the run's frozen artifact, over the prior-plus-current
+  season window, when unanimous and at least eight games. On the 2026-09-20
+  afternoon slate this took captures required from 4 of 5 games to 2 of 5. It
+  resolves nothing for an outdoor venue, nothing when the window records an open
+  roof, and an operator capture still outranks it. Genuinely outdoor games still
+  need a real capture, and in a cloud session that capture must be taken
+  elsewhere (`docs/RUNBOOK.md` step 0).
 - `nfl.sh` as shipped fails the entire suite in a fresh container
   (`2 failed, 226 passed, 1 skipped, 562 errors`) because pytest does not create
   the parent of the `--basetemp` it is handed. Fixed in PR #19, unmerged at the

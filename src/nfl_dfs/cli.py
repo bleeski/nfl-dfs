@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import traceback
@@ -130,6 +131,73 @@ RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
 
 def _print_json(value: object) -> None:
     print(json.dumps(value, indent=2, sort_keys=True, default=str))
+
+
+SESSION_PROBE_SCRIPT = PROJECT_ROOT / "scripts" / "session_probe.py"
+SESSION_PROBE_SKIP_ENV = "NFL_DFS_SKIP_SESSION_PROBE"
+SESSION_PROBE_TIMEOUT_SECONDS = 45
+
+
+def _session_probe(salaries: str | Path | None) -> dict[str, object] | None:
+    """Report which evidence gates this session can reach, before the run works.
+
+    `scripts/session_probe.py` has existed since 2026-09-20 and answered the
+    question in three seconds. It only ever ran when somebody remembered it, and
+    on 2026-09-20 two slates were lost walking into a refused `api.weather.gov`
+    instead. This runs it at the head of every `run-slate`, writes the report
+    into the run folder, and says the verdict out loud.
+
+    It never blocks and never raises. A blocked host is a routing decision for
+    the operator, and the Classic fallback path exists precisely so that a
+    session which cannot certify can still build. A probe that cannot run at all
+    is reported as such rather than being read as good news.
+    """
+
+    if os.environ.get(SESSION_PROBE_SKIP_ENV) == "1":
+        return None
+    if not SESSION_PROBE_SCRIPT.is_file():
+        return {"verdict": "PROBE_UNAVAILABLE", "detail": "script missing"}
+    command = [sys.executable, str(SESSION_PROBE_SCRIPT), "--json"]
+    if salaries:
+        command += ["--salaries", str(salaries)]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=SESSION_PROBE_TIMEOUT_SECONDS,
+            check=False,
+        )
+        report = json.loads(completed.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        return {"verdict": "PROBE_UNAVAILABLE", "detail": f"{type(exc).__name__}:{exc}"}
+    if not isinstance(report, dict):
+        return {"verdict": "PROBE_UNAVAILABLE", "detail": "report was not an object"}
+    return report
+
+
+def _announce_session_probe(report: Mapping[str, object] | None) -> None:
+    """Put the verdict where an operator reading a terminal will see it."""
+
+    if not report:
+        return
+    verdict = str(report.get("verdict") or "UNKNOWN")
+    if verdict == "CAN_COMPLETE_A_RUN":
+        return
+    blocking = report.get("blocking_hosts")
+    names = (
+        ", ".join(
+            f"{item.get('host')} ({item.get('gate')})"
+            for item in blocking
+            if isinstance(item, Mapping)
+        )
+        if isinstance(blocking, list)
+        else ""
+    )
+    print(
+        f"session probe: {verdict}" + (f" -- blocked: {names}" if names else ""),
+        file=sys.stderr,
+    )
 
 
 def _blocked_truth_values(
@@ -2721,6 +2789,12 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     snapshotted = _snapshot_cowork_request(request, run_id, intake["hashes"])
     request_path = DEFAULT_RUNS_DIR / run_id / "run_request.json"
     _write_json(request_path, snapshotted.to_dict())
+    # Session capability, before the run spends its window discovering it.
+    if not getattr(args, "no_session_probe", False):
+        probe_report = _session_probe(request.salary_csv)
+        if probe_report is not None:
+            _write_json(DEFAULT_RUNS_DIR / run_id / "session_probe.json", probe_report)
+            _announce_session_probe(probe_report)
     policy_summary: dict[str, object] | None = None
     policy_blockers: list[str] = []
     validated_policy = None
@@ -3324,6 +3398,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "diagnostic (default) and registered run the existing build and certify"
             " path; prior_review drives the prior-only chain and can never certify"
+        ),
+    )
+    cowork.add_argument(
+        "--no-session-probe",
+        action="store_true",
+        default=False,
+        help=(
+            "skip the pre-run host reachability probe; it otherwise runs at the"
+            " head of every slate and is written to the run folder"
         ),
     )
     cowork.add_argument("--prior-package-dir")

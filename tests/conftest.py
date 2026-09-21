@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from nfl_dfs.dk import parse_entries, parse_salaries
 
+
+# `run-slate` probes host reachability at the head of every run (see
+# `cli._session_probe`). That is a network call, and `.claude/rules/tests.md`
+# says the suite makes none, so it is switched off for every test here rather
+# than per test. A test that wants to exercise the probe calls the helper
+# directly with the environment patched.
+os.environ.setdefault("NFL_DFS_SKIP_SESSION_PROBE", "1")
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "supplied"
 

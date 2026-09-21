@@ -52,10 +52,20 @@ from .sources import (
     fetch_public_artifact,
     validate_source_reference_policy,
 )
+from .venues import (
+    RETRACTABLE_ROOF_HOME_TEAMS,
+    resolve_blank_roof,
+    roof_history,
+    season_window,
+)
 
 
 ADAPTER_VERSION = "nflverse_prior_adapter_v2"
-PROPOSAL_SCHEMA = "nfl_prior_identity_proposal_v1"
+# v2 adds `markets[].venue_roof_history` and `venue_roof_history_seasons`, the
+# counts the weather stage resolves a retractable venue's blank roof from. A v1
+# proposal still reads correctly: the keys are absent, the counts are empty, and
+# the blank roof asks for a capture exactly as it did before.
+PROPOSAL_SCHEMA = "nfl_prior_identity_proposal_v2"
 MANIFEST_SCHEMA = "nfl_prior_source_manifest_v1"
 PACKAGE_SCHEMA = "nfl_prior_package_v1"
 
@@ -1338,8 +1348,32 @@ def _weather_evidence_basis(
     return f"OPERATOR_CAPTURE:{source_uri}:observed_at={observed.isoformat()}"
 
 
+def _venue_roof_history_for(
+    game_row: Mapping[str, str],
+    venue_roof_history: Mapping[str, Mapping[str, int]] | None,
+) -> dict[str, int]:
+    """This game's home venue history, or an empty map when it cannot speak.
+
+    Empty for a venue with no retractable roof, so a reader of the proposal
+    cannot mistake an outdoor venue's unanimous `outdoors` count for something
+    the weather stage would act on.
+    """
+
+    home_team = (game_row.get("home_team") or "").strip().upper()
+    if home_team not in RETRACTABLE_ROOF_HOME_TEAMS or not venue_roof_history:
+        return {}
+    return {
+        str(roof): int(count)
+        for roof, count in sorted(dict(venue_roof_history.get(home_team) or {}).items())
+    }
+
+
 def resolve_weather_state(
-    game_row: Mapping[str, str], operator_weather_state: str | None
+    game_row: Mapping[str, str],
+    operator_weather_state: str | None,
+    *,
+    venue_roof_history: Mapping[str, Mapping[str, int]] | None = None,
+    venue_roof_seasons: Iterable[int | str] | None = None,
 ) -> tuple[str, str]:
     """Resolve the weather enum, which has no UNKNOWN member.
 
@@ -1347,9 +1381,28 @@ def resolve_weather_state(
     outdoor game is not: `api.weather.gov` is unreachable from a session, and
     the contract offers no way to say so. Rather than invent a value, an outdoor
     game requires an operator-supplied state and otherwise fails closed.
+
+    One case sits between the two, and `venue_roof_history` is what resolves it.
+    nflverse writes the `roof` column only after the game is played, so an
+    unplayed game at a retractable-roof venue carries a blank cell that this
+    function used to read as an unobserved outdoor game. With the counts from the
+    same frozen schedule artifact in hand, a blank at one of those venues
+    resolves from that venue's own unanimous history instead, under a basis
+    naming the counts. See `venues.resolve_blank_roof` for the three bounds that
+    keep it a prior rather than an observation. Omitting the argument keeps the
+    behaviour that shipped before it existed.
     """
 
     roof = (game_row.get("roof") or "").strip().lower()
+    if not roof and not operator_weather_state:
+        resolved = resolve_blank_roof(
+            (game_row.get("home_team") or "").strip(),
+            venue_roof_history,
+            seasons=venue_roof_seasons,
+        )
+        if resolved is not None:
+            venue_roof, venue_basis = resolved
+            return _ROOF_WEATHER[venue_roof], venue_basis
     derived = _ROOF_WEATHER.get(roof)
     if derived is not None:
         if operator_weather_state and operator_weather_state.upper() != derived:
@@ -1843,6 +1896,11 @@ def propose_prior_package(
     )
     crosswalk = resolve_team_crosswalk(slate, teams_rows, season=season)
     game_rows = resolve_nflverse_games(slate, games_rows, crosswalk, season=season)
+    # Counted once here and carried per game into `markets`, so the weather
+    # stage resolves a retractable venue's blank roof from the artifact this
+    # proposal froze rather than from a constant.
+    venue_roof_seasons = season_window(season, prior_season)
+    venue_roof_history = roof_history(games_rows, seasons=venue_roof_seasons)
     proposals = propose_identities(
         slate,
         roster_rows,
@@ -1945,6 +2003,17 @@ def propose_prior_package(
                     row.get("spread_line") or ""
                 ).strip(),
                 "roof": (row.get("roof") or "").strip(),
+                # This venue's completed home games by recorded roof state, from
+                # the same frozen artifact the roof above came from. The weather
+                # stage reads it to resolve a retractable venue's blank cell; it
+                # is carried per game so the report shows what the resolution
+                # rested on. Empty for a venue with no retractable roof.
+                "venue_roof_history": _venue_roof_history_for(
+                    row, venue_roof_history
+                ),
+                # The window those counts were taken over, carried so the basis
+                # string downstream names it and a replay can reproduce it.
+                "venue_roof_history_seasons": list(venue_roof_seasons),
                 "attribution": "NFLVERSE_SCHEDULE_ARTIFACT_NO_BOOK_NO_PUBLISHER_TIMESTAMP",
             }
             for game_id, row in sorted(game_rows.items())
@@ -2155,13 +2224,21 @@ def freeze_prior_package(
     crosswalk = resolve_team_crosswalk(slate, rows("teams"), season=season)
     if crosswalk != {key: value for key, value in manifest["team_crosswalk"].items()}:
         raise PriorsBuildError("TEAM_CROSSWALK_CHANGED_SINCE_PROPOSAL")
-    game_rows = resolve_nflverse_games(
-        slate, rows("games"), crosswalk, season=season
-    )
+    schedule_rows = rows("games")
+    game_rows = resolve_nflverse_games(slate, schedule_rows, crosswalk, season=season)
+    # Counted from the same artifact this package binds, so a replay recounts it.
+    venue_roof_seasons = season_window(season, prior_season)
+    venue_roof_history = roof_history(schedule_rows, seasons=venue_roof_seasons)
     outdoor_games = [
         game_id
         for game_id, row in sorted(game_rows.items())
         if (row.get("roof") or "").strip().lower() not in _ROOF_WEATHER
+        and resolve_blank_roof(
+            (row.get("home_team") or "").strip(),
+            venue_roof_history if not (row.get("roof") or "").strip() else None,
+            seasons=venue_roof_seasons,
+        )
+        is None
     ]
     evidence_by_game = dict(weather_evidence_by_game or {})
     if evidence_by_game and any(
@@ -2205,7 +2282,12 @@ def freeze_prior_package(
             if evidence_by_game
             else weather_observed_at
         )
-        resolved_weather, weather_basis = resolve_weather_state(row, supplied_state)
+        resolved_weather, weather_basis = resolve_weather_state(
+            row,
+            supplied_state,
+            venue_roof_history=venue_roof_history,
+            venue_roof_seasons=venue_roof_seasons,
+        )
         if weather_basis.startswith("OPERATOR_SUPPLIED") or (
             resolved_weather == "ROOF_OPEN" and supplied_source_uri
         ):
