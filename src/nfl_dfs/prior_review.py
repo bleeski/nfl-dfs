@@ -99,6 +99,7 @@ from .prelock_manifest import (
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
 from .selection import assignments_for_entries, select_prior_lineups
 from .sources import SourcePolicyError, validate_source_reference_policy
+from .venues import home_team_of, resolve_blank_roof
 
 
 PROFILE_VERSION = "cowork_prior_review_v1"
@@ -661,6 +662,9 @@ class WeatherDecision:
 def decide_weather(
     roof: str,
     *,
+    game_id: str | None = None,
+    venue_roof_history: Mapping[str, Mapping[str, int]] | None = None,
+    venue_roof_seasons: Sequence[int | str] | None = None,
     weather_state: str | None = None,
     weather_source_uri: str | None = None,
     weather_observed_at: str | None = None,
@@ -669,8 +673,15 @@ def decide_weather(
 
     The enum has no `UNKNOWN` member, so nothing here defaults it. A fixed or
     retracted-closed roof is decided by the frozen schedule artifact alone. Every
-    other value, including a retractable roof left open and a blank cell, needs
-    an `api.weather.gov` capture with its URI and its `generatedAt`.
+    other value, including a retractable roof left open, needs an
+    `api.weather.gov` capture with its URI and its `generatedAt`.
+
+    A blank cell used to fall in with "every other value", and on 2026-09-20 that
+    cost two of five games on a live slate: nflverse writes `roof` only after the
+    game, so an unplayed game at a retractable venue is always blank. Given
+    `game_id` and that venue's counts from the frozen artifact, a blank resolves
+    from the venue's own unanimous history instead. An attributed capture is
+    still checked first and still wins, because an observation outranks a count.
     """
 
     normalized = (roof or "").strip().lower()
@@ -678,6 +689,23 @@ def decide_weather(
     uri = (weather_source_uri or "").strip() or None
     observed = (weather_observed_at or "").strip() or None
     attributed = bool(uri and observed)
+
+    if not normalized and not attributed and not state:
+        resolved = resolve_blank_roof(
+            home_team_of(game_id or ""),
+            venue_roof_history,
+            seasons=venue_roof_seasons,
+        )
+        if resolved is not None:
+            venue_roof, venue_basis = resolved
+            return WeatherDecision(
+                roof=venue_roof,
+                freeze_weather_state=None,
+                freeze_source_uri=None,
+                freeze_observed_at=None,
+                basis=venue_basis,
+                blockers=(),
+            )
 
     if normalized in SCHEDULE_DERIVABLE_ROOFS:
         return WeatherDecision(
@@ -1641,6 +1669,19 @@ def run_prior_review(
             supplied = dict(weather_evidence_by_game.get(game_id) or {})
             weather_decisions[game_id] = decide_weather(
                 str(market.get("roof", "")),
+                game_id=game_id,
+                venue_roof_history={
+                    home_team_of(game_id): {
+                        str(roof): int(count)
+                        for roof, count in dict(
+                            market.get("venue_roof_history") or {}
+                        ).items()
+                    }
+                },
+                venue_roof_seasons=list(
+                    market.get("venue_roof_history_seasons") or []
+                )
+                or None,
                 weather_state=(
                     str(supplied.get("weather_state") or "") or None
                     if weather_evidence_by_game

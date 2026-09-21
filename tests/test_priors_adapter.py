@@ -149,19 +149,33 @@ def _salary_bytes(status_by_name: dict[str, str] | None = None) -> bytes:
     return _csv_bytes(header, rows)
 
 
-def _games_bytes(*, roof: str = "dome", spread: str = "-3.5", total: str = "44.5") -> bytes:
+def _games_bytes(
+    *,
+    roof: str = "dome",
+    spread: str = "-3.5",
+    total: str = "44.5",
+    home_roof_history: tuple[str, ...] = (),
+) -> bytes:
     header = (
         "game_id", "season", "game_type", "week", "gameday", "away_team", "home_team",
-        "spread_line", "total_line", "roof",
+        "spread_line", "total_line", "roof", "home_score",
     )
-    return _csv_bytes(
-        header,
-        [
-            ("2026_02_LA_SEA", "2026", "REG", "2", "2026-09-13", "LA", "SEA", spread, total, roof),
-            # A same-day decoy that must not be selected.
-            ("2026_02_DAL_NYG", "2026", "REG", "2", "2026-09-13", "DAL", "NYG", "3", "48.5", "outdoors"),
-        ],
-    )
+    rows = [
+        ("2026_02_LA_SEA", "2026", "REG", "2", "2026-09-13", "LA", "SEA", spread, total, roof, ""),
+        # A same-day decoy that must not be selected.
+        ("2026_02_DAL_NYG", "2026", "REG", "2", "2026-09-13", "DAL", "NYG", "3", "48.5", "outdoors", ""),
+    ]
+    # Completed SEA home games, for the venue-roof-history resolution. Each
+    # carries a home score, because an unplayed row is the one being resolved and
+    # must never vouch for itself.
+    rows += [
+        (
+            f"2025_{index:02d}_LA_SEA", "2025", "REG", str(index), f"2025-09-{index:02d}",
+            "LA", "SEA", "-3.5", "44.5", recorded, "24",
+        )
+        for index, recorded in enumerate(home_roof_history, start=1)
+    ]
+    return _csv_bytes(header, rows)
 
 
 def _teams_bytes() -> bytes:
@@ -1241,3 +1255,205 @@ def test_an_unknown_decision_token_is_still_a_rejection(package, tmp_path):
     _decide_by_name(package, _DROPPABLE, "EXCLUDE_UNRESOLVED")
     with pytest.raises(PriorsBuildError, match="IDENTITY_NOT_ACCEPTED"):
         _freeze(package, tmp_path)
+
+
+def test_a_blank_roof_at_a_retractable_venue_resolves_from_its_own_history():
+    """R26: nflverse records a retractable roof only after the game is played.
+
+    Reading the blank as an unknown outdoor game demanded an api.weather.gov
+    capture for a game played under a roof, which cost two of five games on the
+    2026-09-20 afternoon slate. The history comes out of the same frozen
+    schedule artifact the run already bound.
+    """
+
+    history = {"DAL": {"closed": 17}}
+    state, basis = resolve_weather_state(
+        {"roof": "", "home_team": "DAL"},
+        None,
+        venue_roof_history=history,
+        venue_roof_seasons=(2025, 2026),
+    )
+    assert state == "ROOF_CLOSED"
+    assert basis == (
+        "DERIVED_FROM_VENUE_ROOF_HISTORY:retractable:closed=17/17:seasons=2025,2026"
+    )
+
+
+def test_a_blank_roof_still_blocks_without_venue_history():
+    # The default is the behaviour that shipped before R26: a blank roof and no
+    # history is a game nobody has observed.
+    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
+        resolve_weather_state({"roof": "", "home_team": "DAL"}, None)
+
+
+def test_a_blank_roof_at_an_outdoor_venue_still_blocks_with_history_supplied():
+    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
+        resolve_weather_state(
+            {"roof": "", "home_team": "GB"},
+            None,
+            venue_roof_history={"GB": {"outdoors": 17}},
+        )
+
+
+def test_a_mixed_retractable_history_still_blocks():
+    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
+        resolve_weather_state(
+            {"roof": "", "home_team": "HOU"},
+            None,
+            venue_roof_history={"HOU": {"closed": 16, "open": 1}},
+        )
+
+
+def test_an_operator_observation_outranks_the_venue_history():
+    # A human who watched the roof open beats a count of what it usually does.
+    state, basis = resolve_weather_state(
+        {"roof": "", "home_team": "ARI"},
+        "RAIN",
+        venue_roof_history={"ARI": {"closed": 17}},
+    )
+    assert state == "RAIN"
+    assert basis.startswith("OPERATOR_SUPPLIED")
+
+
+def test_an_outdoors_roof_is_never_resolved_by_venue_history():
+    # 'outdoors' is a recorded observation, not a blank. History never overrides
+    # what the artifact actually says.
+    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
+        resolve_weather_state(
+            {"roof": "outdoors", "home_team": "DAL"},
+            None,
+            venue_roof_history={"DAL": {"closed": 17}},
+        )
+
+
+def test_the_proposal_carries_venue_history_only_for_a_retractable_venue():
+    """`markets` is where the weather stage reads the counts from."""
+
+    from nfl_dfs.priors import _venue_roof_history_for
+
+    history = {"DAL": {"closed": 17}, "GB": {"outdoors": 17}}
+    assert _venue_roof_history_for({"home_team": "DAL"}, history) == {"closed": 17}
+    # An outdoor venue's unanimous history is not something the stage may act
+    # on, so the proposal does not carry it at all.
+    assert _venue_roof_history_for({"home_team": "GB"}, history) == {}
+    assert _venue_roof_history_for({"home_team": "DAL"}, None) == {}
+
+
+def test_a_retractable_venue_blank_roof_freezes_without_a_capture(tmp_path, monkeypatch):
+    """R26 at the freeze boundary, not just in the resolver.
+
+    `freeze_prior_package` keeps its own `outdoor_games` list, the
+    CLASSIC_WEATHER_SCOPE_AMBIGUOUS check and the capture-expiry accounting. This
+    is the test that the venue resolution reaches all of them rather than only
+    the function that decides the enum.
+
+    SEA is patched into the retractable set so the mechanism is tested through
+    the existing fixture. Which venues actually have a moving roof is a stadium
+    fact, tested directly in tests/test_venues.py.
+    """
+
+    monkeypatch.setattr(priors, "RETRACTABLE_ROOF_HOME_TEAMS", frozenset({"SEA"}))
+    monkeypatch.setattr(
+        "nfl_dfs.venues.RETRACTABLE_ROOF_HOME_TEAMS", frozenset({"SEA"})
+    )
+    salary = tmp_path / "DKSalaries.csv"
+    _write_salary(salary)
+    digest = sha256_file(salary)
+    root = _write_package(
+        tmp_path / "retractable",
+        salary_digest=digest,
+        overrides={"games": _games_bytes(roof="", home_roof_history=("closed",) * 9)},
+    )
+    slate = parse_salaries(salary)
+    roster_rows = priors.read_csv_rows(
+        (root / priors.RAW_DIRNAME) / _named(root, "weekly_rosters"),
+        _ROSTER_COLUMNS,
+        label="weekly_rosters",
+    )
+    proposals = propose_identities(slate, roster_rows, {"LAR": "LA", "SEA": "SEA"}, season=2026)
+    (root / priors.PROPOSAL_FILENAME).write_bytes(
+        canonical_json_bytes(
+            {
+                "schema_version": priors.PROPOSAL_SCHEMA,
+                "adapter_version": priors.ADAPTER_VERSION,
+                "as_of": AS_OF,
+                "season": 2026,
+                "salary_artifact_id": digest,
+                "source_manifest_sha256": sha256_file(root / priors.MANIFEST_FILENAME),
+                "authoritative": False,
+                "note": "test",
+                "proposals": [item.as_payload() for item in proposals],
+            }
+        )
+    )
+    review = root / priors.REVIEW_FILENAME
+    review.write_bytes(priors.review_csv_bytes(proposals))
+    frozen = freeze_prior_package(
+        package_dir=root,
+        reviewed=review,
+        reviewed_sha256=sha256_file(review),
+        salaries=salary,
+        salary_sha256=digest,
+        as_of=AS_OF,
+        output_dir=tmp_path / "retractable_out",
+    )
+    assert frozen["weather_state"] == "ROOF_CLOSED"
+    assert frozen["weather_basis"] == (
+        "DERIVED_FROM_VENUE_ROOF_HISTORY:retractable:closed=9/9:seasons=2025,2026"
+    )
+
+
+def test_a_retractable_venue_with_one_open_game_still_blocks_the_freeze(tmp_path, monkeypatch):
+    """The same fixture, one recorded open roof. The gate holds."""
+
+    monkeypatch.setattr(priors, "RETRACTABLE_ROOF_HOME_TEAMS", frozenset({"SEA"}))
+    monkeypatch.setattr(
+        "nfl_dfs.venues.RETRACTABLE_ROOF_HOME_TEAMS", frozenset({"SEA"})
+    )
+    salary = tmp_path / "DKSalaries.csv"
+    _write_salary(salary)
+    digest = sha256_file(salary)
+    root = _write_package(
+        tmp_path / "mixed",
+        salary_digest=digest,
+        overrides={
+            "games": _games_bytes(
+                roof="", home_roof_history=("closed",) * 8 + ("open",)
+            )
+        },
+    )
+    slate = parse_salaries(salary)
+    roster_rows = priors.read_csv_rows(
+        (root / priors.RAW_DIRNAME) / _named(root, "weekly_rosters"),
+        _ROSTER_COLUMNS,
+        label="weekly_rosters",
+    )
+    proposals = propose_identities(slate, roster_rows, {"LAR": "LA", "SEA": "SEA"}, season=2026)
+    (root / priors.PROPOSAL_FILENAME).write_bytes(
+        canonical_json_bytes(
+            {
+                "schema_version": priors.PROPOSAL_SCHEMA,
+                "adapter_version": priors.ADAPTER_VERSION,
+                "as_of": AS_OF,
+                "season": 2026,
+                "salary_artifact_id": digest,
+                "source_manifest_sha256": sha256_file(root / priors.MANIFEST_FILENAME),
+                "authoritative": False,
+                "note": "test",
+                "proposals": [item.as_payload() for item in proposals],
+            }
+        )
+    )
+    review = root / priors.REVIEW_FILENAME
+    review.write_bytes(priors.review_csv_bytes(proposals))
+    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
+        freeze_prior_package(
+            package_dir=root,
+            reviewed=review,
+            reviewed_sha256=sha256_file(review),
+            salaries=salary,
+            salary_sha256=digest,
+            as_of=AS_OF,
+            output_dir=tmp_path / "mixed_out",
+        )
+    assert not (tmp_path / "mixed_out").exists()

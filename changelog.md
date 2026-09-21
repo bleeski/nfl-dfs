@@ -4,6 +4,134 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-21: the weather gate stops demanding a forecast for a game played under a roof
+
+Raised by Ben after the Week 2 afternoon Classic slate: "why do we keep having
+issues with weather and how can we get around that". Three causes, separated by
+measurement rather than theory. Two are fixed here; the third is R24 and remains
+Ben's ruling to make. Every path still ends `MODEL_STATUS=PRIOR_ONLY` and
+`RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+#### Cause 1: nflverse's `roof` column is retrospective (fixed)
+
+`games.csv` records `roof` only after the game is played. An unplayed game at a
+retractable-roof venue therefore carries an empty cell, and both
+`priors.resolve_weather_state` and `prior_review.decide_weather` read a blank as
+"the schedule cannot resolve this roof" and demanded an `api.weather.gov`
+capture, for a game played under a roof.
+
+Measured on the frozen artifact of run `20260920T195344Z-week2-aft2`:
+
+    2026 rows  177 outdoors, 52 dome, 2 closed, 41 BLANK
+    2025 rows  193 outdoors, 50 dome, 42 closed, 0 blank
+    blank-roof home teams  ATL 9, ARI 9, DAL 9, HOU 7, IND 7  (41 games)
+    HOU week 1 'closed' (played), week 2+ BLANK (unplayed)   <- the mechanism
+
+That is 15% of a season's games routed to a host this container cannot reach. On
+the 2026-09-20 afternoon slate it was 2 of 5 games, SEA@ARI and WAS@DAL.
+
+New `src/nfl_dfs/venues.py` resolves that one case. It counts the venue's own
+completed home games by recorded roof state, out of the same frozen artifact the
+run has already bound, and resolves a blank to `closed` only when the window is
+unanimous and holds at least eight games. The basis names the counts and the
+window: `DERIVED_FROM_VENUE_ROOF_HISTORY:retractable:closed=8/8:seasons=2025,2026`.
+
+**The season window is load-bearing, and finding that out changed the design.**
+The first version counted the whole artifact and resolved nothing, because over
+all seasons ARI reads 144 `closed`, 21 `open` and 58 `outdoors`. Scoped to the
+prior and current seasons every one of the five venues is unanimous `closed` (8
+to 10 completed games); widened to four seasons every one of them shows an `open`
+game. These roofs do open sometimes. The window is therefore the prior-plus-
+current pair the rest of the prior package already treats as relevant, it is
+declared in the basis string, and one `open` game in it stops the venue
+resolving anything. This was caught by running against the real artifact instead
+of trusting the two-season sample the fix was first written from.
+
+Three bounds keep it a prior and not an invented observation: it is counted from
+the bound artifact rather than hardcoded, one `open` game or fewer than eight
+completed games resolves nothing, and an operator capture always outranks it.
+`outdoors` is a recorded observation and is never overridden.
+
+Replayed against the real artifact, the afternoon slate's captures required went
+from **4 of 5 games to 2 of 5**:
+
+    BLOCKED JAX@DEN   roof=outdoors  OPERATOR_CAPTURE_REQUIRED:outdoors
+    clear   LV@LAC    roof=dome      SCHEDULE_ROOF_IS_AUTHORITATIVE:dome
+    BLOCKED MIA@SF    roof=outdoors  OPERATOR_CAPTURE_REQUIRED:outdoors
+    clear   SEA@ARI   roof=BLANK     DERIVED_FROM_VENUE_ROOF_HISTORY:...closed=8/8
+    clear   WAS@DAL   roof=BLANK     DERIVED_FROM_VENUE_ROOF_HISTORY:...closed=8/8
+
+The proposal artifact is now `nfl_prior_identity_proposal_v2`: `markets[]` gained
+`venue_roof_history` and `venue_roof_history_seasons`. A v1 proposal still reads
+correctly, with the keys absent and nothing resolved from them.
+
+#### Cause 2: the probe only ran when somebody remembered it (fixed)
+
+`api.weather.gov` is refused by this container's egress proxy (403 at CONNECT),
+which is organization policy and not routable around. `scripts/session_probe.py`
+has answered that in three seconds since 2026-09-20 and ran on neither lost
+slate. `run-slate` now runs it at the head of every slate, writes
+`data/runs/<run_id>/session_probe.json`, and prints the verdict to stderr.
+
+It cannot fail a run: a crash, a timeout, a missing script or non-object output
+all report `PROBE_UNAVAILABLE` rather than raising, and a blocked host is a
+routing decision for the operator, never a refusal. `--no-session-probe` skips
+it. The suite skips it through `NFL_DFS_SKIP_SESSION_PROBE=1`, set once in
+`tests/conftest.py`, because the probe is a network call and
+`.claude/rules/tests.md` says the suite makes none.
+
+The probe also now prints the two `fetch_weather_captures.py` /
+`make_classic_weather_evidence.py` commands when `api.weather.gov` is the blocked
+host. That chain was already stdlib-only and already able to run on a machine
+that reaches the host; it went unused on two lost slates because nothing named
+it at the moment of the block. `docs/RUNBOOK.md` step 0 now carries the same
+procedure with the six-hour freshness window, as operator work to do *before*
+the session rather than inside it.
+
+This is adjacent to chunk `X1` and does not close it. `X1` still owns the
+per-host lines in `doctor`, the `PROHIBITED_HOSTS` exclusion test, and removing
+the asserted-reachability prose from `docs/CLAUDE_CODE_SETUP.md`.
+
+#### Cause 3: the gate blocks on a value that changes no number (R24, unchanged)
+
+Re-verified in code, not taken from the docs. `weather_state` has 62 references
+across seven modules and every one is plumbing: a `Literal`, a CSV column, a
+membership check, a dataclass field, a display row.
+
+    $ grep -rn "weather" src/nfl_dfs/*.py | grep -E "\*|multip|adjust|penal|factor"
+    (no output)
+
+No arithmetic reads it. A field that moves no projection could still stop the
+engine producing any lineup at all. That is exactly R24, already filed and
+`BLOCKED` on Ben's ruling, and it is not implemented here: it changes behaviour
+that fails closed on purpose, and the ruling is his.
+
+#### Verification
+
+    sh ./nfl.sh test tests/test_venues.py -x --tb=short          14 passed
+    sh ./nfl.sh test tests/test_session_probe_gate.py -x          9 passed
+    sh ./nfl.sh test tests/test_priors_adapter.py                49 passed
+    sh ./nfl.sh test tests/test_prior_review_profile.py          49 passed
+    sh ./nfl.sh test tests/test_repo_boundaries.py               88 passed
+    sh ./nfl.sh test tests/test_cowork.py tests/test_classic_prior_review.py \
+        tests/test_classic_portfolio_c2.py \
+        tests/test_cowork_rerun_regressions.py    71 passed, 1 skipped in 35.43s
+    sh ./nfl.sh test                        1023 passed, 1 skipped in 137.46s
+    sh ./nfl.sh doctor                      pass_status: true
+    git diff --check                        clean
+    python3 scripts/check_protected_paths.py  No protected path touched
+
+The one skip is the expected Windows symlink-permission case
+(`tests/test_cowork.py:115`, "Windows junction behavior"). 32 tests added; no
+test was deleted, skipped or loosened. Two of them exercise
+`freeze_prior_package` itself, because the freeze keeps its own `outdoor_games`
+list, the `CLASSIC_WEATHER_SCOPE_AMBIGUOUS` check and the capture-expiry
+accounting, and the resolver test alone would not have proved the resolution
+reaches them. The mixed-history case still raises and still writes no output
+directory. Three of my own basis-string assertions
+failed when the season window was introduced and were updated to assert the
+window, which is the change they exist to pin.
+
 ### 2026-09-20: session close-out — two pull requests merged, R24 recommended, X3 and H3 made runnable
 
 No code changed. Documentation and ledgers only; every current path still ends

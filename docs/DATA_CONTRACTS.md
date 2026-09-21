@@ -119,9 +119,33 @@ An entirely missing group may survive projection as unknown for role resolution;
 an observed all-zero group still fails with `PRIOR_SUPPORT_MISSING`. No uniform
 filling occurs. Adapter version: `nflverse_prior_adapter_v2`.
 
+### The `roof` column is retrospective (R26, 2026-09-21)
+
+nflverse writes `games.csv` `roof` only after the game is played, so an unplayed
+game at a retractable-roof venue carries an empty cell, not `closed`. Measured on
+the 2026-09-20 frozen artifact: 177 `outdoors`, 52 `dome`, 2 `closed` and 41
+blank across the 2026 rows, with every blank at ARI, ATL, DAL, HOU or IND, and no
+blank at all in the completed 2025 rows.
+
+`venues.py` resolves that one case and nothing else. It counts the venue's own
+completed home games by recorded roof state, out of the same frozen artifact the
+run has bound, over the prior-plus-current season window, and resolves a blank to
+`closed` only when that window is unanimous and holds at least eight games. The
+basis string carries the counts and the window
+(`DERIVED_FROM_VENUE_ROOF_HISTORY:retractable:closed=8/8:seasons=2025,2026`).
+
+Three things it does not do. It never touches a cell the artifact filled in, so
+`outdoors` stays `outdoors`. It never resolves a venue with one recorded `open`
+game in the window, which is why the window is two seasons and not four: at four,
+all five venues show an `open` game. And an operator observation always outranks
+it, because a capture is an observation and this is a count.
+
 Identity is a two-phase gate because DraftKings and nflverse share no key.
-`priors-propose` writes `nfl_prior_identity_proposal_v1` plus a reviewable
-`identity_review.csv`, and emits only normalized match methods. `priors-freeze`
+`priors-propose` writes `nfl_prior_identity_proposal_v2` plus a reviewable
+`identity_review.csv`, and emits only normalized match methods. v2 added
+`markets[].venue_roof_history` and `markets[].venue_roof_history_seasons`, which
+carry the counts above; a v1 proposal reads correctly with the keys absent and
+resolves nothing from them. `priors-freeze`
 requires that file's SHA-256, requires `DECISION=ACCEPT` on every row, refuses an
 altered row or a duplicated provider id, and only then writes
 `match_method="EXACT"`. Team identity binds the DraftKings team abbreviation to

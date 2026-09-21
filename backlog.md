@@ -355,7 +355,14 @@ Prompt: `docs/session-prompts/P7-current-role-depth.md`.
 
 ### X1 — Per-session egress probe
 
-Status: `READY`.
+Status: `READY`. Partially overtaken 2026-09-21: `run-slate` now runs
+`scripts/session_probe.py` at the head of every slate and writes
+`data/runs/<run_id>/session_probe.json`, which covers this chunk's scope item 2
+(record it into the run record) for the slate path. Still open and still this
+chunk's: the per-host lines in `doctor`, the `PROHIBITED_HOSTS` exclusion test
+asserting on the injected client's call list, the offline-`doctor` demonstration,
+and deleting the asserted-reachability and stale-suite prose from
+`docs/CLAUDE_CODE_SETUP.md`.
 Brief: `docs/chunks/X1-egress-probe.md`.
 Session prompt: `docs/session-prompts/X1-egress-probe.md`.
 
@@ -382,6 +389,39 @@ Brief: `docs/chunks/X4-greenfield-spec.md`.
 Status: `READY`. Depends on: nothing.
 Brief: `docs/chunks/H3-protected-paths-label-freshness.md`.
 Prompt: `docs/session-prompts/H3-protected-paths-label-freshness.md`.
+
+### R26 (implemented 2026-09-21, no ruling needed): the `roof` column is retrospective
+
+Status: `DONE`. Not a ruling: a data-semantics defect, fixed without changing any
+gate's authority. Raised by Ben's question after the Week 2 afternoon slate.
+
+nflverse writes `games.csv` `roof` only after the game is played, so an unplayed
+game at a retractable-roof venue carries a blank cell. The weather gate read a
+blank as an unobserved outdoor game and demanded an `api.weather.gov` capture for
+a game played under a roof: 41 of 272 2026 rows, all at ARI, ATL, DAL, HOU and
+IND, and 2 of 5 games on the 2026-09-20 afternoon slate.
+
+`src/nfl_dfs/venues.py` resolves a blank from that venue's own completed history
+in the same frozen artifact, over the prior-plus-current season window, only when
+unanimous and at least eight games, under a basis naming the counts and the
+window. One recorded `open` game in the window resolves nothing, `outdoors` is
+never overridden, and an operator capture always outranks it. The window matters:
+over all seasons ARI reads 144 `closed`, 21 `open`, 58 `outdoors`, and at four
+seasons every one of the five venues shows an `open` game.
+
+Verification and the replayed slate are in `changelog.md` under `Unreleased`.
+Captures required on that slate went from 4 of 5 games to 2 of 5. The remaining
+two, JAX@DEN and MIA@SF, are genuinely outdoor and genuinely need a capture, so
+the operator pre-fetch in `docs/RUNBOOK.md` step 0 is the fix for those and R24
+is the question of whether they should block a portfolio at all.
+
+### R24 status note (2026-09-21)
+
+Unchanged and still `BLOCKED` on Ben. Its central fact was re-verified in code
+during the R26 work: `weather_state` has 62 references across seven modules and
+no arithmetic anywhere reads it. A field that moves no projection can still stop
+the engine producing any lineup. R26 shrinks how often that happens; it does not
+answer whether it should happen.
 
 ### R25 (Ben's ruling, 2026-09-20: APPROVED): promote a backup when the depth-chart starter is OUT
 
