@@ -262,7 +262,7 @@ def _package(root, slate, orders, *, as_of=AS_OF, observed=OBSERVED,
     for team, ordering in orders.items():
         excerpt = _excerpt(team, ordering, observed)
         digest = sha256_bytes(excerpt.encode("utf-8"))
-        (root / "sources" / f"{digest}.csv").write_text(excerpt, encoding="utf-8")
+        (root / "sources" / f"{digest}.csv").write_bytes(excerpt.encode("utf-8"))
         sources.append(
             {
                 "path": f"sources/{digest}.csv",
@@ -648,7 +648,7 @@ def test_a_capture_mixing_two_snapshots_is_refused(tmp_path):
         rows = parse_depth_chart_excerpt(mixed)
         assert len({row["dt"] for row in rows}) == 2, "fixture must actually mix two dt values"
         digest = sha256_bytes(mixed.encode("utf-8"))
-        (package.parent / "sources" / f"{digest}.csv").write_text(mixed, encoding="utf-8")
+        (package.parent / "sources" / f"{digest}.csv").write_bytes(mixed.encode("utf-8"))
         old = source["path"]
         source["path"] = f"sources/{digest}.csv"
         source["sha256"] = digest

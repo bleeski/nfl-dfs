@@ -144,6 +144,33 @@ jobs:
           path: state/last-ci.json
           if-no-files-found: warn
 
+  windows:
+    # Windows is where slates are operated, and until 2026-09-22 it was never
+    # tested. That day a local run on Ben's machine failed 25 tests that CI had
+    # never seen: `make_offensive_role_evidence.py` hashed an excerpt's bytes
+    # and then wrote it with `write_text`, which translates "\n" to os.linesep,
+    # so on Windows every depth-role package refused its own capture. P7, the
+    # chunk that resolves who is actually starting, could not run on the only
+    # machine that operates slates. A Linux-only suite cannot see that class of
+    # defect at all.
+    #
+    # It does not gate anything the Linux `suite` job already gates; it exists
+    # so a byte, path or newline assumption that only breaks on Windows is
+    # caught here rather than at a lock clock.
+    name: windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install pinned environment
+        run: uv sync --all-groups --locked --python 3.13.7
+      - name: Complete pinned suite
+        run: uv run pytest -q --no-header
+
   protected-paths:
     # A pull request touching anything in .github/protected-paths.txt is Ben's
     # call, not Claude's. The label is the only way through.
