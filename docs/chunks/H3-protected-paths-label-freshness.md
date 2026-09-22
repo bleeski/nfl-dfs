@@ -1,7 +1,7 @@
 # H3 — the `ben-review` label cannot clear the check that demands it
 
 Brief for chunk `H3` of the harness track. Status and dependencies are tracked
-in `backlog.md` (Queue table and chunk index); this file is the specification.
+in `docs/ROADMAP.md` (status board and session card); this file is the specification.
 Written 2026-09-20 from a defect found while merging PR #32.
 
 - Goal: labelling a protected-path pull request with `ben-review` turns

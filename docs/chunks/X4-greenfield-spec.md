@@ -1,7 +1,7 @@
 # X4 — The greenfield spec report and the subagent cost contract
 
 Brief for chunk `X4` of the cloud-operability track. Status and dependencies are
-tracked in `backlog.md` (Queue table and chunk index); this file is the
+tracked in `docs/ROADMAP.md` (status board and session card); this file is the
 specification. Written 2026-09-20.
 
 - Goal: the audit's required deliverable exists as a repository document, and

@@ -1,5 +1,8 @@
 # NFL DFS Greenfield Engine Blueprint — Red-Team Revision
 
+> **Phase 0 to 5 sequence superseded 2026-09-22.** The architecture and safety sections below stay
+> authoritative (authority #4); the work queue is `docs/ROADMAP.md`, and its §3 retires the phase list.
+
 This document is the governing implementation plan for the local NFL DFS engine.
 
 ## 1. Critique Dispositions

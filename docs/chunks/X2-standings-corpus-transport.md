@@ -1,7 +1,7 @@
 # X2 — Give the standings corpus a durable, cloud-reachable home
 
 Brief for chunk `X2` of the cloud-operability track. Status and dependencies are
-tracked in `backlog.md` (Queue table and chunk index); this file is the
+tracked in `docs/ROADMAP.md` (status board and session card); this file is the
 specification. Written 2026-09-20 from the cloud audit's finding F1.
 
 **The decision is made. Ben ruled option (A) on 2026-09-21**, recorded as `R27`

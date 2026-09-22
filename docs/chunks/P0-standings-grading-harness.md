@@ -1,6 +1,6 @@
 # P0 — Standings grading harness, snapshots, and the failing test
 
-Brief for chunk `P0` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+Brief for chunk `P0` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
 - Goal: one deterministic command that grades a slate from its standings, so
   every later chunk's acceptance is a number the next session can reproduce.

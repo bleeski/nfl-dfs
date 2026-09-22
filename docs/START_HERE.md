@@ -27,9 +27,9 @@ Never mix the two environments in one session.
 ## You are probably not the only instance
 
 Other Claude Code sessions work this repository without knowing about you.
-Before starting a chunk, run `python3 scripts/claim.py show`, and claim the
-chunk before you write code with `python3 scripts/claim.py take <ID>`. It
-refuses a chunk another instance claimed less than six hours ago. An older claim
+Before starting a roadmap session, run `python3 scripts/claim.py show`, and
+claim it before you write code with `python3 scripts/claim.py take <SNN>`. It
+refuses a session another instance claimed less than six hours ago. An older claim
 is stale: taking it is allowed, is recorded in `state/claims.json`, and goes in
 the changelog too. The claims live in `state/claims.json`, which is tracked;
 `state/repo-state.json` is the derived digest and is not. Never assume a status
@@ -86,7 +86,8 @@ only unrecoverable error. Full text in `docs/RUNBOOK.md`.
 2. `docs/RUNBOOK.md` (operating a slate)
 3. `docs/DATA_CONTRACTS.md` (every structured input)
 4. `plan.md` (architecture and safety)
-5. `backlog.md` and `changelog.md` (the session ledger)
+5. `docs/ROADMAP.md` (the only work queue, since 2026-09-22) and
+   `changelog.md` (the evidence for each status change)
 6. `IMPLEMENTATION_STATUS.md` (working code versus unverified claims)
 
 The latest run artifacts and their hashes are authoritative for slate state.
@@ -96,7 +97,7 @@ Never infer status from a document or an earlier conversation.
 
 | You are about to | Read |
 |---|---|
-| Develop a backlog chunk | `CLAUDE.md` § Developing in Claude Code, then `docs/chunks/<ID>-*.md`. Run `/dev-session <ID>`. |
+| Develop the engine | `docs/ROADMAP.md` §1 and the session's card in §2.3, then the briefs it cites. Run `/dev-session <SNN>`. |
 | Operate a slate | `docs/RUNBOOK.md`. Evidence gates run first; they are the only thing that can make you miss a lock. |
 | Commit, push, merge or delete a branch | `.claude/rules/git-authority.md` and `docs/CLAUDE_CODE_SETUP.md`. |
 | Grade a slate or touch calibration | `docs/chunks/P0-standings-grading-harness.md` and `config/metric_registry_q1_v1.json`. |

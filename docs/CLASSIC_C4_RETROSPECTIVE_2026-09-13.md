@@ -1,5 +1,8 @@
 # Classic C4 retrospective, 2026-09-13 Week 1 main slate
 
+> **Appendices A and B superseded 2026-09-22.** Every backlog item there was absorbed into a session
+> of `docs/ROADMAP.md` or retired; §3 of that file maps each item. The retrospective itself stays as evidence.
+
 First live Classic slate. This was the C4 operator rehearsal the plan said would
 be a rehearsal, and it behaved like one. Twenty legal lineups were uploaded with
 nine minutes to spare. Almost none of the value came from where the design

@@ -116,7 +116,8 @@ about what happened to a contest.
    the `nfl_prelock_run_manifest_v1` and `nfl_scenario_bank_v1` that
    `settle --request` binds — the `prior_review`/C1-C3 path never emits them.
    A pre-lock prediction record must never be reconstructed after the fact.
-   See Q1B in `backlog.md`.
+   See Q1B in `docs/backlog-archive/backlog-through-2026-09-22.md` and
+   `docs/ROADMAP.md` Session 30.
 
 Everything in `CLAUDE.md` applies, especially the permanent boundaries:
 DraftKings login, contest entry, upload and money movement are manual;

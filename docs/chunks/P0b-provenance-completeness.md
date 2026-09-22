@@ -1,6 +1,6 @@
 # P0b — Provenance completeness, manual-build manifests, pre-registration
 
-Brief for chunk `P0b` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+Brief for chunk `P0b` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
 - Goal: every set of lineups Ben enters, engine-built or not, leaves a pre-lock
   record that a later grading can be attributed to, and no review CSV is called

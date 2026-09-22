@@ -1,6 +1,6 @@
 # P4a — Mass-conserving ownership challenger
 
-Brief for chunk `P4a` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+Brief for chunk `P4a` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
 - Goal: the engine has an ownership estimate on the operating path that is a
   probability distribution and is graded by slate.

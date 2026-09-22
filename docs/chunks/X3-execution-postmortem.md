@@ -1,7 +1,7 @@
 # X3 — Execution postmortem, recovery sweep, and continuity across compaction
 
 Brief for chunk `X3` of the cloud-operability track. Status and dependencies are
-tracked in `backlog.md` (Queue table and chunk index); this file is the
+tracked in `docs/ROADMAP.md` (status board and session card); this file is the
 specification. Written 2026-09-20 from the cloud audit's findings F7 and F8.
 
 - Goal: every run reviews itself without being asked, an abandoned run leaves a

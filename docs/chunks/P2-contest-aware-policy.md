@@ -1,6 +1,6 @@
 # P2 — Contest-aware assignment, structural hygiene, and the concentration control
 
-Brief for chunk `P2` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+Brief for chunk `P2` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
 - Goal: the policy layer can express the five construction rules that held in
   all four games, cap portfolio concentration, and stop mapping the weakest

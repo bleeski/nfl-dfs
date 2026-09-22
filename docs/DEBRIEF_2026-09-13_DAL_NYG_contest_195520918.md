@@ -1,5 +1,8 @@
 # Debrief: DAL @ NYG showdown, contest 195520918
 
+> **§6 superseded 2026-09-22.** Its recommendations were absorbed into Sessions 23 and 25 of
+> `docs/ROADMAP.md` or retired (§3). The debrief itself stays as evidence.
+
 Source: `contest-standings-195520918.zip`, the $0.25 Winner Take All
 [$100 to 1st], 475 entries. Observations only. Nothing here is a fix; these are
 candidates for the backlog.

@@ -1,5 +1,8 @@
 # NFL DFS production readiness review — September 8, 2026
 
+> **Superseded 2026-09-22, historical record.** Its R01 to R15 items and week plan are expired;
+> `docs/ROADMAP.md` §3 records the disposition. Do not work from the lists below.
+
 ## Decision
 
 **The project is not production ready for model-generated Showdown or Classic lineups that can be certified for upload.** It has a functioning diagnostic lineup generator, a substantially improved evidence and validation layer, and guarded export infrastructure. The numerical selection engine, live input preparation, and operational acceptance remain incomplete.

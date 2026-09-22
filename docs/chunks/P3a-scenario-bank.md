@@ -1,6 +1,6 @@
 # P3a — Bounded scenario bank on the prior_review path
 
-Brief for chunk `P3a` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+Brief for chunk `P3a` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
 - Goal: every selected lineup and every candidate has a distribution, not a
   point, and the review reports it.

@@ -1,6 +1,6 @@
 # P3b — Registered tail objective and the tail sleeve
 
-Brief for chunk `P3b` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+Brief for chunk `P3b` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
 - Goal: the selector can be told to maximize the upper tail for a declared
   number of entries while the rest of the portfolio keeps the expectation

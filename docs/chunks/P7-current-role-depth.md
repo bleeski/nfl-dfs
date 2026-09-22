@@ -1,6 +1,6 @@
 # P7 — Current-role depth resolution
 
-Brief for chunk `P7` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Written 2026-09-20 from the Week 2 Classic post-mortem.
+Brief for chunk `P7` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Written 2026-09-20 from the Week 2 Classic post-mortem.
 
 - Goal: the engine knows who is actually starting today, for every skill
   position, and a backup whose starter is `OUT` inherits the job instead of
