@@ -639,6 +639,45 @@ setting and makes cloud sessions self-sufficient for Classic permanently.
 **Still `BLOCKED` on Ben.** This is a recommendation, not a ruling, and nothing
 is implemented against it.
 
+#### Coupling with R26, added 2026-09-22 after reviewing PR #34
+
+R26 (`src/nfl_dfs/venues.py`, merged in `803618a`) resolves a retractable
+venue's blank roof from the venue's own recorded history, so a game played
+indoors no longer demands a capture. That narrows how often R24's gate bites; it
+does not answer R24. But it changes what R24 would be built on, and the two are
+now coupled in a way the registry condition above has to cover.
+
+The premise is unchanged today. Re-counted on `cdf7865`: 49 `weather_state`
+references across seven modules, every one plumbing (a `Literal`, a CSV column,
+a membership check, a dataclass field, a display row). PR #34 counted 62 by its
+own method and reached the same conclusion. No arithmetic reads it.
+
+What changes is the consequence if that ever stops being true. Before R26 a
+blocked gate meant a **missing** enum, which is an obvious absence. After R26 a
+resolved-from-history roof is a **plausible** value that no human observed. If
+weather later reaches a number, a derived roof would feed that arithmetic
+silently, which is a worse failure than an absence: a wrong number is harder to
+notice than no number. The derived path is bounded well (see `venues.py`: one
+recorded `open` game or fewer than eight completed games resolves nothing, a
+recorded roof and an operator capture both outrank it, and the freeze writes
+`freeze_weather_state=None` with no invented source URI or observed time, so it
+never claims an observation). Those bounds are why this is a note and not an
+objection.
+
+**So the registry the R24 recommendation is conditional on must cover the
+derived-roof path, not only the capture path.** Concretely, the test that
+asserts `weather_state` is read by no scoring or projection path must also fail
+when a value carrying `DERIVED_FROM_VENUE_ROOF_HISTORY` reaches one. Otherwise
+R24 and R26 could each stay individually true while their combination stopped
+being safe.
+
+A related, smaller staleness is handled separately:
+`RETRACTABLE_ROOF_HOME_TEAMS` is a hand-maintained set, correct for the five
+venues that exist today, and it would go stale silently when a sixth
+retractable roof opens. `scripts/check_venue_roof_set.py` detects that against a
+current schedule. No test can, because a committed fixture cannot contain a
+stadium that does not exist yet.
+
 ### Root fix for the 2026-09-20 loss, in preference order
 
 1. **Allow `api.weather.gov` in the environment's egress policy.** One setting,
