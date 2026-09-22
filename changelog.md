@@ -115,6 +115,17 @@ verdicts with file:line evidence.
     set `READY`, and each now carries a note pointing at the close-out skill;
   - the changelog entry template used the retired status words.
 
+#### Found by the `windows` CI job
+
+- `ben_flags()` reported paths with `str(path.relative_to(...))`, which gives
+  `docs\ROADMAP.md` on Windows, so the flag-source test failed there:
+  `1 failed` on PR #41's `windows` job. The Linux job passed.
+- The old test only passed on Windows because every flag sat in `backlog.md`,
+  a root file with no separator.
+- `repo_state.py` now emits `.as_posix()` for flag and brief paths.
+- A Linux run cannot prove the fix. The `windows` job on the fix commit is the
+  evidence.
+
 #### Verification
 
 - Focused: `sh ./nfl.sh test tests/test_roadmap_queue.py tests/test_harness_orientation.py -x --tb=short`,

@@ -358,7 +358,7 @@ def read_roadmap(path: Path | None = None) -> tuple[list[dict], list[dict]]:
         for match in _BRIEF_REFERENCE.finditer(source):
             brief = next(iter(sorted(CHUNKS_DIR.glob(f"{match.group('chunk')}-*.md"))), None)
             if brief is not None:
-                briefs.append(str(brief.relative_to(PROJECT_ROOT)))
+                briefs.append(brief.relative_to(PROJECT_ROOT).as_posix())
         sessions.append(
             {
                 "session": session,
@@ -453,7 +453,7 @@ def ben_flags() -> list[dict]:
                 continue
             found.append(
                 {
-                    "file": str(path.relative_to(PROJECT_ROOT)),
+                    "file": path.relative_to(PROJECT_ROOT).as_posix(),
                     "line": number,
                     "text": text[:160],
                 }
