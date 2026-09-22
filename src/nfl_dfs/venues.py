@@ -156,3 +156,44 @@ def resolve_blank_roof(
         f"{VENUE_ROOF_BASIS}:retractable"
         f":{RESOLVED_ROOF_VALUE}={closed}/{total}:seasons={window}",
     )
+
+
+def unlisted_blank_roof_teams(
+    schedule_rows: Iterable[Mapping[str, str]],
+    *,
+    seasons: Iterable[int | str] | None = None,
+) -> tuple[str, ...]:
+    """Home teams with an unplayed blank-roof game that this module does not list.
+
+    `RETRACTABLE_ROOF_HOME_TEAMS` is a hand-maintained stadium fact. It is
+    correct for the five venues that exist today, and it goes stale silently the
+    day a sixth retractable roof opens: that venue's blank roofs would simply
+    never resolve, so the engine would keep demanding a capture for a game played
+    indoors. That is a miss rather than a wrong answer, which is why this is a
+    diagnostic and not a refusal.
+
+    nflverse records `roof` only once a game is played, and on the measured
+    artifacts every unplayed blank belongs to a retractable venue. So a home team
+    that carries an unplayed blank roof and is absent from the set is either a
+    new retractable stadium or a schedule defect, and both are worth a human
+    look. `scripts/check_venue_roof_set.py` is what runs this against a current
+    schedule; no test can do it, because a committed fixture cannot contain a
+    stadium that does not exist yet.
+
+    Played rows are ignored: a completed game with a blank roof is missing data,
+    not a signal about the venue's roof.
+    """
+
+    window = {str(season).strip() for season in seasons} if seasons is not None else None
+    found: set[str] = set()
+    for row in schedule_rows:
+        if (row.get("home_score") or "").strip():
+            continue
+        if (row.get("roof") or "").strip():
+            continue
+        if window is not None and (row.get("season") or "").strip() not in window:
+            continue
+        team = (row.get("home_team") or "").strip().upper()
+        if team and team not in RETRACTABLE_ROOF_HOME_TEAMS:
+            found.add(team)
+    return tuple(sorted(found))

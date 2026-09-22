@@ -4,6 +4,103 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-22: a guard for the one part of the roof resolution that cannot keep itself current
+
+Follows a post-merge review of PR #34 (`803618a`, R26). The review found the
+change sound and is summarized below; two follow-ups came out of it and are
+implemented here. No release truth changed. Every path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+#### What the review checked, and what it found
+
+R26 resolves a blank `roof` from a retractable venue's own recorded history, so
+a game played indoors stops demanding an `api.weather.gov` capture. That is
+close enough to "inventing an observation to clear a gate" that it was verified
+in code rather than taken from the description.
+
+It does not invent one. `prior_review.py:696-708` returns the resolved roof with
+`freeze_weather_state=None`, `freeze_source_uri=None` and
+`freeze_observed_at=None`: it answers whether a roof is over the game and leaves
+every observation field null, so nothing claims a human looked at the weather.
+Precedence is right in both consumers, `priors.py:1482`
+(`if not roof and not operator_weather_state`) and `prior_review.py:693`
+(`if not normalized and not attributed and not state`), so a schedule-recorded
+roof and a real operator capture each outrank the derived value. It fails closed
+on every edge: `closed != total` rejects an `outdoors` game as well as an `open`
+one, under eight completed games resolves nothing, and an unlisted venue
+resolves nothing.
+
+One concern was formed and then withdrawn. The two-season window looked
+possibly post-hoc, since PR #34's own measurement shows a four-season window has
+every one of these venues opening the roof, making unanimity an artifact of the
+narrow window. It is not post-hoc: `venues.season_window()` returns
+`{prior_season, season}`, the same pair the prior package already uses for its
+era string `{season}_REG_PRIOR_FROM_{prior_season}_REG`. The window is inherited
+from the run's own era definition rather than chosen because it resolves.
+
+#### Added
+
+- `venues.unlisted_blank_roof_teams()`. Names home teams carrying an **unplayed**
+  game with no recorded roof that are absent from `RETRACTABLE_ROOF_HOME_TEAMS`.
+  A played row with a blank roof is missing data, not a signal about the venue,
+  and is ignored.
+- `scripts/check_venue_roof_set.py`. Runs that against a current schedule.
+  Exit 0 names the listed set and the row count; exit 1 names the unlisted
+  venues; exit 2 covers a missing file, an empty file and a file with no `roof`
+  column, so a broken invocation is never mistaken for a clean run. It reads
+  bytes already on disk and fetches nothing.
+- `tests/test_check_venue_roof_set.py`, 14 test functions collecting 18 cases
+  (one is parametrized over the five listed venues): the listed venues, an
+  unlisted venue, a played blank, a recorded roof, a blank home team, duplicate
+  and lower-cased teams, the season window, no rows, and the script's four exit
+  codes.
+
+#### Why a script and not a test
+
+`RETRACTABLE_ROOF_HOME_TEAMS` is a hand-maintained stadium fact. It is correct
+for the five venues that exist today (ARI, ATL, DAL, HOU, IND; SoFi's fixed
+canopy is correctly excluded) and goes stale silently the day a sixth
+retractable roof opens, because that venue's blanks would resolve to nothing and
+the engine would quietly go back to demanding a capture for an indoor game. That
+is a miss rather than a wrong answer, which is why this is a diagnostic and not
+a refusal.
+
+A test cannot catch it. A committed fixture is a snapshot and a snapshot cannot
+contain a stadium that does not exist yet, so a fixture-based subset assertion
+would only re-prove what was true when the fixture was written. Only a run
+against a current schedule catches it. Surfacing it inside the run path instead
+was rejected as disproportionate: the proposal manifest is the contracted
+`nfl_prior_identity_proposal_v2`, so an added key means a v3 bump, and
+`priors.py` is a pure library with no stderr or logging to borrow. A script
+matches how this repository already handles this class of check
+(`session_probe.py`, `check_protected_paths.py`, `record_verify.py`).
+
+#### Changed
+
+`backlog.md`: the R24 stanza gains a coupling note. R26 narrows how often R24's
+gate bites but does not answer it, and it changes what R24 would be built on.
+Before R26 a blocked gate meant a missing enum, an obvious absence. After R26 a
+resolved-from-history roof is a plausible value nobody observed, so if weather
+ever reaches a number, a derived roof would feed it silently, which is harder to
+notice than no number. The registry that the R24 recommendation is conditional
+on must therefore cover the derived-roof path, not only the capture path. R24
+stays `BLOCKED` on Ben; nothing is implemented against it.
+
+#### Verification
+
+- Focused: `sh ./nfl.sh test tests/test_check_venue_roof_set.py tests/test_venues.py`
+  `34 passed in 0.20s`.
+- Complete pinned suite: `1070 passed, 1 skipped in 158.55s (0:02:38)`, exactly
+  18 above the baseline, which is the 18 cases added.
+- Baseline on `cdf7865` before this change, measured in this container:
+  `1052 passed, 1 skipped in 170.72s (0:02:50)`.
+
+Not done, and stated rather than implied: the script has not been run against a
+live schedule. This container holds no frozen `games.csv`, and fetching one
+would go through `sources.py` with the capture obligations that carries, which
+is not worth incurring for a demonstration. The exit codes are proven by tests
+against written files.
+
 ### 2026-09-21: P7, the engine can tell who is starting today
 
 Chunk `P7`, on `claude/next-implementation-priorities-ptjksf`. Release truths
