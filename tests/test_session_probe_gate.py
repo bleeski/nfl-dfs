@@ -116,6 +116,7 @@ def test_the_real_probe_script_is_where_the_run_expects_it() -> None:
     # The helper degrades gracefully when the script is gone, which would make a
     # rename silently stop probing. This is the test that notices.
     assert cli.SESSION_PROBE_SCRIPT.is_file()
-    assert json.loads(json.dumps(str(cli.SESSION_PROBE_SCRIPT))).endswith(
-        "scripts/session_probe.py"
-    )
+    # Compare path parts, not a joined string. Windows renders this path with
+    # backslashes, so a "scripts/session_probe.py" suffix test fails there for a
+    # reason that has nothing to do with the rename this test exists to catch.
+    assert cli.SESSION_PROBE_SCRIPT.parts[-2:] == ("scripts", "session_probe.py")

@@ -4,6 +4,73 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-22: the depth-role package refused its own capture on Windows
+
+Found by Ben running `.\nfl.ps1 test` on his own machine after a sync:
+**`25 failed, 1045 passed, 1 skipped in 303.33s`**. The Linux suite was green at
+`1070 passed, 1 skipped` on the same commit. No release truth changed.
+
+#### The defect
+
+`scripts/make_offensive_role_evidence.py:239-242` took a digest over an
+excerpt's bytes and then wrote the file in text mode:
+
+```python
+digest = hashlib.sha256(excerpt.encode("utf-8")).hexdigest()
+capture.write_text(excerpt, encoding="utf-8")
+```
+
+`Path.write_text` opens with `newline=None`, which translates `\n` to
+`os.linesep`. On Windows the bytes on disk are therefore **not** the bytes that
+were hashed, so `sha256_file()` disagrees and the package refuses the capture it
+had just written: `QB_DEPTH_SOURCE_HASH_MISMATCH`. 24 of the 25 failures.
+
+This is not cosmetic. `P7` exists to resolve who is actually starting, after the
+2026-09-20 slate rejected three starting quarterbacks as backups. It could not
+run at all on Windows, which is the only surface that operates slates. Every
+other hash in that module already read bytes (`:104`, `:124`, `:420`); the write
+was the lone inconsistency, and `make_classic_weather_evidence.py` was never
+affected because it uses `shutil.copyfile`.
+
+The 25th failure was a test asserting a path `.endswith("scripts/session_probe.py")`,
+which is backslashes on Windows.
+
+#### Changed
+
+- `scripts/make_offensive_role_evidence.py`: `write_bytes(excerpt.encode("utf-8"))`.
+  Bytes in, identical bytes out, on every platform.
+- `tests/test_qb_depth_roles.py`: the two helpers that build packages the same
+  way, so fixtures stay byte-faithful.
+- `tests/test_session_probe_gate.py`: compares `Path.parts` instead of a joined
+  string, so it still catches the rename it exists for without failing on a
+  separator.
+
+#### The structural finding, and the fix that matters
+
+`.github/workflows/ci.yml` ran `ubuntu-latest` only. **Windows is the slate
+environment and had never been tested.** A byte, path or newline assumption that
+breaks only on Windows was invisible to every check this repository ran, and
+this one survived from P1 through P7 being merged green.
+
+A `windows` job on `windows-latest` now runs the pinned suite. It gates nothing
+the Linux job already gates; it exists so the next defect of this class is found
+by CI rather than at a lock clock.
+
+#### Verification
+
+- Complete pinned suite on Linux: `1070 passed, 1 skipped in 156.21s (0:02:36)`,
+  unchanged from before the fix, which is exactly the point below.
+- Focused before the CI job was added:
+  `tests/test_qb_depth_roles.py tests/test_session_probe_gate.py` green.
+- `.github/workflows/ci.yml` parses; jobs are `boundaries`, `suite`, `windows`,
+  `protected-paths`.
+
+**Not verified here, and stated rather than implied:** this container is Linux,
+and the tests that failed pass on Linux both before and after the change. A
+Linux run is therefore *not* evidence the fix works. The proof is the new
+`windows` CI job on this pull request, and Ben re-running `.\nfl.ps1 test`,
+where the expected result is `1070 passed, 1 skipped` with zero failures.
+
 ### 2026-09-22: a guard for the one part of the roof resolution that cannot keep itself current
 
 Follows a post-merge review of PR #34 (`803618a`, R26). The review found the
