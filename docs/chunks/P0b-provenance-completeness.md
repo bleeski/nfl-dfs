@@ -2,6 +2,10 @@
 
 Brief for chunk `P0b` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
+Hand-back lines below that name a `docs/session-prompts/` file or a `READY`
+status predate the roadmap. At close-out follow `.claude/skills/close-out/SKILL.md`
+instead: the session card and the §1 Quick-Start replace per-chunk prompts.
+
 - Goal: every set of lineups Ben enters, engine-built or not, leaves a pre-lock
   record that a later grading can be attributed to, and no review CSV is called
   shipped while its policy bytes are missing from the run folder.

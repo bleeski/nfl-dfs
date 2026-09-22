@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "b2b65778-e09b-5294-ae93-c1d38700105f",
-      "branch": "claude/brave-babbage-21d8pk",
-      "chunk": "S00",
-      "claimed_at": "2026-09-22T20:13:59Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

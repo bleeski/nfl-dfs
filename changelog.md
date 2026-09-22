@@ -101,6 +101,20 @@ verdicts with file:line evidence.
   - F8 needs no ruling, because it adds review proposals and changes no gate.
   - X4 is deferred for re-scoping.
 
+#### Commit history, stated plainly
+
+- `25d26bb` was committed after a failed `git add`: its pathspec named the
+  already-renamed test file, and a `;` let the commit run anyway. It carries
+  only the staged renames, although its message describes the whole change.
+  `783db36` lands the content and says so. Amend and force-push are forbidden
+  here, so both commits stay. The lesson: chain `git add` and `git commit` with
+  `&&`, never `;`.
+- The `reviewer` pass found nothing blocking. Two of its findings were fixed in
+  a third commit:
+  - thirteen chunk briefs still told close-out to write a session prompt and
+    set `READY`, and each now carries a note pointing at the close-out skill;
+  - the changelog entry template used the retired status words.
+
 #### Verification
 
 - Focused: `sh ./nfl.sh test tests/test_roadmap_queue.py tests/test_harness_orientation.py -x --tb=short`,
@@ -350,7 +364,7 @@ Entries dated 2026-09-14 to 2026-09-21 moved verbatim to `docs/changelog-archive
 Copy this structure under `Unreleased` and replace every placeholder:
 
 ```markdown
-### YYYY-MM-DD — Sx: short outcome
+### YYYY-MM-DD: short outcome (Session NN)
 
 Changed:
 
@@ -368,8 +382,8 @@ Remaining blockers:
 
 Tracker updates:
 
-- Sx: `OLD_STATUS` -> `NEW_STATUS`.
-- Sy: `BLOCKED` -> `READY`, if dependencies and acceptance gates genuinely passed.
+- `docs/ROADMAP.md` §2.2: Session NN `In Progress` -> `Complete` (or back to `Pending`), with a §4 ledger row.
+- §1 Quick-Start rewritten to the next startable session, only if its dependencies and acceptance gates genuinely passed.
 
 Claims explicitly not made:
 

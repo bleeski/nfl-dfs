@@ -2,6 +2,10 @@
 
 Brief for chunk `P0` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
+Hand-back lines below that name a `docs/session-prompts/` file or a `READY`
+status predate the roadmap. At close-out follow `.claude/skills/close-out/SKILL.md`
+instead: the session card and the §1 Quick-Start replace per-chunk prompts.
+
 - Goal: one deterministic command that grades a slate from its standings, so
   every later chunk's acceptance is a number the next session can reproduce.
 - Read first: the findings report sections 2.2, 4.3, 5.3, 5.4 and appendix B;

@@ -4,6 +4,10 @@ Brief for chunk `X2` of the cloud-operability track. Status and dependencies are
 tracked in `docs/ROADMAP.md` (status board and session card); this file is the
 specification. Written 2026-09-20 from the cloud audit's finding F1.
 
+Hand-back lines below that name a `docs/session-prompts/` file or a `READY`
+status predate the roadmap. At close-out follow `.claude/skills/close-out/SKILL.md`
+instead: the session card and the §1 Quick-Start replace per-chunk prompts.
+
 **The decision is made. Ben ruled option (A) on 2026-09-21**, recorded as `R27`
 in `backlog.md`; operator item 1b is closed. Build (A) and only (A): private
 GitHub release assets with authenticated retrieval added to `sources.py`. The
