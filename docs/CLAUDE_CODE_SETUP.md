@@ -127,6 +127,61 @@ Never mix the two in one session. First run on a new machine or container is
 `.\nfl.ps1 setup` or `sh ./nfl.sh setup`, which needs `uv` and `README.md`
 present.
 
+### Keeping a Windows checkout in sync
+
+Cloud sessions merge into `main` through pull requests, so the Windows checkout
+only ever needs a fast-forward. `sync.ps1` in the repository root performs it.
+Add this one line to your PowerShell profile, once, with your own path:
+
+```powershell
+function Sync-NflDfs { & 'C:\Users\benja\Documents\Claude\nfl-dfs\sync.ps1' @args }
+```
+
+`notepad $PROFILE` opens that file; `New-Item -ItemType File -Path $PROFILE
+-Force` creates it first if it does not exist. Then `Sync-NflDfs` from any
+folder, at the start of each working session.
+
+**The profile holds a pointer, not a copy.** That is the point: `sync.ps1`
+arrives with every sync, so the tool improves itself, and a copy pasted into a
+profile would freeze on the day it was pasted. The script finds the repository
+through `$PSScriptRoot`, so the path above is the only one anywhere.
+
+What it will not do, because `CLAUDE.md` says this tree is often intentionally
+dirty with user-owned work: it never stashes, resets, cleans or discards
+anything. `git pull --ff-only` cannot invent a merge commit or rewrite history,
+and git refuses rather than overwrite a file you have edited. Every failure mode
+ends with nothing changed.
+
+Three things it stops on, and what each means:
+
+- **"On '<branch>', not main."** You are on a feature branch. If it holds work
+  you want, `git add -A` and `git commit` first, then `git checkout main` and
+  run it again. Measured 2026-09-22: a Windows checkout was sitting on
+  `codex/p1-salary-divergence-role-evidence` with 13 modified files, 59 commits
+  behind. Committing them to that branch and switching cost nothing and lost
+  nothing.
+- **"Fast-forward refused."** Local `main` has commits the remote does not.
+  Under this repository's rules that should not happen, because `main` changes
+  only through a merged pull request. Move them to a branch rather than forcing
+  anything.
+- **"Dependencies changed."** `uv.lock` or `pyproject.toml` moved, so run
+  `.\nfl.ps1 setup`. Worth the check because `uv sync --locked` fails outright
+  in that case and the error does not say why. Rare: as of 2026-09-22 only the
+  initial commit has ever touched either file.
+
+Do not put this on a schedule. A background job pulling into a tree you are
+mid-edit in is how the dirty-tree rule gets broken by accident. Run it when you
+sit down.
+
+There is no `sync.sh`. A cloud session clones fresh and is current by
+definition, so it has nothing to sync.
+
+Test results are one thing this never carries. `state/` is gitignored, so
+`last suite:` reads `unknown` on a machine that has not run the suite itself.
+Run `.\nfl.ps1 test` to fill it in; on Windows the expected result is
+`1070 passed, 1 skipped`, the one skip being the symlink-permission case that
+cannot run on Windows.
+
 ## The protected list, and why each entry is on it
 
 `.github/protected-paths.txt` is the definition. The categories:
