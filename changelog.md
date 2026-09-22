@@ -4,6 +4,72 @@ This file records completed implementation work and verification evidence for `b
 
 ## Unreleased
 
+### 2026-09-22: the Windows checkout gets a sync command that keeps itself current
+
+No engine module, contract or evidence gate changed. Every path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. No run executed.
+
+#### Why
+
+Measured on Ben's machine on 2026-09-22: the Windows checkout was **59 commits
+behind** `main`, sitting on `codex/p1-salary-divergence-role-evidence` with 13
+modified files from an abandoned session, and had never seen the CI workflow,
+the hooks, the rules directory, `repo_state.py`, or any chunk from P1 onward.
+Nothing told it to catch up and nothing told Ben how.
+
+#### Added
+
+`sync.ps1` at the repository root. Fetches, reports what is incoming, and
+fast-forwards `main`. It is deliberately conservative, because `CLAUDE.md` says
+this tree is often intentionally dirty with user-owned work: it never stashes,
+resets, cleans or discards, and `git pull --ff-only` can neither invent a merge
+commit nor rewrite history, so every failure mode ends with nothing changed. It
+stops rather than act when the checkout is not on `main`, and it names
+`.\nfl.ps1 setup` when `uv.lock` or `pyproject.toml` moved, because
+`uv sync --locked` fails outright in that case without saying why.
+
+#### The design decision worth recording
+
+**The PowerShell profile holds a pointer, not a copy.** The profile line is
+`function Sync-NflDfs { & '<path>\sync.ps1' @args }`, so the script arrives with
+every sync and improves itself. A copy pasted into a profile freezes on the day
+it was pasted, and a second machine starts from nothing. `$PSScriptRoot` locates
+the repository, so the profile line holds the only path anywhere.
+
+#### Changed
+
+`docs/CLAUDE_CODE_SETUP.md` gains "Keeping a Windows checkout in sync" under
+`## One-time, per machine`, with the profile line, the three stop conditions and
+what each means, and why this is not put on a schedule.
+
+A separate `docs/SYNCING.md` was considered and rejected. That file already
+exists for things only Ben does on his own machine, and X5's finding on
+2026-09-20 was that a document nothing tells the operator to open may as well
+not exist; a fifth setup file would repeat it.
+
+#### Verification
+
+- `sync.ps1` is **not executed by any test**, and this container has no
+  PowerShell, so it is not machine-verified here. What it does carry is a live
+  run: the identical logic was pasted into Ben's PowerShell on 2026-09-22 and
+  performed the real 59-commit fast-forward, including correctly refusing while
+  the checkout was on a feature branch and correctly leaving 13 modified files
+  untouched. `sync.ps1` differs from what ran only in taking its path from
+  `$PSScriptRoot` instead of a parameter default.
+- The git commands it relies on were checked against this repository:
+  `git status --porcelain` for the dirty test, and
+  `git diff --name-only <before> <after> -- uv.lock pyproject.toml` for the
+  dependency test, whose negative result is a true negative because only the
+  initial commit has ever touched either file.
+- Complete pinned suite: `1070 passed, 1 skipped in 158.01s (0:02:38)`.
+
+#### Left open
+
+No `sync.sh`. A cloud session clones fresh and is current by definition.
+`sync.ps1` has no test; a PowerShell script cannot be exercised by this
+repository's pytest suite on Linux, and inventing a fake for it would test the
+fake.
+
 ### 2026-09-22: a guard for the one part of the roof resolution that cannot keep itself current
 
 Follows a post-merge review of PR #34 (`803618a`, R26). The review found the
