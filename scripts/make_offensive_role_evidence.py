@@ -239,7 +239,11 @@ def build_package(
         excerpt = slice_for_team(rows, team=team, observed_at=observed_at)
         digest = hashlib.sha256(excerpt.encode("utf-8")).hexdigest()
         capture = sources_dir / f"{digest}.csv"
-        capture.write_text(excerpt, encoding="utf-8")
+        # Bytes, never text. `write_text` translates "\n" to os.linesep, so on
+        # Windows the file would not hash to the digest just taken over these
+        # exact bytes, and every consumer would refuse the package it just
+        # wrote. Measured 2026-09-22: 24 failures on Windows, none on Linux.
+        capture.write_bytes(excerpt.encode("utf-8"))
         sources.append(
             {
                 "path": f"sources/{capture.name}",
