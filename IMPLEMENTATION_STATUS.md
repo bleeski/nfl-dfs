@@ -1,5 +1,25 @@
 # Implementation Status
 
+## Capability added: 2026-09-23 (Session 03b)
+
+Every blocker code the engine emits has a class, what it stops and its
+authority, in one validated file; no operating path reads it yet (Sessions 04 to
+09), and no gate's behaviour changed. Suite figures are in `changelog.md`.
+
+- **`config/gate_registry_v1.json`** (`nfl_gate_registry_v1`): 1,088 exact
+  codes in 43 families, 15 `V` (stop the file), 3 `S` (construction
+  preferences) and 25 `P` (stop certification). Its SHA-256 is pinned.
+- **`gate_registry.load_gate_registry`** hashes and validates it: only the pairs
+  `V`/`FILE`, `S`/`CONSTRUCTION_PREFERENCE`, `P`/`CERTIFICATION`; no duplicate,
+  orphan or unused entry. `GateRegistry.limitation(code, ...)` builds a
+  `DeliveryLimitation` from an exact code and refuses anything else.
+- **Completeness is test-backed** both ways over `src/nfl_dfs/`: a new blocker
+  code without an entry fails, and so does an entry nothing emits. The scan is
+  syntactic; what it cannot see is pinned to the source that emits it.
+- **Not yet:** codes for the prose-only gates in `lineups.py`, `dk.py` and late
+  swap's locked-cell checks; fixed codes for the four emitters that put an Entry
+  ID inside the code; any path that builds limitations from the registry.
+
 ## Capability added: 2026-09-23 (Session 03)
 
 The fifth truth exists as a contract and a derivation; no operating path emits
