@@ -1654,25 +1654,28 @@ win or cash probability, or that any limitation's evidence is sound. It says a
 valid file exists and which rows it covers.
 
 The per-code class, provenance and `stops` for every blocker the engine can
-emit live in `config/gate_registry_v1.json` (below). A producer builds a
-limitation from its code there, never by stating them itself.
+emit live in `config/gate_registry_v1.json` (below). Sessions 04 to 09 build
+their limitations from a code there. `release._integrity` states its three
+itself, and a test holds them equal to their registry entries.
 
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, loaded and validated by
-`gate_registry.load_gate_registry`, which hashes the bytes (SHA-256) and refuses
-bytes other than an `expected_sha256` when given one. Nothing on the operating
-path reads it yet; Sessions 04 to 09 build their `delivery_limitations` through
-`GateRegistry.limitation`. It changes no gate's behaviour.
+schema `nfl_gate_registry_v1`, SHA-256 `17e83eabbd40fceb2be2a1ccb512b85e0c3e2f78e41e089074f19f0525729b95`, loaded and validated by
+`gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
+bytes when given `expected_sha256`. The hash is pinned in
+`tests/test_gate_registry.py` and here, so a reclassification moves both.
+Nothing on the operating path reads the registry yet; Sessions 04 to 09 build
+their `delivery_limitations` through `GateRegistry.limitation` and record the
+hash they used. It changes no gate's behaviour.
 
 | Field | Meaning |
 |---|---|
 | `schema_version` | Exactly `nfl_gate_registry_v1` |
-| `registered_at` | The date the registry was written |
+| `registered_at` | The ISO date the registry was written |
 | `families` | Name (lower snake) to `class`, `stops`, `provenance` (`kind`, `ref`, as `GateProvenance`) and `covers`, one sentence |
-| `codes` | Every blocker code, or a template, to its family, one per line |
-| `expansions` | A template to the exact codes it produces, when it opens or closes with `*` or its codes differ in family |
+| `codes` | Every exact blocker code to its family, one per line |
+| `expansions` | A template (`*` for an interpolation the source leaves open) to the exact codes it produces |
 
 Rules the loader enforces, each a refusal with its own `GATE_REGISTRY_*` code:
 
@@ -1682,30 +1685,41 @@ Rules the loader enforces, each a refusal with its own `GATE_REGISTRY_*` code:
   construction preferences are relaxable under a lock clock, and truth-claim
   gates stop certification and travel with the file (R28).
 - No duplicate key anywhere, no code whose family is missing, no family no code
-  uses, and no unknown top-level field.
-- A code is one upper-snake token. A template holds `*` for one or more
-  upper-snake segments, as an f-string code does. A template that opens and
-  closes with a literal segment resolves the codes it matches; one that opens or
-  closes with `*` must list its codes under `expansions`, so a generic prefix or
-  suffix never absorbs an unregistered code. An expansion names only codes that
-  match its template and are themselves listed.
+  uses, no unknown top-level field, no blank provenance `ref` or `covers`.
+- Every key of `codes` is one exact upper-snake code. A template appears only as
+  a key of `expansions`, and lists codes that match it and are themselves in
+  `codes`.
 
 `GateRegistry.limitation(code, entry_ids, people, detail)` looks a code up
-exactly, then through the one literal template that matches it; two matching
-templates of different families, an unregistered code, or a malformed one
-refuse. The result is a `DeliveryLimitation`, so its own rules apply too.
+exactly and nothing else; no template or pattern resolves a code, so an
+unregistered or malformed code refuses. The result is a `DeliveryLimitation`,
+so its own rules apply too.
 
 `tests/test_gate_registry.py` holds the registry to the source. A blocker
 literal is the leading upper-snake token of a string, ending it or followed by
 `:`, in an emitting position: a raised exception's first argument; the first
-argument of a call named for a blocker (`*Error`, `_problem`, `_issue`,
-`QAFinding`); an item collected onto, or assigned to, a holder named for
-blockers or reasons; a keyword named for a blocker or reason, or `code`; a string
-compared inside a function named for blocking. Every such literal under
-`src/nfl_dfs/` is registered, every registered code is still emitted, and the
-13 codes the scan cannot see (two that `release._integrity` builds, the C2 and
-SD3 selection statuses, and three weather labels that carry `:game`) are pinned
-to the source text that emits them. `scripts/` codes are outside the registry.
+argument, or `code=`, of a call named for a blocker (`*Error`, `_problem`,
+`_issue`, `QAFinding`); an item collected onto, spread into a display beside,
+or assigned to, a holder named for blockers, or a local that only holds one; the
+value of a `"blockers"` key; a tuple slot named for blockers or problems, or
+`reason` beside the action `BLOCK`, from a display or a called function's
+returned tuples; a keyword named for a blocker or reason, or `code`; a string
+compared inside a function named for blocking. The scan follows locals, called
+functions' returned displays and comprehensions, and resolves an interpolation
+from literal call-site arguments or a literal loop. Every such code under
+`src/nfl_dfs/` is registered and every registered code is still emitted. What
+the scan cannot see (two codes `release._integrity` builds, the C2 and SD3
+selection statuses passed through a `status` field, the referee's reasons and
+the C3 scale harness's replay status) is pinned to the source text that emits
+it, and so are the seven offensive-role reasons it reads but that block nothing.
+
+Known limits. The scan is syntactic: a code reached only through a shape it
+does not follow is missed until it is pinned. Four emitters put the Entry ID
+inside the token (`LINEUP_{entry_id}:` in certification and the review export,
+`{PRIOR|CURRENT|PROPOSED}_{entry_id}:` in late swap), so no registry can hold
+them; the test lists them. The roster validator and DraftKings parser
+(`lineups.py`, `dk.py`) and late swap's locked-cell checks raise prose, not
+codes. `scripts/` codes are outside the registry.
 
 Does not establish: that a gate is correct, that its evidence is sound, upload
 clearance, certification or any model claim. It says what each gate, when it

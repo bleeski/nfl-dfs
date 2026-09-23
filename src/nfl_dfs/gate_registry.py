@@ -14,13 +14,11 @@ Exactly three class and `stops` pairs exist, one per class of rule in `CLAUDE.md
 - `P` stops `CERTIFICATION`: a truth claim or process prerequisite, which under
   R28 travels with the file as a named limitation.
 
-A code with `*` is a template: an f-string code whose `*` stands for one or more
-upper-snake segments. A template that opens and closes with a literal segment
-resolves the codes it matches; two that can match one code must agree on class,
-stops and provenance. A template that opens or closes with `*`, or whose
-codes differ in class, lists its codes under `expansions` instead and resolves
-nothing itself, so a generic prefix or suffix never absorbs a code nobody
-registered.
+Every entry in `codes` is one exact code, and a limitation is built only from an
+exact code. An f-string code whose interpolation the source does not fix is a
+template, with `*` for one or more upper-snake segments; it appears only as a
+key of `expansions`, which lists the exact codes it produces. A template never
+resolves a code itself, so no pattern can absorb a code nobody registered.
 
 Nothing on the operating path reads this file yet; Sessions 04 to 09 build their
 limitations through `GateRegistry.limitation`. It changes no gate's behaviour.
@@ -33,6 +31,7 @@ import json
 import re
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -93,36 +92,6 @@ def _matches(template: str, code: str) -> bool:
     return next(template_bindings(template, code), None) is not None
 
 
-def templates_overlap(first: str, second: str) -> bool:
-    """Whether some code matches both templates."""
-
-    a, b = first.split("_"), second.split("_")
-    seen: dict[tuple[int, int], bool] = {}
-
-    def walk(i: int, j: int) -> bool:
-        if (i, j) in seen:
-            return seen[(i, j)]
-        seen[(i, j)] = False
-        if i == len(a) or j == len(b):
-            result = i == len(a) and j == len(b)
-        elif a[i] != "*" and b[j] != "*":
-            result = a[i] == b[j] and walk(i + 1, j + 1)
-        elif a[i] == "*" and b[j] == "*":
-            result = walk(i + 1, j + 1) or walk(i, j + 1) or walk(i + 1, j)
-        elif a[i] == "*":
-            result = walk(i + 1, j + 1) or walk(i, j + 1)
-        else:
-            result = walk(i + 1, j + 1) or walk(i + 1, j)
-        seen[(i, j)] = result
-        return result
-
-    return walk(0, 0)
-
-
-def _metadata(family: "GateFamily") -> tuple[object, ...]:
-    return (family.gate_class, family.stops, family.provenance)
-
-
 @dataclass(frozen=True)
 class GateRegistry:
     sha256: str
@@ -131,21 +100,14 @@ class GateRegistry:
     expansions: Mapping[str, tuple[str, ...]]
 
     def family_of(self, code: str) -> GateFamily:
-        """The family of an emitted code: its own entry, else the one template matching it."""
+        """The family of an emitted code, looked up exactly."""
 
-        if not _CODE.fullmatch(code):
+        if not isinstance(code, str) or not _CODE.fullmatch(code):
             raise GateRegistryError(f"GATE_REGISTRY_CODE_INVALID:{code!r}")
         name = self.codes.get(code)
-        if name is not None:
-            return self.families[name]
-        found = sorted({self.codes[template] for template in self.codes
-                        if "*" in template and _matches(template, code)})
-        if not found:
+        if name is None:
             raise GateRegistryError(f"GATE_REGISTRY_CODE_UNREGISTERED:{code}")
-        # Two templates may match one code; they must agree on what it stops.
-        if len({_metadata(self.families[match]) for match in found}) > 1:
-            raise GateRegistryError(f"GATE_REGISTRY_CODE_AMBIGUOUS:{code}:{found}")
-        return self.families[found[0]]
+        return self.families[name]
 
     def limitation(
         self,
@@ -189,6 +151,8 @@ def _family(name: str, raw: object) -> GateFamily:
         provenance = GateProvenance.model_validate(raw["provenance"])
     except (ValueError, ValidationError) as exc:
         raise GateRegistryError(f"GATE_REGISTRY_FAMILY_INVALID:{name}:{exc}") from exc
+    if not provenance.ref.strip():
+        raise GateRegistryError(f"GATE_REGISTRY_FAMILY_INVALID:{name}:provenance ref is blank")
     if ALLOWED_PAIRS[gate_class] is not stops:
         raise GateRegistryError(
             f"GATE_REGISTRY_CLASS_STOPS_INVALID:{name}:{gate_class.value} stops "
@@ -211,8 +175,12 @@ def parse_gate_registry(raw: bytes) -> GateRegistry:
         raise GateRegistryError(f"GATE_REGISTRY_SCHEMA_INVALID:fields={sorted(payload) if isinstance(payload, dict) else payload!r}")
     if payload["schema_version"] != SCHEMA_VERSION:
         raise GateRegistryError(f"GATE_REGISTRY_SCHEMA_INVALID:schema_version={payload['schema_version']!r}")
-    if not isinstance(payload["registered_at"], str) or not payload["registered_at"]:
-        raise GateRegistryError("GATE_REGISTRY_SCHEMA_INVALID:registered_at is blank")
+    try:
+        date.fromisoformat(payload["registered_at"])
+    except (TypeError, ValueError) as exc:
+        raise GateRegistryError(
+            f"GATE_REGISTRY_SCHEMA_INVALID:registered_at={payload['registered_at']!r} is not a date"
+        ) from exc
     families_raw, codes_raw, expansions_raw = payload["families"], payload["codes"], payload["expansions"]
     if not all(isinstance(part, dict) for part in (families_raw, codes_raw, expansions_raw)) or not families_raw:
         raise GateRegistryError("GATE_REGISTRY_SCHEMA_INVALID:families, codes and expansions are objects")
@@ -220,33 +188,22 @@ def parse_gate_registry(raw: bytes) -> GateRegistry:
 
     codes: dict[str, str] = {}
     for code, name in codes_raw.items():
-        if not _TEMPLATE.fullmatch(code) or not re.search(r"[A-Z]", code):
-            raise GateRegistryError(f"GATE_REGISTRY_CODE_INVALID:{code!r}")
-        if code.startswith("*") or code.endswith("*"):
-            raise GateRegistryError(
-                f"GATE_REGISTRY_EXPANSION_INVALID:{code} opens or ends with * and must list its codes"
-            )
-        if name not in families:
+        if not _CODE.fullmatch(code):
+            raise GateRegistryError(f"GATE_REGISTRY_CODE_INVALID:{code!r} is not one exact code")
+        if not isinstance(name, str) or name not in families:
             raise GateRegistryError(f"GATE_REGISTRY_FAMILY_UNKNOWN:{code}:{name!r}")
         codes[code] = name
 
     expansions: dict[str, tuple[str, ...]] = {}
     for template, listed in expansions_raw.items():
-        if "*" not in template or not _TEMPLATE.fullmatch(template) or template in codes:
-            raise GateRegistryError(f"GATE_REGISTRY_EXPANSION_INVALID:{template!r} is not an unlisted template")
+        if "*" not in template or not _TEMPLATE.fullmatch(template) or not re.search(r"[A-Z]", template):
+            raise GateRegistryError(f"GATE_REGISTRY_EXPANSION_INVALID:{template!r} is not a template")
         if not isinstance(listed, list) or not listed or len(set(listed)) != len(listed):
             raise GateRegistryError(f"GATE_REGISTRY_EXPANSION_INVALID:{template}:codes must be a non-empty list without repeats")
         for code in listed:
             if not isinstance(code, str) or "*" in code or code not in codes or not _matches(template, code):
                 raise GateRegistryError(f"GATE_REGISTRY_EXPANSION_INVALID:{template}:{code!r}")
         expansions[template] = tuple(listed)
-
-    templates = sorted(code for code in codes if "*" in code)
-    for index, first in enumerate(templates):
-        for second in templates[index + 1:]:
-            if (_metadata(families[codes[first]]) != _metadata(families[codes[second]])
-                    and templates_overlap(first, second)):
-                raise GateRegistryError(f"GATE_REGISTRY_CODE_AMBIGUOUS:{first}:{second} match one code and disagree")
 
     unused = sorted(set(families) - set(codes.values()))
     if unused:

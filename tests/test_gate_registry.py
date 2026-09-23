@@ -49,7 +49,6 @@ from nfl_dfs.gate_registry import (
     load_gate_registry,
     parse_gate_registry,
     template_bindings,
-    templates_overlap,
 )
 from nfl_dfs.opportunity import WEATHER_STATES
 from nfl_dfs.prior_score import score_pool, team_volumes
@@ -486,21 +485,39 @@ REPO = SRC.parent.parent
 # open with an enum name, not a code. It counts only where it is emitted:
 #
 #   raise     the first argument of a raised exception;
-#   build     the first argument of a call whose name says it builds a blocker
-#             (an exception class, `_problem`, `_issue`, `QAFinding`, ...);
+#   build     the first argument, or `code=`, of a call whose name says it builds
+#             a blocker (an exception class, `_problem`, `_issue`, `QAFinding`);
 #   collect   appended, extended, added or inserted onto, or `+=`-ed onto, a
-#             holder named for blockers, or assigned to a name like one;
+#             holder: a name that says blocker, reason, problem and the like, or
+#             a local that only ever holds one (`target = a if x else blockers`);
+#             a display that spreads a holder (`[*blockers, "CODE"]`); the value
+#             of a `"blockers"` key;
+#   assign    assigned to a name like one; in a tuple target, a slot named
+#             for blockers or problems, or `reason` beside the action "BLOCK"
+#             (`action, reason = "BLOCK", "CODE"`), from a display or from the
+#             tuples a called function returns;
 #   keyword   a keyword argument named for a blocker or reason, or `code`;
 #   blocking  compared inside a function or property named for blocking.
 #
 # Each position follows conditional expressions, `and`/`or`, collection
-# displays, starred items, the left operand of `+` or `%`, and nested builder
-# calls. An interpolation inside the token is kept as `*`, so an f-string code
-# is a template. The scan covers src/nfl_dfs/*.py, which is what the card names;
-# scripts/ emit their own codes and are not in the registry.
+# displays and comprehensions, starred items, the left operand of `+` or `%`,
+# nested builder calls, a local assigned a code, and a call to a function whose
+# returned displays hold codes. An interpolation inside the token is resolved
+# where the source fixes it: a parameter from the literal arguments at every
+# call site, a loop variable from a literal it iterates (a display, a local
+# bound to one, a dict's keys or items), `.upper()` applied. One that stays open
+# is kept as `*`, and the code is a template whose codes the registry lists
+# under `expansions`. The scan covers src/nfl_dfs/*.py, which is what the card
+# names; scripts/ emit their own codes and are not in the registry.
 BLOCKER_NAME = re.compile(r"block|reason|failure|problem|refus|error|issue|finding", re.I)
 KEYWORD_NAME = re.compile(r"block|reason|refus|^code$", re.I)
+KEY_NAME = re.compile(r"^blockers?$")
+# A tuple slot is a blocker when named like a holder; a slot named `reason` only
+# beside the literal action "BLOCK", since the same slot names why a person was
+# selected, excluded or a model kept.
+SLOT_NAME = re.compile(r"block|problem|refus|failure|error|issue|finding", re.I)
 CODE_TEXT = re.compile(r"(?:[A-Z][A-Z0-9]*|\*)(?:_(?:[A-Z0-9]+|\*))+")
+_DEPTH = 3
 
 # Codes the scan cannot see, each with the source text that still emits it. A
 # pin the scan starts to see is stale and fails, as does one whose text is gone.
@@ -525,12 +542,40 @@ UNSCANNED_CODES = {
                                        "an SD3 selection status"),
     "CANDIDATE_BANK_EXHAUSTED_INCOMPLETE": ("portfolio_enforcement.py", '"CANDIDATE_BANK_EXHAUSTED_INCOMPLETE"',
                                             "an SD3 selection status"),
-    "WEATHER_OBSERVED_AT": ("prior_review.py", 'label=f"WEATHER_OBSERVED_AT:{game_id}"',
-                            "a `_parse_moment` label that carries `:game`, so the label is the code"),
-    "WEATHER_CAPTURED_AT": ("prior_review.py", 'label=f"WEATHER_CAPTURED_AT:{game_id}"',
-                            "a `_parse_moment` label that carries `:game`, so the label is the code"),
-    "WEATHER_EXPIRES_AT": ("prior_review.py", 'label=f"WEATHER_EXPIRES_AT:{game_id}"',
-                           "a `_parse_moment` label that carries `:game`, so the label is the code"),
+    "CLASSIC_C3_SCALE_REPLAY_MISMATCH": ("classic_scale_acceptance.py", '"CLASSIC_C3_SCALE_REPLAY_MISMATCH"',
+                                         "the C3 scale harness's replay status"),
+    "REFEREE_SAFETY_OR_HARD_CONSTRAINT_FAILURE": ("qa.py", 'return True, "REFEREE_SAFETY_OR_HARD_CONSTRAINT_FAILURE"',
+                                                  "qa.referee_blocks returns it as the reason beside True"),
+    "REFEREE_SIGN_DISAGREEMENT": ("qa.py", '"REFEREE_SIGN_DISAGREEMENT"',
+                                  "qa.referee_blocks returns it as the reason beside True"),
+}
+
+# Strings the scan reads that block nothing. The scan is flow-insensitive: in
+# `offensive_roles`, `blocked.append(f"{reason}:...")` runs only when the action
+# is BLOCK, but `reason` also takes the reasons for the other actions. A pin the
+# scan stops seeing is stale and fails.
+NOT_BLOCKERS = {
+    code: ("offensive_roles.py", f'"{action}", "{code}"')
+    for code, action in (
+        ("HISTORICAL_ROLE_UNCONFIRMED", "DIAGNOSTIC"),
+        ("PARTICIPATION_PRECEDENCE", "EXCLUDE"),
+        ("EXPLICIT_TEAM_ALLOCATION", "SELECT"),
+        ("OFFENSIVE_MISSING_HISTORY", "EXCLUDE"),
+        ("OFFENSIVE_TRANSFER_PRIOR_UNVERIFIED", "DIAGNOSTIC"),
+        ("OFFENSIVE_TRANSFER_PRIOR_ZERO", "EXCLUDE"),
+        ("OFFENSIVE_OBSERVED_HISTORY_ZERO", "EXCLUDE"),
+    )
+}
+
+# Emitted codes no registry can hold: the Entry ID is inside the token, so the
+# code differs per row. Each is a defect for the session that next touches its
+# emitter, which should write a fixed code such as `LINEUP_INVALID:<entry_id>:...`.
+UNREGISTRABLE_TEMPLATES = {
+    "LINEUP_*": (("certification.py", 'f"LINEUP_{entry_id}:{problem}"'),
+                 ("review_export.py", 'f"LINEUP_{entry_id}:{problem}"')),
+    "PRIOR_*": (("late_swap.py", 'f"{label}_{entry_id}:{problem}"'),),
+    "CURRENT_*": (("late_swap.py", 'f"{label}_{entry_id}:{problem}"'),),
+    "PROPOSED_*": (("late_swap.py", 'f"{label}_{entry_id}:{problem}"'),),
 }
 
 
@@ -542,101 +587,337 @@ def _callee(node: ast.AST) -> str:
     return ""
 
 
-def code_text(node: ast.AST) -> str | None:
-    """The code a string opens with, `*` for an interpolation inside it, else None."""
+def _head(text: str) -> str | None:
+    """The code `text` opens with, or None when a message or nothing opens it."""
 
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        parts: list[str | None] = [node.value]
-    elif isinstance(node, ast.JoinedStr):
-        parts = [value.value if isinstance(value, ast.Constant) else None for value in node.values]
-    else:
+    head = re.match(r"[A-Z0-9_*]*", text).group(0)
+    rest = text[len(head):]
+    if rest and not rest.startswith(":"):
         return None
-    text = ""
-    for part in parts:
-        if part is None:
-            if text and not text.endswith("_"):
-                break
-            text += "*"
-            continue
-        head = re.match(r"[A-Z0-9_]*", part).group(0)
-        text += head
-        if len(head) < len(part):
-            if part[len(head)] != ":":
+    if not CODE_TEXT.fullmatch(head) or not re.search(r"[A-Z]", head):
+        return None
+    return head
+
+
+class _Scan:
+    """Blocker literals across a set of modules, with the calls between them."""
+
+    def __init__(self, sources: dict[str, str]):
+        self.trees = {name: ast.parse(text) for name, text in sources.items()}
+        self.parent: dict[ast.AST, ast.AST] = {}
+        self.module: dict[ast.AST, str] = {}
+        self.functions: dict[str, list[tuple[str, ast.AST]]] = {}
+        self.calls: dict[str, list[tuple[str, ast.Call]]] = {}
+        for name, tree in self.trees.items():
+            for node in ast.walk(tree):
+                self.module[node] = name
+                for child in ast.iter_child_nodes(node):
+                    self.parent[child] = node
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    self.functions.setdefault(node.name, []).append((name, node))
+                elif isinstance(node, ast.Call) and _callee(node.func):
+                    self.calls.setdefault(_callee(node.func), []).append((name, node))
+        self.found: dict[str, set[str]] = {}
+
+    # -- scope ---------------------------------------------------------------
+
+    def _ancestors(self, node: ast.AST):
+        while node in self.parent:
+            node = self.parent[node]
+            yield node
+
+    def _function(self, node: ast.AST):
+        return next((a for a in self._ancestors(node)
+                     if isinstance(a, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+
+    def _defs(self, name: str, at: ast.AST):
+        """The functions a call to `name` at `at` can reach: its own module first."""
+
+        local = [f for m, f in self.functions.get(name, ()) if m == self.module[at]]
+        if local or name.startswith("_"):
+            return local
+        return [f for _m, f in self.functions.get(name, ())]
+
+    def _assigned(self, name: str, at: ast.AST) -> list[ast.AST]:
+        """Values a local `name` is assigned in the function around `at`, or its module."""
+
+        scope = self._function(at) or self.trees[self.module[at]]
+        values = []
+        for node in ast.walk(scope):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == name:
+                        values.append(node.value)
+                    elif isinstance(target, ast.Tuple) and isinstance(node.value, ast.Tuple):
+                        values += [v for t, v in zip(target.elts, node.value.elts)
+                                   if isinstance(t, ast.Name) and t.id == name]
+        return values
+
+    def is_holder(self, node: ast.AST, depth: int = 2) -> bool:
+        if BLOCKER_NAME.search(_callee(node)):
+            return True
+        if isinstance(node, ast.Name) and depth > 0:
+            values = self._assigned(node.id, node)
+            return bool(values) and all(self._only_holders(v, depth - 1) for v in values)
+        return False
+
+    def _only_holders(self, node: ast.AST, depth: int) -> bool:
+        if isinstance(node, ast.IfExp):
+            return self._only_holders(node.body, depth) and self._only_holders(node.orelse, depth)
+        if isinstance(node, ast.BoolOp):
+            return all(self._only_holders(v, depth) for v in node.values)
+        return isinstance(node, (ast.Name, ast.Attribute)) and self.is_holder(node, depth)
+
+    # -- the values an interpolation or a loop variable can take -------------
+
+    def _values(self, node: ast.AST, at: ast.AST, depth: int) -> list[str] | None:
+        if depth <= 0:
+            return None
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return [node.value]
+        if isinstance(node, ast.JoinedStr):
+            return self._render(node, depth - 1)
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "upper" and not node.args):
+            inner = self._values(node.func.value, at, depth)
+            return None if inner is None else [value.upper() for value in inner]
+        if isinstance(node, ast.Name):
+            return self._name_values(node.id, at, depth)
+        return None
+
+    def _name_values(self, name: str, at: ast.AST, depth: int) -> list[str] | None:
+        for scope in self._ancestors(at):
+            loops = [scope] if isinstance(scope, (ast.For, ast.AsyncFor)) else (
+                scope.generators if isinstance(scope, (ast.GeneratorExp, ast.ListComp, ast.SetComp)) else [])
+            for loop in loops:
+                path = self._target_path(loop.target, name)
+                if path is not None:
+                    return self._iterated(loop.iter, path, loop, depth)
+            if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                params = [a.arg for a in (*scope.args.posonlyargs, *scope.args.args, *scope.args.kwonlyargs)]
+                if name in params:
+                    return self._argument_values(scope, name, depth)
+                values = self._assigned(name, at)
+                if values:
+                    out: list[str] = []
+                    for value in values:
+                        got = self._values(value, value, depth - 1)
+                        out += ["*"] if got is None else got
+                    return out
                 return None
-            break
-    if not CODE_TEXT.fullmatch(text) or not re.search(r"[A-Z]", text):
         return None
-    return text
 
+    @staticmethod
+    def _target_path(target: ast.AST, name: str) -> tuple[int, ...] | None:
+        if isinstance(target, ast.Name):
+            return () if target.id == name else None
+        if isinstance(target, ast.Tuple):
+            for index, item in enumerate(target.elts):
+                inner = _Scan._target_path(item, name)
+                if inner is not None:
+                    return (index, *inner)
+        return None
 
-def _emitted(node: ast.AST):
-    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        for item in node.elts:
-            yield from _emitted(item)
-    elif isinstance(node, ast.IfExp):
-        yield from _emitted(node.body)
-        yield from _emitted(node.orelse)
-    elif isinstance(node, ast.BoolOp):
-        for value in node.values:
-            yield from _emitted(value)
-    elif isinstance(node, ast.Starred):
-        yield from _emitted(node.value)
-    elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mod)):
-        yield from _emitted(node.left)
-    elif isinstance(node, ast.Call) and BLOCKER_NAME.search(_callee(node.func)) and node.args:
-        yield from _emitted(node.args[0])
-    else:
-        yield node
+    def _elements(self, node: ast.AST, at: ast.AST, depth: int) -> list[ast.AST] | None:
+        """The items a literal iterable yields, following a local bound to one."""
 
+        if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+            return list(node.elts)
+        if isinstance(node, ast.Dict):
+            return list(node.keys)
+        if isinstance(node, ast.Call):
+            if _callee(node.func) in {"sorted", "tuple", "list", "reversed", "set"} and len(node.args) == 1:
+                return self._elements(node.args[0], at, depth)
+            if isinstance(node.func, ast.Attribute) and node.func.attr in {"items", "keys", "values"}:
+                source = node.func.value
+                mapping = self._one_display(source, at) if isinstance(source, ast.Name) else source
+                if isinstance(mapping, ast.Dict):
+                    if node.func.attr == "keys":
+                        return list(mapping.keys)
+                    if node.func.attr == "values":
+                        return list(mapping.values)
+                    return [ast.Tuple(elts=[k, v]) for k, v in zip(mapping.keys, mapping.values)]
+        if isinstance(node, ast.Name) and depth > 0:
+            display = self._one_display(node, at)
+            return None if display is None else self._elements(display, at, depth - 1)
+        return None
 
-def blocker_literals(source: str) -> dict[str, set[str]]:
-    """Every blocker literal in `source`, with the positions it was emitted from."""
+    def _one_display(self, name: ast.Name, at: ast.AST) -> ast.AST | None:
+        values = self._assigned(name.id, at)
+        return values[0] if len(values) == 1 else None
 
-    found: dict[str, set[str]] = {}
+    def _iterated(self, iterable: ast.AST, path: tuple[int, ...], at: ast.AST, depth: int) -> list[str] | None:
+        items = self._elements(iterable, at, depth)
+        if items is None:
+            return None
+        out: list[str] = []
+        for item in items:
+            for index in path:
+                if not isinstance(item, ast.Tuple) or index >= len(item.elts):
+                    return None
+                item = item.elts[index]
+            got = self._values(item, at, depth - 1)
+            out += ["*"] if got is None else got
+        return out
 
-    def record(node: ast.AST, position: str) -> None:
-        for item in _emitted(node):
-            code = code_text(item)
+    def _argument_values(self, function: ast.AST, name: str, depth: int) -> list[str] | None:
+        positional = [a.arg for a in (*function.args.posonlyargs, *function.args.args)]
+        defaults = dict(zip(positional[len(positional) - len(function.args.defaults):], function.args.defaults))
+        defaults.update({a.arg: d for a, d in zip(function.args.kwonlyargs, function.args.kw_defaults) if d})
+        sites = [call for module, call in self.calls.get(function.name, ())
+                 if module == self.module[function] or not function.name.startswith("_")]
+        if not sites:
+            return None
+        out: list[str] = []
+        for call in sites:
+            argument = next((k.value for k in call.keywords if k.arg == name), None)
+            if argument is None and name in positional:
+                index = positional.index(name)
+                if positional and positional[0] in {"self", "cls"} and isinstance(call.func, ast.Attribute):
+                    index -= 1
+                if 0 <= index < len(call.args) and not any(isinstance(a, ast.Starred) for a in call.args[:index + 1]):
+                    argument = call.args[index]
+            if argument is None:
+                argument = defaults.get(name)
+            got = None if argument is None else self._values(argument, call, depth - 1)
+            out += ["*"] if got is None else got  # an open site keeps the template
+        return out
+
+    def _render(self, node: ast.JoinedStr, depth: int) -> list[str] | None:
+        """Every text an f-string can open with; an open interpolation stays `*`."""
+
+        texts = [""]
+        for part in node.values:
+            if all(re.match(r"[A-Z0-9_*]*", text).end() < len(text) for text in texts):
+                break  # every text's code has ended; the rest is detail
+            if isinstance(part, ast.Constant):
+                texts = [text + str(part.value) for text in texts]
+                continue
+            values = self._values(part.value, part, depth)
+            if values is None:
+                values = ["*"]
+            texts = [text + value for text in texts for value in values][:256]
+        return texts
+
+    # -- emitting positions ------------------------------------------------
+
+    def _strings(self, node: ast.AST, depth: int = _DEPTH):
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            for item in node.elts:
+                yield from self._strings(item, depth)
+        elif isinstance(node, (ast.GeneratorExp, ast.ListComp, ast.SetComp)):
+            yield from self._strings(node.elt, depth)
+        elif isinstance(node, ast.IfExp):
+            yield from self._strings(node.body, depth)
+            yield from self._strings(node.orelse, depth)
+        elif isinstance(node, ast.BoolOp):
+            for value in node.values:
+                yield from self._strings(value, depth)
+        elif isinstance(node, ast.Starred):
+            yield from self._strings(node.value, depth)
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mod)):
+            yield from self._strings(node.left, depth)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            yield node.value
+        elif isinstance(node, ast.JoinedStr):
+            yield from self._render(node, _DEPTH + 1) or ()
+        elif isinstance(node, ast.Name) and depth > 0:
+            for value in self._assigned(node.id, node):
+                yield from self._strings(value, depth - 1)
+        elif isinstance(node, ast.Call) and depth > 0:
+            if BLOCKER_NAME.search(_callee(node.func)):
+                if node.args:
+                    yield from self._strings(node.args[0], depth)
+                for keyword in node.keywords:
+                    if keyword.arg == "code":
+                        yield from self._strings(keyword.value, depth)
+            else:
+                for function in self._defs(_callee(node.func), node):
+                    for inner in ast.walk(function):
+                        if isinstance(inner, ast.Return) and isinstance(
+                                inner.value, (ast.Tuple, ast.List, ast.Set, ast.Constant)):
+                            yield from self._strings(inner.value, depth - 1)
+
+    def _record(self, node: ast.AST) -> None:
+        for text in self._strings(node):
+            code = _head(text)
             if code:
-                found.setdefault(code, set()).add(position)
+                self.found.setdefault(code, set()).add(self.module[node])
 
-    for node in ast.walk(ast.parse(source)):
+    def _returned_at(self, call: ast.Call, index: int):
+        for function in self._defs(_callee(call.func), call):
+            for inner in ast.walk(function):
+                if (isinstance(inner, ast.Return) and isinstance(inner.value, ast.Tuple)
+                        and index < len(inner.value.elts)):
+                    yield inner.value.elts[index]
+
+    def scan(self) -> dict[str, set[str]]:
+        for tree in self.trees.values():
+            for node in ast.walk(tree):
+                self._visit(node)
+        return self.found
+
+    def _visit(self, node: ast.AST) -> None:
         if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call) and node.exc.args:
-            record(node.exc.args[0], "raise")
+            self._record(node.exc.args[0])
         elif isinstance(node, ast.Call):
             func = node.func
             if (isinstance(func, ast.Attribute) and func.attr in {"append", "extend", "add", "insert"}
-                    and BLOCKER_NAME.search(_callee(func.value)) and node.args):
-                record(node.args[-1], "collect")
+                    and self.is_holder(func.value) and node.args):
+                self._record(node.args[-1])
             elif BLOCKER_NAME.search(_callee(func)) and node.args:
-                record(node.args[0], "build")
+                self._record(node.args[0])
             for keyword in node.keywords:
                 if keyword.arg and KEYWORD_NAME.search(keyword.arg):
-                    record(keyword.value, "keyword")
+                    self._record(keyword.value)
         elif (isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Add)
-              and BLOCKER_NAME.search(_callee(node.target))):
-            record(node.value, "collect")
+              and self.is_holder(node.target)):
+            self._record(node.value)
         elif isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            if any(KEYWORD_NAME.search(_callee(target)) for target in targets):
-                record(node.value, "collect")
+            for target in targets:
+                if KEYWORD_NAME.search(_callee(target)):
+                    self._record(node.value)
+                elif isinstance(target, ast.Tuple):
+                    blocking = isinstance(node.value, ast.Tuple) and any(
+                        isinstance(v, ast.Constant) and v.value == "BLOCK" for v in node.value.elts)
+                    for index, item in enumerate(target.elts):
+                        name = _callee(item)
+                        if not (SLOT_NAME.search(name) or (blocking and re.search("reason", name, re.I))):
+                            continue
+                        if isinstance(node.value, ast.Tuple) and index < len(node.value.elts):
+                            self._record(node.value.elts[index])
+                        elif isinstance(node.value, ast.Call):
+                            for value in self._returned_at(node.value, index):
+                                self._record(value)
+        elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            if any(isinstance(item, ast.Starred) and self.is_holder(item.value) for item in node.elts):
+                for item in node.elts:
+                    if not isinstance(item, ast.Starred):
+                        self._record(item)
+        elif isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if isinstance(key, ast.Constant) and isinstance(key.value, str) and KEY_NAME.match(key.value):
+                    self._record(value)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and "block" in node.name:
             for inner in ast.walk(node):
                 if isinstance(inner, ast.Compare):
                     for comparator in inner.comparators:
-                        record(comparator, "blocking")
-    return found
+                        self._record(comparator)
+
+
+def blocker_literals(source: str) -> dict[str, set[str]]:
+    """Every blocker literal in one source text, with the module that emits it."""
+
+    return _Scan({"snippet.py": source}).scan()
 
 
 @lru_cache(maxsize=1)
 def scanned_codes() -> dict[str, frozenset[str]]:
     """Each blocker literal under src/nfl_dfs/ and the modules that emit it."""
 
-    found: dict[str, set[str]] = {}
-    for path in sorted(SRC.glob("*.py")):
-        for code in blocker_literals(path.read_text(encoding="utf-8")):
-            found.setdefault(code, set()).add(path.name)
-    return {code: frozenset(modules) for code, modules in found.items()}
+    sources = {path.name: path.read_text(encoding="utf-8") for path in sorted(SRC.glob("*.py"))}
+    return {code: frozenset(modules) for code, modules in _Scan(sources).scan().items()}
 
 
 @lru_cache(maxsize=1)
@@ -669,10 +950,19 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # ----------------------------------------------------------------- the file
 
-def test_the_registry_loads_and_names_its_hash():
+# The registry's bytes, pinned. A reclassification is a deliberate change, so
+# it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
+REGISTRY_SHA256 = "17e83eabbd40fceb2be2a1ccb512b85e0c3e2f78e41e089074f19f0525729b95"
+
+
+def test_the_registry_is_the_pinned_bytes():
     raw = DEFAULT_REGISTRY_PATH.read_bytes()
-    loaded = load_gate_registry(expected_sha256=hashlib.sha256(raw).hexdigest())
-    assert loaded.sha256 == hashlib.sha256(raw).hexdigest()
+    assert hashlib.sha256(raw).hexdigest() == REGISTRY_SHA256, (
+        "config/gate_registry_v1.json changed; re-pin REGISTRY_SHA256 here and in "
+        "docs/DATA_CONTRACTS.md with the change that moved it"
+    )
+    assert load_gate_registry(expected_sha256=REGISTRY_SHA256).sha256 == REGISTRY_SHA256
+    assert REGISTRY_SHA256 in (REPO / "docs" / "DATA_CONTRACTS.md").read_text(encoding="utf-8")
     assert DEFAULT_REGISTRY_PATH == REPO / "config" / "gate_registry_v1.json"
     assert json.loads(raw)["schema_version"] == "nfl_gate_registry_v1"
     with pytest.raises(GateRegistryError, match="GATE_REGISTRY_SHA256_MISMATCH"):
@@ -689,25 +979,31 @@ def test_the_registry_lists_one_code_per_line():
 
 # ----------------------------------------------------------------- completeness
 
+def _emitted_codes() -> dict[str, frozenset[str]]:
+    return {code: modules for code, modules in scanned_codes().items()
+            if code not in NOT_BLOCKERS and code not in UNREGISTRABLE_TEMPLATES}
+
+
 def test_every_blocker_literal_has_an_entry():
-    listed = set(registry().codes) | set(registry().expansions)
-    missing = {code: sorted(modules) for code, modules in scanned_codes().items() if code not in listed}
-    unseen = sorted(code for code in UNSCANNED_CODES if code not in registry().codes)
+    codes, templates = set(registry().codes), set(registry().expansions)
+    missing = {code: sorted(modules) for code, modules in _emitted_codes().items()
+               if code not in (templates if "*" in code else codes)}
+    unseen = sorted(code for code in UNSCANNED_CODES if code not in codes)
     assert not missing and not unseen, (
         "A blocker code has no entry in config/gate_registry_v1.json. Give it a family "
-        "(class, stops, provenance) before it ships; a template that opens with * or "
-        f"mixes classes lists its codes under expansions: missing={missing} unseen={unseen}"
+        "(class, stops, provenance) before it ships; a template the source leaves open "
+        f"lists its codes under expansions: missing={missing} unseen={unseen}"
     )
 
 
 def test_every_entry_is_still_emitted():
     """A registered code nothing emits any more is stale, and would hide a renamed one."""
 
-    scanned = scanned_codes()
+    emitted = _emitted_codes()
     expanded = {code for codes in registry().expansions.values() for code in codes}
     stale = sorted(code for code in registry().codes
-                   if code not in scanned and code not in UNSCANNED_CODES and code not in expanded)
-    stale_templates = sorted(template for template in registry().expansions if template not in scanned)
+                   if code not in emitted and code not in UNSCANNED_CODES and code not in expanded)
+    stale_templates = sorted(template for template in registry().expansions if template not in emitted)
     assert not stale and not stale_templates, (stale, stale_templates)
 
 
@@ -724,11 +1020,23 @@ def test_every_expansion_names_values_its_module_holds():
             ), (template, code)
 
 
-def test_every_unscanned_code_is_pinned_to_live_source():
+def test_every_pin_is_live():
+    """Each pinned code or template is still in the source text that emits it."""
+
+    scanned = scanned_codes()
     for code, (module, text, why) in UNSCANNED_CODES.items():
         assert why
         assert text in (SRC / module).read_text(encoding="utf-8"), (code, module, text)
-        assert code not in scanned_codes(), f"the scan now sees {code}; drop its pin"
+        assert code not in scanned, f"the scan now sees {code}; drop its pin"
+    for code, (module, text) in NOT_BLOCKERS.items():
+        assert text in (SRC / module).read_text(encoding="utf-8"), (code, module, text)
+        assert code in scanned, f"the scan no longer reads {code}; drop it from NOT_BLOCKERS"
+        assert code not in registry().codes, code
+    for template, sites in UNREGISTRABLE_TEMPLATES.items():
+        assert template in scanned, template
+        assert template not in registry().expansions, template
+        for module, text in sites:
+            assert text in (SRC / module).read_text(encoding="utf-8"), (template, module, text)
 
 
 # ----------------------------------------------------------------- class rules
@@ -768,9 +1076,10 @@ def test_every_provenance_names_a_real_authority():
         if line.startswith("#")
     }
     for name, family in registry().families.items():
-        ref = family.provenance.ref
+        ref = _normalized(family.provenance.ref)
+        assert ref, name
         if family.provenance.kind is ProvenanceKind.CLAUDE_MD_BOUNDARY:
-            assert _normalized(ref) in claude, (name, ref)
+            assert len(ref.split()) >= 4 and ref in claude, (name, ref)
         elif family.provenance.kind is ProvenanceKind.RULING:
             assert re.search(rf"(?<![\w-]){re.escape(ref)}(?![\w-])", rulings), (name, ref)
         else:
@@ -800,10 +1109,11 @@ def test_the_codes_release_builds_match_their_entries():
 AUDIT_SECTION_4 = [
     ("unknown official DK ID; wrong slate, mode or draft group", {"V"},
      ["DRAFT_GROUP_MIXED_OR_BLANK", "CLASSIC_C3_DRAFT_GROUP_MISMATCH", "PORTFOLIO_POLICY_UNKNOWN_DK_ID",
-      "READABLE_REVIEW_UNKNOWN_DK_ID", "CLASSIC_C3_MODE_MISMATCH", "CURRENT_TEMPLATE_MODE_MISMATCH"]),
+      "READABLE_REVIEW_UNKNOWN_DK_ID", "CLASSIC_C3_MODE_MISMATCH", "CURRENT_TEMPLATE_MODE_MISMATCH",
+      "SELECTED_ID_NOT_IN_CURRENT_POOL"]),
     ("roster count, slot eligibility, salary cap, a person twice", {"V"},
      ["PORTFOLIO_AUDIT_LINEUP_ILLEGAL", "SOLVER_PRODUCED_ILLEGAL_LINEUP", "READABLE_REVIEW_LINEUP_INVALID",
-      "CLASSIC_PORTFOLIO_SOLVER_PRODUCED_ILLEGAL_LINEUP"]),
+      "CLASSIC_PORTFOLIO_SOLVER_PRODUCED_ILLEGAL_LINEUP", "CLASSIC_AUDIT_LINEUP_ILLEGAL", "CLASSIC_C3_LINEUP_ILLEGAL"]),
     ("Entry ID mapping, extra IDs, missing rows, header, damaged final bytes", {"V"},
      ["PORTFOLIO_AUDIT_EXTRA_ENTRY_ID", "PORTFOLIO_AUDIT_MISSING_ENTRY_ID", "ENTRY_AUTHORIZATION_MISMATCH",
       "CLASSIC_C3_EXPORT_UNAUTHORIZED_BYTES_CHANGED", "FINAL_BYTE_MISMATCH",
@@ -823,13 +1133,14 @@ AUDIT_SECTION_4 = [
       "SOLVER_SELECTED_AN_EXCLUDED_ROW"]),
     ("source, assignment or output hashes disagree; reused output path", {"V"},
      ["CLASSIC_ASSIGNMENT_POST_WRITE_HASH_MISMATCH", "POST_WRITE_HASH_MISMATCH",
-      "SALARY_INPUT_CHANGED_BEFORE_SELECTION", "RUN_ID_COLLISION", "OUTPUT_EXISTS", "CLASSIC_C3_OUTPUT_EXISTS"]),
+      "SALARY_INPUT_CHANGED_BEFORE_SELECTION", "RUN_ID_COLLISION", "OUTPUT_EXISTS", "CLASSIC_C3_OUTPUT_EXISTS",
+      "INPUT_BINDING", "OUTPUT_BINDING", "BUILD_ASSIGNMENT_HASH_MISMATCH", "FINAL_BYTE_AUDIT"]),
     ("provider identity, team crosswalk, history and split coverage", {"P"},
      ["FUZZY_IDENTITY_FORBIDDEN", "IDENTITY_NOT_ACCEPTED", "TEAM_CROSSWALK_INCOMPLETE",
       "TEAM_SPLIT_COVERAGE_MISSING", "OFFENSIVE_HISTORY_COVERAGE_REQUIRED"]),
     ("unrecognized DraftKings status; role or depth ambiguity", {"S", "P"},
      ["UNKNOWN_DK_STATUS", "STATUS_CLASSIFIED_BOTH_WAYS", "QB_DEPTH_EXCERPT_STARTER_NOT_UNIQUE",
-      "DEPTH_ORDER_EMPTY"]),
+      "DEPTH_ORDER_EMPTY", "PARTICIPATION_REMOVES_EVERY_PERSON", "SELECTABLE_POOL_TOO_SMALL"]),
     ("official activity for every selected Classic person", {"S", "P"},
      ["OFFICIAL_STATUS_STALE", "OFFICIAL_STATUS_FUTURE", "OFFICIAL_STATUS_INVALID", "OFFICIAL_STATUS_REQUIRED",
       "CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_INCOMPLETE", "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED"]),
@@ -849,17 +1160,19 @@ AUDIT_SECTION_4 = [
       "ADVERTISED_PRIZE_VALUE_REQUIRED"]),
     ("malformed optional policy input", {"P"},
      ["CLASSIC_POLICY_JSON_INVALID", "CLASSIC_POLICY_UNKNOWN_FIELD", "PORTFOLIO_POLICY_SCHEMA_UNSUPPORTED",
-      "PORTFOLIO_POLICY_FRACTION_TYPE_INVALID"]),
+      "PORTFOLIO_POLICY_FRACTION_TYPE_INVALID", "CLASSIC_POLICY_UNIQUENESS_TYPE_INVALID",
+      "PORTFOLIO_POLICY_UNIQUENESS_TYPE_INVALID", "PORTFOLIO_POLICY_ENTRY_SET_EMPTY"]),
     ("a policy applied to the wrong people or entries", {"V"},
      ["CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH", "PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH",
       "PORTFOLIO_POLICY_SALARY_HASH_MISMATCH", "CLASSIC_PORTFOLIO_POLICY_ENTRY_HASH_MISMATCH"]),
     ("exposure, captain, team, game, group, stack and overlap bounds", {"S"},
      ["CLASSIC_AUDIT_PLAYER_BOUND", "CLASSIC_AUDIT_STACK_BOUND", "PORTFOLIO_AUDIT_CAPTAIN_CAP_EXCEEDED",
       "PORTFOLIO_AUDIT_PAIRWISE_OVERLAP_EXCEEDED", "CLASSIC_POLICY_TEAM_EXPOSURE_CAPACITY_INSUFFICIENT",
-      "READABLE_REVIEW_CAPTAIN_EXPOSURE_EXCEEDED", "OVERLAP_LIMIT_BREACHED", "DUPLICATE_CAPTAIN_SELECTED"]),
+      "READABLE_REVIEW_CAPTAIN_EXPOSURE_EXCEEDED", "OVERLAP_LIMIT_BREACHED", "DUPLICATE_CAPTAIN_SELECTED",
+      "CLASSIC_POLICY_UNIQUE_LINEUP_CAPACITY_INSUFFICIENT"]),
     ("cross-entry uniqueness and a distinct-lineup shortfall (R29)", {"V"},
      ["DUPLICATE_LINEUP_SELECTED", "CLASSIC_C3_CANONICAL_LINEUP_DUPLICATE", "PORTFOLIO_AUDIT_CANONICAL_DUPLICATE",
-      "CLASSIC_POLICY_UNIQUE_LINEUP_CAPACITY_INSUFFICIENT", "DUPLICATE_SELECTED_LINEUPS"]),
+      "DUPLICATE_SELECTED_LINEUPS", "SOLVER_RETURNED_NO_LINEUP", "LINEUP_COUNT_BELOW_RESERVED_ENTRIES"]),
     ("candidate target, time or search limit, incomplete bank", {"S", "P"},
      ["CANDIDATE_BANK_TIMEOUT", "CANDIDATE_BANK_SEARCH_LIMIT", "CANDIDATE_BANK_TIME_LIMIT",
       "MODELED_BANK_INFEASIBILITY", "INCOMPLETE_BANK_EXHAUSTION", "PORTFOLIO_SELECTION_TIMEOUT"]),
@@ -868,7 +1181,7 @@ AUDIT_SECTION_4 = [
       "SOLVER_TIME_LIMIT_ACCEPTED_LINEUPS"]),
     ("simulation, sensitivity, dependence, duplication, exposure QA, referee", {"S", "P"},
      ["MATERIAL_SENSITIVITY", "NEGATIVE_DEPENDENCE", "DUPLICATION_CHOPS_BELOW_FEE", "EXPOSURE_OUTSIDE_ENVELOPE",
-      "DESIGN_SHARE_CONSERVATION_FAILED", "INTERVAL_COVERAGE"]),
+      "DESIGN_SHARE_CONSERVATION_FAILED", "INTERVAL_COVERAGE", "INSUFFICIENT_SAMPLE", "REFEREE_SIGN_DISAGREEMENT"]),
     ("readable JSON and HTML, workbook, render or write failure", {"P"},
      ["READABLE_REVIEW_JSON_WRITE_MISMATCH", "CLASSIC_C3_READABLE_HTML_WRITE_MISMATCH",
       "READABLE_REVIEW_FAILED", "CLASSIC_C3_READABLE_REVIEW_FAILED"]),
@@ -898,6 +1211,18 @@ def test_cross_entry_uniqueness_is_v_by_r29():
     assert (family.provenance.kind, family.provenance.ref) == (ProvenanceKind.RULING, "R29")
 
 
+def test_the_p1_hard_stop_stops_the_file_by_its_ruling():
+    """Ben's 2026-09-19 ruling: the unresolved material role change stops the run.
+
+    ROADMAP section 2.5 keeps it in force beside R28 without saying R28 amends
+    it, so the registry keeps it a file stop until Ben says otherwise.
+    """
+
+    family = registry().family_of("OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE")
+    assert (family.gate_class, family.stops) == (GateClass.V, GateStops.FILE)
+    assert (family.provenance.kind, family.provenance.ref) == (ProvenanceKind.RULING, "2026-09-19 P1 hard stop")
+
+
 def test_the_rung_ladder_triggers_are_construction_preferences():
     """CLAUDE.md drops a rung on these four; the ladder relaxes only preferences."""
 
@@ -918,20 +1243,26 @@ def test_a_limitation_takes_its_metadata_from_the_registry():
     assert (weather.gate_class, weather.stops) == (GateClass.P, GateStops.CERTIFICATION)
 
 
-def test_a_template_resolves_the_codes_it_matches():
-    """`CLASSIC_C3_{kind}_BOUND` is registered as a template; its codes resolve through it."""
-
-    assert "CLASSIC_C3_*_BOUND" in registry().codes
-    assert registry().family_of("CLASSIC_C3_PLAYER_BOUND").name == registry().codes["CLASSIC_C3_*_BOUND"]
+def test_every_registered_code_is_exact_and_every_template_expanded():
+    assert not [code for code in registry().codes if "*" in code]
+    assert set(registry().expansions) == {
+        "*_PASSING_RECEIVING_ACCOUNTING_FAILED", "*_SHARE_CONSERVATION_FAILED",
+    }
+    assert registry().family_of("REFEREE_SHARE_CONSERVATION_FAILED").gate_class is GateClass.P
 
 
 @pytest.mark.parametrize("code,error", [
     ("NOT_A_REGISTERED_CODE", "GATE_REGISTRY_CODE_UNREGISTERED"),
+    ("CLASSIC_C3_WEATHER_CAPTURE_MISMATCH", "GATE_REGISTRY_CODE_UNREGISTERED"),
+    ("READABLE_REVIEW_DK_ID_MISSING", "GATE_REGISTRY_CODE_UNREGISTERED"),
+    ("OTHER_SHARE_CONSERVATION_FAILED", "GATE_REGISTRY_CODE_UNREGISTERED"),
     ("lowercase_code", "GATE_REGISTRY_CODE_INVALID"),
     ("CLASSIC_C3_*_BOUND", "GATE_REGISTRY_CODE_INVALID"),
-    ("SOMETHING_CHANGED_BEFORE_SELECTION", "GATE_REGISTRY_CODE_UNREGISTERED"),
+    ("*_SHARE_CONSERVATION_FAILED", "GATE_REGISTRY_CODE_INVALID"),
 ])
 def test_an_unregistered_code_builds_no_limitation(code, error):
+    """Nothing resolves by pattern: a code a template would produce is still refused."""
+
     with pytest.raises(GateRegistryError, match=error):
         registry().limitation(code)
 
@@ -948,8 +1279,8 @@ def _minimal() -> dict:
             "portfolio_bounds": {"class": "S", "stops": "CONSTRUCTION_PREFERENCE", "covers": "bounds",
                                  "provenance": {"kind": "RULING", "ref": "R28"}},
         },
-        "codes": {"A_CODE": "entry_authority", "B_*_BOUND": "portfolio_bounds", "C_X_FAILED": "portfolio_bounds",
-                  "D_Y_FAILED": "entry_authority"},
+        "codes": {"A_CODE": "entry_authority", "B_TEAM_BOUND": "portfolio_bounds",
+                  "C_X_FAILED": "portfolio_bounds", "D_Y_FAILED": "entry_authority"},
         "expansions": {"*_FAILED": ["C_X_FAILED", "D_Y_FAILED"]},
     }
 
@@ -976,6 +1307,8 @@ def _mutated(change):
     (_mutated(lambda p: p.update(schema_version="nfl_gate_registry_v2")), "GATE_REGISTRY_SCHEMA_INVALID"),
     (_mutated(lambda p: p.update(extra=1)), "GATE_REGISTRY_SCHEMA_INVALID"),
     (_mutated(lambda p: p.pop("expansions")), "GATE_REGISTRY_SCHEMA_INVALID"),
+    (_mutated(lambda p: p.update(registered_at="not a date")), "GATE_REGISTRY_SCHEMA_INVALID"),
+    (_mutated(lambda p: p.update(registered_at=20260923)), "GATE_REGISTRY_SCHEMA_INVALID"),
     (_mutated(lambda p: p["families"]["entry_authority"].update(stops="CERTIFICATION")),
      "GATE_REGISTRY_CLASS_STOPS_INVALID"),
     (_mutated(lambda p: p["families"]["entry_authority"].update(stops="CONSTRUCTION_PREFERENCE")),
@@ -993,19 +1326,22 @@ def _mutated(change):
      "GATE_REGISTRY_FAMILY_INVALID"),
     (_mutated(lambda p: p["families"]["portfolio_bounds"]["provenance"].update(ref="")),
      "GATE_REGISTRY_FAMILY_INVALID"),
+    (_mutated(lambda p: p["families"]["portfolio_bounds"]["provenance"].update(ref="   ")),
+     "GATE_REGISTRY_FAMILY_INVALID"),
     (_mutated(lambda p: p["families"].update({"Bad-Name": p["families"]["portfolio_bounds"]})),
      "GATE_REGISTRY_FAMILY_INVALID"),
     (_mutated(lambda p: p["families"].update(unused=dict(p["families"]["portfolio_bounds"]))),
      "GATE_REGISTRY_FAMILY_UNUSED"),
     (_mutated(lambda p: p["codes"].update(E_CODE="nobody")), "GATE_REGISTRY_FAMILY_UNKNOWN"),
+    (_mutated(lambda p: p["codes"].update(E_CODE=["entry_authority"])), "GATE_REGISTRY_FAMILY_UNKNOWN"),
     (_mutated(lambda p: p["codes"].update(lower_code="entry_authority")), "GATE_REGISTRY_CODE_INVALID"),
-    (_mutated(lambda p: p["codes"].update({"*_ANYTHING": "entry_authority"})), "GATE_REGISTRY_EXPANSION_INVALID"),
-    (_mutated(lambda p: p["codes"].update({"ANY_*": "entry_authority"})), "GATE_REGISTRY_EXPANSION_INVALID"),
+    (_mutated(lambda p: p["codes"].update({"B_*_BOUND": "portfolio_bounds"})), "GATE_REGISTRY_CODE_INVALID"),
+    (_mutated(lambda p: p["codes"].update({"*_ANYTHING": "entry_authority"})), "GATE_REGISTRY_CODE_INVALID"),
     (_mutated(lambda p: p["expansions"].update({"*_FAILED": ["C_X_FAILED", "C_X_FAILED"]})),
      "GATE_REGISTRY_EXPANSION_INVALID"),
     (_mutated(lambda p: p["expansions"].update({"*_FAILED": ["A_CODE"]})), "GATE_REGISTRY_EXPANSION_INVALID"),
     (_mutated(lambda p: p["expansions"].update({"*_FAILED": ["Z_Q_FAILED"]})), "GATE_REGISTRY_EXPANSION_INVALID"),
-    (_mutated(lambda p: p["expansions"].update({"B_*_BOUND": ["B_TEAM_BOUND"]})), "GATE_REGISTRY_EXPANSION_INVALID"),
+    (_mutated(lambda p: p["expansions"].update({"*_FAILED": []})), "GATE_REGISTRY_EXPANSION_INVALID"),
     (_mutated(lambda p: p["expansions"].update({"NO_STAR": ["A_CODE"]})), "GATE_REGISTRY_EXPANSION_INVALID"),
 ])
 def test_the_loader_refuses_a_registry_it_cannot_trust(payload, error):
@@ -1022,40 +1358,6 @@ def test_the_loader_refuses_a_duplicate_code_and_bad_bytes():
         parse_gate_registry(b"\xff{")
     with pytest.raises(GateRegistryError, match="GATE_REGISTRY_UNREADABLE"):
         load_gate_registry(REPO / "config" / "no_such_registry.json")
-
-
-def test_two_templates_that_can_match_one_code_must_agree():
-    """Refused at load, so a disagreement fails here and never at lock."""
-
-    payload = _minimal()
-    payload["codes"].update({"B_X_*_BOUND": "entry_authority"})
-    with pytest.raises(GateRegistryError, match="GATE_REGISTRY_CODE_AMBIGUOUS"):
-        parse_gate_registry(_raw(payload))
-    payload["families"]["other_bounds"] = dict(payload["families"]["portfolio_bounds"], covers="other")
-    payload["codes"]["B_X_*_BOUND"] = "other_bounds"
-    agreeing = parse_gate_registry(_raw(payload))
-    assert agreeing.family_of("B_X_TEAM_BOUND").gate_class is GateClass.S
-
-
-def test_a_checkpoint_hash_code_resolves_through_two_agreeing_templates():
-    """C3 emits `CLASSIC_C3_PRE_EXPORT_HASH_MISMATCH` from `CLASSIC_C3_{name}_HASH_MISMATCH`."""
-
-    family = registry().family_of("CLASSIC_C3_PRE_EXPORT_HASH_MISMATCH")
-    assert (family.gate_class, family.stops) == (GateClass.V, GateStops.FILE)
-    assert '_hash_checkpoint("PRE_EXPORT"' in (SRC / "classic_review.py").read_text(encoding="utf-8")
-
-
-@pytest.mark.parametrize("first,second,overlap", [
-    ("CLASSIC_C3_*_HASH_MISMATCH", "CLASSIC_C3_*_*_MISMATCH", True),
-    ("CLASSIC_C3_*_BOUND", "CLASSIC_C3_*_*_MISMATCH", False),
-    ("READABLE_REVIEW_*_INVALID", "READABLE_REVIEW_*_MISSING", False),
-    ("A_*_B", "A_B", False),
-    ("A_*_*_B", "A_*_B", True),
-    ("A_X_*", "A_*_Y", True),
-])
-def test_templates_overlap(first, second, overlap):
-    assert templates_overlap(first, second) is overlap
-    assert templates_overlap(second, first) is overlap
 
 
 def test_template_bindings_try_every_split():
@@ -1083,6 +1385,21 @@ def test_template_bindings_try_every_split():
     ("class B:\n    def blocking(self):\n        return self.status in {'A_CODE', 'B_CODE'}\n", "A_CODE"),
     ("def f(x):\n    raise ValueError('A_CODE:%s' % x)\n", "A_CODE"),
     ("def f(x):\n    raise ValueError('A_CODE:' + x)\n", "A_CODE"),
+    # the shapes the Session 03b review found
+    ("def f(problems, xs):\n    problems.extend(f'A_CODE:{x}' for x in xs)\n", "A_CODE"),
+    ("def f():\n    action, reason = 'BLOCK', 'A_CODE'\n", "A_CODE"),
+    ("def f(a, b, x):\n    target = a_blockers if x else b_blockers\n    target.append('A_CODE')\n", "A_CODE"),
+    ("def f(blockers):\n    return _unique([*blockers, 'A_CODE'])\n", "A_CODE"),
+    ("def f(d):\n    return dict.fromkeys((*d.reasons, 'A_CODE'))\n", "A_CODE"),
+    ("def f():\n    return {'blockers': ['A_CODE: detail']}\n", "A_CODE"),
+    ("def _read(path, code):\n    raise ValueError(f'{code}:{path}')\ndef g(p):\n    return _read(p, 'A_CODE')\n", "A_CODE"),
+    ("def f(xs):\n    for n in ('ONE', 'TWO'):\n        raise ValueError(f'A_{n}_BAD')\n", "A_TWO_BAD"),
+    ("def f(d):\n    for name, v in {'first': 1}.items():\n        raise ValueError(f'A_{name.upper()}_BAD')\n", "A_FIRST_BAD"),
+    ("def f():\n    message = 'A_CODE:detail'\n    raise ValueError(message)\n", "A_CODE"),
+    ("def g():\n    return 1, 'A_CODE:x'\ndef f():\n    value, problem = g()\n", "A_CODE"),
+    ("def g():\n    return ('A_CODE',)\ndef f(problems):\n    problems.extend(g())\n", "A_CODE"),
+    ("def m(v, *, label):\n    raise ValueError(f'{label}_NOT_A_TIMESTAMP:{v}')\n"
+     "def f(g):\n    m(1, label=f'W_OBSERVED_AT:{g}')\n", "W_OBSERVED_AT"),
 ])
 def test_the_scan_sees_every_emitting_shape(snippet, code):
     assert code in blocker_literals(snippet)
@@ -1097,6 +1414,8 @@ def test_the_scan_sees_every_emitting_shape(snippet, code):
     "def f():\n    status = 'OPTIMAL_ACTUAL_CANDIDATE_BANK'\n",
     "def f():\n    return {'state': 'PRIOR_ONLY_LIMITATION'}\n",
     "def f(x):\n    return x == 'A_CODE'\n",
+    "def f():\n    action, reason = 'SELECT', 'A_REASON'\n",
+    "def g():\n    return True, 'A_REASON'\ndef f():\n    keep, reason = g()\n",
 ])
 def test_the_scan_leaves_messages_and_other_strings_alone(snippet):
     assert not blocker_literals(snippet)
