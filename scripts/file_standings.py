@@ -34,7 +34,7 @@ Three things about that header drive this whole module.
    prize at all. ``nfl_standings_csv_v2`` requires one, so the prize is
    necessarily a *derived* fact joined from the contest's payout table, never
    an observed one. See ``--payouts`` and ``PRIZE_PROVENANCE`` below; the
-   consequence for the downstream prize check is recorded in ``backlog.md``.
+   consequence for the downstream prize check is Session 30 in ``docs/ROADMAP.md``.
 
 3. **``Points`` carries float round-trip noise and ``Lineup`` carries names.**
    Both are handled below, each with its own measured justification.
@@ -142,7 +142,7 @@ MAX_POINTS_ADJUSTMENT = Decimal("0.0005")
 #: rank, scoring 0, with an empty ``Lineup`` cell. ``nfl_standings_csv_v2``
 #: requires a nonempty canonical key and ``settlement.parse_standings`` refuses
 #: an empty one, so the contract as written cannot represent a real DraftKings
-#: field. That is a contract defect, recorded in ``backlog.md`` under Q1B, not
+#: field. That is a contract defect, Session 30 in ``docs/ROADMAP.md``, not
 #: something this tool decides on its own.
 #:
 #: ``refuse`` (the default) keeps the strict contract and names the row.
@@ -167,7 +167,7 @@ UNSUBMITTED_LINEUP_SENTINEL = "NO_LINEUP_SUBMITTED"
 #: ``settlement._prepare_settlement`` compares the evaluator's exact ``Fraction``
 #: against the file's integer cents for *every* field row, so a contest with any
 #: uneven tie split can never clear ``STANDINGS_PRIZE_MISMATCH`` whatever the
-#: intake writes. Recorded under Q1B in ``backlog.md``; not this tool's call.
+#: intake writes. Session 30 in ``docs/ROADMAP.md``; not this tool's call.
 PRIZE_ROUNDING_POLICIES = ("refuse", "half-even")
 
 #: Every slot token DraftKings writes into the ``Lineup`` string.
@@ -372,7 +372,7 @@ def parse_raw_standings(
                 f"UNSUBMITTED_ENTRY_LINEUP: row {row_number} EntryId {entry_id} is a "
                 "real field member who never submitted a lineup. "
                 "nfl_standings_csv_v2 requires a nonempty canonical key, so the "
-                "contract cannot represent it. See Q1B in backlog.md; rerun with "
+                "contract cannot represent it. See Session 30 in docs/ROADMAP.md; rerun with "
                 "--unsubmitted-entry-policy sentinel to record it explicitly instead."
             )
         rank_text = raw_row[index_of["Rank"]].replace(",", "").strip()
@@ -602,7 +602,7 @@ def derive_prizes(
                     f"PRIZE_NOT_WHOLE_CENTS: EntryId {settled.entry_id} settles to "
                     f"{cents} cents across a {settled.tie_count}-way tie at rank "
                     f"{settled.rank}, which is not an exact cent amount. "
-                    "nfl_standings_csv_v2 cannot hold it; see Q1B in backlog.md. "
+                    "nfl_standings_csv_v2 cannot hold it; see Session 30 in docs/ROADMAP.md. "
                     "Rerun with --prize-rounding half-even to record the residual."
                 )
             fractional += 1
@@ -785,7 +785,7 @@ def normalize_export(
                 "Field members who paid in and never submitted a lineup. They score "
                 "zero, tie at the last rank, win nothing, and each forms its own "
                 "duplication group. nfl_standings_csv_v2 has no representation for "
-                "them; see Q1B in backlog.md."
+                "them; see Session 30 in docs/ROADMAP.md."
             )
             if unsubmitted
             else None,

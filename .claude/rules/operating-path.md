@@ -14,13 +14,15 @@ paths:
 # The operating path (`prior_review`) and its review artifacts
 
 - `prior_review` has three success exits (Showdown, Classic C1/C2, Classic C3).
-  Every exit emits the pre-lock manifest and reports the four release truths;
+  Every exit emits the pre-lock manifest and reports the four release truths
+  (a fifth, `DELIVERY_STATE`, arrives with Session 03 under R28);
   a change that reaches one exit must reach all three, with a test per exit.
 - A new `DK_REVIEW_ENTRY` CSV is written only after the independent audit
   returns `PASS`. Time limits, solver errors, incomplete-bank exhaustion,
   modeled-bank infeasibility, assignment mismatch, audit failure or input
   mutation preserve earlier outputs and write nothing new. Classic C1/C2 write
-  no upload-shaped CSV at all; nothing writes `DK_UPLOAD`.
+  no upload-shaped CSV at all; no operating profile writes `DK_UPLOAD` (only
+  `certify` and governed `late-swap` can, and neither is on this path).
 - Review JSON/HTML/workbook are rebuilt from the exact bound artifacts and
   reconciled (`DISPLAY_RECONCILIATION=PASS`). Any byte or semantic disagreement
   is `READABLE_REVIEW_FAILED`, exit code 2, earlier artifacts preserved, and the

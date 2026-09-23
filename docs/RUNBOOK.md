@@ -133,8 +133,11 @@ selected, and the selected portfolio carried `qb-pass-catcher` on 20 of 20 and
 If a run reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
 `CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, regenerate one rung
 lower and rerun immediately. Do not stop to ask; see "Shipping under a lock
-clock", summarized in `CLAUDE.md` and reproduced in full at the end of this runbook. Rung 4 emits no policy and runs C1 sequential selection,
-which always produces a legal portfolio and is the floor the ladder guarantees.
+clock", summarized in `CLAUDE.md` and reproduced in full at the end of this runbook. Rung 4 emits no policy and runs C1 sequential selection.
+It is the last structural rung, not a guaranteed file: C1 writes review JSON
+only (`prior_review.py:3016`) and raises when distinct lineups run out
+(`selection.py:538-542`). When it hands you no file, the Classic fallback path
+below does.
 
 C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
 solver-error, structural-infeasibility, modeled-bank-infeasibility, and
@@ -149,10 +152,10 @@ provenance hash. `FILE_VALID=true` never changes
 `MODEL_STATUS=PRIOR_ONLY` or `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
 The C3 code, copied-package replay, exact-byte diff, rendering, mutation matrix,
-and registered full-fixture 1/3/20/150 acceptance have passed on Windows. C3 is
-still operationally blocked on a successful native Excel
-open/recalculate/save/reopen acceptance on this host. Do not treat the package
-as C3-complete or begin C4 until that exact check passes.
+and registered full-fixture 1/3/20/150 acceptance have passed on Windows. Under
+R30 (Ben, 2026-09-22) C3 is complete for software acceptance. Native Excel
+open/recalculate/save/reopen acceptance is deferred to Session 35 of
+`docs/ROADMAP.md`, and nothing waits on it.
 
 ## Continuity: getting the repo into a session (2026-09-17)
 
@@ -195,7 +198,8 @@ and they carry other DraftKings users' names and lineups.
 --python 3.13.7` completes. `sh ./nfl.sh doctor` returns `pass_status: true`
 with an empty `sqlite_probe_error`; the 2026-09-08 bridge-mount failures below
 do not reproduce. Full suite `1 failed, 735 passed, 1 skipped in 155.56s`, the
-one failure being the documented hardcoded-expiry test that chunk P0 repairs.
+one failure being the hardcoded-expiry test in `tests/test_w6_live_preflight.py`,
+fixed later that day by pinning its clock (changelog, 2026-09-17 CI unblock).
 
 
 ## Showdown generation: current operating path (2026-09-09)
@@ -682,7 +686,8 @@ sh ./nfl.sh doctor    # pass_status: true, sqlite_probe_error empty, WAL ok
 sh ./nfl.sh test      # 1 failed, 735 passed, 1 skipped in 155.56s
 ```
 
-The one failure is the documented hardcoded-expiry test that chunk P0 repairs.
+The one failure was the hardcoded-expiry test in `tests/test_w6_live_preflight.py`,
+fixed later that day by pinning its clock.
 Reachable from the container: `raw.githubusercontent.com`, nflverse GitHub
 release downloads, and `api.weather.gov` (HTTP 200; an older note said otherwise
 and was wrong).
@@ -797,8 +802,8 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    and independent selection-audit JSON. C3 independently audits those exact
    bytes and can write a review-only `DK_REVIEW_ENTRY` CSV plus readable
    JSON/HTML/eight-sheet workbook. It never writes `DK_UPLOAD`, and remains
-   `PRIOR_ONLY / DO_NOT_UPLOAD`. C3 native Excel save/reopen acceptance is still
-   blocked; do not begin C4 until it passes.
+   `PRIOR_ONLY / DO_NOT_UPLOAD`. C3 native Excel save/reopen acceptance is
+   deferred under R30 (Session 35); nothing waits on it.
 
    If they are in different locations, pass `--salaries` and `--entries`
    explicitly. On Windows, use `.\nfl.ps1 run-slate` with the
@@ -1001,32 +1006,61 @@ missed lock cannot be repaired at all, and those games are gone. Procedure
 exists to keep the output honest, not to keep it from existing. When the two
 conflict, ship.
 
-Two classes of rule live in this repo and they are not the same thing.
+Two classes of rule live in this repo and they are not the same thing, and
+since 2026-09-22 a third sits between them. Ben's rulings R28, R29 and R31
+(`docs/ROADMAP.md` §2.5) amend this section; each amended passage says so.
 
 **Construction preferences** are quality choices: stack rules, exposure and
-overlap caps, candidate-bank size and search budgets, uniqueness, the objective's
-tuning. They are opinions about what makes a good portfolio. **Claude may relax
-any of them, on its own authority, without asking Ben**, whenever they are what
-stands between the run and a legal portfolio. Do not stop to request permission,
-do not present a menu of options, and do not spend the last hour before lock
-tuning. Relax, rerun, and report what was relaxed and why in the handoff.
+overlap caps, candidate-bank size and search budgets, the objective's tuning.
+They are opinions about what makes a good portfolio. **Claude may relax any of
+them, on its own authority, without asking Ben**, whenever they are what stands
+between the run and a legal portfolio. Do not stop to request permission, do not
+present a menu of options, and do not spend the last hour before lock tuning.
+Relax, rerun, and report what was relaxed and why in the handoff.
 
-`scripts/make_classic_policy.py` encodes this as a rung ladder. Rung 0 is every
-entry stacked with a bring-back on most of them; each rung relaxes one class; and
-**rung 4 emits no policy at all and runs C1 sequential selection, which is the
-proven floor and always produces a legal portfolio.** Rung 4 is not a failure. It
-is the guarantee. If a run reports `MODELED_BANK_INFEASIBILITY`,
-`INCOMPLETE_BANK_EXHAUSTION`, `CANDIDATE_BANK_TIMEOUT` or
-`CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun immediately rather than
-diagnosing. Diagnose afterwards, in the changelog.
+**Distinct lineups are not a construction preference** (R29, 2026-09-22; this
+list named uniqueness until then). Ben's words: "within a given portfolio keep
+all submitted lineups distinct and unique." Uniqueness is never relaxed. When
+distinct lineups run out, report the unfilled Entry IDs; never repeat a lineup
+to fill a row. Lineup identity is the exact roster, so a different Showdown
+captain makes a different lineup.
+
+`scripts/make_classic_policy.py` encodes the ladder as a `--rung` flag that
+Claude walks by hand. Nothing in the engine walks it yet, and
+`scripts/make_showdown_policy.py` has no ladder at all; Session 10 builds both.
+Rung 0 is every entry stacked with a bring-back on most of them; each rung
+relaxes one class; and rung 4 emits no policy at all and runs C1 sequential
+selection. **Rung 4 is the last structural rung, not a guaranteed file.** Until
+2026-09-23 this text called it "the proven floor" that "always produces a legal
+portfolio", and the 2026-09-22 audit showed that it does not. C1 writes review
+JSON only, no DraftKings-shaped CSV (`prior_review.py:3016`), and raises
+`SOLVER_RETURNED_NO_LINEUP` when distinct lineups run out
+(`selection.py:538-542`). Session 06 makes rung 4 end with a CSV. If a run
+reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
+`CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun
+immediately rather than diagnosing. Diagnose afterwards, in the changelog.
 
 **Evidence gates** are truth claims: official activity, current offensive role,
 weather capture and its expiry, identity resolution, prior-package expiry, and
-every hash binding. These are not preferences and the ladder does not touch them.
-They are also the only things that can genuinely make you miss a lock, so they go
-first in the running order, not last. On a Classic slate that means the per-game
-weather captures and the official-activity observation are the critical path;
-start them before anything else and let the build wait on them.
+every hash binding. These are not preferences and the ladder does not touch
+them. Under R28 the truth-claim gates (official activity, current role, weather)
+stop certification, not construction or delivery: the file ships with the gap
+named as a limitation. Integrity gates (exact DraftKings IDs, hashes, entry
+mapping, blank-cell authority, locked cells, Classic/Showdown mode) still stop
+the file they protect.
+
+**Running order (R28, replacing the 2026-09-12 text).** The baseline goes first:
+a file built from the DraftKings salary and entries bytes alone, before priors,
+weather, roles or solves. This section used to put evidence gates first because
+they were the only things that could make you miss a lock. Under R28 they no
+longer stop the file, so they no longer lead. Start the weather and
+official-activity captures alongside the baseline, not ahead of it: the engine's
+improved portfolio still waits on them until Session 09, but the file does not.
+Until Sessions 04 and 06 build the baseline command and a baseline-first
+`run-slate`, the nearest thing is the Classic fallback path above. Its writer
+and QA exit codes are corrected in Session 02; until then, check by hand that
+every authorized row is filled. The default delivery deadline is the earliest
+relevant lock minus 5 minutes (R31); the engine enforces it from Session 07.
 
 Three rules bound the autonomy above.
 
@@ -1038,7 +1072,9 @@ Three rules bound the autonomy above.
   infeasibility, not for saving effort.
 - **A gate that no real source can ever clear is a defect, not a constraint.**
   Take it to Ben with a recommendation, the way R21 went. Do not work around it
-  silently and do not loosen it unilaterally.
+  silently and do not loosen it unilaterally. That holds for development. At
+  runtime, under the clock, the engine ships what it legally can and names the
+  gap (audit D8, 2026-09-22); the defect still goes to Ben afterwards.
 
 If the clock beats an evidence gate that a source could have cleared, say so
 plainly, ship whatever the engine will legally produce without it, and name the

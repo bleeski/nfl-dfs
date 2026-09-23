@@ -4,6 +4,154 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: rulings R28 to R31 into `CLAUDE.md`, four false claims corrected, and a label that clears its check (Session 01)
+
+No engine module, contract, evidence gate or release truth changed; no run
+executed. Every path still ends `PRIOR_ONLY` / `DO_NOT_UPLOAD`, with four truths
+until Session 03. Branch `claude/determined-knuth-6hklql`, PR #42. `CLAUDE.md`
+is protected: the PR carries `ben-review` and Ben merges it.
+
+#### Changed: `CLAUDE.md` (199 lines, was 214)
+
+- **Boundary 7 of 12.** Its text is kept, with the R28 sentence appended:
+  missing hard evidence stops certification, not construction or delivery, and
+  integrity gates still stop the file they protect. The other 11 boundaries are
+  byte-identical to `HEAD`.
+- **Release truths:** R28 in force, implemented by Sessions 03 to 12, with
+  four truths until Session 03; R30. "Nothing writes `DK_UPLOAD`" becomes "no
+  operating profile writes it; `certify` and governed `late-swap` can".
+- **Lock clock:**
+  - Uniqueness leaves the relaxable list; R29 gets its own class, in Ben's
+    words.
+  - The ladder is `make_classic_policy.py --rung`, walked by hand; Showdown has
+    none.
+  - Rung 4 is the last structural rung, not a guaranteed file
+    (`prior_review.py:3016`, `selection.py:538-542`).
+  - The baseline goes first, with the Classic fallback chain until Sessions 04
+    and 06.
+  - R31's deadline, and D8's runtime clause on the third bound.
+- **Pointers and vocabulary:**
+  - The queue, the authority order, token discipline and the LF list point at
+    `docs/ROADMAP.md`.
+  - Status becomes `Pending` / `In Progress` / `Complete` / `Deferred`.
+  - The suite line is now `1121 passed, 1 skipped` on Linux. The old line
+    called the skip the Windows symlink case; on Linux it is the junction test
+    (`tests/test_cowork.py:115`), and `.claude/rules/tests.md` now says both.
+- **Length:**
+  - The session protocol points at ROADMAP §2.1 and keeps only the rules §2.1
+    lacks.
+  - The git rules moved into the "Committing" bullet, and "Maintaining this
+    file" became the last etiquette bullet.
+  - The maintainer HTML comment is removed. It held no rule and named the
+    retired `COWORK_RUNBOOK.md`.
+  - No rule was dropped.
+
+#### Added: H3
+
+- `.github/workflows/protected-paths.yml`:
+  - triggers on `pull_request` types opened, synchronize, reopened, labeled and
+    unlabeled;
+  - read-only permissions, and concurrency keyed on the PR number;
+  - no label filter, because a skipped run would post over the real result.
+  It lives in its own file so that a label event never reruns or cancels the
+  suite or the Windows job. `ci.yml` loses the job.
+- `scripts/check_protected_paths.py --live-labels`:
+  - reads `GET /repos/{repo}/pulls/{n}` over stdlib `urllib`, with redirects
+    refused, a 10 s timeout and one retry;
+  - requires `https://api.github.com`, and that host must appear in
+    `ALLOWED_HOSTS`, parsed from `sources.py` as `session_probe.py` does;
+  - validates the repo, the PR number, the token and the response shape;
+  - ignores `PR_LABELS`, and every failure exits 2;
+  - prints the live labels with the UTC read time.
+  Without the flag it is unchanged and offline.
+- 37 tests in `tests/test_repo_boundaries.py`, written first; 36 failed before
+  the script changed. They cover:
+  - fail-closed lookup, with and without a protected hit, and the single retry;
+  - 8 missing or invalid inputs and 6 refused hosts, none of which sends a
+    request;
+  - 9 malformed responses;
+  - label present, label absent (each file named), and frozen payload against
+    live;
+  - an unprotected change with and without the label;
+  - no API call without the flag, and an offline subprocess run;
+  - 3 workflow text checks.
+  The three-entry list test is untouched.
+- `docs/CLAUDE_CODE_SETUP.md` and `.claude/rules/git-authority.md` describe the
+  live read.
+
+#### Changed: mirrors
+
+- `docs/START_HERE.md`: boundary 5 (the other 7 are byte-identical), the truths
+  section, the lock-clock paragraph and the "Operate a slate" row.
+- `docs/RUNBOOK.md`:
+  - the rung-4 claim at the policy section;
+  - R30 in two places;
+  - "P0 repairs" in two places (fixed 2026-09-17);
+  - the full lock-clock text, amended in place with each amendment marked,
+    because `CLAUDE.md` cites it as the full ruling.
+- `.claude/rules/`: `slate-operation.md` (R28, R29), `operating-path.md` (fifth
+  truth, `DK_UPLOAD`) and `tests.md`.
+- `IMPLEMENTATION_STATUS.md` (R30, and four `backlog.md` pointers) and
+  `README.md` (three lines).
+- `docs/OPERATOR_GUIDE.md` (R30) and `docs/CLAUDE_CODE_SETUP.md:214`
+  ("P0 repairs").
+- `scripts/file_standings.py`: six "Q1B in `backlog.md`" strings and comments
+  point at Session 30, text only.
+- `docs/ROADMAP.md`:
+  - the claim commit `5c15bb8` moved §1 to Session 02 in the same commit,
+    because an `In Progress` S01 is not startable and the Quick-Start test
+    would otherwise fail;
+  - S01's Target Files now list everything it touched;
+  - the ledger records Session 00's merge `46de154`.
+
+#### Left open
+
+- `scripts/make_classic_policy.py:29-31` and `:166-168` still print "always
+  produces a legal portfolio". That file belongs to Sessions 06 and 10.
+- Dated history sections of `IMPLEMENTATION_STATUS.md` keep their original
+  Excel wording.
+- `changelog.md` is 534 lines, past the ledger rule's ~500. The next close-out
+  moves the oldest 2026-09-22 entries to `docs/changelog-archive/` verbatim.
+  This PR did not widen for it.
+
+#### Verification
+
+- Baseline at `46de154`: `1084 passed, 1 skipped in 160.30s`.
+- Focused: `sh ./nfl.sh test tests/test_repo_boundaries.py
+  tests/test_roadmap_queue.py -x --tb=short` gives `149 passed in 1.22s`.
+- Full: `sh ./nfl.sh test` gives `1121 passed, 1 skipped in 138.76s`, which is
+  1084 + 37, recorded by `record_verify.py`. The skip is
+  `tests/test_cowork.py:115`, "Windows junction behavior".
+- `doctor` gives `pass_status: true`. `compileall` and `git diff --check` are
+  clean.
+- `check_protected_paths.py` exits 0 offline before the commit; after the
+  commit it flags `CLAUDE.md`.
+- Boundary proof (scratch script, `HEAD` against the working tree):
+  - `CLAUDE.md`: bullets 1 to 6 and 8 to 12 byte-identical; bullet 7 keeps the
+    `HEAD` text as a prefix, plus 4 appended lines.
+  - `docs/START_HERE.md`: bullets 1 to 4 and 6 to 8 byte-identical; bullet 5
+    has the same 4 lines appended.
+- `wc -l CLAUDE.md` gives 199.
+- The `reviewer` pass found one blocking item. A draft card line said the
+  label-proof timestamps were already recorded; it now says they are pending.
+  Its informational notes: the card's "boundary 5" uses `START_HERE.md`
+  numbering, and `ci.yml` keeps a harmless `pull-requests: read`.
+- H3 live proof on PR #42, head `32b9135`, no commit in between (UTC,
+  2026-09-23):
+  - red: run `35803520652` (event `synchronize`) read live labels `[]` at
+    00:46:48Z, printed `PROTECTED_PATHS_WITHOUT_REVIEW` naming `CLAUDE.md`,
+    exited 1, and completed at 00:46:50Z;
+  - label: `ben-review` applied through the API at 00:47:14Z (the pull
+    request's `updated_at`);
+  - green: run `35803561795` (event `labeled`) was created at 00:47:16Z, read
+    live labels `["ben-review"]` at 00:47:23Z, printed "Protected paths
+    touched, `ben-review` present: CLAUDE.md", and completed `success` at
+    00:47:26Z.
+  From label to green took 12 s, and the job step itself under 1 s. The H3
+  acceptance clause (labelled after CI, green with no new commit) is met.
+  This commit, which records the proof, is a new head; with the label on,
+  `protected-paths` should pass on it too.
+
 ### 2026-09-22: one roadmap replaces the backlog, and four rulings (Session 00)
 
 No engine module, contract, evidence gate or release truth changed. Every path

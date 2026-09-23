@@ -77,6 +77,18 @@ the engine, the question is what the engine can still legally produce, not
 whether to give up; `docs/RUNBOOK.md` § The Classic fallback path names the
 chain. Say plainly which gates are unmet, keep `DO_NOT_UPLOAD`, and ship.
 
+R28 (2026-09-22) makes that the rule rather than the workaround. Truth-claim
+gates (official activity, current role, weather) stop certification, not the
+file: it ships with each gap named as a limitation. Integrity gates (exact
+DraftKings IDs, hashes, entry mapping, blank-cell authority, locked cells,
+Classic/Showdown mode) still stop the file they protect. The engine catches up
+in Sessions 03 to 12; until then the fallback chain is how a file gets out.
+
+R29 (2026-09-22) is the one construction rule that does not bend: "within a
+given portfolio keep all submitted lineups distinct and unique." When distinct
+lineups run out, list the unfilled Entry IDs in the handoff. Never repeat a
+lineup to fill a row.
+
 The bound that does not move: **never invent an observation to clear a gate.**
 Not a weather enum, not an activity row, not a role share. A portfolio built on
 a fabricated observation is worse than no portfolio, because every hash in the
@@ -102,4 +114,4 @@ him at the moment the clock mattered most, on a call he had already delegated.
 Ask for facts only he has — a ruling, a file, a threshold he has not set. Decide
 everything you could evaluate yourself, say which way you went and why, and let
 him overturn it. Construction preferences are explicitly yours under the lock
-clock ruling.
+clock ruling, except lineup uniqueness, which R29 took off that list.
