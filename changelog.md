@@ -102,7 +102,7 @@ four truths until Session 03.
   cannot see, an all-blank export.
 - `test_the_writer_and_qa_agree`: writer then QA on 20 of 20 (0 and 0) and 18 of
   20 (3 and 3).
-- Writer file: 29 cases (was 8). QA file: 38 cases (was 19).
+- Writer file: 33 cases (was 8). QA file: 41 cases (was 19).
 
 #### Documents
 
@@ -132,14 +132,39 @@ four truths until Session 03.
   `ERROR: file or directory not found: tests/test_qa_showdown_portfolio.py`.
   That file is Session 02b's. The other three files: `79 passed in 5.48s`.
 - Complete pinned suite on the finished tree:
-  `1161 passed, 1 skipped in 126.44s (0:02:06)`. That is 40 above the baseline:
-  the writer and QA files now hold 67 cases, against 27 before. Recorded with
-  `scripts/record_verify.py`. An earlier run on the code change alone gave
-  `1161 passed, 1 skipped in 143.93s`.
+  `1168 passed, 1 skipped in 129.53s (0:02:09)`. That is 47 above the baseline:
+  the writer and QA files now hold 74 cases, against 27 before. Recorded with
+  `scripts/record_verify.py`. Before the review fixes below it was
+  `1161 passed, 1 skipped in 126.44s`.
 - `sh ./nfl.sh doctor`: `pass_status: true`. `python -m compileall` on both
   scripts and both test files: clean. `git diff --check`: clean.
   `scripts/check_protected_paths.py`: no protected path touched.
 - Neither script names or reads the salary file's points-per-game column.
+
+#### Review
+
+The `reviewer` subagent read the diff against the card and ran the two focused
+files (`67 passed in 5.36s`).
+
+- **Blocking, fixed.** QA passed an export in which an assigned Entry ID's
+  template row was already prefilled with a different roster. The row never
+  entered the comparison. It now fails as `ASSIGNED_ROW_WAS_PREFILLED`. The
+  writer already refused that input.
+- **Blocking, already resolved.** It found two placeholder strings and no
+  recorded verify. It had read the tree before the placeholders were filled and
+  `record_verify.py` ran. Both are in `82abbdc`.
+- **Open, fixed.** A new lineup repeating a prefilled row escaped R29 in both
+  scripts. Both now compare against prefilled rows, reading a cell as `123` or
+  `Name (123)`.
+- **Open, recorded.**
+  - `split_byte_lines` splits on LF, so a quoted field holding a newline would
+    split in two. DraftKings exports have none.
+  - `assignments_by_entry_id` has no contract in `docs/DATA_CONTRACTS.md`.
+    That gap predates this session.
+- Added with the fixes: two mutation tests, as `.claude/rules/tests.md` asks of
+  a writer. A non-UTF-8 byte fails as `TEMPLATE_NOT_UTF8`, and an unterminated
+  quote as `UNREADABLE_TEMPLATE_ROW`; the writer's template parser now checks
+  each entry row's field spans. Both withhold the file.
 
 #### Decided, and why
 

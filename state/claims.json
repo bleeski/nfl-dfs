@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "a3e100e8-c204-5712-80e2-f9fdb96c927a",
-      "branch": "claude/s02-fallback-csv-l62fjm",
-      "chunk": "S02",
-      "claimed_at": "2026-09-23T03:03:32Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

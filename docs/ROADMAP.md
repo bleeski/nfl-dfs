@@ -247,7 +247,7 @@ Every session follows this protocol, and the cards only add to it:
   export on bytes, compares each exported roster to its assignment by Entry ID,
   and exits 1 validity, 3 partial, 2 operator limits. The card's command fails
   on `tests/test_qa_showdown_portfolio.py`, which Session 02b creates; the other
-  three files pass. Suite `1161 passed, 1 skipped`. Items 3 and 4 moved to
+  three files pass. Suite `1168 passed, 1 skipped`. Items 3 and 4 moved to
   Session 02b at this card's breakpoint (1,378 changed lines after items 1 and
   2). Nothing relaxed.
 
