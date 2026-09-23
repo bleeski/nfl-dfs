@@ -49,10 +49,10 @@ status from this file or an earlier conversation.
   `DO_NOT_UPLOAD`. Continue diagnostically when useful; never weaken an evidence
   gate to finish. Construction preferences are a separate class (see the lock
   clock ruling).
-  Under R28 it stops certification, not construction or delivery: the file
-  ships with the gap named as a limitation. Integrity gates (exact DraftKings
-  IDs, hashes, entry mapping, blank-cell authority, locked cells,
-  Classic/Showdown mode) still stop the file they protect.
+  Under R28 missing hard evidence stops certification, not construction or
+  delivery: the file ships with the gap named as a limitation. Integrity gates
+  (exact DraftKings IDs, hashes, entry mapping, blank-cell authority, locked
+  cells, Classic/Showdown mode) still stop the file they protect.
 - Cold-start projections, ownership, fields, duplication estimates, and scenario
   utilities are diagnostics or priors. Never call them EV, ROI, win probability,
   cash probability, calibrated ownership, or proven edge.

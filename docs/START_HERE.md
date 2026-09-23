@@ -52,10 +52,10 @@ These are not preferences. None of them is ever relaxed to finish a run.
    normalized input, a projection, a candidate or a selection.
 5. Missing, stale, conflicted, partial, ambiguous or unbound hard evidence is
    `DO_NOT_UPLOAD`. Never weaken an evidence gate to finish.
-   Under R28 it stops certification, not construction or delivery: the file
-   ships with the gap named as a limitation. Integrity gates (exact DraftKings
-   IDs, hashes, entry mapping, blank-cell authority, locked cells,
-   Classic/Showdown mode) still stop the file they protect.
+   Under R28 missing hard evidence stops certification, not construction or
+   delivery: the file ships with the gap named as a limitation. Integrity gates
+   (exact DraftKings IDs, hashes, entry mapping, blank-cell authority, locked
+   cells, Classic/Showdown mode) still stop the file they protect.
 6. Cold-start projections, ownership, fields, duplication estimates and scenario
    utilities are diagnostics or priors. Never call them EV, ROI, win
    probability, cash probability, calibrated ownership or proven edge.
