@@ -4,6 +4,200 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: `nfl baseline`, a file from the DraftKings bytes alone (Session 04)
+
+All of the Session 04 card, Classic and Showdown, on
+`claude/session-04-nfl-baseline-f7aptz`, PR #53, claim `795de43`. The baseline
+is a new command beside `run-slate`, not in it (Session 06 wires it in). Every
+run it makes ends `PRIOR_ONLY / DO_NOT_UPLOAD`; `DELIVERABLE` is not upload
+clearance.
+
+#### Added
+
+- `src/nfl_dfs/baseline.py` and `nfl baseline --salaries <csv> --entries <csv>
+  [--out-dir] [--run-id] [--per-solve-seconds] [--budget-seconds]`. Binds both
+  files by schema, snapshots them under `<out-dir>/<run_id>/inputs/`, parses
+  only the snapshots, cross-checks the entries export's player table against
+  the salary IDs, excludes `contracts.unavailable_people`, builds distinct
+  lineups by `BASELINE_SALARY_RANK_V1`, fills only blank authorized rows through
+  `lineups.write_upload_bytes` into `DK_BASELINE_ENTRY_V1_<run_id>.csv`, audits
+  the bytes read back from disk against fresh parses, and writes
+  `baseline_report.json` with `nfl_release_truths_v2`. Exit 0, 3 (partial, names
+  every unfilled Entry ID) or 2. No network, priors, weather or roles.
+- `tests/test_baseline.py`, 34 cases: the six acceptance runs, the partial
+  pool (Classic, every legal lineup enumerated by brute force) and the Showdown
+  captain case (R29), `AvgPointsPerGame` scrambled in both files moving no
+  lineup, the prefilled refusal, the mode mismatch, schema binding, the player
+  table cross-check, four named salary refusals, the run budget, a copied-
+  snapshot replay, a mid-run template change, a corrupted write caught by the
+  audit, a reused run folder, registry-built limitations, the objective's
+  registration, the writer's `unfilled`, the salary floor, the lock clock, a
+  salary file short of the player table, an audit that cannot finish, and the CLI.
+- `dk.embedded_pool_ids`: the `ID` column of the player table an entries export
+  carries, read and nothing else.
+- `LineupOptimizer.set_salary_floor` and `set_random_seed` (`optimizer.py`).
+- `write_upload_bytes(..., unfilled=...)`: rows left blank on purpose; every
+  authorized row is assigned or listed, never both; a prefilled row refuses
+  either way. Existing callers pass nothing and behave as before.
+- `docs/DATA_CONTRACTS.md` § Baseline entry file and report:
+  `nfl_baseline_entry_csv_v1`, `nfl_baseline_report_v1`, `BASELINE_SALARY_RANK_V1`.
+- `docs/RUNBOOK.md` § Shipping under a lock clock: run `baseline` first.
+
+#### Changed
+
+- `dk.py`: every refusal opens with a code (29 `DK_*` codes over 45 raises);
+  the prose after it is unchanged.
+- `lineups.py`: the validator's ten refusals, the assignment reader's four and
+  both writers' refusals open with codes; the prefilled refusal is
+  `ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`, its prose unchanged.
+- `certification.py`, `review_export.py`: `LINEUP_{entry_id}:` is
+  `LINEUP_INVALID:{entry_id}:`, a code a registry can hold.
+- `contracts.DeliveryLimitation` refuses `S`/`CERTIFICATION` and
+  `P`/`CONSTRUCTION_PREFERENCE`: one mapping, `contracts.GATE_CLASS_STOPS`, is
+  also the registry loader's `ALLOWED_PAIRS`.
+- `config/gate_registry_v1.json`: 69 codes added (64 `V`, 2 `S`, 3 `P`), no
+  existing code moved. 1,157 codes: 427 `V` in 14 families, 71 `S` in 3, 659 `P`
+  in 26. SHA-256
+  `436931e60f7dca3f7eea8d9577d90e7670dc55301bf4348251edbf373f9ffd73`,
+  re-pinned in the test and `docs/DATA_CONTRACTS.md`.
+- `tests/test_gate_registry.py`: the scan counts `GateRegistry.limitation` as a
+  builder (two shape cases added), the `LINEUP_*` unregistrable pin is gone
+  because its emitters are fixed, and the hash is re-pinned.
+- `tests/test_certification.py`, edited visibly: the illegal-lineup blocker it
+  expects now begins `LINEUP_INVALID:<entry_id>:`, because the emitter changed
+  as Session 03b's note asked.
+- `tests/test_delivery_state.py`: the two pairs `DeliveryLimitation` now refuses.
+
+#### Decided, and why
+
+- **`BASELINE_SALARY_RANK_V1`** (registered in `baseline.OBJECTIVE` and the
+  contract): lineups in non-increasing total salary, each a highest-salary legal
+  lineup not already chosen, exact no-good cut against every earlier one. Salary
+  is the only number in the DraftKings bytes the engine may read. Solved a level
+  at a time: one salary-maximizing solve finds the level, zero-objective solves
+  with a salary floor take its other lineups. Measured on the supplied Classic
+  pool at 150 entries, re-maximizing salary per lineup took 55.5 s (0.3 s of
+  root-node work each); the floor method took 2.95 s. Showdown 11.8 s to 8.0 s.
+- **Seed rule.** HiGHS `random_seed` is the number of lineups already built, so
+  each solve starts somewhere new. With seed 0 throughout, 7 salary rows sat in
+  149 of 150 Classic lineups: legal and distinct, but one scratch would touch
+  nearly every entry. With the rule, the most-used person is in 37 of 150 and
+  253 people are used, at no cost in time. A usage-penalty tie-break spread it
+  to 23 of 150 but took 86.8 s, over the budget; rejected. The seed rule is part
+  of the registered objective rather than `config/runtime.json`, because it is a
+  function of the lineup index, not a tunable; changing it is a new version.
+  Showdown at 150 still has one person in 139 lineups: exactly $50,000 in six
+  slots leaves few ways to spend it.
+- **Output**: `DK_BASELINE_ENTRY_V1_<run_id>.csv` inside a new run folder
+  (default `data/runs/`), `nfl_baseline_entry_csv_v1`. The version is in the
+  name so a v2 contract's file cannot be mistaken for it, and the run id makes
+  the file identifiable once Ben moves it. Never `DK_UPLOAD_*`.
+- **Defaults**: 5 s per solve (slowest measured 1.3 s) and a 60 s run budget from
+  the run's start (Classic 150 took 3.6 s, Showdown 150 6.5 s). The audit and
+  write after construction always run. A time stop is `S`
+  (`BASELINE_RUN_BUDGET_EXHAUSTED`, `BASELINE_SOLVE_LIMIT_WITHOUT_LINEUP`) with
+  `UNFILLED_AUTHORIZED_ROWS` naming the rows; a proven exhaustion is `V`
+  (`BASELINE_DISTINCT_LINEUPS_EXHAUSTED`, R29) naming them.
+- **Three pairs: yes.** The card left it to the first session that emits
+  limitations. A hand-built `S`/`CERTIFICATION` limitation would be a preference
+  the ladder may not relax, and `P`/`CONSTRUCTION_PREFERENCE` a truth claim it
+  could; no test or path built either.
+- **Gaps carried, not hidden.** Every run carries `OFFICIAL_STATUS_REQUIRED`,
+  `OFFENSIVE_CURRENT_ROLE_UNRESOLVED`, `WEATHER_CAPTURE_REQUIRED` and
+  `MODEL_NOT_PROSPECTIVELY_VALIDATED` (`P`), existing codes for exactly those
+  gaps, because the baseline consults none of that evidence (R28).
+- **Several contests or mixed fees** ship with their existing `P` codes; the
+  lineups are distinct across the whole file, which R29 allows and is stricter
+  than per contest. Per-contest groups are Session 11's.
+- **Prefilled**: one prefilled row withholds the whole file, naming the rows,
+  as `prior_review` does today; Session 11 changes that.
+- **Exact current-slate IDs**: beyond the salary rows themselves, every salary
+  ID must be in the entries export's player table
+  (`BASELINE_ENTRY_POOL_ID_MISMATCH`, `V`), which catches a salary file from
+  another slate of the same mode. A table ID the salary file lacks can never
+  reach a lineup, so it ships as `P`
+  `BASELINE_SALARY_FILE_MISSING_ENTRY_TABLE_IDS`, and a template without the
+  table ships as `P` `BASELINE_ENTRY_POOL_CROSS_CHECK_UNAVAILABLE`. Both
+  supplied Classic exports match all 719 salary IDs.
+- **Lock clock not enforced** (Session 07), but never silent: the report and the
+  console give `earliest_lock_at`, and a run at or past it carries `P`
+  `BASELINE_EARLIEST_LOCK_PASSED`. It is `P`, not `V`, because the engine cannot
+  know when Ben uploads, and a lock the run's clock has not reached stops nothing.
+- **`optimizer.py` touched** though the card does not list it: two small public
+  methods, for the 55 s to 3 s measurement above and the seed rule.
+- **Breakpoint not taken.** The diff passed 1,500 lines, but Showdown adds no
+  line to `src/`: the builder, writer and audit are mode-agnostic through
+  `LineupOptimizer` and `validate_lineup`. Splitting it out would drop about 100
+  test lines, add a Showdown refusal for a `04b` to remove, and leave the diff
+  over 1,500. The size is the scope beyond the card's list that Ben named (the
+  `dk.py`/`lineups.py` codes, the registry, `LINEUP_INVALID`), the contract
+  section and the tests.
+
+#### Review
+
+The `reviewer` subagent read `227be41` (`31 passed`) and found nothing
+blocking. Its findings, all acted on unless marked:
+
+- **Should-fix, fixed.** `LINEUP_ROSTER_WIDTH_INVALID` was neither registered
+  nor visible to the scan (returned inside `ValidationResult`). It is now
+  collected like the validator's other refusals, and registered.
+- **Fixed.** The order and same-file claims held only while no solve reaches its
+  limit; the objective (`time_limits`) and the contract now say so, and
+  `time_limited` marks every lineup from the first limited solve on.
+- **Fixed.** The lock clock was silent on the console: the summary prints
+  `earliest_lock_at` and `checks_not_run`, and a run at or past the earliest
+  lock carries `P` `BASELINE_EARLIEST_LOCK_PASSED`. The supplied fixtures'
+  games locked on 2026-09-09 and 2026-09-13, so their runs carry it.
+- **Fixed.** An exception between the temporary write and the audit verdict
+  could leave an unaudited `.tmp`; the copy is now removed on every path, and an
+  audit that cannot finish withholds the file as `BASELINE_AUDIT_FAILED`.
+- **Fixed.** The runbook said exit 2 always names an integrity gate; a budget
+  stop is a construction preference, cleared by rerunning with a larger budget,
+  and now says so.
+- **Fixed.** The player-table cross-check stopped the file in both directions.
+  Only a salary ID the table lacks can reach a lineup the contest refuses, so
+  that stays `V`; a table ID the salary file lacks ships as `P`
+  `BASELINE_SALARY_FILE_MISSING_ENTRY_TABLE_IDS`.
+- **Partly fixed.** `ASSIGNMENT_CSV_EMPTY`, `ASSIGNMENT_HEADER_INVALID` and
+  `ASSIGNMENT_ROW_WIDTH_INVALID` move to `audited_selection` beside
+  `ASSIGNMENT_WIDTH`. `BASELINE_ENTRY_POOL_CROSS_CHECK_UNAVAILABLE` stays in
+  `certification_prerequisite`: a cross-check certification would want is
+  missing, and no other `P` family fits better.
+- It also ran the real 13-entry Showdown pair in `data/inbox/slates/det-buf-2026-09-17`:
+  `DELIVERABLE` in 0.59 s with the several-contest and mixed-fee `P` codes, and
+  input hashes unchanged.
+
+#### Verification
+
+- Baseline before any change: `1491 passed, 1 skipped in 174.95s (0:02:54)`.
+  The claim commit `795de43` left the queue test red (the Quick-Start still
+  named Session 04); `86bb872` fixed it before any code.
+- Card command `sh ./nfl.sh test tests/test_baseline.py -x --tb=short`: `34 passed in 15.32s`.
+- Fixture runs through `sh ./nfl.sh baseline`, each `DELIVERABLE`, exit 0,
+  `FILE_VALID` true, `PRIOR_ONLY`, `DO_NOT_UPLOAD`, carrying the four `P`
+  evidence limitations and `BASELINE_EARLIEST_LOCK_PASSED`, and nothing else. Engine wall time from the report, and the whole process:
+
+  | Run | Entries | Engine s | Process s | Output SHA-256 |
+  |---|---|---|---|---|
+  | Classic | 1 | 0.089 | 0.64 | `249219be44c67bb6b29ee7723299015df37df4a4664efff3069ff60a32ef2729` |
+  | Classic | 20 | 0.480 | 1.04 | `9c5bc57ff029de249681ed2b809a8028eea468b273d2ee0107c3aea8695f3978` |
+  | Classic | 150 | 3.550 | 4.11 | `3543ddf2ffe6062375c82f793455d66b86fc0f0e22965cf2e83727f05e4d269f` |
+  | Showdown | 1 | 0.129 | 0.70 | `71aabb67bf101486c0171bc56400ce5d17584236b34ca94a86f830efe4264b39` |
+  | Showdown | 20 | 0.376 | 0.98 | `7d60781e9f056e69f09b34211568d8aad239815baa53b9583cc287273dc0b410` |
+  | Showdown | 150 | 6.520 | 7.06 | `265339f170f7e1abbe2b8bc4a8af57c6ce76c1517fb69cd4fd124f26407f0faf` |
+
+  Byte-identical on repeat runs in fresh processes, all six, and unchanged by
+  the review fixes. The 20-entry Classic file is the supplied template filled.
+- Partial, through the CLI: the ten-person Classic pool with 7 blank rows exits
+  3, `DELIVERABLE_PARTIAL`, 5 delivered, unfilled `5300000006` and
+  `5300000007`, named by `V` `BASELINE_DISTINCT_LINEUPS_EXHAUSTED`.
+- Complete pinned suite: `1529 passed, 1 skipped in 183.69s (0:03:03)`, recorded
+  with `scripts/record_verify.py`. The run before the review fixes, on `227be41`:
+  `1526 passed, 1 skipped in 183.76s (0:03:03)`; CI on that head green
+  (`suite`, `boundaries`, `windows`).
+- `doctor` `pass_status: true`; compileall clean on every changed module;
+  `git diff --check` clean; no protected path.
+
 ### 2026-09-23: R28 absorbs the P1 hard stop (Ben's ruling)
 
 Ben's answer to the Session 09 flag, on `claude/blissful-carson-kzkdcd` after PR
