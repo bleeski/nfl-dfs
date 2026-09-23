@@ -4,6 +4,104 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: the gate registry, every blocker code classified (Session 03b)
+
+All three items of the Session 03b card, on `claude/blissful-carson-kzkdcd`, PR
+#51, claim `adc5b99`. No operating path changed and nothing reads the registry
+yet (Sessions 04 to 09); every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`.
+
+#### Added
+
+- `config/gate_registry_v1.json` (`nfl_gate_registry_v1`, SHA-256
+  `17e83eabbd40fceb2be2a1ccb512b85e0c3e2f78e41e089074f19f0525729b95`): 1,088 exact codes, one per
+  line, in 43 families. 364 codes are `V` (15 families), 69 `S` (3) and 655 `P`
+  (25). Two templates whose interpolation the source leaves open list their six
+  codes under `expansions`.
+- `src/nfl_dfs/gate_registry.py`: `load_gate_registry` (hash, schema, pairs, no
+  duplicate key, unknown or unused family, blank provenance, undated
+  `registered_at`) and `GateRegistry.limitation`, exact codes only.
+- `tests/test_gate_registry.py`, 122 cases beside the 38 R24 ones (unchanged):
+  the blocker-literal scan and its shapes, completeness both ways, live pins,
+  the class rules, provenance refs resolved against `CLAUDE.md`, §2.5 and the
+  contract headings, the `release._integrity` codes matched, the R29, P1 and
+  rung-trigger rules, the audit §4 rows, and 28 loader refusals.
+- `docs/DATA_CONTRACTS.md` § Gate registry, with its known limits.
+
+#### Decided, and why
+
+- **A blocker literal** is the upper-snake token a string opens with, ending it
+  or followed by `:`, in an emitting position: raised; built (`*Error`,
+  `_problem`, `_issue`, `QAFinding`, `code=`); collected onto, spread beside or
+  assigned to a holder; a `"blockers"` value; a tuple slot named for problems,
+  or `reason` beside `BLOCK`; a blocker keyword; compared in a blocking
+  function. Interpolations resolve from literal call-site arguments and literal
+  loops. It is syntactic, so what it cannot follow is pinned with the source
+  text that emits it: 13 codes (two `release._integrity` codes, C2 and SD3
+  selection statuses, two referee reasons, the C3 scale replay status).
+  Session 03's definition (raise, three collectors, two keywords) missed 44
+  real codes, among them the four rung triggers `CLAUDE.md` names.
+- **Three pairs only:** `V`/`FILE`, `S`/`CONSTRUCTION_PREFERENCE`,
+  `P`/`CERTIFICATION`, one per class of rule in `CLAUDE.md`. An `S` gate that
+  stopped certification would be a preference the ladder may not relax; a `P`
+  gate that stopped only a preference would be a truth claim the ladder could
+  relax. Where the audit says "S/P", the pair decides.
+- **`V` means withholding the file, or the rows, keeps the boundary.** So the
+  delivered bytes, DraftKings inputs, the assignment, selection and audit
+  chain, a policy bound to the wrong entries, exclusions, R29 and overwrite
+  are `V`; evidence hashes, source refusals of optional evidence, role,
+  activity, weather and model gates are `P`, because the file stays legal
+  without them (R28).
+- **Exact codes only.** Pattern templates resolved codes nobody registered,
+  across classes, so every template is expanded, or listed where it cannot be.
+- **The P1 hard stop stays `V`** on Ben's 2026-09-19 ruling, which §2.5 keeps
+  in force beside R28. The question is on Session 09's card.
+- **The `gate_registry` family is `V`:** a broken registry names no integrity
+  gate, so no file can be shown clear of one. The completeness test keeps an
+  emitted code from being unregistered.
+- **Breakpoint not taken.** The diff passed 1,500 lines, but every module was
+  classified, so there was nothing to list as `UNCLASSIFIED` and no `03c` row.
+  The size is the one-code-per-line map (1,323 lines) and the scan.
+
+#### Review
+
+The `reviewer` subagent read the first version (`238 passed`).
+
+- **Blocking, fixed.** The scan missed codes in comprehensions, tuple targets,
+  aliased holders, spread displays, `"blockers"` keys, helper arguments,
+  locals and returned tuples: 44 codes, now registered, with mutation checks.
+- **Blocking, fixed.** `INPUT_BINDING`, `OUTPUT_BINDING`, `BUILD_INPUT_HASH_MISMATCH`
+  and `BUILD_ASSIGNMENT_HASH_MISMATCH` were `P`; they are `V`.
+- **Blocking, fixed.** `SOLVER_RETURNED_NO_LINEUP` and
+  `LINEUP_COUNT_BELOW_RESERVED_ENTRIES` are R29 (`V`).
+- **Blocking, fixed.** Literal templates such as `CLASSIC_C3_*_*_MISMATCH`
+  resolved unregistered codes across classes; removed.
+- **Blocking, fixed.** Two `DATA_CONTRACTS.md` sentences overclaimed.
+- **Open, fixed.** Participation shortfalls were `S`, which would re-admit
+  excluded people; they are `P`. A malformed uniqueness or entry-set field
+  stopped the file; it drops the optional policy (`P`), and R29 still holds.
+  Loader holes (a list as family, an undated `registered_at`, a blank ref) and
+  the unpinned hash are closed.
+- **Open, recorded.** The P1 hard stop (above). Four emitters put an Entry ID
+  inside the code (`LINEUP_{entry_id}:`, late swap's `{label}_{entry_id}:`) and
+  `lineups.py`, `dk.py` and the locked-cell checks raise prose; noted on
+  Session 04's card. Audit §4 "S/P" rows cannot catch an S/P swap.
+
+#### Verification
+
+- Baseline before any change: `1368 passed, 1 skipped in 158.42s`, with one
+  failure the claim caused (the Quick-Start still named S03b), fixed in `7860dd4`.
+- Card command: `253 passed in 4.09s`.
+- Complete pinned suite: `1491 passed, 1 skipped in 155.71s (0:02:35)`, recorded with `scripts/record_verify.py`.
+  The first version's run was `1476 passed, 1 skipped in 157.48s`.
+- Mutation checks, each restored byte for byte: a renamed raise, a renamed
+  helper argument, a new loop value, a renamed aliased-holder code, a dropped
+  code, a stale code, an R29 code moved to `S`, a weather code moved to `V`, and
+  a pinned source line changed; each fails its test.
+- `doctor` `pass_status: true`; compileall clean; `git diff --check` clean; no
+  protected path.
+- CI on `09a6fbe` failed before any step ran (no runner assigned, no log, all
+  four checks in 2 to 4 seconds); re-run refused (403). Commented on PR #51.
+
 ### 2026-09-23: `DELIVERY_STATE`, the fifth truth, and the R24 test (Session 03)
 
 Items 1 and 4 of the Session 03 card, its `DELIVERABLE` and R24 tests, on
