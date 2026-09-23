@@ -4,6 +4,23 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: the R28 boundary sentence names its subject (Session 01 follow-up)
+
+Wording only. No boundary's meaning, release truth, gate or engine behaviour
+changed. Branch `claude/determined-knuth-6hklql`, restarted from `main` at
+`1817d57` after PR #42 merged there.
+
+- `CLAUDE.md` boundary 7 and `docs/START_HERE.md` boundary 5 each ended with a
+  sentence starting "Under R28 it stops certification". In `CLAUDE.md`, "it"
+  followed a sentence about construction preferences; in `START_HERE.md`, it
+  followed "never weaken an evidence gate". Either could be read as the
+  subject.
+- Both now read "Under R28 missing hard evidence stops certification", which
+  is the subject the bullet opens with. The rest of the sentence is unchanged
+  and re-wrapped to the same four lines; `CLAUDE.md` stays at 199.
+- `CLAUDE.md` is protected, so this pull request carries `ben-review` and Ben
+  merges it.
+
 ### 2026-09-23: rulings R28 to R31 into `CLAUDE.md`, four false claims corrected, and a label that clears its check (Session 01)
 
 No engine module, contract, evidence gate or release truth changed; no run
