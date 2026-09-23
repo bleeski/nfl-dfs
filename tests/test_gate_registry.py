@@ -486,7 +486,8 @@ REPO = SRC.parent.parent
 #
 #   raise     the first argument of a raised exception;
 #   build     the first argument, or `code=`, of a call whose name says it builds
-#             a blocker (an exception class, `_problem`, `_issue`, `QAFinding`);
+#             a blocker (an exception class, `_problem`, `_issue`, `QAFinding`,
+#             `GateRegistry.limitation`, since Session 04);
 #   collect   appended, extended, added or inserted onto, or `+=`-ed onto, a
 #             holder: a name that says blocker, reason, problem and the like, or
 #             a local that only ever holds one (`target = a if x else blockers`);
@@ -509,7 +510,7 @@ REPO = SRC.parent.parent
 # is kept as `*`, and the code is a template whose codes the registry lists
 # under `expansions`. The scan covers src/nfl_dfs/*.py, which is what the card
 # names; scripts/ emit their own codes and are not in the registry.
-BLOCKER_NAME = re.compile(r"block|reason|failure|problem|refus|error|issue|finding", re.I)
+BLOCKER_NAME = re.compile(r"block|reason|failure|problem|refus|error|issue|finding|limitation", re.I)
 KEYWORD_NAME = re.compile(r"block|reason|refus|^code$", re.I)
 KEY_NAME = re.compile(r"^blockers?$")
 # A tuple slot is a blocker when named like a holder; a slot named `reason` only
@@ -570,9 +571,9 @@ NOT_BLOCKERS = {
 # Emitted codes no registry can hold: the Entry ID is inside the token, so the
 # code differs per row. Each is a defect for the session that next touches its
 # emitter, which should write a fixed code such as `LINEUP_INVALID:<entry_id>:...`.
+# Session 04 did that for `LINEUP_{entry_id}:` in certification and the review
+# export; late swap's three are Session 12's.
 UNREGISTRABLE_TEMPLATES = {
-    "LINEUP_*": (("certification.py", 'f"LINEUP_{entry_id}:{problem}"'),
-                 ("review_export.py", 'f"LINEUP_{entry_id}:{problem}"')),
     "PRIOR_*": (("late_swap.py", 'f"{label}_{entry_id}:{problem}"'),),
     "CURRENT_*": (("late_swap.py", 'f"{label}_{entry_id}:{problem}"'),),
     "PROPOSED_*": (("late_swap.py", 'f"{label}_{entry_id}:{problem}"'),),
@@ -952,7 +953,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "cfa6fda4d0bd7c2406cde9f853ddce94f6605308f4752e5408dab31fd9d947d1"
+REGISTRY_SHA256 = "436931e60f7dca3f7eea8d9577d90e7670dc55301bf4348251edbf373f9ffd73"
 
 
 def test_the_registry_is_the_pinned_bytes():
@@ -1380,6 +1381,8 @@ def test_template_bindings_try_every_split():
     ("def f(self):\n    self._blockers.extend(['A_CODE', 'B_CODE'])\n", "B_CODE"),
     ("def f(problems):\n    problems.append(_problem('A_CODE', 1))\n", "A_CODE"),
     ("def f(findings):\n    findings.append(QAFinding('A_CODE', 'HIGH'))\n", "A_CODE"),
+    ("def f(r, limitations):\n    limitations.append(r.limitation('A_CODE', detail='x'))\n", "A_CODE"),
+    ("def f(r, limitations):\n    limitations += [r.limitation('A_CODE')]\n", "A_CODE"),
     ("def f(errors, x):\n    errors.append('A_CODE' if x else 'B_CODE')\n", "B_CODE"),
     ("def f(reasons):\n    reasons += ('A_CODE',)\n", "A_CODE"),
     ("def f():\n    return Outcome(blockers=('A_CODE',))\n", "A_CODE"),

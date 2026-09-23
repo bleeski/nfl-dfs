@@ -20,8 +20,9 @@ template, with `*` for one or more upper-snake segments; it appears only as a
 key of `expansions`, which lists the exact codes it produces. A template never
 resolves a code itself, so no pattern can absorb a code nobody registered.
 
-Nothing on the operating path reads this file yet; Sessions 04 to 09 build their
-limitations through `GateRegistry.limitation`. It changes no gate's behaviour.
+`nfl baseline` (Session 04) builds every limitation it reports through
+`GateRegistry.limitation`; Sessions 05 to 09 bring the other paths to it. It
+changes no gate's behaviour.
 """
 
 from __future__ import annotations
@@ -36,17 +37,14 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .contracts import DeliveryLimitation, GateClass, GateProvenance, GateStops
+from .contracts import GATE_CLASS_STOPS, DeliveryLimitation, GateClass, GateProvenance, GateStops
 
 SCHEMA_VERSION = "nfl_gate_registry_v1"
 DEFAULT_REGISTRY_PATH = Path(__file__).resolve().parents[2] / "config" / "gate_registry_v1.json"
 
-# The only class and `stops` pairs a registry entry may carry (Session 03b).
-ALLOWED_PAIRS: Mapping[GateClass, GateStops] = {
-    GateClass.V: GateStops.FILE,
-    GateClass.S: GateStops.CONSTRUCTION_PREFERENCE,
-    GateClass.P: GateStops.CERTIFICATION,
-}
+# The only class and `stops` pairs a registry entry may carry (Session 03b);
+# `DeliveryLimitation` holds to the same mapping since Session 04.
+ALLOWED_PAIRS: Mapping[GateClass, GateStops] = GATE_CLASS_STOPS
 
 _TOP_LEVEL = frozenset({"schema_version", "registered_at", "families", "codes", "expansions"})
 _FAMILY_FIELDS = frozenset({"class", "stops", "provenance", "covers"})

@@ -17,6 +17,8 @@ from typing import Iterable, Mapping
 
 import numpy as np
 
+from .baseline import DEFAULT_BUDGET_SECONDS, DEFAULT_PER_SOLVE_SECONDS, run_baseline
+from .baseline import summary as baseline_summary
 from .certification import certify_upload
 from .classic_portfolio_policy import (
     validate_classic_portfolio_policy_file,
@@ -1908,6 +1910,26 @@ def command_review_export(args: argparse.Namespace) -> int:
     return 0 if export.file_valid else 2
 
 
+def command_baseline(args: argparse.Namespace) -> int:
+    """R28's baseline: distinct legal lineups from the DraftKings bytes alone (Session 04).
+
+    Exit 0 fills every blank authorized row, 3 fills some and names the rest, 2
+    fills none. None of them clears an upload: the run ends `PRIOR_ONLY` and
+    `DO_NOT_UPLOAD`.
+    """
+
+    outcome = run_baseline(
+        salaries=args.salaries,
+        entries=args.entries,
+        out_dir=args.out_dir,
+        run_id=args.run_id,
+        per_solve_seconds=args.per_solve_seconds,
+        budget_seconds=args.budget_seconds,
+    )
+    _print_json(baseline_summary(outcome))
+    return outcome.exit_code
+
+
 def command_priors_propose(args: argparse.Namespace) -> int:
     result = propose_prior_package(
         salaries=args.salaries,
@@ -3473,6 +3495,20 @@ def build_parser() -> argparse.ArgumentParser:
     review_export.add_argument("--label")
     review_export.add_argument("--output-dir", required=True)
     review_export.set_defaults(func=command_review_export)
+    baseline_parser = subparsers.add_parser(
+        "baseline",
+        help=(
+            "distinct legal lineups from the DraftKings salary and entries bytes alone, into a"
+            " new byte-audited DK_BASELINE_ENTRY file; no network, priors, weather or roles"
+        ),
+    )
+    baseline_parser.add_argument("--salaries", required=True)
+    baseline_parser.add_argument("--entries", required=True)
+    baseline_parser.add_argument("--out-dir", "--output-dir", dest="out_dir", default=str(DEFAULT_RUNS_DIR))
+    baseline_parser.add_argument("--run-id")
+    baseline_parser.add_argument("--per-solve-seconds", type=float, default=DEFAULT_PER_SOLVE_SECONDS)
+    baseline_parser.add_argument("--budget-seconds", type=float, default=DEFAULT_BUDGET_SECONDS)
+    baseline_parser.set_defaults(func=command_baseline)
     priors_propose = subparsers.add_parser(
         "priors-propose",
         help="freeze approved nflverse artifacts and propose the DK identity crosswalk",

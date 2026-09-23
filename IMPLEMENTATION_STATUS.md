@@ -1,5 +1,31 @@
 # Implementation Status
 
+## Capability added: 2026-09-23 (Session 04)
+
+A file can be built from the two DraftKings downloads alone, before any
+evidence, prior or model: `nfl baseline`. It is a separate command until
+Session 06 puts it first in `run-slate`. Every run still ends
+`PRIOR_ONLY / DO_NOT_UPLOAD`. Suite figures are in `changelog.md`.
+
+- **`nfl baseline --salaries --entries [--out-dir]`** (`baseline.py`) writes a
+  new run folder with snapshots, `DK_BASELINE_ENTRY_V1_<run_id>.csv`
+  (`nfl_baseline_entry_csv_v1`) and `baseline_report.json`
+  (`nfl_baseline_report_v1`, carrying `nfl_release_truths_v2`). Exit 0, 3 or 2.
+- **Verified on the supplied fixtures**: Classic (719 rows) and Showdown (126)
+  at 1, 20 and 150 entries are `DELIVERABLE`, byte-identical on replay; 150
+  entries take about 3.6 s Classic and 6.5 s Showdown. A pool with too few
+  distinct lineups is `DELIVERABLE_PARTIAL` and names every unfilled row.
+- **Lineups rank by DraftKings salary only** (`BASELINE_SALARY_RANK_V1`), with
+  DraftKings `OUT`/`IR`/`D` people excluded. They are legal, distinct and
+  byte-audited, not tuned: at 150 Showdown entries one person is in 139 lineups.
+- **Every gap is a registered limitation**, never silent: no official activity,
+  role, weather or model evidence; a salary file short of the entries table; a
+  template with no table; a run past the earliest lock.
+- **Every `dk.py` and `lineups.py` refusal has a registered code**, and
+  `DeliveryLimitation` accepts only the three class/stops pairs.
+- **Not yet:** the lock clock (Session 07), prefilled rows and per-contest groups
+  (Session 11), `run-slate` baseline-first (Session 06).
+
 ## Capability added: 2026-09-23 (Session 03b)
 
 Every blocker code the engine emits has a class, what it stops and its

@@ -200,7 +200,7 @@ def test_illegal_lineup_reports_file_failure_and_no_upload(
     )
     assert not manifest.file_valid
     assert manifest.release_decision.value == "DO_NOT_UPLOAD"
-    assert any(blocker.startswith(f"LINEUP_{entry_id}:") for blocker in manifest.blockers)
+    assert any(blocker.startswith(f"LINEUP_INVALID:{entry_id}:") for blocker in manifest.blockers)
     assert not output.exists()
 
 

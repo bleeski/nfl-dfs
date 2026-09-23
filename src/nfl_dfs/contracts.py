@@ -739,6 +739,17 @@ class GateProvenance(FrozenModel):
     ref: str = Field(min_length=1)
 
 
+# The only class and `stops` pairs a gate may carry, one per class of rule in
+# `CLAUDE.md`: an integrity gate stops the file, a construction preference is
+# relaxable, a truth claim stops certification. The gate registry's loader and
+# `DeliveryLimitation` both hold to it (Sessions 03b and 04).
+GATE_CLASS_STOPS: dict[GateClass, GateStops] = {
+    GateClass.V: GateStops.FILE,
+    GateClass.S: GateStops.CONSTRUCTION_PREFERENCE,
+    GateClass.P: GateStops.CERTIFICATION,
+}
+
+
 class DeliveryLimitation(FrozenModel):
     """One named gap that travels with a delivered, partial or withheld file.
 
@@ -746,7 +757,9 @@ class DeliveryLimitation(FrozenModel):
     the file (R28): a truth-claim gate stops certification and a construction
     preference is relaxable, so neither may claim `FILE`, and a `V` gate may
     claim nothing less. That also settles the Session 03 card's rule that a `V`
-    gate never has `stops=CERTIFICATION`.
+    gate never has `stops=CERTIFICATION`. Since Session 04 the pair is one of
+    `GATE_CLASS_STOPS`, so `S` never stops certification and `P` never stops a
+    construction preference either.
     """
 
     code: str = Field(pattern=_GATE_CODE)
@@ -771,6 +784,11 @@ class DeliveryLimitation(FrozenModel):
             raise ValueError(
                 f"{self.code}: only a V gate stops the FILE; a "
                 f"{self.gate_class.value} gate travels with it (R28)"
+            )
+        if GATE_CLASS_STOPS[self.gate_class] is not self.stops:
+            raise ValueError(
+                f"{self.code}: a {self.gate_class.value} gate stops "
+                f"{GATE_CLASS_STOPS[self.gate_class].value}, never {self.stops.value}"
             )
         return self
 
