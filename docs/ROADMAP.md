@@ -15,13 +15,14 @@ retrospective and session prompt in the repository.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 17 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S17`, on the branch your session was assigned or `claude/s17-standings-transport`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 06 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S06`, on the branch your session was assigned or `claude/s06-baseline-first-run-slate`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 05 is in progress on `claude/session-05-artifact-preservation-3cecn4`;
-Session 06 waits for it. Session 17 shares no file with Session 05, and its
-acceptance needs operator item O1, so its card's breakpoint applies while O1 is
-open. Session 21 (prior-model triage) shares no file with Session 05 either and
-may run beside it in a separate worktree
+Session 05 left Session 06 `delivery.publish`, `read_latest` and `replace`: the
+pointer lives in `run-slate`'s output folder and names only a file inside it, so
+the baseline must be built there, not in `nfl baseline`'s default `data/runs/`.
+`run-slate` already reports `DELIVERY_STATE`; C1 and C2 report `NO_DELIVERABLE`
+until the baseline backs them. Session 21 (prior-model triage) shares no file with
+Session 06 and may run beside it in a separate worktree
 (`git worktree add ../nfl-dfs-s21 -b claude/s21-prior-triage`).
 
 Every close-out rewrites the session number in this block to the next
@@ -99,7 +100,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 03 | Standalone | `DELIVERY_STATE` contract: the fifth truth, derived only from file validity, coverage and integrity blockers, with structured limitations; `nfl_release_truths_v2`; the non-numerical-gate test that R24 was conditional on. The registry split to Session 03b | R28; audit D1, DD-1, §4; archive § R24 recommendation and R26 coupling | `src/nfl_dfs/release.py`, `src/nfl_dfs/contracts.py`, `docs/DATA_CONTRACTS.md`, new `tests/test_delivery_state.py`, new `tests/test_gate_registry.py` | V | Session 01 | `sh ./nfl.sh test tests/test_release_truths.py tests/test_gate_registry.py tests/test_delivery_state.py -x --tb=short` | Complete |
 | Session 03b | Standalone | Gate registry, split from Session 03 at its seam: `config/gate_registry_v1.json` gives every blocker code emitted under `src/` a class (`V`, `S`, `P`; audit §4 seed, R29 makes cross-entry uniqueness `V`), provenance and `stops`; `gate_registry.py` loads and validates it and builds `DeliveryLimitation`s from codes; a completeness test fails on any unregistered code | R28; audit D1, DD-1, §4; Session 03 breakpoint | new `src/nfl_dfs/gate_registry.py`, new `config/gate_registry_v1.json`, `tests/test_gate_registry.py`, `docs/DATA_CONTRACTS.md` | V | Session 03 | `sh ./nfl.sh test tests/test_gate_registry.py tests/test_delivery_state.py -x --tb=short`; seam: schema, loader and completeness with every code listed, then classification by module | Complete |
 | Session 04 | Standalone | Baseline command: `nfl baseline --salaries --entries` builds distinct legal lineups from the DraftKings bytes alone, fills blank authorized rows through the exact-byte writer into a new versioned file, and reports `DELIVERY_STATE` and every unfilled Entry ID; no network | R28, R29; audit D2, DD-2 | new `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/lineups.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | V | Session 02, Session 03 | `sh ./nfl.sh test tests/test_baseline.py -x --tb=short`; fixture runs at 1, 20 and 150 entries with wall time | Complete |
-| Session 05 | Batched | Artifact preservation: a validated CSV survives later presentation failures in both modes and in the outer exception handler; a roster, Entry ID or byte discrepancy still invalidates; an atomic, hash-bound latest-deliverable pointer | Audit D4, DD-2, DD-8 | `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/review_export.py`, new `src/nfl_dfs/delivery.py` | V | Session 03 | `sh ./nfl.sh test tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py tests/test_cowork_rerun_regressions.py tests/test_artifact_preservation.py -x --tb=short` | In Progress |
+| Session 05 | Batched | Artifact preservation: a validated CSV survives later presentation failures in both modes and in the outer exception handler; a roster, Entry ID or byte discrepancy still invalidates; an atomic, hash-bound latest-deliverable pointer | Audit D4, DD-2, DD-8 | `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/review_export.py`, new `src/nfl_dfs/delivery.py` | V | Session 03 | `sh ./nfl.sh test tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py tests/test_cowork_rerun_regressions.py tests/test_artifact_preservation.py -x --tb=short` | Complete |
 | Session 06 | Standalone | Baseline-first `run-slate`: the baseline is built and published right after intake, before priors, weather, roles or solves; an improvement replaces it only after independent validation; any improvement failure leaves the baseline reachable; C1 (rung 4) ends with a CSV | Audit D2, DD-2 | `src/nfl_dfs/cli.py`, `src/nfl_dfs/cowork.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/delivery.py` | V | Session 04, Session 05 | `sh ./nfl.sh test tests/test_run_slate_baseline_first.py tests/test_prior_review_profile.py tests/test_classic_prior_review.py -x --tb=short` | Pending |
 | Session 07 | Standalone | Deadline controller: run request v3 with an optional delivery deadline (default: earliest lock minus 5 minutes); one budget passed through every stage; retries, solver limits and bank sizes set from remaining time; dead `runtime.json` keys consumed or removed; measured stage durations | R31; audit D3, DD-3; C4 retro #3 | `src/nfl_dfs/cowork.py`, new `src/nfl_dfs/deadline.py`, `src/nfl_dfs/sources.py`, `scripts/fetch_weather_captures.py`, `scripts/make_classic_policy.py`, `config/runtime.json` | P | Session 06 | `sh ./nfl.sh test tests/test_deadline_controller.py tests/test_cowork.py tests/test_fetch_weather_captures.py -x --tb=short` | Pending |
 | Session 08 | Standalone | Timeout incumbents: validated time-limited candidates are kept; a bank with a feasible witness does not block; both joint selectors validate and return an integer incumbent on a time or search limit under a non-optimal status; C3 accepts it labelled; the timing-sensitive C2 status test becomes deterministic | Audit D5, DD-4, §1 test failure | `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_review.py` | P | Session 06 | `sh ./nfl.sh test tests/test_classic_portfolio_c2.py tests/test_portfolio_enforcement.py tests/test_classic_review_c3.py -x --tb=short`; then the C2 status test 20 times in a row | Pending |
@@ -480,6 +481,20 @@ Every session follows this protocol, and the cards only add to it:
   `tests/test_classic_portfolio_c2.py` and `tests/test_cowork_rerun_regressions.py`
   change expectation under R28. New corruption cases prove withholding still
   happens when bytes or mapping are wrong.
+- **2026-09-23, Complete (both modes).** A readable-review failure is classified
+  code by code through the registry: `V`, unregistered or code-less withholds,
+  anything else keeps the Showdown or C3 CSV listed with the code as a
+  limitation (exit 2). C3 keeps its export and audit after re-verifying them and
+  removes only its JSON and HTML; `prior_review.py`'s C3 branch lists them.
+  `delivery.py` writes `LATEST_DELIVERABLE.json` (`nfl_latest_deliverable_v1`)
+  with `os.replace` and revalidates the file before any write and on every read;
+  `publish`, `read_latest`, `replace` are Session 06's API. `run-slate` reports
+  `DELIVERY_STATE` and `nfl_release_truths_v2` on every `prior_review` exit (C1
+  and C2 `NO_DELIVERABLE`). The outer handler names a revalidated deliverable and
+  never deletes it; `certify`'s is unchanged. 27 codes registered, none
+  reclassified. Breakpoint not taken (2,342 changed lines, 1,128 of them source
+  and registry; the pointer's revalidation is what makes the keep path fail
+  closed). Nothing relaxed. Numbers: `changelog.md`.
 
 #### Session 06: baseline-first `run-slate`
 
@@ -966,4 +981,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-23 | Session 03b | In Progress to Complete | `16502c8` | 1,088 codes in 43 families, exact-code loader, completeness both ways; merged as PR #51 |
 | 2026-09-23 | Session 04 | Pending to In Progress | `795de43` | Claim pushed on `claude/session-04-nfl-baseline-f7aptz` |
 | 2026-09-23 | Session 04 | In Progress to Complete | `336d078` | `nfl baseline`, Classic and Showdown, six fixture runs `DELIVERABLE`; merged as PR #53 |
-| 2026-09-23 | Session 05 | Pending to In Progress | recorded at close-out | Claim pushed on `claude/session-05-artifact-preservation-3cecn4` |
+| 2026-09-23 | Session 05 | Pending to In Progress | `79e9c7f` | Claim pushed on `claude/session-05-artifact-preservation-3cecn4` |
+| 2026-09-23 | Session 05 | In Progress to Complete | recorded by the next session | Preservation in both modes, `LATEST_DELIVERABLE.json`, v2 truths in `run-slate`; PR opened at close-out |

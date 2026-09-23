@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "672b52df-c182-56d3-8766-4935e3cfa959",
-      "branch": "claude/session-05-artifact-preservation-3cecn4",
-      "chunk": "S05",
-      "claimed_at": "2026-09-23T21:44:40Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
