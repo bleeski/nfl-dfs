@@ -1578,3 +1578,77 @@ metric-result artifact, `learn` also reports
 `REGISTERED_METRIC_RESULTS_REQUIRED_Q6`, keeps `promote=false`, and cannot use
 legacy boolean diagnostics to promote. This registration does not promote any
 model.
+
+## Release truths
+
+Registered 2026-09-23 by Session 03 (R28). Every run reports independent
+truths; `FILE_VALID` never implies release, and `DELIVERY_STATE` never implies
+upload clearance.
+
+### `nfl_release_truths_v1`, the four truths as they stand
+
+The name is given here for the first time, so that v2 has a predecessor; no v1
+byte, field or derivation changes. v1 is `FILE_VALID`, `EVIDENCE_STATE`,
+`MODEL_STATUS` and `RELEASE_DECISION`, derived only by
+`release.derive_release_policy` and carried by `certification_manifest_v1`,
+the pre-lock run manifest and settlement's `release_truths`. `FILE_VALID`
+describes the artifacts the producing contract names (the C1 review JSON, the
+C3 export, a certified CSV). `CERTIFIED` derives only from
+`RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE`.
+
+### `nfl_release_truths_v2`, adding `DELIVERY_STATE`
+
+`contracts.ReleaseTruthsV2`, built by `release.release_truths_v2` from a v1
+result and a `release.derive_delivery_state` result. Nothing on the operating
+path emits it yet; Sessions 04 to 09 wire it in.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Exactly `nfl_release_truths_v2` |
+| `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, `RELEASE_DECISION` | The v1 values, copied unchanged. In v2 `FILE_VALID` describes the delivered file's bytes |
+| `DELIVERY_STATE` | `DELIVERABLE`, `DELIVERABLE_PARTIAL` or `NO_DELIVERABLE` |
+| `delivered_entry_ids` | The authorized rows the file fills, in template order |
+| `unfilled_entry_ids` | The authorized rows it leaves blank, in template order |
+| `delivery_limitations` | Every gate that fired, structured (below) |
+
+`DELIVERY_STATE` is derived from file validity, coverage and integrity blockers
+only; the derivation takes no model or evidence input:
+
+- `DELIVERABLE`: the file is valid, every authorized blank row is filled, and no
+  integrity limitation exists.
+- `DELIVERABLE_PARTIAL`: the file is valid, some rows are filled, and every
+  unfilled row is named by Entry ID in an integrity limitation.
+- `NO_DELIVERABLE`: nothing valid to hand over. The file is invalid, a
+  file-wide integrity gate fired, no row is filled, or the template authorizes
+  none.
+
+A `delivery_limitations` entry is `code` (one upper-snake token; detail goes in
+`detail`), `class` (`V`, `S` or `P`, the audit's classes), `stops` (`FILE`,
+`CERTIFICATION` or `CONSTRUCTION_PREFERENCE`), `provenance` (`kind` one of
+`CLAUDE_MD_BOUNDARY`, `RULING`, `CONTRACT`, and `ref` naming it), `entry_ids`,
+`people` and `detail`. Only a `V` gate stops the file, and a `V` gate stops
+nothing less (R28: truth-claim gates stop certification and construction
+preferences are relaxable). A `V` entry with no Entry IDs, or with one the
+template does not hold, covers the whole file; with Entry IDs it covers those
+rows. `S` and `P` entries never change `DELIVERY_STATE`.
+
+The derivation adds three limitations of its own, so a gap is never silent:
+`UNFILLED_AUTHORIZED_ROWS` (R28) for unfilled rows nothing else names,
+`FILE_VALIDATION_INCOMPLETE` for an invalid file with no file-wide reason, and
+`NO_AUTHORIZED_ROWS` for a template with no blank row. It refuses, with
+`DELIVERY_ENTRY_NOT_AUTHORIZED`, `DELIVERY_ENTRY_ID_REPEATED` or
+`DELIVERY_ROW_BLOCKED_BY_INTEGRITY_GATE`, inputs no record could describe
+honestly.
+
+The record refuses a delivered file whose `FILE_VALID` is false, and a
+`CERTIFIED_UPLOAD_PACKAGE` whose `DELIVERY_STATE` is not `DELIVERABLE`.
+`RELEASE_DECISION` is unchanged by v2: every current path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+Does not establish: upload clearance, certification, lineup quality, EV, ROI,
+win or cash probability, or that any limitation's evidence is sound. It says a
+valid file exists and which rows it covers.
+
+The per-code class, provenance and `stops` for every blocker the engine can
+emit live in `config/gate_registry_v1.json` (Session 03b). Until it lands, the
+producer of a limitation states them.

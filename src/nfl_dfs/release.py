@@ -6,11 +6,19 @@ from typing import Iterable
 
 from .contracts import (
     CertificationBasis,
+    DeliveryLimitation,
+    DeliveryState,
+    DeliveryTruth,
     EvidenceRecord,
     EvidenceState,
+    GateClass,
+    GateProvenance,
+    GateStops,
     ModelStatus,
+    ProvenanceKind,
     ReleaseDecision,
     ReleaseEvidenceState,
+    ReleaseTruthsV2,
 )
 
 
@@ -143,4 +151,124 @@ def derive_release_policy(
         evidence_blockers=tuple(evidence_reasons),
         model_blockers=tuple(model_reasons),
         blockers=all_blockers,
+    )
+
+
+# ---------------------------------------------------------------------------
+# DELIVERY_STATE (R28, Session 03). Beside the four truths above, never in them:
+# nothing here reads model status or evidence, and `derive_release_policy` is
+# unchanged. Sessions 04 to 09 wire it into the operating paths.
+# ---------------------------------------------------------------------------
+
+_INTEGRITY_BOUNDARY = GateProvenance(
+    kind=ProvenanceKind.CLAUDE_MD_BOUNDARY,
+    ref="Integrity gates (exact DraftKings IDs, hashes, entry mapping, blank-cell "
+        "authority, locked cells, Classic/Showdown mode) still stop the file they protect.",
+)
+_AUTHORITY_BOUNDARY = GateProvenance(
+    kind=ProvenanceKind.CLAUDE_MD_BOUNDARY,
+    ref="Before lock, fill only blank roster cells belonging to the exact Entry IDs "
+        "the supplied template authorizes.",
+)
+_R28 = GateProvenance(kind=ProvenanceKind.RULING, ref="R28")
+
+
+class DeliveryStateError(ValueError):
+    """The inputs contradict themselves; no delivery record can describe them."""
+
+
+def _ordered_unique(values: Iterable[str], label: str) -> tuple[str, ...]:
+    items = tuple(str(value) for value in values)
+    repeated = sorted({value for value in items if items.count(value) > 1})
+    if repeated:
+        raise DeliveryStateError(f"DELIVERY_ENTRY_ID_REPEATED:{label}:{repeated}")
+    return items
+
+
+def _integrity(code: str, provenance: GateProvenance, entry_ids: tuple[str, ...] = (),
+               detail: str = "") -> DeliveryLimitation:
+    return DeliveryLimitation(code=code, gate_class=GateClass.V, stops=GateStops.FILE,
+                              provenance=provenance, entry_ids=entry_ids, detail=detail)
+
+
+def derive_delivery_state(
+    *,
+    file_valid: bool,
+    authorized_entry_ids: Iterable[str],
+    delivered_entry_ids: Iterable[str],
+    limitations: Iterable[DeliveryLimitation] = (),
+) -> DeliveryTruth:
+    """`DELIVERY_STATE` from file validity, coverage and integrity blockers only.
+
+    - `file_valid`: the bytes to be handed over passed their own validation.
+    - `authorized_entry_ids`: the blank rows the template authorizes, in its order.
+    - `delivered_entry_ids`: the rows those bytes fill.
+    - `limitations`: every gate that fired. A `V` one with no Entry IDs, or with
+      one outside the template, stops the whole file; with Entry IDs it stops
+      those rows. `S` and `P` ones never change the state and travel with it.
+
+    An invalid file or a file-wide integrity gate delivers nothing. Otherwise
+    every authorized row is delivered (`DELIVERABLE`), some are
+    (`DELIVERABLE_PARTIAL`), or none are (`NO_DELIVERABLE`). A row left unfilled
+    that no limitation names gets `UNFILLED_AUTHORIZED_ROWS`, so a gap is never
+    silent. A delivered row that is unauthorized, or that an integrity gate
+    blocks, raises: the file would hold bytes its own record disowns.
+    """
+
+    authorized = _ordered_unique(authorized_entry_ids, "authorized")
+    delivered_in = _ordered_unique(delivered_entry_ids, "delivered")
+    stray = [eid for eid in delivered_in if eid not in authorized]
+    if stray:
+        raise DeliveryStateError(f"DELIVERY_ENTRY_NOT_AUTHORIZED:{stray}")
+    items = list(limitations)
+    integrity = [item for item in items if item.gate_class is GateClass.V]
+    file_wide = [item for item in integrity
+                 if not item.entry_ids or not set(item.entry_ids) <= set(authorized)]
+    if not authorized and not file_wide:
+        items.append(_integrity("NO_AUTHORIZED_ROWS", _AUTHORITY_BOUNDARY,
+                                detail="the template authorizes no blank row"))
+    if not file_valid and not file_wide:
+        items.append(_integrity("FILE_VALIDATION_INCOMPLETE", _INTEGRITY_BOUNDARY,
+                                detail="the file to hand over did not pass its own validation"))
+
+    withheld = not file_valid or bool(file_wide) or not authorized
+    if withheld:
+        delivered: tuple[str, ...] = ()
+    else:
+        blocked = {eid for item in integrity for eid in item.entry_ids}
+        clash = [eid for eid in delivered_in if eid in blocked]
+        if clash:
+            raise DeliveryStateError(f"DELIVERY_ROW_BLOCKED_BY_INTEGRITY_GATE:{clash}")
+        chosen = set(delivered_in)
+        delivered = tuple(eid for eid in authorized if eid in chosen)
+    unfilled = tuple(eid for eid in authorized if eid not in set(delivered))
+
+    named = {eid for item in items if item.gate_class is GateClass.V for eid in item.entry_ids}
+    unexplained = tuple(eid for eid in unfilled if eid not in named)
+    if unexplained and not withheld:
+        items.append(_integrity("UNFILLED_AUTHORIZED_ROWS", _R28, unexplained,
+                                detail="authorized blank rows with no delivered lineup"))
+
+    if not delivered:
+        state = DeliveryState.NO_DELIVERABLE
+    elif unfilled:
+        state = DeliveryState.DELIVERABLE_PARTIAL
+    else:
+        state = DeliveryState.DELIVERABLE
+    return DeliveryTruth(DELIVERY_STATE=state, delivery_limitations=tuple(items),
+                         delivered_entry_ids=delivered, unfilled_entry_ids=unfilled)
+
+
+def release_truths_v2(policy: ReleasePolicyResult, delivery: DeliveryTruth) -> ReleaseTruthsV2:
+    """The five truths side by side (`nfl_release_truths_v2`). Neither half moves the other."""
+
+    return ReleaseTruthsV2(
+        FILE_VALID=policy.file_valid,
+        EVIDENCE_STATE=policy.evidence_state,
+        MODEL_STATUS=policy.model_status,
+        RELEASE_DECISION=policy.release_decision,
+        DELIVERY_STATE=delivery.delivery_state,
+        delivery_limitations=delivery.delivery_limitations,
+        delivered_entry_ids=delivery.delivered_entry_ids,
+        unfilled_entry_ids=delivery.unfilled_entry_ids,
     )
