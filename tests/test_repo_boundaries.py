@@ -413,10 +413,11 @@ def test_exactly_one_workflow_defines_the_protected_paths_job() -> None:
 # --------------------------------------------------------------------------
 
 # `cli` and `late_swap` build a `DK_UPLOAD_` path on the legacy certified path.
-# `classic_review` and `classic_scale_acceptance` name it only to refuse it.
-# A fifth module appearing here means a new writer was added.
+# `classic_review`, `classic_scale_acceptance` and `delivery` (Session 05: the
+# latest-deliverable pointer never names one) mention it only to refuse it.
+# A sixth module appearing here means a new writer was added.
 DK_UPLOAD_MODULES = frozenset(
-    {"cli.py", "late_swap.py", "classic_review.py", "classic_scale_acceptance.py"}
+    {"cli.py", "late_swap.py", "classic_review.py", "classic_scale_acceptance.py", "delivery.py"}
 )
 
 

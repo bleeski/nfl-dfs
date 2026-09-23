@@ -934,9 +934,14 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    and Captain exposure, policy maxima, overlap, uniqueness, evidence/role
    observations, provenance paths and hashes. It escapes markup and renders
    spreadsheet-active prefixes inert without changing the exact source bytes.
-   Any byte or semantic disagreement is a named `READABLE_REVIEW_FAILED`
-   blocker, returns exit code 2, preserves earlier artifacts, and does not
-   advertise a new review CSV through the top-level result.
+   Any disagreement is a named `READABLE_REVIEW_FAILED` blocker and returns
+   exit code 2. Under R28 (Session 05) its codes are classified through the
+   gate registry: a roster, Entry ID or byte disagreement, or a code the
+   registry cannot classify, withholds the review CSV, which the top-level
+   result does not advertise; any other keeps the CSV listed with a
+   presentation limitation, after `LATEST_DELIVERABLE.json` has revalidated it.
+   Read `DELIVERY_STATE` and `latest_deliverable` in `cowork_run.json` to see
+   which it was.
    Kicker roles are resolved after those exclusions. If more than one kicker
    remains eligible for a team, capture approved source bytes through
    `sources.py`, prepare the versioned `role_evidence_json` package documented

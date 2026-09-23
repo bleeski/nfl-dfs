@@ -480,8 +480,15 @@ quoting, physical-line geometry, unrelated rows, contest facts, and every
 non-roster byte. It reparses and byte-diffs both proposed and final bytes and
 binds the final SHA-256 into the audit, readable package, and run record. A
 partial write, existing/stale target, mismatched Entry ID, prefilled roster
-cell, unauthorized row, mutation, audit failure, post-write disagreement, or
-display disagreement removes or withholds all new C3 artifacts.
+cell, unauthorized row, mutation, audit failure or post-write disagreement
+removes or withholds all new C3 artifacts. A failure of the readable review
+alone, after the export and its audit passed (R28, Session 05), keeps both once
+they re-verify by hash, reparse and the `DK_UPLOAD` check
+(`CLASSIC_C3_FINAL_OUTPUT_*`), removes only the JSON and HTML, and raises
+`ClassicReviewPresentationError` with the presentation code, or
+`CLASSIC_C3_READABLE_RENDER_FAILED` for an exception that carries none.
+`prior_review` lists the kept pair; `run-slate` classifies the failure as
+below.
 
 The readable surfaces enumerate every exact Entry ID and roster ID, underlying
 person, slot, game/team/opponent, salary, lineup total/remaining salary,
@@ -842,10 +849,24 @@ bytes or exact IDs in JSON/CSV artifacts.
 
 Any missing file, hash change, malformed record, semantic disagreement, policy
 or audit mismatch, roster mutation, entry-order/metadata change or post-write
-hash failure raises a named `READABLE_REVIEW_*` discrepancy. The Cowork command
-then reports `FILE_VALID=false`, stops at stage `READABLE_REVIEW`, exits 2,
-preserves artifacts already written earlier in the run, and does not expose a
-new top-level `bulk_entry_csv` path. No readable-review success may alter
+hash failure raises a named `READABLE_REVIEW_*` discrepancy, several joined by
+`;`. The Cowork command names it `READABLE_REVIEW_FAILED` (Classic C3:
+`CLASSIC_C3_READABLE_REVIEW_FAILED`), stops at stage `READABLE_REVIEW` and exits
+2. Since Session 05 (R28) it classifies each joined code through the gate
+registry (`delivery.discrepancy_limitations`):
+
+- a `V` code (a roster, Entry ID, byte or audited-selection disagreement), a
+  code the registry does not hold, or an exception that carries no code
+  (`GATE_CODE_UNCLASSIFIED`) withholds the CSV: `FILE_VALID=false`, no
+  top-level `bulk_entry_csv`, and neither index names it. Showdown keeps the
+  bytes on disk under `withheld_artifacts`; Classic C3 removes its four outputs;
+- anything else keeps the CSV in the result and both indexes with each code as a
+  limitation, `FILE_VALID=true` in its v1 meaning (the export CSV), stage
+  suffix `_READABLE_REVIEW_FAILED`, once `delivery.publish` has revalidated it
+  (`LATEST_DELIVERABLE.json`, below). A refusal withholds it as a `V` code would.
+
+Showdown writes `READABLE_REVIEW_FAILED.json` in both cases, with
+`withheld_artifacts` or `kept_artifacts`. No readable-review outcome may alter
 `MODEL_STATUS=PRIOR_ONLY` or `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
 ## Showdown kicker-role evidence
@@ -1733,7 +1754,14 @@ C3 export, a certified CSV). `CERTIFIED` derives only from
 
 `contracts.ReleaseTruthsV2`, built by `release.release_truths_v2` from a v1
 result and a `release.derive_delivery_state` result. `nfl baseline` (Session
-04) emits it; Sessions 05 to 09 wire it into the other paths.
+04) emits it. Since Session 05 every `run-slate` `prior_review` exit carries it
+as `release_truths`, with `DELIVERY_STATE` beside the four truths: its
+`delivery_limitations` are the run's blockers and any readable-review codes,
+each built by `delivery.blocker_limitations` or `discrepancy_limitations`
+through the registry, and a blocker the registry does not hold is
+`GATE_CODE_UNCLASSIFIED` (`V`, fail closed). Classic C1 and C2 write no entry
+file, so they report `NO_DELIVERABLE` with `PROFILE_WRITES_NO_ENTRY_FILE`.
+Sessions 06 to 09 wire it into the rest.
 
 | Field | Meaning |
 |---|---|
@@ -1796,7 +1824,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `436931e60f7dca3f7eea8d9577d90e7670dc55301bf4348251edbf373f9ffd73`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `c8d3812822c1f52609476f3313e339a3b429731b52b1acfde1ceca9d4fc4f2df`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -1860,3 +1888,84 @@ registry.
 Does not establish: that a gate is correct, that its evidence is sound, upload
 clearance, certification or any model claim. It says what each gate, when it
 fires, stops and on whose authority.
+
+## Latest deliverable pointer
+
+Registered 2026-09-23 by Session 05 (R28). `LATEST_DELIVERABLE.json`,
+`nfl_latest_deliverable_v1`, written by `delivery.py`, names the one entry file
+a run would hand over. It sits in the run's output folder
+(`<output-dir>/<run_id>/`), one per run: runs are immutable folders, and a
+pointer wider than its run could name another slate's file. `run-slate`
+publishes it for a Showdown or Classic C3 review CSV once the readable review
+has been classified and before the workbook is written, so a later failure
+cannot unpublish it. Session 06 publishes the baseline through it first and
+replaces it with an improvement; Session 14 adds the delivery record.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Exactly `nfl_latest_deliverable_v1` |
+| `published_at`, `run_id`, `producer` | UTC time, the run, and what built the file (`run-slate:prior_review:SHOWDOWN`, `run-slate:prior_review:CLASSIC`) |
+| `file` | `path` relative to the pointer's folder (never absolute, never `..`), `sha256`, `bytes`, `file_kind` (`DK_REVIEW_ENTRY_CSV`; the baseline's is `nfl_baseline_entry_csv_v1`) |
+| `inputs` | `salaries` and `entries`: the snapshot `path` and `sha256` the file was built from |
+| `mode` | `CLASSIC` or `SHOWDOWN`, from a fresh parse of the entries snapshot |
+| `coverage` | `delivered_entry_ids` and `unfilled_entry_ids`, in template order |
+| `release_truths` | The file's `nfl_release_truths_v2`, with every limitation |
+| `revalidation` | `status` `PASS` and the `checks_run` below |
+| `supersedes` | `null` for a first pointer; after `replace`, the old pointer's and file's SHA-256, producer, delivered rows and whether it still revalidated |
+| `warning` | `DELIVERY_STATE` is not upload clearance; `RELEASE_DECISION` still decides that |
+
+The pointer is written to a temporary file in the same folder, flushed and
+synced, then put in place with `os.replace`, so a reader sees the old pointer or
+the new one and never part of either. A failed write leaves the old pointer
+byte for byte and no temporary file. `run-slate` records the pointer's own
+SHA-256 as `latest_deliverable` in `prior_review_hashes`.
+
+Revalidation (`delivery.revalidate`) runs before every write and again on every
+read, independent of whoever built the file, from fresh parses of both
+snapshots. Each failure is a registered `V` code, and any one refuses:
+
+| Check | Code |
+|---|---|
+| The name is not `DK_UPLOAD_*` and the file is inside the pointer's folder | `DELIVERABLE_UPLOAD_NAME_PROHIBITED`, `DELIVERABLE_OUTSIDE_RUN_FOLDER` |
+| The truths deliver something from a valid file | `DELIVERABLE_STATE_NOT_DELIVERABLE` |
+| The file exists and hashes to `file.sha256` | `DELIVERABLE_FILE_MISSING`, `DELIVERABLE_SHA256_MISMATCH` |
+| Both snapshots hash to `inputs` and parse, in one mode | `DELIVERABLE_INPUT_SHA256_MISMATCH`, `DELIVERABLE_INPUT_PARSE_FAILED` |
+| The file reparses in the template's roster columns | `DELIVERABLE_REPARSE_FAILED`, `DELIVERABLE_MODE_MISMATCH` |
+| Its Entry IDs are the template's, in order | `DELIVERABLE_ENTRY_ORDER_MISMATCH` |
+| Its filled and blank authorized rows are exactly the truths' delivered and unfilled rows | `DELIVERABLE_COVERAGE_MISMATCH` |
+| `referee.audit_output_bytes` against the template: only filled roster cells differ | `DELIVERABLE_BYTE_AUDIT_FAILED` |
+| `lineups.validate_lineup` passes every filled row | `DELIVERABLE_LINEUP_INVALID` |
+| No two filled rows hold the same exact roster (R29; a different captain differs) | `DELIVERABLE_LINEUP_DUPLICATE` |
+| The check itself finished | `DELIVERABLE_REVALIDATION_FAILED` |
+
+It judges no evidence, model or policy; those travel in `release_truths`.
+
+- `publish(root, deliverable)` writes a run's first pointer and refuses one that
+  exists (`DELIVERY_POINTER_EXISTS`).
+- `read_latest(root)` returns `None` when there is no pointer, refuses a
+  malformed one (`DELIVERY_POINTER_INVALID`), and returns it only when its file
+  revalidates.
+- `replace(root, deliverable)` needs a pointer (`DELIVERY_POINTER_MISSING`),
+  the same two input hashes (`DELIVERY_POINTER_INPUTS_DIFFER`) and, while the
+  current file still revalidates, at least as many delivered rows
+  (`DELIVERY_POINTER_COVERAGE_REGRESSION`). A current file that no longer
+  revalidates gives way to any file that does, and `supersedes` says so.
+- A pointer whose bytes on disk are not the bytes written is
+  `DELIVERY_POINTER_WRITE_MISMATCH`.
+
+After a failure `run-slate`'s outer handler reads the pointer. A file passed
+independent validation earlier in the run exactly when the pointer names it and
+it revalidates now; the handler reports that file (`DELIVERY_STATE`,
+`release_truths`, `latest_deliverable`), never deletes it, and still removes any
+other `DK_UPLOAD_*.csv`. A pointer that does not revalidate is reported under
+`latest_deliverable_problems`, and its file is left on disk, unadvertised.
+
+`delivery.discrepancy_limitations` splits a `;`-joined discrepancy and
+`blocker_limitations` takes one blocker each; both build every limitation
+through `GateRegistry.limitation` by the leading code, and a code the registry
+does not hold is `GATE_CODE_UNCLASSIFIED` (`V`, fail closed).
+`delivery.withholds` is true when any limitation is `V`.
+
+Does not establish: upload clearance, certification, lineup quality, or any EV,
+ROI, win, cash, ownership or edge claim. It says which validated file to hand
+over and what it covers.
