@@ -20,4 +20,5 @@ paths:
   new writer.
 - No network in tests. Approved-source adapters are exercised through captured
   fixture bytes.
-- The Windows symlink-permission skip is expected; any other skip is a finding.
+- At most one platform skip is expected: the Windows junction test on Linux,
+  the symlink-permission case on Windows. Any other skip is a finding.

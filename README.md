@@ -15,7 +15,7 @@ and one reserved-entry CSV and ask it to run the slate. `docs/START_HERE.md` is
 the orientation page; `CLAUDE.md` and `docs/RUNBOOK.md` define the workflow.
 Windows uses `.\nfl.ps1` and `.venv`; Linux uses `sh ./nfl.sh` and
 `.venv-linux`. Development follows `CLAUDE.md` § Developing in Claude Code, with
-the queue in `backlog.md` and session skills under `.claude/skills/`.
+the queue in `docs/ROADMAP.md` and session skills under `.claude/skills/`.
 `IMPLEMENTATION_STATUS.md` separates working capabilities from external-data and
 calibration gates that cannot be truthfully cleared by code alone.
 
@@ -31,8 +31,8 @@ A governed C2 policy adds the bounded candidate bank, exact Entry-ID assignment
 and independent portfolio audit. C3 independently re-audits those bytes and,
 only on `PASS`, produces an exact-template `DK_REVIEW_ENTRY` CSV plus readable
 JSON, self-contained HTML and an eight-sheet workbook. Every Classic output
-remains `PRIOR_ONLY / DO_NOT_UPLOAD`; C3 currently awaits native Excel
-open/recalculate/save/reopen acceptance before it can be called complete.
+remains `PRIOR_ONLY / DO_NOT_UPLOAD`. C3 is complete for software acceptance;
+native Excel open/recalculate/save/reopen acceptance is deferred (R30).
 That profile can generate legal review lineups from source-bound priors after
 weather and identity gates are resolved. It retains a review CSV, with
 `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. It does not yet
@@ -57,5 +57,5 @@ the system will label field and simulation output diagnostic and will emit
 - Supplied acceptance fixtures: 719 Classic IDs, 24 teams, 12 games, two
   reserved entries, and 63 Showdown people represented by 126 CPT/FLEX rows.
 - The five-sheet operator input workbook and eight-sheet prior-review output
-  workbook have independent render/error-scan coverage. Current C3 native Excel
-  save/reopen acceptance remains pending.
+  workbook have independent render/error-scan coverage. C3 native Excel
+  save/reopen acceptance is deferred (R30, Session 35 in `docs/ROADMAP.md`).

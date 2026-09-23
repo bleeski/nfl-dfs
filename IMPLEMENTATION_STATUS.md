@@ -56,7 +56,7 @@ bank, or `MODEL_STATUS`. Output remains `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
   gitignored path on Ben's Windows checkout. So this is verified to the same
   standard as a unit-tested contract, not "end to end against real bytes" in the
   sense the entry above means it. The snapshot replay is operator item 6 in
-  `backlog.md`.
+  the archived backlog, now part of Session 16 in `docs/ROADMAP.md`.
 
   Only the quarterback path is wired into the resolver today. The non-quarterback
   ranks are derived and tested but reach a projection only through
@@ -71,8 +71,8 @@ box. Evidence in `changelog.md` 2026-09-19 and issue #21.
 
 - `data/standings/inbox/` is gitignored, so a fresh cloud clone has no standings
   corpus. `P0`, `P0b`, `P4a`, `P4b` and `P5` cannot run in a cloud session until
-  chunk `X2` lands. `backlog.md`'s claim that the corpus is "in the repo" is
-  true only on the Windows checkout.
+  chunk `X2` (Session 17 in `docs/ROADMAP.md`) lands. The archived backlog's
+  claim that the corpus is "in the repo" is true only on the Windows checkout.
 - Three of the six hosts in `sources.ALLOWED_HOSTS` answer 403 at CONNECT in a
   cloud session: `api.weather.gov`, `api.sleeper.app`, `api.the-odds-api.com`.
   `docs/CLAUDE_CODE_SETUP.md:114-125` asserts otherwise and is being replaced by
@@ -152,7 +152,9 @@ Ben's ruling rather than worked around: it cannot represent a field member who
 never submitted a lineup (11 of 18 exports carry them), and it cannot hold an
 exact tie split that is not a whole number of cents (757 entries in 193391013
 alone), which means a contest with any uneven tie split can never clear
-`STANDINGS_PRIZE_MISMATCH`. Both are detailed under Q1B in `backlog.md`.
+`STANDINGS_PRIZE_MISMATCH`. Both are detailed under Q1B in
+`docs/backlog-archive/backlog-through-2026-09-22.md`; the fix is Session 30 in
+`docs/ROADMAP.md`, waiting on Ben's ruling.
 
 One pre-existing test failure is now permanent and unrelated to Q1B:
 `tests/test_w6_live_preflight.py::test_live_check_refuses_once_a_selected_player_has_locked`
@@ -180,9 +182,9 @@ suite after the change and its new coverage is `623 passed, 1 skipped in
 `EVIDENCE_STATE` remains separately derived, `MODEL_STATUS=PRIOR_ONLY`, and
 `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
-C3 is still `BLOCKED` on native Excel open/recalculate/save/reopen acceptance and
-no later item is `READY`. That blocks calling C3 complete and blocks starting C4;
-it does not block generating and reviewing a Classic package.
+C3 was `BLOCKED` on native Excel open/recalculate/save/reopen acceptance until
+2026-09-22, when Ben's R30 closed it for software acceptance and deferred the
+Excel step to Session 35 in `docs/ROADMAP.md`. Nothing waits on Excel.
 
 `device_bash` has been unusable since a Windows update released 2026-09-08; the
 other device tools work, so the repo is staged into the cloud container, built
@@ -190,7 +192,9 @@ and tested there, and changed files are written back.
 
 ## Current development program — 2026-09-15
 
-The authoritative queue is `Reprioritized development program — 2026-09-15
+Superseded 2026-09-22: the only queue is now `docs/ROADMAP.md`, and this
+program is archived verbatim in `docs/backlog-archive/backlog-through-2026-09-22.md`.
+The queue was `Reprioritized development program — 2026-09-15
 (prize tail first)` in `backlog.md`, built on
 `docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md` and
 `docs/STANDINGS_GREENFIELD_FINDINGS_2026-09-15.md`. `P0` (standings grading

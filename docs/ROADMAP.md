@@ -17,11 +17,13 @@ Paste this into a fresh Claude Code session:
 
 > Read `docs/ROADMAP.md` and execute Session 02 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S02`, on the branch your session was assigned or `claude/s02-fallback-csv`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 01 is `In Progress` (claimed 2026-09-23). Session 02 has no file overlap
-with it and may run at the same time in a separate worktree
-(`git worktree add ../nfl-dfs-s02 -b claude/s02-fallback-csv`). Sessions 19 and
-20 are startable but overlap Session 01's files (`.claude/rules/`,
-`docs/CLAUDE_CODE_SETUP.md`); start them after Session 01 merges.
+Session 03 depends only on Session 01 and has no file overlap with Session 02,
+so the two may run at the same time in separate worktrees
+(`git worktree add ../nfl-dfs-s03 -b claude/s03-delivery-state`). To run it,
+paste the same prompt with `S03` and Session 03. Session 01's pull request waits
+for Ben's merge because it touches `CLAUDE.md`; Sessions 19 and 20 overlap its
+files (`.claude/rules/`, `docs/CLAUDE_CODE_SETUP.md`), so start them after it
+merges.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -92,7 +94,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session ID | Type | Work Unit & Scope | Source Origin | Target Files | Classification | Depends on | Verification Command / Breakpoint | Status |
 |---|---|---|---|---|---|---|---|---|
 | Session 00 | Batched | Roadmap cutover: write this file; archive `backlog.md` verbatim behind a stub; `repo_state.py`, the queue test, the skills, the ledger rule and the chunk headers read this file; archive the session prompts; banner the superseded trackers; archive old changelog entries | This request; audit §8; `.claude/rules/ledger.md` | `docs/ROADMAP.md`, `backlog.md`, `scripts/repo_state.py`, `tests/test_roadmap_queue.py`, `.claude/skills/`, `.claude/rules/ledger.md` | P | none | `sh ./nfl.sh test tests/test_roadmap_queue.py tests/test_harness_orientation.py -x --tb=short` | Complete |
-| Session 01 | Batched | Governance: write rulings R28 to R31 and the roadmap pointer into `CLAUDE.md`; correct its false claims (rung 4 "always produces a legal portfolio", both generators "encode the rung ladder", "nothing writes `DK_UPLOAD`", evidence gates first in the running order) and the stale Excel and "P0 repairs" lines elsewhere; H3, so `ben-review` can clear this pull request | R28 to R31; audit D2, D5, D8, DD-7 (documents); chunk H3 | `CLAUDE.md` (protected), `docs/START_HERE.md`, `docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md`, `docs/CLAUDE_CODE_SETUP.md`, `.claude/rules/`, `IMPLEMENTATION_STATUS.md`, `README.md`, `.github/workflows/ci.yml`, new `.github/workflows/protected-paths.yml`, `scripts/check_protected_paths.py`, `scripts/file_standings.py`, `tests/test_repo_boundaries.py` | P | Session 00 | `python3 scripts/check_protected_paths.py`; `sh ./nfl.sh test tests/test_repo_boundaries.py -x --tb=short`; seam: H3 alone | In Progress |
+| Session 01 | Batched | Governance: write rulings R28 to R31 and the roadmap pointer into `CLAUDE.md`; correct its false claims (rung 4 "always produces a legal portfolio", both generators "encode the rung ladder", "nothing writes `DK_UPLOAD`", evidence gates first in the running order) and the stale Excel and "P0 repairs" lines elsewhere; H3, so `ben-review` can clear this pull request | R28 to R31; audit D2, D5, D8, DD-7 (documents); chunk H3 | `CLAUDE.md` (protected), `docs/START_HERE.md`, `docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md`, `docs/CLAUDE_CODE_SETUP.md`, `.claude/rules/`, `IMPLEMENTATION_STATUS.md`, `README.md`, `.github/workflows/ci.yml`, new `.github/workflows/protected-paths.yml`, `scripts/check_protected_paths.py`, `scripts/file_standings.py`, `tests/test_repo_boundaries.py` | P | Session 00 | `python3 scripts/check_protected_paths.py`; `sh ./nfl.sh test tests/test_repo_boundaries.py -x --tb=short`; seam: H3 alone | Complete |
 | Session 02 | Batched | Fallback CSV correctness: the writer refuses unknown Entry IDs, fills every blank authorized row or exits non-zero naming the rest, validates each exported roster and never overwrites; QA checks each exported roster against its assignment; the builder's shortfall exits non-zero; Showdown strategy findings stop failing the validity exit code | Audit D6, DD-5, §4 standalone-QA rows | `scripts/write_dk_entries.py`, `scripts/qa_classic_portfolio.py`, `scripts/build_classic_portfolio.py`, `scripts/qa_showdown_portfolio.py` | V | Session 00 | `sh ./nfl.sh test tests/test_write_dk_entries.py tests/test_qa_classic_portfolio.py tests/test_build_classic_portfolio.py tests/test_qa_showdown_portfolio.py -x --tb=short`; seam: writer and Classic QA first | Pending |
 | Session 03 | Standalone | `DELIVERY_STATE` contract and gate registry: the fifth truth, derived only from file validity, coverage and integrity blockers; a registry giving every blocker code a class, provenance and what it stops; the non-numerical-gate test that R24 was conditional on | R28; audit D1, DD-1, §4; archive § R24 recommendation and R26 coupling | `src/nfl_dfs/release.py`, `src/nfl_dfs/contracts.py`, new `src/nfl_dfs/gate_registry.py`, new `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | V | Session 01 | `sh ./nfl.sh test tests/test_release_truths.py tests/test_gate_registry.py tests/test_delivery_state.py -x --tb=short` | Pending |
 | Session 04 | Standalone | Baseline command: `nfl baseline --salaries --entries` builds distinct legal lineups from the DraftKings bytes alone, fills blank authorized rows through the exact-byte writer into a new versioned file, and reports `DELIVERY_STATE` and every unfilled Entry ID; no network | R28, R29; audit D2, DD-2 | new `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/lineups.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | V | Session 02, Session 03 | `sh ./nfl.sh test tests/test_baseline.py -x --tb=short`; fixture runs at 1, 20 and 150 entries with wall time | Pending |
@@ -182,6 +184,17 @@ Every session follows this protocol, and the cards only add to it:
   green with no new commit (timestamps pasted into the changelog).
 - **Breakpoint.** If H3 cannot be proven on this pull request, land H3 alone as
   `Session 01b` first. Do not split the `CLAUDE.md` change to dodge the label.
+- **2026-09-23, Complete.** H3 landed as a new
+  `.github/workflows/protected-paths.yml` (live labels, reruns on `labeled` and
+  `unlabeled`), with `scripts/check_protected_paths.py --live-labels` and 37
+  boundary tests. `CLAUDE.md` carries R28 to R31 and the four corrections, 11 of
+  12 boundaries byte-identical, at 199 lines. The RUNBOOK's full lock-clock text
+  is amended in place, each amendment marked, and the other stale Excel,
+  "P0 repairs" and `backlog.md` lines are corrected. Left open:
+  `scripts/make_classic_policy.py` still prints the old rung-4 claim (Sessions
+  06 and 10 own that file). At this commit the live-label proof on PR #42
+  (label applied after CI, green with no new commit) has not run yet; the
+  follow-up commit records its result here and in `changelog.md`.
 
 #### Session 02: fallback CSV correctness
 
@@ -773,5 +786,6 @@ session, because a commit cannot contain its own merge.
 |---|---|---|---|---|
 | 2026-09-22 | none | Audited baseline | `f8c6942` | QA audit (issue #40) ran against this commit; Linux CI `1070 passed, 1 skipped` |
 | 2026-09-22 | Session 00 | Pending to In Progress | `ab54970` | Claim pushed |
-| 2026-09-22 | Session 00 | In Progress to Complete | recorded by Session 01 | Rulings R28 to R31 recorded; backlog, prompts and old changelog archived |
-| 2026-09-23 | Session 01 | Pending to In Progress | recorded at close-out | Claim pushed on `claude/determined-knuth-6hklql` |
+| 2026-09-22 | Session 00 | In Progress to Complete | `46de154` | Rulings R28 to R31 recorded; backlog, prompts and old changelog archived; merged as PR #41 |
+| 2026-09-23 | Session 01 | Pending to In Progress | `5c15bb8` | Claim pushed on `claude/determined-knuth-6hklql` |
+| 2026-09-23 | Session 01 | In Progress to Complete | recorded by Session 02 | R28 to R31 in `CLAUDE.md`; H3 live-label check; PR #42 waits on Ben's merge |

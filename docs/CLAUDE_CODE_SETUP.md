@@ -80,18 +80,26 @@ more than a red `suite` does. What it does is make the touch visible and
 unambiguous. It runs as a CI job regardless of branch protection, and it turns
 "this pull request changes something Ben decides" from a judgement Claude has to
 make into a check that either passes or names the file. The `ben-review` label
-is how a protected change clears it, and Claude not merging that pull request is
-still a rule Claude keeps rather than a door that is locked.
+is how a protected change clears it. The check runs from
+`.github/workflows/protected-paths.yml`, which reruns on `labeled` and
+`unlabeled` and reads the labels from the pull request at job runtime, so
+applying the label turns it green with no new commit (H3, 2026-09-23; until then
+the job read the frozen event payload and a late label could never clear it).
+Claude not merging that pull request is still a rule Claude keeps rather than a
+door that is locked.
 
 ## One-time, in GitHub
 
 ### The review label
 
-Issues → Labels → New label, named exactly `ben-review`. The CI job looks for
-that string. Any colour.
+Issues → Labels → New label, named exactly `ben-review`. The `protected-paths`
+job looks for that string. Any colour. It exists as of 2026-09-23.
 
-The first pull request that touches a protected path will fail
-`protected-paths` until the label exists, which is the correct failure.
+A pull request that touches a protected path fails `protected-paths` until the
+label is on it, which is the correct failure. Applying the label reruns the
+check by itself and it goes green on the same commit; removing it turns the
+check red again. If the job cannot read the labels (network, permission, a
+deleted pull request) it fails rather than passes.
 
 ## One-time, per machine
 
@@ -210,8 +218,9 @@ Measured in a cloud container on 2026-09-17:
 
 - `uv sync --all-groups --locked --python 3.13.7` completes; `.venv-linux` holds
   Python 3.13.7.
-- Full suite: `1 failed, 735 passed, 1 skipped in 155.56s`. The one failure is
-  the documented hardcoded-expiry test that chunk P0 repairs.
+- Full suite: `1 failed, 735 passed, 1 skipped in 155.56s`. The one failure was
+  the hardcoded-expiry test in `tests/test_w6_live_preflight.py`, fixed later the
+  same day by pinning its clock (changelog, 2026-09-17 CI unblock).
 - `api.weather.gov` answers HTTP 200 from the container. An older note in
   `CLAUDE.md` said it did not; that note was wrong and is corrected.
 - `raw.githubusercontent.com` and nflverse GitHub release downloads are both

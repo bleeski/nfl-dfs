@@ -7,7 +7,10 @@ paths:
 
 Replaces the old rule that every commit needed a reviewed path list from Ben.
 Ben is not a software engineer and does not want to be the gate. The gate is now
-automated: see `.github/workflows/ci.yml` and `.github/protected-paths.txt`.
+automated: see `.github/workflows/ci.yml`, `.github/workflows/protected-paths.yml`
+and `.github/protected-paths.txt`. The `protected-paths` check reads the
+`ben-review` label from the live pull request and reruns when a label is added
+or removed, so the label clears it without a new commit.
 
 It is a client-side gate, and that distinction matters enough to state before
 anything else. This repository is private on a GitHub free plan, where branch

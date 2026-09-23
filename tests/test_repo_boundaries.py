@@ -16,6 +16,9 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -165,6 +168,244 @@ def test_the_protected_list_stays_short_enough_to_actually_read() -> None:
         "The protected list changed. That is allowed, but say why in "
         "changelog.md and update this test in the same commit."
     )
+
+
+# H3 (2026-09-23): the label is read from the live pull request, not the event
+# payload. GitHub freezes the payload when the event fires, so a label added
+# after CI ran could never clear the check that demanded it (PR #32). With
+# `--live-labels` the script asks the API at job runtime and fails closed on any
+# lookup problem; without the flag it is the offline tool it always was.
+
+WORKFLOWS = PROJECT_ROOT / ".github" / "workflows"
+
+
+def _live_env(monkeypatch, **overrides) -> None:
+    env = {
+        "GITHUB_API_URL": "https://api.github.com",
+        "GITHUB_REPOSITORY": "bleeski/nfl-dfs",
+        "PR_NUMBER": "42",
+        "GITHUB_TOKEN": "token-for-tests",
+    }
+    env.update(overrides)
+    for key, value in env.items():
+        if value is None:
+            monkeypatch.delenv(key, raising=False)
+        else:
+            monkeypatch.setenv(key, value)
+    monkeypatch.delenv("PR_LABELS", raising=False)
+
+
+def _pull(*labels: str, number: int = 42) -> dict:
+    return {"number": number, "labels": [{"name": label} for label in labels]}
+
+
+class _Fail(str):
+    """A queued response that makes the fake API raise ``LabelLookupError``."""
+
+
+def _checker(monkeypatch, changed, *, responses=()):
+    """The script with git and the API replaced. Each response is returned in
+    turn; a ``_Fail`` is raised as the loaded module's own ``LabelLookupError``."""
+
+    module = _load_protected_paths_module()
+    monkeypatch.setattr(module, "changed_paths", lambda base, head: tuple(changed))
+    monkeypatch.setattr(module, "RETRY_DELAY_SECONDS", 0)
+    queue = list(responses)
+    calls: list[str] = []
+
+    def fake_fetch(url: str, token: str):
+        calls.append(url)
+        item = queue.pop(0) if queue else _Fail("no response queued")
+        if isinstance(item, _Fail):
+            raise module.LabelLookupError(str(item))
+        return item
+
+    monkeypatch.setattr(module, "_fetch_json", fake_fetch)
+    return module, calls
+
+
+LIVE = ["--live-labels", "--base", "base-sha", "--head", "head-sha"]
+
+
+@pytest.mark.parametrize("changed", [["CLAUDE.md"], ["src/nfl_dfs/ownership.py"]])
+def test_a_failed_live_label_lookup_fails_the_check(monkeypatch, capsys, changed) -> None:
+    """Fail closed, whether or not a protected path is touched. A gate that
+    passes when it cannot look is worse than the defect H3 replaced."""
+
+    _live_env(monkeypatch)
+    module, calls = _checker(monkeypatch, changed, responses=[_Fail("HTTP 503"), _Fail("HTTP 503")])
+    assert module.main(LIVE) == 2
+    assert len(calls) == 2, "one retry, then fail"
+    assert "PROTECTED_PATHS_CHECK_FAILED" in capsys.readouterr().err
+
+
+def test_a_transient_lookup_failure_is_retried_once(monkeypatch) -> None:
+    _live_env(monkeypatch)
+    module, calls = _checker(
+        monkeypatch,
+        ["CLAUDE.md"],
+        responses=[_Fail("connection reset"), _pull("ben-review")],
+    )
+    assert module.main(LIVE) == 0
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"GITHUB_TOKEN": None},
+        {"GITHUB_TOKEN": ""},
+        {"GITHUB_REPOSITORY": None},
+        {"GITHUB_REPOSITORY": "not-a-repo"},
+        {"PR_NUMBER": None},
+        {"PR_NUMBER": "0"},
+        {"PR_NUMBER": "42abc"},
+        {"GITHUB_API_URL": None},
+    ],
+)
+def test_live_labels_need_every_input(monkeypatch, overrides) -> None:
+    _live_env(monkeypatch, **overrides)
+    module, calls = _checker(monkeypatch, ["CLAUDE.md"], responses=[_pull("ben-review")])
+    assert module.main(LIVE) == 2
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "api_url",
+    [
+        "http://api.github.com",
+        "https://example.com",
+        "https://api.github.com.example.com",
+        "https://user@api.github.com",
+        "https://api.github.com:8443",
+        "https://api.github.com/some/prefix",
+    ],
+)
+def test_live_labels_refuse_any_host_but_the_allowlisted_api(monkeypatch, api_url) -> None:
+    _live_env(monkeypatch, GITHUB_API_URL=api_url)
+    module, calls = _checker(monkeypatch, ["CLAUDE.md"], responses=[_pull("ben-review")])
+    assert module.main(LIVE) == 2
+    assert calls == [], "the request must never be sent"
+
+
+def test_the_api_host_is_read_from_the_sources_allowlist() -> None:
+    module = _load_protected_paths_module()
+    assert module.LIVE_LABEL_API_HOST in module.allowed_hosts()
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        [],
+        {"labels": [{"name": "ben-review"}]},
+        {"number": 41, "labels": [{"name": "ben-review"}]},
+        {"number": "42", "labels": [{"name": "ben-review"}]},
+        {"number": True, "labels": [{"name": "ben-review"}]},
+        {"number": 42},
+        {"number": 42, "labels": "ben-review"},
+        {"number": 42, "labels": ["ben-review"]},
+        {"number": 42, "labels": [{"id": 1}]},
+    ],
+)
+def test_a_malformed_pull_request_response_fails_the_check(monkeypatch, response) -> None:
+    _live_env(monkeypatch)
+    module, _ = _checker(monkeypatch, ["CLAUDE.md"], responses=[response])
+    assert module.main(LIVE) == 2
+
+
+def test_a_live_review_label_clears_a_protected_change(monkeypatch, capsys) -> None:
+    _live_env(monkeypatch)
+    module, calls = _checker(monkeypatch, ["CLAUDE.md"], responses=[_pull("ben-review")])
+    assert module.main(LIVE) == 0
+    assert calls == ["https://api.github.com/repos/bleeski/nfl-dfs/pulls/42"]
+    out = capsys.readouterr().out
+    assert "`ben-review` present" in out and "CLAUDE.md" in out
+    # The run log carries what was read and when, which is the H3 evidence.
+    assert re.search(r"Live labels on pull request #42 at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", out)
+    assert '["ben-review"]' in out
+
+
+def test_without_the_live_label_each_protected_file_is_named(monkeypatch, capsys) -> None:
+    _live_env(monkeypatch)
+    module, _ = _checker(
+        monkeypatch,
+        ["CLAUDE.md", ".claude/settings.json", "src/nfl_dfs/ownership.py"],
+        responses=[_pull("documentation")],
+    )
+    assert module.main(LIVE) == 1
+    err = capsys.readouterr().err
+    assert "PROTECTED_PATHS_WITHOUT_REVIEW" in err
+    assert "  CLAUDE.md" in err and "  .claude/settings.json" in err
+    assert "ownership.py" not in err
+
+
+def test_a_frozen_payload_label_cannot_clear_the_live_check(monkeypatch) -> None:
+    """The exact PR #32 shape inverted: the payload says labelled, the pull
+    request says not. The live answer wins."""
+
+    _live_env(monkeypatch)
+    monkeypatch.setenv("PR_LABELS", '["ben-review"]')
+    module, _ = _checker(monkeypatch, ["CLAUDE.md"], responses=[_pull()])
+    assert module.main(LIVE) == 1
+
+
+@pytest.mark.parametrize("labels", [(), ("ben-review",)])
+def test_an_unprotected_change_is_clear_with_or_without_the_label(monkeypatch, capsys, labels) -> None:
+    _live_env(monkeypatch)
+    module, _ = _checker(monkeypatch, ["src/nfl_dfs/ownership.py"], responses=[_pull(*labels)])
+    assert module.main(LIVE) == 0
+    assert "No protected path touched (1 changed)." in capsys.readouterr().out
+
+
+def test_without_the_flag_the_script_never_calls_the_api(monkeypatch) -> None:
+    _live_env(monkeypatch)
+    module, calls = _checker(monkeypatch, ["CLAUDE.md"], responses=[_pull("ben-review")])
+    assert module.main(["--base", "base-sha", "--head", "head-sha"]) == 1
+    monkeypatch.setenv("PR_LABELS", '["ben-review"]')
+    assert module.main(["--base", "base-sha", "--head", "head-sha"]) == 0
+    assert calls == []
+
+
+def test_the_local_run_still_works_offline() -> None:
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"PR_LABELS", "BASE_SHA", "HEAD_SHA", "PR_NUMBER", "GITHUB_TOKEN"}
+    }
+    # Any attempt at the network would hit a closed port.
+    for key in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        env[key] = "http://127.0.0.1:9"
+    result = subprocess.run(
+        [sys.executable, str(PROJECT_ROOT / "scripts" / "check_protected_paths.py"),
+         "--base", "HEAD", "--head", "HEAD"],
+        cwd=PROJECT_ROOT, env=env, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "No protected path touched (0 changed).\n"
+
+
+def test_the_protected_paths_workflow_reruns_on_label_changes() -> None:
+    text = (WORKFLOWS / "protected-paths.yml").read_text(encoding="utf-8")
+    assert "types: [opened, synchronize, reopened, labeled, unlabeled]" in text
+    assert "python3 scripts/check_protected_paths.py --live-labels" in text
+    assert "GITHUB_TOKEN: ${{ github.token }}" in text
+    assert "pull-requests: read" in text
+    assert "PR_LABELS" not in text
+
+
+def test_no_workflow_reads_the_frozen_label_payload() -> None:
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        assert "github.event.pull_request.labels" not in path.read_text(encoding="utf-8"), path.name
+
+
+def test_exactly_one_workflow_defines_the_protected_paths_job() -> None:
+    owners = [
+        path.name
+        for path in sorted(WORKFLOWS.glob("*.yml"))
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if re.fullmatch(r"  protected-paths:\s*", line)
+    ]
+    assert owners == ["protected-paths.yml"]
 
 
 # --------------------------------------------------------------------------

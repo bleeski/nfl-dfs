@@ -52,6 +52,10 @@ These are not preferences. None of them is ever relaxed to finish a run.
    normalized input, a projection, a candidate or a selection.
 5. Missing, stale, conflicted, partial, ambiguous or unbound hard evidence is
    `DO_NOT_UPLOAD`. Never weaken an evidence gate to finish.
+   Under R28 it stops certification, not construction or delivery: the file
+   ships with the gap named as a limitation. Integrity gates (exact DraftKings
+   IDs, hashes, entry mapping, blank-cell authority, locked cells,
+   Classic/Showdown mode) still stop the file they protect.
 6. Cold-start projections, ownership, fields, duplication estimates and scenario
    utilities are diagnostics or priors. Never call them EV, ROI, win
    probability, cash probability, calibrated ownership or proven edge.
@@ -63,7 +67,7 @@ These are not preferences. None of them is ever relaxed to finish a run.
 `tests/test_repo_boundaries.py` asserts the mechanical half of this list. If you
 are about to change something it guards, that is a pull request Ben reads.
 
-## The four release truths
+## The release truths
 
 Every run reports `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS` and
 `RELEASE_DECISION`, independently. `FILE_VALID` never implies release. Every
@@ -72,12 +76,21 @@ current path ends `MODEL_STATUS=PRIOR_ONLY` and
 not that uploading is cleared. Never describe a legal lineup or a green
 diagnostic as upload-ready.
 
+Ben's R28 (2026-09-22) adds a fifth, `DELIVERY_STATE`: whether a valid file
+exists to hand over. Sessions 03 to 12 implement it; until Session 03 lands,
+runs report four.
+
 ## Shipping under a lock clock
 
 The worst outcome is no lineup, not a bad lineup. Construction preferences
-(stack rules, exposure caps, bank sizes, search budgets, uniqueness, objective
-tuning) may be relaxed on Claude's own authority to get a legal portfolio out.
-Evidence gates never may. Report every relaxation. Silence about a gap is the
+(stack rules, exposure caps, bank sizes, search budgets, objective tuning) may
+be relaxed on Claude's own authority to get a legal portfolio out. Evidence
+gates never may; under R28 the truth-claim gates stop certification, not the
+file. Lineup uniqueness is never relaxed either (R29, Ben: "within a given
+portfolio keep all submitted lineups distinct and unique"); when distinct
+lineups run out, report the unfilled Entry IDs. A baseline built from the
+DraftKings bytes goes first, and the default delivery deadline is the earliest
+lock minus 5 minutes (R31). Report every relaxation. Silence about a gap is the
 only unrecoverable error. Full text in `docs/RUNBOOK.md`.
 
 ## Authority, in order
@@ -98,7 +111,7 @@ Never infer status from a document or an earlier conversation.
 | You are about to | Read |
 |---|---|
 | Develop the engine | `docs/ROADMAP.md` §1 and the session's card in §2.3, then the briefs it cites. Run `/dev-session <SNN>`. |
-| Operate a slate | `docs/RUNBOOK.md`. Evidence gates run first; they are the only thing that can make you miss a lock. |
+| Operate a slate | `docs/RUNBOOK.md`. The baseline goes first (R28); until Sessions 04 and 06 land, the nearest thing is the Classic fallback chain. |
 | Commit, push, merge or delete a branch | `.claude/rules/git-authority.md` and `docs/CLAUDE_CODE_SETUP.md`. |
 | Grade a slate or touch calibration | `docs/chunks/P0-standings-grading-harness.md` and `config/metric_registry_q1_v1.json`. |
 | Add or change a structured input | `docs/DATA_CONTRACTS.md`. A schema change is a new version; v1 is never mutated. |

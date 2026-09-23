@@ -127,9 +127,10 @@ It is explicitly review-only: `MODEL_STATUS=PRIOR_ONLY` and
 `RELEASE_DECISION=DO_NOT_UPLOAD`; no `DK_UPLOAD_*.csv` is created.
 
 Current C3 code, deterministic copied-package replay, full supplied-fixture
-1/3/20/150 acceptance and independent workbook/HTML rendering pass. Native
-Excel open/recalculate/save/reopen acceptance remains blocked on this host, so
-C3 is not yet complete and C4 must not begin.
+1/3/20/150 acceptance and independent workbook/HTML rendering pass. Under R30
+(Ben, 2026-09-22) C3 is complete for software acceptance; native Excel
+open/recalculate/save/reopen acceptance is deferred to Session 35 in
+`docs/ROADMAP.md`, and nothing waits on it.
 
 ## Manual-lineup safety guardrail
 

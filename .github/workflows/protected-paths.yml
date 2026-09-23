@@ -1,0 +1,46 @@
+name: Protected paths
+
+# A pull request touching anything in .github/protected-paths.txt is Ben's call,
+# not Claude's. The `ben-review` label is the only way through.
+#
+# This job lives in its own file (H3, 2026-09-23) so that labelling a pull
+# request reruns it and nothing else. On `ci.yml` a label event would either
+# rerun the suite and the 45-minute Windows job, or post a skipped `suite` check
+# that hides the real result, and ci.yml's cancel-in-progress group would let a
+# label cancel a running suite.
+#
+# The labels are read from the pull request as it is when the job runs, never
+# from the event payload's label list: GitHub freezes the payload when the
+# event fires and replays it verbatim on a re-run, so on PR #32 a label
+# added after CI ran could never clear this check. Any lookup failure fails the
+# job. There is deliberately no label filter on the job: a skipped run would
+# post a skipped check over the real result.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  # Every run reads the live labels, so whichever run survives is correct.
+  group: protected-paths-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  protected-paths:
+    name: protected-paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the diff against the protected list
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_protected_paths.py --live-labels
