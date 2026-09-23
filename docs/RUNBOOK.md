@@ -973,8 +973,10 @@ anything, and none of it is an upload package.
 scripts/make_slate_context.py    implied team totals from the run's own frozen
                                  games.csv; never invents ownership or a boost
 scripts/build_classic_portfolio.py   stacks, bring-backs, exposure and overlap
-                                 caps, anti-correlation; assigns reserved
-                                 Entry IDs in template order
+                                 caps, anti-correlation; drops DraftKings
+                                 OUT/IR/D rows; assigns the template's blank
+                                 Entry IDs in order; never repeats a lineup,
+                                 and exits 3 naming every one it could not fill
 scripts/qa_classic_portfolio.py  two-tier gate, REQUIRED before handoff
 scripts/write_dk_entries.py      exact-template fill plus a byte audit; writes
                                  a new file only, and exits 3 naming every
@@ -1065,9 +1067,11 @@ official-activity captures alongside the baseline, not ahead of it: the engine's
 improved portfolio still waits on them until Session 09, but the file does not.
 Until Sessions 04 and 06 build the baseline command and a baseline-first
 `run-slate`, the nearest thing is the Classic fallback path above. Since
-Session 02 its writer and QA refuse a wrong file by name and exit 3 naming every
-authorized row left blank; hand that list over with the file. The builder's own
-shortfall still exits 0 until Session 02b, so run QA on the written file every
+Sessions 02 and 02b its builder and writer refuse a wrong input by name (exit
+2), QA exits 1 on a validity failure, and all three exit 3 naming every
+authorized row left blank; hand that list over with the file. On a builder
+shortfall, relax an exposure or overlap cap and rebuild; when distinct lineups
+run out, ship the file and name the rows (R29). Run QA on the written file every
 time. The default delivery deadline is the earliest
 relevant lock minus 5 minutes (R31); the engine enforces it from Session 07.
 

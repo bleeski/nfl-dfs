@@ -15,12 +15,12 @@ retrospective and session prompt in the repository.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 02b exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S02b`, on the branch your session was assigned or `claude/s02b-fallback-builder`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 03 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S03`, on the branch your session was assigned or `claude/s03-delivery-state`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 03 has no file overlap with Session 02b, so the two may run at the same
-time in separate worktrees
-(`git worktree add ../nfl-dfs-s03 -b claude/s03-delivery-state`). To run it,
-paste the same prompt with `S03` and Session 03.
+Sessions 20 and 21 have no file overlap with Session 03, so either may run at
+the same time in a separate worktree
+(`git worktree add ../nfl-dfs-s21 -b claude/s21-prior-triage`). To run one,
+paste the same prompt with its number.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -93,7 +93,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 00 | Batched | Roadmap cutover: write this file; archive `backlog.md` verbatim behind a stub; `repo_state.py`, the queue test, the skills, the ledger rule and the chunk headers read this file; archive the session prompts; banner the superseded trackers; archive old changelog entries | This request; audit §8; `.claude/rules/ledger.md` | `docs/ROADMAP.md`, `backlog.md`, `scripts/repo_state.py`, `tests/test_roadmap_queue.py`, `.claude/skills/`, `.claude/rules/ledger.md` | P | none | `sh ./nfl.sh test tests/test_roadmap_queue.py tests/test_harness_orientation.py -x --tb=short` | Complete |
 | Session 01 | Batched | Governance: write rulings R28 to R31 and the roadmap pointer into `CLAUDE.md`; correct its false claims (rung 4 "always produces a legal portfolio", both generators "encode the rung ladder", "nothing writes `DK_UPLOAD`", evidence gates first in the running order) and the stale Excel and "P0 repairs" lines elsewhere; H3, so `ben-review` can clear this pull request | R28 to R31; audit D2, D5, D8, DD-7 (documents); chunk H3 | `CLAUDE.md` (protected), `docs/START_HERE.md`, `docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md`, `docs/CLAUDE_CODE_SETUP.md`, `.claude/rules/`, `IMPLEMENTATION_STATUS.md`, `README.md`, `.github/workflows/ci.yml`, new `.github/workflows/protected-paths.yml`, `scripts/check_protected_paths.py`, `scripts/file_standings.py`, `tests/test_repo_boundaries.py` | P | Session 00 | `python3 scripts/check_protected_paths.py`; `sh ./nfl.sh test tests/test_repo_boundaries.py -x --tb=short`; seam: H3 alone | Complete |
 | Session 02 | Batched | Fallback CSV correctness: the writer refuses unknown Entry IDs, fills every blank authorized row or exits non-zero naming the rest, validates each exported roster and never overwrites; QA checks each exported roster against its assignment; the builder's shortfall exits non-zero; Showdown strategy findings stop failing the validity exit code | Audit D6, DD-5, §4 standalone-QA rows | `scripts/write_dk_entries.py`, `scripts/qa_classic_portfolio.py`, `scripts/build_classic_portfolio.py`, `scripts/qa_showdown_portfolio.py` | V | Session 00 | `sh ./nfl.sh test tests/test_write_dk_entries.py tests/test_qa_classic_portfolio.py tests/test_build_classic_portfolio.py tests/test_qa_showdown_portfolio.py -x --tb=short`; seam: writer and Classic QA first | Complete |
-| Session 02b | Batched | Fallback builder and Showdown QA, split from Session 02 at its seam: the builder's shortfall exits 3 naming the unfilled Entry IDs and never repeats a lineup; a real ratchet ceiling; an existing output refused; DraftKings `OUT`/`IR`/`D` rows leave the pool; Showdown strategy findings stop failing the validity exit code | Audit D6, DD-5, §4 standalone-QA rows; Session 02 breakpoint | `scripts/build_classic_portfolio.py`, `scripts/qa_showdown_portfolio.py` | V | Session 02 | `sh ./nfl.sh test tests/test_build_classic_portfolio.py tests/test_qa_showdown_portfolio.py -x --tb=short` | Pending |
+| Session 02b | Batched | Fallback builder and Showdown QA, split from Session 02 at its seam: the builder's shortfall exits 3 naming the unfilled Entry IDs and never repeats a lineup; a real ratchet ceiling; an existing output refused; DraftKings `OUT`/`IR`/`D` rows leave the pool; Showdown strategy findings stop failing the validity exit code | Audit D6, DD-5, §4 standalone-QA rows; Session 02 breakpoint | `scripts/build_classic_portfolio.py`, `scripts/qa_showdown_portfolio.py` | V | Session 02 | `sh ./nfl.sh test tests/test_build_classic_portfolio.py tests/test_qa_showdown_portfolio.py -x --tb=short` | Complete |
 | Session 03 | Standalone | `DELIVERY_STATE` contract and gate registry: the fifth truth, derived only from file validity, coverage and integrity blockers; a registry giving every blocker code a class, provenance and what it stops; the non-numerical-gate test that R24 was conditional on | R28; audit D1, DD-1, §4; archive § R24 recommendation and R26 coupling | `src/nfl_dfs/release.py`, `src/nfl_dfs/contracts.py`, new `src/nfl_dfs/gate_registry.py`, new `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | V | Session 01 | `sh ./nfl.sh test tests/test_release_truths.py tests/test_gate_registry.py tests/test_delivery_state.py -x --tb=short` | Pending |
 | Session 04 | Standalone | Baseline command: `nfl baseline --salaries --entries` builds distinct legal lineups from the DraftKings bytes alone, fills blank authorized rows through the exact-byte writer into a new versioned file, and reports `DELIVERY_STATE` and every unfilled Entry ID; no network | R28, R29; audit D2, DD-2 | new `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/lineups.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | V | Session 02, Session 03 | `sh ./nfl.sh test tests/test_baseline.py -x --tb=short`; fixture runs at 1, 20 and 150 entries with wall time | Pending |
 | Session 05 | Batched | Artifact preservation: a validated CSV survives later presentation failures in both modes and in the outer exception handler; a roster, Entry ID or byte discrepancy still invalidates; an atomic, hash-bound latest-deliverable pointer | Audit D4, DD-2, DD-8 | `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/review_export.py`, new `src/nfl_dfs/delivery.py` | V | Session 03 | `sh ./nfl.sh test tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py tests/test_cowork_rerun_regressions.py tests/test_artifact_preservation.py -x --tb=short` | Pending |
@@ -283,6 +283,20 @@ Every session follows this protocol, and the cards only add to it:
   `STARTER_WITH_OWN_BACKUP` still exit 2. `scores.json` also omits selection's
   kicker zero-share and offense exclusions, for the same ordering reason
   (Session 13 makes the scored pool first-class).
+- **2026-09-23, Complete.** Both items, no breakpoint. The builder exits 0,
+  2 (refused by name, nothing written) or 3 (written, `unfilled_entry_ids`
+  naming every blank row without a lineup); it never repeats a lineup,
+  prefilled ones included; the ratchet stops at `max(--max-exposure, N)` and
+  `max(--max-overlap, 6)` and never tightens a cap; `OUT`, `IR` and `D` leave
+  the pool (`--available-status` as in the engine); only blank rows are
+  reserved; `--out` must be new. On the supplied 719-row salary file and
+  20-entry template, builder, writer and Classic QA all exit 0 with the 33
+  flagged rows out. Showdown QA's four findings are `OBSERVATIONS` that never
+  change the exit code. The template is read as the writer reads it, and an
+  unknown DraftKings status leaves the pool by name. Suite `1235 passed,
+  1 skipped`. Nothing relaxed. Left open: the two Showdown QA limits above;
+  `--min-salary` above `--cap` builds nothing and exits 3 rather than
+  refusing; zero lineups exits 3 in the builder and 2 in the writer.
 
 #### Session 03: `DELIVERY_STATE` contract and gate registry
 
@@ -833,5 +847,7 @@ session, because a commit cannot contain its own merge.
 | 2026-09-23 | Session 01 | Pending to In Progress | `5c15bb8` | Claim pushed on `claude/determined-knuth-6hklql` |
 | 2026-09-23 | Session 01 | In Progress to Complete | `1817d57` | R28 to R31 in `CLAUDE.md`; H3 live-label check; merged as PR #42; wording follow-up merged as `23bd2d8` (PR #43) |
 | 2026-09-23 | Session 02 | Pending to In Progress | `a9ab747` | Claim pushed on `claude/s02-fallback-csv-l62fjm` |
-| 2026-09-23 | Session 02 | In Progress to Complete | recorded by the next session | Writer and Classic QA (items 1 and 2); PR #44 |
-| 2026-09-23 | Session 02b | Added as Pending | recorded by the next session | Builder and Showdown QA (items 3 and 4), split at the card's seam |
+| 2026-09-23 | Session 02 | In Progress to Complete | `7c5a45b` | Writer and Classic QA (items 1 and 2); merged as PR #44 |
+| 2026-09-23 | Session 02b | Added as Pending | `7c5a45b` | Builder and Showdown QA (items 3 and 4), split at the card's seam; merged with PR #44 |
+| 2026-09-23 | Session 02b | Pending to In Progress | `30da519` | Claim pushed on `claude/sharp-faraday-wqc7m5` |
+| 2026-09-23 | Session 02b | In Progress to Complete | recorded by the next session | Builder exit 3 and R29, pool filter, ratchet ceiling; Showdown QA observations; PR #48 |

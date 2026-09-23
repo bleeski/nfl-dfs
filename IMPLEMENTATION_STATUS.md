@@ -1,5 +1,35 @@
 # Implementation Status
 
+## Capability added: 2026-09-23 (Session 02b)
+
+The Classic fallback's first stage and Showdown QA now share the file-first
+exit contract. No release truth changed; the fallback's output is still
+`PRIOR_ONLY / DO_NOT_UPLOAD`. Suite figures are in `changelog.md`.
+
+- **`scripts/build_classic_portfolio.py`** exits 0 when every blank authorized
+  row has a lineup, 2 when it refuses by name with nothing written, and 3 when
+  it writes a shortfall with `unfilled_entry_ids` naming each row. It never
+  repeats a lineup (R29), including one already prefilled in the template,
+  whatever `--max-overlap` allows. DraftKings `OUT`, `IR` and `D` rows leave the
+  pool through `nfl_dfs.contracts.UNAVAILABLE_DK_STATUSES`
+  (`--available-status D` restores doubtful players, as in the engine); a
+  status outside the engine's vocabulary also leaves it and is named. Only
+  blank template rows are reserved, read as the writer reads them (a repeated
+  Entry ID is refused, a narrow blank row is named unfilled), and `--lineups`
+  defaults to their count. The
+  ratchet stops at `max(--max-exposure, N)` exposure and `max(--max-overlap, 6)`
+  overlap and never tightens a cap. `--out` must be new; the write is a verified
+  temporary file and `os.replace`. A Showdown template or salary file, a
+  repeated salary ID, an unreadable salary and a truncated scores file are
+  refused by name.
+- **`scripts/qa_showdown_portfolio.py`** reports `ZERO_QB`, `MULTIPLE_KICKERS`,
+  `MULTIPLE_DST` and `DST_WITH_OWN_OFFENSE` as `OBSERVATIONS`, which never
+  change the exit code. Roster, identity, cap, one-team, repeated-lineup, byte
+  and Entry ID defects keep exit 2.
+- **Not yet:** Showdown QA's `--max-overlap` (default 4) and `--backup-pairs`
+  limits still exit 2 alongside true defects; Classic QA splits them to exit 2
+  apart from validity exit 1.
+
 ## Capability added: 2026-09-23 (Session 02)
 
 The Classic fallback's last two stages now check the file, not the JSON. No

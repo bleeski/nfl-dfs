@@ -4,6 +4,208 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: the fallback builder names its shortfall, and Showdown QA stops failing on strategy (Session 02b)
+
+Both scope items of the Session 02b card, on `claude/sharp-faraday-wqc7m5`, PR
+#48, claim `30da519`. No engine module, contract, evidence gate or release
+truth changed. The fallback's output is still `PRIOR_ONLY` / `DO_NOT_UPLOAD`,
+with four truths until Session 03. No breakpoint was needed: the diff is
+1,479 changed lines, this entry included.
+
+#### Changed: `scripts/build_classic_portfolio.py`
+
+- **Exit codes**, the writer's vocabulary:
+  - 0: every blank authorized row has a lineup, and every lineup is distinct.
+  - 2: refused by name (`REFUSED <CODE>: ...` on stderr), nothing written.
+  - 3: written with a shortfall. `unfilled_entry_ids` lists each blank row with
+    no lineup, `shortfall` counts the lineups not built, and stderr names both.
+- **R29.** A roster already built, or already prefilled in the template, is
+  skipped by exact identity before the overlap check. Before this, a pool with
+  two legal lineups returned five, two of them distinct, with exit 0, under
+  `--max-overlap 9`.
+- **Ratchet** (`next_rung`). Exposure stops at `max(--max-exposure, N)`, as
+  Session 02 proposed; `min(EXP + 1, max(EXP + 1, 9))` was always `EXP + 1`.
+  Overlap stops at `max(--max-overlap, 6)`: `min(OVL + 1, 6)` pulled
+  `--max-overlap 9` down to 6. The bring-back target falls by three to 6 and
+  never rises; `max(need_bb - 3, 6)` lifted it from 2 to 6 at N = 4.
+  `construction` records the asked and landed caps and `ratchet_steps`.
+- **Pool filter.** DraftKings `OUT`, `IR` and `D` rows leave the pool through
+  `nfl_dfs.contracts.UNAVAILABLE_DK_STATUSES`; `Q` stays. `--available-status`
+  (repeatable) restores a status, as `participation.py:131-137` does for the
+  engine, so an engine run with `--available-status D` and this builder agree.
+  `construction.dk_status_dropped` counts what left. A status outside the
+  engine's vocabulary (blank, `Q`, `OUT`, `IR`, `D`) also leaves the pool, is
+  listed in `dk_status_unknown` and named on stderr as `UNKNOWN_DK_STATUS`.
+- **Template**, read as `write_dk_entries.parse_template` reads it. Only rows
+  whose roster cells are all blank, and wide enough to hold nine, are reserved;
+  a narrower blank row is left blank and listed in `unfilled_entry_ids`, as the
+  writer lists it. A repeated Entry ID is refused, `DUPLICATE_TEMPLATE_ENTRY_ID`.
+  `--lineups` defaults to their count with `--entries`, else 20.
+  `ENTRY_ID_SHORTFALL` (more lineups asked than blank rows) now refuses before
+  the build instead of after it.
+- **Output.** `--out` must be new and none of the inputs (`OUTPUT_EXISTS`,
+  `OUTPUT_IS_AN_INPUT`). The bytes go to a temporary file beside it, are re-read,
+  then `os.replace`d. A refusal leaves no file and no temporary.
+- **Inputs.** The salary file is read by eight named columns, `Status` and
+  `Roster Position` among them; `AvgPointsPerGame` is never read. Named
+  refusals: `TEMPLATE_UNREADABLE`, `SALARY_UNREADABLE` and `STATUS_UNREADABLE`
+  for bytes that are not UTF-8 CSV, `SALARY_COLUMNS_MISSING`, `SALARY_DUPLICATE_ID`, `SALARY_UNREADABLE`,
+  `NOT_A_CLASSIC_SALARY_FILE` (a `CPT` row), `NOT_A_CLASSIC_TEMPLATE`,
+  `SCORES_UNREADABLE`, `STATUS_COLUMNS_MISSING`, `NO_BLANK_ENTRY_ROWS`,
+  `LINEUPS_NOT_POSITIVE` and `EMPTY_POOL`. Each used to be a traceback, a
+  silent acceptance or, for the last, `SystemExit` with exit 1.
+- The construction algorithm (picks, stacks, bring-backs, anti-correlation) is
+  unchanged: the same seed on the same pool draws the same lineups.
+
+#### Changed: `scripts/qa_showdown_portfolio.py`
+
+- `ZERO_QB`, `MULTIPLE_KICKERS`, `MULTIPLE_DST` and `DST_WITH_OWN_OFFENSE` move
+  to `OBSERVATIONS`, with a count and an `observation_note`, and never change
+  the exit code. DraftKings accepts each. Through its own CLI, the old script
+  exited 2 on each of the four test lineups.
+- Exit 2 is kept for `INCOMPLETE_ROSTER`, `UNKNOWN_DK_ID`, `SLOT1_NOT_CPT_ROW`,
+  `FLEX_SLOT_HAS_CPT_ROW`, `DUPLICATE_PERSON`, `SALARY_CAP_EXCEEDED`,
+  `SINGLE_TEAM_LINEUP`, `DUPLICATE_LINEUPS`, the byte and row-count checks,
+  `ENTRY_ID_ORDER_OR_COVERAGE_MISMATCH` and `OFFICIALLY_INACTIVE_ROSTERED`.
+- `main(argv=None)` returns its code, so the tests call it directly.
+
+#### Tests changed visibly
+
+- `tests/test_build_classic_portfolio.py`:
+  - `test_too_few_reserved_entry_ids_is_a_named_stop` (`SystemExit` after the
+    build) is now `test_too_few_reserved_entry_ids_is_refused_before_the_build`:
+    exit 2, `REFUSED ENTRY_ID_SHORTFALL`, no file.
+  - `test_empty_pool_is_a_named_stop` (`SystemExit`) is now
+    `test_empty_pool_is_a_named_refusal`: exit 2, `REFUSED EMPTY_POOL`, no file.
+  - `run()` gives each call its own `--out`, because the builder now refuses an
+    existing one, and asserts exit 0.
+  - The fixture's salary rows use real DraftKings roster positions (`QB`, `DST`,
+    `RB/FLEX`), not `QB/FLEX`, so the writer can check the builder's output.
+
+#### Added
+
+- `tests/test_build_classic_portfolio.py`, 12 cases before, 48 now: the
+  shortfall with and without `--entries`; R29 on a pool with exactly two legal
+  lineups; the ratchet ceiling and that it never tightens a cap, end to end
+  and on `next_rung` directly; an existing output and an output that is an
+  input; the `os.replace` write; `OUT`, `IR` and `D` out of the pool, `Q` in,
+  `--available-status D`; blank rows only and the `--lineups` default; a
+  prefilled roster never built again (same seed, so the first draw is that
+  roster), then accepted by the writer; a byte-determinism test; five damaged
+  inputs each withholding the file by name; a Showdown template refused; and,
+  from the review, a repeated template Entry ID, a narrow blank row (builder
+  and writer both exit 3 naming it), a non-UTF-8 template and an unknown
+  DraftKings status.
+- The chain, builder then writer then Classic QA: a shortfall exits 3, 3 and 3
+  with the same unfilled Entry IDs; and on copies of the supplied 719-row
+  Classic salary file and 20-entry template, with synthetic positive scores on
+  every row, the builder drops exactly the 33 flagged rows (`IR` 24, `OUT` 8,
+  `D` 1), fills all 20 with distinct lineups, and the writer and QA both exit
+  0. The old builder rostered flagged players on the same inputs.
+- New `tests/test_qa_showdown_portfolio.py`, 22 cases: a clean pass; each
+  of the four observations alone and together with exit 0; an observation next
+  to a defect (exit 2, both reported apart); a different captain is a
+  different lineup (R29); eleven roster and file defects and an officially
+  inactive player, each exit 2; and the overlap and backup-pair limits pinned
+  at exit 2.
+
+#### Documents
+
+- `docs/RUNBOOK.md`: the fallback listing says what the builder now does, and
+  the Running order sentence drops "the builder's own shortfall still exits 0
+  until Session 02b".
+- `IMPLEMENTATION_STATUS.md`: a capability entry for this session.
+- `docs/ROADMAP.md`: Session 02b `Complete`; the card's dated line; ledger rows,
+  with Session 02's merge `7c5a45b` filled in; §1 names Session 03.
+
+#### Verification
+
+- Baseline before any change, in a fresh `.venv-linux`:
+  `1177 passed, 1 skipped in 143.39s (0:02:23)`.
+- The card's command:
+  `sh ./nfl.sh test tests/test_build_classic_portfolio.py tests/test_qa_showdown_portfolio.py -x --tb=short`:
+  `70 passed in 3.15s`.
+- The four fallback and Showdown QA files together: `144 passed in 9.84s`.
+- Complete pinned suite on the finished tree: `1235 passed, 1 skipped in 140.84s (0:02:20)`, 58 above the baseline (36 builder cases, 22 Showdown QA cases). Before the review fixes below it was `1231 passed, 1 skipped in 143.16s`. Recorded with
+  `scripts/record_verify.py`. The skip is the junction test.
+- `sh ./nfl.sh doctor`: `pass_status: true`. `python -m compileall` on both scripts and
+  both test files: clean. `git diff --check`: clean.
+  `scripts/check_protected_paths.py`: no protected path touched.
+
+#### Review
+
+The `reviewer` subagent read the diff against the card and ran the four
+focused files (`140 passed in 10.61s`).
+
+- **Blocking, fixed.** The builder read the template differently from the
+  writer. A repeated Entry ID collapsed in a dict, so one lineup vanished and
+  one ID was both assigned and listed unfilled; the writer then refused the
+  file. A blank row too narrow for nine cells was assigned with exit 0, and the
+  writer refused it. Both now behave as the writer does, with a test each.
+- **Blocking, fixed.** The new `docs/RUNBOOK.md` sentence said QA refuses a wrong
+  input with exit 2. Classic QA exits 1 on a validity failure and 2 only for an
+  operator limit, so an operator could have read a valid file's exit 2 as a
+  wrong one.
+- **Open, fixed.** An unknown DraftKings status entered the pool silently: a row
+  flagged `O` with a high score landed in 6 of 8 lineups with exit 0. The
+  engine refuses such a code. See "Decided" for why the fallback drops and
+  names it instead.
+- **Open, fixed.** The same runbook sentence said "drop a rung"; the rung ladder
+  belongs to `make_classic_policy.py`, not the builder. It now says to relax an
+  exposure or overlap cap, and to ship and name the rows once distinct lineups
+  run out.
+- **Open, recorded.** The portfolio JSON has no contract (below). With a
+  template and zero lineups built, the builder exits 3 and the writer exits 2
+  `NO_ASSIGNMENTS`, so the two stages report that case differently.
+- It found no weakened test: two renamed, the rest added, and `run()` now
+  asserts exit 0.
+
+#### Decided, and why
+
+- **One exit vocabulary for the three stages** (0, 2, 3; QA adds 1 for
+  validity). The two `SystemExit` refusals exited 1, which Classic QA uses for a
+  validity failure, and a lock-clock operator reads the chain by its codes.
+- **`unfilled_entry_ids` counts every blank row without a lineup**, whatever the
+  cause, so `--lineups` below the blank count also exits 3. Coverage is
+  unconditional in Classic QA since Session 02, and the builder agrees with it.
+- **The ratchet fixes went past the one line the card named.** The overlap and
+  bring-back steps had the same defect, a relaxation that tightens, and the
+  card asked for "a real ratchet ceiling". The attempt budget still bounds the
+  walk: at the default 900,000 attempts it takes at most five steps.
+- **Refusals the card did not list** (a Showdown salary file, a truncated scores
+  file, a repeated or unreadable salary row) follow `.claude/rules/tests.md`:
+  each parser gets adversarial cases that yield a named refusal. The Showdown
+  salary refusal is the Classic/Showdown mismatch hard stop in `CLAUDE.md`.
+- **Showdown QA keeps exit 2 for its operator limits** (`--max-overlap`,
+  `--backup-pairs`), as the card notes them out of scope. Its default
+  `--max-overlap 4` means a plain run can still exit 2 on a portfolio
+  DraftKings would accept.
+- **An unknown DraftKings status is dropped and named, not refused.** The engine
+  refuses it (`participation.py`), a rule written before R28. For the lock-clock
+  fallback, a refusal costs the whole file while dropping the row costs one
+  player, and an unclassified player is never rostered either way.
+  `--available-status CODE` restores one.
+- **A narrow blank row is named, not refused**, because the writer names it too
+  and exit 3 ships the other rows.
+- Nothing was relaxed.
+
+#### Left open
+
+- Showdown QA's `OVERLAP_*` and `STARTER_WITH_OWN_BACKUP` still exit 2; Classic
+  QA gives operator limits their own code. No card owns this yet.
+- `scores.json` still omits selection's kicker zero-share and offense
+  exclusions (Session 13).
+- `assignments_by_entry_id` and the builder's new keys have no contract in
+  `docs/DATA_CONTRACTS.md`; the gap predates Session 02.
+- `--min-salary` above `--cap` is not refused; it builds nothing and exits 3.
+- Zero lineups with a template: builder exit 3, writer exit 2 `NO_ASSIGNMENTS`.
+- `changelog.md` is 904 lines with this entry, past the ~500 in
+  `.claude/rules/ledger.md` (706 before it). The verbatim move of the oldest
+  entries to `docs/changelog-archive/` follows in its own pull request, so this
+  diff stays under the breakpoint.
+- The first code commit's message (`b05776c`) says the builder file holds 45
+  cases; it held 44 then, and 48 after the review fixes.
+
 ### 2026-09-23: no plan-approval wait; the plan goes in the task file
 
 Not a roadmap session: no claim, no status change, no ledger row. Ben's
