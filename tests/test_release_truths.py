@@ -139,3 +139,57 @@ def test_evidence_aggregate_has_registered_release_states_and_named_blockers() -
     assert state is ReleaseEvidenceState.CONFLICTED
     assert "MISSING_HARD_EVIDENCE:final_bytes" in blockers
     assert any("selected player is inactive" in blocker for blocker in blockers)
+
+
+# --------------------------------------------------------------------------
+# Session 03 (R28): a fifth truth, DELIVERY_STATE, is added beside these four.
+# Only additions below; nothing above changed. Its own tests live in
+# tests/test_delivery_state.py.
+# --------------------------------------------------------------------------
+
+
+def test_the_v1_truth_record_is_still_exactly_four_truths() -> None:
+    result = derive_release_policy(
+        file_valid=True,
+        evidence_state=ReleaseEvidenceState.PASS,
+        model_status=ModelStatus.PRIOR_ONLY,
+        certification_basis=CertificationBasis.MODEL_ASSISTED,
+    )
+    assert set(result.truth_values()) == {
+        "FILE_VALID", "EVIDENCE_STATE", "MODEL_STATUS", "RELEASE_DECISION",
+    }
+
+
+def test_release_decision_takes_no_delivery_input() -> None:
+    """R28 leaves RELEASE_DECISION's derivation as it was."""
+
+    import inspect
+
+    assert set(inspect.signature(derive_release_policy).parameters) == {
+        "file_valid", "evidence_state", "model_status", "certification_basis",
+        "file_blockers", "evidence_blockers", "model_blockers", "safety_blockers",
+    }
+
+
+def test_the_v2_record_repeats_the_four_truths_unchanged() -> None:
+    from nfl_dfs.release import derive_delivery_state, release_truths_v2
+
+    for basis in CertificationBasis:
+        for model_status in ModelStatus:
+            policy = derive_release_policy(
+                file_valid=True,
+                evidence_state=ReleaseEvidenceState.PASS,
+                model_status=model_status,
+                certification_basis=basis,
+            )
+            delivery = derive_delivery_state(
+                file_valid=True, authorized_entry_ids=("1",), delivered_entry_ids=("1",),
+                limitations=(),
+            )
+            record = release_truths_v2(policy, delivery)
+            four = {
+                key: value
+                for key, value in record.model_dump(mode="json", by_alias=True).items()
+                if key in policy.truth_values()
+            }
+            assert four == policy.truth_values()

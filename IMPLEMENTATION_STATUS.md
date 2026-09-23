@@ -1,5 +1,35 @@
 # Implementation Status
 
+## Capability added: 2026-09-23 (Session 03)
+
+The fifth truth exists as a contract and a derivation; no operating path emits
+it yet (Sessions 04 to 09). No path's behaviour changed, and every run still
+ends `PRIOR_ONLY / DO_NOT_UPLOAD`. Suite figures are in `changelog.md`.
+
+- **`release.derive_delivery_state`** gives `DELIVERABLE`,
+  `DELIVERABLE_PARTIAL` or `NO_DELIVERABLE` from file validity, the authorized
+  and delivered Entry IDs, and the limitations that fired. It takes no model or
+  evidence input. Only a `V` limitation (integrity) can withhold a row or the
+  file; `S` and `P` ones travel with it. An unfilled row nothing names gets
+  `UNFILLED_AUTHORIZED_ROWS`. `release.release_truths_v2` puts the four v1
+  truths, unchanged, beside it as `nfl_release_truths_v2`.
+- **`contracts.DeliveryLimitation`** (code, class, stops, provenance, Entry IDs,
+  people) refuses a `V` gate that stops anything but the file, and a non-`V`
+  gate that stops the file.
+- **The R24 condition is test-backed** (`tests/test_gate_registry.py`). Weather
+  or a roof value is read only in named plumbing (request, gates, evidence
+  records, the roof resolver, the weather scripts) and at ten pinned reads in
+  numeric code that validate it or copy it into a row; any other read under
+  `src/nfl_dfs/` or `scripts/` fails. No arithmetic anywhere takes one as an
+  operand, index or branch test beyond four named counting and text sites. Every
+  weather state, derived roof included, gives identical prior scores. Not
+  caught: plumbing that turns weather into a number under a name that does not
+  say weather.
+- **`contracts.DeliveryTruth`** carries `delivered_file_valid`, the validity of
+  the file it describes, apart from v1 `FILE_VALID`.
+- **Not yet:** the per-code gate registry (Session 03b), and any path that
+  emits `DELIVERY_STATE`.
+
 ## Capability added: 2026-09-23 (Session 02b)
 
 The Classic fallback's first stage and Showdown QA now share the file-first

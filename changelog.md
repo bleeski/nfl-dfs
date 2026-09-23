@@ -4,6 +4,136 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: `DELIVERY_STATE`, the fifth truth, and the R24 test (Session 03)
+
+Items 1 and 4 of the Session 03 card, its `DELIVERABLE` and R24 tests, on
+`claude/sharp-faraday-wqc7m5`, PR #50, claim `2373057`. The gate registry file,
+its loader and completeness test (items 2 and 3a) split to `Session 03b` at the
+card's named seam, decided before any registry code: an AST scan finds 805
+blocker codes to classify, about 1,000 lines of registry alone. No operating
+path changed and nothing emits the new record yet (Sessions 04 to 09); every run
+still ends `PRIOR_ONLY / DO_NOT_UPLOAD`.
+
+#### Added
+
+- `contracts.py`: `DeliveryState` (`DELIVERABLE`, `DELIVERABLE_PARTIAL`,
+  `NO_DELIVERABLE`), `GateClass` (`V`, `S`, `P`), `GateStops` (`FILE`,
+  `CERTIFICATION`, `CONSTRUCTION_PREFERENCE`), `ProvenanceKind`,
+  `GateProvenance`, `DeliveryLimitation`, `DeliveryTruth` and
+  `ReleaseTruthsV2` (`nfl_release_truths_v2`). The record validators keep the
+  coverage invariants however a record is built, deserialized included.
+- `release.py`: `derive_delivery_state(file_valid, authorized_entry_ids,
+  delivered_entry_ids, limitations)`, with no model or evidence parameter, and
+  `release_truths_v2`, which copies the four v1 truths unchanged.
+  `derive_release_policy` is untouched.
+- Rules: only a `V` gate stops `FILE`, and a `V` gate stops nothing less. A `V`
+  limitation without Entry IDs, or naming a row outside the template, covers the
+  whole file. An unfilled row nothing names gets `UNFILLED_AUTHORIZED_ROWS`;
+  an invalid file, `FILE_VALIDATION_INCOMPLETE`; a template with no blank row,
+  `NO_AUTHORIZED_ROWS`. Refusals: `DELIVERY_ENTRY_NOT_AUTHORIZED`,
+  `DELIVERY_ENTRY_ID_REPEATED`, `DELIVERY_ENTRY_ID_BLANK`,
+  `DELIVERY_ROW_BLOCKED_BY_INTEGRITY_GATE`.
+- `tests/test_delivery_state.py`, 93 cases: the three values, integrity
+  scoping, an exhaustive check over validity × coverage × 64 limitation sets
+  that `DELIVERABLE` occurs exactly when no `V` limitation does, the record's
+  own invariants, the class and `stops` rules, independence from every
+  evidence, model and basis combination, and the v2 round trip.
+- `tests/test_gate_registry.py`, 38 cases, the R24 condition:
+  - Weather or a roof value may be read only in named plumbing (the CLI, the
+    run request, `prior_review`, `venues`, `certification`, the weather scripts,
+    and five weather functions of `priors.py`) and at 10 pinned reads in three
+    numeric functions that validate it or copy it into a row. Any other read in
+    `src/nfl_dfs/` or `scripts/`, a new module included, fails, and a stale pin
+    fails too.
+  - A flow-sensitive scan of every function: no arithmetic takes a weather
+    value as an operand or index, or runs under a branch or `match` that tests
+    one, beyond four named sites (a path join, a tuple join, and the R26
+    resolver's two game counts). Mutation snippets for each shape.
+  - Every weather state, and the `ROOF_CLOSED` that `resolve_weather_state`
+    derives from venue history under `DERIVED_FROM_VENUE_ROOF_HISTORY`, gives
+    identical `score_pool` scores and `team_volumes`.
+  - Proven on real code: wiring weather into `prior_score.team_volumes`, and a
+    weather lookup into `projection._team_rows`, each failed the static and the
+    behavioural checks; both edits were reverted, `src/` clean.
+- `docs/DATA_CONTRACTS.md` § Release truths: names the existing four-truth
+  record `nfl_release_truths_v1` (no byte, field or derivation changes) and
+  registers v2, with its does-not-establish line.
+
+#### Changed
+
+- `tests/test_release_truths.py`: extended only, 15 to 18 cases.
+- `docs/START_HERE.md` and `.claude/rules/operating-path.md` said the fifth
+  truth arrives with Session 03; they now say it has a contract and reaches the
+  exits in Sessions 04 to 09. `CLAUDE.md`'s "four independent truths until
+  Session 03" is protected and left for the session that first emits it.
+- `docs/ROADMAP.md`: `Session 03b` row and card (scanner definition, counts,
+  the codes the scan cannot see, the class-pair question); Session 09 now
+  depends on 03b, since its limitations take their class from the registry.
+  Validator messages that opened with an enum name now open in lowercase, so
+  the 03b scan does not count them as codes.
+
+#### Verification
+
+- Baseline before any change: `1235 passed, 1 skipped in 147.96s (0:02:27)`.
+- Card command: `149 passed in 2.29s`.
+- Complete pinned suite: `1369 passed, 1 skipped in 143.37s (0:02:23)`, 134 above the baseline, recorded with `scripts/record_verify.py`.
+  Before the review fixes it was `1346 passed, 1 skipped in 143.19s`.
+- `sh ./nfl.sh doctor`: `pass_status: true`. `python -m compileall` on both modules and
+  the three test files: clean. `git diff --check`: clean. No protected path.
+- Diff: 1,558 changed lines with this entry. The card's one seam was taken;
+  the rest is tests (134 cases) and the contract text.
+
+#### Review
+
+The `reviewer` subagent read the diff against the card (`126 passed`).
+
+- **Blocking, fixed.** The R24 scan followed operands only: 12 of 14 realistic
+  wirings got through, among them a helper `weather_factor()`, a lookup table
+  indexed by weather state, `.get(state, 1.0)`, a `match`, an early return, and
+  a helper whose parameter is not named for weather. The pinned-read rule now
+  catches all of them, and the arithmetic scan follows lookup keys, `.get`
+  keys, `match` and numeric indicators. `IMPLEMENTATION_STATUS.md` had
+  overclaimed; it now says what is and is not caught.
+- **Blocking, fixed.** v2 tied `FILE_VALID` to delivery, so a valid baseline
+  beside a failed improvement (Session 06's case) could not be recorded, and a
+  valid `FILE_VALID` could sit beside `FILE_VALIDATION_INCOMPLETE`. `FILE_VALID`
+  keeps its v1 meaning; `delivered_file_valid` is the delivered file's own.
+- **Blocking, fixed.** A partial record could carry an integrity gate naming a
+  row outside the template, which the derivation treats as file-wide. A partial
+  record's integrity gates now name only unfilled rows.
+- **Open, fixed.** Repeated or blank Entry IDs and people are refused. The S03
+  row now lists what landed. The 03b card names the codes built through
+  `_integrity()` and the class-pair question.
+- **Open, recorded.** The scans cover `src/nfl_dfs/*.py` and `scripts/*.py`.
+  Plumbing that turns weather into a number under a name that does not say
+  weather is not caught, which is why plumbing is short and named.
+
+#### Decided, and why
+
+- **The split was taken up front**, from a measured count, not after running
+  long: classifying 805 codes well is its own session, and the card names that
+  seam.
+- **`V` ⇔ `FILE`**, stronger than the card's "a `V` gate never has
+  `stops=CERTIFICATION`": under R28 a truth-claim gate never stops the file and
+  a validity gate is never relaxable.
+- **Auto-limitations rather than refusals** for an unexplained gap: a derivation
+  that raised at lock time would cost the file.
+- **Weather reads are pinned rather than parsed for arithmetic**: an operand
+  scan will always leak, and a pinned read list fails on any new shape.
+- Nothing was relaxed.
+
+#### Left open
+
+- Session 03b: the registry, its loader and completeness test.
+- `CLAUDE.md` "four independent truths until Session 03" (protected).
+- Nothing emits `nfl_release_truths_v2` yet.
+- `.claude/hooks/guard_bash.py` does not refuse `git add -N .` or `git add . 2>/dev/null`:
+  its `git add .` pattern allows no flag before the dot and no redirection after
+  it. Found when this session ran `git add -N .` to measure the diff, against
+  the rule; it staged nothing, since no file was untracked. Piping both commands
+  into the hook exits 0. The fix belongs in its own change with refusal tests in
+  `tests/test_repo_boundaries.py`.
+
 ### 2026-09-23: four changelog entries to the archive (after Session 02b)
 
 Not a roadmap session: no claim, no status change, no ledger row. The Session

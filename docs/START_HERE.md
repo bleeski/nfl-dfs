@@ -77,8 +77,8 @@ not that uploading is cleared. Never describe a legal lineup or a green
 diagnostic as upload-ready.
 
 Ben's R28 (2026-09-22) adds a fifth, `DELIVERY_STATE`: whether a valid file
-exists to hand over. Sessions 03 to 12 implement it; until Session 03 lands,
-runs report four.
+exists to hand over. Session 03 registered its contract
+(`nfl_release_truths_v2`); runs report four until Sessions 04 to 09 wire it in.
 
 ## Shipping under a lock clock
 
