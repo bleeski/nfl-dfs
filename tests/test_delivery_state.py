@@ -300,6 +300,17 @@ def test_a_validity_gate_is_never_a_relaxable_preference():
         limitation("DK_ID_NOT_IN_POOL", GateClass.V, GateStops.CONSTRUCTION_PREFERENCE)
 
 
+@pytest.mark.parametrize(("cls", "stops"), [
+    (GateClass.S, GateStops.CERTIFICATION),
+    (GateClass.P, GateStops.CONSTRUCTION_PREFERENCE),
+])
+def test_a_limitation_carries_one_of_the_registrys_three_pairs(cls, stops):
+    """Session 04 holds a hand-built limitation to the registry's pairs, not only off `FILE`."""
+
+    with pytest.raises(ValidationError, match="never"):
+        limitation("A_GATE_CODE", cls, stops, provenance=R28)
+
+
 @pytest.mark.parametrize("cls", [GateClass.S, GateClass.P])
 def test_only_a_validity_gate_may_stop_the_file(cls):
     """R28: truth-claim gates and construction preferences no longer stop delivery."""

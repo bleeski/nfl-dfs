@@ -133,7 +133,7 @@ def export_review_entries(
     for entry_id, roster in sorted(assignments.items()):
         result = validate_lineup(slate, roster)
         if not result.valid:
-            problems.extend(f"LINEUP_{entry_id}:{problem}" for problem in result.errors)
+            problems.extend(f"LINEUP_INVALID:{entry_id}:{problem}" for problem in result.errors)
         elif result.lineup is not None:
             validated[entry_id] = result.lineup
 

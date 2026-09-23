@@ -1579,6 +1579,128 @@ metric-result artifact, `learn` also reports
 legacy boolean diagnostics to promote. This registration does not promote any
 model.
 
+## Baseline entry file and report (Session 04)
+
+Registered 2026-09-23 by Session 04 (R28, R29). `nfl baseline --salaries <csv>
+--entries <csv> [--out-dir] [--run-id] [--per-solve-seconds] [--budget-seconds]`
+(`baseline.run_baseline`) builds distinct legal lineups from the two DraftKings
+files alone: no network, no prior, no weather, no role evidence. It is the
+file R28 ships first. Exit 0 fills every blank authorized row, 3 fills some and
+names the rest, 2 fills none; no exit clears an upload.
+
+### The run folder
+
+`<out-dir>/<run_id>/`, default `data/runs/`. `run_id` defaults to
+`baseline-<UTC stamp>-<first 8 hex of the SHA-256 over both input hashes>`. A
+folder that exists refuses the run (`RUN_ID_COLLISION`) and nothing is written
+into it. Inside:
+
+| File | Contents |
+|---|---|
+| `inputs/<sha256>.csv` | Byte copies of the two supplied files, hash-checked on arrival; everything after intake reads these |
+| `intake.json` | Each input's supplied flag, original path, SHA-256, snapshot path and schema |
+| `DK_BASELINE_ENTRY_V1_<run_id>.csv` | The delivered file, `nfl_baseline_entry_csv_v1`, only when the audit passes |
+| `baseline_report.json` | `nfl_baseline_report_v1` |
+
+Inputs are bound by schema (`cowork.classify_csv`), not by flag or file name,
+so swapped flags still bind correctly and the report says which flag carried
+which file. Anything other than exactly one salary CSV and one entries CSV is
+`BASELINE_INPUT_SCHEMA_UNRESOLVED`.
+
+### `nfl_baseline_entry_csv_v1`
+
+The entries template's exact bytes with the roster cells of assigned blank rows
+written by `lineups.write_upload_bytes`, which since Session 04 takes the rows
+left blank on purpose as `unfilled`. Every other byte, including an unfilled
+row, the embedded player table and its `AvgPointsPerGame` cells, the line
+endings and the encoding, is the template's. The name never begins `DK_UPLOAD`.
+
+Before the file is kept, `baseline.audit_baseline_bytes` reads the bytes back
+from disk and, from fresh parses of both snapshots: runs `referee.audit_output_bytes`
+against the template; reparses them and reconciles the mode; checks the Entry
+IDs, their order, and that exactly the assigned rows are filled and exactly the
+unfilled rows are blank; runs `lineups.validate_lineup` on every filled row;
+checks exact-roster distinctness; and re-derives `contracts.unavailable_people`
+to check no filled row holds one. A failure deletes the temporary copy and
+withholds the file (`BYTE_AUDIT`, `BASELINE_AUDIT_*`, `REPARSE_ASSIGNMENT_MISMATCH`).
+Both snapshots are re-hashed before the write (`ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE`,
+`SALARY_CHANGED_BEFORE_ARTIFACT_PUBLISH`) and the file after it (`POST_WRITE_HASH_MISMATCH`).
+
+Integrity gates that stop the file: an input of the wrong schema or an
+unreadable one; any DraftKings parse refusal (`DK_*`, `dk.py`); a
+Classic/Showdown mismatch (`DK_TEMPLATE_MODE_MISMATCH`); an entries player
+table whose IDs are not exactly the salary file's (`BASELINE_ENTRY_POOL_ID_MISMATCH`);
+and a prefilled row, which refuses the whole template exactly as `prior_review`
+does until Session 11 (`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`, naming the rows).
+A template with no player table ships and says so
+(`BASELINE_ENTRY_POOL_CROSS_CHECK_UNAVAILABLE`, `P`).
+
+### `BASELINE_SALARY_RANK_V1`, the objective
+
+Registered in `baseline.OBJECTIVE` and carried in every report. Each salary
+row scores its DraftKings salary, a captain row at its own 1.5x price, over the
+rows left after `contracts.unavailable_people` (DraftKings `OUT`, `IR`, `D`,
+derived from the salary bytes exactly as `freeze_prior_package` derives it).
+Lineups come in non-increasing total salary: each is a highest-salary legal
+lineup not already chosen, with an exact no-good cut against every earlier one
+(R29: a different Showdown captain is a different lineup). One
+salary-maximizing solve finds a level; zero-objective solves with a salary floor
+at that level (`LineupOptimizer.set_salary_floor`) take its other lineups; when
+the level is spent, the next maximizing solve finds the next. Ties within a
+level fall in the deterministic solver's order, with HiGHS's `random_seed` set
+to the number of lineups already built (`seed_rule`): the same bytes give the
+same file, and each solve starts its search somewhere new. Measured on the
+supplied Classic pool at 150 entries, that seed rule alone took the most-used
+salary row from 149 lineups to 37 at no cost in time. Lineup `i` fills the
+template's `i`-th blank row.
+
+Each solve has a limit (default 5 s) and the run a budget from its start
+(default 60 s); the audit and write after construction always run. When
+lineups stop short, the rows past the last one stay blank and are named:
+`BASELINE_DISTINCT_LINEUPS_EXHAUSTED` (`V`, R29) when the solver proves no
+further distinct legal lineup exists; `BASELINE_RUN_BUDGET_EXHAUSTED` or
+`BASELINE_SOLVE_LIMIT_WITHOUT_LINEUP` (`S`) when time ran out, with
+`UNFILLED_AUTHORIZED_ROWS` naming the rows.
+
+Does not establish: `EXPECTED_POINTS`, `PROJECTION`, `CONTEST_ECONOMICS`,
+`WIN_OR_CASH_LIKELIHOOD`, `OWNERSHIP_OR_LEVERAGE`, `OFFICIAL_ACTIVE_STATUS`,
+`CURRENT_TEAM_ROLE`, `WEATHER`, `MODEL_VALIDATION`, `UPLOAD_CLEARANCE`. Salary
+is DraftKings' price and the only number in its bytes the engine may read.
+
+### `nfl_baseline_report_v1`
+
+| Field | Meaning |
+|---|---|
+| `schema_version`, `generated_at`, `run_id`, `run_dir` | Identity and clock (UTC) |
+| `gate_registry_sha256` | The registry bytes every limitation was built from |
+| `command` | `per_solve_seconds`, `budget_seconds` |
+| `inputs` | `salaries` and `entries`: `supplied_as`, `path`, `sha256`, `snapshot`, `classified_by`; `supplied_schemas` by flag |
+| `slate` | Mode, draft group, both hashes, salary rows, games, `earliest_lock_at`, entry rows, blank and prefilled rows, Contest IDs |
+| `pool` | The availability contract, its statuses, `excluded_people`, excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`) |
+| `objective` | `BASELINE_SALARY_RANK_V1`, as above |
+| `construction` | `stop_reason` (`FILLED`, `DISTINCT_LINEUPS_EXHAUSTED`, `BUDGET_EXHAUSTED`, `SOLVE_LIMIT_WITHOUT_LINEUP`, `SOLVER_PRODUCED_ILLEGAL_LINEUP`, `SOLVER_REPEATED_A_LINEUP`), lineups built, solves, salary levels, `people_used` and `most_used_person_lineups` (a concentration count for late-swap exposure, not a preference), `elapsed_seconds` |
+| `lineups` | Per filled row: `entry_id`, `roster`, `salary`, `found_by`, `time_limited`, `solve_seconds` |
+| `output` | `path`, `sha256`, `bytes`, `contract_version`, filled and unfilled rows; `null` when withheld |
+| `audit` | `status` (`PASS`, `FAIL`, `NOT_RUN`), `problems`, `checks_run` |
+| `release_truths` | `nfl_release_truths_v2`: the five truths, delivered and unfilled Entry IDs, every limitation |
+| `status`, `warning`, `checks_not_run`, `timing` | `DO_NOT_UPLOAD`; the `PRIOR_ONLY / DO_NOT_UPLOAD` warning; what was not consulted; `wall_seconds` |
+
+Every limitation is built by `GateRegistry.limitation` from an exact
+registered code. Every run carries four `P` limitations, since the baseline
+consults none of their evidence: `OFFICIAL_STATUS_REQUIRED`,
+`OFFENSIVE_CURRENT_ROLE_UNRESOLVED`, `WEATHER_CAPTURE_REQUIRED` and
+`MODEL_NOT_PROSPECTIVELY_VALIDATED`. A several-contest or mixed-fee template
+carries `MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED` or `MIXED_ENTRY_FEES_UNSUPPORTED`
+(`P`), and its lineups are distinct across the whole file. The truths are
+`FILE_VALID` true only when the file was written and audited,
+`EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`, and `DELIVERY_STATE` derived by
+`release.derive_delivery_state`. The lock clock is not enforced here
+(Session 07); `earliest_lock_at` is reported.
+
+Does not establish: upload clearance, certification, lineup quality, or any
+expected-points, return, win, cash, ownership or edge claim.
+
 ## Release truths
 
 Registered 2026-09-23 by Session 03 (R28). Every run reports independent
@@ -1599,8 +1721,8 @@ C3 export, a certified CSV). `CERTIFIED` derives only from
 ### `nfl_release_truths_v2`, adding `DELIVERY_STATE`
 
 `contracts.ReleaseTruthsV2`, built by `release.release_truths_v2` from a v1
-result and a `release.derive_delivery_state` result. Nothing on the operating
-path emits it yet; Sessions 04 to 09 wire it in.
+result and a `release.derive_delivery_state` result. `nfl baseline` (Session
+04) emits it; Sessions 05 to 09 wire it into the other paths.
 
 | Field | Meaning |
 |---|---|
@@ -1630,7 +1752,9 @@ A `delivery_limitations` entry is `code` (one upper-snake token; detail goes in
 `CLAUDE_MD_BOUNDARY`, `RULING`, `CONTRACT`, and `ref` naming it), `entry_ids`,
 `people` and `detail`. Only a `V` gate stops the file, and a `V` gate stops
 nothing less (R28: truth-claim gates stop certification and construction
-preferences are relaxable). A `V` entry with no Entry IDs, or with one the
+preferences are relaxable). Since Session 04 the pair is one of three, however
+the entry is built: `V` with `FILE`, `S` with `CONSTRUCTION_PREFERENCE`, `P` with
+`CERTIFICATION` (`contracts.GATE_CLASS_STOPS`, the registry's own pairs). A `V` entry with no Entry IDs, or with one the
 template does not hold, covers the whole file; with Entry IDs it covers those
 rows. `S` and `P` entries never change `DELIVERY_STATE`.
 
@@ -1654,20 +1778,20 @@ win or cash probability, or that any limitation's evidence is sound. It says a
 valid file exists and which rows it covers.
 
 The per-code class, provenance and `stops` for every blocker the engine can
-emit live in `config/gate_registry_v1.json` (below). Sessions 04 to 09 build
-their limitations from a code there. `release._integrity` states its three
+emit live in `config/gate_registry_v1.json` (below). Session 04's baseline
+builds its limitations from a code there, and Sessions 05 to 09 follow. `release._integrity` states its three
 itself, and a test holds them equal to their registry entries.
 
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `cfa6fda4d0bd7c2406cde9f853ddce94f6605308f4752e5408dab31fd9d947d1`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `2e42b066581b1c1de558cbcfb06232c272f91214298d5810cd9f47daef59fc98`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
-Nothing on the operating path reads the registry yet; Sessions 04 to 09 build
-their `delivery_limitations` through `GateRegistry.limitation` and record the
-hash they used. It changes no gate's behaviour.
+`nfl baseline` (Session 04) builds its `delivery_limitations` through
+`GateRegistry.limitation` and records the hash it used; Sessions 05 to 09 bring
+the other paths to it. It changes no gate's behaviour.
 
 | Field | Meaning |
 |---|---|
@@ -1699,7 +1823,7 @@ so its own rules apply too.
 literal is the leading upper-snake token of a string, ending it or followed by
 `:`, in an emitting position: a raised exception's first argument; the first
 argument, or `code=`, of a call named for a blocker (`*Error`, `_problem`,
-`_issue`, `QAFinding`); an item collected onto, spread into a display beside,
+`_issue`, `QAFinding`, and since Session 04 `GateRegistry.limitation`); an item collected onto, spread into a display beside,
 or assigned to, a holder named for blockers, or a local that only holds one; the
 value of a `"blockers"` key; a tuple slot named for blockers or problems, or
 `reason` beside the action `BLOCK`, from a display or a called function's
@@ -1714,12 +1838,13 @@ the C3 scale harness's replay status) is pinned to the source text that emits
 it, and so are the seven offensive-role reasons it reads but that block nothing.
 
 Known limits. The scan is syntactic: a code reached only through a shape it
-does not follow is missed until it is pinned. Four emitters put the Entry ID
-inside the token (`LINEUP_{entry_id}:` in certification and the review export,
-`{PRIOR|CURRENT|PROPOSED}_{entry_id}:` in late swap), so no registry can hold
-them; the test lists them. The roster validator and DraftKings parser
-(`lineups.py`, `dk.py`) and late swap's locked-cell checks raise prose, not
-codes. `scripts/` codes are outside the registry.
+does not follow is missed until it is pinned. Late swap's three emitters put the
+Entry ID inside the token (`{PRIOR|CURRENT|PROPOSED}_{entry_id}:`), so no
+registry can hold them; the test lists them for Session 12. Session 04 gave
+certification and the review export a fixed `LINEUP_INVALID:<entry_id>:` and
+gave every refusal in the DraftKings parser and the roster validator and writers
+(`dk.py`, `lineups.py`) a code of its own. `scripts/` codes are outside the
+registry.
 
 Does not establish: that a gate is correct, that its evidence is sound, upload
 clearance, certification or any model claim. It says what each gate, when it

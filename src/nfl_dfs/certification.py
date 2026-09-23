@@ -111,7 +111,7 @@ def certify_upload(
         result = validate_lineup(slate, roster)
         if not result.valid:
             file_blockers.extend(
-                f"LINEUP_{entry_id}:{problem}" for problem in result.errors
+                f"LINEUP_INVALID:{entry_id}:{problem}" for problem in result.errors
             )
         elif result.lineup is not None:
             validated[entry_id] = result.lineup

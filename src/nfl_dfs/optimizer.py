@@ -51,6 +51,7 @@ class LineupOptimizer:
         self._highs.setOptionValue("mip_rel_gap", float(mip_gap))
         self._highs.setOptionValue("random_seed", 0)
         self._last_selected: np.ndarray | None = None
+        self._salary_floor_row: int | None = None
         self._build(excluded)
 
     def set_time_limit(self, seconds: float) -> None:
@@ -322,6 +323,37 @@ class LineupOptimizer:
         if indices:
             self._add_row(
                 -highspy.kHighsInf, float(max_overlap), {index: 1.0 for index in indices}
+            )
+
+    def set_random_seed(self, seed: int) -> None:
+        """Set the solver's seed for later solves; the same seeds give the same solutions."""
+
+        if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+            raise ValueError("random seed must be a non-negative integer")
+        self._highs.setOptionValue("random_seed", seed)
+
+    def set_salary_floor(self, minimum: int | None) -> None:
+        """Require at least `minimum` total salary in every later solve; None lifts it.
+
+        One row, added on first use and re-bounded after, so the persistent model
+        keeps its no-good cuts. The baseline (Session 04) uses it to enumerate a
+        salary level with a zero objective, which on the supplied Classic pool is
+        about twenty times faster than re-maximizing salary for every lineup.
+        """
+
+        if minimum is not None and (isinstance(minimum, bool) or minimum < 0):
+            raise ValueError("salary floor must be a non-negative integer or None")
+        lower = -highspy.kHighsInf if minimum is None else float(minimum)
+        if self._salary_floor_row is None:
+            self._salary_floor_row = self._highs.getNumRow()
+            self._add_row(
+                lower,
+                float(self.slate.salary_cap),
+                {i: float(player.salary) for i, player in enumerate(self.players)},
+            )
+        else:
+            self._highs.changeRowBounds(
+                self._salary_floor_row, lower, float(self.slate.salary_cap)
             )
 
     def solve(self, scores: Mapping[str, float]) -> SolverResult:

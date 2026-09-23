@@ -49,14 +49,18 @@ class EntryTemplate:
             return EngineMode.CLASSIC
         if self.roster_columns == SHOWDOWN_COLUMNS:
             return EngineMode.SHOWDOWN
-        raise DraftKingsParseError(f"unsupported roster columns: {self.roster_columns}")
+        raise DraftKingsParseError(
+            f"DK_ENTRY_GEOMETRY_UNKNOWN: unsupported roster columns: {self.roster_columns}"
+        )
 
     @property
     def roster_start_index(self) -> int:
         try:
             return self.header.index("Entry Fee") + 1
         except ValueError as exc:
-            raise DraftKingsParseError("entry template header lacks Entry Fee") from exc
+            raise DraftKingsParseError(
+                "DK_ENTRY_HEADER_INVALID: entry template header lacks Entry Fee"
+            ) from exc
 
 
 def single_contest_problems(template: EntryTemplate) -> tuple[str, ...]:
@@ -91,7 +95,9 @@ def _read_csv_bytes(raw: bytes, source: Path) -> tuple[str, list[list[str]], str
             return encoding, list(csv.reader(io.StringIO(text, newline=""))), digest
         except UnicodeDecodeError as exc:
             last_error = exc
-    raise DraftKingsParseError(f"unsupported CSV encoding: {source}") from last_error
+    raise DraftKingsParseError(
+        f"DK_CSV_ENCODING_UNSUPPORTED: unsupported CSV encoding: {source}"
+    ) from last_error
 
 
 def _read_text_csv(path: Path) -> tuple[str, list[list[str]], str]:
@@ -101,13 +107,13 @@ def _read_text_csv(path: Path) -> tuple[str, list[list[str]], str]:
 def _parse_fee(raw: str) -> float:
     cleaned = raw.strip().replace("$", "").replace(",", "")
     if not cleaned:
-        raise DraftKingsParseError("entry fee is blank")
+        raise DraftKingsParseError("DK_ENTRY_FEE_INVALID: entry fee is blank")
     try:
         value = float(cleaned)
     except ValueError as exc:
-        raise DraftKingsParseError(f"invalid entry fee: {raw!r}") from exc
+        raise DraftKingsParseError(f"DK_ENTRY_FEE_INVALID: invalid entry fee: {raw!r}") from exc
     if not math.isfinite(value) or value < 0:
-        raise DraftKingsParseError(f"invalid entry fee: {raw!r}")
+        raise DraftKingsParseError(f"DK_ENTRY_FEE_INVALID: invalid entry fee: {raw!r}")
     return value
 
 
@@ -118,24 +124,26 @@ def _parse_entries_rows(
     raw_hash: str,
 ) -> EntryTemplate:
     if not rows or len(rows[0]) < 10:
-        raise DraftKingsParseError("entry CSV has no usable header")
+        raise DraftKingsParseError("DK_ENTRY_HEADER_INVALID: entry CSV has no usable header")
     header = tuple(rows[0])
     expected_prefix = ("Entry ID", "Contest Name", "Contest ID", "Entry Fee")
     if header[: len(expected_prefix)] != expected_prefix:
         raise DraftKingsParseError(
-            f"entry CSV must begin with the exact columns {expected_prefix}"
+            f"DK_ENTRY_HEADER_INVALID: entry CSV must begin with the exact columns {expected_prefix}"
         )
     try:
         fee_index = header.index("Entry Fee")
     except ValueError as exc:
-        raise DraftKingsParseError("entry CSV lacks Entry Fee") from exc
+        raise DraftKingsParseError("DK_ENTRY_HEADER_INVALID: entry CSV lacks Entry Fee") from exc
     roster_end = len(header)
     for marker in ("", "Instructions"):
         if marker in header[fee_index + 1 :]:
             roster_end = min(roster_end, header.index(marker, fee_index + 1))
     roster_columns = tuple(header[fee_index + 1 : roster_end])
     if roster_columns not in {CLASSIC_COLUMNS, SHOWDOWN_COLUMNS}:
-        raise DraftKingsParseError(f"unknown DraftKings template geometry: {roster_columns}")
+        raise DraftKingsParseError(
+            f"DK_ENTRY_GEOMETRY_UNKNOWN: unknown DraftKings template geometry: {roster_columns}"
+        )
 
     # A real DraftKings Classic entries export repeats the player-pool table to
     # the right of the entry block, starting in the Instructions column, so every
@@ -171,15 +179,15 @@ def _parse_entries_rows(
             or any(cell.strip() for cell in row[roster_end:embedded_pool_start])
         ):
             raise DraftKingsParseError(
-                f"entry row for {entry_id!r} has more cells than the header"
+                f"DK_ENTRY_ROW_MISSHAPEN: entry row for {entry_id!r} has more cells than the header"
             )
         if not entry_id.isdigit():
-            raise DraftKingsParseError(f"non-numeric Entry ID: {entry_id!r}")
+            raise DraftKingsParseError(f"DK_ENTRY_ID_INVALID: non-numeric Entry ID: {entry_id!r}")
         if entry_id in seen_entries:
-            raise DraftKingsParseError(f"duplicate Entry ID: {entry_id}")
+            raise DraftKingsParseError(f"DK_ENTRY_ID_DUPLICATE: duplicate Entry ID: {entry_id}")
         contest_id = padded[2].strip()
         if not contest_id.isdigit():
-            raise DraftKingsParseError(f"invalid Contest ID for Entry {entry_id}")
+            raise DraftKingsParseError(f"DK_CONTEST_ID_INVALID: invalid Contest ID for Entry {entry_id}")
         cells = tuple(cell.strip() for cell in padded[fee_index + 1 : roster_end])
         authorizations.append(
             EntryAuthorization(
@@ -192,7 +200,7 @@ def _parse_entries_rows(
         )
         seen_entries.add(entry_id)
     if not authorizations:
-        raise DraftKingsParseError("entry CSV contains no authorized entries")
+        raise DraftKingsParseError("DK_ENTRY_NONE_AUTHORIZED: entry CSV contains no authorized entries")
     return EntryTemplate(
         path=csv_path,
         raw_hash=raw_hash,
@@ -216,10 +224,48 @@ def parse_entry_bytes(raw: bytes, *, source_name: str = "late-swap-output.csv") 
     return _parse_entries_rows(source, encoding, rows, raw_hash)
 
 
+def embedded_pool_ids(raw: bytes) -> tuple[str, ...] | None:
+    """The DraftKings IDs of the player table an entries export carries, or None.
+
+    A real export repeats the draft group's player table to the right of the
+    entry block (see `_parse_entries_rows`). Its `ID` column is the exact set of
+    salary rows the entries were reserved against, so a salary file from another
+    slate of the same mode shows up as a different set. Only the `ID` column is
+    read; every other cell of the table stays untouched raw bytes.
+    """
+
+    _encoding, rows, _digest = _read_csv_bytes(raw, Path("entries.csv"))
+    if not rows:
+        return None
+    width = len(rows[0])
+    for number, row in enumerate(rows[1:], start=1):
+        cells = [cell.strip() for cell in row]
+        if len(cells) <= width or "Position" not in cells[width - 1 :]:
+            continue
+        start = cells.index("Position", width - 1)
+        if "ID" not in cells[start:]:
+            raise DraftKingsParseError(
+                f"DK_ENTRY_POOL_TABLE_INVALID: the embedded player table at row {number + 1} has no ID column"
+            )
+        column = cells.index("ID", start)
+        ids = tuple(
+            later[column].strip()
+            for later in rows[number + 1 :]
+            if len(later) > column and later[column].strip()
+        )
+        if not ids or len(set(ids)) != len(ids) or not all(value.isdigit() for value in ids):
+            raise DraftKingsParseError(
+                "DK_ENTRY_POOL_TABLE_INVALID: the embedded player table's IDs are blank, "
+                "repeated or not numeric"
+            )
+        return ids
+    return None
+
+
 def _parse_game_info(raw: str) -> tuple[str, str, str, datetime]:
     match = _GAME_RE.match(raw.strip())
     if not match:
-        raise DraftKingsParseError(f"invalid Game Info: {raw!r}")
+        raise DraftKingsParseError(f"DK_SALARY_GAME_INFO_INVALID: invalid Game Info: {raw!r}")
     away = match.group("away")
     home = match.group("home")
     lock = datetime.strptime(
@@ -233,7 +279,7 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
     encoding, rows, raw_hash = _read_text_csv(csv_path)
     del encoding
     if len(rows) < 2:
-        raise DraftKingsParseError("salary CSV is empty")
+        raise DraftKingsParseError("DK_SALARY_EMPTY: salary CSV is empty")
     required = {
         "Position",
         "Name",
@@ -248,11 +294,11 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
     header = rows[0]
     missing = required.difference(header)
     if missing:
-        raise DraftKingsParseError(f"salary CSV missing columns: {sorted(missing)}")
+        raise DraftKingsParseError(f"DK_SALARY_COLUMNS_MISSING: salary CSV missing columns: {sorted(missing)}")
     duplicated = sorted(name for name in required if header.count(name) != 1)
     if duplicated:
         raise DraftKingsParseError(
-            f"salary CSV required columns must appear exactly once: {duplicated}"
+            f"DK_SALARY_COLUMNS_DUPLICATED: salary CSV required columns must appear exactly once: {duplicated}"
         )
     index = {name: header.index(name) for name in required}
     data_rows: list[tuple[int, list[str]]] = []
@@ -260,7 +306,7 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
         if not row or not any(cell.strip() for cell in row):
             continue
         if len(row) < len(header):
-            raise DraftKingsParseError(f"short salary row {row_number}")
+            raise DraftKingsParseError(f"DK_SALARY_ROW_SHORT: short salary row {row_number}")
         data_rows.append((row_number, row))
     roster_values = {row[index["Roster Position"]].strip() for _, row in data_rows}
     if roster_values == {"CPT", "FLEX"}:
@@ -268,12 +314,16 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
     elif roster_values.issubset({"QB", "RB/FLEX", "WR/FLEX", "TE/FLEX", "DST"}):
         mode = EngineMode.CLASSIC
     else:
-        raise DraftKingsParseError(f"unsupported salary roster positions: {sorted(roster_values)}")
+        raise DraftKingsParseError(
+            f"DK_SALARY_ROSTER_POSITIONS_UNSUPPORTED: unsupported salary roster positions: "
+            f"{sorted(roster_values)}"
+        )
 
     present_draft_group_columns = [name for name in _DRAFT_GROUP_COLUMNS if name in header]
     if len(present_draft_group_columns) > 1:
         raise DraftKingsParseError(
-            f"salary CSV has ambiguous draft-group columns: {present_draft_group_columns}"
+            "DK_DRAFT_GROUP_AMBIGUOUS: salary CSV has ambiguous draft-group columns: "
+            f"{present_draft_group_columns}"
         )
     embedded_draft_group: str | None = None
     if present_draft_group_columns:
@@ -290,7 +340,8 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
         embedded_draft_group = next(iter(values))
         if draft_group is not None and draft_group != embedded_draft_group:
             raise DraftKingsParseError(
-                "salary draft group does not match the required contest draft group: "
+                "DK_DRAFT_GROUP_MISMATCH: salary draft group does not match the required "
+                "contest draft group: "
                 f"salary={embedded_draft_group!r}, required={draft_group!r}"
             )
 
@@ -300,16 +351,22 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
     for row_number, row in data_rows:
         dk_id = row[index["ID"]].strip()
         if not dk_id.isdigit() or dk_id in seen_ids:
-            raise DraftKingsParseError(f"invalid or duplicate DK ID at row {row_number}: {dk_id!r}")
+            raise DraftKingsParseError(
+                f"DK_SALARY_ID_INVALID: invalid or duplicate DK ID at row {row_number}: {dk_id!r}"
+            )
         game_id, away, home, lock_at = _parse_game_info(row[index["Game Info"]])
         team = row[index["TeamAbbrev"]].strip()
         if team not in {away, home}:
-            raise DraftKingsParseError(f"team {team} not in game {game_id} at row {row_number}")
+            raise DraftKingsParseError(
+                f"DK_SALARY_TEAM_NOT_IN_GAME: team {team} not in game {game_id} at row {row_number}"
+            )
         opponent = home if team == away else away
         try:
             salary = int(row[index["Salary"]])
         except ValueError as exc:
-            raise DraftKingsParseError(f"invalid salary at row {row_number}") from exc
+            raise DraftKingsParseError(
+                f"DK_SALARY_VALUE_INVALID: invalid salary at row {row_number}"
+            ) from exc
         roster_raw = row[index["Roster Position"]].strip()
         roster_positions = tuple(roster_raw.split("/"))
         position = row[index["Position"]].strip()
@@ -317,10 +374,12 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
         name = row[index["Name"]].strip()
         if not name or not position or not team:
             raise DraftKingsParseError(
-                f"blank name, position, or team at salary row {row_number}"
+                f"DK_SALARY_ROW_BLANK_FIELD: blank name, position, or team at salary row {row_number}"
             )
         if salary <= 0:
-            raise DraftKingsParseError(f"salary must be positive at row {row_number}")
+            raise DraftKingsParseError(
+                f"DK_SALARY_VALUE_INVALID: salary must be positive at row {row_number}"
+            )
         if mode is EngineMode.CLASSIC:
             expected_roster = {
                 "QB": "QB",
@@ -331,7 +390,7 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
             }
             if position not in expected_roster or roster_raw != expected_roster[position]:
                 raise DraftKingsParseError(
-                    f"Classic position/roster mismatch at row {row_number}: "
+                    f"DK_SALARY_POSITION_ROSTER_MISMATCH: Classic position/roster mismatch at row {row_number}: "
                     f"position={position!r}, roster={roster_raw!r}"
                 )
         players.append(
@@ -355,7 +414,7 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
         )
         if game_id in games and games[game_id] != game:
             raise DraftKingsParseError(
-                f"conflicting lock metadata for game {game_id} at row {row_number}"
+                f"DK_SALARY_LOCK_CONFLICT: conflicting lock metadata for game {game_id} at row {row_number}"
             )
         games[game_id] = game
         seen_ids.add(dk_id)
@@ -374,10 +433,12 @@ def parse_salaries(path: str | Path, draft_group: str | None = None) -> SlateCon
 def _validate_salary_pool(players: Iterable[SalaryPlayer], mode: EngineMode) -> None:
     pool = list(players)
     if not pool:
-        raise DraftKingsParseError("salary pool has no players")
+        raise DraftKingsParseError("DK_SALARY_POOL_EMPTY: salary pool has no players")
     if mode is EngineMode.CLASSIC:
         if len({player.game_id for player in pool}) < 2:
-            raise DraftKingsParseError("Classic salary pool must contain at least two games")
+            raise DraftKingsParseError(
+                "DK_SLATE_SHAPE_INVALID: Classic salary pool must contain at least two games"
+            )
         identity_counts: dict[str, int] = defaultdict(int)
         for player in pool:
             identity_counts[player.underlying_id] += 1
@@ -386,7 +447,8 @@ def _validate_salary_pool(players: Iterable[SalaryPlayer], mode: EngineMode) -> 
         )
         if collisions:
             raise DraftKingsParseError(
-                "ambiguous same-name/team/position identity collision; exact disambiguation "
+                "DK_IDENTITY_COLLISION: ambiguous same-name/team/position identity collision; "
+                "exact disambiguation "
                 f"is required: {collisions}"
             )
         games_by_team: dict[str, set[str]] = defaultdict(set)
@@ -399,14 +461,14 @@ def _validate_salary_pool(players: Iterable[SalaryPlayer], mode: EngineMode) -> 
         }
         if conflicted_teams:
             raise DraftKingsParseError(
-                f"Classic team appears in multiple games: {conflicted_teams}"
+                f"DK_SLATE_SHAPE_INVALID: Classic team appears in multiple games: {conflicted_teams}"
             )
     if mode is EngineMode.SHOWDOWN:
         if len({player.game_id for player in pool}) != 1 or len(
             {player.team for player in pool}
         ) != 2:
             raise DraftKingsParseError(
-                "Showdown salary pool must contain exactly one game and two teams"
+                "DK_SLATE_SHAPE_INVALID: Showdown salary pool must contain exactly one game and two teams"
             )
         by_person: dict[str, dict[str, SalaryPlayer]] = defaultdict(dict)
         duplicate_roles: list[str] = []
@@ -425,31 +487,38 @@ def _validate_salary_pool(players: Iterable[SalaryPlayer], mode: EngineMode) -> 
             if roles["CPT"].salary != round(roles["FLEX"].salary * 1.5):
                 anomalies.append(f"{person}: captain salary is not exactly 1.5x")
         if anomalies:
-            raise DraftKingsParseError("; ".join(anomalies[:10]))
+            raise DraftKingsParseError("DK_SHOWDOWN_ROLE_PAIR_INVALID: " + "; ".join(anomalies[:10]))
         if len(pool) != 2 * len(by_person):
-            raise DraftKingsParseError("Showdown role row count does not reconcile")
+            raise DraftKingsParseError(
+                "DK_SHOWDOWN_ROLE_PAIR_INVALID: Showdown role row count does not reconcile"
+            )
         if len(by_person) < 6:
-            raise DraftKingsParseError("Showdown pool needs at least six underlying players")
+            raise DraftKingsParseError(
+                "DK_SLATE_SHAPE_INVALID: Showdown pool needs at least six underlying players"
+            )
     else:
         counts = Counter(player.position for player in pool)
         minimum_counts = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
         for required, minimum in minimum_counts.items():
             if counts[required] < minimum:
                 raise DraftKingsParseError(
-                    f"Classic pool needs at least {minimum} {required} rows"
+                    f"DK_SLATE_SHAPE_INVALID: Classic pool needs at least {minimum} {required} rows"
                 )
         if counts["RB"] + counts["WR"] + counts["TE"] < 7:
             raise DraftKingsParseError(
-                "Classic pool lacks enough RB/WR/TE rows to fill FLEX"
+                "DK_SLATE_SHAPE_INVALID: Classic pool lacks enough RB/WR/TE rows to fill FLEX"
             )
 
 
 def reconcile_template(template: EntryTemplate, slate: SlateContract) -> None:
     if template.mode is not slate.mode:
         raise DraftKingsParseError(
-            f"template is {template.mode.value}, salary pool is {slate.mode.value}"
+            f"DK_TEMPLATE_MODE_MISMATCH: template is {template.mode.value}, "
+            f"salary pool is {slate.mode.value}"
         )
     widths = {len(entry.existing_cells) for entry in template.authorizations}
     expected = 9 if slate.mode is EngineMode.CLASSIC else 6
     if widths != {expected}:
-        raise DraftKingsParseError("entry roster cell count does not match slate mode")
+        raise DraftKingsParseError(
+            "DK_TEMPLATE_MODE_MISMATCH: entry roster cell count does not match slate mode"
+        )

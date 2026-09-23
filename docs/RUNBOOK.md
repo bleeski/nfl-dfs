@@ -1065,11 +1065,26 @@ they were the only things that could make you miss a lock. Under R28 they no
 longer stop the file, so they no longer lead. Start the weather and
 official-activity captures alongside the baseline, not ahead of it: the engine's
 improved portfolio still waits on them until Session 09, but the file does not.
-Until Sessions 04 and 06 build the baseline command and a baseline-first
-`run-slate`, the nearest thing is the Classic fallback path above. Since
-Sessions 02 and 02b its builder and writer refuse a wrong input by name (exit
-2), QA exits 1 on a validity failure, and all three exit 3 naming every
-authorized row left blank; hand that list over with the file. On a builder
+**Run `baseline` first** (Session 04), the moment both DraftKings files are in
+hand and before anything else:
+
+    sh ./nfl.sh baseline --salaries <DKSalaries.csv> --entries <DKEntries.csv>
+
+(`.\nfl.ps1 baseline ...` on Windows). It reads the two files and nothing else:
+no network, priors, weather or roles. It writes a new run folder under
+`data/runs/` holding `DK_BASELINE_ENTRY_V1_<run_id>.csv`, byte-audited, and
+`baseline_report.json` with the five truths. Exit 0 fills every blank row; exit
+3 fills some and names every unfilled Entry ID (hand that list over with the
+file); exit 2 withholds the file and names the integrity gate that stopped it.
+Every exit ends `PRIOR_ONLY / DO_NOT_UPLOAD`, and the report names the gaps it
+carries (official activity, current role, weather, model). Lineups rank by
+DraftKings salary alone (`BASELINE_SALARY_RANK_V1`), so treat the file as the
+baseline a later improvement replaces, not as a tuned portfolio. Until
+Session 06 makes `run-slate` baseline-first, run it by hand before `run-slate`.
+The Classic fallback path above stays the fallback for anything the baseline
+cannot build: since Sessions 02 and 02b its builder and writer refuse a wrong
+input by name (exit 2), QA exits 1 on a validity failure, and all three exit 3
+naming every authorized row left blank; hand that list over with the file. On a builder
 shortfall, relax an exposure or overlap cap and rebuild; when distinct lineups
 run out, ship the file and name the rows (R29). Run QA on the written file every
 time. The default delivery deadline is the earliest
