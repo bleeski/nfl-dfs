@@ -292,9 +292,11 @@ Every session follows this protocol, and the cards only add to it:
   reserved; `--out` must be new. On the supplied 719-row salary file and
   20-entry template, builder, writer and Classic QA all exit 0 with the 33
   flagged rows out. Showdown QA's four findings are `OBSERVATIONS` that never
-  change the exit code. Suite `1231 passed, 1 skipped`. Nothing relaxed. Left
-  open: the two Showdown QA limits above, and `--min-salary` above `--cap`
-  builds nothing and exits 3 rather than refusing.
+  change the exit code. The template is read as the writer reads it, and an
+  unknown DraftKings status leaves the pool by name. Suite `1235 passed,
+  1 skipped`. Nothing relaxed. Left open: the two Showdown QA limits above;
+  `--min-salary` above `--cap` builds nothing and exits 3 rather than
+  refusing; zero lineups exits 3 in the builder and 2 in the writer.
 
 #### Session 03: `DELIVERY_STATE` contract and gate registry
 

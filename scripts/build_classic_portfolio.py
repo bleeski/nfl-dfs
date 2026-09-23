@@ -62,7 +62,11 @@ And:
   writes scores.json before its own exclusion set, so they arrived scored.
   `--available-status D` restores doubtful players, as it does in the engine.
 * Only blank template rows are reserved, and `--lineups` defaults to their
-  count. A prefilled row was assigned and the writer then refused the file.
+  count. A prefilled row was assigned and the writer then refused the file. The
+  template is read as the writer reads it: a repeated Entry ID is refused, and a
+  blank row too narrow for nine roster cells is left blank and named.
+* A DraftKings status outside the engine's vocabulary (blank, `Q`, `OUT`, `IR`,
+  `D`) also leaves the pool, and is named on stderr.
 * `--out` must be a new path that is none of the inputs. The bytes go to a
   temporary file beside it, are re-read, then `os.replace`d.
 * The salary file is read by eight named columns; nothing else is parsed. A
@@ -94,6 +98,7 @@ import tempfile
 from pathlib import Path
 
 from nfl_dfs.contracts import UNAVAILABLE_DK_STATUSES
+from nfl_dfs.participation import AVAILABLE_STATUSES, DEGRADED_STATUSES
 
 SLOTS = ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
 # Only these salary columns are ever read; nothing else in the file is parsed.
@@ -138,29 +143,43 @@ def cell_id(cell):
 
 
 def read_template(path):
-    """(blank Entry IDs in template order, rosters already filled in the template).
+    """(assignable Entry IDs, rosters already filled, every blank Entry ID), in template order.
 
-    A row is blank, and so authorized for filling, when all nine roster cells are
-    empty. A filled row is never assigned: the writer refuses to replace a cell.
+    Read the way `write_dk_entries.parse_template` reads it, so the two agree on
+    what is authorized. A row is blank when every roster cell it has is empty. It
+    is assignable when it is blank and wide enough to hold nine roster cells; a
+    narrower blank row is never assigned, because the writer refuses to fill it,
+    and is reported unfilled instead. A filled row is never assigned either.
     """
 
-    with open(path, encoding="utf-8-sig", newline="") as fh:
-        rows = list(csv.reader(fh))
+    try:
+        with open(path, encoding="utf-8-sig", newline="") as fh:
+            rows = list(csv.reader(fh))
+    except (UnicodeDecodeError, csv.Error) as exc:
+        raise Refused([("TEMPLATE_UNREADABLE", f"{path}: {exc}")])
     header = rows[0] if rows else []
     fee = header.index("Entry Fee") if "Entry Fee" in header else -1
-    if fee < 0 or tuple(header[fee + 1:fee + 1 + len(SLOTS)]) != SLOTS:
+    end = fee + 1 + len(SLOTS)
+    after = header[end] if len(header) > end else ""
+    if fee < 0 or tuple(header[fee + 1:end]) != SLOTS or after not in ("", "Instructions"):
         raise Refused([("NOT_A_CLASSIC_TEMPLATE",
                         f"{path} has no Entry Fee column followed by {list(SLOTS)}")])
-    blank, prefilled = [], []
+    assignable, prefilled, blank, seen = [], [], [], set()
     for row in rows[1:]:
-        if not row or not row[0].strip().isdigit():
+        eid = row[0].strip() if row else ""
+        if not eid.isdigit():
             continue
-        cells = [c.strip() for c in row[fee + 1:fee + 1 + len(SLOTS)]]
+        if eid in seen:
+            raise Refused([("DUPLICATE_TEMPLATE_ENTRY_ID", eid)])
+        seen.add(eid)
+        cells = [c.strip() for c in row[fee + 1:end]]
         if not any(cells):
-            blank.append(row[0].strip())
+            blank.append(eid)
+            if len(row) >= end:
+                assignable.append(eid)
         elif len(cells) == len(SLOTS) and all(cells):
             prefilled.append(frozenset(cell_id(c) for c in cells))
-    return blank, prefilled
+    return assignable, prefilled, blank
 
 
 def reserved_entry_ids(path):
@@ -173,30 +192,37 @@ def reserved_entry_ids(path):
     return read_template(path)[0]
 
 
+def read_csv_rows(path, what):
+    try:
+        with open(path, encoding="utf-8-sig", newline="") as fh:
+            return list(csv.reader(fh))
+    except (UnicodeDecodeError, csv.Error) as exc:
+        raise Refused([(f"{what}_UNREADABLE", f"{path}: {exc}")])
+
+
 def load_salaries(path):
-    with open(path, encoding="utf-8-sig", newline="") as fh:
-        reader = csv.reader(fh)
-        header = next(reader, [])
-        missing = [c for c in SALARY_COLUMNS if c not in header]
-        if missing:
-            raise Refused([("SALARY_COLUMNS_MISSING", f"{path} lacks {missing}")])
-        index = {c: header.index(c) for c in SALARY_COLUMNS}
-        sal = {}
-        for row in reader:
-            if not row or not any(cell.strip() for cell in row):
-                continue
-            rec = {c: (row[i].strip() if i < len(row) else "") for c, i in index.items()}
-            if rec["ID"] in sal:
-                raise Refused([("SALARY_DUPLICATE_ID", rec["ID"])])
-            if "CPT" in rec["Roster Position"].split("/"):
-                raise Refused([("NOT_A_CLASSIC_SALARY_FILE",
-                                f"{path} has Showdown captain rows; this builder is Classic only")])
-            try:
-                rec["Salary"] = int(rec["Salary"])
-            except ValueError:
-                raise Refused([("SALARY_UNREADABLE", f"ID {rec['ID']} salary {rec['Salary']!r}")])
-            sal[rec["ID"]] = rec
-        return sal
+    rows = read_csv_rows(path, "SALARY")
+    header = rows[0] if rows else []
+    missing = [c for c in SALARY_COLUMNS if c not in header]
+    if missing:
+        raise Refused([("SALARY_COLUMNS_MISSING", f"{path} lacks {missing}")])
+    index = {c: header.index(c) for c in SALARY_COLUMNS}
+    sal = {}
+    for row in rows[1:]:
+        if not row or not any(cell.strip() for cell in row):
+            continue
+        rec = {c: (row[i].strip() if i < len(row) else "") for c, i in index.items()}
+        if rec["ID"] in sal:
+            raise Refused([("SALARY_DUPLICATE_ID", rec["ID"])])
+        if "CPT" in rec["Roster Position"].split("/"):
+            raise Refused([("NOT_A_CLASSIC_SALARY_FILE",
+                            f"{path} has Showdown captain rows; this builder is Classic only")])
+        try:
+            rec["Salary"] = int(rec["Salary"])
+        except ValueError:
+            raise Refused([("SALARY_UNREADABLE", f"ID {rec['ID']} salary {rec['Salary']!r}")])
+        sal[rec["ID"]] = rec
+    return sal
 
 
 def load_scores(path):
@@ -209,12 +235,13 @@ def load_scores(path):
 
 
 def load_status(path):
-    with open(path, encoding="utf-8-sig", newline="") as fh:
-        reader = csv.DictReader(fh)
-        missing = [c for c in ("PLAYER_OR_GSIS_ID", "STATUS") if c not in (reader.fieldnames or [])]
-        if missing:
-            raise Refused([("STATUS_COLUMNS_MISSING", f"{path} lacks {missing}")])
-        return {r["PLAYER_OR_GSIS_ID"]: r["STATUS"] for r in reader}
+    rows = read_csv_rows(path, "STATUS")
+    header = rows[0] if rows else []
+    missing = [c for c in ("PLAYER_OR_GSIS_ID", "STATUS") if c not in header]
+    if missing:
+        raise Refused([("STATUS_COLUMNS_MISSING", f"{path} lacks {missing}")])
+    ident, state = header.index("PLAYER_OR_GSIS_ID"), header.index("STATUS")
+    return {r[ident]: r[state] for r in rows[1:] if len(r) > max(ident, state)}
 
 
 def next_rung(exp, ovl, need_bb, asked_exp, asked_ovl, n):
@@ -299,6 +326,10 @@ def main(argv=None):
         return EXIT_REFUSED
 
     unfilled, short = report["unfilled"], report["shortfall"]
+    if report["unknown"]:
+        print(f"UNKNOWN_DK_STATUS: rows flagged {report['unknown']} are outside the engine's "
+              "vocabulary and left the pool. Keep one with --available-status CODE.",
+              file=sys.stderr)
     print(f"unfilled authorized Entry IDs: {len(unfilled)} {unfilled}")
     print(f"sha256: {report['sha256']}")
     print(f"wrote: {a.out}")
@@ -318,9 +349,10 @@ def build(a):
     problems = check_output_path(out, inputs)
     if problems:
         raise Refused(problems)
-    blank, prefilled = read_template(a.entries) if a.entries else ([], [])
+    blank, prefilled, open_rows = read_template(a.entries) if a.entries else ([], [], [])
     if a.entries and not blank:
-        raise Refused([("NO_BLANK_ENTRY_ROWS", f"{a.entries} has no blank authorized row to fill")])
+        raise Refused([("NO_BLANK_ENTRY_ROWS",
+                        f"{a.entries} has no blank authorized row wide enough to fill")])
     N = a.lineups if a.lineups is not None else (len(blank) if a.entries else 20)
     if N < 1:
         raise Refused([("LINEUPS_NOT_POSITIVE", f"--lineups {N}")])
@@ -337,6 +369,10 @@ def build(a):
     ITT, OWN, BOOST = load_slate_context(a.slate_context)
     kept = {s.strip().upper() for s in a.available_status if s.strip()}
     unavailable = UNAVAILABLE_DK_STATUSES - kept
+    # A code outside the engine's vocabulary is never taken as available: it
+    # leaves the pool and is named (R28 keeps the file; the gap is reported).
+    known = AVAILABLE_STATUSES | DEGRADED_STATUSES | UNAVAILABLE_DK_STATUSES | kept
+    unknown = set()
 
     P = lambda i: sal[i]["Position"]
     S = lambda i: sal[i]["Salary"]
@@ -354,7 +390,9 @@ def build(a):
         if i not in sal or status.get(i) == "INACTIVE" or scores[i] <= 0:
             continue
         flag = sal[i]["Status"].upper()
-        if flag in unavailable:
+        if flag not in known:
+            unknown.add(flag)
+        if flag in unavailable or flag not in known:
             dropped[flag] += 1
             continue
         pool.append(i)
@@ -492,7 +530,7 @@ def build(a):
 
     # The mapping write_dk_entries.py consumes, in template order over blank rows.
     assignments = {eid: r for eid, r in zip(blank, lineups)}
-    unfilled = blank[len(assignments):]
+    unfilled = [eid for eid in open_rows if eid not in assignments]
     doc = {"lineups": [{"index": n + 1, "roster": r, "salary": sum(S(i) for i in r),
                         "prior_points": round(sum(scores[i] for i in r), 3),
                         "bringback": has_bringback(r)}
@@ -509,12 +547,14 @@ def build(a):
                             "require_bringback": a.require_bringback,
                             "dk_unavailable_statuses": sorted(unavailable),
                             "dk_status_dropped": dict(sorted(dropped.items())),
+                            "dk_status_unknown": sorted(unknown),
                             "prefilled_rows": len(prefilled),
                             "slate_context": a.slate_context or None}}
     data = json.dumps(doc, indent=1).encode("utf-8")
     write_new(out, data)
     return {"unfilled": unfilled, "shortfall": N - len(lineups), "asked": N,
-            "built": len(lineups), "sha256": hashlib.sha256(data).hexdigest()}
+            "built": len(lineups), "unknown": sorted(unknown),
+            "sha256": hashlib.sha256(data).hexdigest()}
 
 
 if __name__ == "__main__":

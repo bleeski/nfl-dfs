@@ -1067,10 +1067,12 @@ official-activity captures alongside the baseline, not ahead of it: the engine's
 improved portfolio still waits on them until Session 09, but the file does not.
 Until Sessions 04 and 06 build the baseline command and a baseline-first
 `run-slate`, the nearest thing is the Classic fallback path above. Since
-Sessions 02 and 02b its builder, writer and QA refuse a wrong input by name
-(exit 2) and exit 3 naming every authorized row left blank; hand that list over
-with the file, and on a builder shortfall drop a rung before you accept it. Run
-QA on the written file every time. The default delivery deadline is the earliest
+Sessions 02 and 02b its builder and writer refuse a wrong input by name (exit
+2), QA exits 1 on a validity failure, and all three exit 3 naming every
+authorized row left blank; hand that list over with the file. On a builder
+shortfall, relax an exposure or overlap cap and rebuild; when distinct lineups
+run out, ship the file and name the rows (R29). Run QA on the written file every
+time. The default delivery deadline is the earliest
 relevant lock minus 5 minutes (R31); the engine enforces it from Session 07.
 
 Three rules bound the autonomy above.

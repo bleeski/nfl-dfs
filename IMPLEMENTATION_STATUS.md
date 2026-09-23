@@ -12,8 +12,11 @@ exit contract. No release truth changed; the fallback's output is still
   repeats a lineup (R29), including one already prefilled in the template,
   whatever `--max-overlap` allows. DraftKings `OUT`, `IR` and `D` rows leave the
   pool through `nfl_dfs.contracts.UNAVAILABLE_DK_STATUSES`
-  (`--available-status D` restores doubtful players, as in the engine). Only
-  blank template rows are reserved, and `--lineups` defaults to their count. The
+  (`--available-status D` restores doubtful players, as in the engine); a
+  status outside the engine's vocabulary also leaves it and is named. Only
+  blank template rows are reserved, read as the writer reads them (a repeated
+  Entry ID is refused, a narrow blank row is named unfilled), and `--lineups`
+  defaults to their count. The
   ratchet stops at `max(--max-exposure, N)` exposure and `max(--max-overlap, 6)`
   overlap and never tightens a cap. `--out` must be new; the write is a verified
   temporary file and `os.replace`. A Showdown template or salary file, a

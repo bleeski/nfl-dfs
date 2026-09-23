@@ -440,6 +440,22 @@ def test_available_status_restores_a_doubtful_player_as_the_engine_does(tmp_path
     assert "D" not in got["construction"]["dk_unavailable_statuses"]
 
 
+def test_an_unknown_draftkings_status_leaves_the_pool_and_is_named(tmp_path, capsys):
+    """The engine refuses an unclassified code (`participation.py`). Under R28 the
+    fallback keeps the file and never rosters an unclassified player: the row is
+    dropped, named on stderr and recorded; `--available-status` restores it."""
+
+    flagged = top_wr("AAA")
+    pool = make_pool(tmp_path, statuses={flagged: "O"}, scores_override={flagged: 500.0})
+    got = run(tmp_path, lineups=8, pool=pool)
+    assert all(flagged not in l["roster"] for l in got["lineups"])
+    assert got["construction"]["dk_status_dropped"] == {"O": 1}
+    assert got["construction"]["dk_status_unknown"] == ["O"]
+    assert "UNKNOWN_DK_STATUS" in capsys.readouterr().err
+    got = run(tmp_path, ["--available-status", "O"], lineups=8, pool=pool)
+    assert any(flagged in l["roster"] for l in got["lineups"])
+
+
 def test_a_salary_file_without_status_is_refused(tmp_path, capsys):
     code, got = invoke(tmp_path, pool=make_pool(tmp_path, status_column=False))
     assert (code, got) == (2, None)
@@ -533,6 +549,42 @@ def test_a_template_with_no_blank_row_is_refused(tmp_path, capsys):
     code, got = invoke(tmp_path, ["--entries", str(entries)], lineups=None)
     assert (code, got) == (2, None)
     assert "REFUSED NO_BLANK_ENTRY_ROWS" in capsys.readouterr().err
+
+
+def test_a_repeated_template_entry_id_is_refused_as_the_writer_does(tmp_path, capsys):
+    """Found in review: the dict collapsed the repeat and one lineup vanished."""
+
+    p = make_entries(tmp_path, 3)
+    lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+    p.write_text("".join(lines + lines[1:2]), encoding="utf-8")
+    code, got = invoke(tmp_path, ["--entries", str(p)], lineups=None)
+    assert (code, got) == (2, None)
+    assert "REFUSED DUPLICATE_TEMPLATE_ENTRY_ID" in capsys.readouterr().err
+
+
+def test_a_narrow_row_is_listed_unfilled_and_the_writer_agrees(tmp_path):
+    """Found in review: the builder assigned a row with no nine roster cells, exited 0,
+    and the writer then refused the file. Both now leave it blank and name it."""
+
+    p = make_entries(tmp_path, 3)
+    text = p.read_text(encoding="utf-8").replace(f"{entry_id(1)},Contest,1234,$1,,,,,,,,,,,",
+                                                 f"{entry_id(1)},Contest,1234,$1")
+    p.write_text(text, encoding="utf-8")
+    code, got = invoke(tmp_path, ["--entries", str(p)], lineups=None)
+    assert code == 3
+    assert list(got["assignments_by_entry_id"]) == [entry_id(0), entry_id(2)]
+    assert got["unfilled_entry_ids"] == [entry_id(1)]
+    proc, verdict = fill_and_check(tmp_path, got, p, tmp_path / "sal.csv")
+    assert proc.returncode == 3, proc.stderr
+    assert entry_id(1) in proc.stderr
+
+
+def test_an_unreadable_template_is_refused(tmp_path, capsys):
+    p = make_entries(tmp_path, 2)
+    p.write_bytes(p.read_bytes().replace(b"Contest", b"Cont\xffst", 1))
+    code, got = invoke(tmp_path, ["--entries", str(p)], lineups=None)
+    assert (code, got) == (2, None)
+    assert "REFUSED TEMPLATE_UNREADABLE" in capsys.readouterr().err
 
 
 def test_a_showdown_template_is_refused(tmp_path, capsys):

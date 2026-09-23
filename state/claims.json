@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "dfcfd236-b6ca-5bae-a80f-43e1a7222c75",
-      "branch": "claude/sharp-faraday-wqc7m5",
-      "chunk": "S02b",
-      "claimed_at": "2026-09-23T14:47:40Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
