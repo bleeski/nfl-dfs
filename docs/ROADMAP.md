@@ -421,6 +421,14 @@ Every session follows this protocol, and the cards only add to it:
   A pool too small for distinct lineups yields `DELIVERABLE_PARTIAL` with exact
   unfilled IDs.
 - **Breakpoint.** Classic first, Showdown as `Session 04b`.
+- **From Session 03b.** Build every limitation with
+  `gate_registry.load_gate_registry().limitation(code, ...)`. `dk.py` and
+  `lineups.py` raise prose, not codes, so the registry cannot name the parse and
+  roster gates the baseline meets: give each a code and register it, which the
+  completeness test demands. `contracts.DeliveryLimitation` built by hand still
+  accepts `S`/`CERTIFICATION` and `P`/`CONSTRUCTION_PREFERENCE`; holding it to
+  the registry's three pairs is one validator, and belongs with the first
+  session that emits limitations.
 
 #### Session 05: artifact preservation
 

@@ -1654,5 +1654,59 @@ win or cash probability, or that any limitation's evidence is sound. It says a
 valid file exists and which rows it covers.
 
 The per-code class, provenance and `stops` for every blocker the engine can
-emit live in `config/gate_registry_v1.json` (Session 03b). Until it lands, the
-producer of a limitation states them.
+emit live in `config/gate_registry_v1.json` (below). A producer builds a
+limitation from its code there, never by stating them itself.
+
+## Gate registry
+
+Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
+schema `nfl_gate_registry_v1`, loaded and validated by
+`gate_registry.load_gate_registry`, which hashes the bytes (SHA-256) and refuses
+bytes other than an `expected_sha256` when given one. Nothing on the operating
+path reads it yet; Sessions 04 to 09 build their `delivery_limitations` through
+`GateRegistry.limitation`. It changes no gate's behaviour.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Exactly `nfl_gate_registry_v1` |
+| `registered_at` | The date the registry was written |
+| `families` | Name (lower snake) to `class`, `stops`, `provenance` (`kind`, `ref`, as `GateProvenance`) and `covers`, one sentence |
+| `codes` | Every blocker code, or a template, to its family, one per line |
+| `expansions` | A template to the exact codes it produces, when it opens or closes with `*` or its codes differ in family |
+
+Rules the loader enforces, each a refusal with its own `GATE_REGISTRY_*` code:
+
+- Exactly three class and `stops` pairs: `V` stops the `FILE`, `S` a
+  `CONSTRUCTION_PREFERENCE`, `P` `CERTIFICATION`. They are `CLAUDE.md`'s three
+  classes of rule: integrity gates withhold the file or the rows they name,
+  construction preferences are relaxable under a lock clock, and truth-claim
+  gates stop certification and travel with the file (R28).
+- No duplicate key anywhere, no code whose family is missing, no family no code
+  uses, and no unknown top-level field.
+- A code is one upper-snake token. A template holds `*` for one or more
+  upper-snake segments, as an f-string code does. A template that opens and
+  closes with a literal segment resolves the codes it matches; one that opens or
+  closes with `*` must list its codes under `expansions`, so a generic prefix or
+  suffix never absorbs an unregistered code. An expansion names only codes that
+  match its template and are themselves listed.
+
+`GateRegistry.limitation(code, entry_ids, people, detail)` looks a code up
+exactly, then through the one literal template that matches it; two matching
+templates of different families, an unregistered code, or a malformed one
+refuse. The result is a `DeliveryLimitation`, so its own rules apply too.
+
+`tests/test_gate_registry.py` holds the registry to the source. A blocker
+literal is the leading upper-snake token of a string, ending it or followed by
+`:`, in an emitting position: a raised exception's first argument; the first
+argument of a call named for a blocker (`*Error`, `_problem`, `_issue`,
+`QAFinding`); an item collected onto, or assigned to, a holder named for
+blockers or reasons; a keyword named for a blocker or reason, or `code`; a string
+compared inside a function named for blocking. Every such literal under
+`src/nfl_dfs/` is registered, every registered code is still emitted, and the
+13 codes the scan cannot see (two that `release._integrity` builds, the C2 and
+SD3 selection statuses, and three weather labels that carry `:game`) are pinned
+to the source text that emits them. `scripts/` codes are outside the registry.
+
+Does not establish: that a gate is correct, that its evidence is sound, upload
+clearance, certification or any model claim. It says what each gate, when it
+fires, stops and on whose authority.
