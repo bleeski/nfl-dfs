@@ -863,10 +863,13 @@ registry (`delivery.discrepancy_limitations`):
 - anything else keeps the CSV in the result and both indexes with each code as a
   limitation, `FILE_VALID=true` in its v1 meaning (the export CSV), stage
   suffix `_READABLE_REVIEW_FAILED`, once `delivery.publish` has revalidated it
-  (`LATEST_DELIVERABLE.json`, below). A refusal withholds it as a `V` code would.
+  (`LATEST_DELIVERABLE.json`, below).
 
-Showdown writes `READABLE_REVIEW_FAILED.json` in both cases, with
-`withheld_artifacts` or `kept_artifacts`. No readable-review outcome may alter
+A `publish` refusal, or a `V` code among the run's blockers, withholds the CSV at
+stage `DELIVERY` in either mode: unlisted, preserved on disk, never deleted, and
+named under `delivery_withheld`. Showdown writes `READABLE_REVIEW_FAILED.json`
+once that decision is final, with `withheld_artifacts` or `kept_artifacts`; a
+display record that said "kept" is rewritten to say withheld. No readable-review outcome may alter
 `MODEL_STATUS=PRIOR_ONLY` or `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
 ## Showdown kicker-role evidence
@@ -1824,7 +1827,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `c8d3812822c1f52609476f3313e339a3b429731b52b1acfde1ceca9d4fc4f2df`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `b800a8f43adc5f0938940ec75f0c4513a6633361294b3c10b00ec56af9b8ffa9`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -1950,14 +1953,20 @@ It judges no evidence, model or policy; those travel in `release_truths`.
   current file still revalidates, at least as many delivered rows
   (`DELIVERY_POINTER_COVERAGE_REGRESSION`). A current file that no longer
   revalidates gives way to any file that does, and `supersedes` says so.
-- A pointer whose bytes on disk are not the bytes written is
+- A pointer that cannot be built or written is `DELIVERY_POINTER_WRITE_FAILED`,
+  and one whose bytes on disk are not the bytes written is
   `DELIVERY_POINTER_WRITE_MISMATCH`.
+- `read_latest(root, run_id=...)` refuses a pointer another run left in a
+  reused folder (`DELIVERY_POINTER_OTHER_RUN`).
+- The same deliverable and the same `now` write byte-identical pointers;
+  `run-slate` passes its pinned `--as-of` as `now`, the wall clock otherwise.
 
-After a failure `run-slate`'s outer handler reads the pointer. A file passed
-independent validation earlier in the run exactly when the pointer names it and
-it revalidates now; the handler reports that file (`DELIVERY_STATE`,
-`release_truths`, `latest_deliverable`), never deletes it, and still removes any
-other `DK_UPLOAD_*.csv`. A pointer that does not revalidate is reported under
+After a failure `run-slate`'s outer handler reads this run's pointer. A file
+passed independent validation earlier in the run exactly when the pointer names
+it and it revalidates now; the handler reports that file (`DELIVERY_STATE`,
+`latest_deliverable`, and `release_truths` with the failed run's own v1 truths
+beside the pointer's delivery half) and never deletes it. It still removes every
+`DK_UPLOAD_*.csv`, a name the pointer can never hold. A pointer that does not revalidate is reported under
 `latest_deliverable_problems`, and its file is left on disk, unadvertised.
 
 `delivery.discrepancy_limitations` splits a `;`-joined discrepancy and

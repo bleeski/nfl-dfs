@@ -268,10 +268,14 @@ def _write(root: Path, item: Deliverable, *, now: datetime | None,
     problems = revalidate(item, root=root)
     if problems:
         raise DeliveryPointerError(";".join(problems), problems=problems)
-    record = _record(item, root=root, now=now or datetime.now(timezone.utc), supersedes=supersedes)
-    payload = _canonical(record)
     pointer = root / POINTER_NAME
-    if _atomic_write(pointer, payload) != sha256_bytes(payload):
+    try:
+        record = _record(item, root=root, now=now or datetime.now(timezone.utc), supersedes=supersedes)
+        payload = _canonical(record)
+        written = _atomic_write(pointer, payload)
+    except (OSError, ValueError) as exc:
+        raise DeliveryPointerError(f"DELIVERY_POINTER_WRITE_FAILED:{pointer}:{type(exc).__name__}:{exc}") from exc
+    if written != sha256_bytes(payload):
         raise DeliveryPointerError(f"DELIVERY_POINTER_WRITE_MISMATCH:{pointer}")
     return LatestDeliverable(pointer, sha256_bytes(payload), record, item)
 
@@ -317,14 +321,19 @@ def _load(root: Path) -> tuple[Path, bytes, dict[str, object], Deliverable] | No
     return pointer, raw, record, item
 
 
-def read_latest(root: str | Path) -> LatestDeliverable | None:
-    """The run's pointer, after the file it names revalidates; `None` when there is none."""
+def read_latest(root: str | Path, *, run_id: str | None = None) -> LatestDeliverable | None:
+    """The run's pointer, after the file it names revalidates; `None` when there is none.
+
+    With `run_id`, a pointer another run left in a reused folder is refused.
+    """
 
     base = Path(root).resolve()
     loaded = _load(base)
     if loaded is None:
         return None
     pointer, raw, record, item = loaded
+    if run_id is not None and item.run_id != run_id:
+        raise DeliveryPointerError(f"DELIVERY_POINTER_OTHER_RUN:{pointer} names run {item.run_id}, not {run_id}")
     problems = revalidate(item, root=base)
     if problems:
         raise DeliveryPointerError(";".join(problems), problems=problems)

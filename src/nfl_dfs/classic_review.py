@@ -1330,7 +1330,7 @@ def create_classic_review_package(
         if presenting:
             try:
                 _verify_kept_export(export_file, export_sha, audit_file, audit_sha, reparsed_output)
-            except ClassicReviewError as integrity:
+            except Exception as integrity:  # noqa: BLE001 - an unverifiable export is not kept
                 _safe_remove_created((*created, *new_files))
                 raise integrity from exc
             _safe_remove_created((json_file, html_file))

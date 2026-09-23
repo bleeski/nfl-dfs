@@ -162,6 +162,25 @@ def test_publish_writes_an_atomic_hash_bound_pointer_that_reads_back(
     assert delivery.read_latest(root / "inputs") is None
 
 
+def test_the_same_claim_and_clock_write_the_same_pointer_bytes(baseline_file) -> None:
+    root, item = baseline_file
+    pointer = root / delivery.POINTER_NAME
+    first = delivery.publish(root, item, now=NOW)
+    written = pointer.read_bytes()
+    pointer.unlink()
+    second = delivery.publish(root, item, now=NOW)
+    assert pointer.read_bytes() == written and second.pointer_sha256 == first.pointer_sha256
+    assert json.loads(written)["published_at"] == NOW.isoformat()
+
+
+def test_a_pointer_another_run_left_is_refused(baseline_file) -> None:
+    root, item = baseline_file
+    delivery.publish(root, item)
+    assert delivery.read_latest(root, run_id=item.run_id) is not None
+    with pytest.raises(delivery.DeliveryPointerError, match="DELIVERY_POINTER_OTHER_RUN"):
+        delivery.read_latest(root, run_id="another-run")
+
+
 def test_a_pointer_whose_file_changed_is_never_read_back(baseline_file) -> None:
     root, item = baseline_file
     delivery.publish(root, item)
@@ -270,7 +289,7 @@ def test_a_failed_replace_leaves_the_old_pointer_whole(baseline_file, monkeypatc
         raise OSError("disk full")
 
     monkeypatch.setattr(delivery.os, "replace", refuse)
-    with pytest.raises(OSError, match="disk full"):
+    with pytest.raises(delivery.DeliveryPointerError, match="DELIVERY_POINTER_WRITE_FAILED:.*disk full"):
         delivery.replace(root, item)
     assert (root / delivery.POINTER_NAME).read_bytes() == before
     assert not list(root.glob(".*.tmp"))
@@ -396,6 +415,23 @@ def test_c3_withholds_everything_when_the_kept_files_changed_during_rendering(
     _assert_no_new_output(args)
 
 
+def test_c3_withholds_everything_when_a_kept_file_cannot_be_read_back(
+    c3_seed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import classic_review
+
+    args = _direct_args(c3_seed, tmp_path / "gone")
+
+    def remove_audit_then_fail(data, *, data_sha256):
+        (Path(args["output_dir"]) / "classic_review_export_audit.json").unlink()
+        raise KeyError("display")
+
+    monkeypatch.setattr(classic_review, "_render_html", remove_audit_then_fail)
+    with pytest.raises(FileNotFoundError):
+        create_classic_review_package(**args)
+    _assert_no_new_output(args)
+
+
 # ------------------------------------------------ run-slate, Showdown
 
 
@@ -475,6 +511,17 @@ def test_showdown_presentation_label_cannot_save_a_corrupt_or_unclassified_failu
     assert not (root / delivery.POINTER_NAME).exists()
     codes = {item["code"] for item in report["release_truths"]["delivery_limitations"]}
     assert ("GATE_CODE_UNCLASSIFIED" if damage == "unclassified" else "DELIVERABLE_SHA256_MISMATCH") in codes
+    # Nothing on disk or in the report still calls the CSV kept.
+    for record in (
+        report["prior_review_reports"]["readable_review_failure"],
+        json.loads((root / "review" / "READABLE_REVIEW_FAILED.json").read_text(encoding="utf-8")),
+    ):
+        assert record["FILE_VALID"] is False and "kept_artifacts" not in record
+        assert Path(record["withheld_artifacts"]["bulk_entry_csv"]["path"]).is_file()
+    if damage == "entry_ids_swapped":
+        assert report["stage"] == "PRIOR_REVIEW_DELIVERY_BLOCKED"
+        assert report["prior_review_reports"]["delivery_withheld"]["blocker"].startswith(
+            "DELIVERABLE_SHA256_MISMATCH:")
 
 
 def test_the_outer_handler_names_the_deliverable_and_never_deletes_it(
@@ -492,6 +539,8 @@ def test_the_outer_handler_names_the_deliverable_and_never_deletes_it(
     kept = Path(report["latest_deliverable"]["path"])
     assert kept.is_file() and sha256_file(kept) == report["latest_deliverable"]["sha256"]
     assert report["release_truths"]["DELIVERY_STATE"] == "DELIVERABLE"
+    assert report["release_truths"]["FILE_VALID"] is False  # the crashed run's v1 truth
+    assert report["release_truths"]["delivered_file_valid"] is True
     assert not (root / "DK_UPLOAD_stray.csv").exists()
     diagnostic = json.loads((root / "cowork_diagnostic.json").read_text(encoding="utf-8"))
     assert diagnostic["removed_uploads"] == [str(root / "DK_UPLOAD_stray.csv")]
@@ -552,10 +601,14 @@ def _classic_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, policy: boo
 
 
 def test_c3_success_and_c1_exits_report_their_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from .test_classic_prior_review import AS_OF
+
     code, report, root = _classic_run(tmp_path / "c3", monkeypatch)
     assert code == 0 and report["stage"] == "PRIOR_ONLY_CLASSIC_C3_REVIEW_EXPORT"
     assert report["DELIVERY_STATE"] == "DELIVERABLE"
-    assert delivery.read_latest(root).deliverable.sha256 == report["bulk_entry_sha256"]
+    latest = delivery.read_latest(root, run_id="classic-s05")
+    assert latest.deliverable.sha256 == report["bulk_entry_sha256"]
+    assert latest.record["published_at"] == AS_OF.isoformat()  # the pinned clock, not the wall
 
     code, report, root = _classic_run(tmp_path / "c1", monkeypatch, policy=False)
     assert code == 0 and report["stage"] == "PRIOR_ONLY_CLASSIC_REVIEW_ARTIFACTS"
@@ -608,11 +661,18 @@ def test_c3_display_failure_withholds_when_unclassified_or_the_csv_changed(
     code, report, root = _classic_run(tmp_path, monkeypatch, patch=patch)
     assert code == 2
     assert report["FILE_VALID"] is False and report["DELIVERY_STATE"] == "NO_DELIVERABLE"
-    assert report["export"]["bulk_entry_csv"] is None
+    assert report["bulk_entry_csv"] is None and report["export"]["bulk_entry_csv"] is None
     for key in ("classic_export_audit", "bulk_entry_csv", "readable_review_json", "readable_review_html"):
         assert key not in report["prior_review_artifacts"]
-    assert not list(root.rglob("DK_REVIEW_ENTRY_*.csv"))
-    assert not list(root.rglob("classic_review_export_audit.json"))
     assert not (root / delivery.POINTER_NAME).exists()
+    if damage == "unclassified":
+        # A display code nobody classified: C3's four outputs go, as before R28.
+        assert not list(root.rglob("DK_REVIEW_ENTRY_*.csv"))
+        assert not list(root.rglob("classic_review_export_audit.json"))
+    else:
+        # Revalidation refused changed bytes: withheld, preserved on disk, never deleted.
+        withheld = report["prior_review_reports"]["delivery_withheld"]["withheld_artifacts"]["bulk_entry_csv"]
+        assert Path(withheld["path"]).is_file() and sha256_file(withheld["path"]) != withheld["sha256"]
+        assert report["stage"] == "PRIOR_REVIEW_DELIVERY_BLOCKED"
     codes = {item["code"] for item in report["release_truths"]["delivery_limitations"]}
     assert ("GATE_CODE_UNCLASSIFIED" if damage == "unclassified" else "DELIVERABLE_SHA256_MISMATCH") in codes

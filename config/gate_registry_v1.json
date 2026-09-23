@@ -70,7 +70,7 @@
     "latest_deliverable": {
       "class": "V", "stops": "FILE",
       "provenance": {"kind": "CONTRACT", "ref": "Latest deliverable pointer"},
-      "covers": "The latest-deliverable pointer cannot name the file: it is malformed, missing or already written, the file sits outside its run folder or its truths deliver nothing, or a replacement has other inputs or fewer delivered rows."
+      "covers": "The latest-deliverable pointer cannot name the file: it is malformed, missing, already written, another run's or could not be written, the file sits outside its run folder or its truths deliver nothing, or a replacement has other inputs or fewer delivered rows."
     },
     "gate_registry": {
       "class": "V", "stops": "FILE",
@@ -611,6 +611,8 @@
     "DELIVERY_POINTER_INPUTS_DIFFER": "latest_deliverable",
     "DELIVERY_POINTER_INVALID": "latest_deliverable",
     "DELIVERY_POINTER_MISSING": "latest_deliverable",
+    "DELIVERY_POINTER_OTHER_RUN": "latest_deliverable",
+    "DELIVERY_POINTER_WRITE_FAILED": "latest_deliverable",
     "DELIVERY_POINTER_WRITE_MISMATCH": "latest_deliverable",
     "DELIVERY_ROW_BLOCKED_BY_INTEGRITY_GATE": "delivered_bytes",
     "DEPTH_DUPLICATE_PUBLISHED_RANK": "qb_depth_roles",

@@ -2343,8 +2343,8 @@ def _keep_classic_review_csv(outcome, blocker: str):
     )
 
 
-def _withhold_classic_review_csv(outcome, blocker: str, *, stage: str = "READABLE_REVIEW"):
-    """C3's four outputs are removed and nothing advertises them (a `V` gate fired)."""
+def _withhold_classic_review_csv(outcome, blocker: str):
+    """C3's four outputs are removed and nothing advertises them (a `V` display code)."""
 
     _unlink_outputs(outcome, _C3_OUTPUT_KEYS)
     export = {
@@ -2362,7 +2362,7 @@ def _withhold_classic_review_csv(outcome, blocker: str, *, stage: str = "READABL
     }
     return replace(
         outcome,
-        stage=stage,
+        stage="READABLE_REVIEW",
         blocked=True,
         artifacts=_without(outcome.artifacts, _C3_OUTPUT_KEYS),
         hashes=_without(outcome.hashes, _C3_OUTPUT_KEYS),
@@ -2377,15 +2377,14 @@ def _showdown_review_csv_record(
     blocker: str,
     *,
     withheld: bool,
-    stage: str,
     limitations: Iterable[DeliveryLimitation],
-) -> tuple[object, dict[str, object]]:
-    """The Showdown CSV kept listed, or withheld from both indexes, with its record."""
+) -> object:
+    """The Showdown CSV kept listed, or withheld from both indexes, after a display failure."""
 
     path = outcome.artifacts.get("bulk_entry_csv")
     digest = outcome.hashes.get("bulk_entry_csv")
     record = {
-        "stage": stage,
+        "stage": "READABLE_REVIEW",
         "FILE_VALID": not withheld,
         "RELEASE_DECISION": ReleaseDecision.DO_NOT_UPLOAD.value,
         "blocker": blocker,
@@ -2393,12 +2392,8 @@ def _showdown_review_csv_record(
         ("withheld_artifacts" if withheld else "kept_artifacts"): {
             "bulk_entry_csv": {"path": path, "sha256": digest}
         },
-        "meaning": (
-            "A roster, Entry ID, byte or unclassified discrepancy was found after export. "
-            "The review CSV named here is preserved as an earlier output and is not "
-            "advertised; do not review or upload it."
-            if withheld
-            else "The readable review failed after the review CSV passed independent "
+        "meaning": _WITHHELD_MEANING if withheld else (
+            "The readable review failed after the review CSV passed independent "
             "validation. The CSV stays listed with this presentation limitation (R28). "
             "It is not certified and not an upload authorization."
         ),
@@ -2412,18 +2407,73 @@ def _showdown_review_csv_record(
     else:
         export = {**dict(outcome.export or {}), "problems": problems}
         artifacts, hashes = dict(outcome.artifacts), dict(outcome.hashes)
-    key = "readable_review_failure" if stage == "READABLE_REVIEW" else "delivery_revalidation_failure"
-    outcome = replace(
+    return replace(
         outcome,
-        stage=stage,
+        stage="READABLE_REVIEW",
         blocked=withheld,
         artifacts=artifacts,
         hashes=hashes,
-        reports={**_without(outcome.reports, ("readable_review",) if withheld else ()), key: record},
+        reports={**outcome.reports, "readable_review_failure": record},
         export=export,
         error=blocker,
     )
-    return outcome, record
+
+
+_WITHHELD_MEANING = (
+    "A roster, Entry ID, byte or unclassified discrepancy was found after export. The "
+    "review CSV named here is preserved as an earlier output and is not advertised; do "
+    "not review or upload it."
+)
+
+
+def _withhold_at_delivery(outcome, refusal: str, limitations: Iterable[DeliveryLimitation]):
+    """A CSV `publish` refused, or one a `V` blocker stops: unlisted, kept on disk, never deleted.
+
+    Either mode. A display-failure record that said the CSV was kept is rewritten
+    to say it was withheld, so nothing in the run describes it as listed.
+    """
+
+    path = outcome.artifacts.get("bulk_entry_csv")
+    digest = outcome.hashes.get("bulk_entry_csv")
+    drop = ("bulk_entry_csv", "classic_export_audit", *_READABLE_KEYS)
+    record = {
+        "stage": "DELIVERY",
+        "FILE_VALID": False,
+        "RELEASE_DECISION": ReleaseDecision.DO_NOT_UPLOAD.value,
+        "blocker": refusal,
+        "limitations": [item.code for item in limitations],
+        "withheld_artifacts": {"bulk_entry_csv": {"path": path, "sha256": digest}},
+        "meaning": _WITHHELD_MEANING,
+    }
+    export = {**dict(outcome.export or {}), "FILE_VALID": False,
+              "problems": [*list((outcome.export or {}).get("problems", [])), refusal]}
+    for key in ("bulk_entry_csv", "bulk_entry_sha256", "downstream_audit", "downstream_audit_sha256",
+                "readable_review_json", "readable_review_json_sha256", "readable_review_html",
+                "readable_review_html_sha256"):
+        if key in export:
+            export[key] = None
+    reports = {**_without(outcome.reports, ("readable_review", "classic_export_audit")),
+               "delivery_withheld": record}
+    earlier = reports.get("readable_review_failure")
+    if isinstance(earlier, Mapping) and "kept_artifacts" in earlier:
+        reports["readable_review_failure"] = {
+            **_without(earlier, ("kept_artifacts",)),
+            "FILE_VALID": False,
+            "withheld_artifacts": earlier["kept_artifacts"],
+            "withheld_at": "DELIVERY",
+            "withheld_by": refusal,
+            "meaning": _WITHHELD_MEANING,
+        }
+    return replace(
+        outcome,
+        stage="DELIVERY",
+        blocked=True,
+        artifacts=_without(outcome.artifacts, drop),
+        hashes=_without(outcome.hashes, drop),
+        reports=reports,
+        export=export,
+        error=refusal,
+    )
 
 
 def _review_release_truths(
@@ -2665,21 +2715,12 @@ def _run_prior_review_profile(
             withheld = withholds(review_limitations)
             # Withheld, the CSV stays on disk as a preserved earlier output that
             # neither index names; kept, it stays in both (R28, Session 05).
-            outcome, failure_record = _showdown_review_csv_record(
+            outcome = _showdown_review_csv_record(
                 replace(outcome, blockers=(display_blocker, *outcome.blockers)),
                 display_blocker,
                 withheld=withheld,
-                stage="READABLE_REVIEW",
                 limitations=review_limitations,
             )
-            try:
-                _write_json(
-                    DEFAULT_RUNS_DIR / run_id / "prior_review" / "READABLE_REVIEW_FAILED.json",
-                    failure_record,
-                )
-                _write_json(output_root / "review" / "READABLE_REVIEW_FAILED.json", failure_record)
-            except OSError:
-                pass
             if withheld:
                 truths = _blocked_truth_values(
                     file_valid=False,
@@ -2737,6 +2778,7 @@ def _run_prior_review_profile(
                         entry_sha256=outcome.hashes["entry_csv"],
                         truths=release_truths,
                     ),
+                    now=as_of,
                 )
             except DeliveryPointerError as exc:
                 blockers[0:0] = list(exc.problems)
@@ -2747,13 +2789,7 @@ def _run_prior_review_profile(
                 ) if item.gate_class is GateClass.V),
                 "FILE_VALIDATION_INCOMPLETE",
             )
-            if slate.mode is EngineMode.CLASSIC:
-                outcome = _withhold_classic_review_csv(outcome, refusal, stage="DELIVERY")
-            else:
-                outcome, _ = _showdown_review_csv_record(
-                    outcome, refusal, withheld=True, stage="DELIVERY",
-                    limitations=blocker_limitations(blockers, registry),
-                )
+            outcome = _withhold_at_delivery(outcome, refusal, blocker_limitations(blockers, registry))
             readable_review = None
             truths = _blocked_truth_values(
                 file_valid=False,
@@ -2773,6 +2809,18 @@ def _run_prior_review_profile(
                 hashes={**outcome.hashes, "latest_deliverable": latest.pointer_sha256},
             )
     csv_listed = latest is not None
+    failure_record = outcome.reports.get("readable_review_failure")
+    if slate.mode is EngineMode.SHOWDOWN and isinstance(failure_record, Mapping):
+        # Written once the delivery decision is final, so the marker never says
+        # "kept" about a CSV that revalidation then withheld.
+        try:
+            _write_json(
+                DEFAULT_RUNS_DIR / run_id / "prior_review" / "READABLE_REVIEW_FAILED.json",
+                failure_record,
+            )
+            _write_json(output_root / "review" / "READABLE_REVIEW_FAILED.json", failure_record)
+        except OSError:
+            pass
     review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
     create_cowork_status_workbook(
         output_path=review_path,
@@ -3354,15 +3402,30 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     return code
 
 
-def _latest_after_failure(output_root: Path) -> tuple[LatestDeliverable | None, tuple[str, ...]]:
-    """The run's validated deliverable, if its pointer still revalidates; the handler must finish."""
+def _latest_after_failure(
+    output_root: Path, run_id: str
+) -> tuple[LatestDeliverable | None, tuple[str, ...]]:
+    """This run's validated deliverable, if its pointer still revalidates; the handler must finish."""
 
     try:
-        return read_latest_deliverable(output_root), ()
+        return read_latest_deliverable(output_root, run_id=run_id), ()
     except DeliveryPointerError as exc:
         return None, exc.problems
     except Exception as exc:  # noqa: BLE001 - reported, never allowed to break the handler
         return None, (f"DELIVERABLE_REVALIDATION_FAILED:{type(exc).__name__}:{exc}",)
+
+
+def _handler_release_truths(latest: LatestDeliverable | None) -> dict[str, object] | None:
+    """v2 for a failed run: its own blocked v1 truths beside the pointer's delivery half."""
+
+    if latest is None:
+        return None
+    v1 = _blocked_truth_values()
+    merged = {
+        **latest.deliverable.truths.model_dump(mode="json", by_alias=True),
+        **{key: v1[key] for key in ("FILE_VALID", "EVIDENCE_STATE", "MODEL_STATUS", "RELEASE_DECISION")},
+    }
+    return ReleaseTruthsV2.model_validate(merged).model_dump(mode="json", by_alias=True)
 
 
 def command_cowork_run(args: argparse.Namespace) -> int:
@@ -3399,13 +3462,12 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         # A file passed independent validation earlier in this run exactly when
         # this run's LATEST_DELIVERABLE.json names it and it revalidates now
         # (Session 05). The handler names that file and never deletes it.
-        latest, latest_problems = _latest_after_failure(output_root)
-        protected = {latest.deliverable.path.resolve()} if latest is not None else set()
+        # The pointer never names a `DK_UPLOAD_*` file (`delivery.revalidate`
+        # refuses the name), so the sweep below cannot reach it.
+        latest, latest_problems = _latest_after_failure(output_root, run_id)
         removed_uploads: list[str] = []
         if output_root.is_dir():
             for upload_path in output_root.glob("DK_UPLOAD_*.csv"):
-                if upload_path.resolve() in protected:
-                    continue
                 upload_path.unlink(missing_ok=True)
                 removed_uploads.append(str(upload_path))
         delivery_fields = {
@@ -3414,7 +3476,7 @@ def command_cowork_run(args: argparse.Namespace) -> int:
                 if latest is not None
                 else DeliveryState.NO_DELIVERABLE.value
             ),
-            "release_truths": latest.record["release_truths"] if latest is not None else None,
+            "release_truths": _handler_release_truths(latest),
             "latest_deliverable": latest.summary() if latest is not None else None,
             "latest_deliverable_problems": list(latest_problems),
         }
