@@ -828,6 +828,7 @@ the top of each marks it superseded, and its content is unchanged.
 | `docs/session-prompts/` (22 files) | Paste prompts; 16 for finished work and 8 still citing `COWORK_RUNBOOK` | Moved to `docs/session-prompts/archive/`; the Quick-Start and session cards replace them | P0 to Session 18, P3a to 24, X1 to 20, X3 to 19, H3 to 01, SD6 to 16; QA1 (orphaned since 2026-09-14) to Session 31; H1 superseded by Session 00 |
 | `changelog.md` entries dated 2026-09-14 to 2026-09-21 | Evidence for finished work (2,317 lines); the live file was 2,584 lines against the ledger rule's ~500-line trigger | Moved verbatim to `docs/changelog-archive/changelog-2026-09-14-through-2026-09-21.md` | Nothing open |
 | `changelog.md` entries dated 2026-09-22 before the cutover (3 entries) | Evidence for the depth-role capture fix, the Windows sync command and the roof-set guard (228 lines); the live file was 567 lines against the ~500-line trigger | Moved verbatim to `docs/changelog-archive/changelog-2026-09-22.md` by Session 02, proven with `cmp` against `git show HEAD:changelog.md` | Nothing open |
+| `changelog.md` entries from the 2026-09-22 cutover to Session 02 (4 entries) | Evidence for Sessions 00, 01, the Session 01 follow-up and 02 (480 lines); the live file was 904 lines against the ~500-line trigger | Moved verbatim to `docs/changelog-archive/changelog-2026-09-22-cutover-to-2026-09-23.md` after Session 02b, proven with `cmp` against `git show HEAD:changelog.md` | Nothing open |
 | `docs/chunks/` (17 briefs) | Specifications | Kept as specs; the status line of each now points here | Cited by the cards |
 | GitHub issue #21 | One cloud session's claim on X0 and P1, open since 2026-09-19 | Closed 2026-09-22 with a comment: both chunks done, both blockers it named resolved | none |
 | GitHub issue #40 | The 2026-09-22 audit | Stays open; Session 15 closes it | Sessions 01 to 15 |
@@ -850,4 +851,4 @@ session, because a commit cannot contain its own merge.
 | 2026-09-23 | Session 02 | In Progress to Complete | `7c5a45b` | Writer and Classic QA (items 1 and 2); merged as PR #44 |
 | 2026-09-23 | Session 02b | Added as Pending | `7c5a45b` | Builder and Showdown QA (items 3 and 4), split at the card's seam; merged with PR #44 |
 | 2026-09-23 | Session 02b | Pending to In Progress | `30da519` | Claim pushed on `claude/sharp-faraday-wqc7m5` |
-| 2026-09-23 | Session 02b | In Progress to Complete | recorded by the next session | Builder exit 3 and R29, pool filter, ratchet ceiling; Showdown QA observations; PR #48 |
+| 2026-09-23 | Session 02b | In Progress to Complete | `d40b686` | Builder exit 3 and R29, pool filter, ratchet ceiling; Showdown QA observations; merged as PR #48 |
