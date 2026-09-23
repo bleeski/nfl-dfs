@@ -421,3 +421,34 @@ def test_a_pre_existing_output_is_never_overwritten(tmp_path):
     assert proc.returncode == 2
     assert "REFUSED OUTPUT_EXISTS" in proc.stderr
     assert out.read_bytes() == b"an earlier portfolio\r\n"
+
+
+@pytest.mark.parametrize("style", ["ids", "name_and_id"])
+def test_a_lineup_repeating_a_prefilled_row_is_refused(tmp_path, style):
+    """R29 covers rows filled before this run, in either cell format."""
+
+    names = {p[0]: p[1] for p in EVERYONE}
+    cells = ROSTER if style == "ids" else [f"{names[i]} ({i})" for i in ROSTER]
+    sel, tpl, sal = fixtures(tmp_path, ("5263216931",), {"5263216931": list(reversed(ROSTER))})
+    tpl.write_text(
+        ENTRY_HEADER
+        + "5263216931,Contest 0,990,$1,,,,,,,,,,,\n"
+        + f"5263299999,Contest 1,991,$1,{','.join(cells)},,\n",
+        encoding="utf-8",
+    )
+    proc, out = run(tmp_path, sel, tpl, sal)
+    assert_refused(proc, out, "DUPLICATE_LINEUP")
+    assert "5263299999" in proc.stderr
+
+
+@pytest.mark.parametrize("mutation, code", [
+    ((b"Contest 0", b"Contest \xff"), "TEMPLATE_NOT_UTF8"),
+    ((b"Contest 0", b'"Contest 0'), "UNREADABLE_TEMPLATE_ROW"),     # unterminated quote
+])
+def test_a_damaged_template_byte_withholds_the_file(tmp_path, mutation, code):
+    """`.claude/rules/tests.md`: a changed input byte withholds the artifact."""
+
+    sel, tpl, sal = fixtures(tmp_path, ("5263216931",), {"5263216931": ROSTER})
+    tpl.write_bytes(tpl.read_bytes().replace(*mutation))
+    proc, out = run(tmp_path, sel, tpl, sal)
+    assert_refused(proc, out, code)

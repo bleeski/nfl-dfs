@@ -444,3 +444,37 @@ def test_the_writer_and_qa_agree(tmp_path, assigned_count, expected):
     assert proc.returncode == expected, proc.stderr
     assert qa.main(["--portfolio", str(sel), "--salaries", str(sal),
                     "--template", str(tpl), "--export", str(out)]) == expected
+
+
+# ---------------------------------------------------------------- prefilled rows
+# Found by the Session 02 review: a prefilled row never entered the export
+# comparison, so an assignment for it, or a new lineup repeating it, was invisible.
+
+def prefilled_files(tmp_path: Path, cells_text: str, filled: list[str]) -> tuple[Path, Path]:
+    """Row 0 blank and filled with `filled`; row 1 prefilled in both files."""
+
+    ids = [entry_id(0), entry_id(1)]
+    pre = f"{ids[1]},C,1,$1,{cells_text},,\n"
+    tpl = tmp_path / "tpl.csv"
+    tpl.write_bytes((ENTRY_HEADER + template_line(ids[0]) + pre).encode())
+    exp = tmp_path / "exp.csv"
+    exp.write_bytes((ENTRY_HEADER + export_line(ids[0], filled) + pre).encode())
+    return tpl, exp
+
+
+def test_an_assigned_row_that_was_prefilled_fails(tmp_path, capsys):
+    ids = [entry_id(0), entry_id(1)]
+    tpl, exp = prefilled_files(tmp_path, ",".join(legal_for(3)), LEGAL)
+    assert check(tmp_path, {ids[0]: LEGAL, ids[1]: legal_for(4)}, tpl, exp) == 1
+    assert "ASSIGNED_ROW_WAS_PREFILLED" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("style", ["ids", "name_and_id"])
+def test_a_new_lineup_repeating_a_prefilled_row_fails(tmp_path, capsys, style):
+    """R29 covers the whole file, including rows filled before this run."""
+
+    names = {p[0]: p[1] for p in PEOPLE}
+    cells = LEGAL if style == "ids" else [f"{names[i]} ({i})" for i in LEGAL]
+    tpl, exp = prefilled_files(tmp_path, ",".join(cells), LEGAL)
+    assert check(tmp_path, {entry_id(0): LEGAL}, tpl, exp) == 1
+    assert "DUPLICATE_LINEUPS_IN_EXPORT" in capsys.readouterr().out

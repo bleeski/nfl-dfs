@@ -82,7 +82,7 @@ prints a scorecard and names what a human has to accept. Without `--export` the
 verdict covers the portfolio JSON only, and says so.
 """
 from __future__ import annotations
-import argparse, csv, itertools, json, statistics, sys
+import argparse, csv, itertools, json, re, statistics, sys
 from collections import Counter
 
 from nfl_dfs.byte_lines import csv_field_spans, split_byte_lines, split_line_ending
@@ -91,6 +91,13 @@ SLOTS = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST"]
 NEED = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
 FLEX_OK = {"RB", "WR", "TE"}
 EXIT_PASS, EXIT_FAIL, EXIT_DEFECT, EXIT_PARTIAL = 0, 1, 2, 3
+_TRAILING_ID = re.compile(r"\((\d+)\)\s*$")
+
+
+def cell_id(cell):
+    """A roster cell's DraftKings ID, whether it holds `123` or `Name (123)`."""
+    match = _TRAILING_ID.search(cell)
+    return match.group(1) if match else cell.strip()
 
 
 def load_rows(path, key):
@@ -136,7 +143,7 @@ def export_audit(template, export, assigned):
     cells. Returns (failures, exported rosters by Entry ID in slot order,
     unfilled authorized Entry IDs).
     """
-    fail, exported, unfilled = [], {}, []
+    fail, exported, unfilled, prefilled = [], {}, [], {}
     t_raw, e_raw = open(template, "rb").read(), open(export, "rb").read()
     t_lines, e_lines = split_byte_lines(t_raw), split_byte_lines(e_raw)
     if len(t_lines) != len(e_lines):
@@ -153,6 +160,8 @@ def export_audit(template, export, assigned):
         blank = entry and not any(c.strip() for c in tc[lo:lo + 9])
         if entry:
             template_ids.append(eid)
+        if entry and not blank and t == e:
+            prefilled[eid] = [cell_id(c) for c in tc[lo:lo + 9]]
         if t == e:
             if blank:
                 if assigned is not None and eid in assigned:
@@ -182,11 +191,18 @@ def export_audit(template, export, assigned):
     else:
         for eid in sorted(set(assigned) - set(template_ids)):
             fail.append(f"ASSIGNMENT_ENTRY_ID_NOT_IN_TEMPLATE: {eid}")
+        for eid in sorted(set(assigned) & set(prefilled)):
+            fail.append(f"ASSIGNED_ROW_WAS_PREFILLED: entry {eid} was not blank in the template, "
+                        "so its assignment is not what the file holds")
         for eid, cells in exported.items():
             if eid not in assigned:
                 fail.append(f"EXPORT_ROW_NOT_IN_ASSIGNMENT: entry {eid}")
             elif sorted(cells) != sorted(assigned[eid]):
                 fail.append(f"EXPORT_ROSTER_DIFFERS_FROM_ASSIGNMENT: entry {eid}")
+    # R29 covers the whole file, including rows filled before this run.
+    rows = [tuple(sorted(c)) for c in [*exported.values(), *prefilled.values()] if all(c)]
+    if len(set(rows)) != len(rows):
+        fail.append("DUPLICATE_LINEUPS_IN_EXPORT: a lineup appears in more than one row")
     return fail, exported, unfilled
 
 
@@ -318,9 +334,6 @@ def main(argv=None):
                     fail.append(f"SLOT_INELIGIBLE: entry {eid}: {NM(i)} ({P(i)}, "
                                 f"{sal[i]['Roster Position']}) in {slot}")
             check_lineup(f"entry {eid}", cells, enforce=False)
-        rows = [tuple(sorted(c)) for c in exported.values()]
-        if len(set(rows)) != len(rows):
-            fail.append("DUPLICATE_LINEUPS_IN_EXPORT")
     elif a.template or a.export:
         fail.append("EXPORT_CHECK_INCOMPLETE: --template and --export must be given together")
 

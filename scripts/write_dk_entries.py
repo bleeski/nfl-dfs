@@ -48,6 +48,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -62,6 +63,7 @@ SALARY_CAP = 50000
 SALARY_COLUMNS = ("ID", "Name", "Position", "Roster Position", "Salary", "Game Info", "TeamAbbrev")
 
 EXIT_FILLED, EXIT_REFUSED, EXIT_PARTIAL = 0, 2, 3
+_TRAILING_ID = re.compile(r"\((\d+)\)\s*$")
 
 
 class Refused(Exception):
@@ -107,6 +109,13 @@ def load_salaries(path: Path) -> dict[str, dict]:
     return pool
 
 
+def cell_id(cell: str) -> str:
+    """A roster cell's DraftKings ID, whether it holds `123` or `Name (123)`."""
+
+    match = _TRAILING_ID.search(cell)
+    return match.group(1) if match else cell.strip()
+
+
 def decode(line: bytes) -> list[str]:
     body, _ending = split_line_ending(line)
     try:
@@ -144,11 +153,16 @@ def parse_template(lines: tuple[bytes, ...]):
         if eid in seen:
             raise Refused([("DUPLICATE_TEMPLATE_ENTRY_ID", eid)])
         seen.add(eid)
+        try:
+            csv_field_spans(split_line_ending(line)[0])
+        except ValueError as exc:
+            raise Refused([("UNREADABLE_TEMPLATE_ROW", f"entry {eid}: {exc}")])
         present = cells[fee + 1:fee + 1 + len(SLOTS)]
         rows.append({
             "line": number,
             "entry_id": eid,
             "blank": not any(c.strip() for c in present),
+            "cells": [cell_id(c) for c in present],
             "narrow": len(cells) < fee + 1 + len(SLOTS),
         })
     return fee, rows
@@ -301,7 +315,11 @@ def fill(sel: Path, tpl: Path, sal: Path, out: Path):
         problems.extend(found)
         if cells and not found:
             slotted[eid] = cells
-    seen: dict[frozenset, str] = {}
+    # R29 covers the whole file: rows filled before this run count too.
+    seen: dict[frozenset, str] = {
+        frozenset(r["cells"]): f"prefilled {r['entry_id']}"
+        for r in rows if not r["blank"] and len(r["cells"]) == len(SLOTS) and all(r["cells"])
+    }
     for eid, cells in slotted.items():
         key = frozenset(cells)
         if key in seen:
