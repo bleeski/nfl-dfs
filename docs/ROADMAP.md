@@ -102,7 +102,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 06 | Standalone | Baseline-first `run-slate`: the baseline is built and published right after intake, before priors, weather, roles or solves; an improvement replaces it only after independent validation; any improvement failure leaves the baseline reachable; C1 (rung 4) ends with a CSV | Audit D2, DD-2 | `src/nfl_dfs/cli.py`, `src/nfl_dfs/cowork.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/delivery.py` | V | Session 04, Session 05 | `sh ./nfl.sh test tests/test_run_slate_baseline_first.py tests/test_prior_review_profile.py tests/test_classic_prior_review.py -x --tb=short` | Pending |
 | Session 07 | Standalone | Deadline controller: run request v3 with an optional delivery deadline (default: earliest lock minus 5 minutes); one budget passed through every stage; retries, solver limits and bank sizes set from remaining time; dead `runtime.json` keys consumed or removed; measured stage durations | R31; audit D3, DD-3; C4 retro #3 | `src/nfl_dfs/cowork.py`, new `src/nfl_dfs/deadline.py`, `src/nfl_dfs/sources.py`, `scripts/fetch_weather_captures.py`, `scripts/make_classic_policy.py`, `config/runtime.json` | P | Session 06 | `sh ./nfl.sh test tests/test_deadline_controller.py tests/test_cowork.py tests/test_fetch_weather_captures.py -x --tb=short` | Pending |
 | Session 08 | Standalone | Timeout incumbents: validated time-limited candidates are kept; a bank with a feasible witness does not block; both joint selectors validate and return an integer incumbent on a time or search limit under a non-optimal status; C3 accepts it labelled; the timing-sensitive C2 status test becomes deterministic | Audit D5, DD-4, §1 test failure | `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_review.py` | P | Session 06 | `sh ./nfl.sh test tests/test_classic_portfolio_c2.py tests/test_portfolio_enforcement.py tests/test_classic_review_c3.py -x --tb=short`; then the C2 status test 20 times in a row | Pending |
-| Session 09 | Batched | R28 on the model path: missing weather (including a derived roof) and missing Classic official activity become named limitations, not stops; a real identity or timestamp conflict still invalidates its evidence; `build_priors` authority persists for the run; weather pre-capture becomes optional in the runbook | R28; audit D8, DD-7; archive § R23, R24, F7 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/cowork.py`, `docs/RUNBOOK.md` | P | Session 03b, Session 06 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_classic_prior_review.py tests/test_gate_registry.py -x --tb=short` | Pending |
+| Session 09 | Batched | R28 on the model path: missing weather (including a derived roof) and missing Classic official activity become named limitations, not stops; a real identity or timestamp conflict still invalidates its evidence; `build_priors` authority persists for the run; weather pre-capture becomes optional in the runbook | R28; audit D8, DD-7; archive § R23, R24, F7 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/cowork.py`, `docs/RUNBOOK.md` | P | Session 03b, Session 06 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_classic_prior_review.py tests/test_gate_registry.py -x --tb=short` | Pending |
 | Session 10 | Batched | Relaxation controller: the engine, not printed advice, walks a bounded rung ladder inside the cumulative budget; the full trigger list; bank timeouts shrink the bank before relaxing structure; Showdown gets a real ladder; uniqueness is never on it; every relaxation is a structured record | R29; audit D5, DD-4; Showdown retro #6; C4 retro #3 | new `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `scripts/make_showdown_policy.py`, `src/nfl_dfs/cli.py` | S | Session 07, Session 08 | `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_classic_policy_generator.py -x --tb=short` | Pending |
 | Session 11 | Standalone | Entry groups: prefilled rows are preserved byte-identical instead of refusing the file; blank rows are filled; each Contest ID group is delivered on its own; unresolved Entry IDs are listed; distinctness covers prefilled lineups; `entry_ids` may bind a subset | R29; audit D7, DD-6; Showdown retro #4 | `src/nfl_dfs/lineups.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/baseline.py`, `src/nfl_dfs/dk.py` | V | Session 06 | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_byte_line_fidelity.py -x --tb=short` | Pending |
 | Session 12 | Standalone | Late-swap bridge and C5: a hash-bound record of the entries actually submitted (Ben's post-upload DKEntries download) anchors governed late swap without claiming certification; multi-contest by group; locked cells byte-identical; later-lock players preferred in flexible slots | Audit D9, DD-6; archive § C5 | `src/nfl_dfs/late_swap.py`, `src/nfl_dfs/lineups.py`, `docs/DATA_CONTRACTS.md` | V | Session 11 | `sh ./nfl.sh test tests/test_governed_late_swap.py tests/test_late_swap_learning.py -x --tb=short` | Pending |
@@ -546,19 +546,15 @@ Every session follows this protocol, and the cards only add to it:
     authorization question is asked (`prior_review.py:1578-1608`).
   - The runbook's weather pre-capture (`RUNBOOK.md:758-771`) becomes an
     improvement, not a precondition.
+  - The P1 hard stop becomes an exclusion (R28, Ben 2026-09-23). A person
+    `offensive_roles` names with `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE`
+    leaves the selectable pool; the run continues and the code travels as a
+    `P` limitation naming him, its class already `P` in the registry. The
+    runbook's "and stops" (`RUNBOOK.md:889-890`) changes to match.
 - **Must hold.** Never fabricate an observation. `RELEASE_DECISION` stays
   `DO_NOT_UPLOAD`. The provider identity gate keeps its current behaviour; the
-  baseline does not consume it.
-- **[BEN: does R28 absorb the 2026-09-19 P1 hard stop?]**
-  `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE` fires for a person in
-  `TRANSFER_PRIOR_UNVERIFIED` who also trips `SALARY_RANK_DIVERGENCE`; you ruled
-  it stops the run. §2.5 keeps that ruling in force beside R28 without saying
-  R28 amends it, so the Session 03b registry classes it `V` (stops the file) on
-  that ruling. If R28 absorbs it, it becomes a current-role truth claim: the
-  person is left out, the file ships, and the gap is named. Recommendation:
-  absorb it, excluding the person rather than selecting him on the old-team
-  share, which is the stop's own remedy text. Until you rule, no session turns
-  it into a travelling limitation. It blocks nothing else on this card.
+  baseline does not consume it. A person the P1 gate names is never selected on
+  the old-team share: exclusion is the only construction change.
 
 #### Session 10: relaxation controller
 
@@ -840,6 +836,11 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
     ROI or a probability are unchanged.
   - Absorbs R24, answers the gate half of R23, and answers F7. Whether weather
     should ever feed the model is a Q2 question (Session 36).
+  - Absorbs the 2026-09-19 P1 hard stop (Ben, 2026-09-23: "Absorb it"). A
+    person in `TRANSFER_PRIOR_UNVERIFIED` who trips `SALARY_RANK_DIVERGENCE`
+    is left out of the pool, never selected on the old-team share; the file
+    ships and `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE` names him. Session 09
+    makes the code do it; until then the run still stops.
 - **R29, distinct lineups.** Ben's words: "within a given portfolio keep all
   submitted lineups distinct and unique."
   - Uniqueness leaves the relaxable construction-preference list and is never
@@ -857,7 +858,8 @@ Still in force from earlier, with full text in the backlog archive:
 
 - the 2026-09-12 lock-clock ruling, amended by R28 and R29;
 - the 2026-09-19 P1 hard stop on `TRANSFER_PRIOR_UNVERIFIED` with
-  `SALARY_RANK_DIVERGENCE`;
+  `SALARY_RANK_DIVERGENCE`, absorbed by R28 on 2026-09-23 (above): the person
+  is excluded rather than the run stopped;
 - R25, depth-chart promotion (implemented by P7);
 - R26, the retrospective roof column (implemented);
 - R27, standings as private release assets (Session 17).
@@ -947,4 +949,4 @@ session, because a commit cannot contain its own merge.
 | 2026-09-23 | Session 03 | In Progress to Complete | `b6c54d2` | `DELIVERY_STATE`, `nfl_release_truths_v2`, the R24 test; merged as PR #50 |
 | 2026-09-23 | Session 03b | Added as Pending | `b6c54d2` | Gate registry, split at the card's seam; merged with PR #50 |
 | 2026-09-23 | Session 03b | Pending to In Progress | `adc5b99` | Claim pushed on `claude/blissful-carson-kzkdcd` |
-| 2026-09-23 | Session 03b | In Progress to Complete | recorded by the next session | 1,088 codes in 43 families, exact-code loader, completeness both ways; PR #51 |
+| 2026-09-23 | Session 03b | In Progress to Complete | `16502c8` | 1,088 codes in 43 families, exact-code loader, completeness both ways; merged as PR #51 |
