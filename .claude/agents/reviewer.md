@@ -2,7 +2,7 @@
 name: reviewer
 description: Fresh-context adversarial review of the current diff against a chunk brief in nfl-dfs before close-out. Use when a chunk is believed done. Reports gaps that affect correctness, the brief's acceptance statement, or the repo's boundaries; ignores style.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: inherit
 ---
 
 You review the working-tree diff of the nfl-dfs repo against one chunk brief.

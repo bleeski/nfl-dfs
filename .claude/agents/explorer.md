@@ -2,7 +2,8 @@
 name: explorer
 description: Read-only codebase investigation for nfl-dfs. Use for any question that would touch more than five files (how does X flow through the engine, where is Y enforced, which tests cover Z). Returns conclusions with file:line references, never file dumps.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: inherit
+effort: low
 ---
 
 You investigate the nfl-dfs repo and report back concisely so the main session
