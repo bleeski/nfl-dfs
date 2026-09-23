@@ -1,5 +1,32 @@
 # Implementation Status
 
+## Capability added: 2026-09-23 (Session 05)
+
+A review CSV that passed independent validation now survives a failure of its
+readable review, in both modes, and every `run-slate` exit says whether a file
+exists to hand over. Every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`. Suite
+figures are in `changelog.md`.
+
+- **Presentation failures keep the CSV.** A readable-review failure is
+  classified code by code through the gate registry. A presentation code keeps
+  the Showdown or Classic C3 CSV in the result and both indexes, with the code
+  as a limitation and exit 2. A roster, Entry ID or byte code, or one the
+  registry cannot classify, still withholds it.
+- **C3 keeps its export and audit** when its own JSON or HTML fails, after
+  re-checking both by hash, reparse and the `DK_UPLOAD` check, and removes only
+  the two display files.
+- **`LATEST_DELIVERABLE.json`** (`delivery.py`, `nfl_latest_deliverable_v1`)
+  names the run's validated file, written with `os.replace`, bound to the file's
+  and both inputs' SHA-256, and revalidated from fresh parses before it is
+  written and whenever it is read. A changed, remapped, illegal or repeated
+  lineup is refused under any label.
+- **`run-slate` reports `DELIVERY_STATE` and `nfl_release_truths_v2`** on every
+  `prior_review` exit; Classic C1 and C2 are `NO_DELIVERABLE`, since they write
+  no entry file. After a crash the outer handler names a deliverable that still
+  revalidates and never deletes it.
+- **Not yet:** the baseline published first and replaced by an improvement
+  (Session 06), the delivery record (Session 14).
+
 ## Capability added: 2026-09-23 (Session 04)
 
 A file can be built from the two DraftKings downloads alone, before any

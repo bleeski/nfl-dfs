@@ -437,10 +437,21 @@ def test_pool_coverage_is_reconciled_against_exact_salary_bytes(tmp_path: Path) 
     selection_path.write_bytes(original)
 
 
-def test_readable_review_failure_withholds_the_artifact_index_too(
+def test_readable_review_presentation_failure_keeps_the_csv_in_both_indexes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """R28 (Session 05) changed this expectation, visibly.
+
+    Until Session 05 this test was
+    `test_readable_review_failure_withholds_the_artifact_index_too`: a forced
+    selection-salary mismatch kept the CSV on disk but stripped it from both
+    indexes. A presentation-only code (pool coverage, `P`) now keeps the CSV in
+    both indexes and publishes it. The selection-salary mismatch is a `V`
+    (audited selection) code and still withholds; that case moved, unchanged,
+    to `tests/test_artifact_preservation.py`.
+    """
     from nfl_dfs import cli
+    from nfl_dfs import delivery
     from nfl_dfs import prior_review as prior_review_module
 
     salary_path, entry_path, package_dir, project = _prepared_run(
@@ -454,7 +465,7 @@ def test_readable_review_failure_withholds_the_artifact_index_too(
     )
 
     def failing(**kwargs):
-        raise ReadableReviewError("READABLE_REVIEW_SELECTION_SALARY_MISMATCH:test")
+        raise ReadableReviewError("READABLE_REVIEW_POOL_COVERAGE_TOTAL_MISMATCH:test")
 
     monkeypatch.setattr(cli, "create_readable_review", failing)
     code = cli.command_cowork_run(
@@ -464,16 +475,22 @@ def test_readable_review_failure_withholds_the_artifact_index_too(
     report = json.loads(
         (tmp_path / "outputs" / "prior-review-test" / "cowork_run.json").read_text(encoding="utf-8")
     )
-    assert report["FILE_VALID"] is False
-    assert report["bulk_entry_csv"] is None and report["bulk_entry_sha256"] is None
-    assert "bulk_entry_csv" not in report["prior_review_artifacts"]
-    assert "bulk_entry_csv" not in report["prior_review_hashes"]
-    withheld = report["prior_review_reports"]["readable_review_failure"]["withheld_artifacts"]["bulk_entry_csv"]
-    assert Path(withheld["path"]).is_file()
-    assert sha256_file(withheld["path"]) == withheld["sha256"]
+    assert report["stage"] == "PRIOR_ONLY_REVIEW_EXPORT_READABLE_REVIEW_FAILED"
+    assert report["FILE_VALID"] is True
+    assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    assert report["bulk_entry_csv"] == report["prior_review_artifacts"]["bulk_entry_csv"]
+    assert report["bulk_entry_sha256"] == report["prior_review_hashes"]["bulk_entry_csv"]
+    assert sha256_file(report["bulk_entry_csv"]) == report["bulk_entry_sha256"]
+    assert "readable_review_json" not in report["prior_review_artifacts"]
+    record = report["prior_review_reports"]["readable_review_failure"]
+    assert record["kept_artifacts"]["bulk_entry_csv"]["path"] == report["bulk_entry_csv"]
+    assert record["limitations"] == ["READABLE_REVIEW_POOL_COVERAGE_TOTAL_MISMATCH"]
     marker = tmp_path / "outputs" / "prior-review-test" / "review" / "READABLE_REVIEW_FAILED.json"
     assert marker.is_file()
-    assert json.loads(marker.read_text())["FILE_VALID"] is False
+    assert json.loads(marker.read_text())["FILE_VALID"] is True
+    latest = delivery.read_latest(tmp_path / "outputs" / "prior-review-test")
+    assert latest is not None and str(latest.deliverable.path) == report["bulk_entry_csv"]
 
 
 def test_supplied_official_status_names_uncovered_selected_people_and_workbook_names_the_csv(

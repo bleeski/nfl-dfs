@@ -4,6 +4,223 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: a validated CSV survives its readable review (Session 05)
+
+All of the Session 05 card, both modes, on
+`claude/session-05-artifact-preservation-3cecn4`, claim `79e9c7f`. R28's
+preservation half: a review CSV that passed independent validation is no longer
+deleted or orphaned when its readable review fails, and wrong bytes or a wrong
+Entry ID mapping are still withheld whatever the failure is called. Every run
+still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; `DELIVERABLE` is not upload clearance.
+
+#### Added
+
+- `src/nfl_dfs/delivery.py`: `LATEST_DELIVERABLE.json`
+  (`nfl_latest_deliverable_v1`), one per run output folder. `publish`,
+  `read_latest` (optionally refusing another run's pointer) and `replace` (same
+  inputs, equal or better coverage; a current file that no longer revalidates
+  gives way to any that does). Written through a synced temporary file and
+  `os.replace`; the same claim and clock give the same bytes. `revalidate` checks the bytes on disk
+  from fresh parses of both snapshots: name and folder, truths, file and input
+  SHA-256, reparse and mode, Entry ID order, filled and blank rows against the
+  truths, `referee.audit_output_bytes`, `validate_lineup`, exact-roster
+  distinctness (R29). `discrepancy_limitations`, `blocker_limitations` and
+  `withholds` build limitations through the registry, failing closed.
+- `classic_review.ClassicReviewPresentationError`, carrying the kept export and
+  audit, and `CLASSIC_C3_FINAL_OUTPUT_SHA256_MISMATCH`, a final hash check of
+  both on every C3 path.
+- `run-slate`'s result: `DELIVERY_STATE`, `release_truths`
+  (`nfl_release_truths_v2`) and `latest_deliverable` on every `prior_review`
+  exit, and the pointer's hash as `latest_deliverable` in `prior_review_hashes`.
+  The outer handler adds the same three, plus `latest_deliverable_problems`.
+- `tests/test_artifact_preservation.py`, 37 cases: the pointer's write, read,
+  atomic replace, byte-identical rewrite under the same clock, another run's
+  pointer, and refusals; five corruptions under the producer's own hash
+  (Entry ID, a non-roster byte, a person twice, a repeated lineup, a blanked
+  row), each refused; name, folder, input-hash, truths and missing-file
+  refusals; seven classification cases; C3 keeping its export and audit on a
+  JSON write mismatch and a render exception, and removing everything when the
+  export or audit changed during rendering or could not be read back; Showdown and Classic run-slate
+  success, a `V` code, an unclassified exception and a corrupted CSV under a
+  presentation label, with no record left calling it kept; C3's own failure listed and published; C1 reporting
+  `NO_DELIVERABLE`; the outer handler naming the deliverable and removing only
+  a stray `DK_UPLOAD`, and naming nothing when the file changed.
+- `docs/DATA_CONTRACTS.md` § Latest deliverable pointer.
+
+#### Changed
+
+- `classic_review.py`: the display build, render, JSON and HTML writes and the
+  readable post-write check are the presentation phase. A failure there
+  re-verifies the export and audit (`_verify_kept_export`: reparse, SHA-256,
+  no `DK_UPLOAD`), removes only the JSON and HTML, and raises
+  `ClassicReviewPresentationError` with the code, or
+  `CLASSIC_C3_READABLE_RENDER_FAILED` for an exception without one. A failure
+  before it, or a failed re-verification, removes all four outputs as before.
+  The readable post-write check now runs before the final reparse.
+- `prior_review.py`, not on the card's list: its C3 branch catches
+  `ClassicReviewPresentationError` and lists the kept export and audit, with
+  `readable_review_failure` and a `CLASSIC_C3_READABLE_REVIEW_FAILED` blocker.
+  Without it the kept CSV would sit on disk in no index, the defect this card
+  fixes for Showdown. Session 06 owns the rest of that file.
+- `cli.py` run-slate: both readable-review handlers classify each `;`-joined
+  code through the registry. Any `V`, unregistered or unparseable code
+  withholds (Classic removes its four outputs, Showdown keeps the bytes under
+  `withheld_artifacts`, as before). Otherwise the CSV stays in the result and
+  both indexes, stage suffix `_READABLE_REVIEW_FAILED`, exit 2, and C3's failed
+  JSON and HTML are removed. A kept CSV is published only after
+  `delivery.publish` revalidates it, with the pinned `--as-of` as its clock. A
+  refusal, or a `V` blocker, withholds it at stage `DELIVERY` in either mode:
+  unlisted, kept on disk, never deleted, under `delivery_withheld`. Showdown's
+  `READABLE_REVIEW_FAILED.json` is written once that decision is final. The
+  workbook names the CSV whenever it is listed.
+- `cli.py` outer handler: reads this run's pointer; a file it names that
+  revalidates is reported, with `release_truths` carrying the failed run's own
+  v1 truths beside the pointer's delivery half. The `DK_UPLOAD_*` sweep is
+  unchanged: the pointer can never name such a file.
+- `config/gate_registry_v1.json`: 27 codes, one family, nothing reclassified.
+  `latest_deliverable` (`V`, contract Latest deliverable pointer) takes the
+  pointer's ten own refusals; the other 17 join existing families:
+  `delivered_bytes` (8), `entry_authority` (2), `slate_mode`, `roster_legality`,
+  `distinct_lineups`, `prohibited_artifact`, `delivery_coverage`
+  (`PROFILE_WRITES_NO_ENTRY_FILE`), `gate_registry` (`GATE_CODE_UNCLASSIFIED`)
+  and `presentation` (`CLASSIC_C3_READABLE_RENDER_FAILED`, the only new `P`).
+  1,184 codes in 44 families. SHA-256
+  `b800a8f43adc5f0938940ec75f0c4513a6633361294b3c10b00ec56af9b8ffa9`, re-pinned
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+- Two tests, edited visibly because R28 changed their expectation:
+  - `tests/test_classic_portfolio_c2.py`:
+    `test_c3_readable_reconciliation_failure_removes_new_review_outputs` is now
+    `test_c3_readable_reconciliation_failure_keeps_the_validated_csv`. Its forced
+    code was unregistered, which now fails closed; it forces the real
+    `READABLE_REVIEW_JSON_SHA256_MISMATCH` (`P`) and expects the CSV and audit
+    kept, listed and published and the readable files gone. The unregistered
+    code, still withholding everything, moved to the new file.
+  - `tests/test_cowork_rerun_regressions.py`:
+    `test_readable_review_failure_withholds_the_artifact_index_too` is now
+    `test_readable_review_presentation_failure_keeps_the_csv_in_both_indexes`,
+    forcing `READABLE_REVIEW_POOL_COVERAGE_TOTAL_MISMATCH` (`P`). Its old
+    `READABLE_REVIEW_SELECTION_SALARY_MISMATCH` is `V` (audited selection) and
+    still withholds; that case moved, unchanged, to the new file.
+- `tests/test_repo_boundaries.py`, edited visibly: `DK_UPLOAD_MODULES` gains
+  `delivery.py`, which names the prefix only to refuse it. The first full run
+  failed `test_dk_upload_is_confined_to_a_pinned_set_of_modules` on exactly
+  that, as the test's own message asks a refusal to be recorded.
+- `.claude/rules/operating-path.md` and `docs/RUNBOOK.md` step 7: "any byte or
+  semantic disagreement does not advertise a new CSV" rewritten to R28's split.
+  `docs/DATA_CONTRACTS.md` § C3 and § SD5 say the same, and § Release truths
+  says `run-slate` carries v2.
+
+#### Decided, and why
+
+- **Classification**: each `;`-joined fragment by its leading code. Only `S` and
+  `P` keep the CSV. A `V` code, one the registry lacks, or an exception with no
+  code (`KeyError`, a non-review `ValueError`) is `GATE_CODE_UNCLASSIFIED`, `V`:
+  what nobody classified cannot be shown to spare the file. Registered in the
+  `gate_registry` family, whose cover already says "a code it does not hold was
+  asked for". No existing presentation code moved: the five codes Ben named are
+  `V`, and the audit's exposure and overlap mismatches that stay `P` disagree
+  about construction preferences, not the bytes, which `delivery.revalidate`
+  re-checks on the keep path anyway.
+- **C3 is classified by phase, not by code**, because the phase is known: an
+  exception after the export and audit passed and before the final checks is
+  presentation. It is not trusted alone: the kept pair must re-verify, run-slate
+  classifies the recorded code again, and `publish` revalidates the CSV.
+- **`FILE_VALID` keeps its v1 meaning**, the export CSV for C3 and Showdown, so
+  it is true when the CSV survives and false when it is withheld.
+  `delivered_file_valid` equals it on these exits. They would differ only when a
+  second file ships, which is Session 06's baseline.
+- **Exit code stays 2** on any readable-review failure: review generation did
+  not complete. The result's `DELIVERY_STATE` and `latest_deliverable` say a
+  file exists.
+- **`run-slate` gains `nfl_release_truths_v2` now**, not in Session 06, because
+  the pointer carries `DELIVERY_STATE` and the result must say the same thing.
+  Blockers become limitations by their leading code; on a real Showdown fixture
+  run all six are `P`. C1 and C2 report `NO_DELIVERABLE` with
+  `PROFILE_WRITES_NO_ENTRY_FILE` (`V`, `delivery_coverage`) rather than the
+  derivation's generic `FILE_VALIDATION_INCOMPLETE`, since their JSON is valid
+  and there is simply no entry file.
+- **The pointer's location** is the run's output folder, and the file it names
+  must sit inside it. Runs are immutable folders; a wider pointer could name
+  another slate's file, and two instances would race it.
+- **"Passed independent validation earlier in the run"** in the outer handler
+  means the run's pointer names the file and it revalidates now. Nothing else
+  survives an exception, and the handler never deleted a review CSV before
+  either: it removes only `DK_UPLOAD_*.csv`, which run-slate never writes.
+- **A withhold at delivery never deletes.** A display `V` code keeps each
+  mode's old behaviour (C3 removes its four new outputs, Showdown keeps the bytes
+  unlisted). A `publish` refusal can come from a stale pointer or a failed write
+  as well as from changed bytes, so it only unlists, in both modes; the
+  preserve-bytes boundary favours keeping a file nothing advertises.
+- **`certify`'s handler (`cli.py:1177-1180` on `336d078`) is unchanged.** It
+  deletes a certified `DK_UPLOAD` whose command did not finish; R28 leaves
+  `RELEASE_DECISION` and `CERTIFIED` unchanged, the file is not on the operating
+  path, and `delivery.py` refuses `DK_UPLOAD_*` names.
+- **Classic C1 and C2 write no upload-shaped CSV**, so of the three
+  `prior_review` exits only Showdown and C3 have a file to preserve. C1/C2 gained
+  only the v2 truths, with a test.
+- **Breakpoint not taken.** The diff is 2,342 changed lines against about
+  1,500: 1,128 source and registry, 772 tests, 433 documents with this entry.
+  It crossed only when the work was written and green. The seam the card names is not clean: `publish`'s
+  revalidation is what makes the keep path fail closed on corrupt bytes, so
+  landing preservation without it would advertise unrechecked CSVs in the
+  interim, and a Session 05b would pass through `cli.py` again.
+
+#### Review
+
+The `reviewer` subagent read the committed diff (`59f1fcb`). Two blocking
+findings, both fixed before this entry:
+
+- A Showdown CSV kept after a display failure and then refused by `publish`
+  was still described as kept (`FILE_VALID: true`, `kept_artifacts`) in
+  `READABLE_REVIEW_FAILED.json` and `prior_review_reports`. The marker is now
+  written after the delivery decision and the record rewritten to withheld; the
+  corruption test checks both.
+- The pointer writer had no determinism test, and `run-slate` published on the
+  wall clock under a pinned `--as-of`. Both fixed.
+
+Open findings, fixed: the handler's `release_truths` contradicted its top-level
+`FILE_VALID`; a pointer left by another run in a reused `--output-dir` would have
+been read as this run's (`DELIVERY_POINTER_OTHER_RUN`); an `OSError` while
+writing the pointer escaped to the outer handler and orphaned the CSV
+(`DELIVERY_POINTER_WRITE_FAILED`); an `OSError` while C3 re-verified its kept
+pair skipped the cleanup. The handler's check that skipped a pointer-named
+`DK_UPLOAD` could never match and is gone.
+
+#### Found, not fixed
+
+- `REVIEW_EXPORT`, the prefix of the Showdown export's blockers
+  (`prior_review.py`, `REVIEW_EXPORT:{problem}`), is not registered: the scan
+  does not see the generator it is built in. It now classifies as
+  `GATE_CODE_UNCLASSIFIED`, which withholds, and that path has no file anyway.
+- `certify`'s handler removes `DK_UPLOAD_<run>.csv` but leaves its
+  `DK_UPLOAD_<run>.manifest.json`, which still names the removed file.
+- `prior_review.json`, written before `run-slate` classifies, still names a C3
+  or Showdown CSV that `run-slate` later withholds. It is an immutable run
+  record and is not rewritten; `cowork_run.json` is the run's answer. Showdown
+  had this before Session 05, and C3 had it for every display failure.
+- The C2 half of `prior_review`'s JSON-only export note is unreachable: a
+  normalized policy always goes through C3. Only C1 exits there.
+- `create_readable_review` writes its JSON and HTML before its own JSON hash
+  check and never removes them; Showdown leaves them on disk, unindexed, as
+  before (`readable_review.py`, not on the card).
+
+#### Verification
+
+- Baseline before any change: `1529 passed, 1 skipped in 254.46s (0:04:14)`.
+- Card command, final tree: `114 passed in 114.74s (0:01:54)`
+  (`test_classic_review_c3`, `test_classic_portfolio_c2`,
+  `test_cowork_rerun_regressions`, `test_artifact_preservation`). The
+  timing-sensitive C2 status test passed on every run; Session 08 still owns it.
+- First full suite: `1 failed, 1562 passed, 1 skipped in 264.54s`, the
+  `DK_UPLOAD_MODULES` pin above.
+- Final full suite: `1566 passed, 1 skipped in 265.80s (0:04:25)`, the skip the
+  known junction test; recorded with `scripts/record_verify.py`.
+- Two mutations, reverted: `delivery.withholds` returning `False` failed 12
+  cases; C3's presentation flag never set failed 5.
+- `sh ./nfl.sh doctor` `pass_status: true`; `git diff --check` clean;
+  `compileall` of every changed module; `check_protected_paths.py`: no
+  protected path.
+
 ### 2026-09-23: `nfl baseline`, a file from the DraftKings bytes alone (Session 04)
 
 All of the Session 04 card, Classic and Showdown, on

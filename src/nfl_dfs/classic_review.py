@@ -109,6 +109,33 @@ class ClassicReviewError(ValueError):
     """A named fail-closed C3 discrepancy."""
 
 
+class ClassicReviewPresentationError(ClassicReviewError):
+    """The readable review failed after the export and its audit passed (R28, Session 05).
+
+    The export CSV and its audit stay on disk, re-verified after the failure by
+    hash, reparse and the `DK_UPLOAD` check; only the readable JSON and HTML are
+    removed. The message is the presentation code, or
+    `CLASSIC_C3_READABLE_RENDER_FAILED` for an exception that carries none.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        export_path: str,
+        export_sha256: str,
+        audit_path: str,
+        audit_sha256: str,
+        audit: dict[str, object],
+    ) -> None:
+        super().__init__(message)
+        self.export_path = export_path
+        self.export_sha256 = export_sha256
+        self.audit_path = audit_path
+        self.audit_sha256 = audit_sha256
+        self.audit = audit
+
+
 @dataclass(frozen=True)
 class ClassicReviewArtifacts:
     data: dict[str, object]
@@ -499,6 +526,29 @@ def _safe_remove_created(paths: Sequence[Path]) -> None:
             pass
 
 
+def _verify_kept_export(
+    export_file: Path,
+    export_sha: str,
+    audit_file: Path,
+    audit_sha: str,
+    reparsed_output,
+) -> None:
+    """The export and its audit are still the bytes that passed, and nothing upload-named exists."""
+
+    try:
+        final_reparse = parse_entry_bytes(export_file.read_bytes(), source_name=str(export_file))
+    except Exception as exc:  # noqa: BLE001 - written bytes must fail closed
+        raise ClassicReviewError(
+            f"CLASSIC_C3_FINAL_OUTPUT_REPARSE_FAILED:{type(exc).__name__}:{exc}"
+        ) from exc
+    if reparsed_output is None or final_reparse.authorizations != reparsed_output.authorizations:
+        raise ClassicReviewError("CLASSIC_C3_FINAL_OUTPUT_REPARSE_MISMATCH")
+    if sha256_file(export_file) != export_sha or sha256_file(audit_file) != audit_sha:
+        raise ClassicReviewError("CLASSIC_C3_FINAL_OUTPUT_SHA256_MISMATCH")
+    if list(export_file.parent.glob("DK_UPLOAD_*.csv")):
+        raise ClassicReviewError("CLASSIC_C3_DK_UPLOAD_ARTIFACT_PROHIBITED")
+
+
 def create_classic_review_package(
     *,
     salary_path: str | Path,
@@ -542,6 +592,7 @@ def create_classic_review_package(
     intake_hashes = _hash_checkpoint("INTAKE", tracked, expected)
     problems: list[str] = []
     created: list[Path] = []
+    presenting = False
     try:
         slate = parse_salaries(salary_file)
         template = parse_entries(entry_file)
@@ -1142,6 +1193,10 @@ def create_classic_review_package(
         pre_render_expected = {**expected, "bulk_entry_csv": export_sha, "classic_export_audit": audit_sha}
         pre_render_hashes = _hash_checkpoint("PRE_RENDER", pre_render_paths, pre_render_expected)
 
+        # R28 (Session 05): from here to the readable post-write check is
+        # presentation. A failure in it keeps the export and its audit, once
+        # `_verify_kept_export` passes them again, and removes only the JSON and HTML.
+        presenting = True
         denominator = len(entry_ids)
         display_by_person = {row.underlying_id: row for row in slate.players}
         for row in player_rows:
@@ -1255,18 +1310,10 @@ def create_classic_review_package(
         if _atomic_write(html_file, html_payload) != html_sha:
             raise ClassicReviewError("CLASSIC_C3_READABLE_HTML_WRITE_MISMATCH")
         created.append(html_file)
-        try:
-            final_reparse = parse_entry_bytes(export_file.read_bytes(), source_name=str(export_file))
-        except Exception as exc:  # noqa: BLE001 - written bytes must fail closed
-            raise ClassicReviewError(
-                f"CLASSIC_C3_FINAL_OUTPUT_REPARSE_FAILED:{type(exc).__name__}:{exc}"
-            ) from exc
-        if reparsed_output is None or final_reparse.authorizations != reparsed_output.authorizations:
-            raise ClassicReviewError("CLASSIC_C3_FINAL_OUTPUT_REPARSE_MISMATCH")
         if sha256_file(json_file) != json_sha or sha256_file(html_file) != html_sha:
             raise ClassicReviewError("CLASSIC_C3_READABLE_POST_WRITE_MISMATCH")
-        if list(export_file.parent.glob("DK_UPLOAD_*.csv")):
-            raise ClassicReviewError("CLASSIC_C3_DK_UPLOAD_ARTIFACT_PROHIBITED")
+        presenting = False
+        _verify_kept_export(export_file, export_sha, audit_file, audit_sha, reparsed_output)
         return ClassicReviewArtifacts(
             data=data,
             audit=audit_record,
@@ -1279,6 +1326,25 @@ def create_classic_review_package(
             html_path=str(html_file),
             html_sha256=html_sha,
         )
-    except Exception:
+    except Exception as exc:
+        if presenting:
+            try:
+                _verify_kept_export(export_file, export_sha, audit_file, audit_sha, reparsed_output)
+            except Exception as integrity:  # noqa: BLE001 - an unverifiable export is not kept
+                _safe_remove_created((*created, *new_files))
+                raise integrity from exc
+            _safe_remove_created((json_file, html_file))
+            kept = {
+                "export_path": str(export_file),
+                "export_sha256": export_sha,
+                "audit_path": str(audit_file),
+                "audit_sha256": audit_sha,
+                "audit": audit_record,
+            }
+            if isinstance(exc, ClassicReviewError):
+                raise ClassicReviewPresentationError(str(exc), **kept) from exc
+            raise ClassicReviewPresentationError(
+                f"CLASSIC_C3_READABLE_RENDER_FAILED:{type(exc).__name__}:{exc}", **kept
+            ) from exc
         _safe_remove_created((*created, *new_files))
         raise

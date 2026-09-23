@@ -25,9 +25,14 @@ paths:
   no upload-shaped CSV at all; no operating profile writes `DK_UPLOAD` (only
   `certify` and governed `late-swap` can, and neither is on this path).
 - Review JSON/HTML/workbook are rebuilt from the exact bound artifacts and
-  reconciled (`DISPLAY_RECONCILIATION=PASS`). Any byte or semantic disagreement
-  is `READABLE_REVIEW_FAILED`, exit code 2, earlier artifacts preserved, and the
-  top-level result does not advertise a new CSV.
+  reconciled (`DISPLAY_RECONCILIATION=PASS`). Any disagreement is
+  `READABLE_REVIEW_FAILED` (Classic: `CLASSIC_C3_READABLE_REVIEW_FAILED`) and
+  exit code 2, classified code by code through the gate registry (R28,
+  Session 05). A roster, Entry ID or byte disagreement (`V`), or a code the
+  registry cannot classify, withholds the CSV: the result does not advertise
+  it. Any other keeps it in the result and both indexes with a presentation
+  limitation, once `delivery.publish` has revalidated it. C3 removes only its
+  failed JSON and HTML; `LATEST_DELIVERABLE.json` names only a revalidated file.
 - Escape markup and render spreadsheet-active prefixes inert without changing
   the source bytes. HTML is self-contained (no external assets).
 - Exit code 0 means review generation completed. The `warning` and

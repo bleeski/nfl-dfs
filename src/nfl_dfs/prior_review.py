@@ -51,6 +51,7 @@ from .classic_portfolio import (
 from .classic_portfolio_policy import NormalizedClassicPortfolioPolicy
 from .classic_review import (
     SCORE_SNAPSHOT_VERSION,
+    ClassicReviewPresentationError,
     create_classic_review_package,
 )
 from .dk import (
@@ -2909,6 +2910,10 @@ def run_prior_review(
                 else Path.cwd().resolve()
             )
             review_dir = out_dir / "review"
+            # R28 (Session 05): a readable-review failure after the export and its
+            # audit passed keeps both, so they are listed here; run-slate
+            # classifies the failure and publishes or withholds the CSV.
+            readable_failure: ClassicReviewPresentationError | None = None
             try:
                 classic_review = create_classic_review_package(
                     salary_path=salary_path,
@@ -2920,6 +2925,9 @@ def run_prior_review(
                     output_dir=review_dir,
                     package_root=package_root,
                 )
+            except ClassicReviewPresentationError as exc:
+                classic_review = None
+                readable_failure = exc
             except (OSError, ValueError) as exc:
                 error = f"{type(exc).__name__}:{exc}"
                 stages.append(_stage("EXPORT", "FAILED_C3_DOWNSTREAM_AUDIT", error=error))
@@ -2936,50 +2944,64 @@ def run_prior_review(
                 )
                 write_run_record(run_dir / "prior_review.json", outcome.as_report())
                 return outcome
+            kept = classic_review if classic_review is not None else readable_failure
+            assert kept is not None
             artifacts.update(
-                {
-                    "classic_export_audit": classic_review.audit_path,
-                    "bulk_entry_csv": classic_review.export_path,
-                    "readable_review_json": classic_review.json_path,
-                    "readable_review_html": classic_review.html_path,
-                }
+                {"classic_export_audit": kept.audit_path, "bulk_entry_csv": kept.export_path}
             )
             hashes.update(
-                {
-                    "classic_export_audit": classic_review.audit_sha256,
-                    "bulk_entry_csv": classic_review.export_sha256,
-                    "readable_review_json": classic_review.json_sha256,
-                    "readable_review_html": classic_review.html_sha256,
-                }
+                {"classic_export_audit": kept.audit_sha256, "bulk_entry_csv": kept.export_sha256}
             )
-            reports["classic_export_audit"] = classic_review.audit
-            reports["readable_review"] = classic_review.data
+            reports["classic_export_audit"] = kept.audit
+            if classic_review is not None:
+                artifacts.update(
+                    {
+                        "readable_review_json": classic_review.json_path,
+                        "readable_review_html": classic_review.html_path,
+                    }
+                )
+                hashes.update(
+                    {
+                        "readable_review_json": classic_review.json_sha256,
+                        "readable_review_html": classic_review.html_sha256,
+                    }
+                )
+                reports["readable_review"] = classic_review.data
             export_report = {
                 "FILE_VALID": True,
                 "EVIDENCE_STATE": overall_evidence_state,
                 "MODEL_STATUS": "PRIOR_ONLY",
                 "RELEASE_DECISION": "DO_NOT_UPLOAD",
                 "file_kind": "EXACT_TEMPLATE_REVIEW_CSV_NOT_UPLOAD_CERTIFICATION",
-                "bulk_entry_csv": classic_review.export_path,
-                "bulk_entry_sha256": classic_review.export_sha256,
-                "downstream_audit": classic_review.audit_path,
-                "downstream_audit_sha256": classic_review.audit_sha256,
-                "readable_review_json": classic_review.json_path,
-                "readable_review_json_sha256": classic_review.json_sha256,
-                "readable_review_html": classic_review.html_path,
-                "readable_review_html_sha256": classic_review.html_sha256,
+                "bulk_entry_csv": kept.export_path,
+                "bulk_entry_sha256": kept.export_sha256,
+                "downstream_audit": kept.audit_path,
+                "downstream_audit_sha256": kept.audit_sha256,
+                "readable_review_json": classic_review.json_path if classic_review else None,
+                "readable_review_json_sha256": (
+                    classic_review.json_sha256 if classic_review else None
+                ),
+                "readable_review_html": classic_review.html_path if classic_review else None,
+                "readable_review_html_sha256": (
+                    classic_review.html_sha256 if classic_review else None
+                ),
                 "certification_basis": "NOT_CERTIFIED_CLASSIC_C3_REVIEW_ONLY",
                 "warning": (
                     "Exact-template and independently audited review bytes only. "
                     "This remains PRIOR_ONLY / DO_NOT_UPLOAD."
                 ),
             }
+            if readable_failure is not None:
+                export_report["readable_review_failure"] = str(readable_failure)
             stages.append(
                 _stage(
                     "EXPORT",
-                    "C3_INDEPENDENT_AUDIT_AND_REVIEW_PASS",
+                    "C3_INDEPENDENT_AUDIT_AND_REVIEW_PASS"
+                    if readable_failure is None
+                    else "C3_INDEPENDENT_AUDIT_PASS_READABLE_REVIEW_FAILED",
                     file_valid=True,
                     release_decision="DO_NOT_UPLOAD",
+                    **({"error": str(readable_failure)} if readable_failure is not None else {}),
                 )
             )
             stages.append(freeze_prelock(export_report))
@@ -2987,7 +3009,11 @@ def run_prior_review(
                 profile_version=profile_version,
                 stage="EXPORT",
                 blocked=False,
-                blockers=(),
+                blockers=(
+                    (f"CLASSIC_C3_READABLE_REVIEW_FAILED:{readable_failure}",)
+                    if readable_failure is not None
+                    else ()
+                ),
                 stages=tuple(stages),
                 artifacts=artifacts,
                 hashes=hashes,

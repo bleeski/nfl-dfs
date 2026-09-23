@@ -799,10 +799,21 @@ def test_c3_enforcement_never_calls_quantitative_or_later_paths(
     assert not list(tmp_path.rglob("DK_UPLOAD_*.csv"))
 
 
-def test_c3_readable_reconciliation_failure_removes_new_review_outputs(
+def test_c3_readable_reconciliation_failure_keeps_the_validated_csv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """R28 (Session 05) changed this expectation, visibly.
+
+    Until Session 05 this test was
+    `test_c3_readable_reconciliation_failure_removes_new_review_outputs`: an
+    unregistered forced code removed the CSV, its audit and the readable files.
+    A presentation-only code (the readable JSON's hash, `P`) now keeps the
+    independently validated CSV and its audit listed and published, and removes
+    only the readable JSON and HTML. The unregistered code, which still
+    withholds everything, moved to `tests/test_artifact_preservation.py`.
+    """
     from nfl_dfs import cli
+    from nfl_dfs import delivery
     from nfl_dfs.dk import parse_entries, parse_salaries
     from .test_prior_review_profile import _cowork_args
 
@@ -832,7 +843,7 @@ def test_c3_readable_reconciliation_failure_removes_new_review_outputs(
     monkeypatch.setattr(
         cli,
         "verify_readable_review_artifacts",
-        lambda **_kwargs: ("FORCED_POST_PUBLICATION_DISPLAY_MUTATION",),
+        lambda **_kwargs: ("READABLE_REVIEW_JSON_SHA256_MISMATCH:actual=forced:expected=pinned",),
     )
     code = cli.command_cowork_run(
         _cowork_args(
@@ -857,20 +868,29 @@ def test_c3_readable_reconciliation_failure_removes_new_review_outputs(
             / "cowork_run.json"
         ).read_text(encoding="utf-8")
     )
-    assert report["stage"] == "PRIOR_REVIEW_READABLE_REVIEW_BLOCKED"
-    assert report["FILE_VALID"] is False
+    assert report["stage"] == "PRIOR_ONLY_CLASSIC_C3_REVIEW_EXPORT_READABLE_REVIEW_FAILED"
+    assert report["FILE_VALID"] is True
     assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
-    assert report["export"]["bulk_entry_csv"] is None
-    assert report["export"]["downstream_audit"] is None
-    for key in (
-        "classic_export_audit",
-        "bulk_entry_csv",
-        "readable_review_json",
-        "readable_review_html",
-    ):
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    assert report["blockers"][0].startswith(
+        "CLASSIC_C3_READABLE_REVIEW_FAILED:ReadableReviewError:READABLE_REVIEW_JSON_SHA256_MISMATCH:"
+    )
+    assert report["export"]["bulk_entry_csv"] == report["bulk_entry_csv"]
+    assert report["export"]["downstream_audit"] is not None
+    assert report["export"]["readable_review_json"] is None
+    for key in ("classic_export_audit", "bulk_entry_csv", "latest_deliverable"):
+        assert key in report["prior_review_artifacts"] and key in report["prior_review_hashes"]
+    for key in ("readable_review_json", "readable_review_html"):
         assert key not in report["prior_review_artifacts"]
-    assert not list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))
-    assert not list(tmp_path.rglob("classic_review_export_audit.json"))
+    [csv_path] = list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))
+    assert sha256_file(csv_path) == report["bulk_entry_sha256"]
+    assert len(list(tmp_path.rglob("classic_review_export_audit.json"))) == 1
     assert not list(tmp_path.rglob("prior_only_readable_review.json"))
     assert not list(tmp_path.rglob("prior_only_readable_review.html"))
     assert not list(tmp_path.rglob("DK_UPLOAD_*.csv"))
+    limitations = {
+        item["code"]: item["class"] for item in report["release_truths"]["delivery_limitations"]
+    }
+    assert limitations["READABLE_REVIEW_JSON_SHA256_MISMATCH"] == "P"
+    latest = delivery.read_latest(tmp_path / "outputs" / "classic-c3-display-failure")
+    assert latest is not None and latest.deliverable.path == csv_path
