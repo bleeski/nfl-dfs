@@ -56,6 +56,11 @@ decisions on the drifted number.
 The lock on a Classic slate is the **earliest** kickoff in the salary file, not
 the latest. `scripts/session_probe.py --salaries <csv>` reports it measured.
 
+Put the number in every progress note: minutes to the delivery deadline (the
+earliest lock minus 5, R31), re-measured at each stage boundary. A session paces
+itself to the remaining time it can see in its own recent output, and that
+figure is honest only if it was just measured.
+
 ## Verify before reporting a defect
 
 **A structural claim about the engine gets a check first.** Sixty seconds of
@@ -115,3 +120,12 @@ Ask for facts only he has — a ruling, a file, a threshold he has not set. Deci
 everything you could evaluate yourself, say which way you went and why, and let
 him overturn it. Construction preferences are explicitly yours under the lock
 clock ruling, except lineup uniqueness, which R29 took off that list.
+
+A message with no command in it ends the turn, and the slate waits until Ben
+comes back. Four endings have no place in a run: a summary that announces the
+next step instead of taking it; an offer to continue unless he objects; a list
+of decisions none of which blocks the run (the 2026-09-20 question was one); and
+stopping to report because a stage finished. Put status and recommendations in
+the same message as the next command. Stop only when the file is delivered with
+its gaps named, when an integrity gate stops the file and nothing else can
+proceed, or when the next step needs a fact only he has.

@@ -135,6 +135,29 @@ Never mix the two in one session. First run on a new machine or container is
 `.\nfl.ps1 setup` or `sh ./nfl.sh setup`, which needs `uv` and `README.md`
 present.
 
+### Model and effort
+
+Nothing in the repository pins a model or an effort level. Choose both in the
+app, with `/model` and `/effort`, so a new model needs no pull request.
+
+- **Subagents follow the session.** `explorer` and `reviewer` declare
+  `model: inherit` (2026-09-23; both were pinned to a smaller model before).
+  `explorer` also declares `effort: low`, the level Anthropic's effort guide
+  lists for subagents: it looks things up and returns `path:line` references
+  the main session can check. `reviewer` runs at the session's level.
+- **Effort is the thinking control.** On the model this repository runs,
+  thinking is always on: `alwaysThinkingEnabled`, `MAX_THINKING_TOKENS=0` and
+  the Alt+T toggle do nothing. `/effort` saves a level per model, so a level
+  set for an earlier model may not carry over; check it after switching. Prompt
+  lines such as "think carefully" add latency, not quality, and none are in
+  this repository (checked 2026-09-23).
+- **Which level.** Keep slate operation at the model's default: the engine
+  computes every number, so more thinking buys nothing on a slate and costs
+  clock. Keep ordinary roadmap sessions at the default too. Raise a
+  `Standalone` solver-heavy session only after a run at the default missed
+  something, and record that in the changelog. `max` and `ultracode` need a
+  measured gain first.
+
 ### Keeping a Windows checkout in sync
 
 Cloud sessions merge into `main` through pull requests, so the Windows checkout
@@ -192,19 +215,20 @@ cannot run on Windows.
 
 ## The protected list, and why each entry is on it
 
-`.github/protected-paths.txt` is the definition. The categories:
+`.github/protected-paths.txt` is the definition. Since 2026-09-20 it holds
+three entries:
 
-- **`CLAUDE.md` and `.claude/rules/*.md`.** The boundaries themselves. If Claude
-  could edit the rule that constrains it, the rule is decorative.
-- **`release.py`, `certification.py`, `preflight.py`, `evidence.py`,
-  `sources.py`.** What may be released, what counts as proof, and what the
-  engine is allowed to fetch.
-- **`config/evidence_policy.json`, `config/metric_registry_*.json`.** The
-  pre-declared thresholds. A metric registry edited after seeing the data is not
-  a pre-registration, it is a story.
-- **`.claude/settings.json`, `.github/protected-paths.txt`,
-  `.github/workflows/*.yml`.** The authority model. Changing the gate is not
+- **`CLAUDE.md`.** The permanent boundaries. `.claude/rules/*.md` may refine
+  how Claude works and merges on green, but a change that would relax a
+  boundary belongs in `CLAUDE.md`, where it needs the label.
+- **`.claude/settings.json`.** The permission deny list and the hooks that
+  enforce it.
+- **`.github/protected-paths.txt`.** The list itself. Changing the gate is not
   something the thing being gated decides.
+
+The release and evidence modules, the registered policy JSON, the workflows and
+`.claude/rules/*.md` came off on 2026-09-20 (see the top of this file). CI, the
+boundary tests and the pinned suite gate them now.
 
 ## Revoking authority
 

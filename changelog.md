@@ -4,6 +4,56 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: subagents follow the session's model; slate runs name the early stops
+
+Not a roadmap session: no claim, no status change, no ledger row. A review of
+the repository's Claude Code configuration against Anthropic's current
+prompting and effort guidance, at Ben's request. No engine module, contract,
+evidence gate or release truth changed. Nothing under `src/` or `scripts/`
+calls a model API, so the guidance's API changes have nothing to migrate here.
+
+#### Changed
+
+- `.claude/agents/explorer.md`, `.claude/agents/reviewer.md`: the fixed model
+  pin is replaced by `model: inherit`, so both run on the model Ben chose for
+  the session. `explorer` declares `effort: low`, the level the effort guide
+  lists for subagents; `reviewer` runs at the session's level.
+- `.claude/rules/slate-operation.md`: *Measure the clock* now puts the measured
+  minutes to the delivery deadline (R31) in every progress note, re-measured at
+  each stage boundary. *Decide what is yours to decide* names four turn endings
+  that stall a run while Ben is away, the 2026-09-20 question among them, and
+  the three stops a run does want.
+- `docs/CLAUDE_CODE_SETUP.md`: a *Model and effort* section (nothing pins a
+  model or effort; subagents inherit; thinking is always on, so effort is the
+  control; stay at the default for slates). *The protected list* section still
+  described the twelve-entry list and said `.claude/rules/*.md` was protected,
+  which contradicted the top of the same file and `git-authority.md`; it now
+  describes the three entries.
+
+#### Not changed
+
+- `CLAUDE.md` and `.claude/settings.json`. Neither conflicts with the guidance:
+  verification here means pasted evidence, which the guidance keeps; no
+  "think carefully" or "double-check your answer" line exists in `.claude/` or
+  `CLAUDE.md`; plan mode first for multi-file work is a defined check-in, not
+  an early stop.
+- `.claude/skills/onboard/SKILL.md`. Its last line, "Do not start work until
+  that is said out loud", invites a turn that ends on the orientation report.
+  The replacement was refused by the session's permission classifier as
+  self-modification and is left for Ben.
+- `docs/CLAUDE_CODE_SETUP.md` still gives `1070 passed, 1 skipped` as the
+  Windows result, below the Linux count in `CLAUDE.md`. Left as is: the current
+  Windows count was not measured here.
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_roadmap_queue.py tests/test_repo_boundaries.py`:
+  `149 passed in 1.94s`.
+- Complete pinned suite, Linux: `1168 passed, 1 skipped in 164.00s (0:02:43)`,
+  recorded with `scripts/record_verify.py`. The skip is the junction test.
+- `sh ./nfl.sh doctor`: `pass_status: true`. `git diff --check`: clean.
+  `scripts/check_protected_paths.py`: no protected path touched.
+
 ### 2026-09-23: the fallback writer and Classic QA check the file, not the JSON (Session 02)
 
 Items 1 and 2 of the Session 02 card, on `claude/s02-fallback-csv-l62fjm`, PR
