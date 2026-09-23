@@ -15,12 +15,13 @@ retrospective and session prompt in the repository.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 03b exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S03b`, on the branch your session was assigned or `claude/s03b-gate-registry`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 04 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S04`, on the branch your session was assigned or `claude/s04-baseline-command`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Sessions 04 and 05 are startable too. Session 05 (artifact preservation) shares
-no file with Session 03b, so the two may run at the same time in separate
-worktrees (`git worktree add ../nfl-dfs-s05 -b claude/s05-artifact-preservation`).
-Session 04 also edits `docs/DATA_CONTRACTS.md`, so it waits for 03b or runs after.
+Session 03b is in progress on `claude/blissful-carson-kzkdcd`. Session 04 also
+edits `docs/DATA_CONTRACTS.md`, so it merges `origin/main` after 03b lands.
+Session 05 (artifact preservation) shares no file with Session 03b, so the two
+may run at the same time in separate worktrees
+(`git worktree add ../nfl-dfs-s05 -b claude/s05-artifact-preservation`).
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
