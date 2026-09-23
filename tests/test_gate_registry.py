@@ -953,7 +953,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "2e42b066581b1c1de558cbcfb06232c272f91214298d5810cd9f47daef59fc98"
+REGISTRY_SHA256 = "436931e60f7dca3f7eea8d9577d90e7670dc55301bf4348251edbf373f9ffd73"
 
 
 def test_the_registry_is_the_pinned_bytes():

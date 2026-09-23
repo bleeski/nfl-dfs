@@ -1075,7 +1075,11 @@ no network, priors, weather or roles. It writes a new run folder under
 `data/runs/` holding `DK_BASELINE_ENTRY_V1_<run_id>.csv`, byte-audited, and
 `baseline_report.json` with the five truths. Exit 0 fills every blank row; exit
 3 fills some and names every unfilled Entry ID (hand that list over with the
-file); exit 2 withholds the file and names the integrity gate that stopped it.
+file); exit 2 fills none and names why. When the reason, on exit 3 or 2, is
+`BASELINE_RUN_BUDGET_EXHAUSTED` or `BASELINE_SOLVE_LIMIT_WITHOUT_LINEUP`, the
+budget is a construction preference: rerun at once with a larger
+`--budget-seconds` or `--per-solve-seconds`. Any other exit-2 reason is an
+integrity gate, and the file stays withheld until its input is fixed.
 Every exit ends `PRIOR_ONLY / DO_NOT_UPLOAD`, and the report names the gaps it
 carries (official activity, current role, weather, model). Lineups rank by
 DraftKings salary alone (`BASELINE_SALARY_RANK_V1`), so treat the file as the

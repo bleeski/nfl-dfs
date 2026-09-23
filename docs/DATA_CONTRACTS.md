@@ -1621,19 +1621,24 @@ against the template; reparses them and reconciles the mode; checks the Entry
 IDs, their order, and that exactly the assigned rows are filled and exactly the
 unfilled rows are blank; runs `lineups.validate_lineup` on every filled row;
 checks exact-roster distinctness; and re-derives `contracts.unavailable_people`
-to check no filled row holds one. A failure deletes the temporary copy and
-withholds the file (`BYTE_AUDIT`, `BASELINE_AUDIT_*`, `REPARSE_ASSIGNMENT_MISMATCH`).
+to check no filled row holds one. A failure, or an audit that cannot finish
+(`BASELINE_AUDIT_FAILED`), withholds the file (`BYTE_AUDIT`, `BASELINE_AUDIT_*`,
+`REPARSE_ASSIGNMENT_MISMATCH`), and the temporary copy never outlives the run.
 Both snapshots are re-hashed before the write (`ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE`,
 `SALARY_CHANGED_BEFORE_ARTIFACT_PUBLISH`) and the file after it (`POST_WRITE_HASH_MISMATCH`).
 
 Integrity gates that stop the file: an input of the wrong schema or an
 unreadable one; any DraftKings parse refusal (`DK_*`, `dk.py`); a
-Classic/Showdown mismatch (`DK_TEMPLATE_MODE_MISMATCH`); an entries player
-table whose IDs are not exactly the salary file's (`BASELINE_ENTRY_POOL_ID_MISMATCH`);
-and a prefilled row, which refuses the whole template exactly as `prior_review`
-does until Session 11 (`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`, naming the rows).
-A template with no player table ships and says so
-(`BASELINE_ENTRY_POOL_CROSS_CHECK_UNAVAILABLE`, `P`).
+Classic/Showdown mismatch (`DK_TEMPLATE_MODE_MISMATCH`); a salary ID the
+entries file's player table lacks, which a lineup could hold and the contest
+would refuse (`BASELINE_ENTRY_POOL_ID_MISMATCH`); and a prefilled row, which
+refuses the whole template exactly as `prior_review` does until Session 11
+(`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`, naming the rows). These ship and say so
+(`P`): a table ID the salary file lacks, which no lineup can hold
+(`BASELINE_SALARY_FILE_MISSING_ENTRY_TABLE_IDS`); a template with no player
+table (`BASELINE_ENTRY_POOL_CROSS_CHECK_UNAVAILABLE`); and a run whose clock is
+at or past the earliest lock (`BASELINE_EARLIEST_LOCK_PASSED`), since the
+baseline does not enforce the lock clock (Session 07).
 
 ### `BASELINE_SALARY_RANK_V1`, the objective
 
@@ -1649,13 +1654,18 @@ at that level (`LineupOptimizer.set_salary_floor`) take its other lineups; when
 the level is spent, the next maximizing solve finds the next. Ties within a
 level fall in the deterministic solver's order, with HiGHS's `random_seed` set
 to the number of lineups already built (`seed_rule`): the same bytes give the
-same file, and each solve starts its search somewhere new. Measured on the
+same file while no solve reaches its time limit, and each solve starts its
+search somewhere new. Measured on the
 supplied Classic pool at 150 entries, that seed rule alone took the most-used
 salary row from 149 lineups to 37 at no cost in time. Lineup `i` fills the
 template's `i`-th blank row.
 
 Each solve has a limit (default 5 s) and the run a budget from its start
-(default 60 s); the audit and write after construction always run. When
+(default 60 s); the audit and write after construction always run. A
+level-finding solve that stops at its limit may set a level below the best
+remaining salary, so from that lineup on every lineup is marked `time_limited`
+and the order is no longer proven; legality and distinctness never depend on
+the limit. When
 lineups stop short, the rows past the last one stay blank and are named:
 `BASELINE_DISTINCT_LINEUPS_EXHAUSTED` (`V`, R29) when the solver proves no
 further distinct legal lineup exists; `BASELINE_RUN_BUDGET_EXHAUSTED` or
@@ -1676,7 +1686,7 @@ is DraftKings' price and the only number in its bytes the engine may read.
 | `command` | `per_solve_seconds`, `budget_seconds` |
 | `inputs` | `salaries` and `entries`: `supplied_as`, `path`, `sha256`, `snapshot`, `classified_by`; `supplied_schemas` by flag |
 | `slate` | Mode, draft group, both hashes, salary rows, games, `earliest_lock_at`, entry rows, blank and prefilled rows, Contest IDs |
-| `pool` | The availability contract, its statuses, `excluded_people`, excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`) |
+| `pool` | The availability contract, its statuses, `excluded_people`, excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`, `SALARY_SUBSET`) |
 | `objective` | `BASELINE_SALARY_RANK_V1`, as above |
 | `construction` | `stop_reason` (`FILLED`, `DISTINCT_LINEUPS_EXHAUSTED`, `BUDGET_EXHAUSTED`, `SOLVE_LIMIT_WITHOUT_LINEUP`, `SOLVER_PRODUCED_ILLEGAL_LINEUP`, `SOLVER_REPEATED_A_LINEUP`), lineups built, solves, salary levels, `people_used` and `most_used_person_lineups` (a concentration count for late-swap exposure, not a preference), `elapsed_seconds` |
 | `lineups` | Per filled row: `entry_id`, `roster`, `salary`, `found_by`, `time_limited`, `solve_seconds` |
@@ -1696,7 +1706,8 @@ carries `MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED` or `MIXED_ENTRY_FEES_UNSUPPORTED`
 `EVIDENCE_STATE=UNKNOWN`, `MODEL_STATUS=PRIOR_ONLY`,
 `RELEASE_DECISION=DO_NOT_UPLOAD`, and `DELIVERY_STATE` derived by
 `release.derive_delivery_state`. The lock clock is not enforced here
-(Session 07); `earliest_lock_at` is reported.
+(Session 07); `earliest_lock_at` is reported and printed, and a run at or past
+it carries `BASELINE_EARLIEST_LOCK_PASSED`.
 
 Does not establish: upload clearance, certification, lineup quality, or any
 expected-points, return, win, cash, ownership or edge claim.
@@ -1785,7 +1796,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `2e42b066581b1c1de558cbcfb06232c272f91214298d5810cd9f47daef59fc98`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `436931e60f7dca3f7eea8d9577d90e7670dc55301bf4348251edbf373f9ffd73`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

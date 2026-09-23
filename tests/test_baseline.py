@@ -392,6 +392,32 @@ def test_the_entries_pool_table_must_hold_the_exact_salary_ids(tmp_path):
     assert "BASELINE_ENTRY_POOL_ID_MISMATCH" in codes(outcome)
 
 
+def test_a_salary_file_short_of_the_pool_table_ships_and_says_so(tmp_path):
+    """A row the salary file lacks can never reach a lineup, so it names the gap and ships."""
+
+    rows = rows_of(CLASSIC_SALARY.read_bytes())
+    salary = write_rows(tmp_path / "salary_short.csv", rows[:-1])
+
+    outcome = run(tmp_path, salary, CLASSIC_ENTRIES_20)
+
+    assert outcome.truths.delivery_state is DeliveryState.DELIVERABLE
+    assert "BASELINE_SALARY_FILE_MISSING_ENTRY_TABLE_IDS" in codes(outcome)
+    report = json.loads(outcome.report_path.read_text(encoding="utf-8"))
+    assert report["pool"]["entry_pool_cross_check"] == "SALARY_SUBSET"
+
+
+def test_a_run_past_the_earliest_lock_names_it(tmp_path):
+    salary = tiny_classic(tmp_path)  # both games lock 2026-09-27 13:00 ET
+    before = run(tmp_path, salary, tiny_classic_template(tmp_path, 2), run_id="before")
+    after = run(tmp_path, salary, tiny_classic_template(tmp_path, 2), run_id="after",
+                now=datetime(2026, 9, 27, 17, 0, tzinfo=timezone.utc))
+
+    assert "BASELINE_EARLIEST_LOCK_PASSED" not in codes(before)
+    assert "BASELINE_EARLIEST_LOCK_PASSED" in codes(after)
+    assert after.truths.delivery_state is DeliveryState.DELIVERABLE  # named, not hidden or stopped
+    assert baseline.summary(after)["earliest_lock_at"] == "2026-09-27T13:00:00-04:00"
+
+
 def test_a_template_without_the_pool_table_ships_and_says_so(tmp_path):
     outcome = run(tmp_path, SHOWDOWN_SALARY, showdown_template(tmp_path, 3, pool=False))
 
@@ -489,6 +515,18 @@ def test_the_independent_audit_withholds_bytes_the_writer_got_wrong(tmp_path, mo
     assert not list(outcome.run_dir.glob("DK_*.csv"))
 
 
+def test_an_audit_that_cannot_finish_withholds_the_file_and_leaves_no_copy(tmp_path, monkeypatch):
+    def broken(*args, **kwargs):
+        raise csv.Error("unreadable bytes")
+
+    monkeypatch.setattr(baseline, "audit_baseline_bytes", broken)
+    outcome = run(tmp_path, SHOWDOWN_SALARY, showdown_template(tmp_path, 2))
+
+    assert outcome.truths.delivery_state is DeliveryState.NO_DELIVERABLE
+    assert "BASELINE_AUDIT_FAILED" in codes(outcome)
+    assert not list(outcome.run_dir.glob("DK_*"))
+
+
 def test_a_run_folder_is_never_reused(tmp_path):
     entries = showdown_template(tmp_path, 1)
     first = run(tmp_path, SHOWDOWN_SALARY, entries, run_id="once")
@@ -576,6 +614,7 @@ def test_the_parser_and_validator_name_their_refusals(tmp_path):
     with pytest.raises(DraftKingsParseError, match="^DK_TEMPLATE_MODE_MISMATCH: template is CLASSIC"):
         reconcile_template(parse_entries(CLASSIC_ENTRIES_20), showdown)
     cpt = next(p.dk_id for p in showdown.players if p.role == "CPT")
+    assert validate_lineup(showdown, (cpt,)).errors[0].startswith("LINEUP_ROSTER_WIDTH_INVALID:")
     errors = validate_lineup(showdown, (cpt, "1", "2", "3", "4", "")).errors
     assert all(error.split(":")[0] in {"LINEUP_BLANK_CELL", "LINEUP_DK_ID_NOT_IN_POOL"}
                for error in errors), errors

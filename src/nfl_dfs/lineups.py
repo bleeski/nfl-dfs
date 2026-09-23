@@ -58,9 +58,8 @@ def validate_lineup(
     expected_slots = CLASSIC_COLUMNS if slate.mode is EngineMode.CLASSIC else SHOWDOWN_COLUMNS
     errors: list[str] = []
     if len(roster) != len(expected_slots):
-        return ValidationResult(
-            None, (f"LINEUP_ROSTER_WIDTH_INVALID: expected {len(expected_slots)} roster cells",)
-        )
+        errors.append(f"LINEUP_ROSTER_WIDTH_INVALID: expected {len(expected_slots)} roster cells")
+        return ValidationResult(None, tuple(errors))
     if any(not value for value in roster):
         errors.append("LINEUP_BLANK_CELL: roster contains a blank cell")
     by_id = {player.dk_id: player for player in slate.players}

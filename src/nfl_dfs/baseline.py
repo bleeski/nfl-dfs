@@ -96,6 +96,13 @@ OBJECTIVE: Mapping[str, object] = {
         " k (0-based), so the same bytes give the same file, and each solve starts its"
         " search somewhere new instead of beside the lineup before it."
     ),
+    "time_limits": (
+        "The order and the same-bytes-same-file property hold while no solve reaches its"
+        " time limit. A level-finding solve that stops at its limit may set the level below"
+        " the best remaining salary; its lineup and those after it are marked"
+        " time_limited, and a later lineup may then total more. Legality and distinctness"
+        " never depend on the limit."
+    ),
     "seed_rule": "HiGHS random_seed = the number of lineups already built",
     "why": (
         "Salary is the only number in the DraftKings bytes the engine may read, and it is"
@@ -200,6 +207,7 @@ def build_distinct_lineups(
     seen: set[str] = set()
     levels: list[int] = []
     solves = 0
+    limited = False  # once a solve stops at its limit, the order after it is unproven
     level: int | None = None  # None: find the next level; else take lineups at it
     while len(built) < count:
         remaining = deadline - clock()
@@ -228,6 +236,7 @@ def build_distinct_lineups(
         seen.add(lineup.canonical_key)
         optimizer.add_no_good(lineup.roster)
         found_by = "SALARY_LEVEL_MAXIMUM" if level is None else "SALARY_LEVEL_MEMBER"
+        limited = limited or result.status == "FEASIBLE_LIMIT"
         if level is None:
             level = lineup.salary
             levels.append(level)
@@ -237,7 +246,7 @@ def build_distinct_lineups(
                 salary=lineup.salary,
                 canonical_key=lineup.canonical_key,
                 found_by=found_by,
-                time_limited=result.status == "FEASIBLE_LIMIT",
+                time_limited=limited,
                 solve_seconds=round(result.elapsed_seconds, 4),
             )
         )
@@ -419,12 +428,21 @@ def run_baseline(
             "BASELINE_ENTRY_POOL_CROSS_CHECK_UNAVAILABLE",
             detail="the entries file carries no player table, so its draft group is not cross-checked"
                    " against the salary file's IDs"))
-    elif set(pool) != salary_ids:
+    elif salary_ids - set(pool):
+        # A lineup could hold a salary row the contest's draft group lacks.
         cross_check = "MISMATCH"
         limitations.append(registry.limitation(
             "BASELINE_ENTRY_POOL_ID_MISMATCH",
             detail=f"{len(salary_ids - set(pool))} salary IDs are missing from the entries file's player"
                    f" table and {len(set(pool) - salary_ids)} of its IDs are missing from the salary file"))
+    elif set(pool) - salary_ids:
+        # No lineup can hold a row the salary file lacks, so the file stays exact;
+        # the pool it was built from is smaller than the draft group.
+        cross_check = "SALARY_SUBSET"
+        limitations.append(registry.limitation(
+            "BASELINE_SALARY_FILE_MISSING_ENTRY_TABLE_IDS",
+            detail=f"{len(set(pool) - salary_ids)} IDs in the entries file's player table are not in the"
+                   " salary file; they were never candidates"))
     else:
         cross_check = "PASS"
     prefilled = tuple(e.entry_id for e in template.authorizations if any(e.existing_cells))
@@ -438,6 +456,13 @@ def run_baseline(
         limitations.append(registry.limitation(_code(problem, "INTAKE_FAILED"), detail=problem))
     excluded_people = unavailable_people(slate.players)
     excluded_ids = tuple(sorted(p.dk_id for p in slate.players if p.underlying_id in excluded_people))
+    earliest_lock = min(game.lock_at for game in slate.games)
+    if moment >= earliest_lock:
+        limitations.append(registry.limitation(
+            "BASELINE_EARLIEST_LOCK_PASSED",
+            detail=f"the run's clock {moment.isoformat()} is at or past the earliest lock"
+                   f" {earliest_lock.isoformat()}; DraftKings refuses a lineup holding a locked player, and"
+                   " the baseline does not enforce the lock clock (Session 07)"))
     report["slate"] = {
         "mode": slate.mode.value,
         "draft_group": slate.draft_group,
@@ -445,7 +470,7 @@ def run_baseline(
         "entries_sha256": entries_hash,
         "salary_rows": len(slate.players),
         "games": [game.game_id for game in slate.games],
-        "earliest_lock_at": min(game.lock_at for game in slate.games).isoformat(),
+        "earliest_lock_at": earliest_lock.isoformat(),
         "entry_rows": len(template.authorizations),
         "blank_authorized_rows": len(authorized),
         "prefilled_rows": list(prefilled),
@@ -551,15 +576,41 @@ def _write_audited(
         return False
     try:
         raw = write_upload_bytes(template, assignments, unfilled=unfilled)
-    except (OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - named and withheld, never swallowed
         limitations.append(registry.limitation(
             "FILE_CONSTRUCTION_FAILED", detail=f"{type(exc).__name__}: {exc}"))
         return False
     temporary = output.with_name(output.name + ".tmp")
+    try:
+        return _audit_and_keep(temporary, output, raw, salary_path=salary_path,
+                               entries_path=entries_path, assignments=assignments,
+                               unfilled=unfilled, registry=registry,
+                               limitations=limitations, report=report)
+    finally:
+        temporary.unlink(missing_ok=True)  # an unaudited copy never outlives the run
+
+
+def _audit_and_keep(
+    temporary: Path,
+    output: Path,
+    raw: bytes,
+    *,
+    salary_path: Path,
+    entries_path: Path,
+    assignments: Mapping[str, tuple[str, ...]],
+    unfilled: tuple[str, ...],
+    registry: GateRegistry,
+    limitations: list[DeliveryLimitation],
+    report: dict[str, object],
+) -> bool:
     temporary.write_bytes(raw)
     on_disk = temporary.read_bytes()
-    problems = audit_baseline_bytes(on_disk, salary_path=salary_path, entries_path=entries_path,
-                                    assignments=assignments, unfilled=unfilled)
+    problems: list[str] = []
+    try:
+        problems.extend(audit_baseline_bytes(on_disk, salary_path=salary_path, entries_path=entries_path,
+                                             assignments=assignments, unfilled=unfilled))
+    except Exception as exc:  # noqa: BLE001 - an audit that cannot finish proves nothing
+        problems.append(f"BASELINE_AUDIT_FAILED:{type(exc).__name__}: {exc}")
     report["audit"] = {
         "status": "FAIL" if problems else "PASS",
         "problems": problems,
@@ -575,7 +626,6 @@ def _write_audited(
         ],
     }
     if problems:
-        temporary.unlink(missing_ok=True)
         for problem in problems:
             limitations.append(registry.limitation(_code(problem, "BYTE_AUDIT"), detail=problem))
         return False
@@ -684,6 +734,8 @@ def summary(outcome: BaselineOutcome) -> dict[str, object]:
              "entry_ids": list(item.entry_ids), "detail": item.detail}
             for item in truths.delivery_limitations
         ],
+        "earliest_lock_at": outcome.report.get("slate", {}).get("earliest_lock_at"),
+        "checks_not_run": list(CHECKS_NOT_RUN),
         "report": str(outcome.report_path) if outcome.report_path else None,
         "run_dir": str(outcome.run_dir),
         "wall_seconds": outcome.report.get("timing", {}).get("wall_seconds"),
