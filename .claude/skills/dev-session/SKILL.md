@@ -28,12 +28,14 @@ the row `Session 04`) of `docs/ROADMAP.md`.
    result line. Any failure is reported before work starts.
 5. Use the branch the session was assigned, or create `claude/<sNN>-<slug>`
    from the current HEAD.
-6. Enter plan mode. Produce a plan that names: files to touch (only those the
-   card and its briefs list), tests to add first, the card's acceptance
-   verbatim, its breakpoint, open `[BEN: ...]` questions, and what is
-   explicitly out of scope. Wait for approval before editing. Once approved,
-   copy the plan into `state/tasks/$ARGUMENTS.md` as one `- [ ]` line per item
-   (`.claude/rules/stops-and-reports.md`) and tick items as they land.
+6. Write the plan to `state/tasks/$ARGUMENTS.md`
+   (`.claude/rules/stops-and-reports.md`), naming: files to touch (only those
+   the card and its briefs list), tests to add first, the card's acceptance
+   verbatim, its breakpoint, assumptions and tradeoffs, open `[BEN: ...]`
+   questions, and what is explicitly out of scope, then one `- [ ]` line per
+   item. Then start; do not wait for approval (Ben, 2026-09-23). Tick items as
+   they land. Stop here only for an open `[BEN: ...]` question that blocks the
+   whole card.
 7. Claim the session before writing code, so a concurrent instance can see it:
 
        python3 scripts/claim.py take $ARGUMENTS --branch <branch>

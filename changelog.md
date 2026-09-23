@@ -4,6 +4,51 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: no plan-approval wait; the plan goes in the task file
+
+Not a roadmap session: no claim, no status change, no ledger row. Ben's
+ruling, on the recommendation in the entry below: "Do what you recommend",
+then "#1", choosing the option that read "Remove the plan-approval wait from
+CLAUDE.md and /dev-session step 6, and update the CLAUDE.md test count."
+Touches `CLAUDE.md`, a protected path, so the pull request carries
+`ben-review` and Ben merges it.
+
+Why: Ben's 2026-09-20 ruling found that a non-engineer's review of a diff
+produces a signature rather than a check, and a plan is the same. The
+Quick-Start prompt in `docs/ROADMAP.md` §1 already ran without the wait, so
+the two ways into a session disagreed. The plan is still written, to the task
+file Ben can read at any point, and the `reviewer` subagent checks scope
+against the card before close-out.
+
+#### Changed
+
+- `CLAUDE.md` § Session protocol: "plan mode first" becomes "the plan, with
+  assumptions and tradeoffs, goes in the task file and work starts; no
+  plan-approval wait". The known-failing-test line gives the current count,
+  `1177 passed, 1 skipped`, in three lines instead of four, so the file stays
+  at 199 lines.
+- `.claude/skills/dev-session/SKILL.md` step 6: write the plan to
+  `state/tasks/$ARGUMENTS.md` and start. The one stop left at that step is an
+  open `[BEN: ...]` question that blocks the whole card.
+
+#### Not changed
+
+- `.claude/rules/stops-and-reports.md` still defers to any stop `CLAUDE.md` or
+  a skill names; none now names the wait. Archived session prompts that say
+  "start in plan mode" are history and stay as written.
+- The permission classifier refused this change four times before Ben's "#1",
+  and after it refused one read-only check on the result; the edits themselves
+  went through.
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_repo_boundaries.py tests/test_roadmap_queue.py tests/test_harness_orientation.py`:
+  `204 passed in 1.91s`.
+- Complete pinned suite, Linux: `1177 passed, 1 skipped in 153.31s (0:02:33)`,
+  recorded with `scripts/record_verify.py`. The skip is the junction test.
+- `sh ./nfl.sh doctor`: `pass_status: true`. `git diff --check`: clean.
+  `scripts/check_protected_paths.py` flags `CLAUDE.md`, as it should.
+
 ### 2026-09-23: every session names its stops, keeps a task file, and reports what Ben owes first
 
 Not a roadmap session: no claim, no status change, no ledger row. A second

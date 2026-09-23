@@ -151,8 +151,9 @@ only unrecoverable error. Full text: `docs/RUNBOOK.md`.
 ### Session protocol: `docs/ROADMAP.md` §2.1, plus these
 
 - Never reset, clean, stash or reformat a dirty tree; it is often user-owned work.
-- Multi-file session: plan mode first, with assumptions and tradeoffs. Ask Ben
-  only for facts he alone has (a ruling, a file, an unset threshold), or leave a
+- Multi-file session: the plan, with assumptions and tradeoffs, goes in the task
+  file and work starts; no plan-approval wait (Ben, 2026-09-23). Ask Ben only for
+  facts he alone has (a ruling, a file, an unset threshold), or leave a
   `[BEN: ...]` flag and continue; decide judgment calls and record why.
 - One session per branch (`claude/<sNN>-<slug>` or the one assigned). Touch only
   what the card names; mention adjacent dead code instead of fixing it. Open the
@@ -185,10 +186,9 @@ only unrecoverable error. Full text: `docs/RUNBOOK.md`.
   `OPTIMAL` is scoped to the reported bank; sample size is declared, not inferred.
 - `data/standings/inbox/`, `data/runs/**/inputs/`, and
   `tests/fixtures/supplied/` are immutable snapshots; a new run is a new folder.
-- No known failing test as of 2026-09-23: `1121 passed, 1 skipped` on Linux. The
-  one skip is platform-specific (the junction test on Linux, symlink permission
-  on Windows); any other failure or skip is a finding, not a known issue, and
-  `.claude/rules/tests.md` says what to do with it.
+- No known failing test as of 2026-09-23: `1177 passed, 1 skipped` on Linux; the
+  skip is the junction test (symlink permission on Windows). Any other failure or
+  skip is a finding, not a known issue: `.claude/rules/tests.md`.
 - When Ben corrects the same thing twice, add the rule here or to
   `.claude/rules/`, and say that you did.
 - When compacting, preserve the session ID, the branch, the list of modified
