@@ -15,13 +15,12 @@ retrospective and session prompt in the repository.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 04 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S04`, on the branch your session was assigned or `claude/s04-baseline-command`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 05 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S05`, on the branch your session was assigned or `claude/s05-artifact-preservation`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 05 is startable too but shares `src/nfl_dfs/cli.py` with Session 04, so
-it runs after it. Session 21 (prior-model triage) shares no file with Session 04
-and may run beside it in a separate worktree
-(`git worktree add ../nfl-dfs-s21 -b claude/s21-prior-triage`). Session 04's card
-carries what Session 03b found for it.
+Session 04 is in progress on `claude/session-04-nfl-baseline-f7aptz`. Session 05
+shares `src/nfl_dfs/cli.py` with it, so it merges `origin/main` after 04 lands.
+Session 21 (prior-model triage) shares no file with Session 04 and may run beside
+it in a separate worktree (`git worktree add ../nfl-dfs-s21 -b claude/s21-prior-triage`).
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
