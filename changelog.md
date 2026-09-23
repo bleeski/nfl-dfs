@@ -99,8 +99,11 @@ The `reviewer` subagent read the first version (`238 passed`).
   a pinned source line changed; each fails its test.
 - `doctor` `pass_status: true`; compileall clean; `git diff --check` clean; no
   protected path.
-- CI on `09a6fbe` failed before any step ran (no runner assigned, no log, all
-  four checks in 2 to 4 seconds); re-run refused (403). Commented on PR #51.
+- CI on `09a6fbe` and on the close-out head `0a7cf77` failed before any step
+  ran: no runner assigned, no log, all four checks in 2 to 4 seconds. Re-run
+  and `workflow_dispatch` were both refused to this session (403, "Resource not
+  accessible by integration"). Commented on PR #51. Ben restored Actions; the
+  commit carrying this line ran CI again, and the merge waited for it.
 
 ### 2026-09-23: `DELIVERY_STATE`, the fifth truth, and the R24 test (Session 03)
 
