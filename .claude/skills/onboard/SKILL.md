@@ -34,6 +34,8 @@ Three things a cold session gets wrong most often:
   authoritative for work status. Neither another document nor an earlier
   conversation is.
 
-Report back in a few lines: branch, what is claimed, what is startable, last suite
-result, and what you propose to do. Do not start work until that is said out
-loud.
+Report in a few lines: branch, what is claimed, what is startable, last suite
+result, and what you will do next. If Ben asked only where things stand, that
+report is the answer. Otherwise it is status, not a stop: put it in the same
+message as your first command on the task and carry on
+(`.claude/rules/stops-and-reports.md`).

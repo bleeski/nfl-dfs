@@ -4,6 +4,98 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: every session names its stops, keeps a task file, and reports what Ben owes first
+
+Not a roadmap session: no claim, no status change, no ledger row. A second
+review of the Claude Code configuration, at Ben's request, against Anthropic's
+prompting guide for the model this repository runs (claude.dev blog,
+2026-09-22). The entry below this one covered model inheritance, effort and the
+slate-run stops; this one covers what the guide adds: named stops for every
+session, a task list in a file that survives compaction, and a final report
+that leads with what Ben owes. No engine module, contract, evidence gate,
+release truth or protected path changed.
+
+#### Added
+
+- `.claude/rules/stops-and-reports.md`, loaded for every path. When to keep
+  going (status goes in the same message as the next command), the four turn
+  endings that stall a session, the stops a session does want, the task file,
+  and the end-of-run order: **Needs Ben**, **Changed**, **Found**. The four
+  endings were in `slate-operation.md` only, which loads for the runbook, the
+  operator guide and `scripts/`, so a development session saw them only if it
+  happened to read one of those. The list of stops defers to any stop
+  `CLAUDE.md` or the running skill names, and says asking never makes a
+  permanent boundary or a `git-authority.md` refusal allowed.
+- `state/tasks/<SNN>.md`, the task file. Already gitignored by `state/*`.
+  `scripts/repo_state.py` gains `task_files()`, and the session-start digest
+  lists up to three unfinished ones with their tick counts. The hook runs on
+  `compact` and `clear`, so a compacted session is pointed back at its own
+  list. It skips a non-regular file (a FIFO would block the hook) and returns
+  nothing on a directory error. Nine tests in
+  `tests/test_harness_orientation.py`: counting, the finished-list exclusion,
+  order, the three-line cap, the `build_state` wiring (a mutation removing it
+  fails), and that the directory stays ignored.
+
+#### Changed
+
+- `.claude/rules/slate-operation.md`: the four endings now point at the new
+  rule instead of repeating it; the slate's own stops stay, and the handoff
+  leads with **Needs Ben**.
+- `.claude/skills/onboard/SKILL.md`: "Do not start work until that is said out
+  loud" made the orientation report end the turn. The report is now the answer
+  when Ben asked only where things stand, and otherwise rides in the same
+  message as the first command. The previous review left this for Ben after a
+  refusal; this time the edit was allowed.
+- `.claude/skills/dev-session/SKILL.md` step 6: the approved plan is copied
+  into the task file. The approval wait itself is unchanged (below).
+- `.claude/skills/close-out/SKILL.md` step 9: the report opens with **Needs
+  Ben** (a `ben-review` label, open `[BEN: ...]` flags) instead of ending on it.
+- `.claude/agents/explorer.md`: say what could not be confirmed and where you
+  looked, which is the guide's wording for research answers.
+- `.claude/skills/verify/SKILL.md`: step 7 ran the complete suite a second
+  time only to record it (155 s on Linux, up to 365 s on Windows); it now
+  records step 2's log, or `--result-line` on Windows. Step 6 named the Windows
+  skip as the only expected one, so a Linux run's junction skip read as a
+  finding; it now names both, matching `CLAUDE.md`.
+- `docs/CLAUDE_CODE_SETUP.md` § Model and effort: a flagged message can move
+  the session to an older model, and subagents inherit it; `/model` switches
+  back and `/config` can make it ask first. `/fast` for back-and-forth near a
+  lock. Requests to reproduce reasoning in a reply can be declined; none exist
+  here.
+
+#### Not changed
+
+- The plan-approval wait (`CLAUDE.md` "plan mode first"; `/dev-session` step
+  6). The guide recommends stopping only when a step cannot continue without
+  the operator, and Ben's 2026-09-20 ruling found that a non-engineer's review
+  of a diff produces a signature rather than a check; the same may hold for a
+  plan. Removing the wait was refused by the session's permission classifier
+  as self-modification, and so was a first attempt at a line in the new rule
+  naming the wait. The fresh-context review then found the rule's closed list
+  of stops left the wait out, which would have removed it by implication; the
+  list now defers to every stop `CLAUDE.md` or the running skill names. The
+  wait stands until Ben rules: `CLAUDE.md` and the skill still require it, and
+  plan mode blocks edits mechanically.
+- `CLAUDE.md` still gives `1121 passed, 1 skipped` as the Linux count; the
+  suite is now larger. It is a protected file, so the count is left for the
+  next change that carries `ben-review`.
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_harness_orientation.py tests/test_repo_boundaries.py tests/test_roadmap_queue.py`:
+  `204 passed in 1.41s`.
+- Complete pinned suite, Linux: `1177 passed, 1 skipped in 141.05s (0:02:21)`,
+  recorded with `scripts/record_verify.py`. The skip is
+  `tests/test_cowork.py:115: Windows junction behavior`. The run before the
+  review fixes was `1174 passed, 1 skipped in 148.31s`.
+- The session-start hook, run offline with a task file present, printed
+  `state/tasks/config-review.md: 6/12 done` inside its 60-line budget.
+- `sh ./nfl.sh doctor`: `pass_status: true`. `git diff --check`: clean.
+  `scripts/check_protected_paths.py`: no protected path touched.
+- The `reviewer` subagent reviewed the diff. Its one blocking finding (the
+  closed list of stops) is fixed as described under *Not changed*; its
+  changelog corrections and test gaps are applied.
+
 ### 2026-09-23: subagents follow the session's model; slate runs name the early stops
 
 Not a roadmap session: no claim, no status change, no ledger row. A review of

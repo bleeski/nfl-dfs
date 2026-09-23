@@ -150,13 +150,25 @@ app, with `/model` and `/effort`, so a new model needs no pull request.
   the Alt+T toggle do nothing. `/effort` saves a level per model, so a level
   set for an earlier model may not carry over; check it after switching. Prompt
   lines such as "think carefully" add latency, not quality, and none are in
-  this repository (checked 2026-09-23).
+  this repository (checked 2026-09-23). There is no request to reproduce
+  reasoning in a reply either; the model's safeguards can decline one, so ask
+  for the why in a sentence or three instead.
 - **Which level.** Keep slate operation at the model's default: the engine
   computes every number, so more thinking buys nothing on a slate and costs
   clock. Keep ordinary roadmap sessions at the default too. Raise a
   `Standalone` solver-heavy session only after a run at the default missed
   something, and record that in the changelog. `max` and `ultracode` need a
   measured gain first.
+- **After a flagged message.** Anthropic's safeguards can move a flagged
+  message to an older model, and the session stays there; Claude Code shows a
+  notice naming it. `/model` switches back. `/config`, "Switch models when a
+  message is flagged", makes it ask first instead, which suits a repository
+  that runs on one model. Subagents inherit the session's model, so they
+  follow a switch too.
+- **Fast mode.** `/fast` is the same model with faster output, at a higher
+  price per token, and it needs extra usage turned on. It pays near a lock,
+  when Ben reads each reply before sending the next. A long unattended session
+  gains nothing from it.
 
 ### Keeping a Windows checkout in sync
 

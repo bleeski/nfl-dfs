@@ -19,4 +19,5 @@ does not spend its context on exploration.
   `path:line` references with a one-line note each, then open questions. No
   code pasted unless a specific function body is the answer, and then at most
   40 lines.
-- Say what you did not check. A guess is labelled as one.
+- Say what you could not confirm and where you looked for it. A guess is
+  labelled as one.
