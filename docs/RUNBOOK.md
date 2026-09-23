@@ -976,13 +976,20 @@ scripts/build_classic_portfolio.py   stacks, bring-backs, exposure and overlap
                                  caps, anti-correlation; assigns reserved
                                  Entry IDs in template order
 scripts/qa_classic_portfolio.py  two-tier gate, REQUIRED before handoff
-scripts/write_dk_entries.py      exact-template fill plus a byte audit
+scripts/write_dk_entries.py      exact-template fill plus a byte audit; writes
+                                 a new file only, and exits 3 naming every
+                                 blank authorized row it did not fill
 ```
 
 Three things that are not optional:
 
-- **Run `qa_classic_portfolio.py` before every handoff**, and show Tier 2. Tier 1
-  is legality and enforcement and exits 1 or 2. Tier 2 does not block and is the
+- **Run `qa_classic_portfolio.py` before every handoff**, and show Tier 2. Run it
+  on the written file, with `--template` and `--export`; without them it checks
+  the JSON, not the file, and says so. Tier 1 exits 1 on a validity failure
+  (roster, slot, bytes, export against assignment, a repeated lineup), 3 when
+  authorized rows are unfilled, naming each Entry ID, and 2 when only a limit you
+  passed (`--min-salary`, `--max-overlap`, `--max-exposure`, `--backup-pairs`)
+  is exceeded. Tier 2 does not block and is the
   half that matters: on 2026-09-13 a portfolio passed every legality check with
   three players covering 17 of 20 lineups, and on 2026-09-20 one shipped with
   bring-back at 12 of 18 against a suggested floor of 70%. Tier 2 measured that
@@ -1057,9 +1064,11 @@ longer stop the file, so they no longer lead. Start the weather and
 official-activity captures alongside the baseline, not ahead of it: the engine's
 improved portfolio still waits on them until Session 09, but the file does not.
 Until Sessions 04 and 06 build the baseline command and a baseline-first
-`run-slate`, the nearest thing is the Classic fallback path above. Its writer
-and QA exit codes are corrected in Session 02; until then, check by hand that
-every authorized row is filled. The default delivery deadline is the earliest
+`run-slate`, the nearest thing is the Classic fallback path above. Since
+Session 02 its writer and QA refuse a wrong file by name and exit 3 naming every
+authorized row left blank; hand that list over with the file. The builder's own
+shortfall still exits 0 until Session 02b, so run QA on the written file every
+time. The default delivery deadline is the earliest
 relevant lock minus 5 minutes (R31); the engine enforces it from Session 07.
 
 Three rules bound the autonomy above.
