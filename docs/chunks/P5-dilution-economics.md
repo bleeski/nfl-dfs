@@ -1,6 +1,6 @@
 # P5 — Dilution-aware first-place value and real ladders
 
-Brief for chunk `P5` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+Brief for chunk `P5` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
 
 - Goal: the tail objective counts dollars: first place net of predicted copies,
   satellites and WTA as P(first), ordinary GPPs on the supplied ladder.

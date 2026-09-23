@@ -1,5 +1,8 @@
 # Showdown retrospective: DAL @ NYG, 2026-09-13
 
+> **§9 Ranked backlog superseded 2026-09-22.** Each item was absorbed into a session of `docs/ROADMAP.md` or
+> retired; §3 of that file maps each one. The retrospective itself stays as evidence.
+
 First 20-entry live Showdown ship. Built under a 61-minute clock from a cold
 session. Six portfolios generated, v6 shipped, export SHA-256
 `a96f9e704f773d11802679acb6aceb45de5d67a369640653222be2277d540f04`.

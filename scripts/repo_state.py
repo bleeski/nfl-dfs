@@ -38,13 +38,16 @@ STATE_FILE = STATE_DIR / "repo-state.json"
 CLAIMS_FILE = STATE_DIR / "claims.json"
 LAST_VERIFY_FILE = STATE_DIR / "last-verify.json"
 LAST_FETCH_FILE = STATE_DIR / "last-fetch.json"
-BACKLOG = PROJECT_ROOT / "backlog.md"
+ROADMAP = PROJECT_ROOT / "docs" / "ROADMAP.md"
 CHANGELOG = PROJECT_ROOT / "changelog.md"
 CHUNKS_DIR = PROJECT_ROOT / "docs" / "chunks"
 RECORDS_DIR = PROJECT_ROOT / "records" / "slates"
 
 SCHEMA_VERSION = "nfl_repo_state_v1"
-VALID_STATUSES = ("READY", "IN_PROGRESS", "BLOCKED", "DONE", "DEFERRED")
+# `docs/ROADMAP.md` §2.1. "Startable" is derived, not declared: a `Pending`
+# row whose dependencies are all satisfied.
+VALID_STATUSES = ("Pending", "In Progress", "Complete", "Deferred")
+OPERATOR_STATUSES = ("Open", "Done")
 STALE_CLAIM_HOURS = 6
 
 # Fetch bounds. A session start runs on `startup|resume|clear|compact`, so the
@@ -73,11 +76,31 @@ _ENTRY = re.compile(r"^###\s+(?P<heading>.+?)\s*$")
 CHANGELOG_HEADINGS = 3
 CHANGELOG_HEADING_WIDTH = 78
 
-# `| 0 | P0 | `READY` | none (operator item 2 first) | ... |`
-_QUEUE_ROW = re.compile(
-    r"^\|\s*(?P<order>[0-9]+[a-z]?)\s*\|\s*(?P<chunk>[A-Za-z0-9 ,to]+?)\s*\|\s*"
-    r"`(?P<status>[A-Z_]+)`\s*\|\s*(?P<depends>[^|]*?)\s*\|"
+# The status board is the one table between these markers. Anything outside
+# them is prose, and `tests/test_roadmap_queue.py` fails if a session row
+# appears anywhere else, because a status the parser cannot see is decoration.
+TABLE_START = "<!-- roadmap-table:start -->"
+TABLE_END = "<!-- roadmap-table:end -->"
+OPERATOR_START = "<!-- operator-table:start -->"
+OPERATOR_END = "<!-- operator-table:end -->"
+ROADMAP_COLUMNS = (
+    "Session ID",
+    "Type",
+    "Work Unit & Scope",
+    "Source Origin",
+    "Target Files",
+    "Classification",
+    "Depends on",
+    "Verification Command / Breakpoint",
+    "Status",
 )
+OPERATOR_COLUMNS = ("ID", "Item", "Unblocks", "Status")
+SESSION_TYPES = ("Standalone", "Batched")
+_SESSION_ID = re.compile(r"^Session (?P<number>[0-9]{2})(?P<suffix>[a-z]?)$")
+_OPERATOR_ID = re.compile(r"^O[0-9]+$")
+_DEPENDENCY = re.compile(r"^(?:none|Session [0-9]{2}[a-z]?|O[0-9]+|BEN ruling)$")
+_CLASSIFICATION = re.compile(r"^[VSP](?:/[VSP])*$")
+_BRIEF_REFERENCE = re.compile(r"\b[Cc]hunk (?P<chunk>[A-Z][A-Za-z0-9]*)\b")
 # A flag can wrap across lines, so match from the marker to the end of the line
 # and strip a closing bracket if one is there. The bare `[BEN: ...]` placeholder
 # that appears in changelog prose is not a flag.
@@ -265,30 +288,120 @@ def changelog_headings(limit: int = CHANGELOG_HEADINGS, path: Path | None = None
     return found
 
 
-def chunk_queue() -> list[dict]:
-    """Chunk IDs and statuses, read out of the backlog Queue table."""
-    if not BACKLOG.is_file():
-        return []
-    rows: list[dict] = []
-    for line in BACKLOG.read_text(encoding="utf-8").splitlines():
-        match = _QUEUE_ROW.match(line)
-        if not match:
-            continue
-        status = match.group("status")
+class RoadmapError(ValueError):
+    """The status board cannot be read. Reported loudly, never as "none"."""
+
+
+def _cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _marked_rows(lines: list[str], start: str, end: str, columns: tuple[str, ...]) -> list[list[str]]:
+    try:
+        first = lines.index(start)
+        last = lines.index(end, first + 1)
+    except ValueError as error:
+        raise RoadmapError(f"MARKERS_MISSING:{start}...{end}") from error
+    body = [line for line in lines[first + 1 : last] if line.strip()]
+    if len(body) < 2 or tuple(_cells(body[0])) != columns:
+        raise RoadmapError(f"HEADER_MISMATCH:{start}: expected {' | '.join(columns)}")
+    rows = []
+    for line in body[2:]:
+        cells = _cells(line)
+        if len(cells) != len(columns):
+            raise RoadmapError(f"ROW_WIDTH:{len(cells)} cells, expected {len(columns)}: {line[:80]}")
+        rows.append(cells)
+    return rows
+
+
+def _dependencies(cell: str) -> list[str]:
+    tokens = [token.strip() for token in cell.split(",") if token.strip()]
+    for token in tokens:
+        if not _DEPENDENCY.match(token):
+            raise RoadmapError(f"DEPENDENCY_UNREADABLE:{token!r}")
+    return tokens
+
+
+def short_id(session: str) -> str:
+    """`Session 01` -> `S01`, the form claims and branch names use."""
+    match = _SESSION_ID.match(session)
+    return f"S{match.group('number')}{match.group('suffix')}" if match else session
+
+
+def read_roadmap(path: Path | None = None) -> tuple[list[dict], list[dict]]:
+    """The sessions and operator items, validated. Raises `RoadmapError`."""
+    path = path or ROADMAP
+    if not path.is_file():
+        raise RoadmapError(f"ROADMAP_MISSING:{path}")
+    lines = path.read_text(encoding="utf-8").splitlines()
+
+    operators = []
+    for item, text, unblocks, status in _marked_rows(lines, OPERATOR_START, OPERATOR_END, OPERATOR_COLUMNS):
+        if not _OPERATOR_ID.match(item):
+            raise RoadmapError(f"OPERATOR_ID_UNREADABLE:{item!r}")
+        if status not in OPERATOR_STATUSES:
+            raise RoadmapError(f"OPERATOR_STATUS_UNDECLARED:{item}:{status!r}")
+        operators.append({"id": item, "item": text, "unblocks": unblocks, "status": status})
+
+    sessions = []
+    for cells in _marked_rows(lines, TABLE_START, TABLE_END, ROADMAP_COLUMNS):
+        session, kind, scope, source, targets, classification, depends, verify, status = cells
+        if not _SESSION_ID.match(session):
+            raise RoadmapError(f"SESSION_ID_UNREADABLE:{session!r}")
+        if kind not in SESSION_TYPES:
+            raise RoadmapError(f"SESSION_TYPE_UNDECLARED:{session}:{kind!r}")
+        if not _CLASSIFICATION.match(classification):
+            raise RoadmapError(f"CLASSIFICATION_UNDECLARED:{session}:{classification!r}")
         if status not in VALID_STATUSES:
-            continue
-        chunk = match.group("chunk").strip()
-        brief = next(iter(sorted(CHUNKS_DIR.glob(f"{chunk}-*.md"))), None)
-        rows.append(
+            raise RoadmapError(f"STATUS_UNDECLARED:{session}:{status!r}")
+        briefs = []
+        for match in _BRIEF_REFERENCE.finditer(source):
+            brief = next(iter(sorted(CHUNKS_DIR.glob(f"{match.group('chunk')}-*.md"))), None)
+            if brief is not None:
+                briefs.append(brief.relative_to(PROJECT_ROOT).as_posix())
+        sessions.append(
             {
-                "order": match.group("order"),
-                "chunk": chunk,
+                "session": session,
+                "short": short_id(session),
+                "type": kind,
+                "classification": classification,
                 "status": status,
-                "depends_on": match.group("depends").strip(),
-                "brief": str(brief.relative_to(PROJECT_ROOT)) if brief else None,
+                "depends_on": _dependencies(depends),
+                "verification": verify,
+                "briefs": briefs,
             }
         )
-    return rows
+    return sessions, operators
+
+
+def _satisfied(token: str, sessions: dict[str, str], operators: dict[str, str]) -> bool:
+    if token == "none":
+        return True
+    if token.startswith("Session "):
+        return sessions.get(token) == "Complete"
+    if token.startswith("O"):
+        return operators.get(token) == "Done"
+    return False  # `BEN ruling`: open until the flag is answered and the token removed.
+
+
+def session_queue(path: Path | None = None) -> dict:
+    """The status board plus what is startable, or the reason it is unreadable.
+
+    Never raises: the session-start hook must still print, and an unreadable
+    board has to say so rather than report an empty queue. That silent empty
+    queue is the failure the old backlog parser had.
+    """
+    try:
+        sessions, operators = read_roadmap(path)
+    except (OSError, RoadmapError) as error:
+        return {"rows": [], "operators": [], "error": str(error)}
+    status = {row["session"]: row["status"] for row in sessions}
+    operator_status = {item["id"]: item["status"] for item in operators}
+    for row in sessions:
+        row["startable"] = row["status"] == "Pending" and all(
+            _satisfied(token, status, operator_status) for token in row["depends_on"]
+        )
+    return {"rows": sessions, "operators": operators, "error": None}
 
 
 def claims(now: datetime) -> dict:
@@ -319,13 +432,14 @@ def ben_flags() -> list[dict]:
     `']` question'` sitting in the list. A count that is wrong in the direction
     of more is worse than no count: it buries the real blockers.
 
-    `.claude/rules/ledger.md` says a flag lives in `backlog.md` and is listed
-    again in the handoff, so `backlog.md` and the live chunk briefs are the
-    only places an *open* flag can be.
+    `.claude/rules/ledger.md` says a flag lives in `docs/ROADMAP.md`, in the
+    card of the session it blocks, and is listed again in the handoff, so the
+    roadmap and the live chunk briefs are the only places an *open* flag can
+    be. The retired `backlog.md` stub and its archive are history.
     """
 
     found: list[dict] = []
-    roots = [BACKLOG]
+    roots = [ROADMAP]
     roots.extend(sorted(CHUNKS_DIR.glob("*.md")))
     for path in roots:
         if not path.is_file():
@@ -339,7 +453,7 @@ def ben_flags() -> list[dict]:
                 continue
             found.append(
                 {
-                    "file": str(path.relative_to(PROJECT_ROOT)),
+                    "file": path.relative_to(PROJECT_ROOT).as_posix(),
                     "line": number,
                     "text": text[:160],
                 }
@@ -380,15 +494,20 @@ def calibration() -> dict:
 
 def build_state(now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
-    queue = chunk_queue()
+    queue = session_queue()
+    rows = queue["rows"]
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "git": git_state(now),
         "changelog_headings": changelog_headings(),
-        "queue": queue,
-        "ready_chunks": [row["chunk"] for row in queue if row["status"] == "READY"],
-        "in_progress_chunks": [row["chunk"] for row in queue if row["status"] == "IN_PROGRESS"],
+        "queue": rows,
+        "queue_error": queue["error"],
+        "operator_items_open": [item["id"] for item in queue["operators"] if item["status"] == "Open"],
+        # Key names predate the roadmap; they now hold short session IDs
+        # (`S01`) in table order, which is priority order.
+        "ready_chunks": [row["short"] for row in rows if row.get("startable")],
+        "in_progress_chunks": [row["short"] for row in rows if row["status"] == "In Progress"],
         "claims": claims(now),
         "ben_flags": ben_flags(),
         "verification": verification(),
@@ -433,10 +552,15 @@ def digest(state: dict) -> str:
     for commit in git["recent_commits"][:5]:
         lines.append(f"  {commit}")
 
-    ready = ", ".join(state["ready_chunks"]) or "none"
+    if state.get("queue_error"):
+        lines.append(f"ROADMAP UNREADABLE ({state['queue_error'][:70]}); fix docs/ROADMAP.md §2.2")
+    startable = state["ready_chunks"]
+    shown = ", ".join(startable[:3]) or "none"
+    if len(startable) > 3:
+        shown += f" (+{len(startable) - 3} more)"
     in_progress = ", ".join(state["in_progress_chunks"]) or "none"
-    lines.append(f"chunks READY: {ready}")
-    lines.append(f"chunks IN_PROGRESS: {in_progress}")
+    lines.append(f"sessions startable (docs/ROADMAP.md order): {shown}")
+    lines.append(f"sessions in progress: {in_progress}")
 
     active = state["claims"]["active"]
     if active:

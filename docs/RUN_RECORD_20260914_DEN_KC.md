@@ -1,5 +1,8 @@
 # Run record — DEN @ KC Showdown, 2026-09-14 (18 entries)
 
+> **Open defects and "Next" superseded 2026-09-22.** They were absorbed into sessions of
+> `docs/ROADMAP.md` (§3). The run record itself stays as evidence.
+
 ## Release truths
 - `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`, `EVIDENCE_STATE=UNKNOWN`, `FILE_VALID=true`
 - Policy enforcement: `ENFORCED_AND_INDEPENDENTLY_AUDITED`

@@ -4,7 +4,7 @@
 Several Claude Code instances work this repository and none of them knows about
 the others. A CLAUDE.md can be skimmed; this cannot. It runs on startup, resume,
 clear and compact, and prints the few facts a session is most likely to get
-wrong: which branch it is on, which chunks are claimed, whether the suite was
+wrong: which branch it is on, which sessions are startable or claimed, whether the suite was
 last green, and how much graded evidence exists.
 
 Two hard rules. It finishes well under two seconds, and it exits 0 no matter
@@ -39,7 +39,7 @@ Another instance may be working here now. Check the claims below before you star
 """
 
 FOOTER = """\
-Chunk work: /dev-session <ID>.  Evidence: /verify.  Finish: /close-out.
+Session work: /dev-session S<NN> (docs/ROADMAP.md).  Evidence: /verify.  Finish: /close-out.
 Regenerate this: python3 scripts/repo_state.py --stdout
 =================================================================================\
 """

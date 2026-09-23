@@ -1,5 +1,8 @@
 # Showdown priority work — session tracker
 
+> **Superseded 2026-09-22, historical record.** This tracker is no longer authoritative. SD1 to SD5 are
+> complete; SD6 was absorbed into Session 16 of `docs/ROADMAP.md` (see its §3 Retired Artifacts Log).
+
 Created: 2026-09-09. Owner: the session implementing the active item.
 
 **Use multiple sessions: five bounded implementation sessions and one acceptance

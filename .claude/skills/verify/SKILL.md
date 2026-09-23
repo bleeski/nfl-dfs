@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run the nfl-dfs verification stack (focused tests, complete pinned suite, doctor, compile/import, git diff --check) and paste the evidence. Use before claiming a chunk is done, or whenever Ben asks "is it green".
+description: Run the nfl-dfs verification stack (focused tests, complete pinned suite, doctor, compile/import, git diff --check) and paste the evidence. Use before claiming a roadmap session is done, or whenever Ben asks "is it green".
 disable-model-invocation: true
 ---
 
@@ -25,7 +25,7 @@ Run the full verification stack and report evidence, not summaries.
    whether this work needs Ben's `ben-review` label.
 
 Output: a short table of check → result, then the pasted result lines. If any
-check is red, say the chunk is not `DONE` and what is left.
+check is red, say the session is not `Complete` and what is left.
 
 A local green is what earns the push. CI (`suite`, `boundaries`,
 `protected-paths`) is the gate that actually decides the merge, so never push

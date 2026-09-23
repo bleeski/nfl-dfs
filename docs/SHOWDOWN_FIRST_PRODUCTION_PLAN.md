@@ -1,5 +1,8 @@
 # Showdown-first production plan
 
+> **Superseded 2026-09-22, historical record.** Its tracks and open items were superseded by later
+> programs and are retired in `docs/ROADMAP.md` §3. Do not work from the lists below.
+
 Companion to `docs/PRODUCTION_READINESS_REVIEW_2026-09-08.md`. That document says
 what is broken. This one says what to build, in what order, for Showdown, and what
 "production ready" can and cannot mean before the season produces settled slates.

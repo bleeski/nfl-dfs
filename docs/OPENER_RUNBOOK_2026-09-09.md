@@ -1,5 +1,8 @@
 # Opener runbook: NE@SEA Showdown, 2026-09-09
 
+> **Superseded 2026-09-22, historical record.** The NE@SEA slate is past and its operator questions
+> are closed; current operating procedure is `docs/RUNBOOK.md` and current work is `docs/ROADMAP.md`.
+
 **September 9 review update:** `nfl.ps1 preflight` is now available. The
 preflight check validates the manifest contract and policy, includes the
 model-specific evidence requirements when applicable, and reconciles activity

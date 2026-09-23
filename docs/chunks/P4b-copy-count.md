@@ -1,6 +1,10 @@
 # P4b — Exact-lineup copy-count predictor
 
-Brief for chunk `P4b` of the prize-tail program. Status, dependencies and hand-back are tracked in `backlog.md` (Queue table and chunk index); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+Brief for chunk `P4b` of the prize-tail program. Status, dependencies and hand-back are tracked in `docs/ROADMAP.md` (status board and session card); this file is the specification. Moved verbatim from `backlog.md` on 2026-09-15.
+
+Hand-back lines below that name a `docs/session-prompts/` file or a `READY`
+status predate the roadmap. At close-out follow `.claude/skills/close-out/SKILL.md`
+instead: the session card and the §1 Quick-Start replace per-chunk prompts.
 
 - Goal: predict how many field entries will share each of our lineups, because
   that number is the denominator of a Showdown first prize.
