@@ -952,7 +952,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "17e83eabbd40fceb2be2a1ccb512b85e0c3e2f78e41e089074f19f0525729b95"
+REGISTRY_SHA256 = "cfa6fda4d0bd7c2406cde9f853ddce94f6605308f4752e5408dab31fd9d947d1"
 
 
 def test_the_registry_is_the_pinned_bytes():
@@ -1211,16 +1211,19 @@ def test_cross_entry_uniqueness_is_v_by_r29():
     assert (family.provenance.kind, family.provenance.ref) == (ProvenanceKind.RULING, "R29")
 
 
-def test_the_p1_hard_stop_stops_the_file_by_its_ruling():
-    """Ben's 2026-09-19 ruling: the unresolved material role change stops the run.
+def test_r28_absorbs_the_p1_hard_stop():
+    """Ben, 2026-09-23: R28 absorbs the 2026-09-19 P1 hard stop.
 
-    ROADMAP section 2.5 keeps it in force beside R28 without saying R28 amends
-    it, so the registry keeps it a file stop until Ben says otherwise.
+    The unresolved material role change is a current-role truth claim: the
+    person is left out of the pool, never selected on the old-team share, the
+    file ships, and the code travels as a named limitation. It stops
+    certification, never the file. Session 09 makes the run do it.
     """
 
     family = registry().family_of("OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE")
-    assert (family.gate_class, family.stops) == (GateClass.V, GateStops.FILE)
-    assert (family.provenance.kind, family.provenance.ref) == (ProvenanceKind.RULING, "2026-09-19 P1 hard stop")
+    assert (family.gate_class, family.stops) == (GateClass.P, GateStops.CERTIFICATION)
+    assert (family.provenance.kind, family.provenance.ref) == (ProvenanceKind.RULING, "R28")
+    assert "role_change_hard_stop" not in registry().families
 
 
 def test_the_rung_ladder_triggers_are_construction_preferences():

@@ -4,6 +4,42 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: R28 absorbs the P1 hard stop (Ben's ruling)
+
+Ben's answer to the Session 09 flag, on `claude/blissful-carson-kzkdcd` after PR
+#51 merged as `16502c8`: "Absorb it, per your recommendation." No operating path
+changed; the run still stops on the gate until Session 09 makes it an
+exclusion. Every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`.
+
+#### Changed
+
+- `docs/ROADMAP.md` §2.5: R28 now names the 2026-09-19 P1 hard stop among what
+  it absorbs. A person in `TRANSFER_PRIOR_UNVERIFIED` who trips
+  `SALARY_RANK_DIVERGENCE` is left out of the pool, never selected on the
+  old-team share; the file ships and `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE`
+  names him. The "still in force" line says so too.
+- Session 09's card: the `[BEN: ...]` flag is closed. Its scope gains the
+  exclusion, with the runbook's "and stops" (`RUNBOOK.md:889-890`) to change,
+  and its must-hold gains "never selected on the old-team share". Its target
+  files gain `src/nfl_dfs/offensive_roles.py`, which Session 21 also edits.
+- `config/gate_registry_v1.json`: the family `role_change_hard_stop` (`V`,
+  `FILE`, ruling "2026-09-19 P1 hard stop") becomes `unresolved_role_change`
+  (`P`, `CERTIFICATION`, ruling R28). 363 codes `V` in 14 families, 69 `S` in 3,
+  656 `P` in 26. SHA-256 `cfa6fda4d0bd7c2406cde9f853ddce94f6605308f4752e5408dab31fd9d947d1`, re-pinned in the test and
+  `docs/DATA_CONTRACTS.md`.
+- `tests/test_gate_registry.py`: `test_the_p1_hard_stop_stops_the_file_by_its_ruling`
+  becomes `test_r28_absorbs_the_p1_hard_stop`, edited because the ruling changed
+  its expectation: the code is `P`, stops certification, cites R28.
+- `docs/ROADMAP.md` §4: Session 03b's completion row records its merge, `16502c8`.
+
+#### Verification
+
+- The rewritten test failed on the old registry before the reclassification.
+- Card command: `253 passed in 4.82s`.
+- Complete pinned suite: `1491 passed, 1 skipped in 159.53s (0:02:39)`, recorded.
+- `git diff --check` clean; no protected path (`CLAUDE.md` does not name the
+  P1 stop).
+
 ### 2026-09-23: the gate registry, every blocker code classified (Session 03b)
 
 All three items of the Session 03b card, on `claude/blissful-carson-kzkdcd`, PR
