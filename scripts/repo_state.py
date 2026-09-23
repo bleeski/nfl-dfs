@@ -38,6 +38,7 @@ STATE_FILE = STATE_DIR / "repo-state.json"
 CLAIMS_FILE = STATE_DIR / "claims.json"
 LAST_VERIFY_FILE = STATE_DIR / "last-verify.json"
 LAST_FETCH_FILE = STATE_DIR / "last-fetch.json"
+TASKS_DIR = STATE_DIR / "tasks"
 ROADMAP = PROJECT_ROOT / "docs" / "ROADMAP.md"
 CHANGELOG = PROJECT_ROOT / "changelog.md"
 CHUNKS_DIR = PROJECT_ROOT / "docs" / "chunks"
@@ -75,6 +76,13 @@ _SECTION = re.compile(r"^##(?!#)")
 _ENTRY = re.compile(r"^###\s+(?P<heading>.+?)\s*$")
 CHANGELOG_HEADINGS = 3
 CHANGELOG_HEADING_WIDTH = 78
+
+# Task files: `.claude/rules/stops-and-reports.md`. A long session keeps its
+# checklist in `state/tasks/<SNN>.md` because compaction summarizes the
+# scrollback and a file survives it. Only markdown checkboxes are counted.
+_TASK_OPEN = re.compile(r"^\s*[-*]\s+\[ \]")
+_TASK_DONE = re.compile(r"^\s*[-*]\s+\[[xX]\]")
+TASK_FILES_SHOWN = 3
 
 # The status board is the one table between these markers. Anything outside
 # them is prose, and `tests/test_roadmap_queue.py` fails if a session row
@@ -421,6 +429,42 @@ def claims(now: datetime) -> dict:
     return {"active": active, "stale": stale, "stale_after_hours": STALE_CLAIM_HOURS}
 
 
+def task_files(directory: Path | None = None) -> list[dict]:
+    """Unfinished task lists under `state/tasks/`, most recently touched first.
+
+    The hook runs on `compact` and `clear` as well as `startup`, so listing the
+    path and the tick count here is what points a compacted session back at its
+    own list. Counts only: the text stays in the file. A list whose every item
+    is ticked is finished and left out; a file with no checkboxes is kept.
+    """
+    directory = directory or TASKS_DIR
+    try:
+        paths = sorted(directory.glob("*.md")) if directory.is_dir() else []
+    except OSError:
+        return []
+    found = []
+    for path in paths:
+        try:
+            # A FIFO named `*.md` would block the read past the hook's budget.
+            if not path.is_file():
+                continue
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            modified = path.stat().st_mtime
+        except OSError:
+            continue
+        done = sum(1 for line in lines if _TASK_DONE.match(line))
+        open_ = sum(1 for line in lines if _TASK_OPEN.match(line))
+        if done and not open_:
+            continue
+        try:
+            shown = path.relative_to(PROJECT_ROOT).as_posix()
+        except ValueError:
+            shown = path.as_posix()
+        found.append((modified, {"path": shown, "done": done, "open": open_}))
+    found.sort(key=lambda item: (-item[0], item[1]["path"]))
+    return [entry for _, entry in found]
+
+
 def ben_flags() -> list[dict]:
     """Open `[BEN: ...]` questions, the facts only Ben can supply.
 
@@ -509,6 +553,7 @@ def build_state(now: datetime | None = None) -> dict:
         "ready_chunks": [row["short"] for row in rows if row.get("startable")],
         "in_progress_chunks": [row["short"] for row in rows if row["status"] == "In Progress"],
         "claims": claims(now),
+        "task_files": task_files(),
         "ben_flags": ben_flags(),
         "verification": verification(),
         "calibration": calibration(),
@@ -572,6 +617,13 @@ def digest(state: dict) -> str:
     stale = state["claims"]["stale"]
     if stale:
         lines.append(f"  {len(stale)} stale claim(s), reclaimable")
+
+    tasks = state.get("task_files") or []
+    if tasks:
+        more = f" (+{len(tasks) - TASK_FILES_SHOWN} more)" if len(tasks) > TASK_FILES_SHOWN else ""
+        lines.append(f"task files, read before resuming{more}:")
+        for task in tasks[:TASK_FILES_SHOWN]:
+            lines.append(f"  {task['path']}: {task['done']}/{task['done'] + task['open']} done")
 
     headings = state.get("changelog_headings") or []
     if headings:

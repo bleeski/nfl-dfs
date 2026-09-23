@@ -45,6 +45,9 @@ Close out the current roadmap session.
      `ben-review` label, say so, and stop: that pull request is Ben's to merge.
    - Otherwise wait for `suite`, `boundaries` and `protected-paths` to go green,
      then merge and delete the branch. A red check is work, not a reason to stop.
-9. Report to Ben in a few lines: what landed, the exact suite result, the pull
-   request link and whether it merged, anything relaxed, the next session, and
-   any open `[BEN: ...]` flag.
+9. Report to Ben in a few lines, in the order
+   `.claude/rules/stops-and-reports.md` sets. **Needs Ben** first: a
+   `ben-review` label, any open `[BEN: ...]` flag, anything else he owes, or
+   "nothing". Then **Changed**: what landed, the exact suite result, the pull
+   request link and whether it merged. Then **Found**: anything relaxed or
+   left open, and the next session.

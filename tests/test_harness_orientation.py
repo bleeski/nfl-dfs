@@ -549,6 +549,107 @@ def test_the_writer_and_the_reader_share_one_staleness_threshold(claim, repo_sta
     assert claim.STALE_CLAIM_HOURS is repo_state.STALE_CLAIM_HOURS
 
 
+# --------------------------------------------------------------------------
+# Task files. `.claude/rules/stops-and-reports.md`: the list survives compaction,
+# and the hook that runs on `compact` is what points the session back at it.
+# --------------------------------------------------------------------------
+
+
+def test_task_files_are_counted_and_finished_lists_left_out(repo_state, tmp_path):
+    (tmp_path / "S03.md").write_text(
+        "# S03\nAcceptance: ...\n- [x] tests first\n- [X] registry\n- [ ] truth record\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "S02.md").write_text("- [x] one\n- [x] two\n", encoding="utf-8")
+    (tmp_path / "notes.md").write_text("no checkboxes yet\n", encoding="utf-8")
+    (tmp_path / "ignored.txt").write_text("- [ ] not markdown\n", encoding="utf-8")
+
+    found = {Path(task["path"]).name: task for task in repo_state.task_files(tmp_path)}
+
+    assert set(found) == {"S03.md", "notes.md"}
+    assert (found["S03.md"]["done"], found["S03.md"]["open"]) == (2, 1)
+    assert (found["notes.md"]["done"], found["notes.md"]["open"]) == (0, 0)
+
+
+def test_task_files_are_listed_most_recently_touched_first(repo_state, tmp_path):
+    for age, name in enumerate(("newest.md", "middle.md", "oldest.md")):
+        path = tmp_path / name
+        path.write_text("- [ ] one\n", encoding="utf-8")
+        stamp = 1_800_000_000 - age * 3600
+        os.utime(path, (stamp, stamp))
+
+    names = [Path(task["path"]).name for task in repo_state.task_files(tmp_path)]
+
+    assert names == ["newest.md", "middle.md", "oldest.md"]
+
+
+def test_a_directory_named_like_a_task_file_is_skipped(repo_state, tmp_path):
+    (tmp_path / "odd.md").mkdir()
+
+    assert repo_state.task_files(tmp_path) == []
+
+
+def test_the_state_the_hook_reads_carries_the_task_files(repo_state, tmp_path, monkeypatch):
+    """The wiring, not just the helper: `build_state` is what the hook digests."""
+    monkeypatch.setenv("NFL_DFS_NO_FETCH", "1")
+    monkeypatch.setattr(repo_state, "LAST_FETCH_FILE", tmp_path / "last-fetch.json")
+    monkeypatch.setattr(repo_state, "STATE_DIR", tmp_path)
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "S03.md").write_text("- [x] one\n- [ ] two\n", encoding="utf-8")
+    monkeypatch.setattr(repo_state, "TASKS_DIR", tasks)
+
+    state = repo_state.build_state(NOW)
+
+    assert [(Path(t["path"]).name, t["done"], t["open"]) for t in state["task_files"]] == [("S03.md", 1, 1)]
+    assert "S03.md: 1/2 done" in repo_state.digest(state)
+
+
+def test_a_missing_tasks_directory_is_not_fatal(repo_state, tmp_path):
+    assert repo_state.task_files(tmp_path / "absent") == []
+
+
+def test_the_digest_points_a_compacted_session_at_its_task_file(repo_state):
+    state = _state_with_fetch({"attempted": True, "ok": True, "reason": None, "age_seconds": 0.0})
+    state["task_files"] = [{"path": "state/tasks/S03.md", "done": 2, "open": 1}]
+
+    text = repo_state.digest(state)
+
+    assert "state/tasks/S03.md: 2/3 done" in text
+
+
+def test_no_task_file_adds_no_line(repo_state):
+    text = repo_state.digest(
+        _state_with_fetch({"attempted": True, "ok": True, "reason": None, "age_seconds": 0.0})
+    )
+
+    assert "task files" not in text
+
+
+def test_the_digest_shows_at_most_three_task_files(repo_state):
+    state = _state_with_fetch({"attempted": True, "ok": True, "reason": None, "age_seconds": 0.0})
+    state["task_files"] = [{"path": f"state/tasks/S0{n}.md", "done": 0, "open": 1} for n in range(5)]
+
+    text = repo_state.digest(state)
+
+    assert "(+2 more)" in text
+    assert "S03.md" not in text and "S02.md" in text
+
+
+def test_task_files_never_reach_a_diff():
+    """Working notes, not status: `state/` is ignored apart from `claims.json`."""
+    ignored = subprocess.run(
+        ("git", "check-ignore", "--quiet", "--no-index", "state/tasks/S03.md"),
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert ignored.returncode == 0, "state/tasks/ must stay gitignored"
+
+
 def test_the_claims_file_is_tracked_on_purpose():
     """A claim that does not travel cannot coordinate anything."""
     tracked = subprocess.run(

@@ -31,7 +31,9 @@ the row `Session 04`) of `docs/ROADMAP.md`.
 6. Enter plan mode. Produce a plan that names: files to touch (only those the
    card and its briefs list), tests to add first, the card's acceptance
    verbatim, its breakpoint, open `[BEN: ...]` questions, and what is
-   explicitly out of scope. Wait for approval before editing.
+   explicitly out of scope. Wait for approval before editing. Once approved,
+   copy the plan into `state/tasks/$ARGUMENTS.md` as one `- [ ]` line per item
+   (`.claude/rules/stops-and-reports.md`) and tick items as they land.
 7. Claim the session before writing code, so a concurrent instance can see it:
 
        python3 scripts/claim.py take $ARGUMENTS --branch <branch>

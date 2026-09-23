@@ -122,10 +122,10 @@ him overturn it. Construction preferences are explicitly yours under the lock
 clock ruling, except lineup uniqueness, which R29 took off that list.
 
 A message with no command in it ends the turn, and the slate waits until Ben
-comes back. Four endings have no place in a run: a summary that announces the
-next step instead of taking it; an offer to continue unless he objects; a list
-of decisions none of which blocks the run (the 2026-09-20 question was one); and
-stopping to report because a stage finished. Put status and recommendations in
-the same message as the next command. Stop only when the file is delivered with
-its gaps named, when an integrity gate stops the file and nothing else can
-proceed, or when the next step needs a fact only he has.
+comes back. `stops-and-reports.md` names the four endings that stall a run; on
+a slate they cost clock, and the 2026-09-20 question was the third of them (a
+list of decisions none of which blocked the run). Put status and
+recommendations in the same message as the next command. On a slate, stop only
+when the file is delivered with its gaps named, when an integrity gate stops
+the file and nothing else can proceed, or when the next step needs a fact only
+he has. The handoff leads with **Needs Ben**, as that file sets out.
