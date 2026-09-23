@@ -43,24 +43,61 @@ Usage:
         --portfolio <selection or portfolio json> \\
         --salaries  <run>/inputs/DKSalaries.csv \\
         --status    <run>/status/official_status.csv \\
-        [--template <DKEntries.csv> --export <written entries csv>] \\
+        [--template <DKEntries.csv> --export <written entries csv>]  # after the writer \\
         [--backup-pairs 'Brock Purdy>Mac Jones;Lamar Jackson>Tyler Huntley'] \\
         [--min-salary 47500] [--max-overlap 4] [--max-exposure 6] \\
         [--implied-totals team_totals.csv]   # TEAM,IMPLIED_TOTAL
         [--ownership ownership.csv]          # NAME,OWNERSHIP_PCT
         [--json out.json]
 
-Exit 1 if any Tier 1 legality check fails, 2 if only an enforcement defect
-fires, else 0. Tier 2 never changes the exit code; it prints a scorecard and
-names what a human has to accept.
+## 2026-09-23 (Session 02): the final CSV is what gets checked
+
+The 2026-09-22 audit (issue #40, D6) found that this gate validated the JSON
+rosters and never the file. With `--template` and `--export` it compared cell
+values outside the roster, counted non-empty rosters only `if rosters`, and never
+compared an exported roster to the lineup assigned to that Entry ID. A file whose
+reserved rows were blank, swapped or placed in the wrong slots printed PASS.
+Now, with `--template` and `--export`:
+
+* **Export audit, on bytes.** The template and export are split into raw lines
+  with `nfl_dfs.byte_lines`. Every line must be byte-identical except a blank
+  authorized row, which may differ only inside its nine roster cells, with the
+  same field count and line ending. The old cell comparison is gone; its name,
+  "byte fidelity", claimed more than it checked.
+* **Each exported roster against its assignment**, by Entry ID, and each cell
+  against the salary file's slot eligibility, so the rosters that upload go
+  through Tier 1, not only the JSON.
+* **Coverage is unconditional.** Every blank authorized row is filled or listed
+  as unfilled. An assigned row left blank, an assignment Entry ID the template
+  does not hold, and an export byte-identical to the template are failures.
+
+Exit codes separate validity from strategy: 1 a validity failure (roster
+legality, slot eligibility, export bytes, export against assignment, a repeated
+lineup under R29, an officially inactive player); 3 valid, but authorized rows
+are unfilled and each Entry ID is named; 2 only an operator-requested limit
+(`--min-salary`, `--max-overlap`, `--max-exposure`, `--backup-pairs`); else 0.
+A backup pair moved from 1 to 2: it is the operator's assertion about who
+starts, with no evidence bound to it. Tier 2 never changes the exit code; it
+prints a scorecard and names what a human has to accept. Without `--export` the
+verdict covers the portfolio JSON only, and says so.
 """
 from __future__ import annotations
-import argparse, csv, itertools, json, statistics, sys
+import argparse, csv, itertools, json, re, statistics, sys
 from collections import Counter
+
+from nfl_dfs.byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 
 SLOTS = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST"]
 NEED = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
 FLEX_OK = {"RB", "WR", "TE"}
+EXIT_PASS, EXIT_FAIL, EXIT_DEFECT, EXIT_PARTIAL = 0, 1, 2, 3
+_TRAILING_ID = re.compile(r"\((\d+)\)\s*$")
+
+
+def cell_id(cell):
+    """A roster cell's DraftKings ID, whether it holds `123` or `Name (123)`."""
+    match = _TRAILING_ID.search(cell)
+    return match.group(1) if match else cell.strip()
 
 
 def load_rows(path, key):
@@ -69,53 +106,104 @@ def load_rows(path, key):
 
 
 def read_portfolio(path):
+    """Return (rosters to check, the Entry ID map or None)."""
     d = json.load(open(path, encoding="utf-8"))
-    if d.get("assignments_by_entry_id"):
-        return list(d["assignments_by_entry_id"].values())
+    assigned = d.get("assignments_by_entry_id") or None
+    if assigned:
+        assigned = {str(k).strip(): [str(x).strip() for x in (v["roster"] if isinstance(v, dict) else v)]
+                    for k, v in assigned.items()}
+        return list(assigned.values()), assigned
     if "lineups" in d:
-        return [l["roster"] for l in d["lineups"]]
+        return [l["roster"] for l in d["lineups"]], None
     raise SystemExit("portfolio json has neither 'lineups' nor a populated 'assignments_by_entry_id'")
 
 
-def rows_of(path):
-    with open(path, encoding="utf-8-sig", newline="") as fh:
-        return list(csv.reader(fh))
+def cells_of(line):
+    body, _ = split_line_ending(line)
+    return next(csv.reader([body.decode("utf-8-sig", errors="replace")]), [])
 
 
-def byte_fidelity(template, export):
-    """Only the nine roster cells of a reserved row may differ from the template.
-
-    Ported from qa_showdown_portfolio.py, which has had this since 2026-09-14.
-    The Classic export is the operator's own DKEntries file with blanks filled;
-    anything else that moved is a defect, not a formatting difference.
-    """
-    defects = []
-    tpl, exp = rows_of(template), rows_of(export)
-    if len(tpl) != len(exp):
-        defects.append(f"ROW_COUNT_CHANGED template={len(tpl)} export={len(exp)}")
-        return defects, [], []
-    hdr = exp[0]
+def roster_region_changed_only(t_line, e_line, lo):
+    """True when two raw lines differ at most inside fields lo..lo+8."""
+    (tb, te), (eb, ee) = split_line_ending(t_line), split_line_ending(e_line)
     try:
-        fee = hdr.index("Entry Fee")
+        ts, es = csv_field_spans(tb), csv_field_spans(eb)
     except ValueError:
-        defects.append("EXPORT_HEADER_HAS_NO_ENTRY_FEE_COLUMN")
-        return defects, [], []
-    lo, hi = fee + 1, fee + 10
-    for i, (t, e) in enumerate(zip(tpl, exp)):
-        width = max(len(t), len(e))
-        t = t + [""] * (width - len(t))
-        e = e + [""] * (width - len(e))
-        reserved = i > 0 and t and t[0].strip().isdigit()
-        for j, (tv, ev) in enumerate(zip(t, e)):
-            if tv != ev and not (reserved and lo <= j < hi):
-                defects.append(f"ROW_{i}_COL_{j}_MUTATED {tv!r}->{ev!r}")
-    tpl_ids = [r[0].strip() for r in tpl if r and r[0].strip().isdigit()]
-    exp_ids = [r[0].strip() for r in exp if r and r[0].strip().isdigit()]
-    if tpl_ids != exp_ids:
-        defects.append("ENTRY_ID_ORDER_OR_COVERAGE_MISMATCH")
-    rosters = [[c.strip() for c in r[lo:hi]] for r in exp
-               if r and r[0].strip().isdigit() and any(c.strip() for c in r[lo:hi])]
-    return defects, exp_ids, rosters
+        return False
+    if te != ee or len(ts) != len(es) or len(ts) < lo + 9:
+        return False
+    hi = lo + 8
+    return tb[:ts[lo][0]] == eb[:es[lo][0]] and tb[ts[hi][1]:] == eb[es[hi][1]:]
+
+
+def export_audit(template, export, assigned):
+    """Compare the export to the untouched template on raw bytes.
+
+    Only a blank authorized row may change, and only inside its nine roster
+    cells. Returns (failures, exported rosters by Entry ID in slot order,
+    unfilled authorized Entry IDs).
+    """
+    fail, exported, unfilled, prefilled = [], {}, [], {}
+    t_raw, e_raw = open(template, "rb").read(), open(export, "rb").read()
+    t_lines, e_lines = split_byte_lines(t_raw), split_byte_lines(e_raw)
+    if len(t_lines) != len(e_lines):
+        return [f"LINE_COUNT_CHANGED template={len(t_lines)} export={len(e_lines)}"], {}, []
+    hdr = cells_of(t_lines[0]) if t_lines else []
+    if "Entry Fee" not in hdr or hdr[hdr.index("Entry Fee") + 1:hdr.index("Entry Fee") + 10] != SLOTS:
+        return ["NOT_A_CLASSIC_TEMPLATE: the template header has no Classic roster after Entry Fee"], {}, []
+    lo = hdr.index("Entry Fee") + 1
+    template_ids = []
+    for n, (t, e) in enumerate(zip(t_lines, e_lines)):
+        tc = cells_of(t)
+        eid = tc[0].strip() if n and tc else ""
+        entry = eid.isdigit()
+        blank = entry and not any(c.strip() for c in tc[lo:lo + 9])
+        if entry:
+            template_ids.append(eid)
+        if entry and not blank and t == e:
+            prefilled[eid] = [cell_id(c) for c in tc[lo:lo + 9]]
+        if t == e:
+            if blank:
+                if assigned is not None and eid in assigned:
+                    fail.append(f"ASSIGNED_ROW_NOT_FILLED: entry {eid} is assigned and blank in the export")
+                else:
+                    unfilled.append(eid)
+            continue
+        if not blank:
+            fail.append(f"LINE_{n + 1}_BYTES_CHANGED on a line that is not a blank authorized row")
+            continue
+        if not roster_region_changed_only(t, e, lo):
+            fail.append(f"LINE_{n + 1}_BYTES_CHANGED_OUTSIDE_ROSTER entry {eid}")
+            continue
+        cells = [c.strip() for c in cells_of(e)[lo:lo + 9]]
+        if not all(cells):
+            fail.append(f"PARTIALLY_FILLED_ROW: entry {eid} has {sum(map(bool, cells))} of 9 cells")
+            continue
+        exported[eid] = cells
+    export_ids = [c[0].strip() for c in map(cells_of, e_lines[1:]) if c and c[0].strip().isdigit()]
+    if template_ids != export_ids:
+        fail.append("ENTRY_ID_ORDER_OR_COVERAGE_MISMATCH")
+    if t_raw == e_raw and (unfilled or assigned):
+        fail.append("EXPORT_IDENTICAL_TO_TEMPLATE: nothing was filled")
+    if assigned is None:
+        fail.append("EXPORT_HAS_NO_ASSIGNMENT_MAP: the portfolio has no assignments_by_entry_id, "
+                    "so no exported roster can be checked against its lineup")
+    else:
+        for eid in sorted(set(assigned) - set(template_ids)):
+            fail.append(f"ASSIGNMENT_ENTRY_ID_NOT_IN_TEMPLATE: {eid}")
+        for eid in sorted(set(assigned) & set(prefilled)):
+            fail.append(f"ASSIGNED_ROW_WAS_PREFILLED: entry {eid} was not blank in the template, "
+                        "so its assignment is not what the file holds")
+        for eid, cells in exported.items():
+            if eid not in assigned:
+                fail.append(f"EXPORT_ROW_NOT_IN_ASSIGNMENT: entry {eid}")
+            elif sorted(cells) != sorted(assigned[eid]):
+                fail.append(f"EXPORT_ROSTER_DIFFERS_FROM_ASSIGNMENT: entry {eid}")
+    # R29 covers the whole file, including rows filled before this run.
+    rows = [tuple(sorted(c)) for c in [*exported.values(), *prefilled.values()] if all(c)]
+    if len(set(rows)) != len(rows):
+        fail.append("DUPLICATE_LINEUPS_IN_EXPORT: a lineup appears in more than one row")
+    return fail, exported, unfilled
 
 
 def main(argv=None):
@@ -125,7 +213,7 @@ def main(argv=None):
     ap.add_argument("--salaries", required=True)
     ap.add_argument("--status")
     ap.add_argument("--template", help="the untouched DKEntries export")
-    ap.add_argument("--export", help="the written entries CSV, checked byte-for-byte against --template")
+    ap.add_argument("--export", help="the written entries CSV, audited on bytes against --template")
     ap.add_argument("--backup-pairs", default="",
                     help="semicolon list of STARTER>BACKUP names; flags a lineup starting the backup")
     ap.add_argument("--implied-totals")
@@ -151,7 +239,7 @@ def main(argv=None):
         for r in csv.DictReader(open(a.ownership, encoding="utf-8-sig")):
             own[r["NAME"].strip()] = float(r["OWNERSHIP_PCT"])
 
-    L = read_portfolio(a.portfolio)
+    L, assigned = read_portfolio(a.portfolio)
     P = lambda i: sal[i]["Position"]
     S = lambda i: int(sal[i]["Salary"])
     T = lambda i: sal[i]["TeamAbbrev"]
@@ -169,48 +257,54 @@ def main(argv=None):
             pairs.append((starter.strip(), backup.strip()))
 
     # ---------------------------------------------------------- TIER 1
-    fail = []
-    defects = []
-    for n, r in enumerate(L, 1):
+    fail = []        # validity: exit 1
+    defects = []     # operator-requested limits: exit 2
+    unfilled = []    # coverage: exit 3
+
+    def check_lineup(label, r, enforce=True):
+        """Validity always; the operator's limits only on the portfolio, so none prints twice."""
         if len(r) != 9:
-            fail.append(f"L{n}: {len(r)} players"); continue
+            fail.append(f"{label}: {len(r)} players"); return
         if len(set(r)) != 9:
-            fail.append(f"L{n}: duplicate player")
+            fail.append(f"{label}: duplicate player")
         unknown = [x for x in r if x not in sal]
         if unknown:
-            fail.append(f"L{n}: id not in salary pool {unknown}"); continue
+            fail.append(f"{label}: id not in salary pool {unknown}"); return
         c = Counter(P(i) for i in r)
         for pos, n_req in NEED.items():
             if c[pos] < n_req:
-                fail.append(f"L{n}: {c[pos]} {pos}, need {n_req}")
+                fail.append(f"{label}: {c[pos]} {pos}, need {n_req}")
         if c["QB"] != 1:
-            fail.append(f"L{n}: {c['QB']} QB")
+            fail.append(f"{label}: {c['QB']} QB")
         if c["DST"] != 1:
-            fail.append(f"L{n}: {c['DST']} DST")
+            fail.append(f"{label}: {c['DST']} DST")
         if c["RB"] + c["WR"] + c["TE"] != 7:
-            fail.append(f"L{n}: flex shape {dict(c)}")
+            fail.append(f"{label}: flex shape {dict(c)}")
         tot = sum(S(i) for i in r)
         if tot > a.cap:
-            fail.append(f"L{n}: salary {tot} over {a.cap}")
-        if a.min_salary and tot < a.min_salary:
-            defects.append(f"L{n}: salary {tot} under the {a.min_salary} floor")
+            fail.append(f"{label}: salary {tot} over {a.cap}")
+        if enforce and a.min_salary and tot < a.min_salary:
+            defects.append(f"{label}: salary {tot} under the {a.min_salary} floor")
         if len({G(i) for i in r}) < 2:
-            fail.append(f"L{n}: violates the two-game rule")
+            fail.append(f"{label}: violates the two-game rule")
         ina = [NM(i) for i in r if status.get(i) == "INACTIVE"]
         if ina:
-            fail.append(f"L{n}: INACTIVE rostered {ina}")
+            fail.append(f"{label}: INACTIVE rostered {ina}")
         names = {NM(i) for i in r}
-        for starter, backup in pairs:
+        for starter, backup in (pairs if enforce else ()):
             if backup in names and starter not in names:
-                fail.append(f"L{n}: starts {backup}, the backup to {starter}")
+                defects.append(f"{label}: starts {backup}, the backup to {starter}")
             if backup in names and starter in names:
-                fail.append(f"L{n}: {starter} alongside own backup {backup}")
+                defects.append(f"{label}: {starter} alongside own backup {backup}")
 
-    # duplicate lineups, on the canonical player set
+    for n, r in enumerate(L, 1):
+        check_lineup(f"L{n}", r)
+
+    # duplicate lineups, on the canonical player set; R29 makes this validity
     canon = [tuple(sorted(r)) for r in L]
     if len(set(canon)) != len(canon):
         dupes = [k for k, v in Counter(canon).items() if v > 1]
-        defects.append(f"DUPLICATE_LINEUPS: {len(dupes)} roster(s) appear more than once")
+        fail.append(f"DUPLICATE_LINEUPS: {len(dupes)} roster(s) appear more than once")
 
     overlaps_pairs = []
     for (x, rx), (y, ry) in itertools.combinations(list(enumerate(L, 1)), 2):
@@ -225,28 +319,58 @@ def main(argv=None):
             if ct > a.max_exposure:
                 defects.append(f"EXPOSURE_{ct}_EXCEEDS_{a.max_exposure}: {NM(i)}")
 
-    if a.template and a.export:
-        bf, exp_ids, rosters = byte_fidelity(a.template, a.export)
-        defects.extend(bf)
-        if rosters and len(rosters) != len(L):
-            defects.append(f"EXPORT_LINEUP_COUNT {len(rosters)} != portfolio {len(L)}")
+    export_checked = bool(a.template and a.export)
+    if export_checked:
+        audit, exported, unfilled = export_audit(a.template, a.export, assigned)
+        fail.extend(audit)
+        for eid, cells in exported.items():
+            for slot, i in zip(SLOTS, cells):
+                if i not in sal:
+                    continue
+                eligible = {t.strip() for t in sal[i]["Roster Position"].split("/")}
+                fixed_ok = slot != "FLEX" and P(i) == slot
+                flex_ok = slot == "FLEX" and P(i) in FLEX_OK
+                if slot not in eligible or not (fixed_ok or flex_ok):
+                    fail.append(f"SLOT_INELIGIBLE: entry {eid}: {NM(i)} ({P(i)}, "
+                                f"{sal[i]['Roster Position']}) in {slot}")
+            check_lineup(f"entry {eid}", cells, enforce=False)
     elif a.template or a.export:
-        defects.append("BYTE_FIDELITY_SKIPPED: --template and --export must be given together")
+        fail.append("EXPORT_CHECK_INCOMPLETE: --template and --export must be given together")
 
     print("=" * 62)
-    print("TIER 1  LEGALITY AND ENFORCEMENT  (blocking)")
+    print("TIER 1  VALIDITY, COVERAGE AND ENFORCEMENT  (blocking)")
     print("=" * 62)
     print(f"  lineups: {len(L)}")
-    print(f"  legality failures: {len(fail)}")
+    if export_checked:
+        print(f"  export checked: {a.export}")
+    else:
+        print("  export not checked: this verdict covers the portfolio JSON, not a DraftKings file")
+    print(f"  validity failures: {len(fail)}")
     for f in fail:
         print(f"    ! {f}")
     if not fail:
         print("    all lineups legal")
-    print(f"  enforcement defects: {len(defects)}")
+    if export_checked:
+        print(f"  unfilled authorized Entry IDs: {len(unfilled)} {unfilled}")
+        if unfilled:
+            print("    name them in the handoff; never repeat a lineup to fill them (R29)")
+    print(f"  enforcement defects (operator-requested limits): {len(defects)}")
     for d in defects:
         print(f"    ! {d}")
     if not defects:
         print("    no enforced limit exceeded")
+
+    if not L:
+        # A builder shortfall can emit zero lineups; there is nothing to score.
+        print("    ! NO_LINEUPS: the portfolio holds no lineup")
+        print()
+        print("  VERDICT: FAIL")
+        if a.json:
+            json.dump({"verdict": "FAIL", "export_checked": export_checked,
+                       "validity_failures": fail + ["NO_LINEUPS"],
+                       "unfilled_entry_ids": unfilled, "enforcement_defects": defects},
+                      open(a.json, "w"), indent=1)
+        return EXIT_FAIL
 
     # ---------------------------------------------------------- TIER 2
     n_l = len(L)
@@ -327,13 +451,16 @@ def main(argv=None):
         print(f"    {c:2d}/{n_l} {c*100//n_l:3d}%  {NM(i):<22s} {P(i):4s} {T(i):4s} "
               f"${S(i)}{tag}")
 
-    verdict = "FAIL" if fail else ("DEFECT" if defects else "PASS")
+    verdict = ("FAIL" if fail else "PARTIAL" if unfilled
+               else "DEFECT" if defects else "PASS")
     print()
     print(f"  VERDICT: {verdict}")
 
     if a.json:
         json.dump({"verdict": verdict,
-                   "tier1_failures": fail,
+                   "export_checked": export_checked,
+                   "validity_failures": fail,
+                   "unfilled_entry_ids": unfilled,
                    "enforcement_defects": defects,
                    "max_exposure": mx[1] / n_l,
                    "top3_union": top3_union / n_l,
@@ -343,8 +470,10 @@ def main(argv=None):
                    "anti_correlation": anti},
                   open(a.json, "w"), indent=1)
     if fail:
-        return 1
-    return 2 if defects else 0
+        return EXIT_FAIL
+    if unfilled:
+        return EXIT_PARTIAL
+    return EXIT_DEFECT if defects else EXIT_PASS
 
 
 if __name__ == "__main__":

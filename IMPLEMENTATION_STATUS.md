@@ -1,5 +1,26 @@
 # Implementation Status
 
+## Capability added: 2026-09-23 (Session 02)
+
+The Classic fallback's last two stages now check the file, not the JSON. No
+release truth changed; the fallback's output is still `PRIOR_ONLY /
+DO_NOT_UPLOAD`. Suite figures are in `changelog.md`.
+
+- **`scripts/write_dk_entries.py`** refuses by name (exit 2, nothing written) an
+  assignment Entry ID the template lacks, a prefilled row, a roster that fails
+  the salary file (size, pool, repeated person, slot or FLEX eligibility, cap,
+  two games), a repeated lineup (R29), a Showdown template, and an output path
+  that exists or is an input. It fills every blank authorized row or writes the
+  file and exits 3 naming each unfilled Entry ID. Untouched lines keep their raw
+  bytes; the write is a verified temporary file and `os.replace`.
+- **`scripts/qa_classic_portfolio.py --template --export`** audits raw bytes,
+  compares each exported roster to its assignment by Entry ID, checks each cell's
+  slot, and lists every unfilled authorized row. Exit 1 validity, 3 partial
+  coverage, 2 an operator-requested limit, 0 pass.
+- **Not yet:** the builder's shortfall still exits 0 and its pool still admits
+  DraftKings `OUT`/`IR`/`D` rows, and Showdown QA still fails its exit code on
+  strategy findings. Both are Session 02b.
+
 ## Capability added — 2026-09-19 (P1)
 
 Three things work that did not, none of them changing a release truth. Suite

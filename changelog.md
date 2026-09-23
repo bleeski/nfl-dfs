@@ -4,6 +4,187 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-23: the fallback writer and Classic QA check the file, not the JSON (Session 02)
+
+Items 1 and 2 of the Session 02 card, on `claude/s02-fallback-csv-l62fjm`, PR
+#44, claim `a9ab747`. Items 3 and 4 (the builder and Showdown QA) are split to
+`Session 02b` at the card's breakpoint: the first two alone reached 1,378
+changed lines. No engine module, contract, evidence gate or release truth
+changed. The fallback's output is still `PRIOR_ONLY` / `DO_NOT_UPLOAD`, with
+four truths until Session 03.
+
+#### Changed: `scripts/write_dk_entries.py` (rewritten, same positional CLI)
+
+- **Exit codes.**
+  - 0: every blank authorized row is filled and verified.
+  - 2: refused by name, and nothing is written.
+  - 3: the file is written, and every unfilled Entry ID is named on stdout and
+    stderr. R29: a row is never filled with a repeated lineup.
+- **Named refusals** replace the `assert`s the audit cited (`:24, 41, 57, 67`):
+  `UNKNOWN_ENTRY_ID`, `PREFILLED_ROW_ASSIGNED`, `ROSTER_SIZE`,
+  `DK_ID_NOT_IN_POOL`, `DUPLICATE_PLAYER`, `ROSTER_SHAPE`, `SLOT_INELIGIBLE`,
+  `OVER_SALARY_CAP`, `TWO_GAME_RULE`, `DUPLICATE_LINEUP`,
+  `NOT_A_CLASSIC_TEMPLATE`, `ROW_NARROWER_THAN_ROSTER`, `NO_ASSIGNMENTS`,
+  `OUTPUT_IS_TEMPLATE`, `OUTPUT_IS_AN_INPUT` and `OUTPUT_EXISTS`. Every problem
+  in a file is reported in one run.
+- **Raw bytes.** Lines are split with `nfl_dfs.byte_lines`, the helpers
+  `lineups.write_upload_bytes` uses. Untouched lines are copied byte for byte,
+  and a filled line changes only inside its nine roster spans. An LF template
+  now comes back LF; the old writer rewrote every line as CRLF.
+- **Output.** The bytes go to a temporary file beside the target, are re-read
+  and verified (line count, untouched lines identical, filled rows reparse to
+  their assignment), then `os.replace`d. A refusal leaves no file and no
+  temporary.
+- It reads seven named salary columns and nothing else.
+
+#### Changed: `scripts/qa_classic_portfolio.py`
+
+- **The export audit is on bytes.** `byte_fidelity` compared cell values, so its
+  name claimed more than it checked (audit D6 point 5). `export_audit` compares
+  raw lines: a changed line must be a blank authorized row, with the same field
+  count, the same line ending and identical bytes outside its roster spans.
+- **Each exported roster** is compared to its Entry ID's assignment,
+  slot-checked against the salary file's `Roster Position`, and run through
+  Tier 1. Coverage no longer depends on `if rosters`. An assigned row left
+  blank, an assignment Entry ID the template lacks, an export byte-identical to
+  the template, and an export with no Entry ID map to check against are all
+  failures.
+- **Exit codes.** 1 validity, 3 partial coverage with each unfilled Entry ID
+  named, 2 an operator-requested limit, 0 pass; Tier 2 never changes it.
+  - Moved from 2 to 1: duplicate lineups (R29), byte and Entry ID failures, and
+    `--template` without `--export`.
+  - Moved from 1 to 2: `--backup-pairs`. It is the operator's assertion about
+    who starts, with no evidence bound to it (audit #40 §4, "S/P").
+  - Unchanged at 1: officially `INACTIVE` players.
+- A JSON-only run prints that the export was not checked. An empty portfolio
+  fails as `NO_LINEUPS` instead of crashing in Tier 2. The operator's limits
+  apply to the portfolio once, not again per exported row.
+- JSON report: `tier1_failures` is renamed `validity_failures`, and
+  `unfilled_entry_ids` and `export_checked` are added. Nothing in the
+  repository read the old key.
+
+#### Tests changed visibly
+
+- `tests/test_write_dk_entries.py`:
+  - `test_an_entry_id_not_in_the_template_is_simply_not_written` (`:139-147`,
+    exit 0) is now `test_an_entry_id_not_in_the_template_is_refused_by_name`
+    (exit 2, `UNKNOWN_ENTRY_ID`).
+  - `test_output_is_crlf_like_a_draftkings_export` is now
+    `test_line_endings_follow_the_template`: LF in gives LF out, and CRLF in
+    gives CRLF out.
+  - The fill test asserts "bytes changed outside the nine roster cells: 0"; the
+    old line said "cells".
+  - The fixture gives each entry a distinct roster, because the old one
+    assigned one roster to both entries, which R29 now refuses. It uses real
+    DraftKings roster positions (`QB`, `DST`, `RB/FLEX`), not `QB/FLEX`.
+  - The prefilled-cell test also asserts exit 2 and no output.
+- `tests/test_qa_classic_portfolio.py`:
+  - Exit codes changed: backup pairs from 1 to 2; duplicate lineups, a mutated
+    identity cell and template without export from 2 to 1; the Entry ID
+    coverage test from 2 to 1, renamed `..._is_a_failure`.
+  - `test_byte_fidelity_passes_on_an_untouched_template` is now
+    `test_export_audit_passes_on_a_correct_fill`, because an export is now
+    compared to an Entry ID map.
+
+#### Added
+
+- The card's eight adversarial fixtures (an extra ID, a missing ID, a QB in
+  FLEX, over the cap, a duplicate person, output equal to the template, a
+  pre-existing output, 18 of 20 filled):
+  - The writer refuses each by name, or exits 3 naming the unfilled rows.
+  - `test_qa_fails_every_adversarial_export` exits 1 or 3 on all eight, and
+    none prints PASS.
+- A byte test on the supplied 20-entry DKEntries export, copied first: all 707
+  non-entry lines are byte-identical, and the 20 entry lines differ only inside
+  the nine roster cells, CRLF kept.
+- QA cases the old code passed: swapped rosters between two rows, right people
+  in the wrong slots, a quoted `"$1"` and a CRLF rewrite that a cell comparison
+  cannot see, an all-blank export.
+- `test_the_writer_and_qa_agree`: writer then QA on 20 of 20 (0 and 0) and 18 of
+  20 (3 and 3).
+- Writer file: 33 cases (was 8). QA file: 41 cases (was 19).
+
+#### Documents
+
+- `docs/RUNBOOK.md`: the fallback listing, Tier 1's exit codes and that QA runs
+  on the written file, and the Running order sentence. The Running order now
+  says the builder's shortfall still exits 0 until Session 02b.
+- `docs/ROADMAP.md`:
+  - Session 02 is `Complete`, and `Session 02b` has a row and a card.
+  - The card records the answer to the pool-filter question.
+    `selection.py:228-230` writes `scores.json` before the exclusion set at
+    `:231-254`, so DraftKings `OUT`, `IR` and `D` rows reach the builder with
+    positive scores. The supplied Classic salary file has 33 such rows.
+  - The ledger records the claim at `a9ab747`, and §1 names Session 02b.
+  - §3 has a row for the archive move.
+- `IMPLEMENTATION_STATUS.md`: a capability entry for this session.
+- `changelog.md` was 567 lines. Its three oldest entries (2026-09-22, before
+  the cutover, 228 lines) moved verbatim to
+  `docs/changelog-archive/changelog-2026-09-22.md`.
+  `cmp` against `git show HEAD:changelog.md | sed -n 307,534p` found them
+  byte-identical, with sha256 prefix `b294c1c25f88957e` on both sides.
+
+#### Verification
+
+- Baseline before any change, in a fresh `.venv-linux`:
+  `1121 passed, 1 skipped in 175.83s (0:02:55)`.
+- The card's command as written stops at
+  `ERROR: file or directory not found: tests/test_qa_showdown_portfolio.py`.
+  That file is Session 02b's. The other three files: `79 passed in 5.48s`.
+- Complete pinned suite on the finished tree:
+  `1168 passed, 1 skipped in 129.53s (0:02:09)`. That is 47 above the baseline:
+  the writer and QA files now hold 74 cases, against 27 before. Recorded with
+  `scripts/record_verify.py`. Before the review fixes below it was
+  `1161 passed, 1 skipped in 126.44s`.
+- `sh ./nfl.sh doctor`: `pass_status: true`. `python -m compileall` on both
+  scripts and both test files: clean. `git diff --check`: clean.
+  `scripts/check_protected_paths.py`: no protected path touched.
+- Neither script names or reads the salary file's points-per-game column.
+
+#### Review
+
+The `reviewer` subagent read the diff against the card and ran the two focused
+files (`67 passed in 5.36s`).
+
+- **Blocking, fixed.** QA passed an export in which an assigned Entry ID's
+  template row was already prefilled with a different roster. The row never
+  entered the comparison. It now fails as `ASSIGNED_ROW_WAS_PREFILLED`. The
+  writer already refused that input.
+- **Blocking, already resolved.** It found two placeholder strings and no
+  recorded verify. It had read the tree before the placeholders were filled and
+  `record_verify.py` ran. Both are in `82abbdc`.
+- **Open, fixed.** A new lineup repeating a prefilled row escaped R29 in both
+  scripts. Both now compare against prefilled rows, reading a cell as `123` or
+  `Name (123)`.
+- **Open, recorded.**
+  - `split_byte_lines` splits on LF, so a quoted field holding a newline would
+    split in two. DraftKings exports have none.
+  - `assignments_by_entry_id` has no contract in `docs/DATA_CONTRACTS.md`.
+    That gap predates this session.
+- Added with the fixes: two mutation tests, as `.claude/rules/tests.md` asks of
+  a writer. A non-UTF-8 byte fails as `TEMPLATE_NOT_UTF8`, and an unterminated
+  quote as `UNREADABLE_TEMPLATE_ROW`; the writer's template parser now checks
+  each entry row's field spans. Both withhold the file.
+
+#### Decided, and why
+
+- **A partial file is written, not withheld** (exit 3). Under R28 a file with
+  named gaps beats no file. An integrity failure (a bad roster, an unknown
+  Entry ID, an overwrite) still refuses the whole file, because integrity
+  gates stop the file they protect.
+- **The writer and QA share `nfl_dfs.byte_lines`** rather than a second span
+  parser. QA's comparison logic is its own.
+- Nothing was relaxed.
+
+#### Left open
+
+- Session 02b: the builder's shortfall and pool filter, the ratchet ceiling, its
+  output overwrite, and Showdown QA's four strategy findings.
+- Showdown QA's default-on `OVERLAP_*` and `STARTER_WITH_OWN_BACKUP` still exit
+  2. The card names only the four findings.
+- `scores.json` also omits selection's kicker zero-share and offense exclusions,
+  for the same ordering reason (Session 13).
+
 ### 2026-09-23: the R28 boundary sentence names its subject (Session 01 follow-up)
 
 Wording only. No boundary's meaning, release truth, gate or engine behaviour
@@ -304,236 +485,7 @@ verdicts with file:line evidence.
   `S01, S02, S17 (+3 more)`; 1 open flag (Session 30). The session-start hook
   printed 35 of its 60 allowed lines.
 
-### 2026-09-22: the depth-role package refused its own capture on Windows
-
-Found by Ben running `.\nfl.ps1 test` on his own machine after a sync:
-**`25 failed, 1045 passed, 1 skipped in 303.33s`**. The Linux suite was green at
-`1070 passed, 1 skipped` on the same commit. No release truth changed.
-
-#### The defect
-
-`scripts/make_offensive_role_evidence.py:239-242` took a digest over an
-excerpt's bytes and then wrote the file in text mode:
-
-```python
-digest = hashlib.sha256(excerpt.encode("utf-8")).hexdigest()
-capture.write_text(excerpt, encoding="utf-8")
-```
-
-`Path.write_text` opens with `newline=None`, which translates `\n` to
-`os.linesep`. On Windows the bytes on disk are therefore **not** the bytes that
-were hashed, so `sha256_file()` disagrees and the package refuses the capture it
-had just written: `QB_DEPTH_SOURCE_HASH_MISMATCH`. 24 of the 25 failures.
-
-This is not cosmetic. `P7` exists to resolve who is actually starting, after the
-2026-09-20 slate rejected three starting quarterbacks as backups. It could not
-run at all on Windows, which is the only surface that operates slates. Every
-other hash in that module already read bytes (`:104`, `:124`, `:420`); the write
-was the lone inconsistency, and `make_classic_weather_evidence.py` was never
-affected because it uses `shutil.copyfile`.
-
-The 25th failure was a test asserting a path `.endswith("scripts/session_probe.py")`,
-which is backslashes on Windows.
-
-#### Changed
-
-- `scripts/make_offensive_role_evidence.py`: `write_bytes(excerpt.encode("utf-8"))`.
-  Bytes in, identical bytes out, on every platform.
-- `tests/test_qb_depth_roles.py`: the two helpers that build packages the same
-  way, so fixtures stay byte-faithful.
-- `tests/test_session_probe_gate.py`: compares `Path.parts` instead of a joined
-  string, so it still catches the rename it exists for without failing on a
-  separator.
-
-#### The structural finding, and the fix that matters
-
-`.github/workflows/ci.yml` ran `ubuntu-latest` only. **Windows is the slate
-environment and had never been tested.** A byte, path or newline assumption that
-breaks only on Windows was invisible to every check this repository ran, and
-this one survived from P1 through P7 being merged green.
-
-A `windows` job on `windows-latest` now runs the pinned suite. It gates nothing
-the Linux job already gates; it exists so the next defect of this class is found
-by CI rather than at a lock clock.
-
-#### Verification
-
-- Complete pinned suite on Linux: `1070 passed, 1 skipped in 156.21s (0:02:36)`,
-  unchanged from before the fix, which is exactly the point below.
-- Focused before the CI job was added:
-  `tests/test_qb_depth_roles.py tests/test_session_probe_gate.py` green.
-- `.github/workflows/ci.yml` parses; jobs are `boundaries`, `suite`, `windows`,
-  `protected-paths`.
-
-**Not verified here, and stated rather than implied:** this container is Linux,
-and the tests that failed pass on Linux both before and after the change. A
-Linux run is therefore *not* evidence the fix works. The proof is the new
-`windows` CI job on this pull request, and Ben re-running `.\nfl.ps1 test`,
-where the expected result is `1070 passed, 1 skipped` with zero failures.
-### 2026-09-22: the Windows checkout gets a sync command that keeps itself current
-
-No engine module, contract or evidence gate changed. Every path still ends
-`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. No run executed.
-
-#### Why
-
-Measured on Ben's machine on 2026-09-22: the Windows checkout was **59 commits
-behind** `main`, sitting on `codex/p1-salary-divergence-role-evidence` with 13
-modified files from an abandoned session, and had never seen the CI workflow,
-the hooks, the rules directory, `repo_state.py`, or any chunk from P1 onward.
-Nothing told it to catch up and nothing told Ben how.
-
-#### Added
-
-`sync.ps1` at the repository root. Fetches, reports what is incoming, and
-fast-forwards `main`. It is deliberately conservative, because `CLAUDE.md` says
-this tree is often intentionally dirty with user-owned work: it never stashes,
-resets, cleans or discards, and `git pull --ff-only` can neither invent a merge
-commit nor rewrite history, so every failure mode ends with nothing changed. It
-stops rather than act when the checkout is not on `main`, and it names
-`.\nfl.ps1 setup` when `uv.lock` or `pyproject.toml` moved, because
-`uv sync --locked` fails outright in that case without saying why.
-
-#### The design decision worth recording
-
-**The PowerShell profile holds a pointer, not a copy.** The profile line is
-`function Sync-NflDfs { & '<path>\sync.ps1' @args }`, so the script arrives with
-every sync and improves itself. A copy pasted into a profile freezes on the day
-it was pasted, and a second machine starts from nothing. `$PSScriptRoot` locates
-the repository, so the profile line holds the only path anywhere.
-
-#### Changed
-
-`docs/CLAUDE_CODE_SETUP.md` gains "Keeping a Windows checkout in sync" under
-`## One-time, per machine`, with the profile line, the three stop conditions and
-what each means, and why this is not put on a schedule.
-
-A separate `docs/SYNCING.md` was considered and rejected. That file already
-exists for things only Ben does on his own machine, and X5's finding on
-2026-09-20 was that a document nothing tells the operator to open may as well
-not exist; a fifth setup file would repeat it.
-
-#### Verification
-
-- `sync.ps1` is **not executed by any test**, and this container has no
-  PowerShell, so it is not machine-verified here. What it does carry is a live
-  run: the identical logic was pasted into Ben's PowerShell on 2026-09-22 and
-  performed the real 59-commit fast-forward, including correctly refusing while
-  the checkout was on a feature branch and correctly leaving 13 modified files
-  untouched. `sync.ps1` differs from what ran only in taking its path from
-  `$PSScriptRoot` instead of a parameter default.
-- The git commands it relies on were checked against this repository:
-  `git status --porcelain` for the dirty test, and
-  `git diff --name-only <before> <after> -- uv.lock pyproject.toml` for the
-  dependency test, whose negative result is a true negative because only the
-  initial commit has ever touched either file.
-- Complete pinned suite: `1070 passed, 1 skipped in 158.01s (0:02:38)`.
-
-#### Left open
-
-No `sync.sh`. A cloud session clones fresh and is current by definition.
-`sync.ps1` has no test; a PowerShell script cannot be exercised by this
-repository's pytest suite on Linux, and inventing a fake for it would test the
-fake.
-
-### 2026-09-22: a guard for the one part of the roof resolution that cannot keep itself current
-
-Follows a post-merge review of PR #34 (`803618a`, R26). The review found the
-change sound and is summarized below; two follow-ups came out of it and are
-implemented here. No release truth changed. Every path still ends
-`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
-
-#### What the review checked, and what it found
-
-R26 resolves a blank `roof` from a retractable venue's own recorded history, so
-a game played indoors stops demanding an `api.weather.gov` capture. That is
-close enough to "inventing an observation to clear a gate" that it was verified
-in code rather than taken from the description.
-
-It does not invent one. `prior_review.py:696-708` returns the resolved roof with
-`freeze_weather_state=None`, `freeze_source_uri=None` and
-`freeze_observed_at=None`: it answers whether a roof is over the game and leaves
-every observation field null, so nothing claims a human looked at the weather.
-Precedence is right in both consumers, `priors.py:1482`
-(`if not roof and not operator_weather_state`) and `prior_review.py:693`
-(`if not normalized and not attributed and not state`), so a schedule-recorded
-roof and a real operator capture each outrank the derived value. It fails closed
-on every edge: `closed != total` rejects an `outdoors` game as well as an `open`
-one, under eight completed games resolves nothing, and an unlisted venue
-resolves nothing.
-
-One concern was formed and then withdrawn. The two-season window looked
-possibly post-hoc, since PR #34's own measurement shows a four-season window has
-every one of these venues opening the roof, making unanimity an artifact of the
-narrow window. It is not post-hoc: `venues.season_window()` returns
-`{prior_season, season}`, the same pair the prior package already uses for its
-era string `{season}_REG_PRIOR_FROM_{prior_season}_REG`. The window is inherited
-from the run's own era definition rather than chosen because it resolves.
-
-#### Added
-
-- `venues.unlisted_blank_roof_teams()`. Names home teams carrying an **unplayed**
-  game with no recorded roof that are absent from `RETRACTABLE_ROOF_HOME_TEAMS`.
-  A played row with a blank roof is missing data, not a signal about the venue,
-  and is ignored.
-- `scripts/check_venue_roof_set.py`. Runs that against a current schedule.
-  Exit 0 names the listed set and the row count; exit 1 names the unlisted
-  venues; exit 2 covers a missing file, an empty file and a file with no `roof`
-  column, so a broken invocation is never mistaken for a clean run. It reads
-  bytes already on disk and fetches nothing.
-- `tests/test_check_venue_roof_set.py`, 14 test functions collecting 18 cases
-  (one is parametrized over the five listed venues): the listed venues, an
-  unlisted venue, a played blank, a recorded roof, a blank home team, duplicate
-  and lower-cased teams, the season window, no rows, and the script's four exit
-  codes.
-
-#### Why a script and not a test
-
-`RETRACTABLE_ROOF_HOME_TEAMS` is a hand-maintained stadium fact. It is correct
-for the five venues that exist today (ARI, ATL, DAL, HOU, IND; SoFi's fixed
-canopy is correctly excluded) and goes stale silently the day a sixth
-retractable roof opens, because that venue's blanks would resolve to nothing and
-the engine would quietly go back to demanding a capture for an indoor game. That
-is a miss rather than a wrong answer, which is why this is a diagnostic and not
-a refusal.
-
-A test cannot catch it. A committed fixture is a snapshot and a snapshot cannot
-contain a stadium that does not exist yet, so a fixture-based subset assertion
-would only re-prove what was true when the fixture was written. Only a run
-against a current schedule catches it. Surfacing it inside the run path instead
-was rejected as disproportionate: the proposal manifest is the contracted
-`nfl_prior_identity_proposal_v2`, so an added key means a v3 bump, and
-`priors.py` is a pure library with no stderr or logging to borrow. A script
-matches how this repository already handles this class of check
-(`session_probe.py`, `check_protected_paths.py`, `record_verify.py`).
-
-#### Changed
-
-`backlog.md`: the R24 stanza gains a coupling note. R26 narrows how often R24's
-gate bites but does not answer it, and it changes what R24 would be built on.
-Before R26 a blocked gate meant a missing enum, an obvious absence. After R26 a
-resolved-from-history roof is a plausible value nobody observed, so if weather
-ever reaches a number, a derived roof would feed it silently, which is harder to
-notice than no number. The registry that the R24 recommendation is conditional
-on must therefore cover the derived-roof path, not only the capture path. R24
-stays `BLOCKED` on Ben; nothing is implemented against it.
-
-#### Verification
-
-- Focused: `sh ./nfl.sh test tests/test_check_venue_roof_set.py tests/test_venues.py`
-  `34 passed in 0.20s`.
-- Complete pinned suite: `1070 passed, 1 skipped in 158.55s (0:02:38)`, exactly
-  18 above the baseline, which is the 18 cases added.
-- Baseline on `cdf7865` before this change, measured in this container:
-  `1052 passed, 1 skipped in 170.72s (0:02:50)`.
-
-Not done, and stated rather than implied: the script has not been run against a
-live schedule. This container holds no frozen `games.csv`, and fetching one
-would go through `sources.py` with the capture obligations that carries, which
-is not worth incurring for a demonstration. The exit codes are proven by tests
-against written files.
-
-Entries dated 2026-09-14 to 2026-09-21 moved verbatim to `docs/changelog-archive/changelog-2026-09-14-through-2026-09-21.md` on 2026-09-22; entries dated 2026-09-14 (follow-up and checklist) and earlier, back to 2026-09-01, moved to `docs/changelog-archive/changelog-through-2026-09-14.md` on 2026-09-15. Append new entries directly under `## Unreleased`; when this file passes roughly 500 lines, move the oldest entries to the archive rather than letting sessions read them.
+Entries dated 2026-09-22 before the roadmap cutover moved verbatim to `docs/changelog-archive/changelog-2026-09-22.md` on 2026-09-23; entries dated 2026-09-14 to 2026-09-21 moved verbatim to `docs/changelog-archive/changelog-2026-09-14-through-2026-09-21.md` on 2026-09-22; entries dated 2026-09-14 (follow-up and checklist) and earlier, back to 2026-09-01, moved to `docs/changelog-archive/changelog-through-2026-09-14.md` on 2026-09-15. Append new entries directly under `## Unreleased`; when this file passes roughly 500 lines, move the oldest entries to the archive rather than letting sessions read them.
 
 ## Entry template for future sessions
 
