@@ -15,11 +15,13 @@ retrospective and session prompt in the repository.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 05 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S05`, on the branch your session was assigned or `claude/s05-artifact-preservation`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 17 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S17`, on the branch your session was assigned or `claude/s17-standings-transport`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 04 built `nfl baseline`; Session 06 makes `run-slate` call it first once
-Session 05 lands. Session 21 (prior-model triage) shares no file with Session 05
-and may run beside it in a separate worktree
+Session 05 is in progress on `claude/session-05-artifact-preservation-3cecn4`;
+Session 06 waits for it. Session 17 shares no file with Session 05, and its
+acceptance needs operator item O1, so its card's breakpoint applies while O1 is
+open. Session 21 (prior-model triage) shares no file with Session 05 either and
+may run beside it in a separate worktree
 (`git worktree add ../nfl-dfs-s21 -b claude/s21-prior-triage`).
 
 Every close-out rewrites the session number in this block to the next
