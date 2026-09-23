@@ -179,6 +179,8 @@ class DeliveryStateError(ValueError):
 
 def _ordered_unique(values: Iterable[str], label: str) -> tuple[str, ...]:
     items = tuple(str(value) for value in values)
+    if any(not value.strip() for value in items):
+        raise DeliveryStateError(f"DELIVERY_ENTRY_ID_BLANK:{label}")
     repeated = sorted({value for value in items if items.count(value) > 1})
     if repeated:
         raise DeliveryStateError(f"DELIVERY_ENTRY_ID_REPEATED:{label}:{repeated}")
@@ -255,7 +257,8 @@ def derive_delivery_state(
         state = DeliveryState.DELIVERABLE_PARTIAL
     else:
         state = DeliveryState.DELIVERABLE
-    return DeliveryTruth(DELIVERY_STATE=state, delivery_limitations=tuple(items),
+    return DeliveryTruth(DELIVERY_STATE=state, delivered_file_valid=file_valid,
+                         delivery_limitations=tuple(items),
                          delivered_entry_ids=delivered, unfilled_entry_ids=unfilled)
 
 
@@ -268,6 +271,7 @@ def release_truths_v2(policy: ReleasePolicyResult, delivery: DeliveryTruth) -> R
         MODEL_STATUS=policy.model_status,
         RELEASE_DECISION=policy.release_decision,
         DELIVERY_STATE=delivery.delivery_state,
+        delivered_file_valid=delivery.delivered_file_valid,
         delivery_limitations=delivery.delivery_limitations,
         delivered_entry_ids=delivery.delivered_entry_ids,
         unfilled_entry_ids=delivery.unfilled_entry_ids,

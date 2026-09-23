@@ -1605,8 +1605,9 @@ path emits it yet; Sessions 04 to 09 wire it in.
 | Field | Meaning |
 |---|---|
 | `schema_version` | Exactly `nfl_release_truths_v2` |
-| `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, `RELEASE_DECISION` | The v1 values, copied unchanged. In v2 `FILE_VALID` describes the delivered file's bytes |
+| `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS`, `RELEASE_DECISION` | The v1 values, copied unchanged, with their v1 meaning |
 | `DELIVERY_STATE` | `DELIVERABLE`, `DELIVERABLE_PARTIAL` or `NO_DELIVERABLE` |
+| `delivered_file_valid` | Whether the file `DELIVERY_STATE` describes passed its own validation. It differs from `FILE_VALID` when an improvement fails and a valid baseline ships |
 | `delivered_entry_ids` | The authorized rows the file fills, in template order |
 | `unfilled_entry_ids` | The authorized rows it leaves blank, in template order |
 | `delivery_limitations` | Every gate that fired, structured (below) |
@@ -1616,8 +1617,9 @@ only; the derivation takes no model or evidence input:
 
 - `DELIVERABLE`: the file is valid, every authorized blank row is filled, and no
   integrity limitation exists.
-- `DELIVERABLE_PARTIAL`: the file is valid, some rows are filled, and every
-  unfilled row is named by Entry ID in an integrity limitation.
+- `DELIVERABLE_PARTIAL`: the file is valid, some rows are filled, every
+  unfilled row is named by Entry ID in an integrity limitation, and no
+  integrity limitation names a row that is not unfilled.
 - `NO_DELIVERABLE`: nothing valid to hand over. The file is invalid, a
   file-wide integrity gate fired, no row is filled, or the template authorizes
   none.
@@ -1636,12 +1638,14 @@ The derivation adds three limitations of its own, so a gap is never silent:
 `UNFILLED_AUTHORIZED_ROWS` (R28) for unfilled rows nothing else names,
 `FILE_VALIDATION_INCOMPLETE` for an invalid file with no file-wide reason, and
 `NO_AUTHORIZED_ROWS` for a template with no blank row. It refuses, with
-`DELIVERY_ENTRY_NOT_AUTHORIZED`, `DELIVERY_ENTRY_ID_REPEATED` or
-`DELIVERY_ROW_BLOCKED_BY_INTEGRITY_GATE`, inputs no record could describe
-honestly.
+`DELIVERY_ENTRY_NOT_AUTHORIZED`, `DELIVERY_ENTRY_ID_REPEATED`,
+`DELIVERY_ENTRY_ID_BLANK` or `DELIVERY_ROW_BLOCKED_BY_INTEGRITY_GATE`, inputs no
+record could describe honestly.
 
-The record refuses a delivered file whose `FILE_VALID` is false, and a
-`CERTIFIED_UPLOAD_PACKAGE` whose `DELIVERY_STATE` is not `DELIVERABLE`.
+The record keeps the same invariants however it is built, deserialized
+included: no repeated or blank Entry ID or person, no row both delivered and
+unfilled, `delivered_file_valid=false` only with `NO_DELIVERABLE`, and no
+`CERTIFIED_UPLOAD_PACKAGE` unless `DELIVERY_STATE` is `DELIVERABLE`.
 `RELEASE_DECISION` is unchanged by v2: every current path still ends
 `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
 

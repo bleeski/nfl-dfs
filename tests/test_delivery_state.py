@@ -222,7 +222,7 @@ def test_deliverable_never_co_occurs_with_an_integrity_blocker():
 
 def test_a_deliverable_record_with_an_integrity_blocker_cannot_be_constructed():
     with pytest.raises(ValidationError, match="DELIVERABLE"):
-        DeliveryTruth(DELIVERY_STATE="DELIVERABLE", delivered_entry_ids=AUTHORIZED,
+        DeliveryTruth(delivered_file_valid=True, DELIVERY_STATE="DELIVERABLE", delivered_entry_ids=AUTHORIZED,
                       delivery_limitations=(integrity(),))
 
 
@@ -235,20 +235,54 @@ def test_a_deliverable_record_with_an_integrity_blocker_cannot_be_constructed():
 def test_a_record_whose_state_contradicts_its_coverage_cannot_be_constructed(state, delivered, unfilled):
     gap = limitation("UNFILLED_AUTHORIZED_ROWS", GateClass.V, GateStops.FILE, unfilled, provenance=R28)
     with pytest.raises(ValidationError):
-        DeliveryTruth(DELIVERY_STATE=state, delivered_entry_ids=delivered,
+        DeliveryTruth(delivered_file_valid=True, DELIVERY_STATE=state, delivered_entry_ids=delivered,
                       unfilled_entry_ids=unfilled, delivery_limitations=(gap,) if unfilled else ())
 
 
 def test_a_partial_record_must_name_every_unfilled_row():
     with pytest.raises(ValidationError, match="unfilled"):
-        DeliveryTruth(DELIVERY_STATE="DELIVERABLE_PARTIAL", delivered_entry_ids=AUTHORIZED[:1],
+        DeliveryTruth(delivered_file_valid=True, DELIVERY_STATE="DELIVERABLE_PARTIAL", delivered_entry_ids=AUTHORIZED[:1],
                       unfilled_entry_ids=AUTHORIZED[1:], delivery_limitations=())
+
+
+def test_a_partial_record_cannot_carry_an_integrity_gate_outside_its_unfilled_rows():
+    """Found in review: the derivation treats such a gate as file-wide, so a record
+    that holds one beside delivered rows contradicts it."""
+
+    gap = limitation("UNFILLED_AUTHORIZED_ROWS", GateClass.V, GateStops.FILE, AUTHORIZED[1:], provenance=R28)
+    stray = integrity("UNKNOWN_ENTRY_ID", entry_ids=("5263299999",))
+    with pytest.raises(ValidationError, match="unfilled"):
+        DeliveryTruth(delivered_file_valid=True, DELIVERY_STATE="DELIVERABLE_PARTIAL", delivered_entry_ids=AUTHORIZED[:1],
+                      unfilled_entry_ids=AUTHORIZED[1:], delivery_limitations=(gap, stray))
+
+
+@pytest.mark.parametrize("field", ["delivered_entry_ids", "unfilled_entry_ids"])
+def test_a_record_refuses_a_repeated_or_blank_entry_id(field):
+    gap = limitation("UNFILLED_AUTHORIZED_ROWS", GateClass.V, GateStops.FILE, ("2",), provenance=R28)
+    base = {"delivered_entry_ids": ("1",), "unfilled_entry_ids": ("2",)}
+    for bad in (base[field] * 2, ("",)):
+        values = {**base, field: bad}
+        with pytest.raises(ValidationError):
+            DeliveryTruth(delivered_file_valid=True, DELIVERY_STATE="DELIVERABLE_PARTIAL", delivery_limitations=(gap,), **values)
+
+
+def test_the_derivation_refuses_a_blank_entry_id():
+    with pytest.raises(DeliveryStateError, match="DELIVERY_ENTRY_ID_BLANK"):
+        derive(("",), authorized=("",))
+
+
+def test_a_limitation_refuses_a_blank_entry_id_or_person():
+    with pytest.raises(ValidationError):
+        integrity(entry_ids=("",))
+    with pytest.raises(ValidationError):
+        limitation("OFFICIAL_ACTIVITY_MISSING", GateClass.P, GateStops.CERTIFICATION,
+                   people=(" ",), provenance=R28)
 
 
 def test_a_row_cannot_be_both_delivered_and_unfilled():
     gap = limitation("UNFILLED_AUTHORIZED_ROWS", GateClass.V, GateStops.FILE, AUTHORIZED[:1], provenance=R28)
     with pytest.raises(ValidationError):
-        DeliveryTruth(DELIVERY_STATE="DELIVERABLE_PARTIAL", delivered_entry_ids=AUTHORIZED[:2],
+        DeliveryTruth(delivered_file_valid=True, DELIVERY_STATE="DELIVERABLE_PARTIAL", delivered_entry_ids=AUTHORIZED[:2],
                       unfilled_entry_ids=AUTHORIZED[:1], delivery_limitations=(gap,))
 
 
@@ -348,12 +382,31 @@ def test_a_certified_package_must_be_fully_deliverable():
         release_truths_v2(policy, derive(AUTHORIZED[:1]))
 
 
-def test_a_delivered_file_must_be_the_valid_file():
+def test_a_valid_baseline_beside_an_invalid_improvement_can_be_recorded():
+    """Found in review: v2 used to force FILE_VALID to agree with delivery, so the
+    Session 06 case (the improvement fails, the baseline ships) could not be written.
+    FILE_VALID keeps its v1 meaning; the delivered file's validity is its own field."""
+
     policy = derive_release_policy(file_valid=False, evidence_state=ReleaseEvidenceState.PASS,
                                    model_status=ModelStatus.PRIOR_ONLY,
                                    certification_basis=CertificationBasis.MODEL_ASSISTED)
-    with pytest.raises(ValidationError, match="FILE_VALID"):
-        release_truths_v2(policy, derive())
+    record = release_truths_v2(policy, derive())
+    assert (record.file_valid, record.delivered_file_valid) == (False, True)
+    assert record.delivery_state is DeliveryState.DELIVERABLE
+
+
+def test_the_delivery_records_the_validity_of_the_file_it_describes():
+    """Found in review: FILE_VALID=True could sit beside FILE_VALIDATION_INCOMPLETE."""
+
+    policy = derive_release_policy(file_valid=True, evidence_state=ReleaseEvidenceState.UNKNOWN,
+                                   model_status=ModelStatus.PRIOR_ONLY,
+                                   certification_basis=CertificationBasis.MODEL_ASSISTED)
+    record = release_truths_v2(policy, derive(file_valid=False))
+    assert (record.file_valid, record.delivered_file_valid) == (True, False)
+    assert record.delivery_state is DeliveryState.NO_DELIVERABLE
+    with pytest.raises(ValidationError, match="delivered_file_valid"):
+        DeliveryTruth(DELIVERY_STATE="DELIVERABLE", delivered_file_valid=False,
+                      delivered_entry_ids=AUTHORIZED)
 
 
 def test_the_contract_is_registered_and_v1_still_is_four_truths():

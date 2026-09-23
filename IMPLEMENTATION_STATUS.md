@@ -16,9 +16,17 @@ ends `PRIOR_ONLY / DO_NOT_UPLOAD`. Suite figures are in `changelog.md`.
 - **`contracts.DeliveryLimitation`** (code, class, stops, provenance, Entry IDs,
   people) refuses a `V` gate that stops anything but the file, and a non-`V`
   gate that stops the file.
-- **The R24 condition is test-backed** (`tests/test_gate_registry.py`): no
-  arithmetic under `src/` reads a weather or roof value, derived roof included,
-  and every weather state gives identical prior scores.
+- **The R24 condition is test-backed** (`tests/test_gate_registry.py`). Weather
+  or a roof value is read only in named plumbing (request, gates, evidence
+  records, the roof resolver, the weather scripts) and at ten pinned reads in
+  numeric code that validate it or copy it into a row; any other read under
+  `src/nfl_dfs/` or `scripts/` fails. No arithmetic anywhere takes one as an
+  operand, index or branch test beyond four named counting and text sites. Every
+  weather state, derived roof included, gives identical prior scores. Not
+  caught: plumbing that turns weather into a number under a name that does not
+  say weather.
+- **`contracts.DeliveryTruth`** carries `delivered_file_valid`, the validity of
+  the file it describes, apart from v1 `FILE_VALID`.
 - **Not yet:** the per-code gate registry (Session 03b), and any path that
   emits `DELIVERY_STATE`.
 

@@ -759,6 +759,9 @@ class DeliveryLimitation(FrozenModel):
 
     @model_validator(mode="after")
     def only_validity_stops_the_file(self) -> "DeliveryLimitation":
+        blank = [value for value in (*self.entry_ids, *self.people) if not value.strip()]
+        if blank:
+            raise ValueError(f"{self.code}: a blank Entry ID or person names nothing")
         if self.gate_class is GateClass.V and self.stops is not GateStops.FILE:
             raise ValueError(
                 f"{self.code}: a V gate stops the FILE it protects, never only "
@@ -774,12 +777,20 @@ class DeliveryLimitation(FrozenModel):
 
 def _check_delivery(
     state: DeliveryState,
+    delivered_file_valid: bool,
     delivered: tuple[str, ...],
     unfilled: tuple[str, ...],
     limitations: tuple[DeliveryLimitation, ...],
 ) -> None:
     """The invariants every delivery record keeps, however it was built."""
 
+    for label, ids in (("delivered", delivered), ("unfilled", unfilled)):
+        if any(not eid.strip() for eid in ids):
+            raise ValueError(f"a blank {label} Entry ID names no row")
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"a repeated {label} Entry ID: {sorted({e for e in ids if ids.count(e) > 1})}")
+    if not delivered_file_valid and state is not DeliveryState.NO_DELIVERABLE:
+        raise ValueError("delivered_file_valid is false, so nothing can be delivered")
     if set(delivered) & set(unfilled):
         raise ValueError(f"rows both delivered and unfilled: {sorted(set(delivered) & set(unfilled))}")
     integrity = [item for item in limitations if item.gate_class is GateClass.V]
@@ -797,6 +808,10 @@ def _check_delivery(
             raise ValueError("a DELIVERABLE_PARTIAL record needs delivered rows and unfilled rows")
         if any(not item.entry_ids for item in integrity):
             raise ValueError("a DELIVERABLE_PARTIAL record cannot carry a file-wide integrity gate")
+        outside = sorted(blocked - set(unfilled))
+        if outside:
+            # The derivation treats such a gate as covering the whole file.
+            raise ValueError(f"a DELIVERABLE_PARTIAL record's integrity gates name only unfilled rows: {outside}")
         unnamed = [eid for eid in unfilled if eid not in blocked]
         if unnamed:
             raise ValueError(f"every unfilled row needs a V limitation naming it: {unnamed}")
@@ -808,13 +823,14 @@ class DeliveryTruth(FrozenModel):
     """`DELIVERY_STATE` and what it rests on. Built by `release.derive_delivery_state`."""
 
     delivery_state: DeliveryState = Field(alias="DELIVERY_STATE")
+    delivered_file_valid: bool
     delivery_limitations: tuple[DeliveryLimitation, ...] = ()
     delivered_entry_ids: tuple[str, ...] = ()
     unfilled_entry_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def coverage_matches_state(self) -> "DeliveryTruth":
-        _check_delivery(self.delivery_state, self.delivered_entry_ids,
+        _check_delivery(self.delivery_state, self.delivered_file_valid, self.delivered_entry_ids,
                         self.unfilled_entry_ids, self.delivery_limitations)
         return self
 
@@ -822,9 +838,10 @@ class DeliveryTruth(FrozenModel):
 class ReleaseTruthsV2(FrozenModel):
     """`nfl_release_truths_v2`: the four v1 truths, unchanged, plus `DELIVERY_STATE`.
 
-    In v2 `FILE_VALID` describes the delivered file's bytes, so a file that is
-    handed over must be the valid one, and a certified package must cover every
-    authorized row.
+    `FILE_VALID` keeps its v1 meaning, the artifacts the producing contract
+    names; `delivered_file_valid` is the validity of the file `DELIVERY_STATE`
+    describes. They differ when an improvement fails and the baseline ships. A
+    certified package must cover every authorized row.
     """
 
     schema_version: Literal["nfl_release_truths_v2"] = "nfl_release_truths_v2"
@@ -833,16 +850,15 @@ class ReleaseTruthsV2(FrozenModel):
     model_status: ModelStatus = Field(alias="MODEL_STATUS")
     release_decision: ReleaseDecision = Field(alias="RELEASE_DECISION")
     delivery_state: DeliveryState = Field(alias="DELIVERY_STATE")
+    delivered_file_valid: bool
     delivery_limitations: tuple[DeliveryLimitation, ...] = ()
     delivered_entry_ids: tuple[str, ...] = ()
     unfilled_entry_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def truths_agree(self) -> "ReleaseTruthsV2":
-        _check_delivery(self.delivery_state, self.delivered_entry_ids,
+        _check_delivery(self.delivery_state, self.delivered_file_valid, self.delivered_entry_ids,
                         self.unfilled_entry_ids, self.delivery_limitations)
-        if self.delivery_state is not DeliveryState.NO_DELIVERABLE and not self.file_valid:
-            raise ValueError("a delivered file must be the valid one: FILE_VALID is false")
         if (
             self.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE
             and self.delivery_state is not DeliveryState.DELIVERABLE
