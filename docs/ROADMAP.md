@@ -192,9 +192,9 @@ Every session follows this protocol, and the cards only add to it:
   is amended in place, each amendment marked, and the other stale Excel,
   "P0 repairs" and `backlog.md` lines are corrected. Left open:
   `scripts/make_classic_policy.py` still prints the old rung-4 claim (Sessions
-  06 and 10 own that file). At this commit the live-label proof on PR #42
-  (label applied after CI, green with no new commit) has not run yet; the
-  follow-up commit records its result here and in `changelog.md`.
+  06 and 10 own that file). H3 proven on PR #42 at `32b9135`: `protected-paths`
+  red at 00:46:50Z, `ben-review` applied at 00:47:14Z, green at 00:47:26Z on
+  the same SHA with no new commit (timestamps in `changelog.md`).
 
 #### Session 02: fallback CSV correctness
 

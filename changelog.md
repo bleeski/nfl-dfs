@@ -136,8 +136,21 @@ is protected: the PR carries `ben-review` and Ben merges it.
   label-proof timestamps were already recorded; it now says they are pending.
   Its informational notes: the card's "boundary 5" uses `START_HERE.md`
   numbering, and `ci.yml` keeps a harmless `pull-requests: read`.
-- H3 live proof on PR #42: pending at this commit. The follow-up commit records
-  the red run, the label time and the green run on the same SHA.
+- H3 live proof on PR #42, head `32b9135`, no commit in between (UTC,
+  2026-09-23):
+  - red: run `35803520652` (event `synchronize`) read live labels `[]` at
+    00:46:48Z, printed `PROTECTED_PATHS_WITHOUT_REVIEW` naming `CLAUDE.md`,
+    exited 1, and completed at 00:46:50Z;
+  - label: `ben-review` applied through the API at 00:47:14Z (the pull
+    request's `updated_at`);
+  - green: run `35803561795` (event `labeled`) was created at 00:47:16Z, read
+    live labels `["ben-review"]` at 00:47:23Z, printed "Protected paths
+    touched, `ben-review` present: CLAUDE.md", and completed `success` at
+    00:47:26Z.
+  From label to green took 12 s, and the job step itself under 1 s. The H3
+  acceptance clause (labelled after CI, green with no new commit) is met.
+  This commit, which records the proof, is a new head; with the label on,
+  `protected-paths` should pass on it too.
 
 ### 2026-09-22: one roadmap replaces the backlog, and four rulings (Session 00)
 
