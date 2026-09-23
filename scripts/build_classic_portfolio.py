@@ -38,6 +38,41 @@ Three defects surfaced on the Week 2 slate, all recorded in `changelog.md`:
   18 lineups with a bring-back against a suggested floor of 70%. They are flags
   now, and `--require-bringback` makes it structural.
 
+## 2026-09-23 (Session 02b): what changed and why
+
+The 2026-09-22 audit (issue #40, D6) found that a shortfall printed a WARNING
+and exited 0, so the chain could ship blank reserved rows with nothing naming
+them. Now the three fallback stages share one exit vocabulary:
+
+* 0: every blank authorized row has a lineup, and every lineup is distinct.
+* 2: refused by name (`REFUSED <CODE>: ...` on stderr), and nothing is written.
+* 3: written with a shortfall. `unfilled_entry_ids` lists every blank row that
+  has no lineup, and stderr names each one. R29: a lineup is never repeated to
+  fill a row, and a lineup already prefilled in the template is never built
+  again, whatever `--max-overlap` allows.
+
+And:
+
+* The ratchet has a ceiling and never tightens what the operator asked for:
+  exposure stops at `max(--max-exposure, N)` and overlap at
+  `max(--max-overlap, 6)`. `min(EXP + 1, max(EXP + 1, 9))` was always
+  `EXP + 1`, and `min(OVL + 1, 6)` pulled `--max-overlap 9` down to 6.
+* DraftKings `OUT`, `IR` and `D` rows leave the pool, by the engine's one
+  vocabulary (`nfl_dfs.contracts.UNAVAILABLE_DK_STATUSES`). `selection.py`
+  writes scores.json before its own exclusion set, so they arrived scored.
+  `--available-status D` restores doubtful players, as it does in the engine.
+* Only blank template rows are reserved, and `--lineups` defaults to their
+  count. A prefilled row was assigned and the writer then refused the file.
+* `--out` must be a new path that is none of the inputs. The bytes go to a
+  temporary file beside it, are re-read, then `os.replace`d.
+* The salary file is read by eight named columns; nothing else is parsed. A
+  Showdown salary file, a repeated ID, an unreadable salary, a truncated
+  scores.json and a status file without its columns are refused by name.
+
+Exit 0 does not clear an upload: the portfolio is `PRIOR_ONLY / DO_NOT_UPLOAD`,
+and `scripts/qa_classic_portfolio.py --template --export` runs on the written
+file.
+
 Known gaps, all tracked in Appendix A of the retrospective:
   P1-6  dart conditions here still predate the rewrite (top-4 total, lowest
         ownership) rather than "names the prior it is short" + 2-12% with a role
@@ -49,9 +84,34 @@ Known gaps, all tracked in Appendix A of the retrospective:
 import argparse
 import collections
 import csv
+import hashlib
 import json
+import os
 import random
+import re
 import sys
+import tempfile
+from pathlib import Path
+
+from nfl_dfs.contracts import UNAVAILABLE_DK_STATUSES
+
+SLOTS = ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
+# Only these salary columns are ever read; nothing else in the file is parsed.
+SALARY_COLUMNS = ("ID", "Name", "Position", "Roster Position", "Salary", "Game Info",
+                  "TeamAbbrev", "Status")
+EXIT_FILLED, EXIT_REFUSED, EXIT_PARTIAL = 0, 2, 3
+# Attempts between ratchet steps. A module constant so tests can drive it.
+RATCHET_EVERY = 150000
+OVERLAP_CEILING = 6
+_TRAILING_ID = re.compile(r"\((\d+)\)\s*$")
+
+
+class Refused(Exception):
+    """One or more named refusals; nothing is written."""
+
+    def __init__(self, problems):
+        super().__init__("; ".join(f"{code}: {detail}" for code, detail in problems))
+        self.problems = problems
 
 
 def load_slate_context(path):
@@ -70,19 +130,139 @@ def load_slate_context(path):
     return itt, own, boost
 
 
+def cell_id(cell):
+    """A roster cell's DraftKings ID, whether it holds `123` or `Name (123)`."""
+
+    match = _TRAILING_ID.search(cell)
+    return match.group(1) if match else cell.strip()
+
+
+def read_template(path):
+    """(blank Entry IDs in template order, rosters already filled in the template).
+
+    A row is blank, and so authorized for filling, when all nine roster cells are
+    empty. A filled row is never assigned: the writer refuses to replace a cell.
+    """
+
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        rows = list(csv.reader(fh))
+    header = rows[0] if rows else []
+    fee = header.index("Entry Fee") if "Entry Fee" in header else -1
+    if fee < 0 or tuple(header[fee + 1:fee + 1 + len(SLOTS)]) != SLOTS:
+        raise Refused([("NOT_A_CLASSIC_TEMPLATE",
+                        f"{path} has no Entry Fee column followed by {list(SLOTS)}")])
+    blank, prefilled = [], []
+    for row in rows[1:]:
+        if not row or not row[0].strip().isdigit():
+            continue
+        cells = [c.strip() for c in row[fee + 1:fee + 1 + len(SLOTS)]]
+        if not any(cells):
+            blank.append(row[0].strip())
+        elif len(cells) == len(SLOTS) and all(cells):
+            prefilled.append(frozenset(cell_id(c) for c in cells))
+    return blank, prefilled
+
+
 def reserved_entry_ids(path):
-    """Entry IDs from a DKEntries template, in template order.
+    """Blank Entry IDs from a DKEntries template, in template order.
 
     Order is the contract: `write_dk_entries.py` fills the nine blank roster
     cells of each row it is given, and the operator reads the result top to
     bottom against the same file DraftKings exported.
     """
-    ids = []
+    return read_template(path)[0]
+
+
+def load_salaries(path):
     with open(path, encoding="utf-8-sig", newline="") as fh:
-        for row in csv.reader(fh):
-            if row and row[0].strip().isdigit():
-                ids.append(row[0].strip())
-    return ids
+        reader = csv.reader(fh)
+        header = next(reader, [])
+        missing = [c for c in SALARY_COLUMNS if c not in header]
+        if missing:
+            raise Refused([("SALARY_COLUMNS_MISSING", f"{path} lacks {missing}")])
+        index = {c: header.index(c) for c in SALARY_COLUMNS}
+        sal = {}
+        for row in reader:
+            if not row or not any(cell.strip() for cell in row):
+                continue
+            rec = {c: (row[i].strip() if i < len(row) else "") for c, i in index.items()}
+            if rec["ID"] in sal:
+                raise Refused([("SALARY_DUPLICATE_ID", rec["ID"])])
+            if "CPT" in rec["Roster Position"].split("/"):
+                raise Refused([("NOT_A_CLASSIC_SALARY_FILE",
+                                f"{path} has Showdown captain rows; this builder is Classic only")])
+            try:
+                rec["Salary"] = int(rec["Salary"])
+            except ValueError:
+                raise Refused([("SALARY_UNREADABLE", f"ID {rec['ID']} salary {rec['Salary']!r}")])
+            sal[rec["ID"]] = rec
+        return sal
+
+
+def load_scores(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            by_id = json.load(fh)["by_dk_id"]
+        return {str(k): float(v) for k, v in by_id.items()}
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise Refused([("SCORES_UNREADABLE", f"{path}: {type(exc).__name__}: {exc}")])
+
+
+def load_status(path):
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        reader = csv.DictReader(fh)
+        missing = [c for c in ("PLAYER_OR_GSIS_ID", "STATUS") if c not in (reader.fieldnames or [])]
+        if missing:
+            raise Refused([("STATUS_COLUMNS_MISSING", f"{path} lacks {missing}")])
+        return {r["PLAYER_OR_GSIS_ID"]: r["STATUS"] for r in reader}
+
+
+def next_rung(exp, ovl, need_bb, asked_exp, asked_ovl, n):
+    """One ratchet step: loosen toward a ceiling, never below what was asked.
+
+    Exposure stops at N lineups (or the operator's own higher cap), overlap at
+    OVERLAP_CEILING (or higher, if asked), and the bring-back target falls by
+    three to a floor of 6 without ever rising.
+    """
+
+    return (min(exp + 1, max(asked_exp, n)),
+            min(ovl + 1, max(asked_ovl, OVERLAP_CEILING)),
+            max(need_bb - 3, min(need_bb, 6)))
+
+
+def check_output_path(out, inputs):
+    def same(x, y):
+        if x.resolve() == y.resolve():
+            return True
+        try:
+            return x.exists() and y.exists() and os.path.samefile(x, y)
+        except OSError:
+            return False
+
+    if any(same(out, p) for p in inputs):
+        return [("OUTPUT_IS_AN_INPUT", f"{out} is one of the inputs")]
+    if out.exists():
+        return [("OUTPUT_EXISTS", f"{out} already exists; an earlier portfolio is never overwritten")]
+    if not out.parent.is_dir():
+        return [("OUTPUT_DIRECTORY_MISSING", str(out.parent))]
+    return []
+
+
+def write_new(out, data):
+    fd, tmp = tempfile.mkstemp(dir=out.parent, prefix=f".{out.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if Path(tmp).read_bytes() != data:
+            raise Refused([("VERIFICATION_FAILED", "temporary file does not hold the portfolio bytes")])
+        if out.exists():
+            raise Refused([("OUTPUT_EXISTS", f"{out} appeared while building")])
+        os.replace(tmp, out)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def main(argv=None):
@@ -93,10 +273,11 @@ def main(argv=None):
     ap.add_argument("--scores", required=True, help="pool scores json, read as ['by_dk_id']")
     ap.add_argument("--salaries", required=True, help="DKSalaries.csv")
     ap.add_argument("--status", required=True, help="official_status.csv")
-    ap.add_argument("--out", required=True, help="portfolio json to write")
-    ap.add_argument("--entries", help="DKEntries template; supplies the reserved Entry IDs")
+    ap.add_argument("--out", required=True, help="portfolio json to write; a new path, never an input")
+    ap.add_argument("--entries", help="DKEntries template; its blank rows are the reserved Entry IDs")
     ap.add_argument("--slate-context", help="json: implied_team_totals, projected_ownership, role_boosts")
-    ap.add_argument("--lineups", type=int, default=20)
+    ap.add_argument("--lineups", type=int,
+                    help="default: the template's blank rows with --entries, else 20")
     ap.add_argument("--cap", type=int, default=50000)
     ap.add_argument("--min-salary", type=int, default=0,
                     help="reject a lineup below this; unspent salary is late-swap option value (P1-7)")
@@ -104,21 +285,61 @@ def main(argv=None):
     ap.add_argument("--max-overlap", type=int, default=4, help="max shared players between any two lineups")
     ap.add_argument("--require-bringback", action="store_true",
                     help="every lineup must pair the QB stack with an opposing skill player")
+    ap.add_argument("--available-status", action="append", default=[],
+                    help="a DraftKings Status to keep in the pool (e.g. D), as in the engine")
     ap.add_argument("--seed", type=int, default=913)
     ap.add_argument("--attempts", type=int, default=900000)
     a = ap.parse_args(argv)
+    try:
+        report = build(a)
+    except Refused as exc:
+        for code, detail in exc.problems:
+            print(f"REFUSED {code}: {detail}", file=sys.stderr)
+        print("nothing was written", file=sys.stderr)
+        return EXIT_REFUSED
+
+    unfilled, short = report["unfilled"], report["shortfall"]
+    print(f"unfilled authorized Entry IDs: {len(unfilled)} {unfilled}")
+    print(f"sha256: {report['sha256']}")
+    print(f"wrote: {a.out}")
+    if short:
+        print(f"SHORTFALL: asked for {report['asked']} distinct lineups, built {report['built']}. "
+              "Never repeat a lineup to close the gap (R29); relax a construction cap or name "
+              "the gap in the handoff.", file=sys.stderr)
+    if unfilled:
+        print(f"UNFILLED_AUTHORIZED_ROWS: {len(unfilled)} blank authorized rows have no lineup: "
+              f"{unfilled}. The writer leaves them blank and exits 3.", file=sys.stderr)
+    return EXIT_PARTIAL if short or unfilled else EXIT_FILLED
+
+
+def build(a):
+    out = Path(a.out)
+    inputs = [Path(x) for x in (a.scores, a.salaries, a.status, a.entries, a.slate_context) if x]
+    problems = check_output_path(out, inputs)
+    if problems:
+        raise Refused(problems)
+    blank, prefilled = read_template(a.entries) if a.entries else ([], [])
+    if a.entries and not blank:
+        raise Refused([("NO_BLANK_ENTRY_ROWS", f"{a.entries} has no blank authorized row to fill")])
+    N = a.lineups if a.lineups is not None else (len(blank) if a.entries else 20)
+    if N < 1:
+        raise Refused([("LINEUPS_NOT_POSITIVE", f"--lineups {N}")])
+    if a.entries and len(blank) < N:
+        raise Refused([("ENTRY_ID_SHORTFALL",
+                        f"{len(blank)} blank reserved Entry IDs for {N} lineups")])
 
     random.seed(a.seed)
-    N, CAP, FLOOR = a.lineups, a.cap, a.min_salary
+    CAP, FLOOR = a.cap, a.min_salary
 
-    scores = json.load(open(a.scores, encoding="utf-8"))["by_dk_id"]
-    sal = {r["ID"]: r for r in csv.DictReader(open(a.salaries, encoding="utf-8-sig"))}
-    status = {r["PLAYER_OR_GSIS_ID"]: r["STATUS"]
-              for r in csv.DictReader(open(a.status, encoding="utf-8-sig"))}
+    scores = load_scores(a.scores)
+    sal = load_salaries(a.salaries)
+    status = load_status(a.status)
     ITT, OWN, BOOST = load_slate_context(a.slate_context)
+    kept = {s.strip().upper() for s in a.available_status if s.strip()}
+    unavailable = UNAVAILABLE_DK_STATUSES - kept
 
     P = lambda i: sal[i]["Position"]
-    S = lambda i: int(sal[i]["Salary"])
+    S = lambda i: sal[i]["Salary"]
     T = lambda i: sal[i]["TeamAbbrev"]
     NM = lambda i: sal[i]["Name"]
     G = lambda i: sal[i]["Game Info"].split()[0]
@@ -127,9 +348,18 @@ def main(argv=None):
         away, home = G(i).split("@")
         return home if T(i) == away else away
 
-    pool = [i for i in scores if i in sal and status.get(i) != "INACTIVE" and scores[i] > 0]
+    dropped = collections.Counter()
+    pool = []
+    for i in scores:
+        if i not in sal or status.get(i) == "INACTIVE" or scores[i] <= 0:
+            continue
+        flag = sal[i]["Status"].upper()
+        if flag in unavailable:
+            dropped[flag] += 1
+            continue
+        pool.append(i)
     if not pool:
-        raise SystemExit("EMPTY_POOL: no scored, available player survived the filter")
+        raise Refused([("EMPTY_POOL", "no scored, available player survived the filter")])
 
     def wt(i):
         w = 1.0 + (ITT.get(T(i), 21.0) - 21.0) * 0.090      # steeper than v1
@@ -211,16 +441,19 @@ def main(argv=None):
     exp = collections.Counter()
     EXP, OVL = a.max_exposure, a.max_overlap
     need_bb = int(N * 0.7)
+    steps = 0
+    # R29 covers the whole file: a roster already in the template counts too.
+    taken = set(prefilled)
     for att in range(a.attempts):
         if len(lineups) == N:
             break
-        if att and att % 150000 == 0:
+        if att and att % RATCHET_EVERY == 0:
             # Ratchet. Reported at the end, never silent: a relaxed cap is a
             # construction preference Claude may drop under a lock clock, but the
             # handoff has to say which rung it landed on.
-            EXP = min(EXP + 1, max(EXP + 1, 9))
-            OVL = min(OVL + 1, 6)
-            need_bb = max(need_bb - 3, 6)
+            rung = next_rung(EXP, OVL, need_bb, a.max_exposure, a.max_overlap, N)
+            steps += rung != (EXP, OVL, need_bb)
+            EXP, OVL, need_bb = rung
         q = pick(QBS, exp, EXP, 1)
         if not q:
             continue
@@ -243,40 +476,45 @@ def main(argv=None):
             continue
         if a.require_bringback and not has_bringback(r):
             continue
+        if frozenset(r) in taken:
+            continue                                         # R29: never a repeat
         if any(len(set(r) & set(x)) > OVL for x in lineups):
             continue
         lineups.append(r)
+        taken.add(frozenset(r))
         for i in r:
             exp[i] += 1
 
-    print(f"built {len(lineups)} | exposure cap {EXP}/{N}, overlap cap {OVL}"
+    print(f"built {len(lineups)} of {N} | exposure cap {EXP}/{N} (asked {a.max_exposure}), "
+          f"overlap cap {OVL} (asked {a.max_overlap}), {steps} ratchet steps"
           f"{', bring-back required' if a.require_bringback else ''}")
-    if len(lineups) < N:
-        print(f"  WARNING: asked for {N}, produced {len(lineups)}. Relax a cap or widen the pool.")
+    print(f"pool: {len(pool)} players; DraftKings status dropped: {dict(sorted(dropped.items()))}")
 
-    # The mapping write_dk_entries.py consumes. Empty until 2026-09-20, which
-    # meant every slate filled it by hand.
-    assignments = {}
-    if a.entries:
-        ids = reserved_entry_ids(a.entries)
-        if len(ids) < len(lineups):
-            raise SystemExit(
-                f"ENTRY_ID_SHORTFALL: {len(ids)} reserved Entry IDs for {len(lineups)} lineups"
-            )
-        assignments = {eid: r for eid, r in zip(ids, lineups)}
-
-    json.dump({"lineups": [{"index": n + 1, "roster": r, "salary": sum(S(i) for i in r),
-                            "prior_points": round(sum(scores[i] for i in r), 3),
-                            "bringback": has_bringback(r)}
-                           for n, r in enumerate(lineups)],
-               "assignments_by_entry_id": assignments,
-               "construction": {"seed": a.seed, "lineups": N, "cap": CAP,
-                                "min_salary": FLOOR, "max_exposure_landed": EXP,
-                                "max_overlap_landed": OVL,
-                                "require_bringback": a.require_bringback,
-                                "slate_context": a.slate_context or None}},
-              open(a.out, "w"), indent=1)
-    return 0
+    # The mapping write_dk_entries.py consumes, in template order over blank rows.
+    assignments = {eid: r for eid, r in zip(blank, lineups)}
+    unfilled = blank[len(assignments):]
+    doc = {"lineups": [{"index": n + 1, "roster": r, "salary": sum(S(i) for i in r),
+                        "prior_points": round(sum(scores[i] for i in r), 3),
+                        "bringback": has_bringback(r)}
+                       for n, r in enumerate(lineups)],
+           "assignments_by_entry_id": assignments,
+           "unfilled_entry_ids": unfilled,
+           "shortfall": N - len(lineups),
+           "construction": {"seed": a.seed, "lineups": N, "lineups_built": len(lineups),
+                            "cap": CAP, "min_salary": FLOOR,
+                            "max_exposure_requested": a.max_exposure,
+                            "max_exposure_landed": EXP,
+                            "max_overlap_requested": a.max_overlap,
+                            "max_overlap_landed": OVL, "ratchet_steps": steps,
+                            "require_bringback": a.require_bringback,
+                            "dk_unavailable_statuses": sorted(unavailable),
+                            "dk_status_dropped": dict(sorted(dropped.items())),
+                            "prefilled_rows": len(prefilled),
+                            "slate_context": a.slate_context or None}}
+    data = json.dumps(doc, indent=1).encode("utf-8")
+    write_new(out, data)
+    return {"unfilled": unfilled, "shortfall": N - len(lineups), "asked": N,
+            "built": len(lineups), "sha256": hashlib.sha256(data).hexdigest()}
 
 
 if __name__ == "__main__":
