@@ -861,9 +861,12 @@ def test_classic_path_never_reaches_field_ownership_or_economics(
     assert outcome.file_valid
 
 
-def test_one_cowork_command_emits_classic_review_json_and_no_upload_csv(
+def test_one_cowork_command_emits_classic_review_json_a_c1_review_csv_and_no_upload_csv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Session 06 changed this test visibly: C1 now ends with a CSV of its own
+    lineups, through the baseline's writer and audit, and never a `DK_UPLOAD`."""
+
     from nfl_dfs import cli
     from .test_prior_review_profile import _cowork_args
 
@@ -895,13 +898,14 @@ def test_one_cowork_command_emits_classic_review_json_and_no_upload_csv(
     assert report["EVIDENCE_STATE"] == "PASS"
     assert report["MODEL_STATUS"] == "PRIOR_ONLY"
     assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
-    assert report["bulk_entry_csv"] is None
     assert Path(report["prior_review_artifacts"]["selection_report"]).is_file()
     assert Path(report["prior_review_artifacts"]["complete_slate_coverage"]).is_file()
-    assert not [
-        path for path in tmp_path.rglob("*.csv")
-        if path.name.startswith(("DK_UPLOAD_", "DK_REVIEW_ENTRY_"))
-    ]
+    assert not list(tmp_path.rglob("DK_UPLOAD_*.csv"))
+    review_csvs = list(tmp_path.rglob("DK_REVIEW_ENTRY_*.csv"))
+    assert [str(path) for path in review_csvs] == [report["bulk_entry_csv"]]
+    assert review_csvs[0].name == "DK_REVIEW_ENTRY_C1_prior-review-test.csv"
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    assert report["latest_deliverable"]["producer"] == "run-slate:prior_review:CLASSIC_C1"
 
 
 def test_classic_weather_manifest_requires_exact_complete_game_scope(tmp_path: Path) -> None:

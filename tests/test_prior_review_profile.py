@@ -972,7 +972,11 @@ def test_an_unresolved_available_identity_stops_the_command_with_no_export(
         value.startswith(f"IDENTITY_UNRESOLVED_AND_AVAILABLE:{available.dk_id}:")
         for value in report["blockers"]
     )
-    assert list((tmp_path / "outputs").rglob("*.csv")) == []
+    # Session 06: the only CSVs are the baseline's, built before the review ran.
+    baseline_dir = tmp_path / "outputs" / "prior-review-test" / "baseline"
+    assert all(path.is_relative_to(baseline_dir) for path in (tmp_path / "outputs").rglob("*.csv"))
+    assert report["latest_deliverable"]["producer"] == "run-slate:baseline"
+    assert not list((tmp_path / "outputs").rglob("DK_REVIEW_ENTRY_*.csv"))
     # The decision file is still written, so the operator can see and edit it.
     reviewed = tmp_path / "runs" / "prior-review-test" / "prior_review" / "priors"
     assert (reviewed / "identity_reviewed.csv").is_file()

@@ -1,5 +1,34 @@
 # Implementation Status
 
+## Capability added: 2026-09-24 (Session 06)
+
+`run-slate` is baseline-first. A legal, byte-audited file built from the
+DraftKings bytes alone exists before the run touches the network, a policy, a
+prior or a solver, and every exit names the file to hand over. Every run still
+ends `PRIOR_ONLY / DO_NOT_UPLOAD`. Suite figures are in `changelog.md`.
+
+- **The baseline goes first.** Straight after intake `run-slate` builds
+  `baseline/DK_BASELINE_ENTRY_V1_baseline.csv` in its output folder from the
+  run's snapshots, honouring the request's exact exclusions and extra
+  unavailable statuses, and publishes it as `LATEST_DELIVERABLE.json`, before
+  the session probe, policy validation, priors, weather, roles or any solve.
+  A hand-run `nfl baseline` takes the same exclusions as `--exclude` and
+  `--unavailable-status`.
+- **An improvement replaces it only through `delivery.replace`**: the review's
+  own readable-review classification, then revalidation from fresh parses,
+  the same input hashes and at least as many rows. The baseline stays on disk.
+- **Every failure after it leaves it named**: a blocked stage (weather,
+  identity, policy), the pre-review blocked exit, a withheld CSV, a refused C1
+  export and the outer handler. `DELIVERY_STATE` and the delivery half of
+  `release_truths` describe the pointer's file, with `IMPROVEMENT_NOT_DELIVERED`
+  when it is the baseline. Exit codes are unchanged.
+- **Rung 4 ends with a CSV.** Classic C1 exports its own lineups through the
+  baseline's writer and audit (`DK_REVIEW_ENTRY_C1_<run_id>.csv`) and replaces
+  the baseline; a refused export leaves the baseline.
+- **Not yet:** the deadline controller (Session 07), weather and activity as
+  limitations on the model path (Session 09), prefilled rows and contest groups
+  (Session 11), the delivery record (Session 14).
+
 ## Capability added: 2026-09-23 (Session 05)
 
 A review CSV that passed independent validation now survives a failure of its

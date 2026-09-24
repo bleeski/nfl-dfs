@@ -205,7 +205,7 @@
     "stage_failure": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "C1 Classic intake and prior-review artifacts"},
-      "covers": "A model-path stage (priors, projection, selection) failed; the stage's own code is in the detail."
+      "covers": "A model-path stage (priors, projection, selection or its export) failed, or its file was not delivered and the run's baseline ships in its place; the stage's own code is in the detail."
     },
     "prelock_manifest": {
       "class": "P", "stops": "CERTIFICATION",
@@ -249,6 +249,7 @@
     "BASELINE_AUDIT_ENTRY_ORDER_MISMATCH": "entry_authority",
     "BASELINE_AUDIT_FAILED": "delivered_bytes",
     "BASELINE_AUDIT_LINEUP_ILLEGAL": "roster_legality",
+    "BASELINE_AUDIT_OPERATOR_EXCLUDED_PERSON": "operator_restriction",
     "BASELINE_AUDIT_REPARSE_FAILED": "delivered_bytes",
     "BASELINE_AUDIT_UNAVAILABLE_PERSON": "audited_selection",
     "BASELINE_DISTINCT_LINEUPS_EXHAUSTED": "distinct_lineups",
@@ -258,6 +259,7 @@
     "BASELINE_INPUT_SCHEMA_UNRESOLVED": "dk_identity",
     "BASELINE_INPUT_UNREADABLE": "dk_identity",
     "BASELINE_RUN_BUDGET_EXHAUSTED": "search_budget",
+    "BASELINE_RUN_FAILED": "delivery_coverage",
     "BASELINE_SALARY_FILE_MISSING_ENTRY_TABLE_IDS": "certification_prerequisite",
     "BASELINE_SOLVE_LIMIT_WITHOUT_LINEUP": "search_budget",
     "BRIEF_REPLAY_DISAGREES": "settlement",
@@ -306,6 +308,11 @@
     "CLASSIC_AUDIT_SOURCE_POLICY_SHA256_MISMATCH": "policy_binding",
     "CLASSIC_AUDIT_STACK_BOUND": "portfolio_bounds",
     "CLASSIC_AUDIT_TEAM_BOUND": "portfolio_bounds",
+    "CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH": "audited_selection",
+    "CLASSIC_C1_EXPORT_AUDIT_FAILED": "delivered_bytes",
+    "CLASSIC_C1_EXPORT_FAILED": "delivered_bytes",
+    "CLASSIC_C1_EXPORT_OUTPUT_EXISTS": "no_overwrite",
+    "CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH": "delivered_bytes",
     "CLASSIC_C3_ASSIGNMENT_BYTES_NOT_CANONICAL": "audited_selection",
     "CLASSIC_C3_ASSIGNMENT_CANDIDATE_BINDING_MISMATCH": "audited_selection",
     "CLASSIC_C3_ASSIGNMENT_ENTRY_DUPLICATE": "entry_authority",
@@ -728,6 +735,7 @@
     "IDENTITY_UNRESOLVED": "provider_identity",
     "IDENTITY_UNRESOLVED_AND_AVAILABLE": "provider_identity",
     "IDENTITY_UNRESOLVED_AND_UNAVAILABLE": "provider_identity",
+    "IMPROVEMENT_NOT_DELIVERED": "stage_failure",
     "INCOMPLETE_BANK_EXHAUSTION": "search_budget",
     "INCOMPLETE_STANDINGS_FIELD": "settlement",
     "INPUT_ARTIFACT_HASH_MISMATCH": "projection_package",

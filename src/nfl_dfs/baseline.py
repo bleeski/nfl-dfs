@@ -13,7 +13,11 @@ than its bytes support:
 - a Classic/Showdown mismatch, a prefilled row (until Session 11) or any other
   integrity gate stops the file it protects;
 - people DraftKings flags `OUT`, `IR` or `D` leave the pool through
-  `contracts.unavailable_people`, exactly as `freeze_prior_package` derives it;
+  `contracts.unavailable_people`, exactly as `freeze_prior_package` derives it,
+  and so does everyone an operator names by exact DraftKings ID or by an extra
+  unavailable status (`run-slate`'s `exclude_dk_ids` and
+  `unavailable_statuses`, Session 06): an operator's fade or late scratch
+  binds the baseline as it binds the model path, and it only ever narrows;
 - lineups follow the registered `BASELINE_SALARY_RANK_V1` objective, distinct by
   exact roster (R29), under a per-solve limit and a whole-run budget;
 - only blank authorized rows are filled, through `lineups.write_upload_bytes`,
@@ -34,7 +38,7 @@ import re
 import shutil
 import time
 from collections import Counter
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,6 +52,7 @@ from .contracts import (
     ModelStatus,
     ReleaseEvidenceState,
     ReleaseTruthsV2,
+    SalaryPlayer,
     SlateContract,
     unavailable_people,
 )
@@ -253,6 +258,32 @@ def build_distinct_lineups(
     return BuildResult(tuple(built), "FILLED", solves, tuple(levels))
 
 
+def pool_exclusions(
+    players: Iterable[SalaryPlayer],
+    *,
+    operator_excluded_dk_ids: Iterable[str] = (),
+    extra_unavailable_statuses: Iterable[str] = (),
+) -> tuple[set[str], set[str], list[str]]:
+    """Who leaves the pool: DraftKings-unavailable people, operator-excluded people, unknown IDs.
+
+    The first set is `contracts.unavailable_people` plus everyone whose raw
+    DraftKings status is one of the operator's extra unavailable statuses. The
+    second is every person an exact excluded DraftKings ID belongs to, all of
+    their salary rows included. The list is every excluded ID the salary bytes
+    do not hold, which the caller refuses exactly as `participation` does.
+    """
+
+    rows = tuple(players)
+    extra = {str(value).strip().upper() for value in extra_unavailable_statuses if str(value).strip()}
+    unavailable = unavailable_people(rows) | {
+        player.underlying_id for player in rows if (player.status_raw or "").strip().upper() in extra
+    }
+    by_id = {player.dk_id: player for player in rows}
+    named = {str(value).strip() for value in operator_excluded_dk_ids if str(value).strip()}
+    operator = {by_id[dk_id].underlying_id for dk_id in named if dk_id in by_id}
+    return unavailable, operator, sorted(named - set(by_id))
+
+
 def audit_baseline_bytes(
     raw: bytes,
     *,
@@ -260,12 +291,15 @@ def audit_baseline_bytes(
     entries_path: Path,
     assignments: Mapping[str, tuple[str, ...]],
     unfilled: tuple[str, ...],
+    operator_excluded_dk_ids: Iterable[str] = (),
+    extra_unavailable_statuses: Iterable[str] = (),
 ) -> list[str]:
     """Every reason the bytes are not the template with exactly `assignments` filled.
 
-    Independent of the build: both snapshots are parsed afresh, the availability
-    set is re-derived from the salary bytes, the byte audit compares every line
-    against the template, and the reparsed rows are validated again.
+    Independent of the build: both snapshots are parsed afresh, the exclusion
+    sets are re-derived from the salary bytes and the operator's exact IDs and
+    statuses, the byte audit compares every line against the template, and the
+    reparsed rows are validated again.
     """
 
     problems: list[str] = []
@@ -287,7 +321,11 @@ def audit_baseline_bytes(
     if filled != dict(assignments) or blank != set(unfilled):
         problems.append("REPARSE_ASSIGNMENT_MISMATCH:the reparsed rows are not the assigned and unfilled rows")
     by_id = {player.dk_id: player for player in slate.players}
-    unavailable = unavailable_people(slate.players)
+    unavailable, operator, unknown = pool_exclusions(
+        slate.players, operator_excluded_dk_ids=operator_excluded_dk_ids,
+        extra_unavailable_statuses=extra_unavailable_statuses)
+    if unknown:
+        problems.append(f"OPERATOR_EXCLUSION_NOT_IN_POOL:{unknown}")
     keys: set[str] = set()
     for entry_id, roster in filled.items():
         result = validate_lineup(slate, roster)
@@ -297,8 +335,11 @@ def audit_baseline_bytes(
         if result.lineup.canonical_key in keys:
             problems.append(f"BASELINE_AUDIT_DUPLICATE_LINEUP:{entry_id}")
         keys.add(result.lineup.canonical_key)
-        if unavailable.intersection(by_id[dk_id].underlying_id for dk_id in roster):
+        people = {by_id[dk_id].underlying_id for dk_id in roster}
+        if unavailable & people:
             problems.append(f"BASELINE_AUDIT_UNAVAILABLE_PERSON:{entry_id}")
+        if operator & people:
+            problems.append(f"BASELINE_AUDIT_OPERATOR_EXCLUDED_PERSON:{entry_id}")
     return problems
 
 
@@ -336,8 +377,15 @@ def run_baseline(
     budget_seconds: float = DEFAULT_BUDGET_SECONDS,
     now: datetime | None = None,
     clock: Callable[[], float] = time.monotonic,
+    operator_excluded_dk_ids: Iterable[str] = (),
+    extra_unavailable_statuses: Iterable[str] = (),
 ) -> BaselineOutcome:
-    """Build, write, audit and report the baseline file for one pair of DraftKings files."""
+    """Build, write, audit and report the baseline file for one pair of DraftKings files.
+
+    `operator_excluded_dk_ids` and `extra_unavailable_statuses` are the
+    operator's exclusions (`run-slate`'s request carries them). They only take
+    people out of the pool; an ID the salary file lacks refuses the file.
+    """
 
     wall_start = time.perf_counter()
     started = clock()
@@ -454,7 +502,18 @@ def run_baseline(
                    " rows are all blank, as prior_review does, until Session 11"))
     for problem in single_contest_problems(template):
         limitations.append(registry.limitation(_code(problem, "INTAKE_FAILED"), detail=problem))
-    excluded_people = unavailable_people(slate.players)
+    exclusion_ids = tuple(str(value).strip() for value in operator_excluded_dk_ids if str(value).strip())
+    exclusion_statuses = tuple(
+        str(value).strip().upper() for value in extra_unavailable_statuses if str(value).strip())
+    unavailable, operator_people, unknown = pool_exclusions(
+        slate.players, operator_excluded_dk_ids=exclusion_ids,
+        extra_unavailable_statuses=exclusion_statuses)
+    if unknown:
+        limitations.append(registry.limitation(
+            "OPERATOR_EXCLUSION_NOT_IN_POOL",
+            detail=f"the operator excluded {unknown}, which the salary file does not hold; an exclusion"
+                   " that names nobody cannot be honoured, so the baseline is not built"))
+    excluded_people = unavailable | operator_people
     excluded_ids = tuple(sorted(p.dk_id for p in slate.players if p.underlying_id in excluded_people))
     earliest_lock = min(game.lock_at for game in slate.games)
     if moment >= earliest_lock:
@@ -480,6 +539,9 @@ def run_baseline(
         "availability_contract": "contracts.unavailable_people",
         "unavailable_statuses": sorted(UNAVAILABLE_DK_STATUSES),
         "excluded_people": sorted(excluded_people),
+        "operator_excluded_dk_ids": sorted(exclusion_ids),
+        "operator_excluded_people": sorted(operator_people),
+        "extra_unavailable_statuses": sorted(set(exclusion_statuses)),
         "excluded_salary_rows": len(excluded_ids),
         "eligible_salary_rows": len(slate.players) - len(excluded_ids),
         "entry_pool_cross_check": cross_check,
@@ -544,7 +606,9 @@ def run_baseline(
     written = _write_audited(
         output, template=template, salary_path=salary_path, entries_path=entries_path,
         salary_hash=salary_hash, assignments=assignments, unfilled=unfilled, registry=registry,
-        limitations=limitations, report=report)
+        limitations=limitations, report=report,
+        exclusions={"operator_excluded_dk_ids": exclusion_ids,
+                    "extra_unavailable_statuses": exclusion_statuses})
     return _finish(report, registry, limitations, run_dir=run_dir, authorized=authorized,
                    assignments=assignments if written else {}, output=output if written else None,
                    wall_start=wall_start)
@@ -562,6 +626,7 @@ def _write_audited(
     registry: GateRegistry,
     limitations: list[DeliveryLimitation],
     report: dict[str, object],
+    exclusions: Mapping[str, tuple[str, ...]],
 ) -> bool:
     """Write the bytes only once the independent audit passes the copy on disk."""
 
@@ -585,7 +650,7 @@ def _write_audited(
         return _audit_and_keep(temporary, output, raw, salary_path=salary_path,
                                entries_path=entries_path, assignments=assignments,
                                unfilled=unfilled, registry=registry,
-                               limitations=limitations, report=report)
+                               limitations=limitations, report=report, exclusions=exclusions)
     finally:
         temporary.unlink(missing_ok=True)  # an unaudited copy never outlives the run
 
@@ -602,13 +667,14 @@ def _audit_and_keep(
     registry: GateRegistry,
     limitations: list[DeliveryLimitation],
     report: dict[str, object],
+    exclusions: Mapping[str, tuple[str, ...]],
 ) -> bool:
     temporary.write_bytes(raw)
     on_disk = temporary.read_bytes()
     problems: list[str] = []
     try:
         problems.extend(audit_baseline_bytes(on_disk, salary_path=salary_path, entries_path=entries_path,
-                                             assignments=assignments, unfilled=unfilled))
+                                             assignments=assignments, unfilled=unfilled, **exclusions))
     except Exception as exc:  # noqa: BLE001 - an audit that cannot finish proves nothing
         problems.append(f"BASELINE_AUDIT_FAILED:{type(exc).__name__}: {exc}")
     report["audit"] = {
@@ -622,6 +688,7 @@ def _audit_and_keep(
             "SHARED_VALIDATOR_ON_EVERY_REPARSED_ROW",
             "EXACT_ROSTER_DISTINCTNESS",
             "NO_UNAVAILABLE_PERSON",
+            "NO_OPERATOR_EXCLUDED_PERSON",
             "POST_WRITE_SHA256",
         ],
     }
@@ -666,7 +733,8 @@ def _finish(
         registry.limitation(
             "OFFICIAL_STATUS_REQUIRED",
             detail="the baseline reads the DraftKings bytes alone: only DraftKings' own OUT, IR and D"
-                   " flags were applied, and no official activity evidence was consulted"),
+                   " flags and any exact operator exclusion were applied, and no official activity"
+                   " evidence was consulted"),
         registry.limitation(
             "OFFENSIVE_CURRENT_ROLE_UNRESOLVED", detail="no current-role evidence was consulted"),
         registry.limitation(
