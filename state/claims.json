@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "9f4e4c7e-0583-55c6-8c51-2a3eb5e0ca59",
+      "branch": "claude/session-08-nonoptimal-bank-gkusm7",
+      "chunk": "S08",
+      "claimed_at": "2026-09-24T12:25:45Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
