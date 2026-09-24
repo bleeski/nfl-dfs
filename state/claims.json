@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "ba54fe9c-f7b0-5c3e-b5cf-3145098a485b",
+      "branch": "claude/kind-feynman-1r3mwd",
+      "chunk": "S11c",
+      "claimed_at": "2026-09-24T19:36:45Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
