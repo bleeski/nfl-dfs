@@ -4,6 +4,203 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: `run-slate` keeps a delivery deadline (Session 07, R31)
+
+R31 sets the default delivery deadline at 5 minutes before the earliest
+relevant lock; until now nothing enforced it, and every stage kept its own
+fixed clock. On `claude/session-07-deadline-budget-hxfvfa`, claim `dd1203d`.
+Every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; a deadline is a construction
+budget and never withholds a valid file.
+
+#### Added
+
+- `nfl_cowork_run_request_v3`: v2 plus an optional `delivery_deadline_utc`
+  (aware ISO-8601, stored in UTC; naive or unparseable refused). v1 and v2
+  stay accepted and unchanged; either one carrying the field is refused, naming
+  v3. `run-slate --delivery-deadline-utc`. A flag for a later field on a
+  reloaded older request writes that run's `run_request.json` at the later
+  version (`cowork.request_version_for`); the source file is untouched.
+- `src/nfl_dfs/deadline.py`: `earliest_lock` (the one helper; `baseline.py`
+  uses it), `default_deadline`, and `Budget`, built once by `run-slate` right
+  after intake. The baseline gets `min(60, max(30, seconds to the deadline))`
+  with 5 s per solve; the session probe `min(45, 10%)` of the improvement
+  window, skipped under 3 s; C1 selection `min(10, window / (lineups + 1))` per
+  solve and SD3 `min(scaled, 70%)` bank and `min(scaled, 20%)` joint solve,
+  passed through `select_prior_lineups`' existing parameters; a C2 policy's
+  hash-bound bank and joint limits fit the window or stop the review. A passed
+  deadline or a spent window stops the review before it starts or before
+  selection, and the baseline stays the file.
+- `nfl_deadline_budget_v1`, the result's `deadline` field on every exit:
+  deadline and source, the earliest lock, reserves, both clocks, and one
+  measured record per stage (`intake`, `baseline`, `session_probe`,
+  `policy_validation`, `selection`, `review`, `finish`).
+- `nfl_host_candidate_rate_v1`, `data/runs/host_candidate_rates.json`: after
+  every Classic C2 bank `run-slate` records this host's seconds per candidate
+  (the bank's own count and time, or a `CANDIDATE_BANK_TIMEOUT` count over its
+  declared budget). `deadline.read_candidate_rate` returns the slowest of the
+  last five; `make_classic_policy.py` reads it in Session 07b.
+- Seven codes. New family `delivery_deadline` (`S`, `CONSTRUCTION_PREFERENCE`,
+  RULING R31): `DEADLINE_PASSED_AT_START`, `DEADLINE_IMPROVEMENT_WINDOW_SPENT`,
+  `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`, `DEADLINE_STAGE_SHORTENED`,
+  `DEADLINE_PASSED_DURING_REVIEW` (a review that ends after the deadline). In
+  `certification_prerequisite` (`P`): `DEADLINE_AFTER_EARLIEST_LOCK`,
+  `DEADLINE_WALL_CLOCK_PAST_DEADLINE`. Registry SHA-256 now
+  `e23f7d7c6f3ad6fc2ca7e04de66ed74a31e52f1d6a92f5da1b96d279a0e953bd`, 1,204
+  codes in 45 families, re-pinned in `tests/test_gate_registry.py` and
+  `docs/DATA_CONTRACTS.md`. They reach `release_truths` on every exit that
+  reports them, each once; the certify exit carries them in its `deadline`.
+- `tests/test_deadline_controller.py`, 23 tests (25 cases) on a pinned `as_of` and an
+  injected monotonic clock, no network: the default deadline on both fixture
+  slates; the runtime key; an explicit deadline, one after lock named; the
+  pinned clock; the baseline floor; allowances shorten, then skip, each named
+  once; selection limits; the C1 default matches `select_prior_lineups`; no
+  deadline code is `V`; the rate ledger and bank observations; and six
+  `run-slate` runs: a deadline passed at start (the review never called), a
+  slow review that spends the window before selection, a 12 s window that
+  shortens C1 and still delivers, a C2 policy that does not fit, a replay that
+  records its stages, request v3 and the host rate, a review that ends late,
+  a manual certification the deadline does not stop, the outer handler, and a
+  budget that cannot be built (malformed, non-finite or unreadable
+  `runtime.json`) still shipping the baseline first. Also the keyword mapping
+  onto `select_prior_lineups` for C1, SD3 and C2, the baseline limits matching
+  the baseline's defaults, and a rate ledger that is deterministic and never
+  overwrites a foreign file.
+- `tests/test_cowork.py`: v3 carries the deadline in UTC and refuses a naive
+  one; v1 and v2 load unchanged and may not carry it; a flag on a reloaded v2
+  request writes a v3 run request and leaves the file alone.
+
+#### Changed
+
+- `config/runtime.json`: `stop_discretionary_optimization_minutes_before_lock`
+  (10) is read: optimization stops at the deadline less (10 - 5) minutes, so
+  lock minus 10 by default with delivery at lock minus 5. It must be at least
+  5. `full_refresh_seconds` is removed from both profiles: a fixed refresh cap
+  would stop an improvement the deadline still has room for. Still unread, not
+  widened here: `candidate_generation_min`, `candidate_generation_max`,
+  `candidate_vector_shortlist_max`, `memory_limit_bytes` (`cli.py` reports
+  `live_memory_limit()` under that name), `classic.late_swap_seconds`
+  (`late_swap.py` reports a measured value under that name).
+- `BASELINE_EARLIEST_LOCK_PASSED`'s detail no longer promises Session 07; it
+  says the baseline is still built, at its floor under the deadline.
+- `cli._session_probe` takes a `timeout`; `_run_release_truths` and
+  `_handler_release_truths` take the budget's limitations; `run_prior_review`
+  takes `budget`.
+- Tests changed as their own visible change. The fixture slates locked on
+  2026-09-09 and 2026-09-13, so a run on today's clock is past R31's default
+  deadline and correctly skips its review. 37 replay runs therefore name a
+  deadline: `REPLAY_DEADLINE` (2099) in `test_prior_review_profile._cowork_args`,
+  the same in three `test_cowork.py` runs and one in
+  `test_run_slate_baseline_first.py`. One probe stub there accepts the new
+  `timeout` keyword. `test_qb_depth_roles.py` expected the emitted version
+  `v2`; it now expects `v3` beside `v1` and `v2`.
+- `docs/DATA_CONTRACTS.md` (request v3, § Deadline budget, the rate ledger,
+  the `run-slate` result), `docs/RUNBOOK.md` (the R31 paragraph),
+  `IMPLEMENTATION_STATUS.md`.
+
+#### Decisions
+
+- **Earliest relevant lock:** the earliest `lock_at` among the salary file's
+  games. Every contest on a draft group locks at its first kickoff, and every
+  blank row a pre-lock run fills is on that draft group (reconciliation ties
+  the entries to the salary file), so a template whose entries span contests
+  takes the same minimum. Showdown: its one game. Governed late swap is not on
+  this path.
+- **Explicit deadline:** authoritative, including one after the lock, which is
+  named `DEADLINE_AFTER_EARLIEST_LOCK` (`P`) rather than clamped.
+- **Baseline floor 30 s, cap 60 s:** five times the slowest measured baseline
+  (about 6 s for 150 Showdown lineups, Session 04); the cap is its old fixed
+  budget. A deadline passed at start builds it at the floor, skips the review
+  and names `DEADLINE_PASSED_AT_START`; `BASELINE_EARLIEST_LOCK_PASSED` still
+  fires on its own when the run's clock is past the lock.
+- **Split:** the probe is shortened, then skipped (it only reports); solves are
+  shortened, then stopped; a hash-bound C2 policy is never mutated, so it fits
+  or stops the review. Any cut below a default is named once per stage.
+- **Clock:** elapsed time is monotonic. The deadline is compared with the run's
+  clock: the pinned `--as-of` advanced by elapsed time, else the wall clock. A
+  pinned clock before the deadline with the wall clock past it is named
+  `DEADLINE_WALL_CLOCK_PAST_DEADLINE` (`P`, a replay), which answers Session
+  06's open question about `--as-of` hiding the lock.
+- **Host rate:** `data/runs/` is per machine and never committed, which a
+  per-host measurement needs; the slowest of the last five is read, because an
+  optimistic rate is what cost the C4 slate its rungs.
+- **Exit code:** 2 when the deadline skips or stops the review; it did not
+  complete, as Session 06 defined. The pre-review exit's stage is
+  `DEADLINE_IMPROVEMENT_SKIPPED`.
+- **Flag:** `--delivery-deadline-utc`, the field's own name.
+- **Breakpoint taken.** With the fetch, weather-script and generator allowances
+  built and tested, the diff was 2,030 changed lines before close-out, past Ben's
+  1,500. Following his seam, they were removed and Session 07b holds their
+  tested design; the full suite passed with them first
+  (`1623 passed, 1 skipped in 226.63s`). `DEADLINE_FETCH_WINDOW_SPENT` goes with
+  them.
+- **Session 08's files untouched:** budgets reach selection only through
+  `select_prior_lineups`' existing parameters, so Session 08 may still run beside
+  07b.
+
+#### Left open
+
+- The `diagnostic` and `registered` profiles' build and certify limits: only
+  their start is gated by the deadline.
+- `priors.py:2398` and `preflight.py:381` still compute a lock inline (Session
+  09's and another path's files); `deadline.earliest_lock` is there for them.
+- `make_classic_policy.py`'s rung-4 message still says C1 "always produces a
+  legal portfolio"; noted, not in scope.
+- `CLAUDE.md:123` still says the engine enforces the deadline "from Session
+  07"; a separate `ben-review` pull request corrects it.
+
+#### Review
+
+The `reviewer` subagent read `dd1203d..f5e225f`. Fixed:
+
+- **Stale flag.** `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW` named a
+  `make_classic_policy.py --delivery-deadline-utc` flag that went to Session
+  07b. It now says a smaller `--minutes`, or rung 4.
+- **Baseline-first gaps.** A budget that failed other than by `ValueError`
+  (an unreadable `runtime.json`, a non-finite stop that overflowed
+  `timedelta`) skipped the baseline. Any failure now builds it first, and
+  `finish_reserve` refuses non-finite values.
+- **Late finish.** A review that ends after the deadline is now named
+  `DEADLINE_PASSED_DURING_REVIEW`. Its file still replaces the baseline (the
+  baseline was on the pointer before it); the rule is recorded here.
+- **Manual certification.** The deadline gate stopped a manual-guardrail
+  certification, which optimizes nothing. It no longer does.
+- **Deadline years.** Deadlines outside the years 2000 to 2999, and ones that
+  overflow, are refused as input.
+- **Rate ledger.** It never costs a finished review, refuses and leaves a
+  foreign file alone, and is deterministic.
+- **Duplicate codes.** One cause now gives one code (a stopped selection is no
+  longer also a shortened stage), and a probe the environment switched off is
+  not named.
+- **Detail text.** Deadline limitations carry the same `CODE:detail` text on
+  every path.
+- **Other fixes.**
+  - The `BASELINE_EARLIEST_LOCK_PASSED` detail no longer claims a floor
+    budget.
+  - The weather word is out of `deadline.py`.
+  - The release-truths claim now names the certify exit.
+- **Tests.**
+  - Selection's shortening is asserted by its own detail.
+  - No duplicate limitations are allowed.
+  - The baseline's own report proves it ran on the budget's limits.
+  - The C1, SD3 and C2 keyword mapping is tested.
+  - The handler test pins the wall clock.
+  - The baseline constants are pinned to the baseline's own.
+
+Left as is: a v2 request may carry `"delivery_deadline_utc": null`, as v1 may
+carry a null `qb_depth_role_evidence_json` (the existing precedent). The
+`diagnostic` and `registered` build-and-certify limits stay unbudgeted.
+
+#### Verification
+
+- Baseline before any change: `1593 passed, 1 skipped in 228.99s`.
+- The card's command (`tests/test_deadline_controller.py tests/test_cowork.py
+  tests/test_fetch_weather_captures.py`): `51 passed, 1 skipped in 10.92s`.
+- Complete pinned suite: `1621 passed, 1 skipped in 229.23s` (Linux), 28 more
+  than the baseline (25 deadline cases, 3 request). Before the review's fixes:
+  `1614 passed, 1 skipped in 227.87s`. Recorded with `record_verify.py`.
+- `doctor` passes; `compileall` of every changed module, `git diff --check` and
+  `check_protected_paths.py` (no protected path) are clean.
+
 ### 2026-09-24: the run's official inactives bind the baseline (Session 06b, R32)
 
 Ben's ruling on Session 06's open question, 2026-09-24: "For the ruling that

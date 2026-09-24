@@ -82,6 +82,11 @@
       "provenance": {"kind": "RULING", "ref": "2026-09-12 lock-clock ruling"},
       "covers": "An exposure, captain, team, game, group, stack, overlap or salary bound is breached, contradictory or infeasible, or captains repeat."
     },
+    "delivery_deadline": {
+      "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
+      "provenance": {"kind": "RULING", "ref": "R31"},
+      "covers": "The run's delivery deadline (the request's, or the earliest lock minus 5 minutes) left a stage less than its default time or none: a stage was shortened or skipped, a hash-bound search did not fit, the run's own review stopped, or it finished after the deadline; the baseline stayed on the pointer first."
+    },
     "search_budget": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
       "provenance": {"kind": "RULING", "ref": "2026-09-12 lock-clock ruling"},
@@ -600,6 +605,13 @@
     "CURRENT_TEMPLATE_MODE_MISMATCH": "slate_mode",
     "CURRENT_TEMPLATE_MUST_BE_FULLY_PREFILLED": "implementation_limit",
     "CURRENT_TEMPLATE_MUST_CONTAIN_ONE_CONTEST_ID": "implementation_limit",
+    "DEADLINE_AFTER_EARLIEST_LOCK": "certification_prerequisite",
+    "DEADLINE_IMPROVEMENT_WINDOW_SPENT": "delivery_deadline",
+    "DEADLINE_PASSED_AT_START": "delivery_deadline",
+    "DEADLINE_PASSED_DURING_REVIEW": "delivery_deadline",
+    "DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW": "delivery_deadline",
+    "DEADLINE_STAGE_SHORTENED": "delivery_deadline",
+    "DEADLINE_WALL_CLOCK_PAST_DEADLINE": "certification_prerequisite",
     "DELIVERABLE_BYTE_AUDIT_FAILED": "delivered_bytes",
     "DELIVERABLE_COVERAGE_MISMATCH": "entry_authority",
     "DELIVERABLE_ENTRY_ORDER_MISMATCH": "entry_authority",

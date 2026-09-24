@@ -36,7 +36,7 @@ from .test_baseline import CLASSIC_SALARY, NOW, SHOWDOWN_SALARY, classic_templat
 from .test_classic_prior_review import AS_OF as CLASSIC_AS_OF
 from .test_classic_prior_review import _fixture as classic_fixture
 from .test_cowork import _attachment_pair
-from .test_prior_review_profile import _attachments, _cowork_args, _prepared_run
+from .test_prior_review_profile import REPLAY_DEADLINE, _attachments, _cowork_args, _prepared_run
 
 BASELINE = "run-slate:baseline"
 EVIDENCE_GAPS = {"OFFICIAL_STATUS_REQUIRED", "OFFENSIVE_CURRENT_ROLE_UNRESOLVED",
@@ -263,7 +263,7 @@ def test_the_baseline_is_published_before_the_probe_the_policy_and_the_review(
             latest = delivery.read_latest(root)
             return latest.deliverable.producer if latest is not None else None
 
-        def probe(salaries):
+        def probe(salaries, **_budgeted):  # Session 07 passes the probe its timeout
             seen["probe"] = producer()
             return None
 
@@ -399,6 +399,7 @@ def test_the_pre_review_blocked_exit_reports_the_baseline(
     args = argparse.Namespace(
         input_dir=str(attachments), request=None, salaries=None, entries=None,
         label="blocked", run_id="blocked", output_dir=str(tmp_path / "outputs"),
+        delivery_deadline_utc=REPLAY_DEADLINE,  # a replay of a locked slate (Session 07)
     )
     assert cli.command_cowork_run(args) == 2
 

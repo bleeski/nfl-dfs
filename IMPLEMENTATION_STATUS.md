@@ -1,5 +1,21 @@
 # Implementation Status
 
+## Capability added: 2026-09-24 (Session 07)
+
+`run-slate` keeps a delivery deadline (R31): the request's
+`delivery_deadline_utc` (`nfl_cowork_run_request_v3`, `--delivery-deadline-utc`)
+or the earliest lock minus 5 minutes. One budget, built right after intake,
+gives the baseline 30 to 60 s whatever the clock says, stops optimization 5
+minutes before the deadline, and sizes the session probe and the C1 and SD3
+solver limits from the time left. A passed deadline or a spent window stops
+the review and leaves the baseline as the file, named by a `DEADLINE_*`
+limitation (`S`). A C2 policy's hash-bound limits either fit or stop the
+review. Every result carries measured stage durations, and `run-slate` records
+this host's candidate rate after every C2 bank. Not yet: fetch, weather-script
+and policy-generator allowances (Session 07b), the `diagnostic` and
+`registered` profiles' build and certify limits (only their start is gated),
+the relaxation ladder inside the budget (Session 10).
+
 ## Capability added: 2026-09-24 (Session 06b)
 
 The baseline leaves out anyone the run's official status file marks `INACTIVE`

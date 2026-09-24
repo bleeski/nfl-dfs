@@ -5,6 +5,7 @@ import io
 import json
 import math
 from dataclasses import asdict, dataclass, fields
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -17,13 +18,37 @@ from typing import Iterable, Mapping
 # accepted, v1 keeps exactly the fields it always had, and a v1 request carrying
 # the new field is refused rather than silently upgraded — that refusal is what
 # makes "v1 is never mutated" true rather than merely stated.
-COWORK_REQUEST_VERSION = "nfl_cowork_run_request_v2"
+#
+# v3 (Session 07) adds exactly one field, `delivery_deadline_utc`: when the run's
+# file is due, as an aware ISO-8601 moment. Absent, the deadline is the earliest
+# relevant lock minus 5 minutes (R31, `deadline.default_deadline`). v2 stays
+# accepted and unchanged by the same rule that keeps v1.
+COWORK_REQUEST_VERSION = "nfl_cowork_run_request_v3"
+COWORK_REQUEST_VERSION_V2 = "nfl_cowork_run_request_v2"
 COWORK_REQUEST_VERSION_V1 = "nfl_cowork_run_request_v1"
-SUPPORTED_REQUEST_VERSIONS = (COWORK_REQUEST_VERSION_V1, COWORK_REQUEST_VERSION)
-# Fields introduced after v1, and the first version that may carry each.
+SUPPORTED_REQUEST_VERSIONS = (
+    COWORK_REQUEST_VERSION_V1,
+    COWORK_REQUEST_VERSION_V2,
+    COWORK_REQUEST_VERSION,
+)
+# Fields introduced after v1, and the first version that may carry each. A
+# request may carry a field from its own version or an earlier one.
 REQUEST_FIELDS_ADDED_AFTER_V1 = {
-    "qb_depth_role_evidence_json": COWORK_REQUEST_VERSION,
+    "qb_depth_role_evidence_json": COWORK_REQUEST_VERSION_V2,
+    "delivery_deadline_utc": COWORK_REQUEST_VERSION,
 }
+
+
+def request_version_for(version: str, names: Iterable[str]) -> str:
+    """`version`, raised to the first version that carries every field in `names`.
+
+    A command-line value for a later field on a reloaded older request makes a
+    new request of the later version; the file it was loaded from is untouched.
+    """
+
+    order = SUPPORTED_REQUEST_VERSIONS.index
+    needed = [REQUEST_FIELDS_ADDED_AFTER_V1[name] for name in names if name in REQUEST_FIELDS_ADDED_AFTER_V1]
+    return max([version, *needed], key=order) if version in SUPPORTED_REQUEST_VERSIONS else version
 
 ENTRY_HEADER_PREFIX = ("Entry ID", "Contest Name", "Contest ID", "Entry Fee")
 SALARY_HEADER = {
@@ -229,6 +254,8 @@ class CoworkRunRequest:
     exclude_dk_ids: tuple[str, ...] = ()
     unavailable_statuses: tuple[str, ...] = ()
     available_statuses: tuple[str, ...] = ()
+    # v3: when the file is due, aware ISO-8601, stored in UTC. None: R31's default.
+    delivery_deadline_utc: str | None = None
 
     @classmethod
     def from_mapping(
@@ -250,10 +277,11 @@ class CoworkRunRequest:
                 f"unsupported Cowork request schema: {version!r}; "
                 f"expected one of {', '.join(repr(v) for v in SUPPORTED_REQUEST_VERSIONS)}"
             )
+        order = SUPPORTED_REQUEST_VERSIONS.index
         for name, introduced_in in sorted(REQUEST_FIELDS_ADDED_AFTER_V1.items()):
             if payload.get(name) in (None, ""):
                 continue
-            if version != introduced_in:
+            if order(version) < order(introduced_in):
                 raise CoworkInputError(
                     f"{name} was introduced in {introduced_in!r} and this request "
                     f"declares {version!r}; set schema_version to {introduced_in!r} "
@@ -348,6 +376,22 @@ class CoworkRunRequest:
             if not isinstance(raw, str):
                 raise CoworkInputError(f"{name} must be a string")
             payload[name] = raw.strip()
+        deadline = payload.get("delivery_deadline_utc")
+        if deadline in (None, ""):
+            payload["delivery_deadline_utc"] = None
+        else:
+            try:
+                moment = datetime.fromisoformat(str(deadline).strip().replace("Z", "+00:00"))
+                if not isinstance(deadline, str) or moment.tzinfo is None:
+                    raise ValueError("no UTC offset")
+                moment = moment.astimezone(timezone.utc)
+            except (ValueError, OverflowError) as exc:
+                raise CoworkInputError(
+                    "delivery_deadline_utc must be an ISO-8601 moment with a UTC offset"
+                ) from exc
+            if not 2000 <= moment.year <= 2999:  # keeps every reserve arithmetic in range
+                raise CoworkInputError("delivery_deadline_utc must fall in the years 2000 to 2999")
+            payload["delivery_deadline_utc"] = moment.isoformat()
         return cls(**payload)
 
     @classmethod

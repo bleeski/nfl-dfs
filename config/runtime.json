@@ -4,7 +4,6 @@
     "design_scenarios": 10000,
     "select_scenarios": 20000,
     "referee_scenarios": 20000,
-    "full_refresh_seconds": 600,
     "late_swap_seconds": 300,
     "certification_seconds": 120
   },
@@ -12,7 +11,6 @@
     "design_scenarios": 20000,
     "select_scenarios": 50000,
     "referee_scenarios": 50000,
-    "full_refresh_seconds": 600,
     "certification_seconds": 120
   },
   "candidate_generation_min": 20000,

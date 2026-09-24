@@ -204,6 +204,8 @@ def test_cowork_two_file_run_snapshots_and_fails_closed(
         label="cowork-fixture",
         run_id="cowork-fixture",
         output_dir=str(outputs),
+        # The fixture slate locked on 2026-09-09; a replay names its deadline (Session 07).
+        delivery_deadline_utc="2099-01-01T00:00:00+00:00",
     )
 
     assert cli.command_cowork_run(args) == 2
@@ -267,6 +269,8 @@ def test_cowork_build_failure_writes_machine_result_and_diagnostic(
         label="build-failure",
         run_id="build-failure",
         output_dir=str(outputs),
+        # The fixture slate locked on 2026-09-09; a replay names its deadline (Session 07).
+        delivery_deadline_utc="2099-01-01T00:00:00+00:00",
     )
 
     assert cli.command_cowork_run(args) == 2
@@ -314,6 +318,8 @@ def test_cowork_certification_failure_removes_upload_shaped_csv(
         label="certification-failure",
         run_id="certification-failure",
         output_dir=str(outputs),
+        # The fixture slate locked on 2026-09-09; a replay names its deadline (Session 07).
+        delivery_deadline_utc="2099-01-01T00:00:00+00:00",
     )
 
     assert cli.command_cowork_run(args) == 2
@@ -382,3 +388,76 @@ def test_direct_certification_failure_removes_upload_and_keeps_diagnostic(
     )
     assert diagnostic["status"] == "DO_NOT_UPLOAD"
     assert diagnostic["upload_csv"] is None
+
+
+# --- Session 07: request v3 and its delivery deadline ------------------------
+
+
+def test_a_v3_request_carries_an_aware_deadline_in_utc() -> None:
+    from nfl_dfs.cowork import COWORK_REQUEST_VERSION
+
+    request = CoworkRunRequest.from_mapping(
+        {"schema_version": COWORK_REQUEST_VERSION, "delivery_deadline_utc": "2026-09-27T12:55:00-04:00"}
+    )
+    assert request.schema_version == "nfl_cowork_run_request_v3"
+    assert request.delivery_deadline_utc == "2026-09-27T16:55:00+00:00"
+    assert CoworkRunRequest().delivery_deadline_utc is None  # absent: R31's default applies
+    for bad in ("2026-09-27T12:55:00", "tomorrow", 1790000000, "0001-01-01T00:00:00+01:00",
+                "9999-12-31T23:59:59-01:00"):
+        with pytest.raises(CoworkInputError, match="delivery_deadline_utc must be an ISO-8601"):
+            CoworkRunRequest.from_mapping(
+                {"schema_version": COWORK_REQUEST_VERSION, "delivery_deadline_utc": bad}
+            )
+    for out_of_range in ("0001-01-01T00:04:00+00:00", "3000-01-01T00:00:00Z"):
+        with pytest.raises(CoworkInputError, match="years 2000 to 2999"):
+            CoworkRunRequest.from_mapping(
+                {"schema_version": COWORK_REQUEST_VERSION, "delivery_deadline_utc": out_of_range}
+            )
+
+
+def test_v1_and_v2_stay_accepted_and_may_not_carry_the_deadline() -> None:
+    from nfl_dfs.cowork import COWORK_REQUEST_VERSION_V1, COWORK_REQUEST_VERSION_V2
+
+    for version in (COWORK_REQUEST_VERSION_V1, COWORK_REQUEST_VERSION_V2):
+        request = CoworkRunRequest.from_mapping({"schema_version": version, "label": "archived"})
+        assert request.schema_version == version and request.delivery_deadline_utc is None
+        with pytest.raises(CoworkInputError, match="introduced in 'nfl_cowork_run_request_v3'"):
+            CoworkRunRequest.from_mapping(
+                {"schema_version": version, "delivery_deadline_utc": "2026-09-27T16:55:00Z"}
+            )
+    # v3 may still carry v2's field: a later version carries every earlier one's.
+    request = CoworkRunRequest.from_mapping(
+        {"schema_version": "nfl_cowork_run_request_v3", "qb_depth_role_evidence_json": None}
+    )
+    assert request.schema_version == "nfl_cowork_run_request_v3"
+
+
+def test_a_deadline_flag_on_a_reloaded_v2_request_makes_a_v3_run_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs.cowork import request_version_for
+
+    assert request_version_for("nfl_cowork_run_request_v2", ["delivery_deadline_utc"]) == (
+        "nfl_cowork_run_request_v3")
+    assert request_version_for("nfl_cowork_run_request_v1", ["label"]) == "nfl_cowork_run_request_v1"
+    attachments = tmp_path / "attachments"
+    attachments.mkdir()
+    salary, entries = _attachment_pair(attachments)
+    request_path = attachments / "request.json"
+    original = json.dumps({"schema_version": "nfl_cowork_run_request_v2", "salary_csv": salary.name,
+                           "entry_csv": entries.name})
+    request_path.write_text(original, encoding="utf-8")
+    runs = tmp_path / "runs"
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", runs)
+    args = argparse.Namespace(
+        input_dir=str(attachments), request=str(request_path), salaries=None, entries=None,
+        label="reloaded", run_id="reloaded", output_dir=str(tmp_path / "outputs"),
+        delivery_deadline_utc="2099-01-01T00:00:00Z",
+    )
+    assert cli.command_cowork_run(args) == 2  # the diagnostic profile lacks its inputs
+    written = json.loads((runs / "reloaded" / "run_request.json").read_text(encoding="utf-8"))
+    assert written["schema_version"] == "nfl_cowork_run_request_v3"
+    assert written["delivery_deadline_utc"] == "2099-01-01T00:00:00+00:00"
+    assert request_path.read_text(encoding="utf-8") == original  # the v2 file is untouched
+    report = json.loads((tmp_path / "outputs" / "reloaded" / "cowork_run.json").read_text(encoding="utf-8"))
+    assert report["deadline"]["deadline_source"] == "REQUEST"

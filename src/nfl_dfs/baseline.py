@@ -61,6 +61,7 @@ from .contracts import (
     unavailable_people,
 )
 from .cowork import classify_csv
+from .deadline import earliest_lock as slate_earliest_lock
 from .evidence import parse_official_inactive_snapshot
 from .dk import (
     DraftKingsParseError,
@@ -613,13 +614,13 @@ def run_baseline(
                        + "; ".join(refused_rows[:10])))
     excluded_people = unavailable | operator_people | inactive_people
     excluded_ids = tuple(sorted(p.dk_id for p in slate.players if p.underlying_id in excluded_people))
-    earliest_lock = min(game.lock_at for game in slate.games)
+    earliest_lock = slate_earliest_lock(slate.games)
     if moment >= earliest_lock:
         limitations.append(registry.limitation(
             "BASELINE_EARLIEST_LOCK_PASSED",
             detail=f"the run's clock {moment.isoformat()} is at or past the earliest lock"
-                   f" {earliest_lock.isoformat()}; DraftKings refuses a lineup holding a locked player, and"
-                   " the baseline does not enforce the lock clock (Session 07)"))
+                   f" {earliest_lock.isoformat()}; DraftKings refuses a lineup holding a locked player."
+                   " The baseline is still built: it never judges which players have locked"))
     report["slate"] = {
         "mode": slate.mode.value,
         "draft_group": slate.draft_group,

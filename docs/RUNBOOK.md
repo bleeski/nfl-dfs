@@ -1139,7 +1139,16 @@ naming every authorized row left blank; hand that list over with the file. On a 
 shortfall, relax an exposure or overlap cap and rebuild; when distinct lineups
 run out, ship the file and name the rows (R29). Run QA on the written file every
 time. The default delivery deadline is the earliest
-relevant lock minus 5 minutes (R31); the engine enforces it from Session 07.
+relevant lock minus 5 minutes (R31), and `run-slate` enforces it (Session 07):
+one budget, built right after intake, gives the baseline at least 30 s (a
+deadline already passed included), stops discretionary optimization 5 minutes
+before the deadline (lock minus 10 by default), and shortens or skips the
+probe and the review's solves to fit. `--delivery-deadline-utc` sets another
+deadline. A skipped or stopped review exits 2 with `DEADLINE_*` limitations
+(`S`) and the baseline as the file: hand it over. A C2 policy whose declared
+search no longer fits is refused by name; generate it again with a smaller
+`--minutes`, or take rung 4. Fetches, the weather capture script and the
+policy generator keep their own fixed clocks until Session 07b.
 
 Three rules bound the autonomy above.
 
