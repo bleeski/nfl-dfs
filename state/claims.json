@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "1e3d3d94-0eb2-5854-9d72-4d781a540a52",
-      "branch": "claude/festive-lovelace-ffryd8",
-      "chunk": "S11",
-      "claimed_at": "2026-09-24T17:02:37Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

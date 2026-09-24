@@ -15,13 +15,14 @@ retrospective and session prompt in the repository.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 13 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S13`, on the branch your session was assigned or `claude/s13-preflight-report`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 11b exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S11b`, on the branch your session was assigned or `claude/s11b-subset-binding`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 11, entry groups, is in progress on `claude/festive-lovelace-ffryd8`
-(claimed 2026-09-24). Session 13 is the next startable row, but it edits
-`src/nfl_dfs/selection.py` and `src/nfl_dfs/prior_review.py`, which Session 11
-also edits, and Session 14 edits `delivery.py` and `cli.py`, which it edits
-too: start neither until Session 11 merges.
+Session 11 made per-row authority real: prefilled rows ship byte for byte,
+distinctness covers them, and every result reports each Contest ID group.
+Session 11b, subset binding, split from it at the breakpoint, is next; Sessions
+12, 13 and 14 are startable too. Session 11b edits `prior_review.py`,
+`selection.py` and `cli.py`, which Sessions 13 and 14 also edit, so run them
+one at a time; Session 12 shares only `docs/DATA_CONTRACTS.md` with it.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -106,7 +107,8 @@ Every session follows this protocol, and the cards only add to it:
 | Session 08 | Standalone | Timeout incumbents: validated time-limited candidates are kept; a bank with a feasible witness does not block; both joint selectors validate and return an integer incumbent on a time or search limit under a non-optimal status; C3 accepts it labelled; the timing-sensitive C2 status test becomes deterministic | Audit D5, DD-4, §1 test failure | `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_review.py` | P | Session 06 | `sh ./nfl.sh test tests/test_classic_portfolio_c2.py tests/test_portfolio_enforcement.py tests/test_classic_review_c3.py -x --tb=short`; then the C2 status test 20 times in a row | Complete |
 | Session 09 | Batched | R28 on the model path: missing weather (including a derived roof) and missing Classic official activity become named limitations, not stops; a real identity or timestamp conflict still invalidates its evidence; `build_priors` authority persists for the run; weather pre-capture becomes optional in the runbook | R28; audit D8, DD-7; archive § R23, R24, F7 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/cowork.py`, `docs/RUNBOOK.md` | P | Session 03b, Session 06 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_classic_prior_review.py tests/test_gate_registry.py -x --tb=short` | Complete |
 | Session 10 | Batched | Relaxation controller: the engine, not printed advice, walks a bounded rung ladder inside the cumulative budget; the full trigger list; bank timeouts shrink the bank before relaxing structure; Showdown gets a real ladder; uniqueness is never on it; every relaxation is a structured record | R29; audit D5, DD-4; Showdown retro #6; C4 retro #3 | new `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `scripts/make_showdown_policy.py`, `src/nfl_dfs/cli.py` | S | Session 07, Session 07b, Session 08 | `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_classic_policy_generator.py -x --tb=short` | Complete |
-| Session 11 | Standalone | Entry groups: prefilled rows are preserved byte-identical instead of refusing the file; blank rows are filled; each Contest ID group is delivered on its own; unresolved Entry IDs are listed; distinctness covers prefilled lineups; `entry_ids` may bind a subset | R29; audit D7, DD-6; Showdown retro #4 | `src/nfl_dfs/lineups.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/baseline.py`, `src/nfl_dfs/dk.py` | V | Session 06 | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_byte_line_fidelity.py -x --tb=short` | In Progress |
+| Session 11 | Standalone | Entry groups: prefilled rows are preserved byte-identical instead of refusing the file; blank rows are filled; each Contest ID group is delivered on its own; unresolved Entry IDs are listed; distinctness covers prefilled lineups; `entry_ids` may bind a subset | R29; audit D7, DD-6; Showdown retro #4 | `src/nfl_dfs/lineups.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/baseline.py`, `src/nfl_dfs/dk.py` | V | Session 06 | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_byte_line_fidelity.py -x --tb=short` | Complete |
+| Session 11b | Standalone | Subset binding, split from Session 11 at its breakpoint: a policy's `entry_ids` may bind a subset of the fillable blank rows, in template order (a bound prefilled or unknown row is still a `V` refusal); after the policy's joint solve C1 fills the unbound blank rows with every policy lineup and every prefilled roster as no-goods; the relaxation ladder and each rung's document bind the same subset | Showdown retro #4 and §7c; Session 11 breakpoint | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/relaxation.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md` | S | Session 11 | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_relaxation_controller.py tests/test_portfolio_policy.py -x --tb=short` | Pending |
 | Session 12 | Standalone | Late-swap bridge and C5: a hash-bound record of the entries actually submitted (Ben's post-upload DKEntries download) anchors governed late swap without claiming certification; multi-contest by group; locked cells byte-identical; later-lock players preferred in flexible slots | Audit D9, DD-6; archive § C5 | `src/nfl_dfs/late_swap.py`, `src/nfl_dfs/lineups.py`, `docs/DATA_CONTRACTS.md` | V | Session 11 | `sh ./nfl.sh test tests/test_governed_late_swap.py tests/test_late_swap_learning.py -x --tb=short` | Pending |
 | Session 13 | Batched | Run-start preflight report (identity, pool completeness, evidence and participation vocabulary against the actual inputs, one report before the first solve) and the scored player pool as a first-class hash-bound artifact | C4 retro #2, #4; Showdown retro #7; audit §5 | `scripts/session_probe.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/prior_review.py` | P | Session 09 | `sh ./nfl.sh test tests/test_session_probe_gate.py tests/test_prior_selection.py tests/test_preflight_report.py -x --tb=short` | Pending |
 | Session 14 | Batched | Delivery record: `delivery_outcome`, timing, coverage, artifact identity, recovery, relaxation and intervention fields in one versioned run record; "presented" means path and hash in the handoff; submission receipt only from an operator-downloaded file | Audit §9, DD-8 | `src/nfl_dfs/delivery.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md` | P | Session 07, Session 10 | `sh ./nfl.sh test tests/test_delivery_record.py -x --tb=short` | Pending |
@@ -779,6 +781,45 @@ Every session follows this protocol, and the cards only add to it:
   - `entry_ids` may bind a subset (Showdown retro #4).
 - **Must hold.** Blank-cell authority is still `V`. No filled cell is ever
   changed.
+- **2026-09-24, Complete.** `src/nfl_dfs/entry_groups.py` plans every row
+  against the slate: blank rows are fillable, prefilled rows whose cells are
+  exact current-slate IDs (bare or `Name (ID)`) are preserved byte for byte,
+  and partly filled rows, prefilled rosters that do not resolve or repeat
+  another, and every row of a Contest ID whose rows disagree on name or fee are
+  left as they are and named unresolved. The baseline, C1's export, the
+  Showdown export and C3 fill only fillable rows through the per-row
+  `write_upload_bytes`; writing into a prefilled cell is still `V`. The
+  baseline and C1 cut every prefilled roster, the C2 and SD3 banks never hold
+  one, and every export audit and the pointer refuse a repeat. `entry_groups`
+  reports each Contest ID in the baseline report, the result and the pointer,
+  and `replace` compares coverage per group. New records:
+  `nfl_release_truths_v3`, `nfl_latest_deliverable_v2`,
+  `nfl_baseline_report_v3`. Breakpoint used: subset binding moved to Session
+  11b; here a policy binds exactly the fillable rows. Left open: the prefilled
+  cell form is unverified on a real download (Session 12's open question);
+  prior_review still fills all of its fillable rows or none. Decisions and
+  numbers: `changelog.md`.
+
+#### Session 11b: subset binding
+
+- **Depends on.** Session 11.
+- **Scope.** Split from Session 11 at Ben's breakpoint (2026-09-24).
+  - A policy's `entry_ids` may bind a subset of the plan's fillable blank rows,
+    in template order (Showdown retro #4 and §7c: thesis and dart sleeves). A
+    bound prefilled, unresolved or unknown row is still a `V` refusal.
+  - Today both validators refuse anything but the fillable rows in order:
+    `PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH` (`portfolio_policy.py`),
+    `CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH` and
+    `CLASSIC_POLICY_ENTRY_SET_INVALID` (`classic_portfolio_policy.py`), and
+    `PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES` (`cli.py`).
+  - The unbound blank rows: after the policy's joint solve, C1 fills them with
+    every policy lineup and every prefilled roster as no-goods (Ben's lean,
+    2026-09-24); leaving them unfilled would never replace a fuller baseline.
+  - `relaxation.Ladder.entry_ids`, each relaxation record's `entry_ids` and
+    DATA_CONTRACTS § Relaxation record become the policy's bound list, and a
+    rung's document binds the same subset.
+- **Acceptance.** A policy binding a subset validates and fills its rows; the
+  unbound blank rows are filled distinctly; a bound prefilled row is refused `V`.
 
 #### Session 12: late-swap bridge and C5
 
@@ -797,6 +838,11 @@ Every session follows this protocol, and the cards only add to it:
     legality and the lineup are unchanged.
 - **Out of scope.** Strategy aids (Session 32). The conditional-EV reoptimizer
   (Session 36).
+- **Open question.** [BEN: drop one DKEntries download that has some rows
+  already entered into `data/inbox/` (any slate). No fixture or run snapshot
+  holds one, so Session 11 accepts a prefilled cell as a bare DraftKings ID or
+  as text ending `(ID)`, and treats anything else as unresolved; one real file
+  confirms which form DraftKings writes. It does not block Session 12.]
 
 #### Session 13: preflight report and scored player pool
 
@@ -1075,7 +1121,7 @@ Things only Ben can do. A session that depends on one checks its status here.
 | O4 | Paste each payout ladder at intake into `contest/payouts_<id>.csv` on the 193391013 schema | Session 29 | Open |
 | O5 | Enter at least one contest per slate from a single-contest reserved-entry file | Session 36 (Q6 accrual) | Open |
 | O6 | Allow `api.weather.gov` in the cloud environment's egress policy (optionally `api.sleeper.app` and `api.the-odds-api.com`) | Model-path quality in cloud sessions; after Session 06 it no longer blocks delivery | Open |
-| O7 | Apply `ben-review` to the Session 01 pull request and merge it | Session 03 onward | Open |
+| O7 | Apply `ben-review` to the Session 01 pull request and merge it (merged as PR #42) | Session 03 onward | Done |
 | O8 | Current Classic and Showdown salary and entry files for a rehearsal slate, on Windows | Session 16 | Open |
 | O9 | From Session 12 on, save the post-upload DKEntries download into the run folder | Session 12 on real data | Open |
 | O10 | About 20 more Showdown games of standings in the inbox | Session 33 | Open |
@@ -1166,5 +1212,7 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 09 | Pending to In Progress | `82014e5` | Claim pushed on `claude/roadmap-session-09-jizzh0` |
 | 2026-09-24 | Session 09 | In Progress to Complete | `c2e2d8c` | Weather `UNOBSERVED`, Classic activity and P1 ship named; suite `1698 passed, 1 skipped`; merged as PR #62 |
 | 2026-09-24 | Session 10 | Pending to In Progress | `328166a` | Claim pushed on `claude/epic-planck-3jxp20` |
-| 2026-09-24 | Session 10 | In Progress to Complete | recorded by the next session | Relaxation controller, both ladders, `nfl_relaxation_record_v1`; suite `1715 passed, 1 skipped`; PR #63 |
-| 2026-09-24 | Session 11 | Pending to In Progress | claim commit | Claim pushed on `claude/festive-lovelace-ffryd8` |
+| 2026-09-24 | Session 10 | In Progress to Complete | `1f7efcf` | Relaxation controller, both ladders, `nfl_relaxation_record_v1`; suite `1715 passed, 1 skipped`; merged as PR #63 |
+| 2026-09-24 | Session 11 | Pending to In Progress | `3cf7537` | Claim pushed on `claude/festive-lovelace-ffryd8` |
+| 2026-09-24 | Session 11 | In Progress to Complete | recorded by the next session | Per-row authority, prefilled rows preserved and forbidden, `entry_groups` by Contest ID, truths v3, pointer v2; suite `1730 passed, 1 skipped` |
+| 2026-09-24 | Session 11b | Added as Pending | recorded by the next session | Subset binding, split at Ben's breakpoint |

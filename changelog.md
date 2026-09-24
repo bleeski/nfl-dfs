@@ -4,6 +4,135 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: rows already entered ship, and every group is reported (Session 11)
+
+One prefilled row used to refuse the whole file on five paths (prior_review
+intake, the baseline, the writer, C3's package and its export audit). Authority
+is per row now: a row Ben already entered is kept byte for byte, only blank rows
+are filled, no generated lineup repeats a kept one, and each Contest ID group is
+reported on its own. On `claude/festive-lovelace-ffryd8`, claim `3cf7537`.
+Every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; exit codes keep their
+meaning.
+
+#### Added
+
+- **`src/nfl_dfs/entry_groups.py`**, `plan_entries(template, slate)`: every row
+  is `BLANK`, `PREFILLED` or `PARTLY_FILLED`, and one of four outcomes, never
+  two: **fillable** (blank, outside an unresolved group), **preserved** (a
+  prefilled row whose cells are exact current-slate DraftKings IDs and whose
+  roster the shared validator passes), **unresolved** (named: a partly filled
+  row, a prefilled roster that does not resolve or repeats an earlier row's,
+  every row of a group whose contest cannot be stated), or left for the
+  producer to fill or name unfilled. A prefilled cell resolves as a bare ID or
+  as text ending `(ID)`, the form `scripts/write_dk_entries.py` already reads;
+  anything else does not, and is never guessed. Every prefilled roster whose
+  cells are all current-slate IDs, legal or not, joins the forbidden set;
+  one that does not resolve cannot equal an exact-ID roster and stays out.
+  `group_report` gives each Contest ID's name, fee, rows by kind and outcome,
+  and each undelivered row's codes.
+- **Distinctness across the portfolio (R29).** `baseline.build_distinct_lineups`
+  and C1 (both `LineupOptimizer` builds in `selection.py`) cut every forbidden
+  roster before the first solve; the C2 enumerator and the SD3 enumerator hold
+  them as already seen and cut them from every stratum, so the joint solve
+  never sees one; `selection` refuses a selected repeat as a backstop. The
+  baseline audit, the Showdown export, C3 and the pointer's revalidation refuse
+  a filled roster equal to a prefilled one, on the generated row.
+- **Records.** `nfl_release_truths_v3` (v2 plus `preserved_entry_ids` and
+  `unresolved_entry_ids`), `nfl_latest_deliverable_v2` (`coverage` adds both
+  lists and `entry_groups`; `supersedes` adds `delivered_rows_by_group`; v1
+  pointers stay readable, and `delivery.as_v3` writes v2 truths as v3), and
+  `nfl_baseline_report_v3` (rows by kind and outcome, `entry_groups`). The
+  `run-slate` result carries `entry_groups` on every exit. `docs/DATA_CONTRACTS.md`
+  § Entry groups, with what a reader of each old version sees.
+- **Registry**: a `P` family `entry_rows` with `ENTRY_ROW_PARTLY_PREFILLED` and
+  `ENTRY_PREFILLED_ROSTER_UNRESOLVED`; `ENTRY_GROUP_UNRESOLVED`,
+  `DELIVERY_ROW_KIND_OVERLAP` and `DELIVERY_UNRESOLVED_ROW_UNNAMED`
+  (`entry_authority`, `V`); `ENTRY_PREFILLED_LINEUP_REPEATED`
+  (`distinct_lineups`, `V`). 1,218 codes in 46 families; SHA-256
+  `214c1898cc15412c14767b512bd13c5792a3a5f66d5e910e97ef26693c123855`, re-pinned
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+- **`tests/test_entry_groups.py`**, 15 tests, five of them full `run-slate`
+  runs on the synthetic Classic fixture.
+
+#### Changed
+
+- **The writer's rule is per row.** `lineups.write_upload_bytes`: every blank
+  row is assigned or named `unfilled`, never both; every other row is in
+  neither and passes through byte for byte; a row with any cell set in either
+  list is still `ENTRY_BLANK_CELL_AUTHORITY_REQUIRED` (`V`). The byte audit
+  (`referee.audit_output_bytes`) now also refuses an assigned row whose source
+  cells were set. `CLASSIC_C3_EXPORT_PREFILLED_AUTHORIZED_ENTRY` stays as that
+  backstop in C3.
+- **Every producer fills the plan's fillable rows.** The baseline (its
+  `ENTRY_BLANK_CELL_AUTHORITY_REQUIRED` limitation is gone, and so are its
+  `MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED` and `MIXED_ENTRY_FEES_UNSUPPORTED`
+  limitations: several contests are groups now; legacy `certify` keeps both),
+  prior_review (its intake refusal is now only "no blank row at all"), C1's
+  export, the Showdown export and readable review, and C3
+  (`CLASSIC_C3_BLANK_CELL_AUTHORITY_REQUIRED` likewise). A policy binds exactly
+  the fillable rows, and so does every relaxation rung (`Ladder.entry_ids`).
+- **`derive_delivery_state`** takes `preserved_entry_ids` and
+  `unresolved_entry_ids`. A `V` gate covers the file when it names no row or a
+  row that is neither fillable nor unresolved; an unresolved row keeps the
+  state `DELIVERABLE_PARTIAL`; an unresolved row nothing names, or a row in two
+  lists, refuses the record.
+- **`delivery.replace` compares coverage per Contest ID.** A replacement that
+  delivers fewer rows in any group than a current file that still revalidates
+  is `DELIVERY_POINTER_COVERAGE_REGRESSION`, naming the group, whatever its
+  total. Revalidation checks the plan's preserved and unresolved rows, that
+  only fillable rows differ from the template, and prefilled distinctness.
+- **Tests edited, each a visible change a ruling moved:**
+  `test_baseline.py::test_a_prefilled_row_is_refused_as_today` became
+  `test_a_prefilled_row_is_preserved_and_the_blank_rows_ship` (the old test pinned
+  the whole-file refusal naming row 4880000002); the report and truths
+  versions in `test_baseline.py`, `test_artifact_preservation.py` (pointer v2
+  too) and `test_run_slate_baseline_first.py`; the derivation's parameter set
+  in `test_delivery_state.py`; in `test_classic_review_c3.py`, the prefilled
+  case now expects `CLASSIC_C3_SOURCE_POLICY_INVALID` (the edit makes the row
+  partly filled and moves the bytes the policy is bound to; still withheld,
+  nothing written) and a monkeypatched writer lambda takes the new `unfilled`
+  keyword; `test_gate_registry.py`'s hash and its audit §4 "mixed prefilled and
+  blank rows" `P` row, which gains the two `entry_rows` codes. The `V` row for
+  replacing prefilled cells is unchanged.
+
+#### Decided (Ben's leans, recorded)
+
+- **Delivered independently** means each group stands or falls inside one file
+  per producer, with per-group coverage in `replace`; rows are never merged
+  across producers (Session 06's rule). No new merged-file contract.
+- **Unparseable prefilled and partly filled rows** are `P`, preserved and
+  named, and the rest ships. A prefilled roster repeating an earlier prefilled
+  row is named the same way: the engine never changes a filled cell, so the
+  repeat is Ben's to fix on DraftKings.
+- **A group left unresolved** is a Contest ID whose rows disagree on the contest
+  name or fee: which contest those rows enter cannot be stated, so the entry
+  mapping gate holds them (`V`, scoped to those rows) and every other group
+  ships. It is the only group-scoped problem the engine finds today; row
+  problems stay row-scoped.
+- **Release truths** get the smallest change that lets a row be neither
+  delivered nor unfilled: v3 adds two lists. Groups are derived from the
+  template plus the truths, so they live in reports and on the pointer, not in
+  the truths.
+- **C2 and SD3 exclusion** is by canonical key at the bank, plus a no-good cut
+  in every stratum so the enumerator does not keep finding the same roster.
+- **Breakpoint used.** The diff passed about 1,500 changed lines before subset
+  binding, so `entry_ids` binding a subset moved to Session 11b with Ben's lean
+  for the unbound rows (C1 fills them after the joint solve).
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_entry_groups.py tests/test_byte_line_fidelity.py -x --tb=short`:
+  `22 passed in 43.92s`.
+- Full suite before changes: `1715 passed, 1 skipped in 393.80s`. After:
+  `1730 passed, 1 skipped in 432.18s` (the 15 new tests; the skip is the junction test).
+- Left open: the prefilled cell form is unverified against a real DraftKings
+  download with entered rows (none in `tests/fixtures/supplied` or any
+  `data/` snapshot; a schema-level scan found only blank rows), so Session 12's
+  card carries a `[BEN: ...]` request for one. prior_review still fills all of
+  its fillable rows or none. The upload `preflight.py` compares exported cells
+  as bare IDs; it serves legacy certified packages only, which never hold a
+  prefilled row.
+
 ### 2026-09-24: the engine walks the rung ladder itself (Session 10)
 
 Until now the relaxation ladder was printed advice: `make_classic_policy.py`
