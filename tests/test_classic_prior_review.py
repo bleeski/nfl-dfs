@@ -466,7 +466,14 @@ def test_classic_prior_identity_and_schedule_bind_every_team_person_and_game(tmp
     assert len(slate_people(slate)) == len(slate.players) == 20
 
 
-def test_classic_frozen_prior_producer_covers_every_game_team_and_person(tmp_path: Path) -> None:
+@pytest.mark.parametrize("second_roof", ["closed", "outdoors"])
+def test_classic_frozen_prior_producer_covers_every_game_team_and_person(
+    tmp_path: Path, second_roof: str
+) -> None:
+    """`outdoors` added by Session 09: an outdoor game with a typed state and no
+    captured source used to raise CLASSIC_WEATHER_SOURCE_REQUIRED. The typed
+    state is never written; the game is frozen UNOBSERVED and the package is v2."""
+
     salary = tmp_path / "salary.csv"
     salary.write_bytes(_salary_bytes())
     slate = parse_salaries(salary)
@@ -492,7 +499,7 @@ def test_classic_frozen_prior_producer_covers_every_game_team_and_person(tmp_pat
         ),
         [
             ("2026_01_NE_SEA", "2026", "REG", "1", "2026-09-13", "NE", "SEA", "-2", "44", "dome"),
-            ("2026_01_DAL_PHI", "2026", "REG", "1", "2026-09-13", "DAL", "PHI", "1", "46", "closed"),
+            ("2026_01_DAL_PHI", "2026", "REG", "1", "2026-09-13", "DAL", "PHI", "1", "46", second_roof),
         ],
     )
     team_week_rows = []
@@ -635,10 +642,23 @@ def test_classic_frozen_prior_producer_covers_every_game_team_and_person(tmp_pat
         as_of=AS_OF.isoformat(),
         output_dir=tmp_path / "frozen",
         salary_observed_at=OBSERVED.isoformat(),
+        weather_state="RAIN" if second_roof == "outdoors" else None,
     )
     assert result["teams"] == 4
     assert result["people"] == 20
     assert set(result["weather_by_game"]) == {game.game_id for game in slate.games}
+    team_prior = json.loads(
+        (Path(result["output_dir"]) / priors.TEAM_PRIOR_FILENAME).read_text(encoding="utf-8"))
+    outdoor = next(game.game_id for game in slate.games if game.home_team == "PHI")
+    if second_roof == "outdoors":
+        assert result["weather_by_game"][outdoor] == "UNOBSERVED"
+        assert "RAIN" not in result["weather_by_game"].values()
+        assert result["weather_basis_by_game"][outdoor] == (
+            "WEATHER_UNOBSERVED:roof=outdoors:UNATTRIBUTED_STATE_NOT_WRITTEN")
+        assert team_prior["schema_version"] == "nfl_team_projection_source_v2"
+    else:
+        assert "UNOBSERVED" not in result["weather_by_game"].values()
+        assert team_prior["schema_version"] == "nfl_team_projection_source_v1"
     package = build_projection_package(
         salaries=salary,
         salary_sha256=sha256_file(salary),
@@ -702,21 +722,43 @@ def test_exact_id_inactive_is_excluded_before_classic_selection(tmp_path: Path) 
     )
 
 
-def test_missing_selected_activity_blocks_before_any_selection_artifact(tmp_path: Path) -> None:
+@pytest.mark.parametrize("supplied", [True, False], ids=["rows-missing", "no-file"])
+def test_missing_selected_activity_is_a_named_limitation_not_a_stop(tmp_path: Path, supplied: bool) -> None:
+    """R28 (Session 09): Classic treats missing activity as Showdown already does.
+
+    Until Session 09 this was `test_missing_selected_activity_blocks_before_any_selection_artifact`:
+    a selected person with no exact-ID row stopped the run at the selected-evidence
+    gate with `SELECTED_CURRENT_EVIDENCE_REQUIRED`, before any selection artifact.
+    Now the run publishes and names who lacks a row; the truths stay
+    `EVIDENCE_STATE=UNKNOWN` and `DO_NOT_UPLOAD`.
+    """
+
     salary, entry, package, role, status, _ = _fixture(tmp_path)
     rows = status.read_text(encoding="utf-8").splitlines()
     status.write_text("\n".join(rows[:2]) + "\n", encoding="utf-8")
     outcome = run_prior_review(
         salary_csv=salary, entry_csv=entry, label="missing-status", as_of=AS_OF,
         run_root=tmp_path / "run", output_root=tmp_path / "out",
-        prior_package_dir=package, official_status_csv=status,
+        prior_package_dir=package, official_status_csv=status if supplied else None,
         offensive_role_evidence_json=role,
     )
-    assert outcome.blocked
-    assert outcome.blockers[0].startswith("SELECTED_CURRENT_EVIDENCE_REQUIRED:")
-    assert "OFFICIAL_ACTIVITY" in outcome.blockers[0]
-    assert "selection_report" not in outcome.artifacts
-    assert not list((tmp_path / "out").rglob("*.csv"))
+    assert not outcome.blocked, outcome.blockers
+    gate = outcome.reports["selected_evidence_gate"]
+    assert gate["schema_version"] == "nfl_classic_selected_evidence_gate_c1_v3"
+    assert (gate["status"], gate["gaps"]) == ("PASS_WITH_NAMED_LIMITATIONS", [])
+    coverage = outcome.reports["selection"]["official_status_coverage"]
+    expected = (
+        coverage["selected_without_row"] if supplied else sorted(gate["selected_people"])
+    )
+    assert expected and [item["person"] for item in gate["activity_gaps"]] == expected
+    limitation = "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED" if supplied else "OFFICIAL_STATUS_REQUIRED"
+    assert {item["limitation"] for item in gate["activity_gaps"]} == {limitation}
+    if not supplied:
+        assert coverage is None
+    selection = json.loads(Path(outcome.artifacts["selection_report"]).read_text(encoding="utf-8"))
+    assert (selection["EVIDENCE_STATE"], selection["RELEASE_DECISION"]) == ("UNKNOWN", "DO_NOT_UPLOAD")
+    written = json.loads(Path(outcome.artifacts["complete_slate_coverage"]).read_text(encoding="utf-8"))
+    assert written["selected_evidence_gate"] == gate
 
 
 def test_role_source_mutation_fails_closed(tmp_path: Path) -> None:

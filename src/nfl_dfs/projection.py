@@ -33,6 +33,9 @@ from .sources import SourcePolicyError, validate_source_reference_policy
 
 
 TEAM_SOURCE_SCHEMA = "nfl_team_projection_source_v1"
+# v2 (Session 09) is v1 plus the weather state UNOBSERVED. A producer declares
+# it only when a record carries that state, so every other package is v1.
+TEAM_SOURCE_SCHEMA_V2 = "nfl_team_projection_source_v2"
 PLAYER_SOURCE_SCHEMA = "nfl_player_opportunity_source_v1"
 IDENTITY_MAP_SCHEMA = "nfl_projection_identity_map_v1"
 TEAM_SOURCE_PARSER = "team_projection_source_v1"
@@ -136,6 +139,7 @@ class TeamSourceRecord(_FrozenModel):
         "ROOF_CLOSED",
         "ROOF_OPEN",
         "SNOW",
+        "UNOBSERVED",
         "WIND",
     ]
     era: str = Field(min_length=1)
@@ -168,9 +172,18 @@ class TeamSourceRecord(_FrozenModel):
 
 
 class TeamSource(_FrozenModel):
-    schema_version: Literal["nfl_team_projection_source_v1"]
+    schema_version: Literal["nfl_team_projection_source_v1", "nfl_team_projection_source_v2"]
     metadata: ArtifactMetadata
     records: tuple[TeamSourceRecord, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def v1_never_holds_an_unobserved_game(self) -> "TeamSource":
+        # v1 is never mutated: only v2 can say a game was not observed.
+        if self.schema_version == TEAM_SOURCE_SCHEMA and any(
+            record.weather_state == "UNOBSERVED" for record in self.records
+        ):
+            raise ValueError("UNOBSERVED weather needs nfl_team_projection_source_v2")
+        return self
 
 
 class PlayerSourceRecord(_FrozenModel):

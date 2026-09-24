@@ -18,9 +18,10 @@ Three gates are genuinely human and stay human:
    or `IR`: the availability contract makes those people unselectable, so an
    accepted-but-uncertain identity can never reach a lineup. Every auto-accept
    and its reason is recorded.
-2. Weather. The enum has no `UNKNOWN` member and `api.weather.gov` is
-   unreachable from a session, so a game the schedule artifact cannot resolve on
-   its own blocks for an operator capture with its URI and observation time.
+2. Weather. A game the schedule artifact cannot resolve on its own needs an
+   operator capture with its URI and observation time. Since Session 09 (R28) a
+   game without one is frozen `UNOBSERVED` and named, never blocked, and a state
+   typed without a capture is never used.
 3. Staleness. The team prior inherits `MARKET_LINE_MOVES_INTRADAY` from
    `games.csv`, which expires twelve hours after capture. A same-day re-run is
    the normal case. An expired package is rebuilt, never widened.
@@ -30,11 +31,12 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 
+import csv
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
 from .contracts import (
     EngineMode,
@@ -120,8 +122,9 @@ CLASSIC_COVERAGE_SCHEMA_C2 = "nfl_classic_slate_coverage_c2_v1"
 
 # nflverse roof values the frozen schedule artifact resolves without any
 # operator input. `priors._ROOF_WEATHER` also maps "open", but a retractable
-# roof left open is played in the weather, so this profile still asks for the
-# capture rather than treating the schedule as the whole answer.
+# roof left open is played in the weather, so this profile still names a
+# missing capture (WEATHER_UNOBSERVED) rather than treating the schedule as the
+# whole answer.
 SCHEDULE_DERIVABLE_ROOFS = frozenset({"dome", "closed"})
 ROOF_STATE_IS_SCHEDULE_AUTHORITATIVE = frozenset({"dome", "closed", "open"})
 
@@ -654,7 +657,8 @@ class WeatherDecision:
     freeze_source_uri: str | None
     freeze_observed_at: str | None
     basis: str
-    blockers: tuple[str, ...]
+    # Since Session 09 (R28) missing weather is named here and never blocks.
+    limitations: tuple[str, ...] = ()
 
     def as_report(self) -> dict[str, object]:
         return {
@@ -663,6 +667,7 @@ class WeatherDecision:
             "operator_state_passed_to_freeze": self.freeze_weather_state,
             "operator_source_uri": self.freeze_source_uri,
             "operator_observed_at": self.freeze_observed_at,
+            "limitations": list(self.limitations),
         }
 
 
@@ -676,12 +681,16 @@ def decide_weather(
     weather_source_uri: str | None = None,
     weather_observed_at: str | None = None,
 ) -> WeatherDecision:
-    """Resolve the weather enum from the schedule, or name what a human must send.
+    """Resolve the weather enum from the schedule, or name the game nobody observed.
 
-    The enum has no `UNKNOWN` member, so nothing here defaults it. A fixed or
-    retracted-closed roof is decided by the frozen schedule artifact alone. Every
-    other value, including a retractable roof left open, needs an
-    `api.weather.gov` capture with its URI and its `generatedAt`.
+    A fixed or retracted-closed roof is decided by the frozen schedule artifact
+    alone. Every other value, including a retractable roof left open, is
+    observed only by an `api.weather.gov` capture with its URI and its
+    `generatedAt`. Until Session 09 a game without one blocked the run
+    (`WEATHER_CAPTURE_REQUIRED`, `WEATHER_STATE_REQUIRED`). Under R28 it is a
+    named `WEATHER_UNOBSERVED` limitation instead: the freeze records the game as
+    `UNOBSERVED` (an open roof stays schedule-derived `ROOF_OPEN`), and a state
+    typed without a capture is never passed on, because it is not an observation.
 
     A blank cell used to fall in with "every other value", and on 2026-09-20 that
     cost two of five games on a live slate: nflverse writes `roof` only after the
@@ -697,7 +706,9 @@ def decide_weather(
     observed = (weather_observed_at or "").strip() or None
     attributed = bool(uri and observed)
 
-    if not normalized and not attributed and not state:
+    # A typed state with no capture is dropped below, so it does not keep a
+    # blank from resolving here: the freeze resolves the same blank the same way.
+    if not normalized and not attributed:
         resolved = resolve_blank_roof(
             home_team_of(game_id or ""),
             venue_roof_history,
@@ -711,44 +722,51 @@ def decide_weather(
                 freeze_source_uri=None,
                 freeze_observed_at=None,
                 basis=venue_basis,
-                blockers=(),
             )
 
+    # Nothing unattributed is passed on from here, not even for a game the
+    # schedule resolves: the legacy freeze reads the first game's fields as
+    # the scalar capture, and an unsourced state there would stop a multi-game
+    # Classic freeze (CLASSIC_WEATHER_SCOPE_AMBIGUOUS) on a value nobody observed.
     if normalized in SCHEDULE_DERIVABLE_ROOFS:
         return WeatherDecision(
             roof=normalized,
-            freeze_weather_state=state,
-            freeze_source_uri=uri,
-            freeze_observed_at=observed,
+            freeze_weather_state=state if attributed else None,
+            freeze_source_uri=uri if attributed else None,
+            freeze_observed_at=observed if attributed else None,
             basis=f"SCHEDULE_ROOF_IS_AUTHORITATIVE:{normalized}",
-            blockers=(),
         )
 
-    blockers: list[str] = []
-    if not attributed:
-        blockers.append(
-            f"WEATHER_CAPTURE_REQUIRED:roof={normalized or 'BLANK'}"
-            ":supply the api.weather.gov gridpoint forecast URI and its generatedAt"
-            " observation time; api.weather.gov is unreachable from a session and the"
-            " weather enum has no UNKNOWN member, so nothing is defaulted"
-        )
+    unobserved = (
+        f"WEATHER_UNOBSERVED:roof={normalized or 'BLANK'}:no attributed api.weather.gov"
+        " capture (URI and generatedAt) for this game"
+        + (f"; the unattributed state {state} was not used" if state and not attributed else "")
+    )
     if normalized in ROOF_STATE_IS_SCHEDULE_AUTHORITATIVE:
-        # The schedule artifact already resolves this roof. The capture is
-        # required because the game is played in the weather, but the state
-        # itself stays schedule-derived so the two cannot disagree.
+        # The schedule artifact already resolves this roof. The game is played
+        # in the weather, so a missing capture is named, but the state itself
+        # stays schedule-derived so the two cannot disagree.
         return WeatherDecision(
             roof=normalized,
             freeze_weather_state=None,
-            freeze_source_uri=uri,
-            freeze_observed_at=observed,
+            freeze_source_uri=uri if attributed else None,
+            freeze_observed_at=observed if attributed else None,
             basis=f"SCHEDULE_ROOF_IS_AUTHORITATIVE_CAPTURE_REPORTED_ONLY:{normalized}",
-            blockers=tuple(blockers),
+            limitations=() if attributed else (unobserved,),
         )
-    if state is None:
-        blockers.append(
-            f"WEATHER_STATE_REQUIRED:roof={normalized or 'BLANK'}"
-            ":the schedule artifact cannot resolve this roof; supply one of"
-            " CLEAR, INDOOR_OR_CLEAR, MIXED, RAIN, SNOW, WIND"
+    if not attributed or state is None:
+        return WeatherDecision(
+            roof=normalized,
+            freeze_weather_state=None,
+            freeze_source_uri=None,
+            freeze_observed_at=None,
+            basis=f"WEATHER_UNOBSERVED:{normalized or 'BLANK'}",
+            limitations=(
+                unobserved
+                if not attributed
+                else f"WEATHER_UNOBSERVED:roof={normalized or 'BLANK'}:the capture carries"
+                " no weather state",
+            ),
         )
     return WeatherDecision(
         roof=normalized,
@@ -756,7 +774,6 @@ def decide_weather(
         freeze_source_uri=uri,
         freeze_observed_at=observed,
         basis=f"OPERATOR_CAPTURE_REQUIRED:{normalized or 'BLANK'}",
-        blockers=tuple(blockers),
     )
 
 
@@ -948,6 +965,55 @@ def _weather_from_frozen_package(team_source: str | Path) -> dict[str, object] |
     }
 
 
+def _unobserved_weather(team_source: str | Path) -> list[str]:
+    """Each game the frozen package holds no weather observation for (R28, Session 09).
+
+    Read from the package itself, so a rebuilt and a reused package name the
+    same games: one frozen `UNOBSERVED`, and one under an open roof whose
+    weather nobody captured. Each code is a `P` limitation `run-slate` names; a
+    package frozen before Session 09 could hold neither.
+    """
+
+    try:
+        payload = json.loads(Path(team_source).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    metadata = payload.get("metadata") if isinstance(payload, dict) else None
+    coverage = metadata.get("coverage") if isinstance(metadata, dict) else None
+    basis_by_game = coverage.get("weather_basis_by_game") if isinstance(coverage, dict) else None
+    records = payload.get("records") if isinstance(payload, dict) else None
+    recorded = {
+        str(record.get("game_id"))
+        for record in records or ()
+        if isinstance(record, dict) and record.get("weather_state") == "UNOBSERVED"
+    }
+    limitations: list[str] = []
+    for game_id, basis in sorted(dict(basis_by_game or {}).items()):
+        text = str(basis)
+        if text.startswith("WEATHER_UNOBSERVED") or game_id in recorded:
+            recorded.discard(game_id)
+            limitations.append(
+                f"WEATHER_UNOBSERVED:{game_id}:{text}:frozen as UNOBSERVED, never as an"
+                " observation; weather moves no number, and a fresh attributed capture clears it"
+            )
+        elif text.startswith("DERIVED_FROM_SCHEDULE_ROOF:open") and "OPERATOR_CAPTURE:" not in text:
+            limitations.append(
+                f"WEATHER_UNOBSERVED:{game_id}:{text}:the roof is open and nobody captured the"
+                " weather the game is played in"
+            )
+        elif text.endswith("OPERATOR_SUPPLIED_UNATTRIBUTED"):
+            # A package frozen outside run-slate with a typed state and no source.
+            limitations.append(
+                f"WEATHER_UNOBSERVED:{game_id}:{text}:the state was typed without a captured"
+                " source, so it is not an observation"
+            )
+    limitations.extend(
+        f"WEATHER_UNOBSERVED:{game_id}:the frozen team prior records this game as UNOBSERVED"
+        for game_id in sorted(recorded)
+    )
+    return limitations
+
+
 def pool_coverage_summary(
     slate: SlateContract,
     contract: ParticipationContract,
@@ -1096,6 +1162,24 @@ _PRELOCK_PREDICTION_VERSIONS = {
     "player_opportunities": "nfl_player_opportunities_csv_v1",
     "source_ledger": "nfl_source_ledger_v2",
 }
+TEAM_PROJECTIONS_CSV_V2 = "nfl_team_projections_csv_v2"
+
+
+def team_projections_csv_version(weather_states: Iterable[str]) -> str:
+    """v2 (Session 09) is v1 plus the weather state UNOBSERVED, declared only
+    when a row carries it, so every other team CSV is still exactly v1."""
+
+    if "UNOBSERVED" in {str(state).strip().upper() for state in weather_states}:
+        return TEAM_PROJECTIONS_CSV_V2
+    return _PRELOCK_PREDICTION_VERSIONS["team_projections"]
+
+
+def _team_csv_weather_states(path: Path) -> list[str]:
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            return [row.get("WEATHER_STATE") or "" for row in csv.DictReader(handle)]
+    except (OSError, UnicodeError, csv.Error):
+        return []
 
 
 def _declared_schema_version(path: Path) -> str | None:
@@ -1165,7 +1249,13 @@ def _emit_prelock_manifest(
 
     predictions: list[PredictionArtifact] = []
     missing: list[str] = []
-    for name, version in sorted(_PRELOCK_PREDICTION_VERSIONS.items()):
+    versions = dict(_PRELOCK_PREDICTION_VERSIONS)
+    team_csv = artifacts.get("team_projections")
+    if team_csv:
+        versions["team_projections"] = team_projections_csv_version(
+            _team_csv_weather_states(Path(team_csv))
+        )
+    for name, version in sorted(versions.items()):
         digest = projection.hashes.get(name) if projection is not None else None
         path = artifacts.get(name)
         if not digest or not path:
@@ -1765,12 +1855,11 @@ def run_prior_review(
         hashes["identity_reviewed"] = reviewed_hash
         write_run_record(run_dir / "priors" / "identity_decisions.json", gate.as_report())
 
-        weather_blockers = tuple(
-            f"{game_id}:{blocker}"
-            for game_id, decision in sorted(weather_decisions.items())
-            for blocker in decision.blockers
+        # R28 (Session 09): weather never blocks here. A game nobody observed is
+        # frozen as UNOBSERVED and named from the frozen package below.
+        unobserved_games = sorted(
+            game_id for game_id, decision in weather_decisions.items() if decision.limitations
         )
-        blockers = weather_blockers + gate.blockers
         stages.append(
             _stage(
                 "PRIORS",
@@ -1782,7 +1871,7 @@ def run_prior_review(
         stages.append(
             _stage(
                 "WEATHER",
-                "BLOCKED" if weather_blockers else "OK",
+                "UNOBSERVED_GAMES_NAMED" if unobserved_games else "OK",
                 games=reports["weather"]["games"],
             )
         )
@@ -1795,12 +1884,12 @@ def run_prior_review(
                 blocked=len(gate.blocked),
             )
         )
-        if blockers:
+        if gate.blockers:
             return PriorReviewOutcome(
                 profile_version=profile_version,
-                stage="IDENTITY" if gate.blockers else "WEATHER",
+                stage="IDENTITY",
                 blocked=True,
-                blockers=blockers,
+                blockers=gate.blockers,
                 stages=tuple(stages),
                 artifacts=artifacts,
                 hashes=hashes,
@@ -1885,6 +1974,7 @@ def run_prior_review(
         stages.append(_stage("IDENTITY", "INHERITED_FROM_FROZEN_PACKAGE"))
 
     reports["prior_package"] = package.as_report()
+    reports["weather_unobserved"] = _unobserved_weather(package.team_source)
     artifacts["team_source"] = package.team_source
     artifacts["player_source"] = package.player_source
     artifacts["identity_map"] = package.identity_map
@@ -2206,22 +2296,39 @@ def run_prior_review(
                 }
                 for person in selected_unavailable
             )
+        # R28 (Session 09): a selected person with no exact-ID activity row is a
+        # named limitation, as Showdown already treats it, not a stop. It stops
+        # certification: the release truths stay DO_NOT_UPLOAD, and `run-slate`
+        # names OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED for a file that omits him,
+        # or OFFICIAL_STATUS_REQUIRED when no file was supplied. An INACTIVE row
+        # took him out of the pool before selection; an invalid, stale, future or
+        # changed file still stops the run above and below.
         missing_activity = (
             sorted(selected_people)
             if activity_coverage is None
             else list(activity_coverage["selected_without_row"])
         )
-        selected_evidence_gaps.extend(
+        activity_gaps = [
             {
                 "person": person,
                 "evidence": "OFFICIAL_ACTIVITY",
+                "state": (
+                    "NO_OFFICIAL_STATUS_FILE"
+                    if activity_coverage is None
+                    else "NO_EXACT_ID_ROW_IN_SUPPLIED_FILE"
+                ),
+                "limitation": (
+                    "OFFICIAL_STATUS_REQUIRED"
+                    if activity_coverage is None
+                    else "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED"
+                ),
                 "smallest_evidence_action": (
                     "Capture a fresh exact-ID ACTIVE or INACTIVE row from the approved "
                     "official status source and rerun."
                 ),
             }
             for person in missing_activity
-        )
+        ]
         finding_by_person = {
             str(item.get("person")): item
             for item in offensive_resolution.report.get("findings", [])
@@ -2285,9 +2392,10 @@ def run_prior_review(
             if item.get("state") != "SOURCE_SUPPORTED_ADJUSTMENT"
         )
         reports["selected_evidence_gate"] = {
-            "schema_version": "nfl_classic_selected_evidence_gate_c1_v2",
+            "schema_version": "nfl_classic_selected_evidence_gate_c1_v3",
             "selected_people": sorted(selected_people),
             "gaps": selected_evidence_gaps,
+            "activity_gaps": activity_gaps,
             "selected_role_observations": selected_role_observations,
             "unverified_role_people": unverified_role_people,
             "role_basis": (
@@ -2295,7 +2403,11 @@ def run_prior_review(
                 if unverified_role_people
                 else "EVERY_SELECTED_ROLE_IS_SOURCE_SUPPORTED"
             ),
-            "status": "BLOCKED" if selected_evidence_gaps else "PASS",
+            "status": (
+                "BLOCKED"
+                if selected_evidence_gaps
+                else "PASS_WITH_NAMED_LIMITATIONS" if activity_gaps else "PASS"
+            ),
         }
         if selected_evidence_gaps:
             blocker = (
@@ -2540,6 +2652,7 @@ def run_prior_review(
             if set(official_statuses) == {player.dk_id for player in slate.players}
             and offensive_resolution.report.get("evidence_state") == "PASS"
             and not offensive_resolution.report.get("synthetic_sources")
+            and not reports.get("weather_unobserved")
             else "UNKNOWN"
         )
         classic_policy_report: dict[str, object] | None = None

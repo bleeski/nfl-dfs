@@ -40,7 +40,8 @@ DraftKings spells it (or by the exact `game_id`):
 `weather_state` is only read for a roof the frozen schedule cannot resolve; a
 `dome` or `closed` roof stays schedule-derived so the two can never disagree,
 and an `outdoors` roof reports the capture without letting it override the
-schedule. Supply it when the run reports `WEATHER_STATE_REQUIRED`.
+schedule. Supply it to replace a game the run names `WEATHER_UNOBSERVED` with an
+observation.
 
 Example:
 

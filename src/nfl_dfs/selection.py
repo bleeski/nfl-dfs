@@ -225,6 +225,9 @@ def select_prior_lineups(
         as_of=as_of,
     )
     scores = score_pool(slate, offense.model, splits, kicker_roles=kicker_roles, offensive_roles=offense)
+    # Scoring may leave out an unresolved role change (R28); its resolution is
+    # the one every exclusion and report below reads.
+    offense = scores.offensive_role_resolution
     pool_scores_target = resolve_pool_scores_path(pool_scores_path)
     if pool_scores_target is not None:
         write_pool_scores(scores, pool_scores_target)

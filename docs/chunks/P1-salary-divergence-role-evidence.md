@@ -50,7 +50,10 @@ instead: the session card and the §1 Quick-Start replace per-chunk prompts.
     role change and stops, naming the smallest evidence action — the same
     treatment a declared role change already gets. The gate is conjunctive, so
     an unverified transfer priced where his prior puts him stays a diagnostic.
-    Shipped in `offensive_roles.enforce_material_role_change_gate`.
+    Shipped in `offensive_roles.enforce_material_role_change_gate`. R28 absorbed
+    the stop (Ben, 2026-09-23); since Session 09
+    `offensive_roles.exclude_material_role_changes` leaves the person out of the
+    selectable pool and the run names him as a `P` limitation instead.
 - Non-goals: no numerical share typed by anyone; no change to kicker roles; no
   retrospective forcing of Walker or anyone else into a lineup; no ownership.
 - Acceptance: a fixture reproducing DEN@KC (Walker on KC with SEA history, Fields

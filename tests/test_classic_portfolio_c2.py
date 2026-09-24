@@ -1005,9 +1005,17 @@ def test_c3_full_prior_review_writes_bound_review_package_and_replays(tmp_path: 
     assert not list(tmp_path.rglob("DK_UPLOAD_*.csv"))
 
 
-def test_c2_required_player_without_current_activity_stops_before_publish(
-    tmp_path: Path,
+@pytest.mark.parametrize("supplied", [True, False], ids=["row-missing", "no-file"])
+def test_c2_required_player_without_current_activity_is_delivered_and_named(
+    tmp_path: Path, supplied: bool,
 ) -> None:
+    """R28 (Session 09). Until then this was
+    `test_c2_required_player_without_current_activity_stops_before_publish`: the
+    selected-evidence gate refused a selected person with no activity row before
+    any C2 artifact. Now C2 and C3 publish, C3's audit reports the activity it
+    did not see instead of a hard-coded PASS, and the run names the gap.
+    """
+
     salary, entry, package, role, status, _inactive = _fixture(
         tmp_path / "fixture", entries=1
     )
@@ -1062,7 +1070,7 @@ def test_c2_required_player_without_current_activity_stops_before_publish(
         output_root=tmp_path / "out",
         prior_package_dir=package,
         build_priors=True,
-        official_status_csv=status,
+        official_status_csv=status if supplied else None,
         offensive_role_evidence_json=role,
         portfolio_policy=validation.policy,
         portfolio_policy_source_path=policy_path,
@@ -1071,12 +1079,35 @@ def test_c2_required_player_without_current_activity_stops_before_publish(
         portfolio_policy_normalized_sha256=sha256_file(normalized),
         project=build_projection_package,
     )
-    assert outcome.blocked
-    assert outcome.blockers[0].startswith("SELECTED_CURRENT_EVIDENCE_REQUIRED:")
-    assert required.underlying_id in outcome.blockers[0]
-    assert "classic_candidate_bank" not in outcome.artifacts
-    assert "classic_assignment" not in outcome.artifacts
-    assert "selection_report" not in outcome.artifacts
+    assert not outcome.blocked, outcome.blockers
+    assert outcome.blockers == ()
+    gate = outcome.reports["selected_evidence_gate"]
+    assert (gate["status"], gate["gaps"]) == ("PASS_WITH_NAMED_LIMITATIONS", [])
+    missing = [item["person"] for item in gate["activity_gaps"]]
+    assert required.underlying_id in missing
+    if supplied:
+        assert missing == [required.underlying_id]
+    else:
+        assert missing == sorted(gate["selected_people"])
+    audit = outcome.reports["classic_export_audit"]
+    assert audit["schema_version"] == "prior_only_classic_export_audit_c3_v2"
+    assert audit["recomputed"]["selected_activity"] == "INCOMPLETE"
+    assert audit["recomputed"]["selected_activity_without_row"] == missing
+    assert "SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE" not in audit["checks_run"]
+    assert "SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW" in audit["checks_run"]
+    note = (
+        "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED:NO_EXACT_ID_ROW_IN_SUPPLIED_FILE"
+        if supplied
+        else "OFFICIAL_STATUS_REQUIRED:NO_OFFICIAL_STATUS_FILE_SUPPLIED"
+    )
+    assert f"{note}:{len(missing)}_of_{len(gate['selected_people'])}_selected_people" in audit["limitations"]
+    assert audit["truths"]["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    export = outcome.export or {}
+    assert (export["FILE_VALID"], export["EVIDENCE_STATE"]) == (True, "UNKNOWN")
+    assert export["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert Path(export["bulk_entry_csv"]).is_file()
+    assignment = json.loads(Path(outcome.artifacts["classic_assignment"]).read_text())
+    assert required.dk_id in assignment["entry_assignments"][0]["roster"]
 
 
 def test_one_cowork_command_dispatches_classic_c3_review_package(

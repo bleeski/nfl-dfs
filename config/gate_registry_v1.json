@@ -100,7 +100,7 @@
     "official_activity": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CLAUDE_MD_BOUNDARY", "ref": "Official activity evidence needs an HTTPS source and a timezone-aware observation time."},
-      "covers": "Official activity evidence is missing, stale, future, changed, incomplete for a selected person, or says a selected person is not active."
+      "covers": "Official activity evidence is missing, stale, future, changed, incomplete for a selected person, disagreeing between the bound review artifacts, or says a selected person is not active. Since Session 09 missing activity for a selected Classic person is delivered and named, as Showdown's already was."
     },
     "participation_shortfall": {
       "class": "P", "stops": "CERTIFICATION",
@@ -135,7 +135,7 @@
     "weather": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "RULING", "ref": "R28"},
-      "covers": "Weather capture, state, roof or expiry evidence is missing, stale, unbound or conflicted."
+      "covers": "Weather capture, state, roof or expiry evidence is missing, stale, unbound or conflicted. Since Session 09 a game nobody observed is frozen as UNOBSERVED, delivered and named per game (WEATHER_UNOBSERVED); present but invalid evidence still stops the review."
     },
     "source_policy": {
       "class": "P", "stops": "CERTIFICATION",
@@ -324,6 +324,7 @@
     "CLASSIC_C1_EXPORT_OFFICIAL_STATUS_CHANGED": "delivered_bytes",
     "CLASSIC_C1_EXPORT_OUTPUT_EXISTS": "no_overwrite",
     "CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH": "delivered_bytes",
+    "CLASSIC_C3_ACTIVITY_GAPS_ARRAY_REQUIRED": "official_activity",
     "CLASSIC_C3_ASSIGNMENT_BYTES_NOT_CANONICAL": "audited_selection",
     "CLASSIC_C3_ASSIGNMENT_CANDIDATE_BINDING_MISMATCH": "audited_selection",
     "CLASSIC_C3_ASSIGNMENT_ENTRY_DUPLICATE": "entry_authority",
@@ -471,7 +472,7 @@
     "CLASSIC_C3_SCORE_INVALID": "selection_claims",
     "CLASSIC_C3_SCORE_SALARY_BINDING_MISMATCH": "selection_claims",
     "CLASSIC_C3_SCORE_SNAPSHOT_SCHEMA_MISMATCH": "selection_claims",
-    "CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_INCOMPLETE": "official_activity",
+    "CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH": "official_activity",
     "CLASSIC_C3_SELECTED_ACTIVITY_NOT_ACTIVE": "official_activity",
     "CLASSIC_C3_SELECTED_EVIDENCE_GATE_NOT_PASS": "certification_prerequisite",
     "CLASSIC_C3_SELECTED_EVIDENCE_GATE_OBJECT_REQUIRED": "certification_prerequisite",
@@ -597,7 +598,6 @@
     "CLASSIC_ROW_HAS_ROLE": "slate_mode",
     "CLASSIC_STACK_RULE_UNREGISTERED": "classic_policy_input",
     "CLASSIC_WEATHER_SCOPE_AMBIGUOUS": "weather",
-    "CLASSIC_WEATHER_SOURCE_REQUIRED": "weather",
     "CONFLICTED_EVIDENCE": "projection_package",
     "CONTEST_ID_MISMATCH": "settlement",
     "CONTEST_PAYOUT_REQUIRED": "contest_economics",
@@ -1430,8 +1430,8 @@
     "WEATHER_SOURCE_CHANGED_BEFORE_ARTIFACT_PUBLISH": "weather",
     "WEATHER_SOURCE_UNAPPROVED": "source_policy",
     "WEATHER_STATE_CONFLICT": "weather",
-    "WEATHER_STATE_REQUIRED": "weather",
     "WEATHER_STATE_UNSUPPORTED": "weather",
+    "WEATHER_UNOBSERVED": "weather",
     "WRITTEN_BYTES_DID_NOT_MATCH_THE_AUDITED_BYTES": "delivered_bytes",
     "WRITTEN_HASH_MISMATCH": "prior_package",
     "ZERO_DENOMINATOR": "model_arithmetic",

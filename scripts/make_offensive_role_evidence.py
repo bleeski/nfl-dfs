@@ -3,7 +3,8 @@
 starting quarterbacks.
 
 This is the "30-second script" the unresolved-material-role-change gate points
-at. When a run stops with `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE`, or when
+at. When a run names `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE` (since Session
+09 it leaves that person out of the pool rather than stopping), or when
 `opportunity.py` has split a team's attempts across two quarterbacks on
 prior-season history, this produces the source-bound package that resolves it.
 

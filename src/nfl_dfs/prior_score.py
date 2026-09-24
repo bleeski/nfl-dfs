@@ -38,7 +38,7 @@ from .kicker_roles import (
 from .opportunity import OpportunityModel, PlayerOpportunity
 from .offensive_roles import (
     OffensiveResolution,
-    enforce_material_role_change_gate,
+    exclude_material_role_changes,
     resolve_offensive_roles,
 )
 from .participation import build_participation_contract
@@ -636,9 +636,9 @@ def score_pool(
     divergence = salary_rank_divergence(slate, by_person, offense.report)
     # Ben's ruling, 2026-09-19: a person the market prices as the slate's best
     # who is also carrying another team's share is an unresolved material role
-    # change, and the run stops. It is the same treatment a declared role change
-    # already gets, and one script clears it.
-    enforce_material_role_change_gate(offense.report, divergence)
+    # change. R28 absorbs its stop (Ben, 2026-09-23): he leaves the selectable
+    # pool and is named, and every score above, his included, stays as scored.
+    offense = exclude_material_role_changes(offense, divergence)
 
     return PriorScores(
         score_version=SCORE_VERSION,
