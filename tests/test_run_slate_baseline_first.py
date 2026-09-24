@@ -434,6 +434,94 @@ def test_a_baseline_that_cannot_be_built_never_stops_the_run(
     assert report["DELIVERY_STATE"] == "DELIVERABLE"
 
 
+def test_an_improvement_that_stops_revalidating_gives_the_pointer_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Written, then changed before the read-back: withheld, and the baseline restored."""
+
+    from nfl_dfs import cli
+
+    real = cli.replace_deliverable
+
+    def replace_then_corrupt(root, item, *, now=None):
+        written = real(root, item, now=now)
+        if item.producer != BASELINE:
+            Path(item.path).write_bytes(Path(item.path).read_bytes() + b"\r\n")
+        return written
+
+    monkeypatch.setattr(cli, "replace_deliverable", replace_then_corrupt)
+    code, report, root = _showdown_run(tmp_path, monkeypatch)
+    assert code == 2 and report["FILE_VALID"] is False and report["bulk_entry_csv"] is None
+    latest = _assert_baseline_delivered(report, root, "prior-review-test")
+    assert latest.record["supersedes"]["revalidation"] == "FAIL"
+    assert latest.record["supersedes"]["producer"] == "run-slate:prior_review:SHOWDOWN"
+    assert report["improvement"]["status"] == "WITHHELD"
+    assert "DELIVERABLE_SHA256_MISMATCH" in report["improvement"]["reasons"]
+
+
+def test_an_existing_c1_output_is_never_overwritten(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def patch(cli):
+        real = cli.run_prior_review
+
+        def review(**kwargs):
+            outcome = real(**kwargs)
+            stray = Path(kwargs["output_root"]) / "review" / "DK_REVIEW_ENTRY_C1_classic-s05.csv"
+            stray.parent.mkdir(parents=True, exist_ok=True)
+            stray.write_bytes(b"an earlier output\r\n")
+            return outcome
+
+        monkeypatch.setattr(cli, "run_prior_review", review)
+
+    code, report, root = _classic_run(tmp_path, monkeypatch, policy=False, patch=patch)
+    assert code == 2
+    assert report["blockers"][0].startswith("CLASSIC_C1_EXPORT_OUTPUT_EXISTS:")
+    assert (root / "review" / "DK_REVIEW_ENTRY_C1_classic-s05.csv").read_bytes() == b"an earlier output\r\n"
+    _assert_baseline_delivered(report, root, "classic-s05")
+
+
+def test_the_outer_handler_after_a_replacement_names_the_improvement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def crash(**kwargs):
+        raise RuntimeError("workbook crashed after the replacement")
+
+    code, report, root = _showdown_run(tmp_path, monkeypatch, workbook=crash)
+    assert code == 2 and report["stage"] == "BUILD_OR_CERTIFY_FAILED"
+    latest = delivery.read_latest(root, run_id="prior-review-test")
+    assert latest.deliverable.producer == "run-slate:prior_review:SHOWDOWN"
+    assert latest.record["supersedes"]["producer"] == BASELINE
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    assert report["improvement"]["status"] == "DELIVERED"
+    assert "IMPROVEMENT_NOT_DELIVERED" not in _codes(report)
+    assert not report["next"].startswith("The baseline ")
+
+
+def test_the_pre_review_exit_names_a_baseline_that_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import cli
+
+    def broken(**kwargs):
+        raise OSError("forced baseline failure")
+
+    attachments = tmp_path / "attachments"
+    attachments.mkdir()
+    _attachment_pair(attachments)
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(cli, "run_baseline", broken)
+    assert cli.command_cowork_run(argparse.Namespace(
+        input_dir=str(attachments), request=None, salaries=None, entries=None,
+        label="both-failed", run_id="both-failed", output_dir=str(tmp_path / "outputs"),
+    )) == 2
+    report = _report(tmp_path / "outputs" / "both-failed")
+    assert report["DELIVERY_STATE"] == "NO_DELIVERABLE" and report["latest_deliverable"] is None
+    assert report["baseline"]["problems"] == ["BASELINE_RUN_FAILED:OSError:forced baseline failure"]
+    assert _codes(report)["BASELINE_RUN_FAILED"] == "V"
+    assert report["release_truths"]["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+
+
 # ------------------------------------------------- exclusions
 
 
@@ -463,6 +551,24 @@ def test_the_operators_exclusions_bind_the_baseline(tmp_path: Path) -> None:
                            run_id="unknown", now=NOW, operator_excluded_dk_ids=["99999999"])
     assert unknown.truths.delivery_state.value == "NO_DELIVERABLE" and unknown.output_path is None
     assert "OPERATOR_EXCLUSION_NOT_IN_POOL" in {item.code for item in unknown.truths.delivery_limitations}
+
+
+def test_a_hand_run_baseline_takes_the_same_exclusions(tmp_path: Path, capsys) -> None:
+    from nfl_dfs.cli import main
+
+    template = classic_template(tmp_path, 5)
+    slate = parse_salaries(CLASSIC_SALARY)
+    top = max(slate.players, key=lambda player: player.salary)
+    code = main(["baseline", "--salaries", str(CLASSIC_SALARY), "--entries", str(template),
+                 "--out-dir", str(tmp_path / "runs"), "--run-id", "by-hand",
+                 "--exclude", top.dk_id, "--unavailable-status", "Q"])
+    summary = json.loads(capsys.readouterr().out)
+    assert code == 0 and summary["DELIVERY_STATE"] == "DELIVERABLE"
+    report = json.loads((tmp_path / "runs" / "by-hand" / "baseline_report.json").read_text(encoding="utf-8"))
+    assert report["pool"]["operator_excluded_dk_ids"] == [top.dk_id]
+    assert report["pool"]["extra_unavailable_statuses"] == ["Q"]
+    rows = {player.dk_id for player in slate.players if player.underlying_id == top.underlying_id}
+    assert not any(rows & set(line["roster"]) for line in report["lineups"])
 
 
 def test_run_slate_passes_the_request_exclusions_to_the_baseline(

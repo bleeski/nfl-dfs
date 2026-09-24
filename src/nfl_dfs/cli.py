@@ -1946,6 +1946,8 @@ def command_baseline(args: argparse.Namespace) -> int:
         run_id=args.run_id,
         per_solve_seconds=args.per_solve_seconds,
         budget_seconds=args.budget_seconds,
+        operator_excluded_dk_ids=getattr(args, "exclude", None) or (),
+        extra_unavailable_statuses=getattr(args, "unavailable_status", None) or (),
     )
     _print_json(baseline_summary(outcome))
     return outcome.exit_code
@@ -3116,6 +3118,29 @@ def _run_prior_review_profile(
     # What the pointer names now: the improvement just written, the baseline it
     # did not replace, or nothing. The result describes that file.
     latest, latest_problems = _read_run_pointer(output_root, run_id)
+    if improvement_latest is not None and latest is None:
+        # Written, then no longer revalidating: withheld like any other refusal.
+        withheld_by = latest_problems[0] if latest_problems else "DELIVERABLE_REVALIDATION_FAILED"
+        blockers[0:0] = list(latest_problems)
+        outcome = _withhold_at_delivery(outcome, withheld_by, blocker_limitations(blockers, registry))
+        readable_review = None
+        truths = _blocked_truth_values(
+            file_valid=False,
+            evidence_state=ReleaseEvidenceState.UNKNOWN,
+            model_status=ModelStatus.PRIOR_ONLY,
+            certification_basis=CertificationBasis.MODEL_ASSISTED,
+        )
+        next_action = "Resolve every named integrity blocker above, then rerun the same command."
+        improvement_latest = None
+        if baseline is not None and baseline.latest is not None:
+            # The baseline still on disk takes the pointer back: `replace` lets a
+            # file that revalidates displace one that no longer does.
+            try:
+                replace_deliverable(output_root, baseline.latest.deliverable, now=as_of)
+            except DeliveryPointerError as exc:
+                latest_problems = (*latest_problems, *exc.problems)
+            restored, restore_problems = _read_run_pointer(output_root, run_id)
+            latest, latest_problems = restored, (*latest_problems, *restore_problems)
     improvement = _improvement_record(
         outcome,
         delivered=improvement_latest,
@@ -3132,11 +3157,12 @@ def _run_prior_review_profile(
             truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
             authorized=authorized_ids, blockers=blockers, registry=registry,
         )
-    elif latest is None and improvement_latest is not None:
-        # Written, then no longer revalidating: nothing is advertised.
-        release_truths = _run_release_truths(
-            truths, latest=None, not_delivered=None, authorized=authorized_ids,
-            blockers=[*latest_problems, *blockers], registry=registry,
+    elif latest is None:
+        # Nothing to hand over: the review's own record, plus why no baseline backs it.
+        release_truths = _review_release_truths(
+            outcome=outcome, truths=truths, authorized=authorized_ids,
+            blockers=[*blockers, *latest_problems, *(baseline.problems if baseline is not None else ())],
+            extra=review_limitations, registry=registry,
         )
     next_action = _baseline_next(latest, next_action)
     failure_record = outcome.reports.get("readable_review_failure")
@@ -3593,7 +3619,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         release_truths = _run_release_truths(
             blocked_truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
             authorized=tuple(item.entry_id for item in entries.authorizations),
-            blockers=blockers, registry=registry,
+            blockers=[*blockers, *latest_problems, *baseline.problems], registry=registry,
         )
         review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
         create_cowork_status_workbook(
@@ -3735,7 +3761,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         staged_workbook=str(staged_workbook),
     )
     code, certification = _certify(certify_args)
-    latest, _latest_problems = _read_run_pointer(output_root, run_id)
+    latest, latest_problems = _read_run_pointer(output_root, run_id)
     result = {
         "run_id": run_id,
         "status": certification["status"],
@@ -3762,9 +3788,14 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "it is not an EV, ROI, win-rate, or profitability claim."
         ),
         # The certify path writes its own package; the baseline is named beside
-        # it, never mixed into its release decision.
+        # it as the prior-only fallback, never mixed into its release decision.
         "baseline": baseline.summary(),
         "latest_deliverable": latest.summary() if latest is not None else None,
+        "latest_deliverable_problems": list(latest_problems),
+        "latest_deliverable_meaning": (
+            "The PRIOR_ONLY / DO_NOT_UPLOAD baseline this run published first. A certified "
+            "package, when RELEASE_DECISION says so, is certification's own file, not this one."
+        ),
     }
     _write_json(report_path, result)
     _print_json(result)
@@ -4199,6 +4230,12 @@ def build_parser() -> argparse.ArgumentParser:
     baseline_parser.add_argument("--run-id")
     baseline_parser.add_argument("--per-solve-seconds", type=float, default=DEFAULT_PER_SOLVE_SECONDS)
     baseline_parser.add_argument("--budget-seconds", type=float, default=DEFAULT_BUDGET_SECONDS)
+    baseline_parser.add_argument(
+        "--exclude", action="append", default=[],
+        help="an exact DraftKings ID whose person leaves the pool (repeatable)")
+    baseline_parser.add_argument(
+        "--unavailable-status", action="append", default=[],
+        help="an extra DraftKings status whose people leave the pool (repeatable)")
     baseline_parser.set_defaults(func=command_baseline)
     priors_propose = subparsers.add_parser(
         "priors-propose",
