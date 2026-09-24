@@ -78,20 +78,25 @@ no integrity gate and no uniqueness rule is on the ladder.
   written, and re-checked by the review before selection.
 - **Registry**: `RELAXATION_STRUCTURE_RELAXED` and `RELAXATION_POLICY_DROPPED`
   (`portfolio_bounds`), `RELAXATION_BANK_RESIZED` (`search_budget`),
-  `RELAXATION_LADDER_STOPPED` (`delivery_deadline`), all `S`; the three
-  families' `covers` say so. 1,211 codes in 45 families, SHA-256
-  `770689f2e395a1617a82e2c96055d9109cde1d15a5d4d6e8a51bba7c50ca1026`, re-pinned
+  `RELAXATION_LADDER_STOPPED` (`delivery_deadline`), all `S`, and
+  `RELAXATION_RUNG_UNBUILDABLE` (`stage_failure`, `P`); the four families'
+  `covers` say so. 1,212 codes in 45 families, SHA-256
+  `4ec6b604ad71ef2e16c72b6c6477f1f4367d35a1f3acd8f9e8a004c9fc8dae95`, re-pinned
   in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`. They reach
   `release_truths` on the delivered file's exit and, beside the baseline's own,
-  on the baseline's exits after the review and before it.
+  on the baseline's exits after the review and before it. The result's
+  `portfolio_policy` adds `enforced_rung`, `enforced_policy` and
+  `enforced_policy_is_supplied`, since its enforcement status describes the
+  policy the last attempt ran, not the supplied one.
 
 #### Changed
 
 - `deadline.bank_rate_observation(reports, *, declared_bank_seconds)` reads a
   timed-out bank's count from `selection_failure`; the `candidates=(\d+)` regex
   over blocker text and `import re` are gone.
-- `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`'s text adds that `run-slate` takes
-  its steps itself.
+- `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`'s text no longer says the baseline is
+  the deliverable: inside `run-slate` the ladder then re-sizes the bank or takes
+  rung 4, and its record names which file ships.
 - Runbook: the ladder passages (the policy section, "Shipping under a lock
   clock", the deadline paragraph) describe the engine walking it; the stale
   `selection.py:538-542` cite is `:577-584`, where C1's raise sits after this change. `IMPLEMENTATION_STATUS.md` has a
@@ -124,11 +129,31 @@ no integrity gate and no uniqueness rule is on the ladder.
   search from `classic_limits` against `improvement_remaining`, less the last
   attempt's measured pre-selection time, since each retry repeats projection
   and scoring before it selects.
-- **A zero cap is an exclusion.** A Classic `maximum_entries` of 0 or a Showdown
-  combined fraction of 0 is kept at every rung and carried into rung 4, because
-  the selector already treats a zero maximum as an exclusion; relaxing it would
-  put back a person someone took out. A zeroed Showdown Captain is a Captain
-  cap and rung 2 relaxes it (Ben's list names zeroed Captains).
+- **A zero cap is an exclusion.** A Classic `maximum_entries` of 0, a team or
+  game capped at 0, or a Showdown combined fraction of 0 is kept at every rung
+  and carried into rung 4, because the selector already treats a zero maximum
+  as an exclusion; relaxing it would put back a person someone took out. A
+  fraction that only floors to zero entries (0.04 at 20) is a cap the author
+  wrote as a cap, and is relaxed. A zeroed Showdown Captain is a Captain cap and
+  rung 2 relaxes it (Ben's list names zeroed Captains).
+- **A rung the validator refuses on a code no rung loosens** is a generator
+  defect, not a preference: it is named `RELAXATION_RUNG_UNBUILDABLE`
+  (`stage_failure`, `P`) and rung 4, which needs no generated policy, is still
+  tried, because the worst outcome is no lineup. `RELAXATION_LADDER_STOPPED`
+  stays the window's alone.
+- **A joint-solve retry keeps its joint budget.** The bank step on a joint
+  limit halves the bank and keeps at least the joint budget that ran out
+  (within the window's 20%), so the retry is never shorter than the failure.
+  A structural rung sizes its bank by the generator's rule, as regenerating it
+  by hand would, and can be smaller than a large supplied bank.
+- **Uniqueness on a supplied Showdown policy.** The Showdown validator accepts
+  `require_unique_lineups: false`; every rung writes it true (R29) and the
+  record keeps the supplied value, so the change is visible.
+- **Classic `INCOMPLETE_BANK_EXHAUSTION` takes a structural rung**, as the
+  generator always advised, while SD3's `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`
+  deepens the bank first: the DAL@NYG retro showed the SD3 bank binding, and the
+  C4 retro showed a Classic bank bound by throughput, which a deeper bank makes
+  worse.
 - **Intake**: a supplied policy whose only problems are `S` enters the ladder;
   search-budget codes ask for the bank step, bound codes for structure.
 - **No 10b split.** The diff passed the 1,500-line breakpoint (about 1,900
@@ -139,6 +164,23 @@ no integrity gate and no uniqueness rule is on the ladder.
   is still all or nothing, so a pool too small for every entry walks to rung 4,
   C1 runs out of distinct lineups, and the baseline ships with its unfilled
   Entry IDs. Partial delivery by entry group stays Session 11's.
+
+#### Review
+
+The `reviewer` subagent found four blocking items, all fixed before merge: the
+result's `portfolio_policy` reported the enforced rung's audit under the
+supplied policy's hashes (now `enforced_*`); the new writers had no
+determinism or mutation test (added: byte-identical rung policies from the same
+inputs, a folder never written over, a rung policy changed after writing
+refused before selection); `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW` said "the
+baseline is the deliverable" on a run C1 then delivered (reworded); and the
+pre-review exit left the ladder's texts out of `blockers` and wrote no
+`relaxation.json` (both fixed, and tested). Its open items: the joint-budget
+floor, zero team and game caps, the unbuildable-rung code and the uniqueness
+record were fixed as above; the Showdown `READABLE_REVIEW_FAILED.json` marker
+now follows the last attempt's run root; `make_showdown_policy.py --rung` has a
+test and reports the controls it wrote. `CLAUDE.md`'s stale ladder lines go to
+the `ben-review` follow-up.
 
 #### Tests whose expectation changed (each its own edit)
 
@@ -158,7 +200,7 @@ no integrity gate and no uniqueness rule is on the ladder.
 
 #### Verification
 
-- New `tests/test_relaxation_controller.py`, 12 tests, each acceptance a
+- New `tests/test_relaxation_controller.py`, 17 tests, each acceptance a
   `run-slate` run on a fake monotonic clock: an impossible exposure cap (every
   person at one of three entries) is refused at rungs 0 to 2 and exports at 3;
   a bank timeout re-sizes the bank (200 to fewer candidates, budget raised) with
@@ -170,10 +212,17 @@ no integrity gate and no uniqueness rule is on the ladder.
   10% Captain cap over two entries is refused at rung 1 and exports at 2. Also a
   structural failure at selection takes rung 1 exactly, an SD3 bank that ran out
   is deepened from 32 to 48 before any rung, and three unit tests of the merge.
+  After the review, five more: a rung policy mutated after writing is refused
+  before selection; the same inputs write byte-identical rung policies and never
+  over an existing folder; a validator refusal on a code no rung loosens is
+  named and rung 4 still runs; an intake relaxation with no window stops by
+  name on the pre-review exit and writes its record; the Showdown generator
+  writes each rung and nothing at 4.
 - Card command `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_classic_policy_generator.py -x --tb=short`:
-  `28 passed`. The complete pinned suite on Linux: `1710 passed, 1 skipped in
-  224.86s` (baseline before any change `1698 passed, 1 skipped in 212.05s`; the
-  skip is the junction test).
+  `35 passed` (`28 passed` before the review's tests). The complete pinned
+  suite on Linux: `1715 passed, 1 skipped in 226.85s` (`1710 passed` before the
+  review's fixes; baseline before any change `1698 passed, 1 skipped in
+  212.05s`; the skip is the junction test).
 - `sh ./nfl.sh doctor` passes; `compileall` on every changed module;
   `git diff --check` clean; `python3 scripts/check_protected_paths.py` clean.
 

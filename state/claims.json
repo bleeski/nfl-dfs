@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "da080989-91b8-5f43-82de-0cf41ad58ca9",
-      "branch": "claude/epic-planck-3jxp20",
-      "chunk": "S10",
-      "claimed_at": "2026-09-24T15:01:21Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
