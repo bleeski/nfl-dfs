@@ -12,6 +12,8 @@ ends `PRIOR_ONLY / DO_NOT_UPLOAD`. Suite figures are in `changelog.md`.
   run's snapshots, honouring the request's exact exclusions and extra
   unavailable statuses, and publishes it as `LATEST_DELIVERABLE.json`, before
   the session probe, policy validation, priors, weather, roles or any solve.
+  A hand-run `nfl baseline` takes the same exclusions as `--exclude` and
+  `--unavailable-status`.
 - **An improvement replaces it only through `delivery.replace`**: the review's
   own readable-review classification, then revalidation from fresh parses,
   the same input hashes and at least as many rows. The baseline stays on disk.

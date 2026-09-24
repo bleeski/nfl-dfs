@@ -1607,7 +1607,8 @@ model.
 ## Baseline entry file and report (Session 04)
 
 Registered 2026-09-23 by Session 04 (R28, R29). `nfl baseline --salaries <csv>
---entries <csv> [--out-dir] [--run-id] [--per-solve-seconds] [--budget-seconds]`
+--entries <csv> [--out-dir] [--run-id] [--per-solve-seconds] [--budget-seconds]
+[--exclude <DK ID>]... [--unavailable-status <code>]...`
 (`baseline.run_baseline`) builds distinct legal lineups from the two DraftKings
 files alone: no network, no prior, no weather, no role evidence. It is the
 file R28 ships first. Exit 0 fills every blank authorized row, 3 fills some and
@@ -1634,8 +1635,8 @@ which file. Anything other than exactly one salary CSV and one entries CSV is
 
 Since Session 06 `run_baseline` also takes `operator_excluded_dk_ids` and
 `extra_unavailable_statuses`, which `run-slate` fills from its request's
-`exclude_dk_ids` and `unavailable_statuses` (`nfl baseline` has no flag for
-them). `baseline.pool_exclusions` turns them into people: every salary row of a
+`exclude_dk_ids` and `unavailable_statuses`, and `nfl baseline` takes as the
+repeatable `--exclude` and `--unavailable-status`. `baseline.pool_exclusions` turns them into people: every salary row of a
 person an excluded ID belongs to leaves the pool, and so does everyone whose
 raw DraftKings status is an extra unavailable one. They only narrow the pool;
 `available_statuses` is not read. An excluded ID the salary file lacks is
@@ -2003,9 +2004,14 @@ over and what it covers.
 
 ## `run-slate` result, baseline first (Session 06)
 
-Registered 2026-09-24 by Session 06 (R28, R29). Every `run-slate` exit writes
-`cowork_run.json` with these fields beside the ones it always had. None changes
-a release truth or an exit code.
+Registered 2026-09-24 by Session 06 (R28, R29). The `prior_review` exits, the
+pre-review blocked exit and the outer handler write `cowork_run.json` with
+these fields beside the ones they always had. The `diagnostic` and `registered`
+profiles' certify exit writes `baseline`, `latest_deliverable`,
+`latest_deliverable_problems` and `latest_deliverable_meaning` beside its own
+package: there a certified package, when `RELEASE_DECISION` says so, is
+`certification`'s file, and `latest_deliverable` names the prior-only baseline
+as the fallback. None changes a release truth or an exit code.
 
 | Field | Meaning |
 |---|---|
@@ -2013,7 +2019,7 @@ a release truth or an exit code.
 | `improvement` | The run's own review file: `status` `DELIVERED` (it is the pointer's file; `replaced` is the pointer's `supersedes`), `WITHHELD` (it produced a CSV that a `V` code or a pointer refusal stopped; `withheld_by`, and the `V` codes as `reasons`) or `NOT_PRODUCED` (it blocked, crashed, never ran or wrote no file; its blockers as `reasons`), with its `stage` |
 | `latest_deliverable` | The pointer read back and revalidated at the end of the run: the file to hand over, with its `producer`; `null` when there is none |
 | `latest_deliverable_problems` | Why a pointer that exists did not revalidate |
-| `DELIVERY_STATE`, `release_truths` | As § `nfl_release_truths_v2`: the delivery half describes `latest_deliverable` |
+| `DELIVERY_STATE`, `release_truths` | As § `nfl_release_truths_v2`: the delivery half describes `latest_deliverable`. With no pointer, the limitations also carry the pointer's and the baseline step's problems (`BASELINE_RUN_FAILED`, a publish refusal) |
 | `next` | Opens with the baseline's path whenever it is the deliverable |
 
 The baseline sits at `<output-dir>/<run_id>/baseline/`, a `nfl baseline` run
@@ -2039,6 +2045,10 @@ file. A run with a policy goes to C3 and never takes this path.
 A replacement never delivers fewer rows than the baseline while the baseline
 still revalidates (`DELIVERY_POINTER_COVERAGE_REGRESSION`); a partial review
 file never replaces a full baseline, and rows are never merged across the two.
+A review CSV that replaced the baseline and then fails the read-back is
+withheld like any refusal, and the baseline is put back through `replace`
+(a current file that no longer revalidates gives way), so `supersedes` then
+records the review file with `revalidation` `FAIL`.
 
 Exit codes are unchanged: 0 when the run's own review completed, 2 when it did
 not. A shipped baseline never turns a failed review into 0, and a refused C1

@@ -1097,15 +1097,21 @@ Read the result, not the exit code:
 Exit codes keep their meaning: 0 when the run's own review completed, 2 when it
 did not, whether or not the baseline ships. The workbook's Upload sheet names
 the deliverable's path. Both files stay on disk: a replaced baseline is kept,
-never rewritten.
+never rewritten, and a review CSV that stops revalidating after it replaced the
+baseline is withheld and the baseline takes the pointer back. On the `diagnostic`
+and `registered` profiles, a certified package, when `RELEASE_DECISION` says so,
+is `certification`'s own `DK_UPLOAD` file; `latest_deliverable` there names the
+prior-only baseline as the fallback.
 
 **Run `baseline` by hand** (Session 04) only when `run-slate` cannot start, for
 example an intake it refuses or a request that will not load:
 
     sh ./nfl.sh baseline --salaries <DKSalaries.csv> --entries <DKEntries.csv>
 
-(`.\nfl.ps1 baseline ...` on Windows). It reads the two files and nothing else:
-no network, priors, weather or roles. It writes a new run folder under
+(`.\nfl.ps1 baseline ...` on Windows). Add `--exclude <DK ID>` and
+`--unavailable-status <code>`, each repeatable, for every fade or late scratch
+the run request carries: a hand-run baseline knows only what you pass it. It
+reads the two files and nothing else: no network, priors, weather or roles. It writes a new run folder under
 `data/runs/` holding `DK_BASELINE_ENTRY_V1_<run_id>.csv`, byte-audited, and
 `baseline_report.json` with the five truths. Exit 0 fills every blank row; exit
 3 fills some and names every unfilled Entry ID (hand that list over with the
@@ -1118,8 +1124,9 @@ Every exit ends `PRIOR_ONLY / DO_NOT_UPLOAD`, and the report names the gaps it
 carries (official activity, current role, weather, model). Lineups rank by
 DraftKings salary alone (`BASELINE_SALARY_RANK_V1`), so treat the file as the
 baseline a later improvement replaces, not as a tuned portfolio. It applies
-DraftKings' own `OUT`, `IR` and `D` flags and the operator's exact exclusions,
-not official activity reports: say so when it is the file you hand over.
+DraftKings' own `OUT`, `IR` and `D` flags and the exclusions it is given
+(`run-slate` passes the request's; by hand, the two flags above), not official
+activity reports: say so when it is the file you hand over.
 The Classic fallback path above stays the fallback for anything the baseline
 cannot build: since Sessions 02 and 02b its builder and writer refuse a wrong
 input by name (exit 2), QA exits 1 on a validity failure, and all three exit 3

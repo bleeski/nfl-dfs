@@ -4,6 +4,229 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: `run-slate` is baseline-first (Session 06)
+
+All of the Session 06 card, both modes, on `claude/roadmap-session-06-ond9qs`,
+claim `d869e9f`. R28's running order in the engine: a legal, byte-audited file
+built from the DraftKings bytes alone is on the latest-deliverable pointer
+before `run-slate` touches the network, a policy, a prior or a solver, and
+every exit names the file to hand over. Every run still ends
+`PRIOR_ONLY / DO_NOT_UPLOAD`; `DELIVERABLE` is not upload clearance.
+
+#### Added
+
+- `cli._build_run_slate_baseline`: straight after `_intake` and the request
+  snapshot, `baseline.run_baseline` into `<output-dir>/<run_id>/baseline/`
+  (run id `baseline`) from the run's `data/runs/<run_id>/inputs/` snapshots,
+  with the pinned `--as-of` as its clock and the default 5 s per solve and 60 s
+  budget, then `delivery.publish` under the `run-slate` run id, producer
+  `run-slate:baseline`, `file_kind` `nfl_baseline_entry_csv_v1`. It never
+  raises: a crash is `BASELINE_RUN_FAILED`, a publish refusal keeps its codes,
+  and the run goes on. The output folder is now created here, before the
+  session probe and policy work, instead of after them.
+- The improvement goes through `delivery.replace` whenever a pointer exists
+  (`publish` only when the baseline did not publish): same input hashes, at
+  least as many rows, the same revalidation. Producer
+  `run-slate:prior_review:SHOWDOWN`, `:CLASSIC` (C3) or `:CLASSIC_C1`.
+- Every exit reads the pointer back (`_read_run_pointer`, renamed from
+  `_latest_after_failure` now that success paths use it) and reports:
+  `baseline` (what the step did), `improvement` (`DELIVERED`, `WITHHELD` or
+  `NOT_PRODUCED`, with stage and reasons), `latest_deliverable`,
+  `latest_deliverable_problems`, and `DELIVERY_STATE` and `release_truths`
+  describing the pointer's file. When that file is still the baseline,
+  `release_truths` is the run's own four v1 truths beside the baseline's
+  delivery half plus `IMPROVEMENT_NOT_DELIVERED` (`P`), and `next` opens with
+  the baseline's path. The status workbook's Upload sheet names the pointer's
+  file on the review and pre-review exits. A review CSV that replaced the
+  baseline and then fails the read-back is withheld, and the baseline takes the
+  pointer back through `replace`. With no pointer at all, the delivery
+  limitations carry the baseline step's problems too.
+- The pre-review blocked exit (`cli.py`, doctor, contest or policy blockers, or
+  a non-review profile missing its inputs) now carries `release_truths`,
+  `DELIVERY_STATE`, `latest_deliverable`, `baseline` and `improvement`. The
+  certify path names `baseline`, `latest_deliverable` (as the prior-only
+  fallback, with `latest_deliverable_meaning`) and `latest_deliverable_problems`
+  beside its own package, outside its release decision.
+- C1 (rung 4) exports its own lineups: `_export_classic_c1_csv` hash-checks
+  `assignments.csv`, writes the entries snapshot through
+  `lineups.write_upload_bytes`, keeps the bytes only after
+  `baseline.audit_baseline_bytes` passes the copy on disk (exclusions
+  included) and lists `review/DK_REVIEW_ENTRY_C1_<run_id>.csv`, which then
+  replaces the baseline like any review CSV. Five refusals, all `V`, list
+  nothing and leave the baseline: `CLASSIC_C1_EXPORT_OUTPUT_EXISTS`,
+  `_ASSIGNMENT_SHA256_MISMATCH`, `_FAILED`, `_AUDIT_FAILED`,
+  `_POST_WRITE_HASH_MISMATCH`.
+- `baseline.pool_exclusions` and two `run_baseline`/`audit_baseline_bytes`
+  parameters, `operator_excluded_dk_ids` and `extra_unavailable_statuses`
+  (details under Decisions), and `nfl baseline --exclude` and
+  `--unavailable-status` (repeatable) for a hand-run baseline.
+- `tests/test_run_slate_baseline_first.py`, 18 cases: the card's three
+  acceptance runs; the pointer already naming the baseline when the probe,
+  Classic policy validation and the review start; C3 and C1 replacing it; the
+  same bytes giving the same baseline and C1 CSV; a changed C1 assignment, a
+  refused C1 audit and an existing C1 output each falling back, the earlier
+  output untouched; a `V` display failure withheld with the baseline
+  delivered; an improvement that stops revalidating after it replaced the
+  baseline, withheld with the baseline restored; the pre-review blocked exit,
+  with and without a baseline; a baseline that raises never stopping the run;
+  the outer handler after a replacement naming the improvement; exclusions by
+  ID, by status and an unknown ID, in the builder, through `run-slate` and by
+  hand.
+- `config/gate_registry_v1.json`: eight codes, no new family, nothing
+  reclassified. `IMPROVEMENT_NOT_DELIVERED` in `stage_failure` (`P`), whose
+  `covers` sentence now includes an export and a file the baseline ships in
+  place of; `BASELINE_RUN_FAILED` in `delivery_coverage`;
+  `BASELINE_AUDIT_OPERATOR_EXCLUDED_PERSON` in `operator_restriction`; the five
+  C1 export codes in `no_overwrite`, `audited_selection` and
+  `delivered_bytes`. SHA-256 now `ac3d3623...6550d5`, re-pinned in
+  `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+- `docs/DATA_CONTRACTS.md` § `run-slate` result, baseline first; the C1,
+  baseline, v2 truths and pointer sections updated to match.
+
+#### Changed
+
+- `docs/RUNBOOK.md` lock-clock section: `run-slate` builds the baseline itself;
+  read `latest_deliverable`, not the exit code; `nfl baseline` by hand only
+  when `run-slate` cannot start; rung 4 ends with a CSV.
+- `.claude/rules/operating-path.md`: the baseline-first rule for every exit,
+  and C1's export. `docs/START_HERE.md` and `docs/OPERATOR_GUIDE.md`: the two
+  sentences that still said the baseline waited on this session, or that a
+  refused selection leaves no upload-shaped CSV behind.
+- Tests whose expectation this ruling changes, edited as visible changes:
+  - `tests/test_artifact_preservation.py`: the four withheld run-slate cases
+    (Showdown roster code, Showdown unclassified and corrupted, C3 unclassified
+    and changed CSV) expected no pointer and `NO_DELIVERABLE`; the baseline is
+    now on the pointer, so they assert it names the baseline, never the
+    withheld CSV, and the withholding code moved to `improvement.reasons`. The
+    C1 half of `test_c3_success_and_c1_exits_report_their_delivery` expected
+    `NO_DELIVERABLE`; it now expects C1's own CSV delivered.
+  - `tests/test_prior_review_profile.py::test_an_unresolved_available_identity_stops_the_command_with_no_export`
+    expected no CSV under the outputs folder; the only CSVs are now the
+    baseline's, and it asserts that.
+  - `tests/test_classic_prior_review.py`: the C1 run-slate test, renamed
+    `..._emits_classic_review_json_a_c1_review_csv_and_no_upload_csv`, expected
+    no `DK_REVIEW_ENTRY_*`; it now expects exactly C1's and still no
+    `DK_UPLOAD_*`.
+
+#### Decisions (judgment calls, recorded for Ben to overturn)
+
+- **Where the baseline sits, and its names.** `<output-dir>/<run_id>/baseline/`,
+  a plain `nfl baseline` run folder with run id `baseline`, so the file is
+  `DK_BASELINE_ENTRY_V1_baseline.csv`. The pointer names only files inside the
+  run's output folder and `run_baseline` refuses an existing folder, so a
+  subfolder is the one place that satisfies both; a run id derived from the
+  `run-slate` run id could pass the 80-character limit, and the folder already
+  carries that id. The result calls it `baseline`; `latest_deliverable` always
+  names the file to hand over, with its `producer`; `bulk_entry_csv` stays the
+  review's own CSV (null when withheld); the workbook names the pointer's file.
+- **Exit codes unchanged.** 0 when the run's own review completed, 2 when it
+  did not, baseline or not. Exit 0 has always meant "review generation
+  completed", which is pinned in `CLAUDE.md` and asserted across the suite; a
+  new code would overload `nfl baseline`'s 3 (some rows filled). The delivery
+  signal is `DELIVERY_STATE` and `latest_deliverable`, and `next` says which
+  file ships. A refused C1 export is 2.
+- **C1 exports its own lineups** rather than leaving the baseline as the
+  deliverable. Rung 4 exists to get the model's portfolio out: C1's lineups
+  carry official activity, current roles and the operator's exclusions, which
+  the salary-ranked baseline does not, and the export meets the same integrity
+  bar as the baseline (the same writer, the same audit, then `replace`'s
+  revalidation). The export lives in `cli.py`, not in `prior_review.py`'s C1
+  exit, because it needs the run's output folder, the request's exclusions and
+  the pointer; `prior_review` stays JSON-only for C1 and its pre-lock manifest
+  binds the assignment this CSV renders, not the CSV.
+- **A partial improvement never replaces a full baseline.** `replace`'s rule
+  stands: while the baseline revalidates, the replacement must deliver at least
+  as many rows. The worst outcome is no lineup, so trading filled rows for a
+  better model is the wrong direction under a lock clock, and a row-by-row merge
+  would be a third portfolio neither side validated for distinctness. Today
+  `prior_review` fills every row or fails, so this binds only once Session 11
+  delivers partial files.
+- **Codes.** `IMPROVEMENT_NOT_DELIVERED` is `P`: it travels with a delivered
+  baseline, which a `V` code could not (a `DELIVERABLE` record holds no `V`
+  limitation). The review's own `V` codes stay in `improvement.reasons` and
+  `blockers`, describing the file that was withheld, not the one delivered.
+- **The baseline honours the operator's exclusions** (`baseline.py`, outside
+  the card's target list). A baseline that ignored `--exclude` would ship the
+  person a late-scratch rerun excludes, which `operator_restriction` classes
+  `V`. Exact IDs exclude the whole person, extra unavailable statuses add to
+  DraftKings' `OUT`/`IR`/`D`, and `available_statuses` is not read: the
+  baseline only narrows. An unknown ID refuses the baseline, as in
+  `participation`. Official activity reports are still not read: R28's baseline
+  is the DraftKings bytes, and the gap stays named as `OFFICIAL_STATUS_REQUIRED`.
+
+#### Review
+
+The `reviewer` subagent found three blockers, all fixed before the pull
+request: the runbook said a hand-run baseline applies exclusions, which it
+could not (it now takes `--exclude` and `--unavailable-status`); this entry did
+not exist yet; and `DATA_CONTRACTS` promised the new fields on every exit while
+the certify exit wrote two (the text now says which exits carry what, and the
+certify exit also reports pointer problems). From its open list, fixed: an
+improvement that fails the read-back after replacing the baseline reported
+`DELIVERED` beside `NO_DELIVERABLE` (now withheld, baseline restored); a failed
+baseline was missing from a no-deliverable run's limitations; four untested
+paths. The rest is under Found.
+
+#### Verification
+
+- Baseline before any change, fresh `.venv-linux`: `1566 passed, 1 skipped in
+  203.62s`.
+- Card command (`tests/test_run_slate_baseline_first.py`,
+  `tests/test_prior_review_profile.py`, `tests/test_classic_prior_review.py`):
+  `79 passed in 21.62s`.
+- Complete pinned suite, Linux: `1584 passed, 1 skipped in 209.33s`, recorded
+  with `scripts/record_verify.py`. The skip is the Windows junction test.
+  An earlier full run, before the review fixes: `1579 passed, 1 skipped in
+  202.61s`.
+- `sh ./nfl.sh doctor`: `pass_status` true. `compileall` of both changed
+  modules and the new test file, `git diff --check` and
+  `scripts/check_protected_paths.py` clean.
+- Time to baseline inside `run-slate` (default profile, which stops at the
+  pre-review blocked exit, on the supplied pools; the baseline's own wall time,
+  then the whole command): Classic 1, 20, 150 entries 0.12 s / 1.03 s,
+  0.43 s / 1.29 s, 3.47 s / 4.46 s; Showdown 0.12 s / 0.93 s, 0.35 s / 1.19 s,
+  6.19 s / 7.04 s. All six `DELIVERABLE`, `RELEASE_DECISION=DO_NOT_UPLOAD`, exit 2.
+- `config/gate_registry_v1.json` SHA-256
+  `ac3d36234f3cfb9b9320c45b0eaf8e0d6c9d8d5e91b260678d720a5bfe6550d5`, 1,192 codes.
+
+#### Found, left open
+
+- **For Ben:** a run whose official status CSV marks someone `INACTIVE` and
+  whose review then blocks (weather, identity) ships the baseline, which reads
+  no activity evidence and so can hold that person. It carries
+  `OFFICIAL_STATUS_REQUIRED` saying no activity evidence was consulted, which
+  is true, but the run did hold evidence. R28's text is "built from the
+  DraftKings bytes alone", so this session did not apply it. Recommendation:
+  have Session 09 apply the run's validated `INACTIVE` IDs to the baseline as
+  an exclusion once activity validation runs before the baseline, and until
+  then name, as a limitation, any baseline person the run's validated evidence
+  marks inactive.
+- `--available-status D` puts a doubtful person back in C1's pool, and the C1
+  export's audit, which always treats `OUT`/`IR`/`D` as unavailable, then
+  refuses the file (`CLASSIC_C1_EXPORT_AUDIT_FAILED:BASELINE_AUDIT_UNAVAILABLE_PERSON`):
+  it fails closed to the baseline, untested.
+- The baseline keeps every status other than `OUT`/`IR`/`D` (`Q` included),
+  where `participation` refuses a status it does not classify. That is Session
+  04's rule; the baseline's `OFFICIAL_STATUS_REQUIRED` detail says which flags
+  were applied, so the gap is named, but no code lists those people.
+- A pinned `--as-of` earlier than the wall clock suppresses
+  `BASELINE_EARLIEST_LOCK_PASSED` on a baseline built after lock; Session 07
+  owns the clock.
+- No test forces `CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH` (it needs the
+  filesystem to change bytes between the rename and the re-hash).
+
+- A malformed `LATEST_DELIVERABLE.json` (not a stale file: bytes that do not
+  parse) refuses both `publish` and `replace`, so the review CSV is withheld and
+  nothing is delivered. Only a corruption of a file the run wrote atomically can
+  cause it; `delivery.py` is Session 05's contract, left unchanged.
+- The C1 pre-lock manifest binds `assignments.csv`, not the exported CSV
+  (above); P0b (Session 22) owns run-folder provenance.
+- `CLAUDE.md` still says rung 4 is "not a guaranteed file, since C1 writes
+  JSON only", that "Classic C1/C2 emit no upload-shaped CSV", and that the
+  Classic fallback chain is the nearest thing to baseline-first "until Sessions
+  04 and 06 land". It is protected; a separate `ben-review` pull request carries
+  the three edits (the third, on C1/C2, follows from the C1 export decision).
+
 ### 2026-09-23: a validated CSV survives its readable review (Session 05)
 
 All of the Session 05 card, both modes, on

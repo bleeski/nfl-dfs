@@ -175,7 +175,10 @@ TEAM,PLAYER_OR_GSIS_ID,STATUS,SOURCE_URL,OBSERVED_AT
 - Sleeper or another corroborating source cannot independently clear this gate.
 
 If a selected player is inactive, missing, fuzzy-matched, conflicted, or stale,
-the result is `DO_NOT_UPLOAD` and no upload-shaped CSV is left behind.
+the result is `DO_NOT_UPLOAD` and no upload-shaped CSV of that selection is left
+behind. Since Session 06 `run-slate`'s baseline, built before the selection from
+the DraftKings bytes alone, stays in `<output>/<run_id>/baseline/` and is named
+as `latest_deliverable`, `PRIOR_ONLY / DO_NOT_UPLOAD`.
 
 Governed late swap uses a different contract matching the NFL's official
 team-scoped negative list. Do not convert the old positive-row CSV into fake

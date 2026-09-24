@@ -525,7 +525,8 @@ Every session follows this protocol, and the cards only add to it:
   exports its own lineups through the baseline's writer and audit
   (`DK_REVIEW_ENTRY_C1_<run_id>.csv`) and falls back to the baseline on any
   refusal. Exit codes unchanged; a partial improvement never replaces a full
-  baseline. Eight codes registered. The weather block itself stays a stop
+  baseline. `nfl baseline` gains `--exclude` and `--unavailable-status`. Eight
+  codes registered. The weather block itself stays a stop
   (Session 09); no deadline logic (Session 07). Nothing relaxed. Breakpoint not
   taken: the wiring is mode-agnostic, so Showdown adds no source line. Out of
   the card's list: `baseline.py` (exclusions) and the three docs the card

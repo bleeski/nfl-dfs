@@ -78,7 +78,8 @@ diagnostic as upload-ready.
 
 Ben's R28 (2026-09-22) adds a fifth, `DELIVERY_STATE`: whether a valid file
 exists to hand over. Session 03 registered its contract
-(`nfl_release_truths_v2`); runs report four until Sessions 04 to 09 wire it in.
+(`nfl_release_truths_v2`); `nfl baseline` and `run-slate`'s review, blocked and
+failure exits report it since Sessions 04 to 06, and its certify path reports four.
 
 ## Shipping under a lock clock
 
@@ -111,7 +112,7 @@ Never infer status from a document or an earlier conversation.
 | You are about to | Read |
 |---|---|
 | Develop the engine | `docs/ROADMAP.md` §1 and the session's card in §2.3, then the briefs it cites. Run `/dev-session <SNN>`. |
-| Operate a slate | `docs/RUNBOOK.md`. The baseline goes first (R28); until Sessions 04 and 06 land, the nearest thing is the Classic fallback chain. |
+| Operate a slate | `docs/RUNBOOK.md`. The baseline goes first (R28): since Session 06 `run-slate` builds and publishes it before any evidence, policy or model stage, and `latest_deliverable` names the file to hand over. |
 | Commit, push, merge or delete a branch | `.claude/rules/git-authority.md` and `docs/CLAUDE_CODE_SETUP.md`. |
 | Grade a slate or touch calibration | `docs/chunks/P0-standings-grading-harness.md` and `config/metric_registry_q1_v1.json`. |
 | Add or change a structured input | `docs/DATA_CONTRACTS.md`. A schema change is a new version; v1 is never mutated. |
