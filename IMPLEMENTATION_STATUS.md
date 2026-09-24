@@ -3,7 +3,8 @@
 ## Capability added: 2026-09-24 (Session 06b)
 
 The baseline leaves out anyone the run's official status file marks `INACTIVE`
-(R32). Only rows the exact-ID parser accepts apply; refused rows and an
+(R32). Only identity-valid rows count (exact IDs, team, HTTPS source, aware
+time), and a disagreeing row takes its person out; refused rows and an
 unreadable file are named limitations, never a stop; the file is snapshotted,
 hash-bound and re-checked by the audit. `nfl baseline --official-status` does
 the same by hand. Activity is still not certified: freshness and coverage stay
