@@ -52,12 +52,13 @@ On `claude/affectionate-bohr-mnr8vz`, claim `6d24bc3`. Every run still ends
   own). 1,223 codes in 46 families; SHA-256
   `7343565244853db9a14fb3b0163d8b236adb30c200eebbb725c7c4ce683ee932`, re-pinned
   in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
-- **Tests**: 7 in `tests/test_entry_groups.py` (the Showdown subset through
+- **Tests**: 10 in `tests/test_entry_groups.py` (the Showdown subset through
   `run-slate` with a prefilled row, a bound prefilled row refused `V` with the
   baseline shipping, both validators' refusals, the Classic refusal, both
-  generators, and the two full-fillable golden hashes), 5 in
-  `tests/test_portfolio_policy.py` (bound-count caps in both modes, the fill
-  under the run's exclusions, all or nothing, the audit's artifact rule), 4 in
+  generators, the two full-fillable golden hashes, and the three added after
+  review), 7 in `tests/test_portfolio_policy.py` (bound-count caps in both
+  modes, the fill under the run's exclusions and not the policy's, all or
+  nothing, the audit's artifact rule, the fill's time arithmetic), 4 in
   `tests/test_relaxation_controller.py` (rung documents and records bind the
   subset, rung 4's window counts every fillable row, a subset relaxing to rung
   2 through `run-slate`, and rung 4 filling every row).
@@ -125,6 +126,40 @@ On `claude/affectionate-bohr-mnr8vz`, claim `6d24bc3`. Every run still ends
   nothing exercises. C3's export names no row source yet; a Classic file is
   still all C2 or all C1, and the result's `row_sources` says which.
 
+#### Review
+
+The `reviewer` subagent read the diff against the card and found nothing
+blocking: the full-fillable path is row for row the old one, every cap counts
+the bound rows, the SD3 audit is the old check when nothing is unbound, the
+ladder binds the subset, and the Classic refusal cannot be walked around (the
+intake blocker keeps the ladder from triggering; `prior_review` and `selection`
+refuse on their own). Its open list, and what became of each:
+
+1. The readable review's new checks never fired in a test. Now
+   `test_the_readable_reviews_second_section_refuses_each_mutation` replays the
+   run's own call with one input changed and gets each code:
+   `READABLE_REVIEW_ROW_SOURCE_MISMATCH`, `..._UNBOUND_FILL_REPORT_MISMATCH`,
+   `..._UNBOUND_ROW_EXCLUDED_PERSON`, `..._UNBOUND_ROW_NOT_ACTIVE`, and
+   `ENTRY_PREFILLED_LINEUP_REPEATED`.
+2. Nothing showed the run's own exclusions binding the fill. Added.
+3. The `prior_review` and `selection` Classic refusals were untested. Added,
+   calling each directly.
+4. `row_sources` was tested only on the Showdown exit. Added for C1 and C2.
+5. The fill has no stop of its own inside the window: each solve is floored at
+   0.5 s, and the SD3 rung window checks leave the fill out. That stays as
+   decided above (a late fill is named like any late stage); the arithmetic now
+   has a test.
+6. Rung 4 carries a subset policy's exclusions to every row. That stays as
+   decided above; it is on Ben's list to overturn if he wants a fade confined
+   to the thesis rows even at rung 4.
+7. The golden hashes were not recomputed by the reviewer; they were captured
+   twice on `main` and hold on the Windows CI job too.
+8. The one edited test landed in the code commit rather than its own; it is
+   named here and in the pull request. History is never rewritten to split it.
+9. `src/nfl_dfs/entry_groups.py` is outside the card's named files: it holds
+   the shared subset rule (`subset_binding_problems`, `unbound_rows`) that both
+   validators, `prior_review`, the readable review and the ladder read.
+
 #### Verification
 
 - Golden hashes captured on `main` (bd5a97f) in a scratch worktree, twice, the
@@ -133,10 +168,14 @@ On `claude/affectionate-bohr-mnr8vz`, claim `6d24bc3`. Every run still ends
   (`test_a_policy_binding_every_fillable_row_gives_the_same_file_as_before`,
   and its Classic twin).
 - `sh ./nfl.sh test tests/test_entry_groups.py tests/test_relaxation_controller.py tests/test_portfolio_policy.py -x --tb=short`:
-  `82 passed in 92.94s (0:01:32)`.
+  `82 passed in 92.94s (0:01:32)`; after the review's additions
+  `87 passed in 100.31s (0:01:40)`.
 - Full suite before changes: `1737 passed, 1 skipped in 295.12s (0:04:55)`.
-  After: `1753 passed, 1 skipped in 309.81s (0:05:09)` (16 new tests; the skip is
-  the junction test). `doctor` `pass_status` true.
+  After the first push: `1753 passed, 1 skipped in 309.81s (0:05:09)`. After the
+  review's additions: `1758 passed, 1 skipped in 318.75s (0:05:18)` (21 new
+  tests; the skip is the junction test). `doctor` `pass_status` true. CI on the
+  first push (`767e080`): `suite`, `boundaries`, `protected-paths` and
+  `windows` green.
 
 ### 2026-09-24: rows already entered ship, and every group is reported (Session 11)
 

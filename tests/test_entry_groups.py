@@ -1056,3 +1056,126 @@ def test_both_generators_bind_a_subset_with_entry_id_and_refuse_a_row_that_is_no
     assert rules["qb-pass-catcher"]["minimum_entries"] <= 4  # the rung table counts the bound rows
     with pytest.raises(SystemExit, match="ENTRY_ID_NOT_FILLABLE"):
         load("make_classic_policy").main([*arguments, "--entry-id", "999"], wall=wall)
+
+
+def test_the_readable_reviews_second_section_refuses_each_mutation(tmp_path, monkeypatch):
+    """Each new readable-review check fires on its own mutation of the subset run's inputs.
+
+    The review is replayed from the run's own call with one input changed:
+    the selection's row sources, its fill report, the run's exclusions, an
+    official status, and a template whose prefilled roster equals a filled one.
+    """
+
+    from nfl_dfs import cli
+    from nfl_dfs.readable_review import ReadableReviewError, create_readable_review
+
+    captured: dict[str, object] = {}
+
+    def record(**kwargs):
+        captured.update(kwargs)
+        return create_readable_review(**kwargs)
+
+    monkeypatch.setattr(cli, "create_readable_review", record)
+    rows = ("900000001", "900000002", "900000003", "900000004")
+    code, report, _entries, slate = _run_showdown(
+        tmp_path / "run", monkeypatch, run_id="sd-mutate", entry_ids=rows,
+        policy_controls=SD3_CONTROLS, bound=("900000002", "900000004"))
+    assert code == 0 and captured, report["blockers"]
+    output = _cells(Path(report["latest_deliverable"]["path"]))
+    by_id = {player.dk_id: player for player in slate.players}
+    selection_path = Path(captured["artifacts"]["selection_report"])
+    original = json.loads(selection_path.read_text(encoding="utf-8"))
+
+    def replay(name, *, selection=None, reports=None, entry_bytes=None):
+        artifacts = dict(captured["artifacts"])
+        hashes = dict(captured["expected_hashes"])
+        values = dict(captured, output_dir=tmp_path / name / "review")
+        (tmp_path / name).mkdir()
+        if selection is not None:
+            path = tmp_path / name / "selection_report.json"
+            path.write_text(json.dumps(selection), encoding="utf-8")
+            artifacts["selection_report"] = str(path)
+            hashes["selection_report"] = sha256_file(path)
+        if entry_bytes is not None:
+            path = tmp_path / name / "entries.csv"
+            path.write_bytes(entry_bytes)
+            values["entry_path"] = str(path)
+        values.update(artifacts=artifacts, expected_hashes=hashes, reports=reports or captured["reports"])
+        with pytest.raises(ReadableReviewError) as caught:
+            create_readable_review(**values)
+        return str(caught.value)
+
+    flipped = json.loads(json.dumps(original))
+    flipped["row_sources"]["900000002"] = "SHOWDOWN_SEQUENTIAL"
+    assert "READABLE_REVIEW_ROW_SOURCE_MISMATCH" in replay("sources", selection=flipped)
+
+    short = json.loads(json.dumps(original))
+    short["selection"]["unbound_fill"]["lineups"] = 3
+    assert "READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH" in replay("fill", selection=short)
+
+    fill_person = by_id[output["900000001"][0]].underlying_id
+    excluded = json.loads(json.dumps(original))
+    excluded["participation_detail"]["operator_excluded_people"].append(fill_person)
+    assert f"READABLE_REVIEW_UNBOUND_ROW_EXCLUDED_PERSON:entry=900000001:person={fill_person}" in replay(
+        "excluded", selection=excluded)
+
+    reports = json.loads(json.dumps(captured["reports"], default=str))
+    reports.setdefault("official_status", {}).setdefault("statuses", {})[output["900000003"][1]] = "INACTIVE"
+    assert f"READABLE_REVIEW_UNBOUND_ROW_NOT_ACTIVE:entry=900000003:id={output['900000003'][1]}" in replay(
+        "inactive", reports=reports)
+
+    template = tmp_path / "template.csv"
+    template.write_bytes(Path(captured["entry_path"]).read_bytes())
+    _edit(template, cells={"900000003": list(output["900000001"])})  # a prefilled row repeating a filled one
+    assert "ENTRY_PREFILLED_LINEUP_REPEATED:900000001" in replay("prefilled", entry_bytes=template.read_bytes())
+
+
+def test_a_classic_subset_is_refused_by_prior_review_and_selection_called_directly(tmp_path):
+    from nfl_dfs.classic_portfolio_policy import (
+        validate_classic_portfolio_policy_bytes,
+        write_normalized_classic_portfolio_policy,
+    )
+    from nfl_dfs.prior_review import run_prior_review
+    from nfl_dfs.projection import build_projection_package
+    from nfl_dfs.selection import SelectionError, select_prior_lineups
+
+    salary, entry, package, role, status, _ = classic_fixture(tmp_path / "fixture", entries=3)
+    slate = parse_salaries(salary)
+    entries = parse_entries(entry)
+    fillable = plan_entries(entries, slate).fillable
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(json.dumps(classic_portfolio_policy_template(
+        slate, fillable[:2], entry_sha256=entries.raw_hash)), encoding="utf-8")
+    validation = validate_classic_portfolio_policy_bytes(
+        policy_path.read_bytes(), slate=slate, entry_ids=fillable, entry_sha256=entries.raw_hash)
+    assert validation.valid and validation.policy.entry_count == 2, validation.blockers()
+
+    with pytest.raises(SelectionError, match="CLASSIC_POLICY_SUBSET_UNSUPPORTED"):
+        select_prior_lineups(slate, None, {}, None, count=2, fill_count=1, portfolio_policy=validation.policy)
+
+    normalized = write_normalized_classic_portfolio_policy(tmp_path / "policy.normalized.json", validation.policy)
+    outcome = run_prior_review(
+        salary_csv=salary, entry_csv=entry, label="classic-subset", as_of=AS_OF,
+        run_root=tmp_path / "run", output_root=tmp_path / "out", prior_package_dir=package,
+        official_status_csv=status, offensive_role_evidence_json=role,
+        portfolio_policy=validation.policy, portfolio_policy_source_path=policy_path,
+        portfolio_policy_source_sha256=sha256_file(policy_path), portfolio_policy_normalized_path=normalized,
+        portfolio_policy_normalized_sha256=sha256_file(normalized), project=build_projection_package,
+    )
+    assert outcome.blocked and outcome.stage == "SELECT"
+    (blocker,) = outcome.blockers
+    assert "CLASSIC_POLICY_SUBSET_UNSUPPORTED" in blocker and "2 of 3 fillable rows" in blocker
+    assert not list((tmp_path / "out").rglob("DK_REVIEW_ENTRY_*.csv"))
+
+
+def test_every_prior_review_exit_names_its_row_sources(tmp_path, monkeypatch):
+    """C1 names every row `C1`; C2 names every row `POLICY` (a Classic file is one or the other)."""
+
+    code, c1, _entries, _root = _run_slate(tmp_path / "c1", monkeypatch, run_id="c1-sources", entries=2)
+    assert code == 0 and c1["latest_deliverable"]["producer"] == C1, c1["blockers"]
+    assert c1["row_sources"] == {"910000001": "C1", "910000002": "C1"}
+    code, c2, _entries, _root = _run_slate(tmp_path / "c2", monkeypatch, run_id="c2-sources", entries=2,
+                                           policy=_policy)
+    assert code == 0 and c2["latest_deliverable"]["producer"] == C2, c2["blockers"]
+    assert c2["row_sources"] == {"910000001": "POLICY", "910000002": "POLICY"}
+    assert c2["portfolio_policy"]["unbound_entry_ids"] == []

@@ -932,3 +932,41 @@ def test_the_sd3_audit_checks_the_bound_rows_and_holds_the_artifact_to_the_unbou
         failed = audit(artifact_rows, unbound)
         assert any(problem.startswith("PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH")
                    for problem in failed.problems), (artifact_rows, unbound)
+
+
+def test_the_runs_own_exclusions_bind_the_unbound_fill_too(tmp_path: Path) -> None:
+    from nfl_dfs.participation import build_participation_contract
+    from nfl_dfs.selection import select_prior_lineups
+
+    from .test_prior_selection import _prepared
+
+    slate, model, _contract, splits = _prepared(tmp_path)
+    (best,), _scores, _report = select_prior_lineups(slate, model, splits, _contract, count=1)
+    by_id = {row.dk_id: row for row in slate.players}
+    faded = by_id[best.captain_dk_id].underlying_id
+    ids = [row.dk_id for row in slate.players if row.underlying_id == faded]
+    contract = build_participation_contract(slate, operator_excluded_dk_ids=tuple(ids))
+    raw = json.dumps(portfolio_policy_template(slate, ("1", "2"), controls={})).encode("utf-8")
+    policy = validate_portfolio_policy_bytes(
+        raw, slate=slate, entry_ids=("1", "2", "3", "4"), externally_excluded_people=(faded,)).policy
+    lineups, _scores, report = select_prior_lineups(
+        slate, model, splits, contract, count=2, fill_count=2, portfolio_policy=policy)
+    assert len(lineups) == 4 and report["unbound_fill"]["lineups"] == 2
+    assert all(faded not in {by_id[dk_id].underlying_id for dk_id in lineup.roster} for lineup in lineups)
+
+
+def test_each_fill_solve_gets_what_the_bank_and_joint_solve_leave_of_the_window() -> None:
+    from nfl_dfs.prior_review import _fill_solve_seconds
+
+    class Window:
+        def __init__(self, seconds, passed=False):
+            self.seconds, self.passed_at_start = seconds, passed
+
+        def improvement_remaining(self):
+            return self.seconds
+
+    assert _fill_solve_seconds(None, 3) is None and _fill_solve_seconds(Window(100.0), 0) is None
+    assert _fill_solve_seconds(Window(100.0), 4) == pytest.approx(2.0)  # 10% of 100 s over 5
+    assert _fill_solve_seconds(Window(10_000.0), 4) == 10.0  # never above the sequential default
+    assert _fill_solve_seconds(Window(1.0), 4) == 0.5  # never under the solver's minimum
+    assert _fill_solve_seconds(Window(100.0, passed=True), 4) == 0.5
