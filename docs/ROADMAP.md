@@ -102,6 +102,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 04 | Standalone | Baseline command: `nfl baseline --salaries --entries` builds distinct legal lineups from the DraftKings bytes alone, fills blank authorized rows through the exact-byte writer into a new versioned file, and reports `DELIVERY_STATE` and every unfilled Entry ID; no network | R28, R29; audit D2, DD-2 | new `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/lineups.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | V | Session 02, Session 03 | `sh ./nfl.sh test tests/test_baseline.py -x --tb=short`; fixture runs at 1, 20 and 150 entries with wall time | Complete |
 | Session 05 | Batched | Artifact preservation: a validated CSV survives later presentation failures in both modes and in the outer exception handler; a roster, Entry ID or byte discrepancy still invalidates; an atomic, hash-bound latest-deliverable pointer | Audit D4, DD-2, DD-8 | `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/review_export.py`, new `src/nfl_dfs/delivery.py` | V | Session 03 | `sh ./nfl.sh test tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py tests/test_cowork_rerun_regressions.py tests/test_artifact_preservation.py -x --tb=short` | Complete |
 | Session 06 | Standalone | Baseline-first `run-slate`: the baseline is built and published right after intake, before priors, weather, roles or solves; an improvement replaces it only after independent validation; any improvement failure leaves the baseline reachable; C1 (rung 4) ends with a CSV | Audit D2, DD-2 | `src/nfl_dfs/cli.py`, `src/nfl_dfs/cowork.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/delivery.py` | V | Session 04, Session 05 | `sh ./nfl.sh test tests/test_run_slate_baseline_first.py tests/test_prior_review_profile.py tests/test_classic_prior_review.py -x --tb=short` | Complete |
+| Session 06b | Standalone | R32 on the baseline: the run's official status CSV takes every person a valid `INACTIVE` row names out of the baseline's pool, before the baseline is built; only rows the exact-ID snapshot parser accepts apply, refused rows and an unreadable file are named, the file is snapshotted, hash-bound and re-checked by the audit; `nfl baseline --official-status` | R32; Session 06 open question | `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | V | Session 06 | `sh ./nfl.sh test tests/test_run_slate_baseline_first.py tests/test_baseline.py -x --tb=short` | In Progress |
 | Session 07 | Standalone | Deadline controller: run request v3 with an optional delivery deadline (default: earliest lock minus 5 minutes); one budget passed through every stage; retries, solver limits and bank sizes set from remaining time; dead `runtime.json` keys consumed or removed; measured stage durations | R31; audit D3, DD-3; C4 retro #3 | `src/nfl_dfs/cowork.py`, new `src/nfl_dfs/deadline.py`, `src/nfl_dfs/sources.py`, `scripts/fetch_weather_captures.py`, `scripts/make_classic_policy.py`, `config/runtime.json` | P | Session 06 | `sh ./nfl.sh test tests/test_deadline_controller.py tests/test_cowork.py tests/test_fetch_weather_captures.py -x --tb=short` | Pending |
 | Session 08 | Standalone | Timeout incumbents: validated time-limited candidates are kept; a bank with a feasible witness does not block; both joint selectors validate and return an integer incumbent on a time or search limit under a non-optimal status; C3 accepts it labelled; the timing-sensitive C2 status test becomes deterministic | Audit D5, DD-4, §1 test failure | `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_review.py` | P | Session 06 | `sh ./nfl.sh test tests/test_classic_portfolio_c2.py tests/test_portfolio_enforcement.py tests/test_classic_review_c3.py -x --tb=short`; then the C2 status test 20 times in a row | Pending |
 | Session 09 | Batched | R28 on the model path: missing weather (including a derived roof) and missing Classic official activity become named limitations, not stops; a real identity or timestamp conflict still invalidates its evidence; `build_priors` authority persists for the run; weather pre-capture becomes optional in the runbook | R28; audit D8, DD-7; archive § R23, R24, F7 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/cowork.py`, `docs/RUNBOOK.md` | P | Session 03b, Session 06 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_classic_prior_review.py tests/test_gate_registry.py -x --tb=short` | Pending |
@@ -533,6 +534,26 @@ Every session follows this protocol, and the cards only add to it:
   omitted. `CLAUDE.md`'s stale rung-4 and running-order sentences go in a
   separate `ben-review` pull request. Numbers: `changelog.md`.
 
+#### Session 06b: the run's official `INACTIVE` rows bind the baseline (R32)
+
+- **Depends on.** Session 06.
+- **Why.** Session 06 left one question open: when a run's official status
+  file marks someone `INACTIVE` and the review then stops (weather, identity),
+  the delivered baseline could hold that person. Ben ruled on 2026-09-24 (R32)
+  to take the recommendation: the run's validated `INACTIVE` IDs bind the
+  baseline.
+- **Scope.** `baseline.run_baseline(official_status_csv=)` snapshots the file,
+  parses it with `evidence.parse_official_inactive_snapshot` (exact
+  current-slate DK IDs, team, status, HTTPS source, aware time), and takes
+  every person a valid `INACTIVE` row names out of the pool. Refused rows and
+  an unreadable file are named as `P` limitations and never stop the file. The
+  audit re-derives those people; a changed snapshot withholds. `run-slate`
+  passes its request's file, the C1 export audit checks it, and `nfl baseline`
+  takes `--official-status`.
+- **Not here.** Freshness and per-person coverage stay certification checks
+  (`OFFICIAL_STATUS_REQUIRED` stays on every baseline); Session 09 still owns
+  activity on the model path.
+
 #### Session 07: deadline controller
 
 - **Depends on.** Session 06.
@@ -900,6 +921,13 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
   `Complete` for software acceptance. Nothing waits on Excel.
 - **R31, handoff reserve.** The default delivery deadline is 5 minutes before
   the earliest relevant lock.
+- **R32, official inactives bind the baseline** (Ben, 2026-09-24, on Session
+  06's open question: "do your recommendation"). Amends R28's "built only from
+  the DraftKings salary and entries bytes": when a run carries an official
+  status file, every person a row the exact-ID parser accepts marks `INACTIVE`
+  leaves the baseline's pool. It only narrows the pool; freshness and coverage
+  remain certification checks, and a row or file that cannot be applied is a
+  named limitation, never a stop. Session 06b.
 
 Still in force from earlier, with full text in the backlog archive:
 
@@ -1002,4 +1030,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-23 | Session 05 | Pending to In Progress | `79e9c7f` | Claim pushed on `claude/session-05-artifact-preservation-3cecn4` |
 | 2026-09-23 | Session 05 | In Progress to Complete | `e0eb4a7` | Preservation in both modes, `LATEST_DELIVERABLE.json`, v2 truths in `run-slate`; merged as PR #54 |
 | 2026-09-24 | Session 06 | Pending to In Progress | `d869e9f` | Claim pushed on `claude/roadmap-session-06-ond9qs` |
-| 2026-09-24 | Session 06 | In Progress to Complete | recorded by the next session | Baseline-first `run-slate`, both modes; C1 exports its own CSV; PR opened at close-out |
+| 2026-09-24 | Session 06 | In Progress to Complete | `f96bf6e` | Baseline-first `run-slate`, both modes; C1 exports its own CSV; merged as PR #55; `CLAUDE.md` follow-up merged by Ben as `f810349` (PR #56) |
+| 2026-09-24 | Session 06b | Added as In Progress | recorded at close-out | R32 (Ben, 2026-09-24); claim pushed on `claude/roadmap-session-06-ond9qs` |
