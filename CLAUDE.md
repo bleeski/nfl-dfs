@@ -101,14 +101,13 @@ portfolio can be late-swapped, a missed lock cannot. Three classes of rule:
 - **Construction preferences** (stack rules, exposure and overlap caps, bank size
   and search budgets, objective tuning) may be relaxed on Claude's own
   authority, without asking, whenever they stand between the run and a legal
-  portfolio. The ladder is `scripts/make_classic_policy.py --rung`, walked by
-  hand; Showdown has none (Session 10). Rung 4 runs C1 with no policy, the last
-  structural rung: `run-slate` exports C1's lineups, and the baseline stays the
-  deliverable when that is refused or C1 raises out of distinct lineups
-  (`selection.py:538-542`). On `MODELED_BANK_INFEASIBILITY`,
-  `INCOMPLETE_BANK_EXHAUSTION`, `CANDIDATE_BANK_TIMEOUT` or
-  `CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun; diagnose afterwards in
-  the changelog. Report every relaxation.
+  portfolio. `run-slate` walks the ladder itself (`src/nfl_dfs/relaxation.py`,
+  Session 10), both modes, inside the deadline: a bank or joint-solve limit
+  re-sizes the bank before any structure, an infeasible policy takes the next
+  rung, and rung 4 is no policy (C1, or sequential Showdown). The baseline stays
+  the deliverable when rung 4's export is refused or it raises out of distinct
+  lineups (`selection.py:577-584`). Never rerun a rung by hand; diagnose
+  afterwards in the changelog. Report every relaxation (the result's `relaxation`).
 - **Distinct lineups (R29)** are never relaxed. Ben: "within a given portfolio
   keep all submitted lineups distinct and unique." When distinct lineups run
   out, report the unfilled Entry IDs; never repeat a lineup. Identity is the
