@@ -422,7 +422,9 @@ by a limit that left no roster, is `BOUNDED_TIME_LIMIT_STOP` or
 `BOUNDED_SEARCH_LIMIT_STOP` when it holds at least the entry count and a
 `POLICY_FEASIBLE` witness, and is not blocking; without either it is
 `CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT` as before, and those
-two still block. A solver error always blocks.
+two still block. A solver error always blocks, and so does a roster the
+optimizer itself rejected as illegal, whatever the model status
+(`ILLEGAL_SOLVER_ROSTER`, `CANDIDATE_BANK_SOLVER_ERROR`).
 
 The joint MILP chooses exactly the Entry-ID count from the actual canonical
 bank under all hard player/team/game/group/stack, uniqueness, and pair-overlap
@@ -435,7 +437,14 @@ point of the same model). Two solver statuses are accepted.
 holding a valid integer incumbent that passed the optimum's own integrality,
 count and bound checks; it reports its gap and nodes, its `optimality_scope` is
 null, it is never called optimal, and it travels as the `S` limitation
-`PORTFOLIO_SELECTION_LIMIT_INCUMBENT`. No gap threshold applies: the incumbent is
+`PORTFOLIO_SELECTION_LIMIT_INCUMBENT`. A C2 limit never delivers less than the
+witness: when HiGHS's incumbent scores below it, or HiGHS stops at a limit with
+no incumbent (as it can with presolve off and a limit reached early), the
+witness is the incumbent, and `incumbent_source` says `POLICY_FEASIBLE_WITNESS`
+rather than `JOINT_SOLVE`. The selection record's `objective_limits` says
+`OPTIMAL_ONLY_OVER_ACTUAL_CANDIDATE_BANK` for an optimum and
+`LIMIT_INCUMBENT_NOT_PROVEN_OPTIMAL_OVER_ACTUAL_CANDIDATE_BANK` for an
+incumbent. No gap threshold applies: the incumbent is
 legal under every hard bound, and a threshold would be a construction
 preference the lock-clock ruling relaxes. `MODELED_BANK_INFEASIBILITY` applies
 only to an exhaustive modeled bank; `INCOMPLETE_BANK_EXHAUSTION` is the distinct
@@ -447,10 +456,14 @@ is prohibited.
 
 These are new values of existing v1 fields, not a new version (Session 08): no
 key is added to or removed from `nfl_classic_candidate_bank_c2_v1` or
-`nfl_classic_portfolio_assignment_c2_v1`, every value an existing artifact can
-hold keeps its meaning, and a reader that predates the change fails closed on
-the new values, since C3 refused every bank status but the two completions and
-every joint status but the optimum. The selection report's `mip_start` and the
+`nfl_classic_portfolio_assignment_c2_v1`, and every value an existing artifact
+can hold keeps its meaning. A reader that predates the change fails closed on
+the new bank and joint statuses, since C3 refused every bank status but the two
+completions and every joint status but the optimum. It does accept a candidate
+whose `source_solver_status` is the new `FEASIBLE_LIMIT` inside a completed
+bank, because C3 never read that label; that is safe, since C3 re-validates
+every selected roster from its exact IDs and the label claims nothing about
+legality. The selection report's `mip_start` and `incumbent_source` and the
 bank report's `limit_incumbent_candidates` are runtime diagnostics beside the
 artifact, not artifact keys.
 

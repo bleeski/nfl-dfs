@@ -365,37 +365,59 @@ def test_a_limit_stopped_bank_is_accepted_and_named(
     assert result.audit["joint_selection"]["optimality_scope"] == "ACTUAL_CANDIDATE_BANK"
 
 
-def test_run_slate_delivers_a_node_limited_incumbent_from_a_time_stopped_bank(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("limit", "model_status"), (("nodes", "kSolutionLimit"), ("time", "kTimeLimit"))
+)
+def test_run_slate_delivers_a_limited_incumbent_from_a_time_stopped_bank(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: str, model_status: str
 ) -> None:
     """The card's acceptance, end to end through run-slate and the C3 export.
 
-    Real HiGHS: the joint selection runs with `mip_max_nodes=0`, so it stops at
-    kSolutionLimit holding the bank's witness start, a search limit no clock
-    decides. The bank's total budget runs out two solves into its top-k fill.
-    The export is delivered, both limits are named `S` limitations, and this
-    host's candidate rate is still read from the bank's own report.
+    Real HiGHS stops the joint selection holding the bank's witness start:
+    at `mip_max_nodes=0` (kSolutionLimit), and at a 1e-9 s time limit
+    (kTimeLimit), which a clock can only reach sooner. The bank's total budget
+    runs out two solves into its top-k fill; its other limits are ones a small
+    bank cannot reach. The export is delivered, both limits are named `S`
+    limitations, and this host's candidate rate is still read from the bank's
+    own report.
     """
 
     import highspy
 
     from nfl_dfs import classic_portfolio, selection
+    from nfl_dfs.classic_portfolio_policy import classic_portfolio_policy_template
     from nfl_dfs.deadline import read_candidate_rate
 
-    from .test_classic_portfolio_c2 import _stop_in_the_fill
-    from .test_deadline_controller import _classic, _template_policy, _truth_codes
+    from .test_classic_portfolio_c2 import UNREACHABLE_LIMITS, _stop_in_the_fill
+    from .test_deadline_controller import _classic, _truth_codes
 
-    def node_limited():
+    def policy_file(attachments: Path) -> Path:
+        slate = parse_salaries(attachments / "salary.csv")
+        entries = parse_entries(attachments / "entries.csv")
+        path = attachments.parent / "classic_policy.json"
+        path.write_text(json.dumps(classic_portfolio_policy_template(
+            slate, tuple(item.entry_id for item in entries.authorizations),
+            entry_sha256=entries.raw_hash, limits=UNREACHABLE_LIMITS,
+        )), encoding="utf-8")
+        return path
+
+    def limited():
         model = highspy.Highs()
-        model.setOptionValue("mip_max_nodes", 0)
         model.setOptionValue("presolve", "off")  # presolve alone picks one lineup of a small bank
+        if limit == "nodes":
+            model.setOptionValue("mip_max_nodes", 0)
         return model
 
     real_solve = selection.solve_classic_portfolio
-    monkeypatch.setattr(selection, "solve_classic_portfolio",
-                        lambda policy, bank, **kwargs: real_solve(policy, bank, solver_factory=node_limited, **kwargs))
+
+    def solve(policy, bank, **kwargs):
+        if limit == "time":
+            kwargs["time_limit_seconds"] = 1e-9
+        return real_solve(policy, bank, solver_factory=limited, **kwargs)
+
+    monkeypatch.setattr(selection, "solve_classic_portfolio", solve)
     _stop_in_the_fill(monkeypatch, classic_portfolio, after=2)
-    code, report, root = _classic(tmp_path, monkeypatch, run_id="limited", policy=_template_policy,
+    code, report, root = _classic(tmp_path, monkeypatch, run_id="limited", policy=policy_file,
                                   deadline="2099-01-01T00:00:00+00:00")
     assert code == 0 and report["stage"] == "PRIOR_ONLY_CLASSIC_C3_REVIEW_EXPORT", report["blockers"][:3]
     assert report["improvement"]["status"] == "DELIVERED"
@@ -405,6 +427,9 @@ def test_run_slate_delivers_a_node_limited_incumbent_from_a_time_stopped_bank(
     codes = _truth_codes(report)
     assert codes["PORTFOLIO_SELECTION_LIMIT_INCUMBENT"] == "S"
     assert codes["CANDIDATE_BANK_STOPPED_AT_LIMIT"] == "S"
+    named = next(item for item in report["release_truths"]["delivery_limitations"]
+                 if item["code"] == "PORTFOLIO_SELECTION_LIMIT_INCUMBENT")
+    assert f"stopped at {model_status} with a validated incumbent" in named["detail"]
     audit = json.loads(Path(report["prior_review_artifacts"]["classic_export_audit"]).read_text(encoding="utf-8"))
     assert audit["joint_selection"] == {
         "status": "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", "optimality_scope": None, "c2_audit_status": "PASS",

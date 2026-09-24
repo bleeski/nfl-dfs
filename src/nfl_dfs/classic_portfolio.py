@@ -213,6 +213,7 @@ class ClassicPortfolioSelection:
     model_status: str
     infeasibility_scope: str | None
     mip_start: str | None = None
+    incumbent_source: str | None = None
 
     @property
     def passed(self) -> bool:
@@ -236,6 +237,7 @@ class ClassicPortfolioSelection:
             "optimality_scope": "ACTUAL_CANDIDATE_BANK" if self.proven_optimal else None,
             "infeasibility_scope": self.infeasibility_scope,
             "mip_start": self.mip_start,
+            "incumbent_source": self.incumbent_source,
         }
 
 
@@ -590,6 +592,13 @@ class _Enumerator:
                 and limit is not None
                 and result.roster is not None
             )
+            if result.roster is not None and result.status not in {"OPTIMAL", "FEASIBLE_LIMIT"}:
+                # The optimizer refused its own incumbent as illegal. That is a
+                # solver error at any model status, as an illegal optimal roster
+                # is below; a limit never makes it a stop the bank survives.
+                termination = "ILLEGAL_SOLVER_ROSTER"
+                self.blocking_status = "CANDIDATE_BANK_SOLVER_ERROR"
+                break
             if not kept_at_limit and (result.status != "OPTIMAL" or result.roster is None):
                 if limit is not None:
                     termination, self.limit_stop = limit
@@ -782,14 +791,29 @@ def solve_classic_portfolio(
         status = "PORTFOLIO_SELECTION_SOLVER_ERROR"
     else:
         status = "OPTIMAL_ACTUAL_CANDIDATE_BANK"
+    # A limit never delivers less than the witness. HiGHS returns the start
+    # itself with its default presolve, but with presolve off a limit reached
+    # early loses it (probed on highspy 1.11.0), and an incumbent HiGHS found
+    # without it can score lower. The witness is still a feasible point of
+    # this model, so the better of the two is the incumbent, labelled.
+    witness = chain if mip_start is not None else ()
+    source = "JOINT_SOLVE"
     if status not in ACCEPTED_SELECTION_STATUSES:
-        return ClassicPortfolioSelection(status, (), elapsed, budget, None, gap, nodes, model_status_name, None, mip_start)
-    # An incumbent and an optimum pass the same checks.
-    raw = np.asarray(solution.col_value[:count])
-    rounded = np.rint(raw).astype(int)
-    if np.max(np.abs(raw - rounded)) > 1e-6 or int(rounded.sum()) != policy.entry_count or np.any((rounded < 0) | (rounded > 1)):
-        return ClassicPortfolioSelection("PORTFOLIO_SELECTION_SOLVER_ERROR", (), elapsed, budget, None, gap, nodes, "INVALID_INTEGER_SOLUTION", None, mip_start)
-    selected = tuple(np.flatnonzero(rounded).tolist())
+        if not (witness and model_status in limits):
+            return ClassicPortfolioSelection(status, (), elapsed, budget, None, gap, nodes, model_status_name, None, mip_start)
+        status, selected, source = LIMIT_INCUMBENT_STATUS, witness, "POLICY_FEASIBLE_WITNESS"
+    else:
+        # An incumbent and an optimum pass the same checks.
+        raw = np.asarray(solution.col_value[:count])
+        rounded = np.rint(raw).astype(int)
+        if np.max(np.abs(raw - rounded)) > 1e-6 or int(rounded.sum()) != policy.entry_count or np.any((rounded < 0) | (rounded > 1)):
+            return ClassicPortfolioSelection("PORTFOLIO_SELECTION_SOLVER_ERROR", (), elapsed, budget, None, gap, nodes, "INVALID_INTEGER_SOLUTION", None, mip_start)
+        selected = tuple(np.flatnonzero(rounded).tolist())
+        if status == LIMIT_INCUMBENT_STATUS and witness and (
+            sum(candidates[index].prior_points for index in witness)
+            > sum(candidates[index].prior_points for index in selected) + 1e-9
+        ):
+            selected, source = witness, "POLICY_FEASIBLE_WITNESS"
     selected = tuple(sorted(selected, key=lambda index: (-candidates[index].prior_points, candidates[index].canonical_key, candidates[index].roster, index)))
     return ClassicPortfolioSelection(
         status,
@@ -802,6 +826,7 @@ def solve_classic_portfolio(
         model_status_name,
         None,
         mip_start,
+        source,
     )
 
 

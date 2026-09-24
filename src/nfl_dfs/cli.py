@@ -3125,7 +3125,8 @@ def _run_prior_review_profile(
                     0,
                     "PORTFOLIO_SELECTION_LIMIT_INCUMBENT: the joint selection stopped at "
                     f"{solve_record.get('model_status')} with a validated incumbent "
-                    f"(gap {solve_record.get('mip_gap')}, {solve_record.get('node_count')} nodes); "
+                    f"(from {solve_record.get('incumbent_source') or 'JOINT_SOLVE'}, "
+                    f"gap {solve_record.get('mip_gap')}, {solve_record.get('node_count')} nodes); "
                     "its lineups were accepted and are feasible under every policy bound but "
                     "not proven optimal for the prior objective over the bank",
                 )

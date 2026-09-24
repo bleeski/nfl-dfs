@@ -587,25 +587,55 @@ def test_nonoptimal_limit_with_a_valid_incumbent_returns_it_validated(model_stat
     """A limit that leaves a valid integer incumbent returns it, labelled, never optimal."""
 
     slate, policy, source, entry = _policy(3)
-    bank = _constructed_bank(slate, policy, _legal_rosters(slate, 6), chain=(0, 1, 2))
+    # The witness (3, 4, 5) scores below the incumbent (0, 1, 3), so HiGHS's stands.
+    bank = _constructed_bank(slate, policy, _legal_rosters(slate, 6), chain=(3, 4, 5))
 
     class StubHighs(_StubHighs):
         starts = []
         info = SimpleNamespace(mip_gap=0.0125, mip_node_count=37)
-        solution = SimpleNamespace(value_valid=True, col_value=[0.0, 1.0, 0.0, 1.0, 1.0, 0.0])
+        solution = SimpleNamespace(value_valid=True, col_value=[1.0, 1.0, 0.0, 1.0, 0.0, 0.0])
 
     StubHighs.model_status = model_status
     result = solve_classic_portfolio(policy, bank, solver_factory=StubHighs)
     assert result.status == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK"
     assert result.passed and not result.proven_optimal
-    assert sorted(result.selected_candidate_indexes) == [1, 3, 4]
+    assert sorted(result.selected_candidate_indexes) == [0, 1, 3]
     assert (result.mip_gap, result.node_count, result.model_status) == (0.0125, 37, model_status.name)
     report = result.as_report()
     assert report["optimality_scope"] is None
-    assert report["mip_start"] == "POLICY_FEASIBLE_WITNESS"
-    assert StubHighs.starts == [(3, [0, 1, 2], [1.0, 1.0, 1.0])]  # the witness seeded it
+    assert (report["mip_start"], report["incumbent_source"]) == ("POLICY_FEASIBLE_WITNESS", "JOINT_SOLVE")
+    assert StubHighs.starts == [(3, [3, 4, 5], [1.0, 1.0, 1.0])]  # the witness seeded it
     audit, _candidate, _assignment = _audit(slate, policy, source, entry, bank, result)
     assert audit.passed, audit.problems
+
+
+def test_nonoptimal_limit_never_delivers_less_than_the_witness() -> None:
+    """An incumbent below the witness gives way to it; a limit with none returns it."""
+
+    slate, policy, source, entry = _policy(3)
+    bank = _constructed_bank(slate, policy, _legal_rosters(slate, 6), chain=(0, 1, 2))
+
+    class Weaker(_StubHighs):
+        model_status = highspy.HighsModelStatus.kTimeLimit
+        solution = SimpleNamespace(value_valid=True, col_value=[0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+
+    class Empty(_StubHighs):
+        model_status = highspy.HighsModelStatus.kIterationLimit
+
+    for stub in (Weaker, Empty):
+        result = solve_classic_portfolio(policy, bank, solver_factory=stub)
+        assert result.status == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", stub
+        assert sorted(result.selected_candidate_indexes) == [0, 1, 2]
+        assert result.as_report()["incumbent_source"] == "POLICY_FEASIBLE_WITNESS"
+        assert result.model_status == stub.model_status.name and not result.proven_optimal
+        audit, _candidate, _assignment = _audit(slate, policy, source, entry, bank, result)
+        assert audit.passed, audit.problems
+
+    class Broken(_StubHighs):
+        model_status = highspy.HighsModelStatus.kSolveError
+
+    # A solver error is not a limit: the witness never covers it.
+    assert solve_classic_portfolio(policy, bank, solver_factory=Broken).status == "PORTFOLIO_SELECTION_SOLVER_ERROR"
 
 
 @pytest.mark.parametrize(
@@ -634,6 +664,32 @@ def _node_limited_highs() -> highspy.Highs:
     model = highspy.Highs()
     model.setOptionValue("mip_max_nodes", 0)
     return model
+
+
+@pytest.mark.parametrize("presolve", ["on", "off"])
+def test_nonoptimal_real_highs_time_limit_returns_the_witness_validated(presolve) -> None:
+    """A real HiGHS time limit, 1e-9 s: the clock can only stop it sooner, never change the outcome.
+
+    With presolve on, HiGHS returns the witness start itself; with presolve off
+    it loses the start that early, and the selector returns the witness.
+    """
+
+    slate, policy, source, entry = _policy(3)
+    rosters = _legal_rosters(slate, 12)
+    bank = _constructed_bank(slate, policy, rosters, chain=(9, 10, 11))
+
+    def factory() -> highspy.Highs:
+        model = highspy.Highs()
+        model.setOptionValue("presolve", presolve)
+        return model
+
+    result = solve_classic_portfolio(policy, bank, time_limit_seconds=1e-9, solver_factory=factory)
+    assert (result.status, result.model_status) == ("FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", "kTimeLimit")
+    assert sorted(result.selected_candidate_indexes) == [9, 10, 11]
+    assert result.as_report()["incumbent_source"] in {"JOINT_SOLVE", "POLICY_FEASIBLE_WITNESS"}
+    assert result.as_report()["optimality_scope"] is None and not result.proven_optimal
+    audit, _candidate, _assignment = _audit(slate, policy, source, entry, bank, result)
+    assert audit.passed, audit.problems
 
 
 def test_nonoptimal_real_highs_node_limit_returns_the_witness_start_validated() -> None:
@@ -713,6 +769,13 @@ def _scripted(monkeypatch, script):
 # The witness's joint solve still runs on real HiGHS; a selection budget no
 # small bank can reach keeps its clock out of these tests.
 _UNREACHABLE_SELECTION = {"selection_milliseconds": 3_600_000}
+# The same for a real bank's candidate solves, whose outcome a search limit
+# decides: no clock limit a small bank can reach.
+UNREACHABLE_LIMITS = {
+    "candidate_total_milliseconds": 3_600_000,
+    "candidate_per_solve_milliseconds": 300_000,
+    "selection_milliseconds": 3_600_000,
+}
 
 
 def test_a_limit_stopped_candidate_solve_keeps_its_roster_labelled(monkeypatch) -> None:
@@ -733,6 +796,23 @@ def test_a_limit_stopped_candidate_solve_keeps_its_roster_labelled(monkeypatch) 
     assert [(item.qualifying, item.termination) for item in families[:3]] == [(1, "TARGET_REACHED")] * 3
     assert bank.as_report()["limit_incumbent_candidates"] == 3
     assert solve_classic_portfolio(policy, bank).passed
+
+
+@pytest.mark.parametrize("model_status", ["kTimeLimit", "kIterationLimit", "kSolutionLimit"])
+def test_an_illegal_roster_at_a_limit_still_blocks_the_bank(monkeypatch, model_status) -> None:
+    """The optimizer refusing its own incumbent is a solver error, never a limit stop."""
+
+    slate, policy, _source, _entry = _policy(3, limits=_UNREACHABLE_SELECTION)
+    rosters = _legal_rosters(slate, 40)
+    illegal = (rosters[0][0],) * 9  # the same QB in every slot
+    assert validate_lineup(slate, illegal).lineup is None
+    script = [("OPTIMAL", "kOptimal", roster) for roster in rosters[:10]]
+    script.append(("NO_SOLUTION", model_status, illegal))
+    _scripted(monkeypatch, script)
+    bank = build_classic_candidate_bank(slate, _objective(slate), policy)
+    assert len(bank.candidates) >= policy.entry_count  # enough, and a witness: still blocked
+    assert (bank.status, bank.blocking) == ("CANDIDATE_BANK_SOLVER_ERROR", True)
+    assert ("stack", "ILLEGAL_SOLVER_ROSTER") in [(item.kind, item.termination) for item in bank.strata]
 
 
 def _stop_in_the_fill(monkeypatch, module, *, after: int) -> None:
@@ -837,7 +917,7 @@ def test_a_real_highs_candidate_solve_stopped_by_a_search_limit_keeps_its_roster
             self._highs.setOptionValue("mip_max_improving_sols", 1)
 
     monkeypatch.setattr(module, "LineupOptimizer", FirstImprovingSolution)
-    slate, policy, source, entry = _policy(3, limits=_UNREACHABLE_SELECTION)
+    slate, policy, source, entry = _policy(3, limits=UNREACHABLE_LIMITS)
     bank = build_classic_candidate_bank(slate, _objective(slate), policy)
     assert not bank.blocking, bank.status
     kept = [candidate for candidate in bank.candidates if candidate.source_solver_status == "FEASIBLE_LIMIT"]

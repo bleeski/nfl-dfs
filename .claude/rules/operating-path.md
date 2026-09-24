@@ -29,9 +29,13 @@ paths:
   baseline named. Exit codes keep their meaning: the baseline never turns a
   failed review into 0.
 - A new `DK_REVIEW_ENTRY` CSV is written only after the independent audit
-  returns `PASS`. Time limits, solver errors, incomplete-bank exhaustion,
-  modeled-bank infeasibility, assignment mismatch, audit failure or input
-  mutation preserve earlier outputs and write nothing new. Classic C1 exports
+  returns `PASS`. A time or search limit with no incumbent, solver errors,
+  incomplete-bank exhaustion, modeled-bank infeasibility, assignment mismatch,
+  audit failure or input mutation preserve earlier outputs and write nothing
+  new. Since Session 08 a limit that leaves a validated incumbent, or a C2 bank
+  a limit stopped with the entry count and a policy-feasible witness, does
+  write one after that audit, named as `PORTFOLIO_SELECTION_LIMIT_INCUMBENT` or
+  `CANDIDATE_BANK_STOPPED_AT_LIMIT`, and never called optimal. Classic C1 exports
   its own `assignments.csv` in `run-slate` through the baseline's writer and
   audit (`DK_REVIEW_ENTRY_C1_<run_id>.csv`, rung 4); C2 without C3 writes no
   CSV. No operating profile writes `DK_UPLOAD` (only `certify` and governed
