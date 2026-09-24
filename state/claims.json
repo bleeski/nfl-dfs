@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "0d00ac99-0b11-56fc-9a9e-13aed1415237",
+      "branch": "claude/session-07b-deadline-budget-iwheie",
+      "chunk": "S07b",
+      "claimed_at": "2026-09-24T08:08:29Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
