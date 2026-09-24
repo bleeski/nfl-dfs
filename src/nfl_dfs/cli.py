@@ -1948,6 +1948,7 @@ def command_baseline(args: argparse.Namespace) -> int:
         budget_seconds=args.budget_seconds,
         operator_excluded_dk_ids=getattr(args, "exclude", None) or (),
         extra_unavailable_statuses=getattr(args, "unavailable_status", None) or (),
+        official_status_csv=getattr(args, "official_status", None),
     )
     _print_json(baseline_summary(outcome))
     return outcome.exit_code
@@ -2580,7 +2581,8 @@ def _build_run_slate_baseline(
     """The baseline for this run, published as its first deliverable. Never raises.
 
     Built from the run's immutable snapshots into `<output_root>/baseline/`, with
-    the operator's exact exclusions and extra unavailable statuses, and published
+    the operator's exact exclusions and extra unavailable statuses and the run's
+    official `INACTIVE` rows (R32), and published
     under this run's id so the outer handler reads it back. A build that raises,
     delivers nothing or is refused by `publish` is reported; the run goes on.
     """
@@ -2598,6 +2600,7 @@ def _build_run_slate_baseline(
             now=as_of,
             operator_excluded_dk_ids=request.exclude_dk_ids,
             extra_unavailable_statuses=request.unavailable_statuses,
+            official_status_csv=request.official_status_csv,  # R32
         )
         if outcome.output_path is not None and outcome.output_sha256 is not None:
             inputs = outcome.report["inputs"]
@@ -2758,6 +2761,7 @@ def _export_classic_c1_csv(
             unfilled=(),
             operator_excluded_dk_ids=request.exclude_dk_ids,
             extra_unavailable_statuses=request.unavailable_statuses,
+            official_status_csv=request.official_status_csv,
         )
         if audit_problems:
             return outcome, (f"CLASSIC_C1_EXPORT_AUDIT_FAILED:{' | '.join(audit_problems)}",)
@@ -4236,6 +4240,9 @@ def build_parser() -> argparse.ArgumentParser:
     baseline_parser.add_argument(
         "--unavailable-status", action="append", default=[],
         help="an extra DraftKings status whose people leave the pool (repeatable)")
+    baseline_parser.add_argument(
+        "--official-status",
+        help="an official status CSV; people its accepted rows mark INACTIVE leave the pool (R32)")
     baseline_parser.set_defaults(func=command_baseline)
     priors_propose = subparsers.add_parser(
         "priors-propose",

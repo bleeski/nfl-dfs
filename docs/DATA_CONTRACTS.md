@@ -1608,7 +1608,7 @@ model.
 
 Registered 2026-09-23 by Session 04 (R28, R29). `nfl baseline --salaries <csv>
 --entries <csv> [--out-dir] [--run-id] [--per-solve-seconds] [--budget-seconds]
-[--exclude <DK ID>]... [--unavailable-status <code>]...`
+[--exclude <DK ID>]... [--unavailable-status <code>]... [--official-status <csv>]`
 (`baseline.run_baseline`) builds distinct legal lineups from the two DraftKings
 files alone: no network, no prior, no weather, no role evidence. It is the
 file R28 ships first. Exit 0 fills every blank authorized row, 3 fills some and
@@ -1643,6 +1643,23 @@ raw DraftKings status is an extra unavailable one. They only narrow the pool;
 `OPERATOR_EXCLUSION_NOT_IN_POOL` (`V`), as in `participation`, and nothing is
 built.
 
+Since Session 06b (R32) `run_baseline` also takes `official_status_csv`, which
+`run-slate` fills from its request and `nfl baseline` takes as
+`--official-status`. The file is snapshotted into `inputs/` and bound in the
+report's `inputs.official_status` (`path`, `sha256`, `snapshot`), then parsed by
+`evidence.parse_official_inactive_snapshot`, the exact-ID parser the model path
+uses: a row is accepted only for an exact current-slate DraftKings ID on its own
+team, `ACTIVE` or `INACTIVE`, from a public HTTPS source at a timezone-aware
+time. Every person with an accepted `INACTIVE` row leaves the pool, all of their
+salary rows included, and so does a person whose roles disagree. Nothing else
+in the file is read, and it only narrows the pool: freshness and whether it
+covers every selected person stay certification checks, so
+`OFFICIAL_STATUS_REQUIRED` stays, its detail saying what was applied. Refused
+rows are `BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED` and a file that cannot be
+read is `BASELINE_OFFICIAL_STATUS_UNREADABLE`, both `P`: the baseline still
+ships, without them. A snapshot that changes before the write is
+`BASELINE_OFFICIAL_STATUS_CHANGED_DURING_RUN` (`V`).
+
 ### `nfl_baseline_entry_csv_v1`
 
 The entries template's exact bytes with the roster cells of assigned blank rows
@@ -1657,8 +1674,9 @@ against the template; reparses them and reconciles the mode; checks the Entry
 IDs, their order, and that exactly the assigned rows are filled and exactly the
 unfilled rows are blank; runs `lineups.validate_lineup` on every filled row;
 checks exact-roster distinctness; and re-derives the exclusions to check no
-filled row holds a DraftKings-unavailable person (`BASELINE_AUDIT_UNAVAILABLE_PERSON`)
-or an operator-excluded one (`BASELINE_AUDIT_OPERATOR_EXCLUDED_PERSON`). A failure, or an audit that cannot finish
+filled row holds a DraftKings-unavailable person (`BASELINE_AUDIT_UNAVAILABLE_PERSON`),
+an operator-excluded one (`BASELINE_AUDIT_OPERATOR_EXCLUDED_PERSON`) or one the
+official status snapshot marks inactive (`BASELINE_AUDIT_OFFICIAL_INACTIVE_PERSON`). A failure, or an audit that cannot finish
 (`BASELINE_AUDIT_FAILED`), withholds the file (`BYTE_AUDIT`, `BASELINE_AUDIT_*`,
 `REPARSE_ASSIGNMENT_MISMATCH`), and the temporary copy never outlives the run.
 Both snapshots are re-hashed before the write (`ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE`,
@@ -1723,7 +1741,7 @@ is DraftKings' price and the only number in its bytes the engine may read.
 | `command` | `per_solve_seconds`, `budget_seconds` |
 | `inputs` | `salaries` and `entries`: `supplied_as`, `path`, `sha256`, `snapshot`, `classified_by`; `supplied_schemas` by flag |
 | `slate` | Mode, draft group, both hashes, salary rows, games, `earliest_lock_at`, entry rows, blank and prefilled rows, Contest IDs |
-| `pool` | The availability contract, its statuses, `excluded_people`, `operator_excluded_dk_ids`, `operator_excluded_people` and `extra_unavailable_statuses` (Session 06), excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`, `SALARY_SUBSET`) |
+| `pool` | The availability contract, its statuses, `excluded_people`, `operator_excluded_dk_ids`, `operator_excluded_people` and `extra_unavailable_statuses` (Session 06), `official_status_applied`, `official_inactive_people` and `official_status_rows_not_applied` (Session 06b), excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`, `SALARY_SUBSET`) |
 | `objective` | `BASELINE_SALARY_RANK_V1`, as above |
 | `construction` | `stop_reason` (`FILLED`, `DISTINCT_LINEUPS_EXHAUSTED`, `BUDGET_EXHAUSTED`, `SOLVE_LIMIT_WITHOUT_LINEUP`, `SOLVER_PRODUCED_ILLEGAL_LINEUP`, `SOLVER_REPEATED_A_LINEUP`), lineups built, solves, salary levels, `people_used` and `most_used_person_lineups` (a concentration count for late-swap exposure, not a preference), `elapsed_seconds` |
 | `lineups` | Per filled row: `entry_id`, `roster`, `salary`, `found_by`, `time_limited`, `solve_seconds` |
@@ -1848,7 +1866,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `ac3d36234f3cfb9b9320c45b0eaf8e0d6c9d8d5e91b260678d720a5bfe6550d5`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `392befaadd9cdbafda632ecb306f68d1971fb8d1837d71ac53eb5257787e2e56`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2027,7 +2045,7 @@ folder with run id `baseline`: `inputs/`, `intake.json`,
 `DK_BASELINE_ENTRY_V1_baseline.csv` and `baseline_report.json`. It is built from
 the run's `data/runs/<run_id>/inputs/` snapshots (its own copies hash the same),
 with the pinned `--as-of` as its clock, the default 5 s per solve and 60 s
-budget, and the request's exclusions. The pointer's `run_id` is the `run-slate`
+budget, the request's exclusions, and its official status file (R32). The pointer's `run_id` is the `run-slate`
 run's, so the outer handler reads it back. A replaced baseline stays on disk,
 byte for byte. The status workbook's Upload sheet names the pointer's file.
 
@@ -2035,7 +2053,7 @@ C1's export (rung 4) is `<output-dir>/<run_id>/review/DK_REVIEW_ENTRY_C1_<run_id
 `file_kind` `DK_REVIEW_ENTRY_CSV`: the entries snapshot with C1's hash-checked
 `assignments.csv` written in by `lineups.write_upload_bytes`, kept only after
 `baseline.audit_baseline_bytes` passes the bytes on disk, the request's
-exclusions included, and listed in `export.c1_export`. Refusals list nothing and
+exclusions and official status file included, and listed in `export.c1_export`. Refusals list nothing and
 leave the baseline: `CLASSIC_C1_EXPORT_OUTPUT_EXISTS`,
 `CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH`, `CLASSIC_C1_EXPORT_FAILED`,
 `CLASSIC_C1_EXPORT_AUDIT_FAILED`, `CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH`

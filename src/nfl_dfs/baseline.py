@@ -18,6 +18,10 @@ than its bytes support:
   unavailable status (`run-slate`'s `exclude_dk_ids` and
   `unavailable_statuses`, Session 06): an operator's fade or late scratch
   binds the baseline as it binds the model path, and it only ever narrows;
+- when the run carries an official status file, every person a row the exact-ID
+  parser accepts marks `INACTIVE` leaves the pool too (R32, Session 06b). The
+  file only narrows the pool: its freshness and coverage stay certification
+  checks, and a row or file it cannot apply is a named limitation;
 - lineups follow the registered `BASELINE_SALARY_RANK_V1` objective, distinct by
   exact roster (R29), under a per-solve limit and a whole-run budget;
 - only blank authorized rows are filled, through `lineups.write_upload_bytes`,
@@ -57,6 +61,7 @@ from .contracts import (
     unavailable_people,
 )
 from .cowork import classify_csv
+from .evidence import EvidenceError, parse_official_inactive_snapshot
 from .dk import (
     DraftKingsParseError,
     EntryTemplate,
@@ -284,6 +289,26 @@ def pool_exclusions(
     return unavailable, operator, sorted(named - set(by_id))
 
 
+def official_inactive_people(
+    path: str | Path, players: Iterable[SalaryPlayer]
+) -> tuple[set[str], tuple[str, ...]]:
+    """Every person an accepted official row marks `INACTIVE`, and the rows refused.
+
+    `evidence.parse_official_inactive_snapshot` accepts a row only for an exact
+    current-slate DraftKings ID on its own team, `ACTIVE` or `INACTIVE`, from a
+    public HTTPS source at a timezone-aware time. A person with any accepted
+    `INACTIVE` row leaves, all of their salary rows included; a person whose
+    salary roles disagree leaves too. Raises when the file cannot be read.
+    """
+
+    rows = tuple(players)
+    snapshot = parse_official_inactive_snapshot(path, rows)
+    by_id = {player.dk_id: player for player in rows}
+    inactive = {by_id[dk_id].underlying_id for dk_id, status in snapshot.statuses.items()
+                if status == "INACTIVE"}
+    return inactive, snapshot.problems
+
+
 def audit_baseline_bytes(
     raw: bytes,
     *,
@@ -293,6 +318,7 @@ def audit_baseline_bytes(
     unfilled: tuple[str, ...],
     operator_excluded_dk_ids: Iterable[str] = (),
     extra_unavailable_statuses: Iterable[str] = (),
+    official_status_csv: str | Path | None = None,
 ) -> list[str]:
     """Every reason the bytes are not the template with exactly `assignments` filled.
 
@@ -326,6 +352,9 @@ def audit_baseline_bytes(
         extra_unavailable_statuses=extra_unavailable_statuses)
     if unknown:
         problems.append(f"OPERATOR_EXCLUSION_NOT_IN_POOL:{unknown}")
+    inactive: set[str] = set()
+    if official_status_csv is not None:
+        inactive, _refused = official_inactive_people(official_status_csv, slate.players)
     keys: set[str] = set()
     for entry_id, roster in filled.items():
         result = validate_lineup(slate, roster)
@@ -340,6 +369,8 @@ def audit_baseline_bytes(
             problems.append(f"BASELINE_AUDIT_UNAVAILABLE_PERSON:{entry_id}")
         if operator & people:
             problems.append(f"BASELINE_AUDIT_OPERATOR_EXCLUDED_PERSON:{entry_id}")
+        if inactive & people:
+            problems.append(f"BASELINE_AUDIT_OFFICIAL_INACTIVE_PERSON:{entry_id}")
     return problems
 
 
@@ -379,12 +410,16 @@ def run_baseline(
     clock: Callable[[], float] = time.monotonic,
     operator_excluded_dk_ids: Iterable[str] = (),
     extra_unavailable_statuses: Iterable[str] = (),
+    official_status_csv: str | Path | None = None,
 ) -> BaselineOutcome:
     """Build, write, audit and report the baseline file for one pair of DraftKings files.
 
     `operator_excluded_dk_ids` and `extra_unavailable_statuses` are the
     operator's exclusions (`run-slate`'s request carries them). They only take
     people out of the pool; an ID the salary file lacks refuses the file.
+    `official_status_csv` is the run's official status file (R32): the people
+    its accepted rows mark `INACTIVE` leave the pool, and nothing else in it is
+    read.
     """
 
     wall_start = time.perf_counter()
@@ -446,6 +481,20 @@ def run_baseline(
         for role, kind in (("salaries", "salary_csv"), ("entries", "entry_csv"))
     }
     report["inputs"]["supplied_schemas"] = {flag: kinds.get(flag) for flag in supplied}
+    status_snapshot: tuple[Path, str] | None = None
+    if official_status_csv is not None:
+        status_source = Path(official_status_csv).resolve()
+        try:
+            status_snapshot = _snapshot(status_source, inputs)
+        except (OSError, ValueError) as exc:
+            limitations.append(registry.limitation(
+                "BASELINE_OFFICIAL_STATUS_UNREADABLE",
+                detail=f"{status_source}: {type(exc).__name__}: {exc}; no official activity row was applied"))
+        report["inputs"]["official_status"] = {
+            "path": str(status_source),
+            "sha256": status_snapshot[1] if status_snapshot else None,
+            "snapshot": str(status_snapshot[0]) if status_snapshot else None,
+        }
     _write_json(run_dir / "intake.json", {
         key: report[key] for key in ("schema_version", "generated_at", "run_id", "inputs")})
     if set(by_kind) != {"salary_csv", "entry_csv"} or len(by_kind) != len(kinds):
@@ -513,7 +562,22 @@ def run_baseline(
             "OPERATOR_EXCLUSION_NOT_IN_POOL",
             detail=f"the operator excluded {unknown}, which the salary file does not hold; an exclusion"
                    " that names nobody cannot be honoured, so the baseline is not built"))
-    excluded_people = unavailable | operator_people
+    inactive_people: set[str] = set()
+    refused_rows: tuple[str, ...] = ()
+    if status_snapshot is not None:
+        try:
+            inactive_people, refused_rows = official_inactive_people(status_snapshot[0], slate.players)
+        except (EvidenceError, OSError, ValueError) as exc:
+            status_snapshot = None
+            limitations.append(registry.limitation(
+                "BASELINE_OFFICIAL_STATUS_UNREADABLE",
+                detail=f"{type(exc).__name__}: {exc}; no official activity row was applied"))
+        if refused_rows:
+            limitations.append(registry.limitation(
+                "BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED",
+                detail=f"{len(refused_rows)} official status rows were refused and not applied: "
+                       + "; ".join(refused_rows[:10])))
+    excluded_people = unavailable | operator_people | inactive_people
     excluded_ids = tuple(sorted(p.dk_id for p in slate.players if p.underlying_id in excluded_people))
     earliest_lock = min(game.lock_at for game in slate.games)
     if moment >= earliest_lock:
@@ -542,6 +606,9 @@ def run_baseline(
         "operator_excluded_dk_ids": sorted(exclusion_ids),
         "operator_excluded_people": sorted(operator_people),
         "extra_unavailable_statuses": sorted(set(exclusion_statuses)),
+        "official_status_applied": status_snapshot is not None,
+        "official_inactive_people": sorted(inactive_people),
+        "official_status_rows_not_applied": list(refused_rows),
         "excluded_salary_rows": len(excluded_ids),
         "eligible_salary_rows": len(slate.players) - len(excluded_ids),
         "entry_pool_cross_check": cross_check,
@@ -608,7 +675,9 @@ def run_baseline(
         salary_hash=salary_hash, assignments=assignments, unfilled=unfilled, registry=registry,
         limitations=limitations, report=report,
         exclusions={"operator_excluded_dk_ids": exclusion_ids,
-                    "extra_unavailable_statuses": exclusion_statuses})
+                    "extra_unavailable_statuses": exclusion_statuses,
+                    "official_status_csv": status_snapshot[0] if status_snapshot else None},
+        status_hash=status_snapshot[1] if status_snapshot else None)
     return _finish(report, registry, limitations, run_dir=run_dir, authorized=authorized,
                    assignments=assignments if written else {}, output=output if written else None,
                    wall_start=wall_start)
@@ -626,7 +695,8 @@ def _write_audited(
     registry: GateRegistry,
     limitations: list[DeliveryLimitation],
     report: dict[str, object],
-    exclusions: Mapping[str, tuple[str, ...]],
+    exclusions: Mapping[str, object],
+    status_hash: str | None = None,
 ) -> bool:
     """Write the bytes only once the independent audit passes the copy on disk."""
 
@@ -638,6 +708,12 @@ def _write_audited(
     if sha256_file(salary_path) != salary_hash:
         limitations.append(registry.limitation(
             "SALARY_CHANGED_BEFORE_ARTIFACT_PUBLISH", detail=f"{salary_path} changed during the run"))
+        return False
+    status_path = exclusions.get("official_status_csv")
+    if status_path is not None and sha256_file(Path(str(status_path))) != status_hash:
+        limitations.append(registry.limitation(
+            "BASELINE_OFFICIAL_STATUS_CHANGED_DURING_RUN",
+            detail=f"{status_path} changed after its inactive people were read"))
         return False
     try:
         raw = write_upload_bytes(template, assignments, unfilled=unfilled)
@@ -667,7 +743,7 @@ def _audit_and_keep(
     registry: GateRegistry,
     limitations: list[DeliveryLimitation],
     report: dict[str, object],
-    exclusions: Mapping[str, tuple[str, ...]],
+    exclusions: Mapping[str, object],
 ) -> bool:
     temporary.write_bytes(raw)
     on_disk = temporary.read_bytes()
@@ -689,6 +765,7 @@ def _audit_and_keep(
             "EXACT_ROSTER_DISTINCTNESS",
             "NO_UNAVAILABLE_PERSON",
             "NO_OPERATOR_EXCLUDED_PERSON",
+            "NO_OFFICIAL_INACTIVE_PERSON",
             "POST_WRITE_SHA256",
         ],
     }
@@ -729,12 +806,22 @@ def _finish(
     """The five truths from what happened, the report beside the file, and the outcome."""
 
     assignments = dict(assignments or {})
+    pool = report.get("pool") if isinstance(report.get("pool"), Mapping) else {}
+    if pool.get("official_status_applied"):
+        inactive = len(pool.get("official_inactive_people") or ())
+        activity = (
+            "the baseline applied DraftKings' own OUT, IR and D flags, any exact operator exclusion,"
+            f" and the run's official status file only to take out the {inactive} "
+            + ("person" if inactive == 1 else "people")
+            + " its accepted rows mark INACTIVE (R32); the file's freshness and whether it covers"
+              " every selected person were not judged, so activity is not certified")
+    else:
+        activity = (
+            "the baseline reads the DraftKings bytes alone: only DraftKings' own OUT, IR and D"
+            " flags and any exact operator exclusion were applied, and no official activity"
+            " evidence was consulted")
     limitations += [
-        registry.limitation(
-            "OFFICIAL_STATUS_REQUIRED",
-            detail="the baseline reads the DraftKings bytes alone: only DraftKings' own OUT, IR and D"
-                   " flags and any exact operator exclusion were applied, and no official activity"
-                   " evidence was consulted"),
+        registry.limitation("OFFICIAL_STATUS_REQUIRED", detail=activity),
         registry.limitation(
             "OFFENSIVE_CURRENT_ROLE_UNRESOLVED", detail="no current-role evidence was consulted"),
         registry.limitation(

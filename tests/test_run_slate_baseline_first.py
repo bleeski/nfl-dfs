@@ -598,3 +598,147 @@ def test_run_slate_passes_the_request_exclusions_to_the_baseline(
     assert all(not rows & set(item.existing_cells) for item in written.authorizations)
     baseline_report = json.loads(Path(report["baseline"]["report"]).read_text(encoding="utf-8"))
     assert baseline_report["pool"]["operator_excluded_dk_ids"] == [top.dk_id]
+
+
+# ------------------------------------------ R32: official inactives (Session 06b)
+
+OBSERVED = "2026-09-23T11:00:00-04:00"
+SOURCE = "https://www.nfl.com/injuries/league/2026/reg3"
+
+
+def _status_csv(path: Path, rows: list[tuple[str, str, str, str]]) -> Path:
+    """An official status file: (team, DK ID, status, source URL) per row."""
+
+    lines = ["TEAM,PLAYER_OR_GSIS_ID,STATUS,SOURCE_URL,OBSERVED_AT"]
+    lines += [f"{team},{dk_id},{status},{url},{OBSERVED}" for team, dk_id, status, url in rows]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _rows_of(slate, person: str) -> set[str]:
+    return {player.dk_id for player in slate.players if player.underlying_id == person}
+
+
+def test_official_inactive_rows_leave_the_baseline_pool(tmp_path: Path) -> None:
+    template = classic_template(tmp_path, 20)
+    slate = parse_salaries(CLASSIC_SALARY)
+    top = max(slate.players, key=lambda player: player.salary)
+    other = next(p for p in sorted(slate.players, key=lambda p: -p.salary)
+                 if p.underlying_id != top.underlying_id and (p.status_raw or "") == "")
+    status = _status_csv(tmp_path / "status.csv", [
+        (top.team, top.dk_id, "INACTIVE", SOURCE),
+        (other.team, other.dk_id, "ACTIVE", SOURCE),
+    ])
+    outcome = run_baseline(salaries=CLASSIC_SALARY, entries=template, out_dir=tmp_path / "runs",
+                           run_id="inactive", now=NOW, official_status_csv=status)
+    assert outcome.truths.delivery_state.value == "DELIVERABLE"
+    assert not any(_rows_of(slate, top.underlying_id) & set(r) for r in outcome.assignments.values())
+    pool = outcome.report["pool"]
+    assert pool["official_inactive_people"] == [top.underlying_id]
+    assert pool["official_status_rows_not_applied"] == []
+    assert "NO_OFFICIAL_INACTIVE_PERSON" in outcome.report["audit"]["checks_run"]
+    bound = outcome.report["inputs"]["official_status"]
+    assert bound["sha256"] == sha256_file(status) and Path(bound["snapshot"]).is_file()
+    required = next(item for item in outcome.truths.delivery_limitations
+                    if item.code == "OFFICIAL_STATUS_REQUIRED")
+    assert required.gate_class.value == "P" and "1 person" in required.detail  # still not certified
+
+
+def test_refused_rows_and_an_unreadable_file_are_named_never_a_stop(tmp_path: Path) -> None:
+    template = classic_template(tmp_path, 5)
+    slate = parse_salaries(CLASSIC_SALARY)
+    top = max(slate.players, key=lambda player: player.salary)
+    status = _status_csv(tmp_path / "status.csv", [
+        (top.team, top.dk_id, "INACTIVE", SOURCE),
+        (top.team, "99999999", "INACTIVE", SOURCE),                  # not a current-slate ID
+        (top.team, top.dk_id.replace(top.dk_id[-1], "0"), "INACTIVE", "http://insecure.example/x"),
+    ])
+    mixed = run_baseline(salaries=CLASSIC_SALARY, entries=template, out_dir=tmp_path / "runs",
+                         run_id="mixed", now=NOW, official_status_csv=status)
+    assert mixed.truths.delivery_state.value == "DELIVERABLE"
+    assert mixed.report["pool"]["official_inactive_people"] == [top.underlying_id]
+    codes = {item.code: item for item in mixed.truths.delivery_limitations}
+    assert codes["BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED"].gate_class.value == "P"
+    assert "99999999" in codes["BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED"].detail
+
+    broken = tmp_path / "broken.csv"
+    broken.write_text("NAME,STATUS\nsomeone,INACTIVE\n", encoding="utf-8")
+    unread = run_baseline(salaries=CLASSIC_SALARY, entries=template, out_dir=tmp_path / "runs",
+                          run_id="unread", now=NOW, official_status_csv=broken)
+    assert unread.truths.delivery_state.value == "DELIVERABLE"
+    assert unread.report["pool"]["official_inactive_people"] == []
+    codes = {item.code: item.gate_class.value for item in unread.truths.delivery_limitations}
+    assert codes["BASELINE_OFFICIAL_STATUS_UNREADABLE"] == "P" and "V" not in codes.values()
+
+
+def test_a_status_snapshot_that_changes_before_the_write_withholds_the_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nfl_dfs import baseline as baseline_module
+
+    template = classic_template(tmp_path, 3)
+    slate = parse_salaries(CLASSIC_SALARY)
+    top = max(slate.players, key=lambda player: player.salary)
+    status = _status_csv(tmp_path / "status.csv", [(top.team, top.dk_id, "INACTIVE", SOURCE)])
+    digest = sha256_file(status)
+    real = baseline_module.build_distinct_lineups
+
+    def build_then_change(*args, **kwargs):
+        built = real(*args, **kwargs)
+        for snapshot in (tmp_path / "runs" / "changed" / "inputs").glob(f"{digest}*"):
+            snapshot.write_bytes(snapshot.read_bytes() + b"\n")
+        return built
+
+    monkeypatch.setattr(baseline_module, "build_distinct_lineups", build_then_change)
+    outcome = run_baseline(salaries=CLASSIC_SALARY, entries=template, out_dir=tmp_path / "runs",
+                           run_id="changed", now=NOW, official_status_csv=status)
+    assert outcome.output_path is None and outcome.truths.delivery_state.value == "NO_DELIVERABLE"
+    assert "BASELINE_OFFICIAL_STATUS_CHANGED_DURING_RUN" in {
+        item.code for item in outcome.truths.delivery_limitations}
+    assert not list((tmp_path / "runs" / "changed").glob("DK_BASELINE_ENTRY_*"))
+
+
+def test_a_hand_run_baseline_takes_the_official_status_file(tmp_path: Path, capsys) -> None:
+    from nfl_dfs.cli import main
+
+    template = classic_template(tmp_path, 3)
+    slate = parse_salaries(CLASSIC_SALARY)
+    top = max(slate.players, key=lambda player: player.salary)
+    status = _status_csv(tmp_path / "status.csv", [(top.team, top.dk_id, "INACTIVE", SOURCE)])
+    code = main(["baseline", "--salaries", str(CLASSIC_SALARY), "--entries", str(template),
+                 "--out-dir", str(tmp_path / "runs"), "--run-id", "by-hand", "--official-status", str(status)])
+    assert code == 0 and json.loads(capsys.readouterr().out)["DELIVERY_STATE"] == "DELIVERABLE"
+    report = json.loads((tmp_path / "runs" / "by-hand" / "baseline_report.json").read_text(encoding="utf-8"))
+    assert report["pool"]["official_inactive_people"] == [top.underlying_id]
+
+
+def test_run_slate_delivers_a_baseline_without_the_runs_official_inactives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The case R32 was ruled on: the review never finishes, the baseline ships."""
+
+    from nfl_dfs import cli
+
+    salary, entry, package, _role, status, inactive_id = classic_fixture(
+        tmp_path / "fixture", entries=2, inactive_dst=True)
+    attachments = _attachments(tmp_path, salary, entry)
+    slate = parse_salaries(salary)
+    inactive_person = next(p.underlying_id for p in slate.players if p.dk_id == inactive_id)
+
+    def crash(**kwargs):
+        raise RuntimeError("the review never finishes")
+
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(cli, "run_prior_review", crash)
+    cli.command_cowork_run(_cowork_args(
+        tmp_path, attachments, label="inactive", run_id="inactive", prior_package_dir=str(package),
+        official_status_csv=str(status), as_of=CLASSIC_AS_OF.isoformat()))
+
+    root = tmp_path / "outputs" / "inactive"
+    report = _report(root)
+    latest = _assert_baseline_delivered(report, root, "inactive")
+    written = parse_entries(latest.deliverable.path)
+    rows = _rows_of(slate, inactive_person)
+    assert all(not rows & set(item.existing_cells) for item in written.authorizations)
+    baseline_report = json.loads(Path(report["baseline"]["report"]).read_text(encoding="utf-8"))
+    assert baseline_report["pool"]["official_inactive_people"] == [inactive_person]
