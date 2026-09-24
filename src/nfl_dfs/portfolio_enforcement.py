@@ -23,7 +23,7 @@ import numpy as np
 from .contracts import EngineMode, SlateContract
 from .hashing import sha256_bytes
 from .lineups import validate_lineup
-from .optimizer import LineupOptimizer
+from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
 from .portfolio_policy import (
     EffectivePersonLimit,
     NormalizedPortfolioPolicy,
@@ -124,6 +124,13 @@ class CandidateBank:
     strata: tuple[CandidateStratum, ...] = ()
 
     @property
+    def limit_incumbent_candidates(self) -> int:
+        return sum(
+            candidate.source_solver_status == "FEASIBLE_LIMIT"
+            for candidate in self.candidates
+        )
+
+    @property
     def canonical_count(self) -> int:
         return len({candidate.canonical_key for candidate in self.candidates})
 
@@ -175,6 +182,7 @@ class CandidateBank:
             "elapsed_seconds": round(self.elapsed_seconds, 6),
             "solve_count": self.solve_count,
             "terminal_model_status": self.terminal_model_status,
+            "limit_incumbent_candidates": self.limit_incumbent_candidates,
             "policy_aware": self.policy_aware,
             "strata": self.strata_summary(),
             "strata_detail": [stratum.as_report() for stratum in self.strata],
@@ -196,7 +204,8 @@ class PolicySelection:
 
     @property
     def passed(self) -> bool:
-        return self.status == "OPTIMAL"
+        # A time- or search-limited incumbent passes like the optimum (Session 08).
+        return self.status in {"OPTIMAL", LIMIT_INCUMBENT_STATUS}
 
     def as_report(self) -> dict[str, object]:
         return {
@@ -386,7 +395,16 @@ class _StratifiedEnumerator:
             if result.status == "INFEASIBLE":
                 terminal = "MODEL_INFEASIBLE"
                 break
-            if result.status != "OPTIMAL" or result.roster is None:
+            # A solve stopped by a time or search limit that still returned a
+            # roster keeps it, labelled `FEASIBLE_LIMIT` (Session 08), as the
+            # Classic bank does. A bank stopped with no roster still blocks: it
+            # has no jointly solved witness to show it can fill the entries.
+            kept_at_limit = (
+                result.status == "FEASIBLE_LIMIT"
+                and result.roster is not None
+                and result.model_status in {"kTimeLimit", "kIterationLimit", "kSolutionLimit"}
+            )
+            if not kept_at_limit and (result.status != "OPTIMAL" or result.roster is None):
                 if result.model_status == "kTimeLimit":
                     self.blocking_status = "CANDIDATE_BANK_TIME_LIMIT"
                     terminal = "TIME_LIMIT"
@@ -802,7 +820,16 @@ def solve_policy_portfolio(
             model_status=model_status_name,
             infeasibility_scope=("COMPLETE_MODELED_BANK" if bank.complete else None),
         )
-    if model_status == highspy.HighsModelStatus.kTimeLimit:
+    limits = {
+        highspy.HighsModelStatus.kTimeLimit,
+        highspy.HighsModelStatus.kIterationLimit,
+        highspy.HighsModelStatus.kSolutionLimit,
+    }
+    if model_status in limits and solution.value_valid:
+        # A limit with a valid integer incumbent (Session 08): the same checks
+        # as the optimum below, and no optimality scope.
+        status = LIMIT_INCUMBENT_STATUS
+    elif model_status == highspy.HighsModelStatus.kTimeLimit:
         status = "PORTFOLIO_SELECTION_TIME_LIMIT"
     elif model_status in {
         highspy.HighsModelStatus.kIterationLimit,
@@ -813,7 +840,7 @@ def solve_policy_portfolio(
         status = "PORTFOLIO_SELECTION_SOLVER_ERROR"
     else:
         status = "OPTIMAL"
-    if status != "OPTIMAL":
+    if status not in {"OPTIMAL", LIMIT_INCUMBENT_STATUS}:
         return PolicySelection(
             status=status,
             selected_candidate_indexes=(),
@@ -861,7 +888,7 @@ def solve_policy_portfolio(
         )
     )
     return PolicySelection(
-        status="OPTIMAL",
+        status=status,
         selected_candidate_indexes=selected,
         elapsed_seconds=elapsed,
         time_limit_seconds=budget,

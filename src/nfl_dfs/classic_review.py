@@ -696,9 +696,17 @@ def create_classic_review_package(
             problems.append("CLASSIC_C3_C2_ENFORCEMENT_STATUS_MISMATCH")
         if enforcement.get("candidate_bank_status") != bank.get("status"):
             problems.append("CLASSIC_C3_C2_CANDIDATE_STATUS_MISMATCH")
-        if enforcement.get("joint_selection_status") != "OPTIMAL_ACTUAL_CANDIDATE_BANK":
+        # Session 08: a joint selection a time or search limit stopped with a
+        # valid incumbent is accepted, labelled, with no optimality scope; only
+        # a proven optimum is scoped to the actual bank.
+        joint_status = enforcement.get("joint_selection_status")
+        joint_scopes = {
+            "OPTIMAL_ACTUAL_CANDIDATE_BANK": "ACTUAL_CANDIDATE_BANK",
+            "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK": None,
+        }
+        if joint_status not in joint_scopes:
             problems.append("CLASSIC_C3_C2_JOINT_SELECTION_NOT_OPTIMAL_ACTUAL_BANK")
-        if enforcement.get("optimality_scope") != "ACTUAL_CANDIDATE_BANK":
+        if enforcement.get("optimality_scope") != joint_scopes.get(joint_status, "ACTUAL_CANDIDATE_BANK"):
             problems.append("CLASSIC_C3_C2_OPTIMALITY_SCOPE_MISMATCH")
         for label, digest in (
             ("source_policy_sha256", actual_hash["portfolio_policy_source"]),
@@ -731,7 +739,14 @@ def create_classic_review_package(
             {str(item.get("canonical_key", "")) for item in candidate_by_roster.values()}
         ):
             problems.append("CLASSIC_C3_CANDIDATE_CANONICAL_COUNT_MISMATCH")
-        if bank.get("status") not in {"BOUNDED_COMPLETION", "EXHAUSTIVE_COMPLETION"}:
+        # A bank stopped at a limit that still held the entry count and its
+        # POLICY_FEASIBLE witness is accepted under a status naming the limit.
+        if bank.get("status") not in {
+            "BOUNDED_COMPLETION",
+            "EXHAUSTIVE_COMPLETION",
+            "BOUNDED_TIME_LIMIT_STOP",
+            "BOUNDED_SEARCH_LIMIT_STOP",
+        }:
             problems.append(f"CLASSIC_C3_CANDIDATE_BANK_NOT_ACCEPTED:{bank.get('status')}")
         if bank.get("policy_feasible_chain_status") != "POLICY_FEASIBLE":
             problems.append("CLASSIC_C3_POLICY_FEASIBLE_CHAIN_NOT_PASS")
@@ -1100,6 +1115,18 @@ def create_classic_review_package(
                 problems.append("CLASSIC_C3_PROPOSED_OUTPUT_ASSIGNMENT_MISMATCH")
         if problems:
             raise ClassicReviewError(";".join(problems))
+        # What a limit left unproven travels with the file (Session 08). The
+        # codes are the ones `run-slate` reports; neither is ever called optimal.
+        limit_notes: list[str] = []
+        if bank.get("status") in {"BOUNDED_TIME_LIMIT_STOP", "BOUNDED_SEARCH_LIMIT_STOP"}:
+            limit_notes.append(
+                f"CANDIDATE_BANK_STOPPED_AT_LIMIT:{bank.get('status')}:"
+                f"{produced_candidates}_of_{requested_candidates}_candidates"
+            )
+        if joint_status == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK":
+            limit_notes.append(
+                "PORTFOLIO_SELECTION_LIMIT_INCUMBENT:FEASIBLE_UNDER_EVERY_POLICY_BOUND_NOT_PROVEN_OPTIMAL"
+            )
 
         pre_export_hashes = _hash_checkpoint("PRE_EXPORT", tracked, expected)
         export_sha = sha256_bytes(proposed)
@@ -1148,8 +1175,8 @@ def create_classic_review_package(
                 "search_scope": bank.get("search_scope"),
             },
             "joint_selection": {
-                "status": "OPTIMAL_ACTUAL_CANDIDATE_BANK",
-                "optimality_scope": "ACTUAL_CANDIDATE_BANK",
+                "status": joint_status,
+                "optimality_scope": enforcement.get("optimality_scope"),
                 "c2_audit_status": c2_audit.get("status"),
             },
             "recomputed": {
@@ -1180,6 +1207,7 @@ def create_classic_review_package(
                 "PRIOR_ONLY_CENTRAL_ESTIMATE_NOT_CEILING_LEVERAGE_EV_ROI_WIN_OR_CASH_PROBABILITY",
                 "NO_OWNERSHIP_FIELD_DUPLICATION_PAYOUT_OR_ECONOMICS",
                 "REVIEW_CSV_NOT_CERTIFIED_AND_NOT_UPLOAD_AUTHORIZATION",
+                *limit_notes,
             ],
             "next_action": next_action,
         }

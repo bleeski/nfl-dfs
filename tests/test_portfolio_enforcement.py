@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 
 import highspy
+import numpy as np
 import pytest
 
 from nfl_dfs.hashing import sha256_bytes
@@ -278,6 +280,244 @@ def test_portfolio_timeout_search_limit_and_solver_error_are_distinct(
 
     result = solve_policy_portfolio(policy, bank, solver_factory=StubHighs)
     assert result.status == expected
+
+
+class _SelectionStub:
+    """SD3's joint model calls, recorded; the result is whatever the test sets."""
+
+    model_status = highspy.HighsModelStatus.kOptimal
+    info = SimpleNamespace(mip_gap=float("inf"), mip_node_count=0)
+    solution = SimpleNamespace(value_valid=False, col_value=[])
+
+    def setOptionValue(self, *_args):
+        pass
+
+    def addVars(self, *_args):
+        pass
+
+    def changeColsIntegrality(self, *_args):
+        pass
+
+    def changeObjectiveSense(self, *_args):
+        pass
+
+    def changeColsCost(self, *_args):
+        pass
+
+    def addRow(self, *_args):
+        pass
+
+    def run(self):
+        pass
+
+    def getModelStatus(self):
+        return self.model_status
+
+    def getInfo(self):
+        return self.info
+
+    def getSolution(self):
+        return self.solution
+
+
+@pytest.mark.parametrize(
+    "model_status",
+    [
+        highspy.HighsModelStatus.kTimeLimit,
+        highspy.HighsModelStatus.kIterationLimit,
+        highspy.HighsModelStatus.kSolutionLimit,
+    ],
+)
+def test_sd3_limit_with_a_valid_incumbent_returns_it_validated(tmp_path, model_status) -> None:
+    """Session 08: SD3 returns a limit's valid integer incumbent, labelled, never optimal."""
+
+    slate = _slate(tmp_path)
+    policy, _ = _policy(slate)
+    people = [row.underlying_id for row in policy.people]
+    bank = _bank(
+        _candidate(people[:6], 20, "a"),
+        _candidate(people[3:9], 19, "b", captain=people[3]),
+        _candidate(people[6:12], 18, "c", captain=people[6]),
+        complete=False,
+    )
+
+    class Stub(_SelectionStub):
+        info = SimpleNamespace(mip_gap=0.04, mip_node_count=12)
+        # Counts, then the used indicators, per candidate.
+        solution = SimpleNamespace(value_valid=True, col_value=[1.0, 0.0, 1.0, 1.0, 0.0, 1.0])
+
+    Stub.model_status = model_status
+    result = solve_policy_portfolio(policy, bank, solver_factory=Stub)
+    assert result.status == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK"
+    assert result.passed
+    assert result.selected_candidate_indexes == (0, 2)
+    assert (result.mip_gap, result.node_count, result.model_status) == (0.04, 12, model_status.name)
+    assert result.objective_prior_points == pytest.approx(38.0)
+    assert result.as_report()["optimality_scope"] is None
+    # An incumbent failing the optimum's checks fails closed.
+    Stub.solution = SimpleNamespace(value_valid=True, col_value=[0.5, 0.5, 1.0, 1.0, 1.0, 1.0])
+    failed = solve_policy_portfolio(policy, bank, solver_factory=Stub)
+    assert (failed.status, failed.model_status) == ("PORTFOLIO_SELECTION_SOLVER_ERROR", "INVALID_INTEGER_SOLUTION")
+
+
+def test_sd3_real_highs_node_limit_returns_a_validated_incumbent(tmp_path) -> None:
+    """Real HiGHS: a feasible start and a zero-node limit give kSolutionLimit with a valid incumbent."""
+
+    slate = _slate(tmp_path)
+    policy, _ = _policy(slate)
+    people = [row.underlying_id for row in policy.people]
+    candidates = (
+        _candidate(people[:6], 20, "a"),
+        _candidate(people[3:9], 19, "b", captain=people[3]),
+        _candidate(people[6:12], 18, "c", captain=people[6]),
+    )
+    bank = _bank(*candidates, complete=False)
+
+    class Started(highspy.Highs):
+        def run(self):
+            # The weaker pair, b and c: counts 1 and used indicators 1.
+            start = np.asarray([1, 2, 4, 5], dtype=np.int32)
+            self.setSolution(len(start), start, np.ones(len(start), dtype=np.float64))
+            self.setOptionValue("mip_max_nodes", 0)
+            self.setOptionValue("presolve", "off")  # presolve alone solves three candidates
+            return super().run()
+
+    result = solve_policy_portfolio(policy, bank, solver_factory=Started)
+    assert (result.status, result.model_status) == ("FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", "kSolutionLimit")
+    assert sorted(result.selected_candidate_indexes) == [1, 2]
+    assert result.as_report()["optimality_scope"] is None
+    optimum = solve_policy_portfolio(policy, bank)
+    assert optimum.status == "OPTIMAL" and optimum.objective_prior_points > result.objective_prior_points
+
+
+def _legal_showdown_rosters(slate, count):
+    """Distinct legal Showdown rosters built by hand, checked by `validate_lineup`."""
+
+    from itertools import combinations
+
+    from nfl_dfs.lineups import validate_lineup
+
+    captains = [row for row in slate.players if row.role == "CPT"]
+    flex = sorted((row for row in slate.players if row.role == "FLEX"), key=lambda row: (row.salary, row.dk_id))
+    rosters = []
+    for captain in captains:
+        others = [row for row in flex if row.underlying_id != captain.underlying_id]
+        for chosen in combinations(others[:8], 5):
+            roster = (captain.dk_id, *(row.dk_id for row in chosen))
+            if validate_lineup(slate, roster).lineup is not None:
+                rosters.append(roster)
+                break
+        if len(rosters) == count:
+            return rosters
+    raise AssertionError("fixture slate has too few rosters")
+
+
+def test_a_limit_stopped_showdown_candidate_solve_keeps_its_roster_labelled(tmp_path, monkeypatch) -> None:
+    from nfl_dfs import portfolio_enforcement as module
+
+    slate = _slate(tmp_path)
+    rosters = _legal_showdown_rosters(slate, 2)
+    script = [("FEASIBLE_LIMIT", "kTimeLimit", rosters[0]), ("FEASIBLE_LIMIT", "kSolutionLimit", rosters[1])]
+
+    class Scripted:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def set_time_limit(self, _seconds):
+            pass
+
+        def add_no_good(self, *_args):
+            pass
+
+        def solve(self, _scores):
+            if not script:
+                return SimpleNamespace(status="INFEASIBLE", roster=None, model_status="kInfeasible",
+                                       elapsed_seconds=0.0)
+            status, model_status, roster = script.pop(0)
+            return SimpleNamespace(status=status, roster=roster, model_status=model_status,
+                                   elapsed_seconds=0.5)
+
+    monkeypatch.setattr(module, "LineupOptimizer", Scripted)
+    bank = build_policy_candidate_bank(slate, {row.dk_id: 1.0 for row in slate.players}, candidate_limit=2)
+    assert not bank.blocking and bank.status == "CANDIDATE_LIMIT_REACHED_INCOMPLETE"
+    assert [candidate.roster for candidate in bank.candidates] == rosters
+    assert {candidate.source_solver_status for candidate in bank.candidates} == {"FEASIBLE_LIMIT"}
+    assert bank.as_report()["limit_incumbent_candidates"] == 2
+
+
+def test_run_slate_delivers_an_sd3_limit_incumbent_through_the_showdown_export(
+    tmp_path, monkeypatch
+) -> None:
+    """Session 08 for SD3, end to end: the Showdown review export ships it named.
+
+    Real HiGHS: SD3's joint model is solved, then solved again from that answer
+    as a MIP start with `mip_max_nodes=0` and presolve off, so the delivered
+    selection is a genuine kSolutionLimit incumbent, stopped by a search limit
+    no clock decides.
+    """
+
+    from datetime import datetime, timedelta, timezone
+
+    from nfl_dfs import cli, selection
+    from nfl_dfs import prior_review as prior_review_module
+    from nfl_dfs.dk import parse_entries, parse_salaries
+
+    from .test_prior_review_profile import _attachments, _cowork_args, _prepared_run
+
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=datetime.now(timezone.utc) + timedelta(hours=6)
+    )
+    attachments = _attachments(tmp_path, salary_path, entry_path)
+    slate = parse_salaries(salary_path)
+    entries = parse_entries(entry_path)
+    policy_path = tmp_path / "policy" / "portfolio.json"
+    policy_path.parent.mkdir()
+    policy_path.write_text(json.dumps(portfolio_policy_template(
+        slate, [entry.entry_id for entry in entries.authorizations],
+        controls={"max_pairwise_person_overlap": 4},
+    )), encoding="utf-8")
+
+    class Restarted(highspy.Highs):
+        def run(self):
+            super().run()
+            values = np.asarray(self.getSolution().col_value)
+            start = np.flatnonzero(np.rint(values) > 0).astype(np.int32)
+            counts = np.rint(values[start])
+            self.clearSolver()
+            self.setOptionValue("mip_max_nodes", 0)
+            self.setOptionValue("presolve", "off")
+            self.setSolution(len(start), start, counts)
+            return super().run()
+
+    real_solve = selection.solve_policy_portfolio
+    seen = []
+
+    def limited(policy, bank, **kwargs):
+        result = real_solve(policy, bank, solver_factory=Restarted, **kwargs)
+        seen.append(result)
+        return result
+
+    monkeypatch.setattr(selection, "solve_policy_portfolio", limited)
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    real_review = prior_review_module.run_prior_review
+    monkeypatch.setattr(cli, "run_prior_review", lambda **kwargs: real_review(**kwargs, project=project))
+    outputs = tmp_path / "outputs"
+    code = cli.command_cowork_run(_cowork_args(
+        tmp_path, attachments, run_id="sd3-limited", output_dir=str(outputs),
+        portfolio_policy_json=str(policy_path), prior_package_dir=str(package_dir),
+    ))
+    report = json.loads((outputs / "sd3-limited" / "cowork_run.json").read_text(encoding="utf-8"))
+    assert code == 0, report["blockers"][:3]
+    assert [(item.status, item.model_status) for item in seen] == [
+        ("FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", "kSolutionLimit")]
+    assert report["FILE_VALID"] is True and report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert Path(report["bulk_entry_csv"]).is_file()
+    assert report["latest_deliverable"]["producer"] != "run-slate:baseline"
+    limitations = {item["code"]: item["class"] for item in report["release_truths"]["delivery_limitations"]}
+    assert limitations["PORTFOLIO_SELECTION_LIMIT_INCUMBENT"] == "S"
+    solve = report["prior_review_reports"]["selection"]["selection"]["portfolio_policy"]["solve"]
+    assert solve["status"] == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK" and solve["optimality_scope"] is None
+    assert report["prior_review_reports"]["portfolio_policy_audit"]["status"] == "PASS"
 
 
 def _assignment_csv_bytes(pairs):

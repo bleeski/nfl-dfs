@@ -4,6 +4,248 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: limit-stopped banks and joint solves keep what they built (Session 08)
+
+Until now one per-candidate HiGHS solve that hit its time or search limit set
+`CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT` and broke, and
+`solve_classic_portfolio` then returned `NOT_RUN_BLOCKING_BANK`, so every
+candidate already built was lost; a bank that ran out of total budget did the
+same with no solve at all; and both joint selectors discarded a valid integer
+incumbent on a limit. On `claude/session-08-nonoptimal-bank-gkusm7`, claim
+`d236025`. Every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; no evidence gate
+changed, and distinct lineups (R29) are untouched.
+
+#### Added
+
+- The C2 bank keeps a per-candidate roster a time or search limit
+  (`kTimeLimit`, `kIterationLimit`, `kSolutionLimit`) stopped with, once
+  `validate_lineup` accepts it again: `source_solver_status` `FEASIBLE_LIMIT`,
+  its model status, gap and nodes, counted toward its stratum. The bank report
+  adds `limit_incumbent_candidates`. A limit with no roster, or the total
+  budget running out, stops the bank (`_Enumerator.limit_stop`); later solver
+  strata record `NOT_RUN_AFTER_LIMIT_STOP`, while the solver-free witness chain
+  and the witness solve still run.
+- Bank statuses `BOUNDED_TIME_LIMIT_STOP` and `BOUNDED_SEARCH_LIMIT_STOP`: a
+  stopped bank holding at least the entry count and a `POLICY_FEASIBLE`
+  witness is not blocking. Without either it is `CANDIDATE_BANK_TIMEOUT` or
+  `CANDIDATE_BANK_SEARCH_LIMIT` as before, and those still block. A solver
+  error still blocks, and so does a roster the optimizer itself rejected as
+  illegal at any model status (`ILLEGAL_SOLVER_ROSTER`,
+  `CANDIDATE_BANK_SOLVER_ERROR`); before this session an illegal roster at a
+  limit reported `CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`,
+  which would now have let a stopped bank through.
+- Both joint selectors accept a limit that leaves a valid incumbent:
+  `optimizer.LIMIT_INCUMBENT_STATUS` = `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`,
+  shared by C2 (`solve_classic_portfolio`) and SD3
+  (`portfolio_enforcement.solve_policy_portfolio`). The rounded `col_value`
+  goes through the optimum's own integrality, count and bound checks; the
+  status reports gap, nodes and model status, `passed` is true, the new
+  `ClassicPortfolioSelection.proven_optimal` is false, and `optimality_scope`
+  is null. With no incumbent the codes stay (`PORTFOLIO_SELECTION_TIMEOUT`,
+  `PORTFOLIO_SELECTION_SEARCH_LIMIT`, `PORTFOLIO_SELECTION_TIME_LIMIT`).
+- The C2 joint solve starts from the bank's witness chain (`setSolution`,
+  report `mip_start` `POLICY_FEASIBLE_WITNESS`), and a limit never delivers
+  less than it: when HiGHS's incumbent scores below the witness, or HiGHS stops
+  at a limit with none, the witness is the incumbent (`incumbent_source`
+  `POLICY_FEASIBLE_WITNESS`, otherwise `JOINT_SOLVE`). Probed on highspy
+  1.11.0 on the C2 fixture bank at 10 entries: with the start,
+  `mip_max_nodes=0` returns `kSolutionLimit` with the start as a valid
+  incumbent (objective 3598.931 against the optimum's 3599.102); without a
+  start it returns `kSolutionLimit` with no valid solution. Under time limits
+  of 1e-9, 1e-6, 1e-4 and 1e-3 s, five solves each on a 12-candidate and a
+  34-candidate bank, HiGHS's default presolve returned the start every time;
+  with presolve off it returned no incumbent at 1e-9 and 1e-6 s, sometimes at
+  1e-4 s, which is why the selector does not rely on HiGHS keeping the start.
+- The C2 selection record's `objective_limits` says
+  `LIMIT_INCUMBENT_NOT_PROVEN_OPTIMAL_OVER_ACTUAL_CANDIDATE_BANK` for an
+  incumbent in place of `OPTIMAL_ONLY_OVER_ACTUAL_CANDIDATE_BANK`.
+- The SD3 bank keeps a limit-stopped roster the same way. A stopped SD3 bank
+  still blocks (below).
+- C3 (`classic_review.py`) accepts the two stop statuses and the incumbent
+  status with a null scope; a limit incumbent claiming `ACTUAL_CANDIDATE_BANK`
+  is `CLASSIC_C3_C2_OPTIMALITY_SCOPE_MISMATCH`. Its export audit and readable
+  review list `CANDIDATE_BANK_STOPPED_AT_LIMIT:<status>:<n>_of_<m>_candidates`
+  and `PORTFOLIO_SELECTION_LIMIT_INCUMBENT:...` as limitations, and the HTML
+  says "stopped at a limit: feasible, not proven optimal" where it printed the
+  scope. `prior_review.py` and `classic_scale_acceptance.py` take the scope
+  from the solve instead of writing `ACTUAL_CANDIDATE_BANK`.
+- `run-slate` names both as delivery limitations beside C1's
+  `SOLVER_TIME_LIMIT_ACCEPTED_LINEUPS`, for C2 and SD3:
+  `CANDIDATE_BANK_STOPPED_AT_LIMIT` and `PORTFOLIO_SELECTION_LIMIT_INCUMBENT`,
+  family `search_budget` (`S`, `CONSTRUCTION_PREFERENCE`); the family's
+  `covers` says so. Registry SHA-256 now
+  `942d43cb9920c5abee29670d20944eb4c38138a71708ff69571af654d5c8e9e1`, 1,207
+  codes in 45 families, re-pinned in `tests/test_gate_registry.py` and
+  `docs/DATA_CONTRACTS.md`.
+- Tests, each decided by a search limit, a script or a time limit a clock can
+  only reach sooner; where a real bank is still built, its other clock limits
+  are ones a small bank cannot reach (300 s per solve, an hour in total):
+  `tests/test_classic_portfolio_c2.py` +18: a limit with a valid incumbent at
+  each of the three statuses (labelled, gap 0.0125 and 37 nodes reported, the
+  witness start recorded, the C2 audit passes); a limit never delivers less
+  than the witness (a weaker incumbent and none both give way to it; a solver
+  error does not); an incumbent failing the optimum's checks (fractional,
+  short) fails closed; real HiGHS at a 1e-9 s time limit returns the witness
+  with presolve on and off; real HiGHS at `mip_max_nodes=0` returns the
+  weakest-three witness start, below the optimum, audited, and with no witness
+  `PORTFOLIO_SELECTION_SEARCH_LIMIT`; an illegal roster at each limit still
+  blocks a bank that holds the entry count and a witness;
+  scripted-optimizer banks that keep three limit rosters, stop on the total
+  budget two solves into the fill (`BOUNDED_TIME_LIMIT_STOP`, the host rate
+  read as `BANK_REPORT` from its report), stop on each search limit
+  (`BOUNDED_SEARCH_LIMIT_STOP`, later strata skipped, the chain still built),
+  and still block with two candidates or no witness; a real-HiGHS bank at
+  `mip_max_improving_sols=1` keeps `kSolutionLimit` rosters and audits.
+  `tests/test_portfolio_enforcement.py` +6: SD3's incumbent at each limit and
+  its failed checks; real HiGHS from a feasible start at `mip_max_nodes=0`
+  (presolve off: presolve alone solves three candidates); a scripted SD3 bank
+  keeping two limit rosters; and `run-slate` on the Showdown fixture with SD3's
+  joint model re-solved from its own answer at `mip_max_nodes=0`, a genuine
+  kSolutionLimit incumbent, delivered through the Showdown review export with
+  `PORTFOLIO_SELECTION_LIMIT_INCUMBENT` as an `S` limitation and the
+  independent audit `PASS`.
+  `tests/test_classic_review_c3.py` +6: the incumbent accepted and named, the
+  over-claimed scope withheld, both stop statuses accepted and named, and the
+  card's acceptance through `run-slate` at a node limit and at a real time
+  limit (below).
+
+#### Changed
+
+- `test_nonoptimal_and_solver_error_selection_states_fail_closed` is
+  deterministic and keeps its three assertions. It no longer builds a real
+  bank on `_policy(1)`'s template limits (30 s total, 1.5 s per solve, 10 s
+  joint), where one per-solve limit under load blocked the bank before the stub
+  ran; it selects from a constructed `ClassicCandidateBank` of four hand-built
+  legal rosters. Its stub moved to a shared `_StubHighs`, which records
+  `setSolution`.
+- Tests the brief listed as asserting that a limit blocks, each checked:
+  `test_classic_portfolio_c2.py`'s `test_candidate_timeout_search_limit_and_solver_error_are_distinct`,
+  `test_portfolio_enforcement.py`'s bank test, `test_classic_review_c3.py`'s
+  `CANDIDATE_BANK_TIMEOUT` and `PORTFOLIO_SELECTION_TIMEOUT` cases, and
+  `test_gate_registry.py`'s audit-§4 rows and rung-trigger test all keep their
+  assertions unedited, because each models a limit with no roster or no
+  incumbent, which still blocks under the same code. `test_deadline_controller.py`'s
+  `CANDIDATE_BANK_TIMEOUT` blocker text is still emitted by a blocking bank.
+- Docs: `docs/DATA_CONTRACTS.md` (the C2 bank and joint-solve rules, C3's
+  publication rule, the SD3 bank and joint solve, the host-rate basis, the
+  registry hash), `docs/RUNBOOK.md` (the two "accept only" lines and both
+  rung-trigger paragraphs, which now say the two bank codes mean a bank that
+  stopped without enough), `docs/OPERATOR_GUIDE.md` (the C2 acceptance line).
+  `CLAUDE.md`'s trigger list stays true, since the codes are still emitted
+  exactly when the bank blocks, so it is unchanged and this needs no
+  `ben-review`. `scripts/make_classic_policy.py`'s printed advice stays true
+  for the same reason and is untouched (Session 10's file).
+
+#### Decisions
+
+- A limit-stopped per-candidate roster counts toward its stratum's target like
+  any other and is labelled, not counted apart. It satisfies the stratum's hard
+  constraints (they are MILP rows); what it lacks is proof that it is the best
+  roster for the perturbed objective. Counting it apart would spend more
+  solves at the same per-solve limit, which is the time the bank ran short of.
+- A limit-stopped bank blocks when it holds fewer than the entry count or no
+  `POLICY_FEASIBLE` witness. The witness is computed before the top-k fill, so
+  a bank that stops in the fill (the usual place) already has it. New status
+  names rather than reusing `CANDIDATE_BANK_TIMEOUT` with a non-blocking flag,
+  so the two codes keep meaning "blocking" and `CLAUDE.md`'s rung list stays
+  exactly true.
+- The witness chain can be the selection. It is the joint solve's MIP start,
+  and on a limit the selector returns HiGHS's incumbent or the witness,
+  whichever scores higher, so "no incumbent" can happen only without a witness.
+  The witness is a feasible point of the final model because every bound counts
+  selected lineups and the final bank extends the witness's; the C2 audit
+  re-checks it like any selection. The fallback is in the selector rather than
+  left to the MIP start because HiGHS drops the start under an early limit with
+  presolve off (above).
+- An illegal roster the optimizer returns at a limit is now
+  `CANDIDATE_BANK_SOLVER_ERROR`, as it already was at `kOptimal`, rather than
+  the limit's code: a lower rung does not fix a solver that returns an illegal
+  lineup, and a limit code would now let a stopped bank deliver. The adversarial
+  review found this.
+- One status for C2 and SD3, `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`, the
+  portfolio form of the optimizer's `FEASIBLE_LIMIT`, defined once in
+  `optimizer.py`, which both modules already import. No `mip_gap` threshold: it
+  is a construction preference, the lock-clock ruling would relax it the moment
+  it refused a legal portfolio, and the incumbent is validated legal under
+  every bound either way. The gap is reported, and HiGHS reports none (`null`)
+  when it stops before a bound exists.
+- Limitation class and family: `S`, `search_budget`, whose `covers` already
+  named a joint selection hitting its budget. C1's
+  `SOLVER_TIME_LIMIT_ACCEPTED_LINEUPS` stays in `selection_claims` (`P`); it
+  is not reclassified here.
+- The real-HiGHS acceptance uses search limits, since a wall-clock limit on a
+  real solve cannot be deterministic: `mip_max_nodes=0` for the joint solve
+  and `mip_max_improving_sols=1` for candidate solves, both confirmed above on
+  highspy 1.11.0. The time-limit branch is the same code path and is covered by
+  the `value_valid=True` stub at `kTimeLimit`.
+- `docs/DATA_CONTRACTS.md` records this as new values of existing v1 fields,
+  not a new version: no key is added to or removed from
+  `nfl_classic_candidate_bank_c2_v1` or the assignment artifact, every value an
+  existing artifact can hold keeps its meaning, and a reader that predates the
+  change fails closed on the new values (C3 refused every bank status but the
+  two completions and every joint status but the optimum). `mip_start` and
+  `limit_incumbent_candidates` are report diagnostics, not artifact keys.
+- SD3's bank keeps limit-stopped rosters but a stopped SD3 bank still blocks:
+  SD3 has no jointly solved witness showing the kept bank can fill the entries.
+  Session 10 gives Showdown its ladder. Keeping the rosters goes past the card's
+  Classic line reference but is its row's first clause ("validated
+  time-limited candidates are kept") in a file it names.
+- Files outside the card's and the brief's lists, each for one line of the
+  change: `optimizer.py` (the shared status constant, beside the per-lineup
+  `FEASIBLE_LIMIT` both modules already import), `readable_review.py` (the HTML
+  printed the scope, which is null for an incumbent), `selection.py`'s
+  `objective_limits` string (a Target File), and
+  `.claude/rules/operating-path.md`, whose "time limits write nothing new" the
+  change made false.
+- Session 07b's open item, "the generator's 5 s per-solve limit is not scaled
+  to a measured rate", closes as a delivery risk: a per-solve limit that
+  returns a roster now keeps it and the bank goes on, so it no longer costs a
+  rung. Only a per-solve limit that returns nothing still stops the bank, and
+  that blocks only without the entry count and a witness. Sizing the limit to
+  a measured rate stays a construction preference for Session 10.
+
+#### Verification
+
+- The card's command,
+  `sh ./nfl.sh test tests/test_classic_portfolio_c2.py tests/test_portfolio_enforcement.py tests/test_classic_review_c3.py -x --tb=short`:
+  `136 passed in 80.33s (0:01:20)` (`128 passed in 73.81s` before the review
+  fixes).
+- The card's loop,
+  `for i in $(seq 20); do sh ./nfl.sh test tests/test_classic_portfolio_c2.py -k nonoptimal -x --tb=short || break; done`:
+  20 of 20 runs `12 passed, 34 deselected`, 0.55 to 0.67 s each (and 20 of 20
+  at `9 passed` before the review added three).
+- Full suite before the change: `1647 passed, 1 skipped in 238.33s (0:03:58)`.
+  After: `1677 passed, 1 skipped in 250.76s (0:04:10)` (+30; the skip is the
+  Windows junction test), recorded. `doctor` exit 0 (`pass_status: true`), `git diff --check` clean,
+  `compileall` of the eight changed modules clean, `check_protected_paths.py`:
+  no protected path touched.
+- The card's acceptance, `test_run_slate_delivers_a_limited_incumbent_from_a_time_stopped_bank`:
+  `run-slate` on the Classic fixture with the template policy at limits no
+  small bank reaches, the joint solve on real HiGHS at `mip_max_nodes=0` and,
+  separately, at a 1e-9 s time limit (presolve off; with presolve on HiGHS
+  solves the one-entry model outright and the node-limit case fails, checked),
+  the bank's total budget spent two solves into its fill. Exit 0,
+  `PRIOR_ONLY_CLASSIC_C3_REVIEW_EXPORT`, improvement `DELIVERED`, the C3 CSV
+  the deliverable, both codes `S` limitations, the export audit's joint record
+  `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK` with a null scope, bank
+  `BOUNDED_TIME_LIMIT_STOP`, host rate `BANK_REPORT`.
+
+#### Left open
+
+- The adversarial review found one blocking defect (an illegal roster at a
+  limit, fixed above) and eight smaller items. Fixed: the card's "time-limited"
+  acceptance now also runs on a real 1e-9 s limit; SD3 has an end-to-end test;
+  `operating-path.md` and the fails-closed claim corrected; the
+  `objective_limits` string; the two tests that built real banks on the
+  template's clock limits now use limits no small bank reaches. Recorded
+  above: the SD3 bank change and the files outside the lists. Not independently
+  verified by the reviewer: the full-suite line and the highspy time-limit
+  behaviour, both shown above.
+- A stopped SD3 bank still blocks; Session 10 gives Showdown its ladder.
+- The C2 witness solve and the final joint solve are separate HiGHS runs;
+  when the bank stops before its fill they solve the same candidates twice.
+  Harmless (the second starts from the first's answer) and not optimized.
+
 ### 2026-09-24: fetches, the weather capture and the policy generator keep the deadline (Session 07b, R31)
 
 Session 07 put one delivery budget through `run-slate` and left three clocks

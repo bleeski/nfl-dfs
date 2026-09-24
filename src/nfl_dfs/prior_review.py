@@ -2901,7 +2901,10 @@ def run_prior_review(
                             "joint_selection_status": dict(
                                 (classic_policy_report or {}).get("solve", {})
                             ).get("status"),
-                            "optimality_scope": "ACTUAL_CANDIDATE_BANK",
+                            # Scoped only for a proven optimum (Session 08).
+                            "optimality_scope": dict(
+                                (classic_policy_report or {}).get("solve", {})
+                            ).get("optimality_scope"),
                         },
                         "independent_audit": classic_audit_report,
                     },

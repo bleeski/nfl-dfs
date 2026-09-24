@@ -332,7 +332,10 @@ def select_prior_lineups(
                 "CENTRAL_ESTIMATE_NOT_A_CEILING",
                 "NO_OWNERSHIP_LEVERAGE_OR_DUPLICATION_TERM",
                 "NO_FIELD_OR_PAYOUT_ECONOMICS_CONSULTED",
-                "OPTIMAL_ONLY_OVER_ACTUAL_CANDIDATE_BANK",
+                # A limit incumbent is never called optimal (Session 08).
+                "OPTIMAL_ONLY_OVER_ACTUAL_CANDIDATE_BANK"
+                if portfolio_solve.proven_optimal
+                else "LIMIT_INCUMBENT_NOT_PROVEN_OPTIMAL_OVER_ACTUAL_CANDIDATE_BANK",
             ],
             "lineups": len(selected),
             "selected_lineup_count": len(selected),

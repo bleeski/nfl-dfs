@@ -296,6 +296,150 @@ def test_nonoptimal_joint_selection_state_is_withheld(
     _assert_no_new_output(args)
 
 
+def _limit_stopped(c3_seed, tmp_path, monkeypatch, *, joint=None, scope=None, bank_status=None):
+    """C3 on a seed whose records say a limit stopped the joint solve or the bank."""
+
+    from nfl_dfs import classic_review
+
+    args = _direct_args(c3_seed, tmp_path)
+    original = classic_review._strict_json
+
+    def hook(raw, *, label: str, canonical: bool = False):
+        result = original(raw, label=label, canonical=canonical)
+        if label == "SELECTION":
+            changed = copy.deepcopy(dict(result))
+            enforcement = changed["portfolio_policy"]["enforcement"]
+            if joint is not None:
+                enforcement["joint_selection_status"] = joint
+                enforcement["optimality_scope"] = scope
+            if bank_status is not None:
+                enforcement["candidate_bank_status"] = bank_status
+            return changed
+        if label == "CANDIDATE_BANK" and bank_status is not None:
+            changed = copy.deepcopy(dict(result))
+            changed["status"] = bank_status
+            return changed
+        return result
+
+    monkeypatch.setattr(classic_review, "_strict_json", hook)
+    return args
+
+
+def test_a_limit_incumbent_joint_selection_is_accepted_and_named(
+    c3_seed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Session 08: labelled, with no optimality scope, and named as a limitation."""
+
+    args = _limit_stopped(c3_seed, tmp_path / "incumbent", monkeypatch,
+                          joint="FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", scope=None)
+    result = create_classic_review_package(**args)
+    assert result.audit["joint_selection"]["status"] == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK"
+    assert result.audit["joint_selection"]["optimality_scope"] is None
+    assert any(item.startswith("PORTFOLIO_SELECTION_LIMIT_INCUMBENT:") for item in result.audit["limitations"])
+    assert result.data["limitations"] == result.audit["limitations"]
+    html = Path(result.html_path).read_text(encoding="utf-8")
+    assert "feasible, not proven optimal" in html
+    assert Path(result.export_path).is_file()
+
+
+def test_a_limit_incumbent_claiming_the_optimum_scope_is_withheld(
+    c3_seed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    args = _limit_stopped(c3_seed, tmp_path / "overclaim", monkeypatch,
+                          joint="FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", scope="ACTUAL_CANDIDATE_BANK")
+    with pytest.raises(ClassicReviewError, match="CLASSIC_C3_C2_OPTIMALITY_SCOPE_MISMATCH"):
+        create_classic_review_package(**args)
+    _assert_no_new_output(args)
+
+
+@pytest.mark.parametrize("bank_status", ("BOUNDED_TIME_LIMIT_STOP", "BOUNDED_SEARCH_LIMIT_STOP"))
+def test_a_limit_stopped_bank_is_accepted_and_named(
+    c3_seed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bank_status: str
+) -> None:
+    args = _limit_stopped(c3_seed, tmp_path / bank_status.lower(), monkeypatch, bank_status=bank_status)
+    result = create_classic_review_package(**args)
+    assert result.audit["candidate_bank"]["status"] == bank_status
+    assert any(item.startswith(f"CANDIDATE_BANK_STOPPED_AT_LIMIT:{bank_status}:")
+               for item in result.audit["limitations"])
+    # A proven optimum over the bank stays scoped to it.
+    assert result.audit["joint_selection"]["optimality_scope"] == "ACTUAL_CANDIDATE_BANK"
+
+
+@pytest.mark.parametrize(
+    ("limit", "model_status"), (("nodes", "kSolutionLimit"), ("time", "kTimeLimit"))
+)
+def test_run_slate_delivers_a_limited_incumbent_from_a_time_stopped_bank(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: str, model_status: str
+) -> None:
+    """The card's acceptance, end to end through run-slate and the C3 export.
+
+    Real HiGHS stops the joint selection holding the bank's witness start:
+    at `mip_max_nodes=0` (kSolutionLimit), and at a 1e-9 s time limit
+    (kTimeLimit), which a clock can only reach sooner. The bank's total budget
+    runs out two solves into its top-k fill; its other limits are ones a small
+    bank cannot reach. The export is delivered, both limits are named `S`
+    limitations, and this host's candidate rate is still read from the bank's
+    own report.
+    """
+
+    import highspy
+
+    from nfl_dfs import classic_portfolio, selection
+    from nfl_dfs.classic_portfolio_policy import classic_portfolio_policy_template
+    from nfl_dfs.deadline import read_candidate_rate
+
+    from .test_classic_portfolio_c2 import UNREACHABLE_LIMITS, _stop_in_the_fill
+    from .test_deadline_controller import _classic, _truth_codes
+
+    def policy_file(attachments: Path) -> Path:
+        slate = parse_salaries(attachments / "salary.csv")
+        entries = parse_entries(attachments / "entries.csv")
+        path = attachments.parent / "classic_policy.json"
+        path.write_text(json.dumps(classic_portfolio_policy_template(
+            slate, tuple(item.entry_id for item in entries.authorizations),
+            entry_sha256=entries.raw_hash, limits=UNREACHABLE_LIMITS,
+        )), encoding="utf-8")
+        return path
+
+    def limited():
+        model = highspy.Highs()
+        model.setOptionValue("presolve", "off")  # presolve alone picks one lineup of a small bank
+        if limit == "nodes":
+            model.setOptionValue("mip_max_nodes", 0)
+        return model
+
+    real_solve = selection.solve_classic_portfolio
+
+    def solve(policy, bank, **kwargs):
+        if limit == "time":
+            kwargs["time_limit_seconds"] = 1e-9
+        return real_solve(policy, bank, solver_factory=limited, **kwargs)
+
+    monkeypatch.setattr(selection, "solve_classic_portfolio", solve)
+    _stop_in_the_fill(monkeypatch, classic_portfolio, after=2)
+    code, report, root = _classic(tmp_path, monkeypatch, run_id="limited", policy=policy_file,
+                                  deadline="2099-01-01T00:00:00+00:00")
+    assert code == 0 and report["stage"] == "PRIOR_ONLY_CLASSIC_C3_REVIEW_EXPORT", report["blockers"][:3]
+    assert report["improvement"]["status"] == "DELIVERED"
+    assert report["latest_deliverable"]["producer"] != "run-slate:baseline"
+    assert Path(report["bulk_entry_csv"]).is_file()
+    assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    codes = _truth_codes(report)
+    assert codes["PORTFOLIO_SELECTION_LIMIT_INCUMBENT"] == "S"
+    assert codes["CANDIDATE_BANK_STOPPED_AT_LIMIT"] == "S"
+    named = next(item for item in report["release_truths"]["delivery_limitations"]
+                 if item["code"] == "PORTFOLIO_SELECTION_LIMIT_INCUMBENT")
+    assert f"stopped at {model_status} with a validated incumbent" in named["detail"]
+    audit = json.loads(Path(report["prior_review_artifacts"]["classic_export_audit"]).read_text(encoding="utf-8"))
+    assert audit["joint_selection"] == {
+        "status": "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", "optimality_scope": None, "c2_audit_status": "PASS",
+    }
+    assert audit["candidate_bank"]["status"] == "BOUNDED_TIME_LIMIT_STOP"
+    rate = report["deadline"]["candidate_rate"]
+    assert rate["basis"] == "BANK_REPORT" and rate["seconds_per_candidate"] > 0
+    assert read_candidate_rate(tmp_path / "runs" / "host_candidate_rates.json", mode="CLASSIC") is not None
+
+
 def test_prefilled_stale_partial_and_unauthorized_exports_are_withheld(
     c3_seed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import itertools
 import json
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,7 +13,10 @@ import highspy
 import pytest
 
 from nfl_dfs.classic_portfolio import (
+    ClassicCandidate,
     ClassicCandidateBank,
+    _group_matches,
+    _stack_matches,
     assignment_artifact_bytes,
     audit_classic_portfolio,
     build_classic_candidate_bank,
@@ -433,6 +438,115 @@ def test_candidate_timeout_search_limit_and_solver_error_are_distinct(
     assert bank.blocking
 
 
+def _legal_rosters(slate: SlateContract, count: int) -> list[tuple[str, ...]]:
+    """Distinct legal Classic rosters from the fixture slate, with no solver.
+
+    QB, RB1, RB2, three WRs and the TE from one team, the opponent's WR1 at
+    FLEX (a bring-back, so both default stack rules match), and a DST from
+    another game. Every roster is checked by `validate_lineup`.
+    """
+
+    rows = {}
+    for row in slate.players:
+        rows.setdefault((row.team, row.position), []).append(row)
+    games = {row.team: row.game_id for row in slate.players}
+    opponents = {row.team: row.opponent for row in slate.players}
+    teams = sorted(games)
+    rosters: list[tuple[str, ...]] = []
+    for team in teams:
+        dst_team = next(other for other in teams if games[other] != games[team])
+        qb, rb, te = rows[(team, "QB")][0], rows[(team, "RB")], rows[(team, "TE")][0]
+        flex = rows[(opponents[team], "WR")][0]
+        dst = rows[(dst_team, "DST")][0]
+        for wrs in itertools.combinations(rows[(team, "WR")], 3):
+            roster = tuple(
+                row.dk_id for row in (qb, rb[0], rb[1], *wrs, te, flex, dst)
+            )
+            assert validate_lineup(slate, roster).lineup is not None, roster
+            rosters.append(roster)
+            if len(rosters) == count:
+                return rosters
+    raise AssertionError("fixture slate has too few rosters")
+
+
+def _constructed_bank(slate, policy, rosters, *, chain=(), status="BOUNDED_COMPLETION"):
+    """A bank built by hand, so no wall-clock HiGHS limit decides a test."""
+
+    objective = _objective(slate)
+    by_id = {row.dk_id: row for row in slate.players}
+    candidates = []
+    for roster in rosters:
+        validation = validate_lineup(slate, roster)
+        assert validation.lineup is not None
+        rows = [by_id[dk_id] for dk_id in roster]
+        people = frozenset(row.underlying_id for row in rows)
+        candidates.append(
+            ClassicCandidate(
+                roster=tuple(roster),
+                canonical_key=validation.lineup.canonical_key,
+                people=people,
+                teams=frozenset(row.team for row in rows),
+                games=frozenset(row.game_id for row in rows),
+                prior_points=sum(objective[dk_id] for dk_id in roster),
+                families=(),
+                group_matches=_group_matches(people, policy.groups),
+                stack_matches=_stack_matches(slate, roster, policy.stack_rules),
+                source_stratum="constructed",
+                source_solver_status="OPTIMAL",
+                source_model_status="kOptimal",
+                source_mip_gap=0.0,
+                source_node_count=1,
+            )
+        )
+    return ClassicCandidateBank(
+        tuple(candidates), status, False, len(candidates), policy.entry_count, 0.0, 0,
+        len(candidates), 0, 0.0, "kOptimal", (), tuple(chain),
+        "POLICY_FEASIBLE" if chain else "NOT_RUN",
+    )
+
+
+class _StubHighs:
+    """The joint model's calls, recorded; the result is whatever the test sets."""
+
+    model_status = highspy.HighsModelStatus.kOptimal
+    info = SimpleNamespace(mip_gap=float("inf"), mip_node_count=0)
+    solution = SimpleNamespace(value_valid=False, col_value=[])
+    starts: list = []
+
+    def setOptionValue(self, *_args):
+        pass
+
+    def addVars(self, *_args):
+        pass
+
+    def changeColsIntegrality(self, *_args):
+        pass
+
+    def changeObjectiveSense(self, *_args):
+        pass
+
+    def changeColsCost(self, *_args):
+        pass
+
+    def addRow(self, *_args):
+        pass
+
+    def setSolution(self, count, indexes, values):
+        type(self).starts.append((count, list(indexes), list(values)))
+
+    def run(self):
+        pass
+
+    def getModelStatus(self):
+        return self.model_status
+
+    def getInfo(self):
+        return self.info
+
+    def getSolution(self):
+        return self.solution
+
+
 @pytest.mark.parametrize(
     ("model_status", "expected"),
     [
@@ -442,43 +556,376 @@ def test_candidate_timeout_search_limit_and_solver_error_are_distinct(
     ],
 )
 def test_nonoptimal_and_solver_error_selection_states_fail_closed(model_status, expected) -> None:
+    """No incumbent keeps today's codes.
+
+    Deterministic since Session 08: the bank is constructed, not built on the
+    template's wall-clock HiGHS limits, which under load once blocked the bank
+    before this stub ran.
+    """
+
     slate, policy, _source, _entry = _policy(1)
-    bank = build_classic_candidate_bank(slate, _objective(slate), policy)
+    bank = _constructed_bank(slate, policy, _legal_rosters(slate, 4))
 
-    class StubHighs:
-        def setOptionValue(self, *_args):
-            pass
+    class StubHighs(_StubHighs):
+        pass
 
-        def addVars(self, *_args):
-            pass
-
-        def changeColsIntegrality(self, *_args):
-            pass
-
-        def changeObjectiveSense(self, *_args):
-            pass
-
-        def changeColsCost(self, *_args):
-            pass
-
-        def addRow(self, *_args):
-            pass
-
-        def run(self):
-            pass
-
-        def getModelStatus(self):
-            return model_status
-
-        def getInfo(self):
-            return SimpleNamespace(mip_gap=float("inf"), mip_node_count=0)
-
-        def getSolution(self):
-            return SimpleNamespace(value_valid=False, col_value=[])
-
+    StubHighs.model_status = model_status
     result = solve_classic_portfolio(policy, bank, solver_factory=StubHighs)
     assert result.status == expected
     assert not result.passed
+
+
+@pytest.mark.parametrize(
+    "model_status",
+    [
+        highspy.HighsModelStatus.kTimeLimit,
+        highspy.HighsModelStatus.kIterationLimit,
+        highspy.HighsModelStatus.kSolutionLimit,
+    ],
+)
+def test_nonoptimal_limit_with_a_valid_incumbent_returns_it_validated(model_status) -> None:
+    """A limit that leaves a valid integer incumbent returns it, labelled, never optimal."""
+
+    slate, policy, source, entry = _policy(3)
+    # The witness (3, 4, 5) scores below the incumbent (0, 1, 3), so HiGHS's stands.
+    bank = _constructed_bank(slate, policy, _legal_rosters(slate, 6), chain=(3, 4, 5))
+
+    class StubHighs(_StubHighs):
+        starts = []
+        info = SimpleNamespace(mip_gap=0.0125, mip_node_count=37)
+        solution = SimpleNamespace(value_valid=True, col_value=[1.0, 1.0, 0.0, 1.0, 0.0, 0.0])
+
+    StubHighs.model_status = model_status
+    result = solve_classic_portfolio(policy, bank, solver_factory=StubHighs)
+    assert result.status == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK"
+    assert result.passed and not result.proven_optimal
+    assert sorted(result.selected_candidate_indexes) == [0, 1, 3]
+    assert (result.mip_gap, result.node_count, result.model_status) == (0.0125, 37, model_status.name)
+    report = result.as_report()
+    assert report["optimality_scope"] is None
+    assert (report["mip_start"], report["incumbent_source"]) == ("POLICY_FEASIBLE_WITNESS", "JOINT_SOLVE")
+    assert StubHighs.starts == [(3, [3, 4, 5], [1.0, 1.0, 1.0])]  # the witness seeded it
+    audit, _candidate, _assignment = _audit(slate, policy, source, entry, bank, result)
+    assert audit.passed, audit.problems
+
+
+def test_nonoptimal_limit_never_delivers_less_than_the_witness() -> None:
+    """An incumbent below the witness gives way to it; a limit with none returns it."""
+
+    slate, policy, source, entry = _policy(3)
+    bank = _constructed_bank(slate, policy, _legal_rosters(slate, 6), chain=(0, 1, 2))
+
+    class Weaker(_StubHighs):
+        model_status = highspy.HighsModelStatus.kTimeLimit
+        solution = SimpleNamespace(value_valid=True, col_value=[0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+
+    class Empty(_StubHighs):
+        model_status = highspy.HighsModelStatus.kIterationLimit
+
+    for stub in (Weaker, Empty):
+        result = solve_classic_portfolio(policy, bank, solver_factory=stub)
+        assert result.status == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", stub
+        assert sorted(result.selected_candidate_indexes) == [0, 1, 2]
+        assert result.as_report()["incumbent_source"] == "POLICY_FEASIBLE_WITNESS"
+        assert result.model_status == stub.model_status.name and not result.proven_optimal
+        audit, _candidate, _assignment = _audit(slate, policy, source, entry, bank, result)
+        assert audit.passed, audit.problems
+
+    class Broken(_StubHighs):
+        model_status = highspy.HighsModelStatus.kSolveError
+
+    # A solver error is not a limit: the witness never covers it.
+    assert solve_classic_portfolio(policy, bank, solver_factory=Broken).status == "PORTFOLIO_SELECTION_SOLVER_ERROR"
+
+
+@pytest.mark.parametrize(
+    "col_value",
+    [
+        [0.5, 0.5, 1.0, 1.0, 0.0, 0.0],  # not integral
+        [1.0, 1.0, 0.0, 0.0, 0.0, 0.0],  # two lineups for three entries
+    ],
+)
+def test_nonoptimal_incumbent_failing_the_optimums_checks_fails_closed(col_value) -> None:
+    slate, policy, _source, _entry = _policy(3)
+    bank = _constructed_bank(slate, policy, _legal_rosters(slate, 6))
+
+    class StubHighs(_StubHighs):
+        model_status = highspy.HighsModelStatus.kTimeLimit
+        solution = SimpleNamespace(value_valid=True, col_value=col_value)
+
+    result = solve_classic_portfolio(policy, bank, solver_factory=StubHighs)
+    assert (result.status, result.model_status) == ("PORTFOLIO_SELECTION_SOLVER_ERROR", "INVALID_INTEGER_SOLUTION")
+    assert not result.passed and result.selected_candidate_indexes == ()
+
+
+def _node_limited_highs() -> highspy.Highs:
+    """Real HiGHS, stopped before its first branch-and-bound node: a search limit, no clock."""
+
+    model = highspy.Highs()
+    model.setOptionValue("mip_max_nodes", 0)
+    return model
+
+
+@pytest.mark.parametrize("presolve", ["on", "off"])
+def test_nonoptimal_real_highs_time_limit_returns_the_witness_validated(presolve) -> None:
+    """A real HiGHS time limit, 1e-9 s: the clock can only stop it sooner, never change the outcome.
+
+    With presolve on, HiGHS returns the witness start itself; with presolve off
+    it loses the start that early, and the selector returns the witness.
+    """
+
+    slate, policy, source, entry = _policy(3)
+    rosters = _legal_rosters(slate, 12)
+    bank = _constructed_bank(slate, policy, rosters, chain=(9, 10, 11))
+
+    def factory() -> highspy.Highs:
+        model = highspy.Highs()
+        model.setOptionValue("presolve", presolve)
+        return model
+
+    result = solve_classic_portfolio(policy, bank, time_limit_seconds=1e-9, solver_factory=factory)
+    assert (result.status, result.model_status) == ("FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", "kTimeLimit")
+    assert sorted(result.selected_candidate_indexes) == [9, 10, 11]
+    assert result.as_report()["incumbent_source"] in {"JOINT_SOLVE", "POLICY_FEASIBLE_WITNESS"}
+    assert result.as_report()["optimality_scope"] is None and not result.proven_optimal
+    audit, _candidate, _assignment = _audit(slate, policy, source, entry, bank, result)
+    assert audit.passed, audit.problems
+
+
+def test_nonoptimal_real_highs_node_limit_returns_the_witness_start_validated() -> None:
+    """highspy 1.11.0 returns the witness MIP start as the incumbent under a node limit."""
+
+    slate, policy, source, entry = _policy(3)
+    rosters = _legal_rosters(slate, 12)
+    objective = _objective(slate)
+    weakest = sorted(range(len(rosters)), key=lambda index: sum(objective[d] for d in rosters[index]))[:3]
+    bank = _constructed_bank(slate, policy, rosters, chain=tuple(weakest))
+    result = solve_classic_portfolio(policy, bank, solver_factory=_node_limited_highs)
+    assert result.status == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK"
+    assert result.model_status == "kSolutionLimit"
+    assert result.as_report()["optimality_scope"] is None
+    assert sorted(result.selected_candidate_indexes) == sorted(weakest)
+    optimum = solve_classic_portfolio(policy, bank)
+    assert optimum.status == "OPTIMAL_ACTUAL_CANDIDATE_BANK" and optimum.proven_optimal
+    assert result.objective_prior_points < optimum.objective_prior_points  # an incumbent, not the optimum
+    audit, _candidate, _assignment = _audit(slate, policy, source, entry, bank, result)
+    assert audit.passed, audit.problems
+    # With no witness to start from, the same limit leaves no incumbent: today's code.
+    bare = replace(bank, feasible_chain_indexes=(), feasible_chain_status="NOT_RUN")
+    unseeded = solve_classic_portfolio(policy, bare, solver_factory=_node_limited_highs)
+    assert (unseeded.status, unseeded.passed) == ("PORTFOLIO_SELECTION_SEARCH_LIMIT", False)
+
+
+class _ScriptedOptimizer:
+    """A `LineupOptimizer` stand-in that plays a script, so no wall clock decides a bank.
+
+    Every stratum's optimizer reads the same class-level script; when it runs
+    out, each solve reports the model infeasible.
+    """
+
+    script: list = []
+
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+    def add_required_row(self, *_args):
+        pass
+
+    def add_selected_count_bounds(self, *_args, **_kwargs):
+        pass
+
+    def add_classic_qb_correlation_bounds(self, *_args, **_kwargs):
+        pass
+
+    def add_no_good(self, *_args):
+        pass
+
+    def add_person_overlap_limit(self, *_args):
+        pass
+
+    def set_time_limit(self, *_args):
+        pass
+
+    def solve(self, *_args):
+        if not type(self).script:
+            return SimpleNamespace(status="INFEASIBLE", roster=None, model_status="kInfeasible",
+                                   node_count=0, mip_gap=None)
+        status, model_status, roster = type(self).script.pop(0)
+        return SimpleNamespace(status=status, roster=roster, model_status=model_status,
+                               node_count=7, mip_gap=0.02 if status == "FEASIBLE_LIMIT" else 0.0)
+
+
+def _scripted(monkeypatch, script):
+    from nfl_dfs import classic_portfolio as module
+
+    class Scripted(_ScriptedOptimizer):
+        pass
+
+    Scripted.script = list(script)
+    monkeypatch.setattr(module, "LineupOptimizer", Scripted)
+    return module
+
+
+# The witness's joint solve still runs on real HiGHS; a selection budget no
+# small bank can reach keeps its clock out of these tests.
+_UNREACHABLE_SELECTION = {"selection_milliseconds": 3_600_000}
+# The same for a real bank's candidate solves, whose outcome a search limit
+# decides: no clock limit a small bank can reach.
+UNREACHABLE_LIMITS = {
+    "candidate_total_milliseconds": 3_600_000,
+    "candidate_per_solve_milliseconds": 300_000,
+    "selection_milliseconds": 3_600_000,
+}
+
+
+def test_a_limit_stopped_candidate_solve_keeps_its_roster_labelled(monkeypatch) -> None:
+    slate, policy, _source, _entry = _policy(3, limits=_UNREACHABLE_SELECTION)
+    rosters = _legal_rosters(slate, 12)
+    script = [("FEASIBLE_LIMIT", "kTimeLimit", rosters[0]), ("FEASIBLE_LIMIT", "kSolutionLimit", rosters[1]),
+              ("FEASIBLE_LIMIT", "kIterationLimit", rosters[2])]
+    script += [("OPTIMAL", "kOptimal", roster) for roster in rosters[3:]]
+    _scripted(monkeypatch, script)
+    bank = build_classic_candidate_bank(slate, _objective(slate), policy)
+    assert not bank.blocking and bank.status in {"BOUNDED_COMPLETION", "EXHAUSTIVE_COMPLETION"}
+    kept = [candidate for candidate in bank.candidates if candidate.source_solver_status == "FEASIBLE_LIMIT"]
+    assert [candidate.roster for candidate in kept] == rosters[:3]
+    assert [candidate.source_model_status for candidate in kept] == ["kTimeLimit", "kSolutionLimit", "kIterationLimit"]
+    assert all(candidate.source_mip_gap == 0.02 and candidate.source_node_count == 7 for candidate in kept)
+    # Each counted toward its family stratum's target like any candidate.
+    families = [stratum for stratum in bank.strata if stratum.kind == "family"]
+    assert [(item.qualifying, item.termination) for item in families[:3]] == [(1, "TARGET_REACHED")] * 3
+    assert bank.as_report()["limit_incumbent_candidates"] == 3
+    assert solve_classic_portfolio(policy, bank).passed
+
+
+@pytest.mark.parametrize("model_status", ["kTimeLimit", "kIterationLimit", "kSolutionLimit"])
+def test_an_illegal_roster_at_a_limit_still_blocks_the_bank(monkeypatch, model_status) -> None:
+    """The optimizer refusing its own incumbent is a solver error, never a limit stop."""
+
+    slate, policy, _source, _entry = _policy(3, limits=_UNREACHABLE_SELECTION)
+    rosters = _legal_rosters(slate, 40)
+    illegal = (rosters[0][0],) * 9  # the same QB in every slot
+    assert validate_lineup(slate, illegal).lineup is None
+    script = [("OPTIMAL", "kOptimal", roster) for roster in rosters[:10]]
+    script.append(("NO_SOLUTION", model_status, illegal))
+    _scripted(monkeypatch, script)
+    bank = build_classic_candidate_bank(slate, _objective(slate), policy)
+    assert len(bank.candidates) >= policy.entry_count  # enough, and a witness: still blocked
+    assert (bank.status, bank.blocking) == ("CANDIDATE_BANK_SOLVER_ERROR", True)
+    assert ("stack", "ILLEGAL_SOLVER_ROSTER") in [(item.kind, item.termination) for item in bank.strata]
+
+
+def _stop_in_the_fill(monkeypatch, module, *, after: int) -> None:
+    """The bank's total budget runs out `after` solves into the top-k fill."""
+
+    real_enumerate = module._Enumerator.enumerate
+    real_elapsed = module._Enumerator.elapsed
+
+    def enumerate_(self, *, kind, **kwargs):
+        if kind == "top_k_fill":
+            self.stop_after = self.solve_count + after
+        return real_enumerate(self, kind=kind, **kwargs)
+
+    def elapsed(self):
+        stop = getattr(self, "stop_after", None)
+        if stop is not None and self.solve_count >= stop:
+            return self.total_budget + 0.25
+        return real_elapsed(self)
+
+    monkeypatch.setattr(module._Enumerator, "enumerate", enumerate_)
+    monkeypatch.setattr(module._Enumerator, "elapsed", elapsed)
+
+
+def test_a_bank_stopped_by_its_total_budget_with_a_witness_does_not_block(monkeypatch) -> None:
+    from nfl_dfs.deadline import bank_rate_observation
+
+    slate, policy, _source, _entry = _policy(3, limits=_UNREACHABLE_SELECTION)
+    rosters = _legal_rosters(slate, 40)
+    module = _scripted(monkeypatch, [("OPTIMAL", "kOptimal", roster) for roster in rosters])
+    _stop_in_the_fill(monkeypatch, module, after=2)
+    bank = build_classic_candidate_bank(slate, _objective(slate), policy)
+    assert bank.status == "BOUNDED_TIME_LIMIT_STOP" and not bank.blocking and not bank.exhaustive
+    assert bank.feasible_chain_status == "POLICY_FEASIBLE"
+    assert len(bank.candidates) >= policy.entry_count
+    assert bank.strata[-1].kind == "top_k_fill" and bank.strata[-1].termination == "TIMEOUT"
+    selection = solve_classic_portfolio(policy, bank)
+    assert selection.proven_optimal and selection.as_report()["mip_start"] == "POLICY_FEASIBLE_WITNESS"
+    # run-slate still records this host's rate from the bank's own report.
+    report = {"selection": {"selection": {"portfolio_policy": {"candidate_bank": bank.as_report()}}}}
+    blockers = ("CANDIDATE_BANK_STOPPED_AT_LIMIT: the candidate bank stopped at its BOUNDED_TIME_LIMIT_STOP",)
+    observed = bank_rate_observation(report, blockers, declared_bank_seconds=30.0)
+    assert observed == (len(bank.candidates), round(bank.elapsed_seconds, 6), "BANK_REPORT")
+
+
+@pytest.mark.parametrize("model_status", ["kIterationLimit", "kSolutionLimit"])
+def test_a_bank_stopped_by_a_search_limit_with_a_witness_does_not_block(monkeypatch, model_status) -> None:
+    slate, policy, _source, _entry = _policy(3, limits=_UNREACHABLE_SELECTION)
+    rosters = _legal_rosters(slate, 40)
+    script = [("OPTIMAL", "kOptimal", roster) for roster in rosters[:10]]
+    script.append(("NO_SOLUTION", model_status, None))
+    _scripted(monkeypatch, script)
+    bank = build_classic_candidate_bank(slate, _objective(slate), policy)
+    assert bank.status == "BOUNDED_SEARCH_LIMIT_STOP" and not bank.blocking
+    terminations = [(stratum.kind, stratum.termination) for stratum in bank.strata]
+    stopped = terminations.index(("stack", "SEARCH_LIMIT"))
+    # Later solver strata do not run; the solver-free witness chain still does.
+    assert all(term == "NOT_RUN_AFTER_LIMIT_STOP" for kind, term in terminations[stopped + 1:]
+               if kind != "policy_feasible_chain")
+    assert ("policy_feasible_chain", "TARGET_REACHED") in terminations[stopped + 1:]
+    assert bank.feasible_chain_status == "POLICY_FEASIBLE"
+    assert solve_classic_portfolio(policy, bank).passed
+
+
+def test_a_limit_stopped_bank_without_enough_or_without_a_witness_still_blocks(monkeypatch) -> None:
+    slate, policy, _source, _entry = _policy(3, limits=_UNREACHABLE_SELECTION)
+    rosters = _legal_rosters(slate, 40)
+    # Two candidates for three entries.
+    module = _scripted(monkeypatch, [("OPTIMAL", "kOptimal", rosters[0]), ("NO_SOLUTION", "kTimeLimit", None)])
+    monkeypatch.setattr(module._Enumerator, "expand_validated_neighbors",
+                        lambda self, *, kind, target, subject=None: None)
+    few = build_classic_candidate_bank(slate, _objective(slate), policy)
+    assert (few.status, few.blocking) == ("CANDIDATE_BANK_TIMEOUT", True)
+    assert solve_classic_portfolio(policy, few).model_status == "NOT_RUN_BLOCKING_BANK"
+    monkeypatch.undo()
+    # Enough candidates, but the witness failed.
+    module = _scripted(monkeypatch, [("OPTIMAL", "kOptimal", roster) for roster in rosters])
+    _stop_in_the_fill(monkeypatch, module, after=2)
+    real_solve = module.solve_classic_portfolio
+
+    def no_witness(policy, bank, **kwargs):
+        if bank.feasible_chain_status == "PENDING":
+            return replace(real_solve(policy, bank, **kwargs), status="INCOMPLETE_BANK_EXHAUSTION",
+                           selected_candidate_indexes=())
+        return real_solve(policy, bank, **kwargs)
+
+    monkeypatch.setattr(module, "solve_classic_portfolio", no_witness)
+    unwitnessed = build_classic_candidate_bank(slate, _objective(slate), policy)
+    assert len(unwitnessed.candidates) >= policy.entry_count
+    assert unwitnessed.feasible_chain_status == "INCOMPLETE_BANK_EXHAUSTION"
+    assert (unwitnessed.status, unwitnessed.blocking) == ("CANDIDATE_BANK_TIMEOUT", True)
+
+
+def test_a_real_highs_candidate_solve_stopped_by_a_search_limit_keeps_its_roster(monkeypatch) -> None:
+    """`mip_max_improving_sols=1`: real HiGHS stops some solves at kSolutionLimit with a roster."""
+
+    from nfl_dfs import classic_portfolio as module
+    from nfl_dfs.optimizer import LineupOptimizer
+
+    class FirstImprovingSolution(LineupOptimizer):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._highs.setOptionValue("mip_max_improving_sols", 1)
+
+    monkeypatch.setattr(module, "LineupOptimizer", FirstImprovingSolution)
+    slate, policy, source, entry = _policy(3, limits=UNREACHABLE_LIMITS)
+    bank = build_classic_candidate_bank(slate, _objective(slate), policy)
+    assert not bank.blocking, bank.status
+    kept = [candidate for candidate in bank.candidates if candidate.source_solver_status == "FEASIBLE_LIMIT"]
+    assert kept and {candidate.source_model_status for candidate in kept} == {"kSolutionLimit"}
+    selection = solve_classic_portfolio(policy, bank)
+    assert selection.passed
+    audit, _candidate, _assignment = _audit(slate, policy, source, entry, bank, selection)
+    assert audit.passed, audit.problems
 
 
 def test_c3_full_prior_review_writes_bound_review_package_and_replays(tmp_path: Path) -> None:

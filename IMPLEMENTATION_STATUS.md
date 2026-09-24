@@ -1,5 +1,23 @@
 # Implementation Status
 
+## Capability added: 2026-09-24 (Session 08)
+
+A time or search limit no longer throws away what the Classic C2 bank built.
+A per-candidate solve a limit stops with a legal roster keeps it, labelled
+`FEASIBLE_LIMIT`; a bank stopped by its total budget or a limit is
+`BOUNDED_TIME_LIMIT_STOP` or `BOUNDED_SEARCH_LIMIT_STOP`, and not blocking,
+when it holds the entry count and a `POLICY_FEASIBLE` witness. Both joint
+selectors (C2 and SD3) return a limit's valid integer incumbent after the
+optimum's own checks as `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`, with gap and
+nodes and no optimality scope; the C2 solve starts from the witness and, on a
+limit, returns whichever of HiGHS's incumbent and the witness scores higher. C3 and SD3's review export accept both, and the
+file ships naming `CANDIDATE_BANK_STOPPED_AT_LIMIT` and
+`PORTFOLIO_SELECTION_LIMIT_INCUMBENT` (`S`). Verified end to end through
+`run-slate` on real HiGHS stopped by a node limit and by a time limit, and for
+SD3 through the Showdown export. Not yet: a stopped SD3 bank
+still blocks (no joint-solved witness), and nothing walks the rung ladder when
+a bank does block (Session 10).
+
 ## Capability added: 2026-09-24 (Session 07b)
 
 The three clocks Session 07 left fixed keep the run's deadline.

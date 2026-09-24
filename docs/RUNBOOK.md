@@ -142,7 +142,11 @@ the baseline is the file. For a replay of a past slate, pass a later
 
 If a run reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
 `CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, regenerate one rung
-lower and rerun immediately. Do not stop to ask; see "Shipping under a lock
+lower and rerun immediately. Since Session 08 the last two mean the bank
+stopped at a limit without the entry count or a policy-feasible witness; a bank
+that stopped with both reports `BOUNDED_TIME_LIMIT_STOP` or
+`BOUNDED_SEARCH_LIMIT_STOP`, delivers, and names `CANDIDATE_BANK_STOPPED_AT_LIMIT`,
+which is not a reason to drop a rung. Do not stop to ask; see "Shipping under a lock
 clock", summarized in `CLAUDE.md` and reproduced in full at the end of this runbook. Rung 4 emits no policy and runs C1 sequential selection.
 It is the last structural rung, not a guaranteed file: C1 writes review JSON
 only (`prior_review.py:3016`) and raises when distinct lineups run out
@@ -151,9 +155,12 @@ below does.
 
 C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
 solver-error, structural-infeasibility, modeled-bank-infeasibility, and
-incomplete-bank-exhaustion states separately. Accept only
-`OPTIMAL_ACTUAL_CANDIDATE_BANK` plus independent audit `PASS`; this is optimal
-over the reported bank only. Before accepting the display, require
+incomplete-bank-exhaustion states separately. Accept
+`OPTIMAL_ACTUAL_CANDIDATE_BANK` (optimal over the reported bank only) or, since
+Session 08, `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK` (a time or search limit
+stopped the joint solve holding a validated incumbent: legal under every bound,
+not proven optimal, named `PORTFOLIO_SELECTION_LIMIT_INCUMBENT`), each with
+independent audit `PASS`. Before accepting the display, require
 `classic_review_export_audit.json` status `PASS`,
 `DISPLAY_RECONCILIATION=PASS`, the exact review CSV SHA-256, and all four
 release truths. Start with the workbook or HTML; inspect every exact Entry ID,
@@ -935,9 +942,11 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    exclusions, hard/advisory groups and registered stack rules, uniqueness and
    pairwise person overlap. It creates a deterministic bounded legal candidate
    bank, a policy-feasible chain before top-objective fill, and one joint
-   assignment without cycling. Accept only
-   `OPTIMAL_ACTUAL_CANDIDATE_BANK` and independent audit `PASS`; that status is
-   optimal over the reported actual bank only. C2 writes machine-readable JSON
+   assignment without cycling. Accept
+   `OPTIMAL_ACTUAL_CANDIDATE_BANK`, optimal over the reported actual bank only,
+   or since Session 08 `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`, a validated
+   incumbent a time or search limit left, feasible and not proven optimal; each
+   with independent audit `PASS`. C2 writes machine-readable JSON
    only. C3 independently reparses every bound artifact and proposed/final CSV,
    recomputes the complete portfolio and every hard limit, and publishes the
    exact-template review CSV plus readable JSON/HTML/workbook only after audit
@@ -1072,6 +1081,13 @@ raises `SOLVER_RETURNED_NO_LINEUP` when distinct lineups run out
 reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
 `CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun
 immediately rather than diagnosing. Diagnose afterwards, in the changelog.
+Since Session 08 the bank keeps the rosters a limit-stopped solve returns, and
+those two codes appear only when a limit left the bank without the entry count
+or a policy-feasible witness; a bank with both delivers under
+`BOUNDED_TIME_LIMIT_STOP` or `BOUNDED_SEARCH_LIMIT_STOP`, and a joint solve a
+limit stopped with a valid incumbent delivers it as
+`FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`. Both are named limitations, not rung
+triggers.
 
 **Evidence gates** are truth claims: official activity, current offensive role,
 weather capture and its expiry, identity resolution, prior-package expiry, and
