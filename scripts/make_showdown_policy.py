@@ -8,6 +8,16 @@ wrong by hand on the prior slate and cost ~3 minutes under a lock clock.
 Emits absolute paths, exact-decimal fractions in FRACTION_0_TO_1, the complete
 person identity map derived from the salary bytes, and every Entry ID in
 template order as read from the entries file.
+
+RUNGS (Session 10). `--rung 0` is the policy the flags describe. Rungs 1 to 3
+are `nfl_dfs.relaxation.SHOWDOWN_RUNGS` applied to it, each the loosest of the
+policy and the rung, never tighter: 1 widens every capped Captain fraction to
+at least 0.25 (zeroed Captains stay zero); 2 lets zeroed Captains captain and
+widens Captain caps to at least 0.5; 3 drops every exposure cap and raises the
+overlap cap to at least 5. Rung 4 writes nothing: run-slate without
+--portfolio-policy-json. `--exclude` and uniqueness are never relaxed (R29).
+`run-slate` walks these rungs itself when SD3 fails on a trigger, after trying
+a re-sized bank first; this flag writes one by hand.
 """
 import argparse, csv, hashlib, json, os, sys, re
 from collections import defaultdict
@@ -63,7 +73,7 @@ def game_id(path):
 def ident(e):
     return {'underlying_id': e['underlying_id'], 'cpt_dk_id': e['cpt_dk_id'], 'flex_dk_id': e['flex_dk_id']}
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--salaries', required=True)
     ap.add_argument('--entries', required=True)
@@ -81,7 +91,13 @@ def main():
                     help='UNDERLYING_ID=FRACTION (repeatable)')
     ap.add_argument('--exclude', action='append', default=[],
                     help='UNDERLYING_ID to exclude entirely (repeatable)')
-    a = ap.parse_args()
+    ap.add_argument('--rung', type=int, default=0, choices=(0, 1, 2, 3, 4),
+                    help='relax the policy the flags describe to this rung (nfl_dfs.relaxation)')
+    a = ap.parse_args(argv)
+    if a.rung == 4:
+        print("rung 4 emits no policy by design: run run-slate without --portfolio-policy-json, so"
+              " sequential Showdown selection builds the portfolio; exclusions go in the request.")
+        return 0
 
     sal = os.path.abspath(a.salaries); ent = os.path.abspath(a.entries)
     people = read_salary(sal)
@@ -137,9 +153,14 @@ def main():
         },
     }
     out = os.path.abspath(a.out)
-    with open(out, 'w', encoding='utf-8') as f:
-        json.dump(pol, f, indent=2)
-        f.write('\n')
+    if a.rung:
+        pol = relaxed_document(pol, sal, ent, a.rung)
+        with open(out, 'wb') as f:
+            f.write(pol)
+    else:
+        with open(out, 'w', encoding='utf-8') as f:
+            json.dump(pol, f, indent=2)
+            f.write('\n')
 
     import math
     def imax(fr): return math.floor(fr * n)
@@ -154,7 +175,29 @@ def main():
         'combined_overrides_integer': {u: imax(f) for u, f in sorted(comb_ovr.items())},
         'captain_overrides_nonzero_integer': {u: imax(f) for u, f in sorted(capt_ovr.items()) if f > 0},
         'max_pairwise_person_overlap': a.max_overlap,
+        'rung': a.rung,
     }, indent=2))
+    return 0
+
+
+def relaxed_document(document, salary_path, entry_path, rung):
+    """The rung-0 `document` relaxed to `rung` by the engine's table, as canonical bytes."""
+
+    from nfl_dfs.dk import parse_entries, parse_salaries
+    from nfl_dfs.portfolio_policy import (
+        canonical_decimal_json_bytes, portfolio_policy_template, validate_portfolio_policy_bytes)
+    from nfl_dfs.relaxation import showdown_relaxed_controls
+
+    slate = parse_salaries(salary_path)
+    entry_ids = [item.entry_id for item in parse_entries(entry_path).authorizations]
+    raw = json.dumps(document).encode('utf-8')
+    validation = validate_portfolio_policy_bytes(raw, slate=slate, entry_ids=entry_ids)
+    if validation.policy is None:
+        sys.exit("RUNG_0_POLICY_INVALID: " + "; ".join(validation.blockers()))
+    controls = showdown_relaxed_controls(validation.policy, rung)
+    relaxed = portfolio_policy_template(slate, entry_ids, controls=controls)
+    return canonical_decimal_json_bytes(relaxed) + b"\n"
+
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

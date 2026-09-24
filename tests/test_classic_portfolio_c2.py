@@ -852,8 +852,7 @@ def test_a_bank_stopped_by_its_total_budget_with_a_witness_does_not_block(monkey
     assert selection.proven_optimal and selection.as_report()["mip_start"] == "POLICY_FEASIBLE_WITNESS"
     # run-slate still records this host's rate from the bank's own report.
     report = {"selection": {"selection": {"portfolio_policy": {"candidate_bank": bank.as_report()}}}}
-    blockers = ("CANDIDATE_BANK_STOPPED_AT_LIMIT: the candidate bank stopped at its BOUNDED_TIME_LIMIT_STOP",)
-    observed = bank_rate_observation(report, blockers, declared_bank_seconds=30.0)
+    observed = bank_rate_observation(report, declared_bank_seconds=30.0)
     assert observed == (len(bank.candidates), round(bank.elapsed_seconds, 6), "BANK_REPORT")
 
 

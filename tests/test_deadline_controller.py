@@ -317,12 +317,14 @@ def test_a_rate_no_bank_can_be_sized_from_is_not_read(tmp_path):
 def test_a_bank_rate_is_read_from_its_report_or_from_a_bank_time_limit():
     report = {"selection": {"selection": {"portfolio_policy": {
         "candidate_bank": {"produced_candidates": 50, "elapsed_seconds": 14.0}}}}}
-    assert bank_rate_observation(report, (), declared_bank_seconds=60.0) == (50, 14.0, "BANK_REPORT")
-    timed_out = ("SELECTION_FAILED:SelectionError:CANDIDATE_BANK_TIMEOUT:model_status=kTimeLimit:"
-                 "candidates=82:requested=642",)
-    assert bank_rate_observation({}, timed_out, declared_bank_seconds=480.0) == (
-        82, 480.0, "BANK_TIME_LIMIT")
-    assert bank_rate_observation({}, ("SELECTION_FAILED:other",), declared_bank_seconds=480.0) is None
+    assert bank_rate_observation(report, declared_bank_seconds=60.0) == (50, 14.0, "BANK_REPORT")
+    # Session 10: the timed-out count is the review's structured failure, not parsed text.
+    timed_out = {"selection_failure": {"status": "CANDIDATE_BANK_TIMEOUT", "origin": "SELECTION",
+                                       "facts": {"candidates": 82, "requested_candidates": 642}}}
+    assert bank_rate_observation(timed_out, declared_bank_seconds=480.0) == (82, 480.0, "BANK_TIME_LIMIT")
+    other = {"selection_failure": {"status": "MODELED_BANK_INFEASIBILITY", "facts": {"candidates": 82}}}
+    assert bank_rate_observation(other, declared_bank_seconds=480.0) is None
+    assert bank_rate_observation({}, declared_bank_seconds=480.0) is None
 
 
 # ----------------------------------------------------------------- run-slate
@@ -472,16 +474,31 @@ def _template_policy(attachments: Path) -> Path:
     return path
 
 
-def test_a_c2_policy_whose_declared_search_does_not_fit_stops_the_review(tmp_path, monkeypatch):
+def test_a_c2_policy_whose_declared_search_does_not_fit_takes_rung_4(tmp_path, monkeypatch):
+    """Session 10 changed this expectation: the stop's own advice is now the engine's.
+
+    Until Session 10 the review stopped here and the baseline was the file, the
+    stop's text telling a person to regenerate a smaller bank or take rung 4. The
+    relaxation controller does it: no re-sized C2 bank fits the 20 s window, so
+    the ladder drops the policy for rung 4, C1 delivers, and both the stop and
+    the drop travel with the file as `S` limitations.
+    """
     clock = FakeClock()
     _clocked(monkeypatch, clock)
     code, report, root = _classic(
         tmp_path, monkeypatch, run_id="c2-late", policy=_template_policy,
         deadline=(AS_OF + timedelta(minutes=5, seconds=20)).isoformat())  # 20 s; it declares 40
-    assert code == 2
-    _baseline_is_the_file(report, root)
-    assert _truth_codes(report)["DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW"] == "S"
-    assert report["blockers"][0].startswith("DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW:")
+    assert code == 0 and report["improvement"]["status"] == "DELIVERED"
+    assert report["latest_deliverable"]["producer"] == "run-slate:prior_review:CLASSIC_C1"
+    codes = _truth_codes(report)
+    assert codes["DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW"] == "S" and codes["RELAXATION_POLICY_DROPPED"] == "S"
+    relaxation = report["relaxation"]
+    assert relaxation["final_rung"] == "4" and relaxation["stop"] is None
+    (dropped,) = relaxation["relaxations"]
+    assert (dropped["trigger"], dropped["step"], dropped["constraint"]) == (
+        "DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW", "NO_POLICY", "portfolio_policy")
+    assert "no re-sized bank fits the window" in dropped["why"]
+    assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
 
 
 def test_a_replay_records_its_stages_its_request_v3_and_the_hosts_candidate_rate(tmp_path, monkeypatch):

@@ -80,17 +80,17 @@
     "portfolio_bounds": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
       "provenance": {"kind": "RULING", "ref": "2026-09-12 lock-clock ruling"},
-      "covers": "An exposure, captain, team, game, group, stack, overlap or salary bound is breached, contradictory or infeasible, or captains repeat."
+      "covers": "An exposure, captain, team, game, group, stack, overlap or salary bound is breached, contradictory or infeasible, or captains repeat. Since Session 10 also a bound the relaxation controller loosened, or the policy it dropped for rung 4, delivered and named."
     },
     "delivery_deadline": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
       "provenance": {"kind": "RULING", "ref": "R31"},
-      "covers": "The run's delivery deadline (the request's, or the earliest lock minus 5 minutes) left a stage less than its default time or none: a stage was shortened or skipped, an evidence fetch was not started, a hash-bound search did not fit, the run's own review stopped, or it finished after the deadline; the baseline stayed on the pointer first."
+      "covers": "The run's delivery deadline (the request's, or the earliest lock minus 5 minutes) left a stage less than its default time or none: a stage was shortened or skipped, an evidence fetch was not started, a hash-bound search did not fit, the run's own review stopped, or it finished after the deadline; the baseline stayed on the pointer first. Since Session 10 also the rung ladder stopped because the window could not hold its next rung."
     },
     "search_budget": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
       "provenance": {"kind": "RULING", "ref": "2026-09-12 lock-clock ruling"},
-      "covers": "A candidate bank or joint selection hit its time, search or size budget, or the bank ran out before the portfolio filled; the rung ladder's triggers. Since Session 08 also a bank a limit stopped with enough kept to select from, and a joint selection a limit stopped with a validated incumbent, delivered and named."
+      "covers": "A candidate bank or joint selection hit its time, search or size budget, or the bank ran out before the portfolio filled; the rung ladder's triggers. Since Session 08 also a bank a limit stopped with enough kept to select from, and a joint selection a limit stopped with a validated incumbent, delivered and named. Since Session 10 also a bank the relaxation controller re-sized before relaxing any structure."
     },
     "strategy_observation": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
@@ -1281,6 +1281,10 @@
     "REFERENCE_SIZE_BUDGET_EXCEEDED": "settlement",
     "REFERENCE_WORK_BUDGET_EXCEEDED": "settlement",
     "REGISTERED_METRIC_RESULTS_REQUIRED_Q6": "settlement",
+    "RELAXATION_BANK_RESIZED": "search_budget",
+    "RELAXATION_LADDER_STOPPED": "delivery_deadline",
+    "RELAXATION_POLICY_DROPPED": "portfolio_bounds",
+    "RELAXATION_STRUCTURE_RELAXED": "portfolio_bounds",
     "RELEASE_TRUTHS_INCOMPLETE": "certification_prerequisite",
     "REPARSE_ASSIGNMENT_MISMATCH": "delivered_bytes",
     "REPLAY_REQUEST_BUNDLE_ID_MISMATCH": "settlement",

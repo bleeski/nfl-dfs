@@ -52,6 +52,7 @@ from .deadline import (
     Budget,
     activated,
     bank_rate_observation,
+    read_candidate_rate,
     record_candidate_rate,
     runtime_stop_minutes,
 )
@@ -134,6 +135,7 @@ from .review_export import export_review_entries, write_assignments_csv, write_r
 from .selection import assignments_for_entries, select_prior_lineups
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .gate_registry import GateRegistry, load_gate_registry
+from .relaxation import DEFAULT_SECONDS_PER_CANDIDATE, Ladder, failure_of, intake_failure, supplied_rung
 from .release import derive_delivery_state, derive_release_policy, release_truths_v2
 from .scenario_store import save_scenario_bank
 from .settlement import (
@@ -2862,6 +2864,7 @@ def _run_prior_review_profile(
     policy_summary: Mapping[str, object] | None = None,
     baseline: _SlateBaseline | None = None,
     budget: Budget | None = None,
+    ladder: Ladder | None = None,
 ) -> int:
     """Drive the prior-only review chain from one gated Cowork command.
 
@@ -2874,6 +2877,13 @@ def _run_prior_review_profile(
     The run's review is the improvement on `baseline` (Session 06): a CSV it
     lists replaces the pointer only through `delivery.replace`, and a review
     that blocks, is withheld or writes no file leaves the baseline delivered.
+
+    With a policy, `ladder` (Session 10) re-enters the review here when its
+    selection fails on a trigger: each attempt gets its own run root, reuses the
+    first attempt's frozen priors, and consumes the rung's own validated,
+    normalized and hash-bound policy, inside the same budget. Everything below
+    the loop is unchanged: it sees the last attempt, and the baseline stays on
+    the pointer unless that attempt's file replaces it.
     """
 
     as_of = _pinned_as_of(args)  # None: the live profile advances the clock itself
@@ -2882,47 +2892,83 @@ def _run_prior_review_profile(
     # limits from the window, and it stops before selection when none is left.
     # Every evidence fetch it reaches reads the same budget (Session 07b); the
     # session probe is a subprocess with its own allowance, so only this is wrapped.
-    review_started = budget.elapsed() if budget is not None else 0.0
-    with activated(budget):
-        outcome = run_prior_review(
-            salary_csv=request.salary_csv or "",
-            entry_csv=request.entry_csv or "",
-            label=request.label,
-            as_of=as_of,
-            run_root=DEFAULT_RUNS_DIR / run_id / "prior_review",
-            output_root=output_root,
-            season=request.season,
-            prior_season=request.prior_season,
-            prior_package_dir=request.prior_package_dir,
-            build_priors=request.build_priors,
-            weather_state=request.weather_state,
-            weather_source_uri=request.weather_source_uri,
-            weather_observed_at=request.weather_observed_at,
-            weather_evidence_json=request.weather_evidence_json,
-            lineup_count=request.lineup_count,
-            max_person_overlap=request.max_person_overlap,
-            operator_excluded_dk_ids=request.exclude_dk_ids,
-            extra_unavailable_statuses=request.unavailable_statuses,
-            extra_available_statuses=request.available_statuses,
-            official_status_csv=request.official_status_csv,
-            role_evidence_json=request.role_evidence_json,
-            offensive_role_evidence_json=request.offensive_role_evidence_json,
-            qb_depth_role_evidence_json=request.qb_depth_role_evidence_json,
-            portfolio_policy=portfolio_policy,
-            portfolio_policy_source_path=portfolio_policy_source_path,
-            portfolio_policy_source_sha256=portfolio_policy_source_sha256,
-            portfolio_policy_normalized_path=portfolio_policy_normalized_path,
-            portfolio_policy_normalized_sha256=portfolio_policy_normalized_sha256,
-            budget=budget,
-        )
-    if budget is not None:
-        budget.record("review", started_after=review_started, elapsed=budget.elapsed() - review_started)
-        budget.finished_late("review")
-        _record_bank_rate(budget, outcome, portfolio_policy, run_id=run_id, slate=slate, entries=entries)
+    review_root = DEFAULT_RUNS_DIR / run_id / "prior_review"
+    attempt = 0
+    while True:
+        rung = ladder.current if ladder is not None else None
+        if rung is not None:
+            portfolio_policy = rung.policy
+            portfolio_policy_source_path, portfolio_policy_source_sha256 = rung.source_path, rung.source_sha256
+            portfolio_policy_normalized_path = rung.normalized_path
+            portfolio_policy_normalized_sha256 = rung.normalized_sha256
+        run_root = review_root if attempt == 0 else DEFAULT_RUNS_DIR / run_id / f"prior_review_attempt_{attempt}"
+        # Rung 4 carries the dropped policy's own exact exclusions (never relaxed).
+        carried = rung.excluded_dk_ids if rung is not None and rung.policy is None else ()
+        review_started = budget.elapsed() if budget is not None else 0.0
+        with activated(budget):
+            outcome = run_prior_review(
+                salary_csv=request.salary_csv or "",
+                entry_csv=request.entry_csv or "",
+                label=request.label,
+                as_of=as_of,
+                run_root=run_root,
+                output_root=output_root,
+                season=request.season,
+                prior_season=request.prior_season,
+                prior_package_dir=(
+                    request.prior_package_dir if attempt == 0 else _reused_priors(review_root, request)
+                ),
+                build_priors=request.build_priors,
+                weather_state=request.weather_state,
+                weather_source_uri=request.weather_source_uri,
+                weather_observed_at=request.weather_observed_at,
+                weather_evidence_json=request.weather_evidence_json,
+                lineup_count=request.lineup_count,
+                max_person_overlap=request.max_person_overlap,
+                operator_excluded_dk_ids=(*request.exclude_dk_ids, *carried),
+                extra_unavailable_statuses=request.unavailable_statuses,
+                extra_available_statuses=request.available_statuses,
+                official_status_csv=request.official_status_csv,
+                role_evidence_json=request.role_evidence_json,
+                offensive_role_evidence_json=request.offensive_role_evidence_json,
+                qb_depth_role_evidence_json=request.qb_depth_role_evidence_json,
+                portfolio_policy=portfolio_policy,
+                portfolio_policy_source_path=portfolio_policy_source_path,
+                portfolio_policy_source_sha256=portfolio_policy_source_sha256,
+                portfolio_policy_normalized_path=portfolio_policy_normalized_path,
+                portfolio_policy_normalized_sha256=portfolio_policy_normalized_sha256,
+                budget=budget,
+                showdown_candidate_limit=rung.showdown_candidate_limit if rung is not None else None,
+            )
+        elapsed = budget.elapsed() - review_started if budget is not None else 0.0
+        if budget is not None:
+            budget.record("review", started_after=review_started, elapsed=elapsed)
+            budget.finished_late("review")
+            _record_bank_rate(budget, outcome, portfolio_policy, run_id=run_id, slate=slate, entries=entries)
+        if ladder is None:
+            break
+        failure = failure_of(outcome)
+        before_selection = _pre_selection_seconds(budget, review_started, elapsed)
+        ladder.observe(attempt=attempt, run_root=run_root, outcome=outcome, failure=failure,
+                       elapsed_seconds=elapsed, pre_selection_seconds=before_selection)
+        if failure is None:
+            break
+        try:
+            following = ladder.next(failure, overhead_seconds=before_selection)
+        except (OSError, ValueError) as exc:  # a rung it cannot write or validate ends it, named
+            ladder.halt(failure, exc)
+            following = None
+        if following is None:
+            break
+        attempt += 1
     finish_started = budget.elapsed() if budget is not None else 0.0
 
     blockers = list(reported_blockers)
     blockers[0:0] = list(outcome.blockers)
+    if ladder is not None:
+        # Every relaxation, and a stop the window forced, travels with the file
+        # (or with the baseline) by name, each an `S` limitation.
+        blockers[0:0] = [text for text in ladder.texts() if text not in blockers]
     if budget is not None:
         blockers.extend(
             deadline_text for deadline_text in budget.blocker_texts() if deadline_text not in blockers
@@ -3259,10 +3305,13 @@ def _run_prior_review_profile(
         ),
     )
     if latest is not None and improvement_latest is None:
+        # The baseline carries its own limitations; the deadline's and the
+        # ladder's travel beside them (Sessions 07 and 10).
         release_truths = _run_release_truths(
             truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
             authorized=authorized_ids, blockers=blockers, registry=registry,
-            extra=budget.limitations(registry) if budget is not None else (),
+            extra=(*(budget.limitations(registry) if budget is not None else ()),
+                   *(blocker_limitations(ladder.texts(), registry) if ladder is not None else ())),
         )
     elif latest is None:
         # Nothing to hand over: the review's own record, plus why no baseline backs it.
@@ -3354,6 +3403,12 @@ def _run_prior_review_profile(
             )
         ),
     }
+    if ladder is not None:
+        result["relaxation"] = ladder.as_record()
+        try:
+            _write_json(DEFAULT_RUNS_DIR / run_id / "relaxation" / "relaxation.json", result["relaxation"])
+        except OSError as exc:
+            result["relaxation_record_problems"] = [f"RELAXATION_RECORD_UNWRITTEN:{exc}"]
     if policy_summary is not None:
         selector_policy = (
             dict(outcome.reports.get("selection", {}))
@@ -3395,6 +3450,35 @@ def _run_prior_review_profile(
 HOST_RATES_FILENAME = "host_candidate_rates.json"
 
 
+def _reused_priors(review_root: Path, request: CoworkRunRequest) -> str | None:
+    """A retry's prior package: the first attempt's frozen one if it built one, else the request's."""
+
+    frozen = review_root / "priors" / "frozen"
+    return str(frozen) if (frozen / "prior_package.json").is_file() else request.prior_package_dir
+
+
+def _pre_selection_seconds(budget: Budget | None, started: float, elapsed: float) -> float:
+    """How long an attempt ran before its selection began (all of it when none began)."""
+
+    if budget is None:
+        return 0.0
+    for record in reversed(budget.stages):
+        if (record.name == "selection" and record.started_after_seconds is not None
+                and record.started_after_seconds >= started):
+            return max(0.0, record.started_after_seconds - started)
+    return max(0.0, elapsed)
+
+
+def _host_classic_rate() -> tuple[float, str]:
+    """This host's slowest recent Classic candidate rate, as the policy generator reads it."""
+
+    measured = read_candidate_rate(DEFAULT_RUNS_DIR / HOST_RATES_FILENAME, mode="CLASSIC")
+    if measured is None:
+        return DEFAULT_SECONDS_PER_CANDIDATE, f"{DEFAULT_SECONDS_PER_CANDIDATE:g} s per candidate (the default)"
+    seconds = float(measured["seconds_per_candidate"])
+    return seconds, f"{seconds:g} s per candidate (this host's slowest of its last {measured['observations']})"
+
+
 def _record_bank_rate(budget: Budget, outcome, portfolio_policy, *, run_id: str, slate, entries) -> None:
     """This host's candidate rate from a Classic C2 bank, into the run's runs folder.
 
@@ -3408,8 +3492,7 @@ def _record_bank_rate(budget: Budget, outcome, portfolio_policy, *, run_id: str,
         return
     try:
         observed = bank_rate_observation(
-            outcome.reports, outcome.blockers,
-            declared_bank_seconds=limits.candidate_total_milliseconds / 1000.0,
+            outcome.reports, declared_bank_seconds=limits.candidate_total_milliseconds / 1000.0,
         )
         if observed is None:
             return
@@ -3625,6 +3708,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     policy_summary: dict[str, object] | None = None
     policy_blockers: list[str] = []
     validated_policy = None
+    ladder: Ladder | None = None
     normalized_path: Path | None = None
     expected_policy_sha256: str | None = None
     if snapshotted.portfolio_policy_json is not None:
@@ -3755,6 +3839,44 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 else "VALIDATION_FAILED"
             ),
         }
+        # Session 10: the review walks the rung ladder from this policy. One whose
+        # only problems are construction preferences (`S`: a capacity or bound it
+        # cannot meet) takes its first rung here instead of stopping the run; any
+        # other problem, or a blocker from outside the policy, stops it as before.
+        if snapshotted.profile == "prior_review" and validation.policy is not None:
+            registry = load_gate_registry()
+            ladder = Ladder(
+                slate=slate, entries=entries, folder=DEFAULT_RUNS_DIR / run_id / "relaxation",
+                supplied=supplied_rung(
+                    validation.policy, source_path=snapshotted.portfolio_policy_json,
+                    source_sha256=expected_policy_sha256, normalized_path=normalized_path,
+                    normalized_sha256=validation.normalized_sha256),
+                registry=registry, externally_excluded_people=external_people, budget=budget,
+                rate=_host_classic_rate,
+            )
+            own = set(validation.blockers())
+            others = [text for text in policy_blockers if text not in own]
+            trigger = (
+                intake_failure([issue.code for issue in validation.problems], registry)
+                if not validation.valid and not others else None
+            )
+            if trigger is not None:
+                try:
+                    relaxed = ladder.next(trigger)
+                except (OSError, ValueError) as exc:  # named, and the policy stops the run as before
+                    ladder.halt(trigger, exc)
+                    relaxed = None
+                if relaxed is not None:
+                    validated_policy = ladder.current.policy
+                    policy_blockers = others
+                    policy_summary["relaxed_at_intake"] = {
+                        "trigger": trigger.status, "codes": list(trigger.facts.get("codes", ())),
+                        "rung": ladder.current.label, "policy": ladder.current.binding(),
+                    }
+                elif ladder.stop is not None:
+                    policy_blockers.append(ladder.stop)
+            elif not validation.valid:
+                ladder = None
     if policy_summary is not None:
         budget.record("policy_validation", started_after=policy_started,
                       elapsed=budget.elapsed() - policy_started)
@@ -3826,7 +3948,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             blocked_truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
             authorized=tuple(item.entry_id for item in entries.authorizations),
             blockers=[*blockers, *latest_problems, *baseline.problems], registry=registry,
-            extra=budget.limitations(registry),
+            extra=(*budget.limitations(registry),
+                   *(blocker_limitations(ladder.texts(), registry) if ladder is not None else ())),
         )
         review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
         create_cowork_status_workbook(
@@ -3868,6 +3991,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "improvement": improvement,
             "deadline": budget.as_record(),
         }
+        if ladder is not None and (ladder.records or ladder.stop):
+            result["relaxation"] = ladder.as_record()
         if policy_summary is not None:
             result["portfolio_policy"] = policy_summary
             result["bulk_entry_csv"] = None
@@ -3915,6 +4040,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             policy_summary=policy_summary,
             baseline=baseline,
             budget=budget,
+            ladder=ladder,
         )
 
     review_started = budget.elapsed()

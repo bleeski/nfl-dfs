@@ -58,7 +58,21 @@ CLASSIC_PROFILE_VERSION = "prior_only_classic_selection_c1_v1"
 
 
 class SelectionError(ValueError):
-    """A named fail-closed selection error."""
+    """A named fail-closed selection error.
+
+    `status` and `facts` (Session 10) carry the failure structured, so the
+    relaxation controller reads the status a bank or joint solve reported
+    instead of parsing the message.
+    """
+
+    def __init__(self, message: str, *, status: str | None = None,
+                 facts: Mapping[str, object] | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+        self.facts = dict(facts or {})
+
+    def as_report(self, *, error: str) -> dict[str, object]:
+        return {"status": self.status, "origin": "SELECTION", "facts": dict(self.facts), "error": error}
 
 
 @dataclass(frozen=True)
@@ -274,13 +288,23 @@ def select_prior_lineups(
         if bank.blocking:
             raise SelectionError(
                 f"{bank.status}:model_status={bank.terminal_model_status}:"
-                f"candidates={len(bank.candidates)}:requested={bank.requested_candidates}"
+                f"candidates={len(bank.candidates)}:requested={bank.requested_candidates}",
+                status=bank.status,
+                facts={"stage": "CANDIDATE_BANK", "candidates": len(bank.candidates),
+                       "requested_candidates": bank.requested_candidates,
+                       "model_status": bank.terminal_model_status, "exhaustive": bank.exhaustive,
+                       "elapsed_seconds": round(bank.elapsed_seconds, 3)},
             )
         portfolio_solve = solve_classic_portfolio(portfolio_policy, bank)
         if not portfolio_solve.passed:
             raise SelectionError(
                 f"{portfolio_solve.status}:model_status={portfolio_solve.model_status}:"
-                f"candidate_bank={len(bank.candidates)}:scope={portfolio_solve.infeasibility_scope}"
+                f"candidate_bank={len(bank.candidates)}:scope={portfolio_solve.infeasibility_scope}",
+                status=portfolio_solve.status,
+                facts={"stage": "JOINT_SELECTION", "candidates": len(bank.candidates),
+                       "requested_candidates": bank.requested_candidates,
+                       "model_status": portfolio_solve.model_status, "exhaustive": bank.exhaustive,
+                       "scope": portfolio_solve.infeasibility_scope},
             )
         for index, candidate_index in enumerate(
             portfolio_solve.selected_candidate_indexes, start=1
@@ -408,7 +432,12 @@ def select_prior_lineups(
         if bank.blocking:
             raise SelectionError(
                 f"{bank.status}:model_status={bank.terminal_model_status}:"
-                f"candidates={len(bank.candidates)}:budget={bank.total_time_limit_seconds}"
+                f"candidates={len(bank.candidates)}:budget={bank.total_time_limit_seconds}",
+                status=bank.status,
+                facts={"stage": "CANDIDATE_BANK", "candidates": len(bank.candidates),
+                       "requested_candidates": bank.candidate_limit,
+                       "model_status": bank.terminal_model_status, "complete": bank.complete,
+                       "budget_seconds": bank.total_time_limit_seconds},
             )
         portfolio_solve = solve_policy_portfolio(
             portfolio_policy,
@@ -418,7 +447,11 @@ def select_prior_lineups(
         if not portfolio_solve.passed:
             raise SelectionError(
                 f"{portfolio_solve.status}:model_status={portfolio_solve.model_status}:"
-                f"candidate_bank={len(bank.candidates)}:complete={bank.complete}"
+                f"candidate_bank={len(bank.candidates)}:complete={bank.complete}",
+                status=portfolio_solve.status,
+                facts={"stage": "JOINT_SELECTION", "candidates": len(bank.candidates),
+                       "requested_candidates": bank.candidate_limit,
+                       "model_status": portfolio_solve.model_status, "complete": bank.complete},
             )
         for index, candidate_index in enumerate(
             portfolio_solve.selected_candidate_indexes, start=1
@@ -544,7 +577,10 @@ def select_prior_lineups(
         if result.roster is None:
             raise SelectionError(
                 f"SOLVER_RETURNED_NO_LINEUP:index={index}:status={result.status}"
-                f":selectable_people={len(contract.selectable_people)}"
+                f":selectable_people={len(contract.selectable_people)}",
+                status="SOLVER_RETURNED_NO_LINEUP",
+                facts={"stage": "SEQUENTIAL", "index": index, "selected": len(selected),
+                       "requested": count, "selectable_people": len(contract.selectable_people)},
             )
         roster = tuple(result.roster)
         validation = validate_lineup(slate, roster)

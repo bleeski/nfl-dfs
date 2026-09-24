@@ -967,7 +967,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "941f6d471a39c8170529b2691f2f297445ef1f18c060b3e7c97910f50cfd9ce1"
+REGISTRY_SHA256 = "770689f2e395a1617a82e2c96055d9109cde1d15a5d4d6e8a51bba7c50ca1026"
 
 
 def test_the_registry_is_the_pinned_bytes():
@@ -1242,11 +1242,41 @@ def test_r28_absorbs_the_p1_hard_stop():
 
 
 def test_the_rung_ladder_triggers_are_construction_preferences():
-    """CLAUDE.md drops a rung on these four; the ladder relaxes only preferences."""
+    """The ladder relaxes only preferences (Session 10: the full trigger list).
+
+    CLAUDE.md's four, the joint-solve limits, `STRUCTURAL_INFEASIBILITY` and the
+    SD3 equivalents are `S`; the two solver errors stay claim failures (`P`), which
+    the ladder answers with a bank retry and rung 4, never a structural rung.
+    """
+
+    from nfl_dfs.relaxation import (
+        NEVER_TRIGGERS, SOLVER_ERROR, SOLVER_ERROR_TRIGGERS, STRUCTURE, TRIGGERS, classify,
+    )
 
     for code in ("MODELED_BANK_INFEASIBILITY", "INCOMPLETE_BANK_EXHAUSTION",
                  "CANDIDATE_BANK_TIMEOUT", "CANDIDATE_BANK_SEARCH_LIMIT"):
+        assert code in TRIGGERS, code
+    for code in ("PORTFOLIO_SELECTION_TIMEOUT", "PORTFOLIO_SELECTION_SEARCH_LIMIT", "STRUCTURAL_INFEASIBILITY",
+                 "MODELED_BANK_INFEASIBLE_PROVEN", "CANDIDATE_BANK_EXHAUSTED_INCOMPLETE",
+                 "PORTFOLIO_SELECTION_TIME_LIMIT"):
+        assert code in TRIGGERS, code
+    for code in TRIGGERS - SOLVER_ERROR_TRIGGERS:
         assert registry().family_of(code).stops is GateStops.CONSTRUCTION_PREFERENCE, code
+    assert registry().family_of("STRUCTURAL_INFEASIBILITY").name == "portfolio_bounds"
+    for code in SOLVER_ERROR_TRIGGERS:
+        family = registry().family_of(code)
+        assert (family.name, family.gate_class) == ("selection_claims", GateClass.P), code
+        assert classify(code) == SOLVER_ERROR != STRUCTURE
+    # What Session 08 delivers and names, and the floor's own end, never trigger.
+    assert not NEVER_TRIGGERS & TRIGGERS
+    assert all(classify(code) is None for code in NEVER_TRIGGERS)
+    for code, family in (("RELAXATION_STRUCTURE_RELAXED", "portfolio_bounds"),
+                         ("RELAXATION_POLICY_DROPPED", "portfolio_bounds"),
+                         ("RELAXATION_BANK_RESIZED", "search_budget"),
+                         ("RELAXATION_LADDER_STOPPED", "delivery_deadline")):
+        found = registry().family_of(code)
+        assert (found.name, found.gate_class, found.stops) == (
+            family, GateClass.S, GateStops.CONSTRUCTION_PREFERENCE), code
 
 
 # ----------------------------------------------------------------- building a limitation

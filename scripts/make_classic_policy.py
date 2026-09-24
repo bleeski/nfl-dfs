@@ -18,7 +18,8 @@ RUNGS. Hard structure can make the joint solve infeasible, and a portfolio that
 never gets built is a worse outcome than an imperfect one: an imperfect lineup
 can be late-swapped, a missed lock cannot be recovered. So the policy is emitted
 at a requested rung, and each rung relaxes exactly one class of CONSTRUCTION
-preference:
+preference. The table lives in `src/nfl_dfs/relaxation.py` (Session 10), which
+`run-slate` walks itself; this script is a thin wrapper that writes one rung:
 
   0  every entry stacks QB + pass catcher; 70% carry a bring-back; overlap 5;
      player exposure <= 50% of entries
@@ -27,9 +28,11 @@ preference:
   3  QB pass-catcher holds on half the entries; overlap 7; no exposure caps
   4  emit nothing; run C1 with no policy at all, which is the proven floor
 
-Rung 4 is not a failure mode to avoid at all costs, it is the floor that
-guarantees a legal portfolio exists. Walk down the ladder as far as you need to
-and report the rung you landed on.
+Rung 4 is the floor: C1 needs no policy, and when it runs out of distinct
+lineups the baseline stays the file with its unfilled Entry IDs named (R29).
+Since Session 10 `run-slate` walks down the ladder inside one run when a C2
+bank or joint solve fails on a trigger, and records every step; this script is
+for writing the rung-0 policy it starts from, or one rung by hand.
 
 NOTHING ON THIS LADDER TOUCHES EVIDENCE. Official activity, current role,
 weather, identity, expiry and hash binding are truth claims and are not
@@ -68,154 +71,31 @@ from pathlib import Path
 from nfl_dfs.classic_portfolio_policy import classic_portfolio_policy_template
 from nfl_dfs.deadline import SOLVE_MINIMUM_SECONDS, Budget, read_candidate_rate, runtime_stop_minutes
 from nfl_dfs.dk import parse_entries, parse_salaries
+from nfl_dfs.relaxation import (
+    DEFAULT_SECONDS_PER_CANDIDATE,
+    GENERATION_HEADROOM,
+    JOINT_SHARE,
+    ROSTER_SIZE,
+    WINDOW_SHARE,
+    BankDoesNotFit,
+    classic_exposure_fraction,
+    classic_limits,
+    classic_overlap,
+    classic_rung_controls,
+    classic_stack_rules,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_JSON = REPO_ROOT / "config" / "runtime.json"
 DEFAULT_HOST_RATES = REPO_ROOT / "data" / "runs" / "host_candidate_rates.json"
-ROSTER_SIZE = 9
-# The 2026-09-12 cloud measurement below, with the room kept for it: a declared
-# bank budget is twice the expected generation time, and the bank plus joint
-# solve may declare 75% of the improvement window, the joint solve at most 20%.
-DEFAULT_SECONDS_PER_CANDIDATE = 0.28
-GENERATION_HEADROOM = 2.0
-WINDOW_SHARE, JOINT_SHARE = 0.75, 0.20
 
-
-class BankDoesNotFit(ValueError):
-    """Even the floor bank and its joint solve exceed the window's share."""
-
-
-def _stack_rules(count: int, rung: int) -> list[dict[str, object]]:
-    """QB correlation is the only edge this objective can express structurally.
-
-    The objective is a sum of independent per-player central estimates: there is
-    no covariance term and no ceiling, so a stack is worth nothing to the solver
-    on its own. The only way correlation enters a Classic portfolio today is as
-    a hard constraint on which candidates may be built.
-    """
-    if rung <= 0:
-        pass_catcher_entries, bringback_entries, bringback_strength = count, math.ceil(0.70 * count), "HARD"
-    elif rung == 1:
-        pass_catcher_entries, bringback_entries, bringback_strength = count, math.ceil(0.34 * count), "HARD"
-    elif rung == 2:
-        pass_catcher_entries, bringback_entries, bringback_strength = count, 0, "ADVISORY"
-    else:
-        pass_catcher_entries, bringback_entries, bringback_strength = math.ceil(0.50 * count), 0, "ADVISORY"
-
-    return [
-        {
-            "rule_id": "qb-pass-catcher",
-            "rule_type": "QB_PASS_CATCHER",
-            "minimum_value": 1,
-            "maximum_value": 4,
-            "minimum_entries": min(pass_catcher_entries, count),
-            "maximum_entries": count,
-            "strength": "HARD",
-        },
-        {
-            "rule_id": "qb-bringback",
-            "rule_type": "QB_BRINGBACK",
-            "minimum_value": 1,
-            "maximum_value": 6,
-            "minimum_entries": min(bringback_entries, count),
-            "maximum_entries": count,
-            "strength": bringback_strength,
-        },
-        {
-            "rule_id": "secondary-game-correlation",
-            "rule_type": "SECONDARY_GAME_CORRELATION",
-            "minimum_value": 1,
-            "maximum_value": 4,
-            "minimum_entries": 0,
-            "maximum_entries": count,
-            "strength": "ADVISORY",
-        },
-        {
-            "rule_id": "rb-dst-pair",
-            "rule_type": "RB_DST_PAIR",
-            "minimum_value": 1,
-            "maximum_value": 2,
-            "minimum_entries": 0,
-            "maximum_entries": count,
-            "strength": "ADVISORY",
-        },
-    ]
-
-
-def _overlap(rung: int) -> int:
-    return {0: 5, 1: 5, 2: 6}.get(rung, 7)
-
-
-def _exposure_fraction(rung: int) -> float | None:
-    return {0: 0.50, 1: 0.50, 2: 0.65}.get(rung)
-
-
-def _limits(
-    count: int,
-    pool_people: int,
-    rung: int,
-    *,
-    minutes: float,
-    seconds_per_candidate: float = DEFAULT_SECONDS_PER_CANDIDATE,
-    window_seconds: float | None = None,
-) -> dict[str, int]:
-    """Size the bank to the pool, not to the entry count, and to the window.
-
-    Measured on the 719-person supplied fixture in the cloud container at 20
-    entries, two processors: a 1000-candidate bank with the rung-0 HARD stack
-    rules generated in 273.6s and the joint MILP then solved it in 0.39s,
-    selecting all 20 entries. Generation is the whole cost, the joint solve is
-    free, and hard stack rules make generation slower per candidate than the
-    unconstrained default. The declared budget is twice the expected time at
-    `seconds_per_candidate`, so a bank that fits the requested minutes does not
-    then trip CANDIDATE_BANK_TIMEOUT and cost a rung for nothing.
-
-    Session 07b. `seconds_per_candidate` is this host's measured rate when it
-    has one (the C4 retrospective measured 4 to 6 s). With `window_seconds`,
-    the seconds left before the improvement stops, the declared bank budget
-    plus the joint solve stay within `WINDOW_SHARE` of it and the joint solve
-    within `JOINT_SHARE`; the rest is the run's own before selection. Raises
-    `BankDoesNotFit` when even the floor bank, `max(32, entries + 24)`, does not.
-    """
-    per_candidate_seconds = float(seconds_per_candidate)
-    if not (math.isfinite(per_candidate_seconds) and per_candidate_seconds > 0):
-        raise ValueError(f"seconds_per_candidate must be a finite number above zero, not {seconds_per_candidate!r}")
-    floor = max(32, count + 24)
-    affordable = int((minutes * 60.0) / per_candidate_seconds)
-    selection_seconds = min(3_600.0, max(10.0, 1.0 * count))
-    if window_seconds is not None:
-        selection_seconds = min(selection_seconds, JOINT_SHARE * window_seconds)
-        generation_seconds = WINDOW_SHARE * window_seconds - selection_seconds
-        affordable = min(affordable, max(0, int(
-            generation_seconds / (per_candidate_seconds * GENERATION_HEADROOM))))
-    target = max(floor, min(2000, affordable))
-    if rung >= 3:
-        target = max(floor, target // 2)
-
-    def declared_ms(candidates: int) -> int:
-        return int(min(3_600_000, max(
-            30_000, candidates * per_candidate_seconds * 1000 * GENERATION_HEADROOM)))
-
-    total_ms = declared_ms(target)
-    selection_ms = int(1_000 * selection_seconds)
-    # A bank above the floor was sized to fit, so only the floor bank (or the
-    # 30 s least budget any bank declares) can fail this.
-    if window_seconds is not None and (
-            selection_seconds < SOLVE_MINIMUM_SECONDS
-            or (total_ms + selection_ms) / 1000.0 > WINDOW_SHARE * window_seconds):
-        floor_ms = declared_ms(floor)
-        raise BankDoesNotFit(
-            f"even the floor bank of {floor} candidates at {per_candidate_seconds:g} s each"
-            f" declares {floor_ms / 1000:.0f} s and its joint solve {selection_ms / 1000:.1f} s,"
-            f" {(floor_ms + selection_ms) / 1000:.1f} s together, over {WINDOW_SHARE:.0%} of the"
-            f" {window_seconds:.1f} s window ({WINDOW_SHARE * window_seconds:.1f} s)"
-        )
-    return {
-        "candidate_limit": target,
-        "candidate_total_milliseconds": total_ms,
-        "candidate_per_solve_milliseconds": 5_000,
-        "selection_milliseconds": selection_ms,
-    }
+# The rung table's names before it moved to `nfl_dfs.relaxation` (Session 10).
+_stack_rules = classic_stack_rules
+_overlap = classic_overlap
+_exposure_fraction = classic_exposure_fraction
+_limits = classic_limits
+__all__ = ["BankDoesNotFit", "DEFAULT_SECONDS_PER_CANDIDATE", "GENERATION_HEADROOM", "JOINT_SHARE",
+           "WINDOW_SHARE", "main"]
 
 
 def _rate(path: Path) -> tuple[float, str]:
@@ -313,27 +193,7 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
         )
         return 2
     fraction = _exposure_fraction(args.rung)
-
-    controls: dict[str, object] = {
-        "stack_rules": _stack_rules(count, args.rung),
-        "max_pairwise_person_overlap": min(_overlap(args.rung), ROSTER_SIZE - 1),
-        "require_unique_lineups": True,
-    }
-    if fraction is not None and count > 2:
-        cap = max(1, math.ceil(fraction * count))
-        controls["player_exposure_bounds"] = [
-            {
-                "underlying_id": row.underlying_id,
-                "dk_id": row.dk_id,
-                "minimum_entries": 0,
-                "maximum_entries": cap,
-                "hard": True,
-            }
-            for row in sorted(
-                {row.underlying_id: row for row in slate.players}.values(),
-                key=lambda row: row.underlying_id,
-            )
-        ]
+    controls = classic_rung_controls(slate, count, args.rung)
 
     document = classic_portfolio_policy_template(
         slate,
@@ -366,9 +226,9 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
     else:
         print("player exposure:   uncapped at this rung")
     print()
-    print("If the run reports MODELED_BANK_INFEASIBILITY, INCOMPLETE_BANK_EXHAUSTION,")
-    print("CANDIDATE_BANK_TIMEOUT or CANDIDATE_BANK_SEARCH_LIMIT, regenerate at "
-          f"--rung {args.rung + 1} and rerun. Do not ask permission; report the rung you landed on.")
+    print("run-slate walks the ladder from here itself (Session 10): on a bank or joint-solve")
+    print("trigger it re-sizes the bank, then relaxes one rung at a time down to C1, inside the")
+    print("run's deadline, and names every step in the result's `relaxation` record.")
     return 0
 
 
