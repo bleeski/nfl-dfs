@@ -1154,6 +1154,13 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
     have sub variants of each of those for example, high scoring or low
     scoring, etc.." Every Showdown lineup carries one named thesis, reported
     per Entry ID, and the portfolio spreads rows across theses.
+  - The purpose is Captain diversification: "The fundamental problem with
+    your build is that there is incredible concentration risk. Especially
+    within the captain ranks. The goal of the game thesis adherence is to make
+    sure there's diversification in captains for example, on a Green Bay win
+    with a low scoring game it might make sense to captain their kicker or
+    DST." A thesis may require its Captain from a named set, K and DST
+    included, which no policy on 2026-09-24 could force.
   - "Backup quarterbacks, generally requiring an injury, which is why I would
     exclude them." A quarterback below his team's depth-chart starter is out
     of the pool by default.
