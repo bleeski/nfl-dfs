@@ -18,7 +18,6 @@ import pytest
 
 from nfl_dfs.hashing import sha256_bytes
 from nfl_dfs.offensive_roles import (
-    OffensiveRoleError,
     material_role_change_blockers,
     resolve_offensive_roles,
 )
@@ -210,21 +209,16 @@ def _person(slate, name):
 
 
 def _prior_points(slate, offense, splits):
-    """Score the pool without the gate, so the ranking itself can be asserted.
+    """Score the pool, so the ranking itself can be asserted.
 
-    `score_pool` runs the gate as its last act, which is right for the engine
-    and unhelpful for a test whose whole subject is the input that gate reads.
+    Until Session 09 `score_pool` raised at the gate as its last act, so this
+    helper patched the gate out. R28 turned the stop into an exclusion that
+    leaves every score as scored, so no patch is needed.
     """
 
     from nfl_dfs.prior_score import score_pool as _score
-    import nfl_dfs.prior_score as module
 
-    original = module.enforce_material_role_change_gate
-    module.enforce_material_role_change_gate = lambda *args, **kwargs: None
-    try:
-        return _score(slate, offense.model, splits, offensive_roles=offense).by_person
-    finally:
-        module.enforce_material_role_change_gate = original
+    return _score(slate, offense.model, splits, offensive_roles=offense).by_person
 
 
 def _excerpt(team, ordering, observed=OBSERVED):
@@ -434,22 +428,47 @@ def test_divergence_is_reported_deterministically(tmp_path):
 # --- the gate -------------------------------------------------------------
 
 
-def test_an_unresolved_transfer_the_market_disagrees_with_stops_the_run(tmp_path):
+def test_an_unresolved_transfer_the_market_disagrees_with_leaves_the_pool(tmp_path):
+    """R28 absorbs the 2026-09-19 stop (Ben, 2026-09-23: "Absorb it").
+
+    Until Session 09 this raised `OffensiveRoleError` and the run stopped. Now
+    the person leaves the selectable pool, the run continues, and the code
+    names him and the action that clears it. He is never selected on the
+    old-team share, and exclusion is the only construction change.
+    """
+
     slate, model, contract, splits = _setup(tmp_path, transfer=True)
-    # No depth-chart package at all: the transfer is still unresolved, and Ben's
-    # 2026-09-19 ruling makes that a stop rather than a diagnostic.
-    with pytest.raises(OffensiveRoleError) as error:
-        select_prior_lineups(slate, model, splits, contract, count=1, as_of=AS_OF)
-    message = str(error.value)
-    assert "OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE" in message
-    assert _person(slate, "KC Transfer RB") in message
+    # No depth-chart package at all: the transfer is still unresolved.
+    lineups, scores, report = select_prior_lineups(slate, model, splits, contract, count=3, as_of=AS_OF)
+    transfer = _person(slate, "KC Transfer RB")
+    transfer_ids = {p.dk_id for p in slate.players if p.underlying_id == transfer}
+    assert lineups
+    assert all(not transfer_ids.intersection(lineup.roster) for lineup in lineups)
+    assert transfer in scores.offensive_role_resolution.excluded_people
+    offensive = report["offensive_roles"]
+    [message] = offensive["material_role_change_exclusions"]
+    assert message.startswith(f"OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE:{transfer}:")
     assert "old_teams=SEA" in message
-    # The stop names the action that actually clears it. A running back is
+    assert "left out of the selectable pool" in message
+    # The code names the action that actually clears it. A running back is
     # not resolved by a quarterback depth chart, so it must not say so.
     assert "offensive_role_evidence_json" in message
     assert "qb_depth_role_evidence_json" not in message
     assert "make_offensive_role_evidence.py" not in message
-    assert error.value.report["evidence_state"] == "UNKNOWN"
+    assert offensive["evidence_state"] == "UNKNOWN"
+    assert offensive["gate_version"] == "unresolved_material_role_change_gate_v2"
+    assert offensive["excluded_by_finding"]["OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE"] == [transfer]
+    finding = next(item for item in offensive["findings"] if item["person"] == transfer)
+    assert (finding["state"], finding["selection_action"]) == ("TRANSFER_PRIOR_UNVERIFIED", "EXCLUDE")
+    # He is still scored, on the prior the gate read; nothing else moved.
+    assert transfer in scores.by_person
+    # Exclusion is the only construction change: the same pool with the same
+    # person faded by the operator selects exactly the same lineups.
+    faded = build_participation_contract(slate, operator_excluded_dk_ids=sorted(transfer_ids))
+    faded_lineups, _faded_scores, _ = select_prior_lineups(
+        slate, model, splits, faded, count=3, as_of=AS_OF
+    )
+    assert [lineup.roster for lineup in lineups] == [lineup.roster for lineup in faded_lineups]
 
 
 def test_an_unresolved_transfer_the_market_agrees_with_stays_a_diagnostic(tmp_path):

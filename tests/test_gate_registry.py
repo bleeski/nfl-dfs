@@ -953,7 +953,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "942d43cb9920c5abee29670d20944eb4c38138a71708ff69571af654d5c8e9e1"
+REGISTRY_SHA256 = "92abd16b04d7631f814e34c1a2274d082645f58c57a893997eb8874acfc875fc"
 
 
 def test_the_registry_is_the_pinned_bytes():
@@ -1144,7 +1144,7 @@ AUDIT_SECTION_4 = [
       "DEPTH_ORDER_EMPTY", "PARTICIPATION_REMOVES_EVERY_PERSON", "SELECTABLE_POOL_TOO_SMALL"]),
     ("official activity for every selected Classic person", {"S", "P"},
      ["OFFICIAL_STATUS_STALE", "OFFICIAL_STATUS_FUTURE", "OFFICIAL_STATUS_INVALID", "OFFICIAL_STATUS_REQUIRED",
-      "CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_INCOMPLETE", "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED"]),
+      "CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH", "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED"]),
     ("offensive, kicker and QB role packages; unsupported numeric allocation", {"S", "P"},
      ["OFFENSIVE_CURRENT_ROLE_UNRESOLVED", "KICKER_ROLE_UNRESOLVED", "QB_DEPTH_SOURCE_EXPIRED_DURING_SELECTION",
       "OFFENSIVE_ROLE_NUMERICAL_SOURCE_REQUIRED"]),

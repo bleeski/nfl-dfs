@@ -702,21 +702,43 @@ def test_exact_id_inactive_is_excluded_before_classic_selection(tmp_path: Path) 
     )
 
 
-def test_missing_selected_activity_blocks_before_any_selection_artifact(tmp_path: Path) -> None:
+@pytest.mark.parametrize("supplied", [True, False], ids=["rows-missing", "no-file"])
+def test_missing_selected_activity_is_a_named_limitation_not_a_stop(tmp_path: Path, supplied: bool) -> None:
+    """R28 (Session 09): Classic treats missing activity as Showdown already does.
+
+    Until Session 09 this was `test_missing_selected_activity_blocks_before_any_selection_artifact`:
+    a selected person with no exact-ID row stopped the run at the selected-evidence
+    gate with `SELECTED_CURRENT_EVIDENCE_REQUIRED`, before any selection artifact.
+    Now the run publishes and names who lacks a row; the truths stay
+    `EVIDENCE_STATE=UNKNOWN` and `DO_NOT_UPLOAD`.
+    """
+
     salary, entry, package, role, status, _ = _fixture(tmp_path)
     rows = status.read_text(encoding="utf-8").splitlines()
     status.write_text("\n".join(rows[:2]) + "\n", encoding="utf-8")
     outcome = run_prior_review(
         salary_csv=salary, entry_csv=entry, label="missing-status", as_of=AS_OF,
         run_root=tmp_path / "run", output_root=tmp_path / "out",
-        prior_package_dir=package, official_status_csv=status,
+        prior_package_dir=package, official_status_csv=status if supplied else None,
         offensive_role_evidence_json=role,
     )
-    assert outcome.blocked
-    assert outcome.blockers[0].startswith("SELECTED_CURRENT_EVIDENCE_REQUIRED:")
-    assert "OFFICIAL_ACTIVITY" in outcome.blockers[0]
-    assert "selection_report" not in outcome.artifacts
-    assert not list((tmp_path / "out").rglob("*.csv"))
+    assert not outcome.blocked, outcome.blockers
+    gate = outcome.reports["selected_evidence_gate"]
+    assert gate["schema_version"] == "nfl_classic_selected_evidence_gate_c1_v3"
+    assert (gate["status"], gate["gaps"]) == ("PASS_WITH_NAMED_LIMITATIONS", [])
+    coverage = outcome.reports["selection"]["official_status_coverage"]
+    expected = (
+        coverage["selected_without_row"] if supplied else sorted(gate["selected_people"])
+    )
+    assert expected and [item["person"] for item in gate["activity_gaps"]] == expected
+    limitation = "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED" if supplied else "OFFICIAL_STATUS_REQUIRED"
+    assert {item["limitation"] for item in gate["activity_gaps"]} == {limitation}
+    if not supplied:
+        assert coverage is None
+    selection = json.loads(Path(outcome.artifacts["selection_report"]).read_text(encoding="utf-8"))
+    assert (selection["EVIDENCE_STATE"], selection["RELEASE_DECISION"]) == ("UNKNOWN", "DO_NOT_UPLOAD")
+    written = json.loads(Path(outcome.artifacts["complete_slate_coverage"]).read_text(encoding="utf-8"))
+    assert written["selected_evidence_gate"] == gate
 
 
 def test_role_source_mutation_fails_closed(tmp_path: Path) -> None:

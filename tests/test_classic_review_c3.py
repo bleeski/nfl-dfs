@@ -526,6 +526,51 @@ def test_selected_unavailable_and_missing_current_role_stop(
     _assert_no_new_output(missing_role)
 
 
+@pytest.mark.parametrize("where", ["coverage", "gate"])
+def test_artifacts_that_disagree_about_missing_activity_still_refuse(
+    c3_seed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str
+) -> None:
+    """R28 moved only the missing row (Session 09). A bound artifact that claims
+    a selected person lacks a row when C3's own re-read finds one, or a gate
+    that hides a gap, is conflicted evidence and still refuses the export."""
+
+    from nfl_dfs import classic_review
+
+    args = _direct_args(c3_seed, tmp_path / where)
+    assignment = json.loads(Path(args["artifacts"]["classic_assignment"]).read_text())
+    selected_id = assignment["entry_assignments"][0]["roster"][0]
+    person = next(
+        row.underlying_id for row in parse_salaries(args["salary_path"]).players if row.dk_id == selected_id
+    )
+    original = classic_review._strict_json
+
+    def hook(raw, *, label: str, canonical: bool = False):
+        result = original(raw, label=label, canonical=canonical)
+        if label != "COVERAGE":
+            return result
+        changed = copy.deepcopy(dict(result))
+        if where == "coverage":
+            changed["official_status_coverage"]["selected_without_row"] = [person]
+        else:
+            changed["selected_evidence_gate"]["activity_gaps"] = [{"person": person}]
+            changed["selected_evidence_gate"]["status"] = "PASS_WITH_NAMED_LIMITATIONS"
+        return changed
+
+    monkeypatch.setattr(classic_review, "_strict_json", hook)
+    with pytest.raises(ClassicReviewError, match="SELECTED_ACTIVITY_COVERAGE_MISMATCH"):
+        create_classic_review_package(**args)
+    _assert_no_new_output(args)
+
+
+def test_a_coverage_that_names_a_file_the_review_does_not_track_refuses(c3_seed, tmp_path: Path) -> None:
+    args = _direct_args(c3_seed, tmp_path / "untracked-status")
+    args["artifacts"] = {k: v for k, v in args["artifacts"].items() if k != "official_status_csv"}
+    args["expected_hashes"] = {k: v for k, v in args["expected_hashes"].items() if k != "official_status_csv"}
+    with pytest.raises(ClassicReviewError, match="CLASSIC_C3_OFFICIAL_STATUS_ARTIFACT_REQUIRED"):
+        create_classic_review_package(**args)
+    _assert_no_new_output(args)
+
+
 def test_classic_html_and_workbook_injection_defenses(c3_seed, tmp_path: Path) -> None:
     args = _direct_args(c3_seed, tmp_path / "render-safety")
     result = create_classic_review_package(**args)

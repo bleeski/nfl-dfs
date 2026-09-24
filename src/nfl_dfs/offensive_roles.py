@@ -476,13 +476,17 @@ def resolve_offensive_roles(
 # 7.3-point prior, 0 of 18 lineups paid, and nothing stopped. A person in one of
 # these states who is *also* priced far above his prior is not a person we are
 # merely uncertain about; he is a person whose role we can see has changed and
-# have not resolved. That is the same thing a declared MATERIAL_ROLE_CHANGE is,
-# and it gets the same answer: stop, and name the one action that clears it.
+# have not resolved. That is the same thing a declared MATERIAL_ROLE_CHANGE is.
+# The 2026-09-19 answer was to stop the run. R28 absorbs it (Ben, 2026-09-23:
+# "Absorb it"): he leaves the selectable pool, the run continues, and the code
+# travels with the file as a named `P` limitation. He is never selected on the
+# old-team share; exclusion is the only construction change.
 #
 # The gate is deliberately conjunctive. An unverified transfer priced where his
 # prior puts him is still a diagnostic, because nothing observable disagrees.
 UNRESOLVED_ROLE_CHANGE_STATES = frozenset({"TRANSFER_PRIOR_UNVERIFIED"})
-MATERIAL_ROLE_CHANGE_GATE_VERSION = "unresolved_material_role_change_gate_v1"
+MATERIAL_ROLE_CHANGE_GATE_VERSION = "unresolved_material_role_change_gate_v2"
+MATERIAL_ROLE_CHANGE_FINDING = "OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE"
 
 
 def material_role_change_blockers(
@@ -491,12 +495,19 @@ def material_role_change_blockers(
 ) -> tuple[str, ...]:
     """Name every person who is both role-unresolved and priced against it."""
 
+    return tuple(sorted(code for _person, code in _material_role_changes(report, divergence)))
+
+
+def _material_role_changes(
+    report: Mapping[str, object],
+    divergence: Iterable[Mapping[str, object]],
+) -> list[tuple[str, str]]:
     diverging = {
         str(finding.get("person")): finding
         for finding in divergence
         if isinstance(finding, Mapping)
     }
-    blockers: list[str] = []
+    blockers: list[tuple[str, str]] = []
     for finding in report.get("findings", ()) or ():
         if not isinstance(finding, Mapping):
             continue
@@ -525,34 +536,54 @@ def material_role_change_blockers(
             else "Capture a numerical current-team allocation for his team and pass"
             " it as offensive_role_evidence_json"
         )
-        blockers.append(
+        blockers.append((person, (
             f"OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE:{person}:"
             f"salary={diverged.get('salary')}:prior_points={diverged.get('prior_points')}:"
             f"places={diverged.get('divergence_places')}:old_teams={old_teams or 'UNKNOWN'}:"
             "the market prices this person far above a prior carried from his previous"
-            f" team. {remedy}, or --exclude him."
-            " Do not select him on the old-team share."
-        )
-    return tuple(sorted(blockers))
+            " team, so he was left out of the selectable pool and is never selected on"
+            f" the old-team share. {remedy} to make him selectable."
+        )))
+    return blockers
 
 
-def enforce_material_role_change_gate(
-    report: Mapping[str, object],
+def exclude_material_role_changes(
+    resolution: OffensiveResolution,
     divergence: Iterable[Mapping[str, object]],
-) -> None:
-    """Fail closed on an unresolved role change the market disagrees with."""
+) -> OffensiveResolution:
+    """Leave out every unresolved role change the market disagrees with (R28).
 
-    blockers = material_role_change_blockers(report, divergence)
-    if blockers:
-        raise OffensiveRoleError(
-            ";".join(blockers),
-            {
-                **dict(report),
-                "evidence_state": "UNKNOWN",
-                "gate_version": MATERIAL_ROLE_CHANGE_GATE_VERSION,
-                "blockers": list(blockers),
-            },
-        )
+    Each person `material_role_change_blockers` names joins `excluded_people`,
+    which selection already honours; his finding says `EXCLUDE`; and the report
+    carries each code under `material_role_change_exclusions` for the run to
+    name as a limitation. The model is the one that was scored and is returned
+    unchanged, so no other person's prior moves: his vacated share stays
+    unallocated, exactly as for every other role-gate exclusion.
+    """
+
+    changes = _material_role_changes(resolution.report, divergence)
+    if not changes:
+        return resolution
+    people = sorted({person for person, _code in changes})
+    report = dict(resolution.report)
+    report["findings"] = [
+        {**finding, "selection_action": "EXCLUDE", "material_role_change": MATERIAL_ROLE_CHANGE_FINDING}
+        if isinstance(finding, Mapping) and str(finding.get("person")) in people
+        else finding
+        for finding in resolution.report.get("findings", ()) or ()
+    ]
+    report["excluded_by_finding"] = {
+        **dict(resolution.report.get("excluded_by_finding") or {}),
+        MATERIAL_ROLE_CHANGE_FINDING: people,
+    }
+    report["evidence_state"] = "UNKNOWN"
+    report["gate_version"] = MATERIAL_ROLE_CHANGE_GATE_VERSION
+    report["material_role_change_exclusions"] = sorted(code for _person, code in changes)
+    return replace(
+        resolution,
+        excluded_people=tuple(sorted(set(resolution.excluded_people) | set(people))),
+        report=report,
+    )
 
 
 def verify_offensive_resolution(resolution: OffensiveResolution, *, at: datetime) -> None:

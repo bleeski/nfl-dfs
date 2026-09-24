@@ -343,6 +343,19 @@ A successful Classic C1 run writes two atomic canonical JSON artifacts:
   game, salary, activity state, inclusion/exclusion reason, unallocated share,
   conservation totals and smallest evidence action.
 
+Both embed the selected-evidence gate. Since Session 09 (R28) it is
+`nfl_classic_selected_evidence_gate_c1_v3`; v2 stays as written. v3 keeps
+`gaps` for what still blocks (synthetic role sources, a selected unavailable
+person, a missing or unselectable current role) and adds `activity_gaps`, one
+per selected person with no exact-ID official activity row: `person`,
+`evidence` `OFFICIAL_ACTIVITY`, `state` (`NO_EXACT_ID_ROW_IN_SUPPLIED_FILE` or
+`NO_OFFICIAL_STATUS_FILE`), the `limitation` code `run-slate` names
+(`OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED` or `OFFICIAL_STATUS_REQUIRED`) and
+the smallest evidence action. `status` is `BLOCKED` with any gap,
+`PASS_WITH_NAMED_LIMITATIONS` with activity gaps only, and `PASS` with neither.
+Coverage's `official_status_coverage` is `null` when no official status file
+was supplied.
+
 Runtime paths, run IDs, timestamps and solver elapsed seconds are excluded from
 these canonical payloads, so identical immutable inputs reproduce both hashes.
 `FILE_VALID` describes these two review JSON files only. `EVIDENCE_STATE`,
@@ -516,6 +529,12 @@ closed. The C3 audit independently recomputes:
   uniqueness, and every unordered pairwise underlying-person overlap; and
 - selected exact-ID official activity plus selected current-team offensive-role
   evidence, including source paths, source hashes, observation and expiry.
+  Since Session 09 (R28) the official status file is optional: a selected
+  person with no row, or a run with no file, is a named limitation, while a
+  row that is not `ACTIVE` still refuses, and so does any disagreement between
+  C3's re-read and the coverage or gate about who lacks a row
+  (`CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH`), or a coverage that names a
+  file the review does not track (`CLASSIC_C3_OFFICIAL_STATUS_ARTIFACT_REQUIRED`).
 
 Only `ENFORCED_AND_INDEPENDENTLY_AUDITED`, C2 audit `PASS`, bank status
 `EXHAUSTIVE_COMPLETION`, `BOUNDED_COMPLETION`, `BOUNDED_TIME_LIMIT_STOP` or
@@ -534,7 +553,7 @@ Successful C3 publication is atomic and adds:
 
 | Artifact | Contract |
 |---|---|
-| `classic_review_export_audit.json` | Canonical `prior_only_classic_export_audit_c3_v1`; every boundary hash, recomputed fact, exact output hash, status, limitations, truths, and one next action |
+| `classic_review_export_audit.json` | Canonical `prior_only_classic_export_audit_c3_v2` since Session 09 (v1 stays as written); every boundary hash, recomputed fact, exact output hash, status, limitations, truths, and one next action. v2 reports `recomputed.selected_activity` as `PASS` or `INCOMPLETE` (v1 always wrote `PASS`), adds `recomputed.selected_activity_without_row`, lists `SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE` in `checks_run` only when every selected person has an `ACTIVE` row (otherwise `SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW`), and names the gap in `limitations` as `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED:NO_EXACT_ID_ROW_IN_SUPPLIED_FILE:<n>_of_<m>_selected_people` or `OFFICIAL_STATUS_REQUIRED:NO_OFFICIAL_STATUS_FILE_SUPPLIED:<n>_of_<m>_selected_people` |
 | `DK_REVIEW_ENTRY_<label>.csv` | Exact reserved-entry template bytes with only nine previously blank authorized roster cells rewritten for each exact Entry ID in template order |
 | `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v1` display data independently reconstructed from the accepted artifacts |
 | `prior_only_readable_review.html` | Self-contained escaped rendering of the canonical readable JSON |
@@ -709,6 +728,16 @@ shares remain unconfirmed; excluding people leaves their volume unallocated,
 so no unsupported backup inherits it. This is an understated retained-volume
 diagnostic, not a guaranteed lower bound on fantasy points or a current-role
 forecast. Historical `role_capacity` is never a forward ceiling.
+
+An unresolved transfer the market prices far above his prior (the P1 gate,
+`unresolved_material_role_change_gate_v2` since Session 09) no longer stops the
+run (R28, Ben 2026-09-23). Scoring adds him to the resolution's excluded people,
+his finding's selection action becomes `EXCLUDE` with `material_role_change`
+`OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE`, `excluded_by_finding` lists him
+under that key, `evidence_state` is `UNKNOWN`, and `material_role_change_exclusions`
+carries one code per person, which `run-slate` names as a `P` limitation
+(family `unresolved_role_change`). Every prior stays as scored; v1 raised
+instead.
 
 Selection/scoring reports retain this under `offensive_roles`; failed selection
 retains it directly under `prior_review_reports.offensive_roles`. Source/manifest
@@ -1965,7 +1994,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `942d43cb9920c5abee29670d20944eb4c38138a71708ff69571af654d5c8e9e1`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `92abd16b04d7631f814e34c1a2274d082645f58c57a893997eb8874acfc875fc`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

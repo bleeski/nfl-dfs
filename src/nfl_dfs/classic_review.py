@@ -36,7 +36,7 @@ from .portfolio_policy import canonical_decimal_json_bytes
 from .readable_review import _render_html
 
 
-AUDIT_VERSION = "prior_only_classic_export_audit_c3_v1"
+AUDIT_VERSION = "prior_only_classic_export_audit_c3_v2"
 READABLE_VERSION = "prior_only_readable_review_classic_c3_v1"
 SCORE_SNAPSHOT_VERSION = "nfl_classic_selected_prior_scores_c3_v1"
 
@@ -48,7 +48,8 @@ _REQUIRED_ARTIFACTS = (
     "player_opportunities",
     "source_ledger",
     "team_splits",
-    "official_status_csv",
+    # `official_status_csv` is optional since Session 09 (R28): a run with no
+    # activity file is delivered with that gap named, and its binding is `None`.
     "offensive_role_evidence_json",
     "portfolio_policy_source",
     "portfolio_policy_normalized",
@@ -794,19 +795,42 @@ def create_classic_review_package(
         if score_snapshot.get("assignment_sha256") != actual_hash["classic_assignment"]:
             problems.append("CLASSIC_C3_SCORE_ASSIGNMENT_BINDING_MISMATCH")
 
+        # R28 (Session 09): a selected person with no exact-ID activity row, or a
+        # run with no official status file at all, is a named limitation, not a
+        # refusal. A row that is not ACTIVE still refuses, and the bound
+        # artifacts must agree with this re-read about who lacks a row.
         status_path = tracked.get("official_status_csv")
+        coverage_activity = coverage.get("official_status_coverage")
+        statuses: Mapping[str, str] = {}
+        observed_by_id: Mapping[str, datetime] = {}
+        source_by_id: Mapping[str, str] = {}
         if status_path is None:
-            raise ClassicReviewError("CLASSIC_C3_OFFICIAL_STATUS_ARTIFACT_REQUIRED")
-        status = parse_official_inactive_snapshot(status_path, slate.players)
-        if status.problems:
-            problems.extend(f"CLASSIC_C3_OFFICIAL_STATUS_INVALID:{item}" for item in status.problems)
+            if coverage_activity is not None:
+                raise ClassicReviewError("CLASSIC_C3_OFFICIAL_STATUS_ARTIFACT_REQUIRED")
+        else:
+            status = parse_official_inactive_snapshot(status_path, slate.players)
+            if status.problems:
+                problems.extend(f"CLASSIC_C3_OFFICIAL_STATUS_INVALID:{item}" for item in status.problems)
+            statuses = status.statuses
+            observed_by_id = status.observed_at_by_id
+            source_by_id = status.source_url_by_id
         for dk_id in sorted(selected_ids, key=int):
-            if status.statuses.get(dk_id) != "ACTIVE":
-                problems.append(f"CLASSIC_C3_SELECTED_ACTIVITY_NOT_ACTIVE:{dk_id}:{status.statuses.get(dk_id)}")
+            if statuses.get(dk_id, "ACTIVE") != "ACTIVE":
+                problems.append(f"CLASSIC_C3_SELECTED_ACTIVITY_NOT_ACTIVE:{dk_id}:{statuses.get(dk_id)}")
         selected_people = {by_id[dk_id].underlying_id for dk_id in selected_ids if dk_id in by_id}
+        covered_people = {row.underlying_id for row in slate.players if row.dk_id in statuses}
+        activity_missing = sorted(selected_people - covered_people)
         selected_gate = _mapping(coverage.get("selected_evidence_gate"), label="SELECTED_EVIDENCE_GATE")
-        if selected_gate.get("status") != "PASS" or selected_gate.get("gaps") != []:
+        gate_activity = sorted(
+            str(item.get("person"))
+            for item in _sequence(selected_gate.get("activity_gaps") or (), label="ACTIVITY_GAPS")
+            if isinstance(item, Mapping)
+        )
+        expected_gate_status = "PASS_WITH_NAMED_LIMITATIONS" if activity_missing else "PASS"
+        if selected_gate.get("status") != expected_gate_status or selected_gate.get("gaps") != []:
             problems.append("CLASSIC_C3_SELECTED_EVIDENCE_GATE_NOT_PASS")
+        if gate_activity != activity_missing:
+            problems.append("CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH")
         # R17 extended to Classic, 2026-09-12. The selection gate decides which
         # selected offensive people rest on a captured numerical allocation and
         # which rest on a history-derived prior. C3 re-derives that split from
@@ -847,9 +871,12 @@ def create_classic_review_package(
             if position_by_person.get(person) in {"QB", "RB", "WR", "TE"}
             and person not in role_facts
         )
-        activity_coverage = _mapping(coverage.get("official_status_coverage"), label="OFFICIAL_STATUS_COVERAGE")
-        if activity_coverage.get("selected_without_row") != []:
-            problems.append("CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_INCOMPLETE")
+        if coverage_activity is not None:
+            activity_coverage = _mapping(coverage_activity, label="OFFICIAL_STATUS_COVERAGE")
+            if activity_coverage.get("selected_without_row") != activity_missing:
+                problems.append("CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH")
+        elif status_path is None and activity_missing != sorted(selected_people):
+            problems.append("CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH")
 
         selection_lineups: dict[tuple[str, ...], Mapping[str, object]] = {}
         for raw in _sequence(selection.get("lineups"), label="SELECTION_LINEUPS"):
@@ -924,13 +951,13 @@ def create_classic_review_package(
                         "position": player.position,
                         "salary": player.salary,
                         "prior_only_central_estimate_points": round(score_map.get(player.dk_id, 0.0), 6),
-                        "official_activity": status.statuses.get(player.dk_id),
+                        "official_activity": statuses.get(player.dk_id),
                         "official_observed_at": (
-                            status.observed_at_by_id.get(player.dk_id).isoformat()
-                            if player.dk_id in status.observed_at_by_id
+                            observed_by_id[player.dk_id].isoformat()
+                            if player.dk_id in observed_by_id
                             else None
                         ),
-                        "official_source": status.source_url_by_id.get(player.dk_id),
+                        "official_source": source_by_id.get(player.dk_id),
                         "salary_status_raw": player.status_raw or "BLANK_NOT_OFFICIAL_ACTIVITY",
                         "role_evidence_state": (
                             role.get("state") if role else "NOT_APPLICABLE_DST"
@@ -1127,6 +1154,17 @@ def create_classic_review_package(
             limit_notes.append(
                 "PORTFOLIO_SELECTION_LIMIT_INCUMBENT:FEASIBLE_UNDER_EVERY_POLICY_BOUND_NOT_PROVEN_OPTIMAL"
             )
+        # Missing activity travels with the file under the code `run-slate`
+        # names (Session 09); it is never reported as a pass.
+        if activity_missing:
+            limit_notes.append(
+                (
+                    "OFFICIAL_STATUS_REQUIRED:NO_OFFICIAL_STATUS_FILE_SUPPLIED"
+                    if status_path is None
+                    else "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED:NO_EXACT_ID_ROW_IN_SUPPLIED_FILE"
+                )
+                + f":{len(activity_missing)}_of_{len(selected_people)}_selected_people"
+            )
 
         pre_export_hashes = _hash_checkpoint("PRE_EXPORT", tracked, expected)
         export_sha = sha256_bytes(proposed)
@@ -1187,7 +1225,8 @@ def create_classic_review_package(
                 "group_counts": expected_c2_maps["group_counts"],
                 "stack_counts": expected_c2_maps["stack_counts"],
                 "pairwise_person_overlap": pairwise,
-                "selected_activity": "PASS",
+                "selected_activity": "INCOMPLETE" if activity_missing else "PASS",
+                "selected_activity_without_row": activity_missing,
                 "selected_current_roles": "PASS",
             },
             "checks_run": [
@@ -1198,7 +1237,11 @@ def create_classic_review_package(
                 "EVERY_SELECTED_LINEUP_ELIGIBILITY_SALARY_TWO_GAME_RULE",
                 "ALL_HARD_PLAYER_TEAM_GAME_GROUP_STACK_COUNTS",
                 "EXACT_EXCLUSIONS_CANONICAL_UNIQUENESS_ALL_PAIRWISE_OVERLAPS",
-                "SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE",
+                (
+                    "SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW"
+                    if activity_missing
+                    else "SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE"
+                ),
                 "BLANK_CELL_AUTHORITY_AND_UNCHANGED_NON_ROSTER_TEMPLATE_BYTES",
                 "PROPOSED_OUTPUT_REPARSE_SHA256_AND_POST_WRITE_REPARSE",
             ],
@@ -1289,17 +1332,29 @@ def create_classic_review_package(
             "evidence_observations": [
                 {
                     "category": "SELECTED_OFFICIAL_ACTIVITY",
-                    "state": "PASS",
-                    "observation": f"{len(selected_people)} selected people have exact ACTIVE rows",
+                    "state": "UNKNOWN" if activity_missing else "PASS",
+                    "observation": (
+                        f"{len(selected_people) - len(activity_missing)} of {len(selected_people)}"
+                        " selected people have exact ACTIVE rows"
+                        + (
+                            f"; {len(activity_missing)} have no row: {', '.join(activity_missing)}"
+                            if activity_missing
+                            else ""
+                        )
+                    ),
                     "observed_at": min(
-                        (status.observed_at_by_id[dk_id] for dk_id in selected_ids),
+                        (observed_by_id[dk_id] for dk_id in selected_ids if dk_id in observed_by_id),
                         default=None,
                     ).isoformat()
-                    if selected_ids
+                    if any(dk_id in observed_by_id for dk_id in selected_ids)
                     else None,
                     "expires_at": None,
-                    "source": sorted({status.source_url_by_id[dk_id] for dk_id in selected_ids}),
-                    "next_action": "Refresh official activity near lock.",
+                    "source": sorted({source_by_id[dk_id] for dk_id in selected_ids if dk_id in source_by_id}),
+                    "next_action": (
+                        "Capture a fresh exact-ID ACTIVE or INACTIVE row for each person named, and refresh near lock."
+                        if activity_missing
+                        else "Refresh official activity near lock."
+                    ),
                 },
                 {
                     "category": "SELECTED_CURRENT_OFFENSIVE_ROLE",

@@ -60,10 +60,14 @@ review CSV is an exact template copy with only the nine previously blank roster
 cells for each authorized Entry ID changed; all non-roster bytes and physical
 line geometry remain exact. It is a review artifact, never an upload package.
 
-Classic publication requires fresh exact-ID official activity for every selected
-person. A missing selected row stops publication and names the person plus the
-smallest evidence action. Uncertainty for nonselected people remains visible in
-complete-slate coverage.
+Since Session 09 (R28) Classic treats missing official activity as Showdown
+does: a selected person with no exact-ID row publishes with the gap named
+(`OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED`, or `OFFICIAL_STATUS_REQUIRED` when
+no file was supplied; `P`, stops certification) and `EVIDENCE_STATE=UNKNOWN`.
+C3's audit reports `selected_activity` as `INCOMPLETE` with the people, never
+`PASS`. An `INACTIVE` row still takes the person out before selection, and an
+invalid, empty, stale, future or changed file still stops the run. Uncertainty
+for nonselected people remains visible in complete-slate coverage.
 
 Current offensive roles follow the Showdown rule since 2026-09-12 (R21, Ben's
 ruling extending R17 to Classic). The role resolver decides: an unresolved or
@@ -894,8 +898,8 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    reports are available. The supplied rows must be current, and an INACTIVE
    row excludes both CPT and FLEX identities before selection. Missing ACTIVE
    rows remain unknown; salary status alone never establishes current activity.
-   Classic C1/C2 will not publish selection artifacts unless every selected person
-   has a fresh exact-ID row. Classic current-role evidence follows the same rule
+   Since Session 09 (R28) Classic C1/C2 publish with a selected person's
+   missing row named, as Showdown does. Classic current-role evidence follows the same rule
    as Showdown (R17, extended to Classic 2026-09-12 on Ben's ruling): the role
    resolver decides, so an unresolved or declared-changed role still blocks
    before selection and a person with no prior-season row is still excluded with
@@ -911,8 +915,10 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    share as an unverified cold-start prior (`TRANSFER_PRIOR_UNVERIFIED`,
    `EVIDENCE_STATE=UNKNOWN`); a person with no prior-season row anywhere is
    excluded with zero share and named with salary in `pool_coverage`; an
-   unresolved material role change still names the person and the smallest
-   evidence action and stops. Capture approved source bytes, prepare the
+   unresolved transfer the market prices far above his prior (the P1 gate) leaves
+   the selectable pool and is named with the smallest evidence action as
+   `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE` (`P`), and the run continues
+   (R28, Ben 2026-09-23); he is never selected on the old-team share. Capture approved source bytes, prepare the
    versioned auxiliary `offensive_role_evidence_json` package in
    `docs/DATA_CONTRACTS.md`, add it to the generated request and rerun.
    Qualitative starter/backup evidence cannot invent a numerical share. Without

@@ -2206,22 +2206,39 @@ def run_prior_review(
                 }
                 for person in selected_unavailable
             )
+        # R28 (Session 09): a selected person with no exact-ID activity row is a
+        # named limitation, as Showdown already treats it, not a stop. It stops
+        # certification: the release truths stay DO_NOT_UPLOAD, and `run-slate`
+        # names OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED for a file that omits him,
+        # or OFFICIAL_STATUS_REQUIRED when no file was supplied. An INACTIVE row
+        # took him out of the pool before selection; an invalid, stale, future or
+        # changed file still stops the run above and below.
         missing_activity = (
             sorted(selected_people)
             if activity_coverage is None
             else list(activity_coverage["selected_without_row"])
         )
-        selected_evidence_gaps.extend(
+        activity_gaps = [
             {
                 "person": person,
                 "evidence": "OFFICIAL_ACTIVITY",
+                "state": (
+                    "NO_OFFICIAL_STATUS_FILE"
+                    if activity_coverage is None
+                    else "NO_EXACT_ID_ROW_IN_SUPPLIED_FILE"
+                ),
+                "limitation": (
+                    "OFFICIAL_STATUS_REQUIRED"
+                    if activity_coverage is None
+                    else "OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED"
+                ),
                 "smallest_evidence_action": (
                     "Capture a fresh exact-ID ACTIVE or INACTIVE row from the approved "
                     "official status source and rerun."
                 ),
             }
             for person in missing_activity
-        )
+        ]
         finding_by_person = {
             str(item.get("person")): item
             for item in offensive_resolution.report.get("findings", [])
@@ -2285,9 +2302,10 @@ def run_prior_review(
             if item.get("state") != "SOURCE_SUPPORTED_ADJUSTMENT"
         )
         reports["selected_evidence_gate"] = {
-            "schema_version": "nfl_classic_selected_evidence_gate_c1_v2",
+            "schema_version": "nfl_classic_selected_evidence_gate_c1_v3",
             "selected_people": sorted(selected_people),
             "gaps": selected_evidence_gaps,
+            "activity_gaps": activity_gaps,
             "selected_role_observations": selected_role_observations,
             "unverified_role_people": unverified_role_people,
             "role_basis": (
@@ -2295,7 +2313,11 @@ def run_prior_review(
                 if unverified_role_people
                 else "EVERY_SELECTED_ROLE_IS_SOURCE_SUPPORTED"
             ),
-            "status": "BLOCKED" if selected_evidence_gaps else "PASS",
+            "status": (
+                "BLOCKED"
+                if selected_evidence_gaps
+                else "PASS_WITH_NAMED_LIMITATIONS" if activity_gaps else "PASS"
+            ),
         }
         if selected_evidence_gaps:
             blocker = (

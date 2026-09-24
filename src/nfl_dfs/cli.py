@@ -3095,6 +3095,12 @@ def _run_prior_review_profile(
                 "ACTIVE for anyone it omits",
             )
         selector = selection_report.get("selection")
+        # R28 absorbs the P1 stop (Session 09): each unresolved role change the
+        # market disagrees with left the pool, and travels with the file by name.
+        offensive = selector.get("offensive_roles") if isinstance(selector, Mapping) else None
+        if isinstance(offensive, Mapping):
+            for code in reversed(list(offensive.get("material_role_change_exclusions") or ())):
+                blockers.insert(0, str(code))
         if isinstance(selector, Mapping) and selector.get("non_optimal_lineups"):
             blockers.insert(
                 0,
