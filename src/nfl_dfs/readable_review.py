@@ -570,7 +570,8 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
             '<div class="scope"><b>Bounded-bank scope:</b> '
             f'{_escape(bank.get("status"))}; requested {_escape(bank.get("requested_candidates"))}, '
             f'produced {_escape(bank.get("produced_candidates"))}; exhaustive={_escape(bank.get("exhaustive"))}. '
-            f'Joint solve {_escape(joint.get("status"))} over {_escape(joint.get("optimality_scope"))}. '
+            f'Joint solve {_escape(joint.get("status"))} over '
+            f'{_escape(joint.get("optimality_scope") or "the actual bank, stopped at a limit: feasible, not proven optimal")}. '
             'No full-slate optimality, calibrated performance, ownership, field, duplication, payout, economics, or EV claim.</div>',
             f'<p class="scope"><b>Next operator action:</b> {_escape(data.get("next_action"))}</p>',
             f'<p class="small">Readable review data SHA-256: {_escape(data_sha256)}</p>',

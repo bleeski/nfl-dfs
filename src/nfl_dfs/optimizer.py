@@ -10,6 +10,12 @@ import numpy as np
 from .contracts import EngineMode, SalaryPlayer, SlateContract
 from .lineups import ValidationResult, validate_lineup
 
+# A joint portfolio selection (C2 or SD3) that HiGHS stopped at a time or
+# search limit holding a valid integer incumbent, the portfolio form of this
+# module's per-lineup `FEASIBLE_LIMIT`. It passes the optimum's checks and every
+# policy bound, but nothing proves it optimal, so it has no optimality scope.
+LIMIT_INCUMBENT_STATUS = "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK"
+
 
 @dataclass(frozen=True)
 class SolverResult:

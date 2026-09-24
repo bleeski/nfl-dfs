@@ -104,9 +104,12 @@ set `portfolio_policy_json` in the generated request. The policy must bind the
 exact current salary and entry hashes, full Classic identity, direct integer
 bounds, and exact Entry IDs in template order. Require all of the following in
 the completed report: policy enforcement `PASS`, candidate bank
-`BOUNDED_COMPLETION` or `EXHAUSTIVE_COMPLETION`, joint selection
-`OPTIMAL_ACTUAL_CANDIDATE_BANK`, and independent audit `PASS`. An actual-bank
-optimum is not a full-slate optimum.
+`BOUNDED_COMPLETION` or `EXHAUSTIVE_COMPLETION` (or, since Session 08,
+`BOUNDED_TIME_LIMIT_STOP` or `BOUNDED_SEARCH_LIMIT_STOP`, named as a limitation),
+joint selection `OPTIMAL_ACTUAL_CANDIDATE_BANK` (or a named
+`FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK` incumbent a limit left, feasible and not
+proven optimal), and independent audit `PASS`. An actual-bank optimum is not a
+full-slate optimum.
 
 Every selected person requires a fresh exact-ID official activity row, and every
 selected QB/RB/WR/TE requires a source-supported numerical current-team role

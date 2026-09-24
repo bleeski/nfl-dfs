@@ -100,7 +100,7 @@ from .metric_registry import (
     require_registry_precedes_evaluation,
 )
 from .opportunity import load_opportunity_model
-from .optimizer import generate_candidates
+from .optimizer import LIMIT_INCUMBENT_STATUS, generate_candidates
 from .ownership import OwnershipBracket, cold_start_states
 from .payouts import parse_payout_csv, validate_payout_tiers
 from .portfolio import (
@@ -3102,6 +3102,33 @@ def _run_prior_review_profile(
                 f"{list(selector['non_optimal_lineups'])} were accepted from a time-limited "
                 "solve and are feasible but not proven optimal for the prior objective",
             )
+        # C2 and SD3 (Session 08): a bank stopped at a limit that kept enough to
+        # select from, and a joint selection a limit stopped with a validated
+        # incumbent, each travel with the file. Neither is a claim of optimality.
+        policy_record = selector.get("portfolio_policy") if isinstance(selector, Mapping) else None
+        if isinstance(policy_record, Mapping):
+            bank_record = policy_record.get("candidate_bank")
+            solve_record = policy_record.get("solve")
+            if isinstance(bank_record, Mapping) and bank_record.get("status") in {
+                "BOUNDED_TIME_LIMIT_STOP", "BOUNDED_SEARCH_LIMIT_STOP",
+            }:
+                blockers.insert(
+                    0,
+                    "CANDIDATE_BANK_STOPPED_AT_LIMIT: the candidate bank stopped at its "
+                    f"{bank_record.get('status')} after "
+                    f"{bank_record.get('produced_candidates')} of "
+                    f"{bank_record.get('requested_candidates')} candidates; it held the entry "
+                    "count and a policy-feasible witness, and the portfolio was chosen from it",
+                )
+            if isinstance(solve_record, Mapping) and solve_record.get("status") == LIMIT_INCUMBENT_STATUS:
+                blockers.insert(
+                    0,
+                    "PORTFOLIO_SELECTION_LIMIT_INCUMBENT: the joint selection stopped at "
+                    f"{solve_record.get('model_status')} with a validated incumbent "
+                    f"(gap {solve_record.get('mip_gap')}, {solve_record.get('node_count')} nodes); "
+                    "its lineups were accepted and are feasible under every policy bound but "
+                    "not proven optimal for the prior objective over the bank",
+                )
 
     # The delivery truth, then the pointer. A kept CSV is published only after
     # `delivery.publish` revalidates it, or put in place of the baseline only

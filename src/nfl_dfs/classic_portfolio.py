@@ -29,7 +29,7 @@ from .classic_portfolio_policy import (
 from .contracts import EngineMode, SlateContract
 from .hashing import sha256_bytes
 from .lineups import validate_lineup
-from .optimizer import LineupOptimizer
+from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
 from .portfolio_policy import canonical_decimal_json_bytes
 
 
@@ -37,6 +37,28 @@ ENFORCEMENT_VERSION = "prior_only_classic_portfolio_enforcement_c2_v1"
 CANDIDATE_BANK_SCHEMA = "nfl_classic_candidate_bank_c2_v1"
 ASSIGNMENT_SCHEMA = "nfl_classic_portfolio_assignment_c2_v1"
 AUDIT_VERSION = "prior_only_classic_portfolio_audit_c2_v1"
+
+# A time- or search-limited incumbent passes like the optimum (Session 08),
+# under `LIMIT_INCUMBENT_STATUS`, which SD3 shares.
+ACCEPTED_SELECTION_STATUSES = frozenset(
+    {"OPTIMAL_ACTUAL_CANDIDATE_BANK", LIMIT_INCUMBENT_STATUS}
+)
+# The HiGHS model statuses a limit stops on, with the bank's termination label
+# and the code a bank stopped by one reports when it cannot go on (Session 08).
+_BANK_LIMITS = {
+    "kTimeLimit": ("TIMEOUT", "CANDIDATE_BANK_TIMEOUT"),
+    "kIterationLimit": ("SEARCH_LIMIT", "CANDIDATE_BANK_SEARCH_LIMIT"),
+    "kSolutionLimit": ("SEARCH_LIMIT", "CANDIDATE_BANK_SEARCH_LIMIT"),
+}
+# A bank stopped at a limit that still holds the entry count and a
+# POLICY_FEASIBLE witness is not blocking; its status names the limit.
+LIMIT_STOP_BANK_STATUSES = {
+    "CANDIDATE_BANK_TIMEOUT": "BOUNDED_TIME_LIMIT_STOP",
+    "CANDIDATE_BANK_SEARCH_LIMIT": "BOUNDED_SEARCH_LIMIT_STOP",
+}
+ACCEPTED_BANK_STATUSES = frozenset(
+    {"BOUNDED_COMPLETION", "EXHAUSTIVE_COMPLETION", *LIMIT_STOP_BANK_STATUSES.values()}
+)
 
 
 @dataclass(frozen=True)
@@ -163,6 +185,10 @@ class ClassicCandidateBank:
             "solver_node_count": self.solver_node_count,
             "solver_max_gap": self.solver_max_gap,
             "terminal_model_status": self.terminal_model_status,
+            "limit_incumbent_candidates": sum(
+                candidate.source_solver_status == "FEASIBLE_LIMIT"
+                for candidate in self.candidates
+            ),
             "coverage": self.coverage(),
             "policy_feasible_chain": {
                 "status": self.feasible_chain_status,
@@ -186,9 +212,14 @@ class ClassicPortfolioSelection:
     node_count: int | None
     model_status: str
     infeasibility_scope: str | None
+    mip_start: str | None = None
 
     @property
     def passed(self) -> bool:
+        return self.status in ACCEPTED_SELECTION_STATUSES
+
+    @property
+    def proven_optimal(self) -> bool:
         return self.status == "OPTIMAL_ACTUAL_CANDIDATE_BANK"
 
     def as_report(self) -> dict[str, object]:
@@ -202,8 +233,9 @@ class ClassicPortfolioSelection:
             "mip_gap": self.mip_gap,
             "node_count": self.node_count,
             "model_status": self.model_status,
-            "optimality_scope": "ACTUAL_CANDIDATE_BANK" if self.passed else None,
+            "optimality_scope": "ACTUAL_CANDIDATE_BANK" if self.proven_optimal else None,
             "infeasibility_scope": self.infeasibility_scope,
+            "mip_start": self.mip_start,
         }
 
 
@@ -344,6 +376,10 @@ class _Enumerator:
         self.max_gap: float | None = None
         self.terminal_model_status: str | None = None
         self.blocking_status: str | None = None
+        # The limit a solve stopped the bank on (Session 08). Unlike a solver
+        # error it blocks only when the bank ends without the entry count and
+        # a POLICY_FEASIBLE witness (`build_classic_candidate_bank`).
+        self.limit_stop: str | None = None
 
     def elapsed(self) -> float:
         return time.perf_counter() - self.started
@@ -480,6 +516,10 @@ class _Enumerator:
             record = ClassicCandidateStratum(kind, subject, requested, 0, 0, 0, "NOT_RUN_AFTER_BLOCKER")
             self.strata.append(record)
             return record
+        if self.limit_stop is not None:
+            record = ClassicCandidateStratum(kind, subject, requested, 0, 0, 0, "NOT_RUN_AFTER_LIMIT_STOP")
+            self.strata.append(record)
+            return record
         if target <= 0:
             record = ClassicCandidateStratum(kind, subject, requested, 0, 0, 0, "CANDIDATE_LIMIT")
             self.strata.append(record)
@@ -515,7 +555,7 @@ class _Enumerator:
             remaining = self.total_budget - self.elapsed()
             if remaining <= 0:
                 termination = "TIMEOUT"
-                self.blocking_status = "CANDIDATE_BANK_TIMEOUT"
+                self.limit_stop = "CANDIDATE_BANK_TIMEOUT"
                 break
             optimizer.set_time_limit(min(self.per_solve_budget, remaining))
             cycle = self.solve_count
@@ -539,13 +579,20 @@ class _Enumerator:
             if result.status == "INFEASIBLE":
                 termination = "MODEL_INFEASIBLE"
                 break
-            if result.status != "OPTIMAL" or result.roster is None:
-                if result.model_status == "kTimeLimit":
-                    termination = "TIMEOUT"
-                    self.blocking_status = "CANDIDATE_BANK_TIMEOUT"
-                elif result.model_status in {"kIterationLimit", "kSolutionLimit"}:
-                    termination = "SEARCH_LIMIT"
-                    self.blocking_status = "CANDIDATE_BANK_SEARCH_LIMIT"
+            limit = _BANK_LIMITS.get(result.model_status)
+            # A solve stopped by a time or search limit that still returned a
+            # roster keeps it (Session 08): `LineupOptimizer.solve` validated it
+            # and `validate_lineup` below checks it again, so it counts toward
+            # the stratum like any candidate, labelled `FEASIBLE_LIMIT` with
+            # its model status, gap and nodes. Without a roster the bank stops.
+            kept_at_limit = (
+                result.status == "FEASIBLE_LIMIT"
+                and limit is not None
+                and result.roster is not None
+            )
+            if not kept_at_limit and (result.status != "OPTIMAL" or result.roster is None):
+                if limit is not None:
+                    termination, self.limit_stop = limit
                 else:
                     termination = "SOLVER_ERROR"
                     self.blocking_status = "CANDIDATE_BANK_SOLVER_ERROR"
@@ -697,6 +744,18 @@ def solve_classic_portfolio(
                 if len(candidates[left].people & candidates[right].people) > policy.max_pairwise_person_overlap:
                     _add_row(model, -highspy.kHighsInf, 1.0, {left: 1.0, right: 1.0})
 
+    # The bank's POLICY_FEASIBLE witness is a feasible point of this model: it
+    # was selected under the same policy from a prefix of these candidates, and
+    # every bound counts selected lineups only. As a MIP start it is the
+    # incumbent HiGHS returns if a limit stops it before anything better
+    # (Session 08; highspy 1.11.0 returns it under both a node and a time limit).
+    chain = tuple(bank.feasible_chain_indexes)
+    mip_start = None
+    if len(chain) == policy.entry_count and all(0 <= index < count for index in chain):
+        start = np.asarray(chain, dtype=np.int32)
+        model.setSolution(len(start), start, np.ones(len(start), dtype=np.float64))
+        mip_start = "POLICY_FEASIBLE_WITNESS"
+
     model.run()
     elapsed = time.perf_counter() - started
     model_status = model.getModelStatus()
@@ -705,10 +764,17 @@ def solve_classic_portfolio(
     solution = model.getSolution()
     gap = float(info.mip_gap) if np.isfinite(info.mip_gap) else None
     nodes = int(info.mip_node_count)
+    limits = {
+        highspy.HighsModelStatus.kTimeLimit,
+        highspy.HighsModelStatus.kIterationLimit,
+        highspy.HighsModelStatus.kSolutionLimit,
+    }
     if model_status == highspy.HighsModelStatus.kInfeasible:
         status = "MODELED_BANK_INFEASIBILITY" if bank.exhaustive else "INCOMPLETE_BANK_EXHAUSTION"
-        return ClassicPortfolioSelection(status, (), elapsed, budget, None, gap, nodes, model_status_name, "EXHAUSTIVE_MODELED_BANK" if bank.exhaustive else "BOUNDED_BANK")
-    if model_status == highspy.HighsModelStatus.kTimeLimit:
+        return ClassicPortfolioSelection(status, (), elapsed, budget, None, gap, nodes, model_status_name, "EXHAUSTIVE_MODELED_BANK" if bank.exhaustive else "BOUNDED_BANK", mip_start)
+    if model_status in limits and solution.value_valid:
+        status = LIMIT_INCUMBENT_STATUS
+    elif model_status == highspy.HighsModelStatus.kTimeLimit:
         status = "PORTFOLIO_SELECTION_TIMEOUT"
     elif model_status in {highspy.HighsModelStatus.kIterationLimit, highspy.HighsModelStatus.kSolutionLimit}:
         status = "PORTFOLIO_SELECTION_SEARCH_LIMIT"
@@ -716,16 +782,17 @@ def solve_classic_portfolio(
         status = "PORTFOLIO_SELECTION_SOLVER_ERROR"
     else:
         status = "OPTIMAL_ACTUAL_CANDIDATE_BANK"
-    if status != "OPTIMAL_ACTUAL_CANDIDATE_BANK":
-        return ClassicPortfolioSelection(status, (), elapsed, budget, None, gap, nodes, model_status_name, None)
+    if status not in ACCEPTED_SELECTION_STATUSES:
+        return ClassicPortfolioSelection(status, (), elapsed, budget, None, gap, nodes, model_status_name, None, mip_start)
+    # An incumbent and an optimum pass the same checks.
     raw = np.asarray(solution.col_value[:count])
     rounded = np.rint(raw).astype(int)
     if np.max(np.abs(raw - rounded)) > 1e-6 or int(rounded.sum()) != policy.entry_count or np.any((rounded < 0) | (rounded > 1)):
-        return ClassicPortfolioSelection("PORTFOLIO_SELECTION_SOLVER_ERROR", (), elapsed, budget, None, gap, nodes, "INVALID_INTEGER_SOLUTION", None)
+        return ClassicPortfolioSelection("PORTFOLIO_SELECTION_SOLVER_ERROR", (), elapsed, budget, None, gap, nodes, "INVALID_INTEGER_SOLUTION", None, mip_start)
     selected = tuple(np.flatnonzero(rounded).tolist())
     selected = tuple(sorted(selected, key=lambda index: (-candidates[index].prior_points, candidates[index].canonical_key, candidates[index].roster, index)))
     return ClassicPortfolioSelection(
-        "OPTIMAL_ACTUAL_CANDIDATE_BANK",
+        status,
         selected,
         elapsed,
         budget,
@@ -734,6 +801,7 @@ def solve_classic_portfolio(
         nodes,
         model_status_name,
         None,
+        mip_start,
     )
 
 
@@ -841,7 +909,11 @@ def build_classic_candidate_bank(
         seed_no_goods=True,
     )
     fill = enumerator.strata[-1]
-    exhaustive = fill.termination == "MODEL_INFEASIBLE" and enumerator.blocking_status is None
+    exhaustive = (
+        fill.termination == "MODEL_INFEASIBLE"
+        and enumerator.blocking_status is None
+        and enumerator.limit_stop is None
+    )
     if (
         exhaustive
         and not enumerator.candidates
@@ -850,6 +922,19 @@ def build_classic_candidate_bank(
         status = "STRUCTURAL_INFEASIBILITY"
     elif enumerator.blocking_status is not None:
         status = enumerator.blocking_status
+    elif enumerator.limit_stop is not None:
+        # Stopped at a limit (Session 08): the bank keeps what it built, and it
+        # blocks only when that is too few for the entry count or holds no
+        # POLICY_FEASIBLE witness for the joint solve to start from.
+        enough = (
+            len(enumerator.candidates) >= policy.entry_count
+            and chain_status == "POLICY_FEASIBLE"
+        )
+        status = (
+            LIMIT_STOP_BANK_STATUSES[enumerator.limit_stop]
+            if enough
+            else enumerator.limit_stop
+        )
     elif exhaustive:
         status = "EXHAUSTIVE_COMPLETION"
     else:

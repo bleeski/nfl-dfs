@@ -90,7 +90,7 @@
     "search_budget": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
       "provenance": {"kind": "RULING", "ref": "2026-09-12 lock-clock ruling"},
-      "covers": "A candidate bank or joint selection hit its time, search or size budget, or the bank ran out before the portfolio filled; the rung ladder's triggers."
+      "covers": "A candidate bank or joint selection hit its time, search or size budget, or the bank ran out before the portfolio filled; the rung ladder's triggers. Since Session 08 also a bank a limit stopped with enough kept to select from, and a joint selection a limit stopped with a validated incumbent, delivered and named."
     },
     "strategy_observation": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
@@ -288,6 +288,7 @@
     "CANDIDATE_BANK_EXHAUSTED_INCOMPLETE": "search_budget",
     "CANDIDATE_BANK_SEARCH_LIMIT": "search_budget",
     "CANDIDATE_BANK_SOLVER_ERROR": "selection_claims",
+    "CANDIDATE_BANK_STOPPED_AT_LIMIT": "search_budget",
     "CANDIDATE_BANK_TIMEOUT": "search_budget",
     "CANDIDATE_BANK_TIME_LIMIT": "search_budget",
     "CANDIDATE_FAMILY_COVERAGE_INCOMPLETE": "strategy_observation",
@@ -1064,6 +1065,7 @@
     "PORTFOLIO_POLICY_UNKNOWN_DK_ID": "dk_identity",
     "PORTFOLIO_POLICY_UNKNOWN_FIELD": "showdown_policy_input",
     "PORTFOLIO_POLICY_UNKNOWN_PERSON_ID": "policy_binding",
+    "PORTFOLIO_SELECTION_LIMIT_INCUMBENT": "search_budget",
     "PORTFOLIO_SELECTION_SEARCH_LIMIT": "search_budget",
     "PORTFOLIO_SELECTION_SOLVER_ERROR": "selection_claims",
     "PORTFOLIO_SELECTION_TIMEOUT": "search_budget",

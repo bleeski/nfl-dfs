@@ -405,20 +405,54 @@ exhaustive state, family/group/stack coverage, every documented stratum and
 termination reason, policy-feasible-chain candidate indexes, and every exact
 candidate roster with its canonical identity and prior-only central estimate.
 Runtime diagnostics separately report elapsed seconds, peak traced Python
-bytes, solve count, nodes, maximum reported gap, and terminal model status.
+bytes, solve count, nodes, maximum reported gap, terminal model status, and
+(since Session 08) `limit_incumbent_candidates`.
 The bank distinguishes `EXHAUSTIVE_COMPLETION`, `BOUNDED_COMPLETION`,
+`BOUNDED_TIME_LIMIT_STOP`, `BOUNDED_SEARCH_LIMIT_STOP`,
 `CANDIDATE_BANK_TIMEOUT`, `CANDIDATE_BANK_SEARCH_LIMIT`,
 `CANDIDATE_BANK_SOLVER_ERROR`, and `STRUCTURAL_INFEASIBILITY`. A bounded bank
 never asserts full-slate optimality.
 
+Since Session 08 a per-candidate solve that a time or search limit
+(`kTimeLimit`, `kIterationLimit`, `kSolutionLimit`) stops with a roster
+`validate_lineup` accepts keeps it: the candidate records
+`source_solver_status` `FEASIBLE_LIMIT`, its model status, gap and nodes, and
+counts toward its stratum like any other. A bank stopped by its total budget, or
+by a limit that left no roster, is `BOUNDED_TIME_LIMIT_STOP` or
+`BOUNDED_SEARCH_LIMIT_STOP` when it holds at least the entry count and a
+`POLICY_FEASIBLE` witness, and is not blocking; without either it is
+`CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT` as before, and those
+two still block. A solver error always blocks.
+
 The joint MILP chooses exactly the Entry-ID count from the actual canonical
 bank under all hard player/team/game/group/stack, uniqueness, and pair-overlap
-bounds. `OPTIMAL_ACTUAL_CANDIDATE_BANK` is the only accepted solver status and
-means optimal only over that reported bank. `MODELED_BANK_INFEASIBILITY` applies
+bounds, starting from the bank's `POLICY_FEASIBLE` witness as a MIP start when
+there is one (`mip_start` `POLICY_FEASIBLE_WITNESS`; the witness is a feasible
+point of the same model). Two solver statuses are accepted.
+`OPTIMAL_ACTUAL_CANDIDATE_BANK` means optimal only over that reported bank, with
+`optimality_scope` `ACTUAL_CANDIDATE_BANK`. `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`
+(Session 08, shared with SD3) means a time or search limit stopped the solve
+holding a valid integer incumbent that passed the optimum's own integrality,
+count and bound checks; it reports its gap and nodes, its `optimality_scope` is
+null, it is never called optimal, and it travels as the `S` limitation
+`PORTFOLIO_SELECTION_LIMIT_INCUMBENT`. No gap threshold applies: the incumbent is
+legal under every hard bound, and a threshold would be a construction
+preference the lock-clock ruling relaxes. `MODELED_BANK_INFEASIBILITY` applies
 only to an exhaustive modeled bank; `INCOMPLETE_BANK_EXHAUSTION` is the distinct
-bounded-bank result. Timeout, search-limit, non-optimal, invalid-integrality,
-and solver-error results fail closed. Selected lineups are paired one-to-one
-with `entry_ids` in exact template order; cycling is prohibited.
+bounded-bank result. A limit with no valid incumbent keeps its code
+(`PORTFOLIO_SELECTION_TIMEOUT`, `PORTFOLIO_SELECTION_SEARCH_LIMIT`), and
+non-optimal, invalid-integrality and solver-error results fail closed. Selected
+lineups are paired one-to-one with `entry_ids` in exact template order; cycling
+is prohibited.
+
+These are new values of existing v1 fields, not a new version (Session 08): no
+key is added to or removed from `nfl_classic_candidate_bank_c2_v1` or
+`nfl_classic_portfolio_assignment_c2_v1`, every value an existing artifact can
+hold keeps its meaning, and a reader that predates the change fails closed on
+the new values, since C3 refused every bank status but the two completions and
+every joint status but the optimum. The selection report's `mip_start` and the
+bank report's `limit_incumbent_candidates` are runtime diagnostics beside the
+artifact, not artifact keys.
 
 A successful governed C2 run writes three additional atomic canonical JSON
 artifacts before extending the C1 selection and coverage records:
@@ -471,10 +505,17 @@ closed. The C3 audit independently recomputes:
   evidence, including source paths, source hashes, observation and expiry.
 
 Only `ENFORCED_AND_INDEPENDENTLY_AUDITED`, C2 audit `PASS`, bank status
-`EXHAUSTIVE_COMPLETION` or `BOUNDED_COMPLETION`, and joint status
-`OPTIMAL_ACTUAL_CANDIDATE_BANK` over `ACTUAL_CANDIDATE_BANK` can reach C3
-publication. A bounded bank remains explicitly incomplete and never implies
-full-slate optimality.
+`EXHAUSTIVE_COMPLETION`, `BOUNDED_COMPLETION`, `BOUNDED_TIME_LIMIT_STOP` or
+`BOUNDED_SEARCH_LIMIT_STOP`, a `POLICY_FEASIBLE` chain, and joint status
+`OPTIMAL_ACTUAL_CANDIDATE_BANK` over `ACTUAL_CANDIDATE_BANK` or (Session 08)
+`FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK` with a null optimality scope can reach C3
+publication. A limit incumbent that claims the bank's optimality scope is
+`CLASSIC_C3_C2_OPTIMALITY_SCOPE_MISMATCH`. A limit-stopped bank or a limit
+incumbent adds `CANDIDATE_BANK_STOPPED_AT_LIMIT:...` or
+`PORTFOLIO_SELECTION_LIMIT_INCUMBENT:...` to the export audit's and the readable
+review's `limitations`, and `run-slate` reports each as an `S` delivery
+limitation (family `search_budget`). A bounded bank remains explicitly
+incomplete and never implies full-slate optimality.
 
 Successful C3 publication is atomic and adds:
 
@@ -794,7 +835,19 @@ per lineup solve and `max(10 s, 1 s x entries)` for the joint solve. This is
 still a bounded search over an actual bank, not a full-slate enumeration.
 Reports distinguish `COMPLETE_MODELED_BANK` from
 `CANDIDATE_LIMIT_REACHED_INCOMPLETE`, candidate time/search limits and solver
-errors. An optimal result is explicitly scoped to the actual candidate bank.
+errors. Since Session 08 a lineup solve a time or search limit stops with a
+legal roster keeps it (`source_solver_status` `FEASIBLE_LIMIT`, counted in
+`limit_incumbent_candidates`); a bank a limit stops with no roster, or whose
+total budget runs out, still blocks under `CANDIDATE_BANK_TIME_LIMIT` or
+`CANDIDATE_BANK_SEARCH_LIMIT`, because SD3 has no jointly solved witness to
+show the kept bank can fill the entries. An optimal result is explicitly scoped
+to the actual candidate bank. A joint solve a time or search limit stops with a
+valid integer incumbent returns it as `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`
+(Session 08, the C2 name) after the optimum's own integrality and count checks,
+with its gap and nodes and no optimality scope; the independent audit then
+checks it like any selection, and `run-slate` names it
+`PORTFOLIO_SELECTION_LIMIT_INCUMBENT`. Without an incumbent the codes stay
+`PORTFOLIO_SELECTION_TIME_LIMIT` and `PORTFOLIO_SELECTION_SEARCH_LIMIT`.
 Only an infeasible joint MILP over a bank whose fill enumeration ended in a
 proven lineup-model `INFEASIBLE` state is `MODELED_BANK_INFEASIBLE_PROVEN`;
 infeasibility over a bounded incomplete bank is
@@ -812,7 +865,8 @@ selector summaries.
 
 Only `enforcement_status=ENFORCED_AND_INDEPENDENTLY_AUDITED` may write a new
 `DK_REVIEW_ENTRY` CSV. Invalid policies, the unsupported diagnostic profile,
-necessary-capacity failures, timeout/search/solver states, incomplete-bank
+necessary-capacity failures, timeout/search/solver states without a valid
+incumbent, incomplete-bank
 exhaustion, assignment coverage/order failures, audit disagreement or artifact
 mutation preserve earlier outputs and write no new review CSV. Every outcome
 remains `MODEL_STATUS=PRIOR_ONLY` / `RELEASE_DECISION=DO_NOT_UPLOAD`; an audited
@@ -1898,7 +1952,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `34ac114d295e4bef5bf633e35ed693a75fb0a8023551fe453bd7a1f3dbac6db3`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `942d43cb9920c5abee29670d20944eb4c38138a71708ff69571af654d5c8e9e1`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2048,7 +2102,9 @@ it. A request deadline must fall in the years 2000 to 2999.
 `<runs dir>/host_candidate_rates.json` (`data/runs/`, per machine, never
 committed). `hosts` maps `<node>|<system>|<machine>|cpus=<n>|<mode>` to its last
 20 observations: `seconds_per_candidate`, `candidates`, `elapsed_seconds`,
-`basis` (`BANK_REPORT`: the bank's own count and time; `BANK_TIME_LIMIT`: a
+`basis` (`BANK_REPORT`: the bank's own count and time, which since Session 08
+includes a bank stopped at its time limit that still delivered
+(`BOUNDED_TIME_LIMIT_STOP`); `BANK_TIME_LIMIT`: a blocking
 `CANDIDATE_BANK_TIMEOUT` count over the policy's declared bank budget),
 `pool_people`, `entries`, `run_id`, `measured_at` (wall clock). `run-slate`
 appends one after every Classic C2 bank; `deadline.read_candidate_rate` returns

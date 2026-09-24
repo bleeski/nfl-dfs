@@ -393,7 +393,7 @@ def _prepare_artifacts(root: Path, salary_source: Path, entry_source: Path, scal
         "status": "ENFORCED_AND_INDEPENDENTLY_AUDITED",
         "candidate_bank_status": bank.status,
         "joint_selection_status": selected.status,
-        "optimality_scope": "ACTUAL_CANDIDATE_BANK",
+        "optimality_scope": selected.as_report()["optimality_scope"],
     }
     selection_record = {
         "schema_version": SELECTION_SCHEMA,
@@ -651,7 +651,7 @@ def run_classic_c3_scale_acceptance(
         },
         "joint_selection": {
             "status": selected.status,
-            "optimality_scope": "ACTUAL_CANDIDATE_BANK",
+            "optimality_scope": selected.as_report()["optimality_scope"],
             "elapsed_seconds": round(float(prepared["selection_elapsed"]), 6),
             "nodes": selected.node_count,
             "gap": selected.mip_gap,
