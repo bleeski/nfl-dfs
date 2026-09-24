@@ -571,6 +571,13 @@ def test_classic_reaches_the_shared_prior_chain_instead_of_a_mode_block(tmp_path
 # --------------------------------------------------------------------------- #
 
 
+# The fixture slates locked on 2026-09-09 and 2026-09-13, so a run on a clock
+# after that is past R31's default deadline and would skip its own review
+# (Session 07). These runs replay those slates to test the review, so they name
+# a deadline explicitly, as an operator replaying one would.
+REPLAY_DEADLINE = "2099-01-01T00:00:00+00:00"
+
+
 def _cowork_args(tmp_path: Path, attachments: Path, **overrides):
     import argparse
 
@@ -594,6 +601,7 @@ def _cowork_args(tmp_path: Path, attachments: Path, **overrides):
         lineup_count=None,
         max_person_overlap=None,
         as_of=None,
+        delivery_deadline_utc=REPLAY_DEADLINE,
     )
     values.update(overrides)
     return argparse.Namespace(**values)

@@ -904,14 +904,18 @@ def test_a_v1_request_still_loads_unchanged():
     from nfl_dfs.cowork import (
         COWORK_REQUEST_VERSION,
         COWORK_REQUEST_VERSION_V1,
+        COWORK_REQUEST_VERSION_V2,
         SUPPORTED_REQUEST_VERSIONS,
         CoworkRunRequest,
     )
 
-    assert COWORK_REQUEST_VERSION == "nfl_cowork_run_request_v2"
+    # Session 07 emits v3 (`delivery_deadline_utc`); v1 and v2 stay accepted.
+    assert COWORK_REQUEST_VERSION == "nfl_cowork_run_request_v3"
+    assert COWORK_REQUEST_VERSION_V2 == "nfl_cowork_run_request_v2"
     assert COWORK_REQUEST_VERSION_V1 == "nfl_cowork_run_request_v1"
     assert SUPPORTED_REQUEST_VERSIONS == (
         COWORK_REQUEST_VERSION_V1,
+        COWORK_REQUEST_VERSION_V2,
         COWORK_REQUEST_VERSION,
     )
     request = CoworkRunRequest.from_mapping(
@@ -939,7 +943,8 @@ def test_a_v1_request_may_not_carry_the_v2_field(tmp_path):
 
 
 def test_a_v2_request_carries_and_confines_the_package(tmp_path):
-    from nfl_dfs.cowork import COWORK_REQUEST_VERSION, CoworkInputError, CoworkRunRequest
+    from nfl_dfs.cowork import COWORK_REQUEST_VERSION_V2 as COWORK_REQUEST_VERSION
+    from nfl_dfs.cowork import CoworkInputError, CoworkRunRequest
 
     package = tmp_path / "qb_depth_roles.json"
     package.write_text("{}", encoding="utf-8")

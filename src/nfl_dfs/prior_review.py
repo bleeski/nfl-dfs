@@ -28,6 +28,8 @@ Three gates are genuinely human and stay human:
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -86,9 +88,13 @@ from .priors import (
     propose_prior_package,
 )
 from .projection import build_projection_package
+from .deadline import Budget
 from .portfolio_enforcement import (
+    DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
     audit_policy_assignments,
     exact_assignments_for_entries,
+    scaled_candidate_seconds,
+    scaled_selection_seconds,
 )
 from .portfolio_policy import NormalizedPortfolioPolicy
 from .prelock_manifest import (
@@ -800,6 +806,42 @@ def _stage(name: str, status: str, **detail: object) -> dict[str, object]:
     return {"stage": name, "status": status, **detail}
 
 
+# `select_prior_lineups`' own per-solve default for sequential (C1) selection,
+# which the run's budget shortens and never raises (Session 07).
+SEQUENTIAL_PER_SOLVE_SECONDS = 10.0
+
+
+def _deadline_selection_limits(
+    budget: Budget, *, count: int, portfolio_policy: object
+) -> tuple[dict[str, float], str | None]:
+    """`select_prior_lineups` keyword limits from the budget, or the text that stops selection.
+
+    C1 gets a per-solve limit that fits its solves in the window; an SD3 policy a
+    bank and joint-solve budget; a Classic C2 policy's limits are hash-bound in
+    the policy, so they either fit the window or stop the review.
+    """
+
+    if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+        limits = portfolio_policy.search_limits
+        declared = (limits.candidate_total_milliseconds + limits.selection_milliseconds) / 1000.0
+        return {}, budget.fits_declared_search(declared_seconds=declared)
+    if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
+        entries = portfolio_policy.entry_count
+        seconds, stopped = budget.policy_search_seconds(
+            bank_default=scaled_candidate_seconds(entries),
+            joint_default=scaled_selection_seconds(entries),
+            per_solve_default=DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
+        )
+        if seconds is None:
+            return {}, stopped
+        bank, per_solve, joint = seconds
+        return {"policy_candidate_seconds": bank, "policy_candidate_per_solve_seconds": per_solve,
+                "policy_selection_seconds": joint}, None
+    per_solve, stopped = budget.sequential_solve_seconds(
+        count=count, default=SEQUENTIAL_PER_SOLVE_SECONDS)
+    return ({"time_limit_seconds": per_solve} if per_solve is not None else {}), stopped
+
+
 def _safe_label(label: str) -> str:
     """Make an operator label safe for a filename without changing the run id.
 
@@ -1247,11 +1289,14 @@ def run_prior_review(
     propose: Callable[..., dict[str, object]] = propose_prior_package,
     freeze: Callable[..., dict[str, object]] = freeze_prior_package,
     project: Callable[..., object] = build_projection_package,
+    budget: Budget | None = None,
 ) -> PriorReviewOutcome:
     """Drive priors, identity, projection, selection and export as one gate.
 
     Returns a blocked outcome with named blockers wherever a human decision is
     genuinely required, and never writes an export on any blocked or failed path.
+    `budget` (Session 07) sets selection's time limits from the run's window and
+    stops the review before selection when the window cannot hold it.
     """
 
     run_dir = Path(run_root).resolve()
@@ -1988,6 +2033,23 @@ def run_prior_review(
             reports=reports,
             error=message,
         )
+    selection_limits: dict[str, float] = {}
+    if budget is not None:
+        selection_limits, deadline_stop = _deadline_selection_limits(
+            budget, count=requested_count, portfolio_policy=portfolio_policy)
+        if deadline_stop is not None:
+            stages.append(_stage("SELECT", "STOPPED_FOR_DEADLINE", error=deadline_stop))
+            return PriorReviewOutcome(
+                profile_version=profile_version,
+                stage="SELECT",
+                blocked=True,
+                blockers=(deadline_stop,),
+                stages=tuple(stages),
+                artifacts=artifacts,
+                hashes=hashes,
+                reports=reports,
+                error=deadline_stop,
+            )
     try:
         if slate.mode is EngineMode.CLASSIC:
             if sha256_file(salary_path) != salary_digest:
@@ -2054,20 +2116,23 @@ def run_prior_review(
             teams=sorted({player.team for player in slate.players}),
             provider_team_by_team=team_binding or None,
         )
-        lineups, scores, selection = select_prior_lineups(
-            slate,
-            model,
-            splits,
-            contract,
-            count=requested_count,
-            differentiate_captain=not allow_repeat_captain,
-            max_person_overlap=max_person_overlap,
-            role_evidence_json=role_evidence_json,
-            offensive_role_evidence_json=offensive_role_evidence_json,
-            qb_depth_role_evidence_json=qb_depth_role_evidence_json,
-            as_of=as_of,
-            portfolio_policy=portfolio_policy,
-        )
+        measured = budget.stage("selection") if budget is not None else nullcontext()
+        with measured:
+            lineups, scores, selection = select_prior_lineups(
+                slate,
+                model,
+                splits,
+                contract,
+                count=requested_count,
+                differentiate_captain=not allow_repeat_captain,
+                max_person_overlap=max_person_overlap,
+                role_evidence_json=role_evidence_json,
+                offensive_role_evidence_json=offensive_role_evidence_json,
+                qb_depth_role_evidence_json=qb_depth_role_evidence_json,
+                as_of=as_of,
+                portfolio_policy=portfolio_policy,
+                **selection_limits,
+            )
         if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
             assignments = dict(
                 exact_classic_assignments(

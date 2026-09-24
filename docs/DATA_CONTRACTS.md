@@ -5,8 +5,18 @@ DraftKings input is CP1252. Times must be timezone-aware ISO 8601 values.
 
 ## Cowork run request
 
-`cowork-run` (aliased `run-slate`) emits `nfl_cowork_run_request_v2` and accepts
-both `v1` and `v2`. Unknown keys are rejected.
+`cowork-run` (aliased `run-slate`) emits `nfl_cowork_run_request_v3` and accepts
+`v1`, `v2` and `v3`. Unknown keys are rejected.
+
+**v3, added 2026-09-24 (Session 07), adds exactly one field:**
+`delivery_deadline_utc`, when the run's file is due, an ISO-8601 moment with a
+UTC offset, stored in UTC; a naive or unparseable value is refused. Absent, the
+deadline is the earliest relevant lock minus 5 minutes (R31); § Deadline budget
+says what the run does with it. The CLI flag is `--delivery-deadline-utc`. A
+`v1` or `v2` request carrying it is refused, naming `v3`; a later version may
+carry every earlier version's fields. A command-line value for a field a later
+version added, given on a reloaded older request, makes this run's
+`run_request.json` that later version; the file it was loaded from is untouched.
 
 **v2, added 2026-09-19 (P1b), adds exactly one field:**
 `qb_depth_role_evidence_json`, the optional quarterback depth-chart package
@@ -1888,7 +1898,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `41f6647ed55527b97e510ac86a9de487c2dc285ab9b9a7157e826d05eaf6ce27`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `dad33548434aad3eadad2bb63b973a394aa3dddd4f18a8002d93c2618a9d29a6`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -1952,6 +1962,75 @@ registry.
 Does not establish: that a gate is correct, that its evidence is sound, upload
 clearance, certification or any model claim. It says what each gate, when it
 fires, stops and on whose authority.
+
+## Deadline budget (Session 07)
+
+Registered 2026-09-24 (R31). `deadline.Budget`, built once by `run-slate` right
+after intake, is the run's one clock and time budget; its record,
+`nfl_deadline_budget_v1`, is the result's `deadline` field.
+
+- **Deadline.** The request's `delivery_deadline_utc`, or the earliest relevant
+  lock minus 5 minutes (R31). The earliest relevant lock is the earliest
+  `lock_at` among the salary file's games (`deadline.earliest_lock`): every
+  contest on a draft group locks at its first kickoff and every blank row a
+  pre-lock run fills is on it, so a template whose entries span contests takes
+  the same minimum. An explicit deadline is authoritative, including one after
+  the lock, which is named.
+- **Improvement stop.** The deadline less a finishing reserve of
+  `stop_discretionary_optimization_minutes_before_lock` (`config/runtime.json`,
+  10) minus 5: by default optimization stops at lock minus 10 and delivery is
+  due at lock minus 5. The key must be at least 5. `full_refresh_seconds` is
+  removed: a fixed cap would stop an improvement the deadline still had room for.
+- **Clock.** Elapsed time is monotonic (injected in tests). The deadline is
+  compared with the run's clock: the pinned `--as-of` advanced by elapsed time,
+  else the wall clock. A pinned run records the wall clock beside it.
+- **Allowances.** The baseline gets `min(60, max(30, seconds to the
+  deadline))` with 5 s per solve, a deadline already passed included. Against
+  the improvement window: the session probe `min(45, 10%)`, skipped under 3 s;
+  sequential (C1) selection `min(10, window / (lineups + 1))` per solve,
+  stopped under 0.5 s; an SD3 bank `min(scaled, 70%)` and its joint solve
+  `min(scaled, 20%)`; a Classic C2 policy's bank and joint limits are
+  hash-bound, so they either fit the window or stop the review. A passed
+  deadline or a spent window skips the review before it starts. Evidence
+  fetches (`sources.fetch_public_artifact`, the weather capture script) and
+  the policy generator's bank take their allowances in Session 07b.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | `nfl_deadline_budget_v1` |
+| `deadline_utc`, `deadline_source` | The deadline, and `REQUEST` or `DEFAULT_EARLIEST_LOCK_MINUS_R31` |
+| `earliest_lock_utc`, `handoff_reserve_seconds` | The earliest relevant lock and R31's 300 s |
+| `stop_discretionary_optimization_minutes_before_lock`, `finish_reserve_seconds`, `improvement_stop_utc` | The runtime key, the reserve it gives, and when optimization stops |
+| `clock` | `deadline_against` (`PINNED_AS_OF` or `WALL_CLOCK`), `started_utc`, `wall_started_utc`, `elapsed` (`MONOTONIC`) |
+| `passed_at_start`, `seconds_to_deadline_at_start`, `elapsed_seconds` | As named |
+| `stages` | One per stage in order (`intake`, `baseline`, `session_probe`, `policy_validation`, `selection`, `review`, `finish`): `started_after_seconds`, `elapsed_seconds` (measured), `default_seconds`, `allowance_seconds`, `outcome` (`COMPLETED`, `SKIPPED`, `RAISED`) |
+| `limitations` | The codes below, in the order they arose |
+| `candidate_rate` | The Classic C2 bank observation this run recorded, or `null` |
+| `does_not_establish` | Upload clearance, certification, lineup quality, that the deadline is met after the run ends |
+
+Codes. `delivery_deadline` (`S`, `CONSTRUCTION_PREFERENCE`, R31):
+`DEADLINE_PASSED_AT_START`, `DEADLINE_IMPROVEMENT_WINDOW_SPENT`,
+`DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW` and `DEADLINE_STAGE_SHORTENED` (a stage
+ran under its default or was skipped; once per stage). `certification_prerequisite`
+(`P`): `DEADLINE_AFTER_EARLIEST_LOCK` and `DEADLINE_WALL_CLOCK_PAST_DEADLINE`
+(a pinned clock before the deadline while the wall clock is past it: a replay).
+None is `V`: a deadline never withholds a valid file. They reach the result's
+`release_truths` on every exit, beside the delivered file's own.
+
+### `nfl_host_candidate_rate_v1`
+
+`<runs dir>/host_candidate_rates.json` (`data/runs/`, per machine, never
+committed). `hosts` maps `<node>|<system>|<machine>|cpus=<n>|<mode>` to its last
+20 observations: `seconds_per_candidate`, `candidates`, `elapsed_seconds`,
+`basis` (`BANK_REPORT`: the bank's own count and time; `BANK_TIME_LIMIT`: a
+`CANDIDATE_BANK_TIMEOUT` count over the policy's declared bank budget),
+`pool_people`, `entries`, `run_id`, `measured_at` (wall clock). `run-slate`
+appends one after every Classic C2 bank; `deadline.read_candidate_rate` returns
+the slowest of this host's last five for a mode. `scripts/make_classic_policy.py`
+reads it in Session 07b, in place of its 0.28 s constant.
+
+Does not establish: that any stage's allowance was enough, lineup quality,
+certification or upload clearance.
 
 ## Latest deliverable pointer
 
@@ -2066,8 +2145,8 @@ The baseline sits at `<output-dir>/<run_id>/baseline/`, a `nfl baseline` run
 folder with run id `baseline`: `inputs/`, `intake.json`,
 `DK_BASELINE_ENTRY_V1_baseline.csv` and `baseline_report.json`. It is built from
 the run's `data/runs/<run_id>/inputs/` snapshots (its own copies hash the same),
-with the pinned `--as-of` as its clock, the default 5 s per solve and 60 s
-budget, the request's exclusions, and its official status file (R32). The pointer's `run_id` is the `run-slate`
+with the pinned `--as-of` as its clock, the budget's 5 s per solve and 30 to
+60 s (§ Deadline budget), the request's exclusions, and its official status file (R32). The pointer's `run_id` is the `run-slate`
 run's, so the outer handler reads it back. A replaced baseline stays on disk,
 byte for byte. The status workbook's Upload sheet names the pointer's file.
 
@@ -2094,7 +2173,13 @@ records the review file with `revalidation` `FAIL`.
 
 Exit codes are unchanged: 0 when the run's own review completed, 2 when it did
 not. A shipped baseline never turns a failed review into 0, and a refused C1
-export is 2.
+export is 2. A review the deadline skipped or stopped is 2 (Session 07).
+
+Since Session 07 every exit's result also carries `deadline`, the run's
+`nfl_deadline_budget_v1` record (§ Deadline budget; `null` from the outer
+handler when the budget itself could not be built), and the pre-review exit's
+`stage` is `DEADLINE_IMPROVEMENT_SKIPPED` when the deadline, not an input,
+stopped the review.
 
 Does not establish: upload clearance, certification, lineup quality, or any EV,
 ROI, win, cash, ownership or edge claim. It says which file to hand over, which

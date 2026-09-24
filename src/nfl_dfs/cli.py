@@ -46,6 +46,14 @@ from .contracts import (
     ReleaseEvidenceState,
     ReleaseTruthsV2,
 )
+from .deadline import (
+    PROBE_MINIMUM_SECONDS,
+    PROBE_SHARE,
+    Budget,
+    bank_rate_observation,
+    record_candidate_rate,
+    runtime_stop_minutes,
+)
 from .cowork import (
     CoworkRunRequest,
     LIST_MERGE_REQUEST_FIELDS,
@@ -53,6 +61,7 @@ from .cowork import (
     PATH_FIELDS,
     SUPPORTED_PROFILES,
     confine_request_path,
+    request_version_for,
     gating_blockers,
     prior_review_next_inputs,
     required_next_inputs,
@@ -161,7 +170,9 @@ SESSION_PROBE_SKIP_ENV = "NFL_DFS_SKIP_SESSION_PROBE"
 SESSION_PROBE_TIMEOUT_SECONDS = 45
 
 
-def _session_probe(salaries: str | Path | None) -> dict[str, object] | None:
+def _session_probe(
+    salaries: str | Path | None, *, timeout: float = SESSION_PROBE_TIMEOUT_SECONDS
+) -> dict[str, object] | None:
     """Report which evidence gates this session can reach, before the run works.
 
     `scripts/session_probe.py` has existed since 2026-09-20 and answered the
@@ -188,7 +199,7 @@ def _session_probe(salaries: str | Path | None) -> dict[str, object] | None:
             command,
             capture_output=True,
             text=True,
-            timeout=SESSION_PROBE_TIMEOUT_SECONDS,
+            timeout=timeout,
             check=False,
         )
         report = json.loads(completed.stdout)
@@ -2576,7 +2587,8 @@ def _pinned_as_of(args: argparse.Namespace) -> datetime | None:
 
 
 def _build_run_slate_baseline(
-    request: CoworkRunRequest, *, run_id: str, output_root: Path, args: argparse.Namespace
+    request: CoworkRunRequest, *, run_id: str, output_root: Path, args: argparse.Namespace,
+    budget: Budget | None = None,
 ) -> _SlateBaseline:
     """The baseline for this run, published as its first deliverable. Never raises.
 
@@ -2585,11 +2597,16 @@ def _build_run_slate_baseline(
     official `INACTIVE` rows (R32), and published
     under this run's id so the outer handler reads it back. A build that raises,
     delivers nothing or is refused by `publish` is reported; the run goes on.
+    Its solve limits come from `budget` (Session 07), never below the floor.
     """
 
     problems: list[str] = []
     outcome: BaselineOutcome | None = None
     latest: LatestDeliverable | None = None
+    per_solve, total = (
+        budget.baseline_limits() if budget is not None
+        else (DEFAULT_PER_SOLVE_SECONDS, DEFAULT_BUDGET_SECONDS)
+    )
     try:
         as_of = _pinned_as_of(args)
         outcome = run_baseline(
@@ -2597,6 +2614,8 @@ def _build_run_slate_baseline(
             entries=request.entry_csv or "",
             out_dir=output_root,
             run_id=BASELINE_DIRNAME,
+            per_solve_seconds=per_solve,
+            budget_seconds=total,
             now=as_of,
             operator_excluded_dk_ids=request.exclude_dk_ids,
             extra_unavailable_statuses=request.unavailable_statuses,
@@ -2635,13 +2654,16 @@ def _run_release_truths(
     authorized: tuple[str, ...],
     blockers: Iterable[str],
     registry: GateRegistry,
+    extra: Iterable[DeliveryLimitation] = (),
 ) -> ReleaseTruthsV2:
     """The run's own v1 truths beside the delivery half of the file its pointer names.
 
     With a pointer, `DELIVERY_STATE`, `delivered_file_valid`, coverage and the
     file's limitations are the pointer's; `not_delivered` adds
-    `IMPROVEMENT_NOT_DELIVERED` when that file is the baseline. Without one,
-    nothing is delivered and the run's blockers are the limitations.
+    `IMPROVEMENT_NOT_DELIVERED` when that file is the baseline, and `extra` (the
+    deadline's limitations, Session 07) follows. Without one, nothing is
+    delivered and the run's blockers, which carry the same texts, are the
+    limitations.
     """
 
     head = {key: v1[key] for key in _V1_KEYS}
@@ -2653,6 +2675,11 @@ def _run_release_truths(
                 registry.limitation("IMPROVEMENT_NOT_DELIVERED", detail=not_delivered)
                 .model_dump(mode="json", by_alias=True)
             )
+        seen = {(item["code"], item["detail"]) for item in limitations}
+        limitations.extend(
+            item.model_dump(mode="json", by_alias=True) for item in extra
+            if (item.code, item.detail) not in seen
+        )
         return ReleaseTruthsV2.model_validate({**record, **head, "delivery_limitations": limitations})
     delivery = derive_delivery_state(
         file_valid=False,
@@ -2820,6 +2847,7 @@ def _run_prior_review_profile(
     portfolio_policy_normalized_sha256: str | None = None,
     policy_summary: Mapping[str, object] | None = None,
     baseline: _SlateBaseline | None = None,
+    budget: Budget | None = None,
 ) -> int:
     """Drive the prior-only review chain from one gated Cowork command.
 
@@ -2836,6 +2864,9 @@ def _run_prior_review_profile(
 
     as_of = _pinned_as_of(args)  # None: the live profile advances the clock itself
 
+    # The review runs inside the run's budget (Session 07): its solves take their
+    # limits from the window, and it stops before selection when none is left.
+    review_started = budget.elapsed() if budget is not None else 0.0
     outcome = run_prior_review(
         salary_csv=request.salary_csv or "",
         entry_csv=request.entry_csv or "",
@@ -2865,10 +2896,19 @@ def _run_prior_review_profile(
         portfolio_policy_source_sha256=portfolio_policy_source_sha256,
         portfolio_policy_normalized_path=portfolio_policy_normalized_path,
         portfolio_policy_normalized_sha256=portfolio_policy_normalized_sha256,
+        budget=budget,
     )
+    if budget is not None:
+        budget.record("review", started_after=review_started, elapsed=budget.elapsed() - review_started)
+        _record_bank_rate(budget, outcome, portfolio_policy, run_id=run_id, slate=slate, entries=entries)
+    finish_started = budget.elapsed() if budget is not None else 0.0
 
     blockers = list(reported_blockers)
     blockers[0:0] = list(outcome.blockers)
+    if budget is not None:
+        blockers.extend(
+            deadline_text for deadline_text in budget.blocker_texts() if deadline_text not in blockers
+        )
     next_action = (
         "Review every exact Entry ID and named limitation, refresh missing or stale "
         "evidence, and rerun before any separately certified manual workflow."
@@ -3165,6 +3205,7 @@ def _run_prior_review_profile(
         release_truths = _run_release_truths(
             truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
             authorized=authorized_ids, blockers=blockers, registry=registry,
+            extra=budget.limitations(registry) if budget is not None else (),
         )
     elif latest is None:
         # Nothing to hand over: the review's own record, plus why no baseline backs it.
@@ -3198,6 +3239,8 @@ def _run_prior_review_profile(
         review_csv_sha256=latest.deliverable.sha256 if latest is not None else None,
     )
     review_workbook_sha256 = sha256_file(review_path)
+    if budget is not None:
+        budget.record("finish", started_after=finish_started, elapsed=budget.elapsed() - finish_started)
     result = {
         "run_id": run_id,
         "status": "DO_NOT_UPLOAD",
@@ -3235,6 +3278,7 @@ def _run_prior_review_profile(
         "latest_deliverable_problems": list(latest_problems),
         "baseline": baseline.summary() if baseline is not None else None,
         "improvement": improvement,
+        "deadline": budget.as_record() if budget is not None else None,
         "next": next_action,
         "meaning": (
             "Legal and byte-audited, never certified. This profile reads no payout "
@@ -3291,7 +3335,39 @@ def _run_prior_review_profile(
     ) else 2
 
 
+HOST_RATES_FILENAME = "host_candidate_rates.json"
+
+
+def _record_bank_rate(budget: Budget, outcome, portfolio_policy, *, run_id: str, slate, entries) -> None:
+    """This host's candidate rate from a Classic C2 bank, into the run's runs folder.
+
+    `data/runs/` is per machine and never committed, which is what a per-host
+    measurement needs; `make_classic_policy.py` reads it back. Never raises.
+    """
+
+    limits = getattr(portfolio_policy, "search_limits", None)
+    if slate.mode is not EngineMode.CLASSIC or limits is None:
+        return
+    observed = bank_rate_observation(
+        outcome.reports, outcome.blockers,
+        declared_bank_seconds=limits.candidate_total_milliseconds / 1000.0,
+    )
+    if observed is None:
+        return
+    candidates, seconds, basis = observed
+    try:
+        budget.candidate_rate = record_candidate_rate(
+            DEFAULT_RUNS_DIR / HOST_RATES_FILENAME, mode=slate.mode.value, candidates=candidates,
+            seconds=seconds, basis=basis, run_id=run_id, measured_at=datetime.now(timezone.utc),
+            pool_people=len({player.underlying_id for player in slate.players}),
+            entries=len(entries.authorizations),
+        )
+    except OSError as exc:
+        budget.candidate_rate = {"recorded": False, "detail": f"{type(exc).__name__}:{exc}"}
+
+
 def _command_cowork_run(args: argparse.Namespace) -> int:
+    command_started = time.monotonic()
     request_roots: list[Path] = [(PROJECT_ROOT / "data").resolve()]
     if args.input_dir:
         request_roots.append(Path(args.input_dir).resolve())
@@ -3354,6 +3430,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         ("exclude", "exclude_dk_ids"),
         ("unavailable_status", "unavailable_statuses"),
         ("available_status", "available_statuses"),
+        ("delivery_deadline_utc", "delivery_deadline_utc"),
     ):
         value = getattr(args, flag, None)
         if value not in (None, ""):
@@ -3374,7 +3451,13 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         overrides["build_priors"] = True
     if overrides:
         requested = CoworkRunRequest.from_mapping(
-            {**requested.to_dict(), **overrides},
+            {
+                **requested.to_dict(),
+                **overrides,
+                # A flag for a field a later version added makes this run's
+                # request that version; the file it was loaded from is untouched.
+                "schema_version": request_version_for(requested.schema_version, overrides),
+            },
             allowed_roots=request_roots,
             allowed_files=tuple(
                 Path(path).resolve()
@@ -3434,16 +3517,48 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     output_root = Path(args.output_dir).resolve() / run_id
     output_root.mkdir(parents=True, exist_ok=True)
     report_path = output_root / "cowork_run.json"
+    # R31 (Session 07): one budget for the whole run, from the request's deadline
+    # or the earliest lock minus 5 minutes; every stage below takes its allowance.
+    try:
+        budget = Budget.build(
+            slate.games,
+            requested_deadline=snapshotted.delivery_deadline_utc,
+            as_of=_pinned_as_of(args),
+            stop_minutes=runtime_stop_minutes(_load_config("runtime.json")),
+        )
+    except ValueError:
+        # A clock or runtime setting the budget cannot read never costs the
+        # baseline: it is built on its fixed defaults, then the run fails by name.
+        args._run_slate_baseline = _build_run_slate_baseline(
+            snapshotted, run_id=run_id, output_root=output_root, args=args
+        )
+        raise
+    budget.record("intake", started_after=command_started - budget.clock_started,
+                  elapsed=budget.clock_started - command_started)
+    args._run_slate_budget = budget
     # R28 (Session 06): the baseline first, from the DraftKings bytes alone and
     # before anything that needs the network, a policy or a model.
-    baseline = _build_run_slate_baseline(snapshotted, run_id=run_id, output_root=output_root, args=args)
+    with budget.stage("baseline"):
+        baseline = _build_run_slate_baseline(
+            snapshotted, run_id=run_id, output_root=output_root, args=args, budget=budget
+        )
     args._run_slate_baseline = baseline
-    # Session capability, before the run spends its window discovering it.
+    # Session capability, before the run spends its window discovering it, for
+    # as long as the window allows.
     if not getattr(args, "no_session_probe", False):
-        probe_report = _session_probe(request.salary_csv)
-        if probe_report is not None:
-            _write_json(DEFAULT_RUNS_DIR / run_id / "session_probe.json", probe_report)
-            _announce_session_probe(probe_report)
+        probe_seconds = budget.allowance(
+            "session_probe", default=SESSION_PROBE_TIMEOUT_SECONDS,
+            share=PROBE_SHARE, minimum=PROBE_MINIMUM_SECONDS,
+        )
+        if probe_seconds is not None:
+            with budget.stage("session_probe") as probe_stage:
+                probe_report = _session_probe(request.salary_csv, timeout=probe_seconds)
+                if probe_report is None:
+                    probe_stage.outcome = "SKIPPED"  # switched off by the environment
+            if probe_report is not None:
+                _write_json(DEFAULT_RUNS_DIR / run_id / "session_probe.json", probe_report)
+                _announce_session_probe(probe_report)
+    policy_started = budget.elapsed()
     policy_summary: dict[str, object] | None = None
     policy_blockers: list[str] = []
     validated_policy = None
@@ -3577,6 +3692,9 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 else "VALIDATION_FAILED"
             ),
         }
+    if policy_summary is not None:
+        budget.record("policy_validation", started_after=policy_started,
+                      elapsed=budget.elapsed() - policy_started)
     staged_workbook = DEFAULT_RUNS_DIR / run_id / "staged" / "cowork_input.xlsx"
     create_operator_input_workbook(staged_workbook)
     populate_operator_run_control(
@@ -3598,11 +3716,15 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "ENVIRONMENT_DOCTOR_FAILED: the pinned runtime or workspace checks did not pass",
         )
 
+    # The deadline's gate on the improvement: a deadline already passed, or a
+    # window already spent, leaves the baseline as the file (named, never silent).
+    deadline_stop = budget.review_gate()
     if (
         not doctor_report.pass_status
         or contest_problems
         or policy_blockers
         or _cowork_core_blockers(snapshotted)
+        or deadline_stop is not None
     ):
         blocked_truths = _blocked_truth_values(
             model_status=(
@@ -3619,7 +3741,16 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         # The run stops before its review; the baseline, when published, is
         # still the file to hand over, and the result says so.
         registry = load_gate_registry()
-        stage = "PORTFOLIO_POLICY_ENFORCEMENT_BLOCKED" if policy_summary is not None else "RECONCILED"
+        if deadline_stop is not None:
+            blockers.insert(0, deadline_stop)
+        blockers.extend(
+            deadline_text for deadline_text in budget.blocker_texts() if deadline_text not in blockers
+        )
+        stage = (
+            "DEADLINE_IMPROVEMENT_SKIPPED" if deadline_stop is not None
+            else "PORTFOLIO_POLICY_ENFORCEMENT_BLOCKED" if policy_summary is not None
+            else "RECONCILED"
+        )
         latest, latest_problems = _read_run_pointer(output_root, run_id)
         improvement = {
             "status": "NOT_PRODUCED", "stage": stage, "path": None, "sha256": None,
@@ -3629,6 +3760,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             blocked_truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
             authorized=tuple(item.entry_id for item in entries.authorizations),
             blockers=[*blockers, *latest_problems, *baseline.problems], registry=registry,
+            extra=budget.limitations(registry),
         )
         review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
         create_cowork_status_workbook(
@@ -3668,6 +3800,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "latest_deliverable_problems": list(latest_problems),
             "baseline": baseline.summary(),
             "improvement": improvement,
+            "deadline": budget.as_record(),
         }
         if policy_summary is not None:
             result["portfolio_policy"] = policy_summary
@@ -3675,6 +3808,11 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             result["next"] = (
                 "Resolve every named policy or input blocker, then rerun from the immutable "
                 "salary, entry, source-policy and normalized-policy artifacts."
+            )
+        if deadline_stop is not None:
+            result["next"] = (
+                f"The delivery deadline {budget.deadline.isoformat()} left the run's own review no"
+                " time; hand over the file named above with every limitation it carries."
             )
         result["next"] = _baseline_next(latest, str(result["next"]))
         _write_json(report_path, result)
@@ -3710,8 +3848,10 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             ),
             policy_summary=policy_summary,
             baseline=baseline,
+            budget=budget,
         )
 
+    review_started = budget.elapsed()
     assignment_path = snapshotted.assignment_csv
     build_report_path: Path | None = None
     model_assisted = assignment_path is None
@@ -3770,6 +3910,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         staged_workbook=str(staged_workbook),
     )
     code, certification = _certify(certify_args)
+    budget.record("review", started_after=review_started, elapsed=budget.elapsed() - review_started)
     latest, latest_problems = _read_run_pointer(output_root, run_id)
     result = {
         "run_id": run_id,
@@ -3805,6 +3946,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "The PRIOR_ONLY / DO_NOT_UPLOAD baseline this run published first. A certified "
             "package, when RELEASE_DECISION says so, is certification's own file, not this one."
         ),
+        "deadline": budget.as_record(),
     }
     _write_json(report_path, result)
     _print_json(result)
@@ -3828,7 +3970,9 @@ def _read_run_pointer(
         return None, (f"DELIVERABLE_REVALIDATION_FAILED:{type(exc).__name__}:{exc}",)
 
 
-def _handler_release_truths(latest: LatestDeliverable | None, failure: str) -> dict[str, object] | None:
+def _handler_release_truths(
+    latest: LatestDeliverable | None, failure: str, budget: Budget | None = None
+) -> dict[str, object] | None:
     """v2 for a failed run: its own blocked v1 truths beside the pointer's delivery half.
 
     When the pointer still names the baseline, `IMPROVEMENT_NOT_DELIVERED` says
@@ -3837,6 +3981,7 @@ def _handler_release_truths(latest: LatestDeliverable | None, failure: str) -> d
 
     if latest is None:
         return None
+    registry = load_gate_registry()
     return _run_release_truths(
         _blocked_truth_values(),
         latest=latest,
@@ -3845,7 +3990,8 @@ def _handler_release_truths(latest: LatestDeliverable | None, failure: str) -> d
         ),
         authorized=(),
         blockers=(),
-        registry=load_gate_registry(),
+        registry=registry,
+        extra=budget.limitations(registry) if budget is not None else (),
     ).model_dump(mode="json", by_alias=True)
 
 
@@ -3887,8 +4033,10 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         # refuses the name), so the sweep below cannot reach it.
         latest, latest_problems = _read_run_pointer(output_root, run_id)
         failure = f"{type(exc).__name__}:{exc}"
+        budget = getattr(args, "_run_slate_budget", None)
+        budget = budget if isinstance(budget, Budget) else None
         try:
-            handler_truths = _handler_release_truths(latest, failure)
+            handler_truths = _handler_release_truths(latest, failure, budget)
         except Exception as truths_exc:  # noqa: BLE001 - the handler must finish
             latest_problems = (*latest_problems, f"DELIVERABLE_REVALIDATION_FAILED:{truths_exc}")
             latest, handler_truths = None, None
@@ -3917,6 +4065,7 @@ def command_cowork_run(args: argparse.Namespace) -> int:
                 "stage": "BUILD_OR_CERTIFY_FAILED",
                 "reasons": [failure],
             },
+            "deadline": budget.as_record() if budget is not None else None,
         }
 
         diagnostic = {
@@ -4184,6 +4333,13 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--lineup-count", type=int)
     cowork.add_argument("--max-person-overlap", type=int)
     cowork.add_argument("--as-of")
+    cowork.add_argument(
+        "--delivery-deadline-utc",
+        help=(
+            "when the file is due, an ISO-8601 moment with a UTC offset (request v3);"
+            " default: the earliest lock minus 5 minutes (R31)"
+        ),
+    )
     cowork.add_argument("--exclude", action="append")
     cowork.add_argument("--unavailable-status", action="append")
     cowork.add_argument("--available-status", action="append")
