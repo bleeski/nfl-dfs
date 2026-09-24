@@ -4,6 +4,211 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: missing weather, Classic activity and the P1 role change ship named (Session 09, R28)
+
+Three stops on the model path held back the engine's own portfolio for evidence
+R28 moves from "stops the run" to "stops certification": a game nobody observed
+the weather for, a Classic selected person with no official activity row, and
+the 2026-09-19 P1 unresolved role change (Ben, 2026-09-23: "Absorb it"). Each
+now ships the model's file with the gap named. On
+`claude/roadmap-session-09-jizzh0`, claim `82014e5`. Every run still ends
+`PRIOR_ONLY / DO_NOT_UPLOAD`; no integrity gate changed, the provider identity
+gate is untouched, and the baseline consumes none of this.
+
+#### Changed
+
+- **Weather.** `priors.resolve_weather_state` no longer raises
+  `WEATHER_STATE_REQUIRED`: a game with no state resolves to the new
+  `WEATHER_STATES` member `UNOBSERVED` under the basis
+  `WEATHER_UNOBSERVED:roof=<roof>`. The Classic freeze no longer raises
+  `CLASSIC_WEATHER_SOURCE_REQUIRED` for a state with no captured source: the
+  state is never written, and the game is `UNOBSERVED`
+  (`...:UNATTRIBUTED_STATE_NOT_WRITTEN`). `prior_review.decide_weather` no
+  longer blocks (`WEATHER_CAPTURE_REQUIRED`, `WEATHER_STATE_REQUIRED`): a game
+  without an attributed capture gets a `WEATHER_UNOBSERVED` limitation, an
+  unattributed typed state is dropped rather than passed to the freeze, and an
+  open roof keeps its schedule-derived `ROOF_OPEN`. `WeatherDecision.blockers`
+  became `limitations`; the WEATHER stage reports `UNOBSERVED_GAMES_NAMED`.
+  After the priors stage, on the build and the reuse path alike, the run reads
+  the frozen team prior and names each game frozen `UNOBSERVED`, or under an
+  open roof nobody captured, as `WEATHER_UNOBSERVED:<game_id>:...`; `run-slate`
+  puts each on a delivered file as a `P` limitation, and Classic
+  `EVIDENCE_STATE` is no longer `PASS` with one. The R26 derived-roof path is
+  unchanged. Certification's `weather_if_required` record reads `UNKNOWN` when
+  any team is `UNOBSERVED`, so it can never certify.
+- **Classic official activity.** The selected-evidence gate
+  (`nfl_classic_selected_evidence_gate_c1_v3`) keeps in `gaps`, and still
+  blocks on, synthetic role sources, a selected unavailable person and a missing
+  or unselectable current role (`prior_review.py`, the `CURRENT_OFFENSIVE_ROLE`
+  and `PARTICIPATION` entries). A selected person with no exact-ID row, or a run
+  with no activity file, goes to the new `activity_gaps` and the run publishes;
+  `run-slate` names `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED` or
+  `OFFICIAL_STATUS_REQUIRED`, the codes it already named for Showdown. The
+  inconsistency checks (invalid, empty, future, stale, changed during read,
+  before publish or during selection, and C1's export re-check) stay stops.
+- **C3.** The official status file is optional. A row that is not `ACTIVE`
+  still refuses (`CLASSIC_C3_SELECTED_ACTIVITY_NOT_ACTIVE`); a missing row does
+  not. The gate must read `PASS_WITH_NAMED_LIMITATIONS` exactly when C3's own
+  re-read finds a selected person without a row, and any disagreement between
+  that re-read and the coverage or the gate is
+  `CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH`; a coverage naming a file the
+  review does not track is still `CLASSIC_C3_OFFICIAL_STATUS_ARTIFACT_REQUIRED`.
+  The export audit (`prior_only_classic_export_audit_c3_v2`) reports
+  `selected_activity` `PASS` or `INCOMPLETE` with
+  `selected_activity_without_row` in place of the hard-coded `PASS`, lists
+  `SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE` only when every selected person
+  has an `ACTIVE` row, and names the gap in `limitations`; the readable review's
+  `SELECTED_OFFICIAL_ACTIVITY` observation reads `UNKNOWN` with the people.
+- **P1.** `prior_score.score_pool` no longer raises through
+  `enforce_material_role_change_gate` (removed). `offensive_roles.
+  exclude_material_role_changes` adds every person
+  `material_role_change_blockers` names to `OffensiveResolution.excluded_people`,
+  sets his finding to `EXCLUDE`, lists him under `excluded_by_finding`,
+  sets `evidence_state` `UNKNOWN` and records each code under
+  `material_role_change_exclusions` (`unresolved_material_role_change_gate_v2`).
+  `select_prior_lineups` now reads the resolution scoring returns, so every
+  selector (C1, the C2 bank, Showdown) honours the exclusion; `run-slate` names
+  each code as a `P` limitation (family `unresolved_role_change`). Every prior
+  stays as scored. Too few distinct lineups after an exclusion is the existing
+  R29 path: C1 raises out of distinct lineups and the baseline stays the file
+  with its own unfilled Entry IDs; nothing repeats a lineup.
+- **Registry.** `WEATHER_UNOBSERVED`, `CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH`
+  and `CLASSIC_C3_ACTIVITY_GAPS_ARRAY_REQUIRED` added; `WEATHER_STATE_REQUIRED`,
+  `CLASSIC_WEATHER_SOURCE_REQUIRED` and `CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_INCOMPLETE`
+  removed, as nothing emits them. `WEATHER_CAPTURE_REQUIRED` stays: the
+  baseline still names it. 1,208 codes in 45 families, SHA-256
+  `941f6d471a39c8170529b2691f2f297445ef1f18c060b3e7c97910f50cfd9ce1`, re-pinned in `tests/test_gate_registry.py` and
+  `docs/DATA_CONTRACTS.md`.
+- **Contracts** (`docs/DATA_CONTRACTS.md`): `nfl_team_projection_source_v2` and
+  `nfl_team_projections_csv_v2` are v1 plus `UNOBSERVED`, declared only when a
+  record or row carries it, so every other package and team CSV is
+  byte-identical v1, and a v1 team source holding `UNOBSERVED` is refused; the
+  gate v3, the C3 audit v2 and the P1 gate v2 are described beside their v1/v2.
+- **Runbook**: the weather pre-capture ("Capture the weather before the
+  session, not inside it") is an improvement, not a precondition, as are the
+  outdoor-weather step, step 4 and the running-order note; Classic missing
+  activity publishes named; the P1 "and stops" now says he leaves the pool and
+  is named. `scripts/make_classic_weather_evidence.py`'s docstring and the P1
+  brief say the same.
+
+#### Decided, and why
+
+- **Representation: a new `UNOBSERVED` member** (Ben's lean). It is explicit,
+  it can never be read as an observation, the R24 loop over `WEATHER_STATES`
+  covers it automatically (and a new test names it), and it is not in the
+  operator vocabulary, so nobody can type it. It needs new contract versions for
+  the team source and team CSV; declaring v2 only when a game is unobserved
+  keeps every existing package byte-identical and every v1 reader safe.
+- **A conflicting or unsupported weather state still stops**, and so does a
+  supplied capture that fails its source, time or hash checks. R28 moves missing
+  evidence; the card says a real conflict "still invalidates its evidence"; and
+  Ben's brief keeps the matching official-activity checks as stops, so both
+  kinds of evidence are treated alike. `WEATHER_STATE_CONFLICT` cannot be
+  reached through the freeze at all (it passes no operator state for a schedule
+  roof), and the scalar path refuses an unsupported state at request parse, so
+  only a malformed per-game evidence file reaches `WEATHER_STATE_UNSUPPORTED`.
+  Since Session 06 the baseline ships before either can fire. Recommendation for
+  a later card: weather moves no number, so present-but-invalid weather could
+  degrade to `UNOBSERVED` safely; that is a ruling on invalid evidence, wider
+  than this card.
+- **Classic activity codes are reused**, not new: they are the ones Showdown and
+  `run-slate` already emit (family `official_activity`, `P`), so the two modes
+  read the same. C3's `selected_activity` reports `INCOMPLETE` and the people.
+- **Versions**: the selected-evidence gate (v3), the C3 export audit (v2), the
+  P1 gate (v2), the team source and team CSV (v2) are new versions because each
+  field's domain changed. The C1/C2 selection and coverage schemas are
+  unchanged: their fields are the same, and the embedded gate carries its own
+  version.
+- **`build_priors`**: the audit's D8 text names no stop that still exists. A
+  request's `to_dict` saves `build_priors`, so a plain `--request` rerun keeps
+  it; `PRIOR_PACKAGE_EXPIRED` and `PRIOR_PACKAGE_REQUIRED` fire only when the
+  request never authorized the rebuild, and the review then leaves the baseline
+  as the file. A new test runs a `build_priors` request and a plain `--request`
+  rerun of what it saved, and both reach the (stubbed) rebuild without a stop.
+  The runbook's note that a rebuilt run's request keeps `prior_package_dir:
+  null`, so a rerun re-fetches, is not this defect: it asks nothing and costs
+  only fetch time, which the deadline budget already bounds.
+
+#### Tests whose expectation changed (each its own edit)
+
+- `tests/test_classic_prior_review.py`:
+  `test_missing_selected_activity_blocks_before_any_selection_artifact` is now
+  `test_missing_selected_activity_is_a_named_limitation_not_a_stop`, for a file
+  missing rows and for no file; `test_classic_frozen_prior_producer_covers_every_game_team_and_person`
+  gains an outdoor case. `test_unselectable_or_missing_role_finding_still_blocks_classic`
+  (:772, :814) is a role gap and is unchanged.
+- `tests/test_classic_portfolio_c2.py`:
+  `test_c2_required_player_without_current_activity_stops_before_publish` is now
+  `test_c2_required_player_without_current_activity_is_delivered_and_named`,
+  through C3, for both cases.
+- `tests/test_classic_review_c3.py` :491/:508 is the `INACTIVE` case and is
+  unchanged; two tests added for artifacts that disagree about missing
+  activity and an untracked status file.
+- `tests/test_cowork_rerun_regressions.py` :496, :537-542 is the Showdown
+  activity case and is unchanged.
+- `tests/test_prior_review_profile.py`: the weather-gate tests at :218-244 and
+  :1120-1174 now assert `limitations` and `WEATHER_UNOBSERVED` where they
+  asserted `WEATHER_CAPTURE_REQUIRED` blockers; two cases added.
+- `tests/test_priors_adapter.py`: the nine `WEATHER_STATE_REQUIRED` raises now
+  assert `UNOBSERVED`; the freeze tests assert the v2 and v1 team source.
+- `tests/test_qb_depth_roles.py`:
+  `test_an_unresolved_transfer_the_market_disagrees_with_stops_the_run` is now
+  `..._leaves_the_pool`, and asserts the same lineups as an operator fade of the
+  same person; the `_prior_points` helper no longer patches the gate out.
+- `tests/test_run_slate_baseline_first.py`:
+  `test_blocked_weather_with_no_network_still_delivers_the_baseline` is now
+  `test_an_unobserved_game_with_no_network_still_delivers_the_baseline`; its
+  improvement now fails at the freeze, after WEATHER names the game.
+- `tests/test_gate_registry.py`: the audit §4 weather and activity rows name the
+  new codes; the `weather_blockers + gate.blockers` site left `NON_NUMERIC_SITES`
+  with the code that held it; `projection.v1_never_holds_an_unobserved_game`
+  joined `PLUMBING_FUNCTIONS`; `test_an_unobserved_game_moves_no_prior_score`
+  added. The R24 scan, `test_a_derived_roof_moves_no_prior_score` and
+  `test_r28_absorbs_the_p1_hard_stop` are unchanged and green.
+- New `tests/test_r28_model_path.py`: a `run-slate` test per changed exit, all
+  Classic C1 on the replay fixture pinned before lock, each delivering C1's file
+  with `DO_NOT_UPLOAD`: an unobserved game (same rosters as the observed run,
+  team CSV declared v2), a selected person without a row and a run with no
+  activity file, and a P1 person (absent from every delivered roster); plus the
+  `build_priors` rerun test, the v1 team source refusal and the certification
+  weather record.
+
+#### Verification
+
+- Baseline before any change: `1 failed, 1676 passed, 1 skipped in 268.95s`;
+  the failure was `tests/test_roadmap_queue.py::test_the_quick_start_names_the_first_startable_session`,
+  tripped by this session's own claim edit landing mid-run (Section 1 still
+  named Session 09); `5a1ab0b` moved it to Session 10 and it passes.
+- Part 1 (`10ff660`), full suite: `1685 passed, 1 skipped in 265.00s`.
+- The card's command plus every test file the brief names
+  (`test_prior_review_profile`, `test_classic_prior_review`, `test_gate_registry`,
+  `test_classic_portfolio_c2`, `test_classic_review_c3`,
+  `test_cowork_rerun_regressions`, `test_priors_adapter`, `test_qb_depth_roles`,
+  `test_r28_model_path`, `test_run_slate_baseline_first`,
+  `test_projection_producer`, `test_prelock_manifest`, `test_deadline_controller`):
+  `538 passed in 132.68s`.
+- Complete pinned suite on `020708e`: `1692 passed, 1 skipped in 274.35s`,
+  recorded with `scripts/record_verify.py`; the skip is the junction test.
+- `sh ./nfl.sh doctor` `pass_status: true`; `compileall` and import of every
+  changed module; `git diff --check` clean; `scripts/check_protected_paths.py`:
+  no protected path touched, so no `ben-review` label.
+- Diff about 1,320 changed lines before the close-out documents, at the card's
+  breakpoint with every item done, so no Session 09b row.
+
+#### Found and left open
+
+- Still blocking the Classic selected-evidence gate, for a later card:
+  synthetic role sources, a selected person with a missing or unselectable
+  current role (`CURRENT_OFFENSIVE_ROLE`), and a selected unavailable person
+  (`PARTICIPATION`). Current role is a truth-claim gate under R28 too.
+- Present-but-invalid weather evidence still stops the review (above).
+- `scripts/session_probe.py` still lists `api.weather.gov` as a blocking host
+  (exit 2), though a blocked host now costs only the observation. Session 13
+  owns that script.
+- The C3 export audit does not name `WEATHER_UNOBSERVED` or a P1 exclusion in
+  its own `limitations`; `run-slate`'s delivery limitations and the coverage's
+  pool rows do.
+
 ### 2026-09-24: limit-stopped banks and joint solves keep what they built (Session 08)
 
 Until now one per-candidate HiGHS solve that hit its time or search limit set

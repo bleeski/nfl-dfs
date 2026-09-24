@@ -1,5 +1,27 @@
 # Implementation Status
 
+## Capability added: 2026-09-24 (Session 09)
+
+R28 on the model path: three stops that held back the engine's own portfolio
+are named limitations now, and the file ships. A game nobody observed freezes
+as `UNOBSERVED` (team source and team CSV v2, declared only when a game needs
+it), is named per game as `WEATHER_UNOBSERVED` (`P`), moves no number (R24
+scan and score tests) and never reads as weather evidence in certification. A
+Classic selected person with no official activity row, or a run with no file,
+publishes through C1, C2 and C3 with `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED`
+or `OFFICIAL_STATUS_REQUIRED`, as Showdown already did; C3's audit (v2) reports
+`selected_activity` `INCOMPLETE` with the people. The P1 unresolved role change
+leaves the selectable pool and is named (`OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE`,
+`P`); every prior stays as scored. Verified end to end through `run-slate` on
+the Classic replay fixture, one run per changed exit, each delivering C1's file
+with `DO_NOT_UPLOAD`. A `build_priors` request never stops for authority,
+including on a plain `--request` rerun, and a test holds it. Not yet: role
+gaps (synthetic sources, a missing or unselectable current role) and a selected
+unavailable person still block the Classic gate, and present-but-invalid
+weather or activity evidence (stale, conflicted, unsupported, hash-mismatched)
+still stops the review; the session probe still counts a blocked
+`api.weather.gov` as a blocking host.
+
 ## Capability added: 2026-09-24 (Session 08)
 
 A time or search limit no longer throws away what the Classic C2 bank built.
@@ -267,7 +289,8 @@ paragraph overstating it.
   runs at the tail of `score_pool`, and both callers that produce lineups go
   through it. This is the Kenneth Walker failure, previously silent and now a
   named stop. For anyone who is not a quarterback the remedy it names is the
-  full numerical allocation, which is already plumbed.
+  full numerical allocation, which is already plumbed. **Since Session 09
+  (R28)** the stop is an exclusion: he leaves the selectable pool and is named.
 - **Quarterback depth-chart evidence**, contract
   `nfl_qb_depth_role_evidence_v1`, producer
   `scripts/make_offensive_role_evidence.py`. Binds `qb_attempt_share` to a

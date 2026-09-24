@@ -17,11 +17,12 @@ Paste this into a fresh Claude Code session:
 
 > Read `docs/ROADMAP.md` and execute Session 10 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S10`, on the branch your session was assigned or `claude/s10-relaxation-controller`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 09 is in progress: R28 on the model path (missing weather, Classic
-missing official activity and the P1 role-change stop become named
-limitations). It edits `src/nfl_dfs/prior_review.py` and `src/nfl_dfs/cli.py`,
-which are in Session 11's and Session 10's Target Files, so do not run either
-beside it; wait for 09's merge.
+Session 09 put R28 on the model path: an unobserved game, Classic missing
+official activity and the P1 role change ship named instead of stopping.
+Session 10, the relaxation controller, is next; Sessions 11 and 13 (which
+waited on 09) are startable too. Sessions 11 and 13 both edit
+`src/nfl_dfs/prior_review.py`, so run them one at a time; Session 10's Target
+Files overlap neither.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -104,7 +105,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 07 | Standalone | Deadline controller: run request v3 with an optional delivery deadline (default: earliest lock minus 5 minutes); one budget passed through every stage; retries, solver limits and bank sizes set from remaining time; dead `runtime.json` keys consumed or removed; measured stage durations | R31; audit D3, DD-3; C4 retro #3 | `src/nfl_dfs/cowork.py`, new `src/nfl_dfs/deadline.py`, `src/nfl_dfs/sources.py`, `scripts/fetch_weather_captures.py`, `scripts/make_classic_policy.py`, `config/runtime.json` | P | Session 06 | `sh ./nfl.sh test tests/test_deadline_controller.py tests/test_cowork.py tests/test_fetch_weather_captures.py -x --tb=short` | Complete |
 | Session 07b | Standalone | Deadline allowances, split from Session 07 at its breakpoint: `sources.fetch_public_artifact` takes its timeout from the run's budget and refuses to start a fetch the window cannot hold; the weather capture script's timeouts and retry pauses stop at the deadline; `make_classic_policy._limits` sizes the bank to the window from this host's measured candidate rate | R31; audit D3; C4 retro #3; Session 07 breakpoint | `src/nfl_dfs/sources.py`, `src/nfl_dfs/deadline.py`, `src/nfl_dfs/cli.py`, `scripts/fetch_weather_captures.py`, `scripts/make_classic_policy.py`, `config/gate_registry_v1.json` | P | Session 07 | `sh ./nfl.sh test tests/test_deadline_controller.py tests/test_fetch_weather_captures.py tests/test_classic_policy_generator.py tests/test_sources_tls.py -x --tb=short` | Complete |
 | Session 08 | Standalone | Timeout incumbents: validated time-limited candidates are kept; a bank with a feasible witness does not block; both joint selectors validate and return an integer incumbent on a time or search limit under a non-optimal status; C3 accepts it labelled; the timing-sensitive C2 status test becomes deterministic | Audit D5, DD-4, §1 test failure | `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_review.py` | P | Session 06 | `sh ./nfl.sh test tests/test_classic_portfolio_c2.py tests/test_portfolio_enforcement.py tests/test_classic_review_c3.py -x --tb=short`; then the C2 status test 20 times in a row | Complete |
-| Session 09 | Batched | R28 on the model path: missing weather (including a derived roof) and missing Classic official activity become named limitations, not stops; a real identity or timestamp conflict still invalidates its evidence; `build_priors` authority persists for the run; weather pre-capture becomes optional in the runbook | R28; audit D8, DD-7; archive § R23, R24, F7 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/cowork.py`, `docs/RUNBOOK.md` | P | Session 03b, Session 06 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_classic_prior_review.py tests/test_gate_registry.py -x --tb=short` | In Progress |
+| Session 09 | Batched | R28 on the model path: missing weather (including a derived roof) and missing Classic official activity become named limitations, not stops; a real identity or timestamp conflict still invalidates its evidence; `build_priors` authority persists for the run; weather pre-capture becomes optional in the runbook | R28; audit D8, DD-7; archive § R23, R24, F7 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/cowork.py`, `docs/RUNBOOK.md` | P | Session 03b, Session 06 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_classic_prior_review.py tests/test_gate_registry.py -x --tb=short` | Complete |
 | Session 10 | Batched | Relaxation controller: the engine, not printed advice, walks a bounded rung ladder inside the cumulative budget; the full trigger list; bank timeouts shrink the bank before relaxing structure; Showdown gets a real ladder; uniqueness is never on it; every relaxation is a structured record | R29; audit D5, DD-4; Showdown retro #6; C4 retro #3 | new `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `scripts/make_showdown_policy.py`, `src/nfl_dfs/cli.py` | S | Session 07, Session 07b, Session 08 | `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_classic_policy_generator.py -x --tb=short` | Pending |
 | Session 11 | Standalone | Entry groups: prefilled rows are preserved byte-identical instead of refusing the file; blank rows are filled; each Contest ID group is delivered on its own; unresolved Entry IDs are listed; distinctness covers prefilled lineups; `entry_ids` may bind a subset | R29; audit D7, DD-6; Showdown retro #4 | `src/nfl_dfs/lineups.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/baseline.py`, `src/nfl_dfs/dk.py` | V | Session 06 | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_byte_line_fidelity.py -x --tb=short` | Pending |
 | Session 12 | Standalone | Late-swap bridge and C5: a hash-bound record of the entries actually submitted (Ben's post-upload DKEntries download) anchors governed late swap without claiming certification; multi-contest by group; locked cells byte-identical; later-lock players preferred in flexible slots | Audit D9, DD-6; archive § C5 | `src/nfl_dfs/late_swap.py`, `src/nfl_dfs/lineups.py`, `docs/DATA_CONTRACTS.md` | V | Session 11 | `sh ./nfl.sh test tests/test_governed_late_swap.py tests/test_late_swap_learning.py -x --tb=short` | Pending |
@@ -712,6 +713,19 @@ Every session follows this protocol, and the cards only add to it:
   `DO_NOT_UPLOAD`. The provider identity gate keeps its current behaviour; the
   baseline does not consume it. A person the P1 gate names is never selected on
   the old-team share: exclusion is the only construction change.
+- **2026-09-24, Complete.** A game nobody observed freezes as `UNOBSERVED`
+  (team source and team CSV v2, declared only when a game needs it) and ships
+  named per game as `WEATHER_UNOBSERVED` (`P`); it moves no number and never
+  certifies. Classic missing official activity, a row or the whole file,
+  publishes through C1, C2 and C3 named as Showdown's already was, and C3's
+  audit (v2) reports `selected_activity` truthfully. The P1 person leaves the
+  selectable pool and is named. `build_priors` already persisted in the saved
+  request; a test now holds it through a `--request` rerun. Each changed exit has
+  a `run-slate` test delivering C1's file with `DO_NOT_UPLOAD`. Left open, for a
+  later card: role gaps and a selected unavailable person still block the
+  Classic gate; present-but-invalid weather or activity evidence still stops the
+  review; the session probe still counts `api.weather.gov` as blocking (Session
+  13). Decisions and numbers: `changelog.md`.
 
 #### Session 10: relaxation controller
 
@@ -1131,4 +1145,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 07b | In Progress to Complete | `e6673c2` | Fetch, weather-capture and generator allowances; `DEADLINE_FETCH_WINDOW_SPENT`; suite `1647 passed, 1 skipped`; merged as PR #60 |
 | 2026-09-24 | Session 08 | Pending to In Progress | `d236025` | Claim pushed on `claude/session-08-nonoptimal-bank-gkusm7` |
 | 2026-09-24 | Session 08 | In Progress to Complete | `b0066f8` | Limit-stopped banks and joint solves keep validated incumbents; C3 and SD3 exports name them; suite `1677 passed, 1 skipped`; merged as PR #61 |
-| 2026-09-24 | Session 09 | Pending to In Progress | recorded at close-out | Claim pushed on `claude/roadmap-session-09-jizzh0` |
+| 2026-09-24 | Session 09 | Pending to In Progress | `82014e5` | Claim pushed on `claude/roadmap-session-09-jizzh0` |
+| 2026-09-24 | Session 09 | In Progress to Complete | recorded by the next session | Weather `UNOBSERVED`, Classic activity and P1 ship named; suite `1692 passed, 1 skipped` |
