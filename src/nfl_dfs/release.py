@@ -19,6 +19,7 @@ from .contracts import (
     ReleaseDecision,
     ReleaseEvidenceState,
     ReleaseTruthsV2,
+    ReleaseTruthsV3,
 )
 
 
@@ -199,33 +200,53 @@ def derive_delivery_state(
     authorized_entry_ids: Iterable[str],
     delivered_entry_ids: Iterable[str],
     limitations: Iterable[DeliveryLimitation] = (),
+    preserved_entry_ids: Iterable[str] = (),
+    unresolved_entry_ids: Iterable[str] = (),
 ) -> DeliveryTruth:
     """`DELIVERY_STATE` from file validity, coverage and integrity blockers only.
 
     - `file_valid`: the bytes to be handed over passed their own validation.
-    - `authorized_entry_ids`: the blank rows the template authorizes, in its order.
+    - `authorized_entry_ids`: the blank rows the template authorizes filling, in
+      its order.
     - `delivered_entry_ids`: the rows those bytes fill.
+    - `preserved_entry_ids`, `unresolved_entry_ids` (Session 11): the template's
+      other rows. A preserved row is prefilled and kept byte for byte; an
+      unresolved row is left as it was and a limitation names it. Neither is
+      delivered or unfilled.
     - `limitations`: every gate that fired. A `V` one with no Entry IDs, or with
-      one outside the template, stops the whole file; with Entry IDs it stops
-      those rows. `S` and `P` ones never change the state and travel with it.
+      one that is not an authorized or unresolved row, stops the whole file;
+      with Entry IDs it stops those rows. `S` and `P` ones never change the
+      state and travel with it.
 
     An invalid file or a file-wide integrity gate delivers nothing. Otherwise
-    every authorized row is delivered (`DELIVERABLE`), some are
-    (`DELIVERABLE_PARTIAL`), or none are (`NO_DELIVERABLE`). A row left unfilled
-    that no limitation names gets `UNFILLED_AUTHORIZED_ROWS`, so a gap is never
-    silent. A delivered row that is unauthorized, or that an integrity gate
-    blocks, raises: the file would hold bytes its own record disowns.
+    every authorized row is delivered and no row is unresolved
+    (`DELIVERABLE`), some rows are delivered (`DELIVERABLE_PARTIAL`), or none
+    are (`NO_DELIVERABLE`). A row left unfilled that no limitation names gets
+    `UNFILLED_AUTHORIZED_ROWS`, so a gap is never silent. A delivered row that
+    is unauthorized, or that an integrity gate blocks, raises: the file would
+    hold bytes its own record disowns. So does an unresolved row nothing names.
     """
 
     authorized = _ordered_unique(authorized_entry_ids, "authorized")
     delivered_in = _ordered_unique(delivered_entry_ids, "delivered")
+    preserved = _ordered_unique(preserved_entry_ids, "preserved")
+    unresolved = _ordered_unique(unresolved_entry_ids, "unresolved")
+    overlap = sorted((set(authorized) & set(preserved)) | (set(authorized) & set(unresolved))
+                     | (set(preserved) & set(unresolved)))
+    if overlap:
+        raise DeliveryStateError(f"DELIVERY_ROW_KIND_OVERLAP:{overlap}")
     stray = [eid for eid in delivered_in if eid not in authorized]
     if stray:
         raise DeliveryStateError(f"DELIVERY_ENTRY_NOT_AUTHORIZED:{stray}")
     items = list(limitations)
+    named_any = {eid for item in items for eid in item.entry_ids}
+    unnamed = [eid for eid in unresolved if eid not in named_any]
+    if unnamed:
+        raise DeliveryStateError(f"DELIVERY_UNRESOLVED_ROW_UNNAMED:{unnamed}")
+    scoped = set(authorized) | set(unresolved)
     integrity = [item for item in items if item.gate_class is GateClass.V]
     file_wide = [item for item in integrity
-                 if not item.entry_ids or not set(item.entry_ids) <= set(authorized)]
+                 if not item.entry_ids or not set(item.entry_ids) <= scoped]
     if not authorized and not file_wide:
         items.append(_integrity("NO_AUTHORIZED_ROWS", _AUTHORITY_BOUNDARY,
                                 detail="the template authorizes no blank row"))
@@ -253,18 +274,24 @@ def derive_delivery_state(
 
     if not delivered:
         state = DeliveryState.NO_DELIVERABLE
-    elif unfilled:
+    elif unfilled or unresolved:
         state = DeliveryState.DELIVERABLE_PARTIAL
     else:
         state = DeliveryState.DELIVERABLE
     return DeliveryTruth(DELIVERY_STATE=state, delivered_file_valid=file_valid,
                          delivery_limitations=tuple(items),
-                         delivered_entry_ids=delivered, unfilled_entry_ids=unfilled)
+                         delivered_entry_ids=delivered, unfilled_entry_ids=unfilled,
+                         preserved_entry_ids=preserved, unresolved_entry_ids=unresolved)
 
 
 def release_truths_v2(policy: ReleasePolicyResult, delivery: DeliveryTruth) -> ReleaseTruthsV2:
-    """The five truths side by side (`nfl_release_truths_v2`). Neither half moves the other."""
+    """The five truths side by side (`nfl_release_truths_v2`). Neither half moves the other.
 
+    v2 cannot hold a preserved or unresolved row; a template with one needs v3.
+    """
+
+    if delivery.preserved_entry_ids or delivery.unresolved_entry_ids:
+        raise DeliveryStateError("nfl_release_truths_v2 cannot hold a preserved or unresolved row; use v3")
     return ReleaseTruthsV2(
         FILE_VALID=policy.file_valid,
         EVIDENCE_STATE=policy.evidence_state,
@@ -275,4 +302,22 @@ def release_truths_v2(policy: ReleasePolicyResult, delivery: DeliveryTruth) -> R
         delivery_limitations=delivery.delivery_limitations,
         delivered_entry_ids=delivery.delivered_entry_ids,
         unfilled_entry_ids=delivery.unfilled_entry_ids,
+    )
+
+
+def release_truths_v3(policy: ReleasePolicyResult, delivery: DeliveryTruth) -> ReleaseTruthsV3:
+    """The five truths with every row's outcome (`nfl_release_truths_v3`, Session 11)."""
+
+    return ReleaseTruthsV3(
+        FILE_VALID=policy.file_valid,
+        EVIDENCE_STATE=policy.evidence_state,
+        MODEL_STATUS=policy.model_status,
+        RELEASE_DECISION=policy.release_decision,
+        DELIVERY_STATE=delivery.delivery_state,
+        delivered_file_valid=delivery.delivered_file_valid,
+        delivery_limitations=delivery.delivery_limitations,
+        delivered_entry_ids=delivery.delivered_entry_ids,
+        unfilled_entry_ids=delivery.unfilled_entry_ids,
+        preserved_entry_ids=delivery.preserved_entry_ids,
+        unresolved_entry_ids=delivery.unresolved_entry_ids,
     )

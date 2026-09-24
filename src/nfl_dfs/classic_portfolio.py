@@ -28,7 +28,7 @@ from .classic_portfolio_policy import (
 )
 from .contracts import EngineMode, SlateContract
 from .hashing import sha256_bytes
-from .lineups import validate_lineup
+from .lineups import roster_canonical_key, validate_lineup
 from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
 from .portfolio_policy import canonical_decimal_json_bytes
 
@@ -359,18 +359,22 @@ class _Enumerator:
         objective: Mapping[str, float],
         *,
         excluded_ids: Sequence[str],
+        forbidden_rosters: Sequence[tuple[str, ...]] = (),
     ) -> None:
         self.slate = slate
         self.policy = policy
         self.objective = objective
         self.excluded_ids = tuple(sorted(set(map(str, excluded_ids))))
+        # The template's prefilled rosters (Session 11): cut from every solve and
+        # held as already seen, so no candidate the joint solve sees repeats one.
+        self.forbidden = tuple(tuple(map(str, roster)) for roster in forbidden_rosters)
         self.started = time.perf_counter()
         self.total_budget = policy.search_limits.candidate_total_milliseconds / 1000.0
         self.per_solve_budget = policy.search_limits.candidate_per_solve_milliseconds / 1000.0
         self.limit = policy.search_limits.candidate_limit
         self.by_id = {row.dk_id: row for row in slate.players}
         self.candidates: list[ClassicCandidate] = []
-        self.seen: set[str] = set()
+        self.seen: set[str] = {roster_canonical_key(slate, roster) for roster in self.forbidden}
         self.rosters: list[tuple[str, ...]] = []
         self.strata: list[ClassicCandidateStratum] = []
         self.solve_count = 0
@@ -545,6 +549,8 @@ class _Enumerator:
         if seed_no_goods:
             for roster in self.rosters:
                 optimizer.add_no_good(roster)
+        for roster in self.forbidden:
+            optimizer.add_no_good(roster)
 
         solves = 0
         qualifying = 0
@@ -836,6 +842,7 @@ def build_classic_candidate_bank(
     policy: NormalizedClassicPortfolioPolicy,
     *,
     excluded_ids: Sequence[str] = (),
+    forbidden_rosters: Sequence[tuple[str, ...]] = (),
 ) -> ClassicCandidateBank:
     if slate.mode is not EngineMode.CLASSIC:
         raise ValueError("CLASSIC_CANDIDATE_MODE_UNSUPPORTED")
@@ -849,6 +856,7 @@ def build_classic_candidate_bank(
         policy,
         objective,
         excluded_ids=tuple(excluded_ids) + tuple(policy_excluded_ids),
+        forbidden_rosters=forbidden_rosters,
     )
 
     family_specs = (

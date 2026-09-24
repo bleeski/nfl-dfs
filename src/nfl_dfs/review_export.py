@@ -36,6 +36,7 @@ from .dk import (
     reconcile_template,
     single_contest_problems,
 )
+from .entry_groups import plan_entries
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup, write_upload_bytes
 from .referee import audit_output_bytes
@@ -116,14 +117,19 @@ def export_review_entries(
     problems: list[str] = []
     if slate.mode is not EngineMode.SHOWDOWN:
         problems.append(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
+    plan = None
     try:
         reconcile_template(template, slate)
+        plan = plan_entries(template, slate)
     except ValueError as exc:
         problems.append(f"TEMPLATE_MISMATCH:{exc}")
     if sha256_file(template.path) != template.raw_hash:
         problems.append("ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE")
 
-    authorized = {entry.entry_id for entry in template.authorizations}
+    # Per-row authority (Session 11): exactly the plan's fillable rows are
+    # assigned; every other row passes through byte for byte.
+    authorized = set(plan.fillable) if plan is not None else {
+        entry.entry_id for entry in template.authorizations}
     if set(assignments) != authorized:
         missing = sorted(authorized.difference(assignments))
         extra = sorted(set(assignments).difference(authorized))
@@ -136,12 +142,15 @@ def export_review_entries(
             problems.extend(f"LINEUP_INVALID:{entry_id}:{problem}" for problem in result.errors)
         elif result.lineup is not None:
             validated[entry_id] = result.lineup
+            if plan is not None and result.lineup.canonical_key in plan.forbidden_keys:
+                problems.append(f"ENTRY_PREFILLED_LINEUP_REPEATED:{entry_id}")
 
     output_bytes: bytes | None = None
     digest = ""
     if not problems:
         try:
-            output_bytes = write_upload_bytes(template, assignments)
+            output_bytes = write_upload_bytes(
+                template, assignments, unfilled=plan.left_blank if plan is not None else ())
             audit = audit_output_bytes(
                 template.path, output_bytes, template, assignments
             )
@@ -153,6 +162,7 @@ def export_review_entries(
                 reparsed_assignments = {
                     entry.entry_id: entry.existing_cells
                     for entry in reparsed.authorizations
+                    if entry.entry_id in assignments
                 }
                 if reparsed_assignments != dict(assignments):
                     problems.append("REPARSE_ASSIGNMENT_MISMATCH")

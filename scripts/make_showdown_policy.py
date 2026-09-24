@@ -19,7 +19,7 @@ overlap cap to at least 5. Rung 4 writes nothing: run-slate without
 `run-slate` walks these rungs itself when SD3 fails on a trigger, after trying
 a re-sized bank first; this flag writes one by hand.
 """
-import argparse, csv, hashlib, json, os, sys, re
+import argparse, csv, hashlib, json, os, sys
 from collections import defaultdict
 
 def sha256(p):
@@ -54,16 +54,16 @@ def read_salary(path):
         sys.exit(f"PERSON_MISSING_ROLE_ROW: {bad}")
     return people
 
-def read_entries(path):
-    ids = []
-    with open(path, newline='', encoding='utf-8-sig') as f:
-        for i, r in enumerate(csv.reader(f)):
-            if i == 0 or not r or not r[0].strip():
-                continue
-            if not re.fullmatch(r'\d+', r[0].strip()):
-                continue
-            ids.append(r[0].strip())
-    return ids
+def read_entries(path, salary_path):
+    """The Entry IDs a policy binds: the template's fillable blank rows (Session 11).
+
+    A prefilled, partly filled or unresolved row is never bound; `run-slate`
+    validates the policy against the same list, and its intake checks the mode.
+    """
+    from nfl_dfs.dk import parse_entries, parse_salaries
+    from nfl_dfs.entry_groups import plan_entries
+
+    return list(plan_entries(parse_entries(path), parse_salaries(salary_path)).fillable)
 
 def game_id(path):
     with open(path, newline='', encoding='utf-8-sig') as f:
@@ -101,7 +101,7 @@ def main(argv=None):
 
     sal = os.path.abspath(a.salaries); ent = os.path.abspath(a.entries)
     people = read_salary(sal)
-    entry_ids = read_entries(ent)
+    entry_ids = read_entries(ent, sal)
     n = len(entry_ids)
 
     def parse_ovr(items):
@@ -201,13 +201,13 @@ def _written_controls(path):
 def relaxed_document(document, salary_path, entry_path, rung):
     """The rung-0 `document` relaxed to `rung` by the engine's table, as canonical bytes."""
 
-    from nfl_dfs.dk import parse_entries, parse_salaries
+    from nfl_dfs.dk import parse_salaries
     from nfl_dfs.portfolio_policy import (
         canonical_decimal_json_bytes, portfolio_policy_template, validate_portfolio_policy_bytes)
     from nfl_dfs.relaxation import showdown_relaxed_controls
 
     slate = parse_salaries(salary_path)
-    entry_ids = [item.entry_id for item in parse_entries(entry_path).authorizations]
+    entry_ids = read_entries(entry_path, salary_path)
     raw = json.dumps(document).encode('utf-8')
     validation = validate_portfolio_policy_bytes(raw, slate=slate, entry_ids=entry_ids)
     if validation.policy is None:

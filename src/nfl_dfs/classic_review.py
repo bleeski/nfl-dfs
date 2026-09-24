@@ -29,6 +29,7 @@ from .classic_portfolio_policy import (
 )
 from .contracts import EngineMode, SlateContract
 from .dk import CLASSIC_COLUMNS, parse_entries, parse_entry_bytes, parse_salaries, reconcile_template
+from .entry_groups import plan_entries
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup, write_upload_bytes
@@ -600,9 +601,13 @@ def create_classic_review_package(
         reconcile_template(template, slate)
         if slate.mode is not EngineMode.CLASSIC or template.roster_columns != CLASSIC_COLUMNS:
             raise ClassicReviewError("CLASSIC_C3_MODE_MISMATCH")
-        if any(any(item.existing_cells) for item in template.authorizations):
+        # Per-row authority (Session 11): the policy binds, and C3 fills, only the
+        # plan's fillable blank rows; every other row passes through byte for byte
+        # and no filled roster may repeat a prefilled one.
+        entry_plan = plan_entries(template, slate)
+        if not entry_plan.fillable:
             raise ClassicReviewError("CLASSIC_C3_BLANK_CELL_AUTHORITY_REQUIRED")
-        entry_ids = tuple(item.entry_id for item in template.authorizations)
+        entry_ids = entry_plan.fillable
 
         source_raw = tracked["portfolio_policy_source"].read_bytes()
         normalized_raw = tracked["portfolio_policy_normalized"].read_bytes()
@@ -884,7 +889,10 @@ def create_classic_review_package(
             roster = tuple(str(value) for value in _sequence(item.get("roster"), label="SELECTION_ROSTER"))
             selection_lineups[roster] = item
 
+        fillable = set(entry_ids)
         for authorization in template.authorizations:
+            if authorization.entry_id not in fillable:
+                continue  # a preserved or unresolved row: the byte audit holds it (Session 11)
             roster = assignments.get(authorization.entry_id, ())
             if roster not in candidate_by_roster:
                 problems.append(f"CLASSIC_C3_ASSIGNMENT_OUTSIDE_CANDIDATE_BANK:{authorization.entry_id}")
@@ -985,6 +993,10 @@ def create_classic_review_package(
 
         if policy.require_unique_lineups and len(set(canonical_by_entry.values())) != len(entry_ids):
             problems.append("CLASSIC_C3_CANONICAL_LINEUP_DUPLICATE")
+        problems.extend(
+            f"ENTRY_PREFILLED_LINEUP_REPEATED:{entry_id}"
+            for entry_id, key in canonical_by_entry.items() if key in entry_plan.forbidden_keys
+        )
         pairwise: list[dict[str, object]] = []
         for left_index, left in enumerate(entry_ids):
             for right in entry_ids[left_index + 1 :]:
@@ -1114,7 +1126,7 @@ def create_classic_review_package(
         }:
             problems.append("CLASSIC_C3_SELECTION_ASSIGNMENT_MAP_DISAGREEMENT")
 
-        proposed = write_upload_bytes(template, assignments)
+        proposed = write_upload_bytes(template, assignments, unfilled=entry_plan.left_blank)
         problems.extend(
             _audit_template_bytes(
                 source_bytes=entry_file.read_bytes(),
@@ -1134,10 +1146,11 @@ def create_classic_review_package(
                 f"CLASSIC_C3_PROPOSED_OUTPUT_REPARSE_FAILED:{type(exc).__name__}:{exc}"
             )
         if reparsed_output is not None:
-            if tuple(item.entry_id for item in reparsed_output.authorizations) != entry_ids:
+            if tuple(item.entry_id for item in reparsed_output.authorizations) != entry_plan.order:
                 problems.append("CLASSIC_C3_PROPOSED_OUTPUT_ENTRY_ORDER_MISMATCH")
             if {
                 item.entry_id: item.existing_cells for item in reparsed_output.authorizations
+                if item.entry_id in entry_ids
             } != assignments:
                 problems.append("CLASSIC_C3_PROPOSED_OUTPUT_ASSIGNMENT_MISMATCH")
         if problems:

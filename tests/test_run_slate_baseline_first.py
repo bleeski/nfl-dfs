@@ -73,7 +73,7 @@ def _assert_baseline_delivered(report: dict, root: Path, run_id: str):
     assert report["baseline"]["DELIVERY_STATE"] == "DELIVERABLE"
     assert report["baseline"]["path"] == str(latest.deliverable.path)
     truths = report["release_truths"]
-    assert truths["schema_version"] == "nfl_release_truths_v2"
+    assert truths["schema_version"] == "nfl_release_truths_v3"  # v3 since Session 11
     assert report["RELEASE_DECISION"] == truths["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
     assert truths["DELIVERY_STATE"] == "DELIVERABLE" and truths["delivered_file_valid"] is True
     assert truths["unfilled_entry_ids"] == []

@@ -1820,9 +1820,14 @@ Integrity gates that stop the file: an input of the wrong schema or an
 unreadable one; any DraftKings parse refusal (`DK_*`, `dk.py`); a
 Classic/Showdown mismatch (`DK_TEMPLATE_MODE_MISMATCH`); a salary ID the
 entries file's player table lacks, which a lineup could hold and the contest
-would refuse (`BASELINE_ENTRY_POOL_ID_MISMATCH`); and a prefilled row, which
-refuses the whole template exactly as `prior_review` does until Session 11
-(`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`, naming the rows). These ship and say so
+would refuse (`BASELINE_ENTRY_POOL_ID_MISMATCH`). Until Session 11 a prefilled
+row refused the whole template; since then authority is per row (§ Entry
+groups): a prefilled row passes through byte for byte, only the plan's
+fillable blank rows are written, the audit refuses a filled roster equal to a
+prefilled one (`ENTRY_PREFILLED_LINEUP_REPEATED`, on the generated row) and a
+row outside the fillable set (`ENTRY_AUTHORIZATION_MISMATCH`), and writing into
+a prefilled cell still refuses the file (`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`,
+`V`). These ship and say so
 (`P`): a table ID the salary file lacks, which no lineup can hold
 (`BASELINE_SALARY_FILE_MISSING_ENTRY_TABLE_IDS`); a template with no player
 table (`BASELINE_ENTRY_POOL_CROSS_CHECK_UNAVAILABLE`); and a run whose clock is
@@ -1918,6 +1923,26 @@ official-status fields.
 | `inputs.official_status` | `path`, `sha256` and `snapshot` of the file, when one was given |
 | `audit.checks_run` | Adds `NO_OPERATOR_EXCLUDED_PERSON` and `NO_OFFICIAL_INACTIVE_PERSON` |
 
+### `nfl_baseline_report_v3`
+
+Registered 2026-09-24 by Session 11. Every `v2` field, unchanged in meaning,
+plus the template's rows by kind and outcome (§ Entry groups). A reader of a
+`v2` report sees no prefilled row, because a `v2` baseline refused any template
+that had one.
+
+| Field | Added or changed |
+|---|---|
+| `slate.blank_rows`, `slate.prefilled_rows`, `slate.partly_filled_rows` | The template's rows by kind, in template order (`prefilled_rows` was already a list) |
+| `slate.fillable_rows`, `slate.preserved_rows`, `slate.unresolved_rows` | The plan's outcomes; `blank_authorized_rows` is now the fillable count |
+| `slate.contest_ids` | Contest IDs in template order, one per group |
+| `entry_groups` | One record per Contest ID (§ Entry groups) |
+| `release_truths` | `nfl_release_truths_v3` |
+
+A several-contest or mixed-fee template no longer carries
+`MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED` or `MIXED_ENTRY_FEES_UNSUPPORTED` in the
+baseline: its rows are groups now. Legacy `certify` keeps both
+(`certification.py`, ROADMAP §2.4 D7).
+
 ## Release truths
 
 Registered 2026-09-23 by Session 03 (R28). Every run reports independent
@@ -2009,6 +2034,30 @@ Does not establish: upload clearance, certification, lineup quality, EV, ROI,
 win or cash probability, or that any limitation's evidence is sound. It says a
 valid file exists and which rows it covers.
 
+### `nfl_release_truths_v3`, adding preserved and unresolved rows
+
+Registered 2026-09-24 by Session 11. `contracts.ReleaseTruthsV3`, built by
+`release.release_truths_v3`. Every `v2` field, with its `v2` meaning, plus:
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Exactly `nfl_release_truths_v3` |
+| `preserved_entry_ids` | Prefilled rows kept byte for byte whose roster resolves (§ Entry groups), in template order |
+| `unresolved_entry_ids` | Rows left as they were and named by a limitation of any class: a partly filled row, a prefilled roster that does not resolve or repeats an earlier one, every row of a group whose contest cannot be stated |
+
+A row is delivered, unfilled, preserved or unresolved, never two.
+`delivered_entry_ids` and `unfilled_entry_ids` keep their meaning over the
+fillable blank rows. The derivation changes in three places: a `V` limitation
+covers the whole file when it names no row or a row that is not fillable or
+unresolved (a preserved row included); `DELIVERABLE` needs no unfilled and no
+unresolved row, so an unresolved row keeps a file `DELIVERABLE_PARTIAL`; and an
+unresolved row nothing names refuses the record
+(`DELIVERY_UNRESOLVED_ROW_UNNAMED`), as does a row in two lists
+(`DELIVERY_ROW_KIND_OVERLAP`). Every `run-slate` exit and `nfl baseline` emit
+v3 since Session 11. A reader of `v2` sees no preserved or unresolved row,
+because every `v2` producer refused a template with one; `delivery.as_v3` reads
+a `v2` record as `v3` with both lists empty.
+
 The per-code class, provenance and `stops` for every blocker the engine can
 emit live in `config/gate_registry_v1.json` (below). Session 04's baseline
 builds its limitations from a code there, and Sessions 05 to 09 follow. `release._integrity` states its three
@@ -2017,7 +2066,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `4ec6b604ad71ef2e16c72b6c6477f1f4367d35a1f3acd8f9e8a004c9fc8dae95`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `214c1898cc15412c14767b512bd13c5792a3a5f66d5e910e97ef26693c123855`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2184,6 +2233,47 @@ this ledger.
 Does not establish: that any stage's allowance was enough, lineup quality,
 certification or upload clearance.
 
+## Entry groups (Session 11)
+
+Registered 2026-09-24 by Session 11 (R28, R29). `entry_groups.plan_entries`
+reads a reconciled template against its slate, and every producer (the
+baseline, C1's export, the Showdown review export, C3) and `delivery.revalidate`
+take their rows from it:
+
+- a **blank** row (every roster cell empty) is **fillable** unless its group is
+  unresolved;
+- a **prefilled** row (every cell set) is **preserved** when each cell is an
+  exact current-slate DraftKings ID, as a bare ID or text ending `(ID)`, and the
+  shared validator passes the roster; otherwise it is unresolved
+  (`ENTRY_PREFILLED_ROSTER_UNRESOLVED`, `P`, family `entry_rows`), as is a
+  prefilled roster that repeats an earlier row's;
+- a **partly filled** row is unresolved (`ENTRY_ROW_PARTLY_PREFILLED`, `P`):
+  filling around set cells is governed late swap's (Session 12);
+- rows group by Contest ID, and a group whose rows disagree on the contest name
+  or entry fee leaves every row in it unresolved (`ENTRY_GROUP_UNRESOLVED`, `V`,
+  `entry_authority`, scoped to those rows); every other group ships.
+
+Every preserved roster (resolved: exact current-slate IDs the shared validator
+passes) joins the forbidden set: the baseline and C1 cut each from every solve, the C2
+and SD3 banks never hold one, and every export audit refuses a filled roster
+equal to one (`ENTRY_PREFILLED_LINEUP_REPEATED`, `V`, `distinct_lineups`, on
+the generated row). A row that does not resolve stays out of the set: it is
+no legal lineup, and a Showdown roster with a FLEX-role ID in the Captain cell
+would share a legal lineup's person-level key without the DraftKings-ID cut
+removing that lineup. The cell form is unverified against a real
+DraftKings download with entered rows (ROADMAP Session 12).
+
+One file per producer carries every group; each group stands or falls inside
+it, and rows are never merged across producers. A group record, in `nfl baseline`'s report, the `run-slate` result and the pointer's
+`coverage`: `contest_id`; `contest_name` and `entry_fee` (`null` when the rows
+disagree) and the lists `contest_names`, `entry_fees`; `rows`; the Entry IDs by
+kind (`blank`, `prefilled`, `partly_filled`) and by outcome (`filled`,
+`unfilled`, `preserved`, `unresolved`); and `reasons`, each unfilled or
+unresolved row's limitation codes (a file-wide gate's codes when none names it).
+
+Does not establish: that a preserved lineup is a good one, or anything about a
+contest beyond its ID, name and fee as the template states them.
+
 ## Latest deliverable pointer
 
 Registered 2026-09-23 by Session 05 (R28). `LATEST_DELIVERABLE.json`,
@@ -2273,6 +2363,30 @@ Does not establish: upload clearance, certification, lineup quality, or any EV,
 ROI, win, cash, ownership or edge claim. It says which validated file to hand
 over and what it covers.
 
+### `nfl_latest_deliverable_v2`
+
+Registered 2026-09-24 by Session 11. `delivery.py` writes only v2 since then
+and reads v1 and v2 (a v1 pointer's truths are `nfl_release_truths_v2`).
+
+| Field | Added or changed |
+|---|---|
+| `schema_version` | Exactly `nfl_latest_deliverable_v2` |
+| `coverage` | Adds `preserved_entry_ids`, `unresolved_entry_ids` and `entry_groups` (§ Entry groups) |
+| `release_truths` | `nfl_release_truths_v3`; `v2` truths handed to `publish` or `replace` are written as `v3` with both new lists empty |
+| `supersedes` | Adds `delivered_rows_by_group`, the replaced file's delivered rows per Contest ID (empty when it no longer revalidated) |
+
+Revalidation adds three checks, each under an existing code: only the plan's
+fillable rows may differ from the template, and every other row, prefilled or
+partly filled or of an unresolved group, is its bytes exactly
+(`DELIVERABLE_BYTE_AUDIT_FAILED`; the byte audit now also refuses a written
+prefilled cell); the truths' preserved and unresolved rows are the plan's
+(`DELIVERABLE_COVERAGE_MISMATCH`); and no filled roster equals a prefilled one
+(`DELIVERABLE_LINEUP_DUPLICATE`). `replace` compares coverage per Contest ID: a
+replacement that delivers fewer rows in any group than a current file that
+still revalidates is refused (`DELIVERY_POINTER_COVERAGE_REGRESSION`, naming
+the group), whatever its total. A reader of v1 sees delivered and unfilled rows
+only, which was the whole template then.
+
 ## `run-slate` result, baseline first (Session 06)
 
 Registered 2026-09-24 by Session 06 (R28, R29). The `prior_review` exits, the
@@ -2327,6 +2441,13 @@ records the review file with `revalidation` `FAIL`.
 Exit codes are unchanged: 0 when the run's own review completed, 2 when it did
 not. A shipped baseline never turns a failed review into 0, and a refused C1
 export is 2. A review the deadline skipped or stopped is 2 (Session 07).
+
+Since Session 11 every `prior_review` exit and the pre-review exit carry
+`entry_groups` (§ Entry groups) for the file the result describes, the outer
+handler the pointer's; `baseline` adds `preserved_entry_ids` and
+`unresolved_entry_ids`, and `latest_deliverable` adds those and `entry_groups`.
+A policy (supplied, or a rung's) binds the plan's fillable rows in template
+order, and `PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES` counts those rows.
 
 Since Session 10 a run with a policy also carries `relaxation`, the run's
 `nfl_relaxation_record_v1` record (§ Relaxation record); the pre-review exit
@@ -2428,7 +2549,8 @@ Each relaxation: `sequence`, `attempt` (the one it fed), `step` (`BANK`,
 `provenance` (the registry's), `original`, `final`, `trigger`, `trigger_kind`,
 `trigger_origin` (`SELECTION`, `DEADLINE`, `INTAKE`), `trigger_detail`,
 `rung_from`, `rung_to`, `why`, `at_utc` (the run's clock), `elapsed_seconds`,
-`entry_ids` (every authorized Entry ID: a policy binds them all), `policy`
+`entry_ids` (the Entry IDs the policy binds: since Session 11 the plan's
+fillable blank rows, every one of them), `policy`
 (the new rung's binding), `limitation_code` and `limitation_text`.
 
 Codes, on every exit that reports the record, the delivered file's or the

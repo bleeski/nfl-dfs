@@ -231,11 +231,12 @@ def test_the_supplied_fixtures_deliver_at_1_20_and_150_entries(tmp_path, mode, c
     assert salaries == sorted(salaries, reverse=True)  # BASELINE_SALARY_RANK_V1 order
 
     report = json.loads(outcome.report_path.read_text(encoding="utf-8"))
-    # v2 since Session 06b: v1 plus the exclusion fields (`docs/DATA_CONTRACTS.md`).
-    assert report["schema_version"] == "nfl_baseline_report_v2"
+    # v2 since Session 06b: v1 plus the exclusion fields; v3 since Session 11: row
+    # kinds and outcomes, `entry_groups`, and v3 truths (`docs/DATA_CONTRACTS.md`).
+    assert report["schema_version"] == "nfl_baseline_report_v3"
     assert report["objective"]["version"] == "BASELINE_SALARY_RANK_V1"
     assert report["output"]["contract_version"] == "nfl_baseline_entry_csv_v1"
-    assert report["release_truths"]["schema_version"] == "nfl_release_truths_v2"
+    assert report["release_truths"]["schema_version"] == "nfl_release_truths_v3"
     assert report["release_truths"]["DELIVERY_STATE"] == "DELIVERABLE"
     assert report["audit"]["status"] == "PASS"
     assert report["timing"]["wall_seconds"] > 0
@@ -343,7 +344,9 @@ def test_avg_points_per_game_is_never_read(tmp_path):
         encoding="utf-8")
 
 
-def test_a_prefilled_row_is_refused_as_today(tmp_path):
+def test_a_prefilled_row_is_preserved_and_the_blank_rows_ship(tmp_path):
+    # Session 11 replaced the whole-file refusal this test pinned (a V limitation
+    # naming row 4880000002, NO_DELIVERABLE, no file) with per-row authority.
     slate = parse_salaries(tiny_showdown(tmp_path))
     lineup = [p.dk_id for p in slate.players if p.role == "CPT"][:1] + [
         p.dk_id for p in slate.players if p.role == "FLEX"][1:6]
@@ -352,10 +355,14 @@ def test_a_prefilled_row_is_refused_as_today(tmp_path):
 
     outcome = run(tmp_path, tmp_path / "tiny_showdown_salaries.csv", entries)
 
-    assert outcome.truths.delivery_state is DeliveryState.NO_DELIVERABLE
-    assert outcome.exit_code == 2 and outcome.output_path is None
-    assert codes(outcome)["ENTRY_BLANK_CELL_AUTHORITY_REQUIRED"] == ("4880000002",)
-    assert not list(outcome.run_dir.glob("DK_*.csv"))
+    assert outcome.truths.delivery_state is DeliveryState.DELIVERABLE
+    assert outcome.exit_code == 0 and outcome.output_path is not None
+    assert "ENTRY_BLANK_CELL_AUTHORITY_REQUIRED" not in codes(outcome)
+    assert outcome.truths.preserved_entry_ids == ("4880000002",)
+    assert outcome.truths.delivered_entry_ids == ("4880000001", "4880000003")
+    kept = entries.read_bytes().splitlines(keepends=True)
+    written = outcome.output_path.read_bytes().splitlines(keepends=True)
+    assert written[2] == kept[2]  # the prefilled row, byte for byte
 
 
 def test_a_classic_showdown_mismatch_hard_stops(tmp_path):

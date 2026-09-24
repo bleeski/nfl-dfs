@@ -202,6 +202,11 @@
       "provenance": {"kind": "RULING", "ref": "R28"},
       "covers": "A path does not support this contest shape or entry file (several contests, mixed fees, a partly prefilled template); another path may."
     },
+    "entry_rows": {
+      "class": "P", "stops": "CERTIFICATION",
+      "provenance": {"kind": "RULING", "ref": "R28"},
+      "covers": "A template row the engine keeps byte for byte but cannot resolve: a partly filled row, or a prefilled roster that is not a distinct legal lineup of exact current-slate DraftKings IDs. The row is named unresolved and every other row ships (Session 11)."
+    },
     "presentation": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "SD5 prior-only readable review"},
@@ -641,6 +646,8 @@
     "DELIVERY_POINTER_WRITE_FAILED": "latest_deliverable",
     "DELIVERY_POINTER_WRITE_MISMATCH": "latest_deliverable",
     "DELIVERY_ROW_BLOCKED_BY_INTEGRITY_GATE": "delivered_bytes",
+    "DELIVERY_ROW_KIND_OVERLAP": "entry_authority",
+    "DELIVERY_UNRESOLVED_ROW_UNNAMED": "entry_authority",
     "DEPTH_DUPLICATE_PUBLISHED_RANK": "qb_depth_roles",
     "DEPTH_NO_SELECTABLE_PERSON_AT_POSITION": "qb_depth_roles",
     "DEPTH_ORDER_EMPTY": "qb_depth_roles",
@@ -699,10 +706,14 @@
     "ENTRY_BLANK_CELL_AUTHORITY_REQUIRED": "entry_authority",
     "ENTRY_CHANGED_BEFORE_ARTIFACT_PUBLISH": "delivered_bytes",
     "ENTRY_FEE_MISMATCH": "settlement",
+    "ENTRY_GROUP_UNRESOLVED": "entry_authority",
     "ENTRY_ID_ASSIGNMENT_MISMATCH": "settlement",
     "ENTRY_INPUT_CHANGED_BEFORE_SELECTION": "delivered_bytes",
     "ENTRY_INPUT_CHANGED_DURING_CERTIFICATION": "delivered_bytes",
+    "ENTRY_PREFILLED_LINEUP_REPEATED": "distinct_lineups",
+    "ENTRY_PREFILLED_ROSTER_UNRESOLVED": "entry_rows",
     "ENTRY_ROW_NARROWER_THAN_ROSTER": "delivered_bytes",
+    "ENTRY_ROW_PARTLY_PREFILLED": "entry_rows",
     "ENTRY_SOURCE_COVERAGE_INCOMPLETE": "entry_authority",
     "ENTRY_SOURCE_ID_DUPLICATE": "entry_authority",
     "ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE": "delivered_bytes",

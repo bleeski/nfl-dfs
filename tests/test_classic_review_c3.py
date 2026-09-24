@@ -457,7 +457,11 @@ def test_prefilled_stale_partial_and_unauthorized_exports_are_withheld(
     changed_hashes = dict(prefilled["expected_hashes"])
     changed_hashes["entry_csv"] = sha256_file(source)
     prefilled["expected_hashes"] = changed_hashes
-    with pytest.raises(ClassicReviewError, match="BLANK_CELL_AUTHORITY_REQUIRED"):
+    # Since Session 11 a prefilled cell no longer refuses the whole file: the row is
+    # preserved or named. This one changes a template the package was bound to, so the
+    # bound policy no longer matches its bytes or its fillable rows, and it is withheld.
+    with pytest.raises(ClassicReviewError,
+                       match="CLASSIC_C3_SOURCE_POLICY_INVALID:.*CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH"):
         create_classic_review_package(**prefilled)
     _assert_no_new_output(prefilled)
 
@@ -466,7 +470,8 @@ def test_prefilled_stale_partial_and_unauthorized_exports_are_withheld(
     monkeypatch.setattr(
         classic_review,
         "write_upload_bytes",
-        lambda template, assignments: original_upload(template, assignments) + b"UNAUTHORIZED\r\n",
+        lambda template, assignments, **kwargs: (
+            original_upload(template, assignments, **kwargs) + b"UNAUTHORIZED\r\n"),
     )
     with pytest.raises(ClassicReviewError, match="PHYSICAL_LINE_COUNT_CHANGED"):
         create_classic_review_package(**unauthorized)

@@ -79,6 +79,7 @@ from .classic_portfolio_policy import (
 from .contracts import EngineMode, GateClass
 from .deadline import JOINT_SHARE as SD3_JOINT_SHARE
 from .deadline import SOLVE_MINIMUM_SECONDS, Budget
+from .entry_groups import plan_entries
 from .gate_registry import GateRegistry, GateRegistryError
 from .hashing import sha256_bytes
 from .portfolio_enforcement import scaled_candidate_limit
@@ -639,7 +640,8 @@ class Ladder:
         self.slate = slate
         self.mode = slate.mode
         self.entries = entries
-        self.entry_ids = tuple(item.entry_id for item in entries.authorizations)
+        # The rows a policy may bind: the template's fillable blank rows (Session 11).
+        self.entry_ids = plan_entries(entries, slate).fillable
         self.folder = Path(folder)
         self.registry = registry
         self.external = tuple(externally_excluded_people)

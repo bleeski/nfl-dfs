@@ -22,7 +22,7 @@ import numpy as np
 
 from .contracts import EngineMode, SlateContract
 from .hashing import sha256_bytes
-from .lineups import validate_lineup
+from .lineups import roster_canonical_key, validate_lineup
 from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
 from .portfolio_policy import (
     EffectivePersonLimit,
@@ -298,17 +298,21 @@ class _StratifiedEnumerator:
         candidate_limit: int,
         total_budget: float,
         per_solve_budget: float,
+        forbidden_rosters: Sequence[tuple[str, ...]] = (),
     ) -> None:
         self.slate = slate
         self.objective = objective
         self.excluded_ids = tuple(sorted({str(dk_id) for dk_id in excluded_ids}))
+        # The template's prefilled rosters (Session 11): cut from every solve and
+        # held as already seen, so no candidate the joint solve sees repeats one.
+        self.forbidden = tuple(tuple(map(str, roster)) for roster in forbidden_rosters)
         self.candidate_limit = candidate_limit
         self.total_budget = total_budget
         self.per_solve_budget = per_solve_budget
         self.started = time.perf_counter()
         self.by_id = {row.dk_id: row for row in slate.players}
         self.candidates: list[PolicyCandidate] = []
-        self.canonical_seen: set[str] = set()
+        self.canonical_seen: set[str] = {roster_canonical_key(slate, roster) for roster in self.forbidden}
         self.rosters: list[tuple[str, ...]] = []
         self.solve_count = 0
         self.terminal: str | None = None
@@ -359,6 +363,8 @@ class _StratifiedEnumerator:
         if seed_no_goods:
             for roster in self.rosters:
                 optimizer.add_no_good(roster)
+        for roster in self.forbidden:
+            optimizer.add_no_good(roster)
         chain_limits: dict[str, EffectivePersonLimit] = {}
         chain_overlap = 6
         chain_people: Counter[str] = Counter()
@@ -561,8 +567,12 @@ def build_policy_candidate_bank(
     total_time_limit_seconds: float = DEFAULT_CANDIDATE_SECONDS,
     per_solve_time_limit_seconds: float = DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
     policy: NormalizedPortfolioPolicy | None = None,
+    forbidden_rosters: Sequence[tuple[str, ...]] = (),
 ) -> CandidateBank:
     """Enumerate a deterministic bounded bank of legal policy candidates.
+
+    `forbidden_rosters` (Session 11) are the template's prefilled rosters; no
+    candidate equals one, so the joint solve never sees one.
 
     Without a policy this is the plain top-K enumeration by prior points. With
     a policy the same machinery runs in strata so the joint MILP has something
@@ -591,6 +601,7 @@ def build_policy_candidate_bank(
         candidate_limit=candidate_limit,
         total_budget=total_budget,
         per_solve_budget=per_solve_budget,
+        forbidden_rosters=forbidden_rosters,
     )
     if policy is None:
         enumerator.enumerate(kind="fill", target=candidate_limit)
