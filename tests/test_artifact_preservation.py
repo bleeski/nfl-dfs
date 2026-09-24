@@ -144,7 +144,8 @@ def test_publish_writes_an_atomic_hash_bound_pointer_that_reads_back(
     assert replaced == [(str(root / f".{delivery.POINTER_NAME}.{os.getpid()}.tmp"), str(pointer))]
     assert latest.pointer_sha256 == sha256_file(pointer)
     record = json.loads(pointer.read_text(encoding="utf-8"))
-    assert record["schema_version"] == "nfl_latest_deliverable_v1"
+    assert record["schema_version"] == "nfl_latest_deliverable_v2"  # v2 since Session 11
+    assert record["release_truths"]["schema_version"] == "nfl_release_truths_v3"
     assert record["file"] == {
         "path": item.path.name, "sha256": item.sha256,
         "bytes": item.path.stat().st_size, "file_kind": "nfl_baseline_entry_csv_v1",
@@ -478,7 +479,7 @@ def test_showdown_success_publishes_the_revalidated_csv(tmp_path: Path, monkeypa
     code, report, root = _showdown_run(tmp_path, monkeypatch)
     assert code == 0
     assert report["DELIVERY_STATE"] == "DELIVERABLE"
-    assert report["release_truths"]["schema_version"] == "nfl_release_truths_v2"
+    assert report["release_truths"]["schema_version"] == "nfl_release_truths_v3"  # v3 since Session 11
     assert report["release_truths"]["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
     assert {item["class"] for item in report["release_truths"]["delivery_limitations"]} == {"P"}
     latest = delivery.read_latest(root)

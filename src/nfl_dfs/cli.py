@@ -44,7 +44,7 @@ from .contracts import (
     ModelStatus,
     ReleaseDecision,
     ReleaseEvidenceState,
-    ReleaseTruthsV2,
+    ReleaseTruthsV3,
 )
 from .deadline import (
     PROBE_MINIMUM_SECONDS,
@@ -90,6 +90,7 @@ from .delivery import (
     withholds,
 )
 from .economics import evaluate_candidates_against_field
+from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
 from .evidence import EvidenceError, parse_official_inactive_snapshot, source_ledger_evidence
 from .field import generate_opponent_field, scale_field_multiplicities
 from .hashing import content_hash, sha256_bytes, sha256_file
@@ -136,7 +137,7 @@ from .selection import assignments_for_entries, select_prior_lineups
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .gate_registry import GateRegistry, load_gate_registry
 from .relaxation import DEFAULT_SECONDS_PER_CANDIDATE, Ladder, failure_of, intake_failure, supplied_rung
-from .release import derive_delivery_state, derive_release_policy, release_truths_v2
+from .release import derive_delivery_state, derive_release_policy, release_truths_v3
 from .scenario_store import save_scenario_bank
 from .settlement import (
     capture_settlement_bundle,
@@ -2515,12 +2516,17 @@ def _review_release_truths(
     *,
     outcome,
     truths: Mapping[str, object],
-    authorized: tuple[str, ...],
+    plan: EntryPlan | None,
     blockers: Iterable[str],
     extra: Iterable[DeliveryLimitation],
     registry: GateRegistry,
-) -> ReleaseTruthsV2:
-    """`nfl_release_truths_v2` for a prior_review exit: the four v1 truths, and delivery."""
+) -> ReleaseTruthsV3:
+    """`nfl_release_truths_v3` for a prior_review exit: the four v1 truths, and delivery.
+
+    The review fills every fillable row of the template's plan or none
+    (Session 11); preserved and unresolved rows are the plan's, named by its
+    limitations.
+    """
 
     policy = derive_release_policy(
         file_valid=bool(truths["FILE_VALID"]),
@@ -2531,19 +2537,32 @@ def _review_release_truths(
     if {key: truths[key] for key in policy.truth_values()} != policy.truth_values():
         raise RuntimeError("the v2 truths would disagree with the v1 truths this run reports")
     has_csv = outcome.file_valid and bool(outcome.artifacts.get("bulk_entry_csv"))
-    limitations = [*blocker_limitations(blockers, registry), *extra]
+    limitations = [*(plan.limitations(registry) if plan is not None else ()),
+                   *blocker_limitations(blockers, registry), *extra]
     if outcome.file_valid and not has_csv:
         limitations.append(registry.limitation(
             "PROFILE_WRITES_NO_ENTRY_FILE",
             detail="the run's own review wrote no entry file to hand over; the baseline, when "
                    "it was published, stays the deliverable"))
+    authorized = plan.fillable if plan is not None else ()
     delivery = derive_delivery_state(
         file_valid=has_csv,
         authorized_entry_ids=authorized,
         delivered_entry_ids=authorized if has_csv else (),
         limitations=limitations,
+        preserved_entry_ids=plan.preserved if plan is not None else (),
+        unresolved_entry_ids=plan.unresolved if plan is not None else (),
     )
-    return release_truths_v2(policy, delivery)
+    return release_truths_v3(policy, delivery)
+
+
+def _entry_groups(plan: EntryPlan | None, truths: ReleaseTruthsV3) -> list[dict[str, object]]:
+    """Each Contest ID group of the file the result describes (Session 11)."""
+
+    if plan is None:
+        return []
+    return group_report(plan, delivered=truths.delivered_entry_ids, unfilled=truths.unfilled_entry_ids,
+                        limitations=truths.delivery_limitations)
 
 
 # R28 (Session 06): the baseline goes first. `run-slate` builds `nfl baseline`'s
@@ -2581,6 +2600,8 @@ class _SlateBaseline:
             ),
             "delivered_rows": len(truths.delivered_entry_ids) if truths is not None else 0,
             "unfilled_entry_ids": list(truths.unfilled_entry_ids) if truths is not None else [],
+            "preserved_entry_ids": list(truths.preserved_entry_ids) if truths is not None else [],
+            "unresolved_entry_ids": list(truths.unresolved_entry_ids) if truths is not None else [],
             "limitations": [item.code for item in truths.delivery_limitations] if truths is not None else [],
             "report": str(outcome.report_path) if outcome is not None and outcome.report_path else None,
             "wall_seconds": (
@@ -2667,11 +2688,11 @@ def _run_release_truths(
     *,
     latest: LatestDeliverable | None,
     not_delivered: str | None,
-    authorized: tuple[str, ...],
+    plan: EntryPlan | None,
     blockers: Iterable[str],
     registry: GateRegistry,
     extra: Iterable[DeliveryLimitation] = (),
-) -> ReleaseTruthsV2:
+) -> ReleaseTruthsV3:
     """The run's own v1 truths beside the delivery half of the file its pointer names.
 
     With a pointer, `DELIVERY_STATE`, `delivered_file_valid`, coverage and the
@@ -2696,14 +2717,20 @@ def _run_release_truths(
             item.model_dump(mode="json", by_alias=True) for item in extra
             if (item.code, item.detail) not in seen
         )
-        return ReleaseTruthsV2.model_validate({**record, **head, "delivery_limitations": limitations})
+        # This run's pointer is v2 and carries v3 truths (Session 11).
+        return ReleaseTruthsV3.model_validate({
+            **record, **head, "schema_version": "nfl_release_truths_v3",
+            "delivery_limitations": limitations})
     delivery = derive_delivery_state(
         file_valid=False,
-        authorized_entry_ids=authorized,
+        authorized_entry_ids=plan.fillable if plan is not None else (),
         delivered_entry_ids=(),
-        limitations=blocker_limitations(blockers, registry),
+        limitations=[*(plan.limitations(registry) if plan is not None else ()),
+                     *blocker_limitations(blockers, registry)],
+        preserved_entry_ids=plan.preserved if plan is not None else (),
+        unresolved_entry_ids=plan.unresolved if plan is not None else (),
     )
-    return ReleaseTruthsV2.model_validate({
+    return ReleaseTruthsV3.model_validate({
         **head,
         "DELIVERY_STATE": delivery.delivery_state.value,
         "delivered_file_valid": delivery.delivered_file_valid,
@@ -2711,6 +2738,8 @@ def _run_release_truths(
                                  for item in delivery.delivery_limitations],
         "delivered_entry_ids": list(delivery.delivered_entry_ids),
         "unfilled_entry_ids": list(delivery.unfilled_entry_ids),
+        "preserved_entry_ids": list(delivery.preserved_entry_ids),
+        "unresolved_entry_ids": list(delivery.unresolved_entry_ids),
     })
 
 
@@ -2793,7 +2822,10 @@ def _export_classic_c1_csv(
             return outcome, (f"CLASSIC_C1_EXPORT_OFFICIAL_STATUS_CHANGED:{status}",)
         assignments = read_assignment_csv(source, EngineMode.CLASSIC)
         template = parse_entries(request.entry_csv or "")
-        raw = write_upload_bytes(template, assignments)
+        # Per-row authority (Session 11): C1 filled the plan's fillable rows;
+        # every other blank row is left blank and every other row passes through.
+        left_blank = tuple(eid for eid in blank_entry_ids(template) if eid not in assignments)
+        raw = write_upload_bytes(template, assignments, unfilled=left_blank)
     except (OSError, ValueError) as exc:
         return outcome, (f"CLASSIC_C1_EXPORT_FAILED:{type(exc).__name__}:{exc}",)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -2806,7 +2838,7 @@ def _export_classic_c1_csv(
             salary_path=Path(request.salary_csv or ""),
             entries_path=Path(request.entry_csv or ""),
             assignments=assignments,
-            unfilled=(),
+            unfilled=left_blank,
             operator_excluded_dk_ids=request.exclude_dk_ids,
             extra_unavailable_statuses=request.unavailable_statuses,
             official_status_csv=request.official_status_csv,
@@ -3001,7 +3033,7 @@ def _run_prior_review_profile(
         )
 
     registry = load_gate_registry()
-    authorized_ids = tuple(item.entry_id for item in entries.authorizations)
+    entry_plan = plan_entries(entries, slate)
     readable_review = None
     readable_failed = False
     withheld_by: str | None = None  # why a CSV this review produced is not listed
@@ -3207,7 +3239,7 @@ def _run_prior_review_profile(
     # same revalidation); a refusal, or a `V` gate among the blockers, withholds
     # it exactly as a `V` display discrepancy would, and the baseline stays.
     release_truths = _review_release_truths(
-        outcome=outcome, truths=truths, authorized=authorized_ids, blockers=blockers,
+        outcome=outcome, truths=truths, plan=entry_plan, blockers=blockers,
         extra=review_limitations, registry=registry,
     )
     latest: LatestDeliverable | None = None
@@ -3257,7 +3289,7 @@ def _run_prior_review_profile(
             )
             next_action = "Resolve every named integrity blocker above, then rerun the same command."
             release_truths = _review_release_truths(
-                outcome=outcome, truths=truths, authorized=authorized_ids, blockers=blockers,
+                outcome=outcome, truths=truths, plan=entry_plan, blockers=blockers,
                 extra=review_limitations, registry=registry,
             )
         else:
@@ -3309,14 +3341,14 @@ def _run_prior_review_profile(
         # ladder's travel beside them (Sessions 07 and 10).
         release_truths = _run_release_truths(
             truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
-            authorized=authorized_ids, blockers=blockers, registry=registry,
+            plan=entry_plan, blockers=blockers, registry=registry,
             extra=(*(budget.limitations(registry) if budget is not None else ()),
                    *(blocker_limitations(ladder.texts(), registry) if ladder is not None else ())),
         )
     elif latest is None:
         # Nothing to hand over: the review's own record, plus why no baseline backs it.
         release_truths = _review_release_truths(
-            outcome=outcome, truths=truths, authorized=authorized_ids,
+            outcome=outcome, truths=truths, plan=entry_plan,
             blockers=[*blockers, *latest_problems, *(baseline.problems if baseline is not None else ())],
             extra=review_limitations, registry=registry,
         )
@@ -3377,6 +3409,7 @@ def _run_prior_review_profile(
         **outcome.as_report(),
         "DELIVERY_STATE": release_truths.delivery_state.value,
         "release_truths": release_truths.model_dump(mode="json", by_alias=True),
+        "entry_groups": _entry_groups(entry_plan, release_truths),
         "latest_deliverable": latest.summary() if latest is not None else None,
         "latest_deliverable_problems": list(latest_problems),
         "baseline": baseline.summary() if baseline is not None else None,
@@ -3660,6 +3693,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             if path
         ),
     )
+    # Per-row authority (Session 11): the rows a policy binds and a review fills.
+    entry_plan = plan_entries(entries, slate)
     snapshotted = _snapshot_cowork_request(request, run_id, intake["hashes"])
     request_path = DEFAULT_RUNS_DIR / run_id / "run_request.json"
     _write_json(request_path, snapshotted.to_dict())
@@ -3780,7 +3815,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             validation = validate_classic_portfolio_policy_file(
                 snapshotted.portfolio_policy_json,
                 slate=slate,
-                entry_ids=tuple(entry.entry_id for entry in entries.authorizations),
+                entry_ids=entry_plan.fillable,
                 entry_sha256=entries.raw_hash,
                 externally_excluded_people=external_people,
                 expected_sha256=expected_policy_sha256,
@@ -3789,7 +3824,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             validation = validate_portfolio_policy_file(
                 snapshotted.portfolio_policy_json,
                 slate=slate,
-                entry_ids=tuple(entry.entry_id for entry in entries.authorizations),
+                entry_ids=entry_plan.fillable,
                 externally_excluded_people=external_people,
                 expected_sha256=expected_policy_sha256,
             )
@@ -3826,12 +3861,12 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             )
         if (
             snapshotted.lineup_count is not None
-            and snapshotted.lineup_count != len(entries.authorizations)
+            and snapshotted.lineup_count != len(entry_plan.fillable)
         ):
             policy_blockers.append(
                 "PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES: "
                 f"lineup_count={snapshotted.lineup_count} but requested entries="
-                f"{len(entries.authorizations)}; next action: omit lineup_count or set it "
+                f"{len(entry_plan.fillable)}; next action: omit lineup_count or set it "
                 "to the full requested Entry-ID count"
             )
         policy_summary = {
@@ -3840,7 +3875,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "normalized_policy_sha256": validation.normalized_sha256,
             "validation_report": str(policy_report_path),
             "normalized_policy": str(normalized_path) if normalized_path else None,
-            "entry_count_denominator": len(entries.authorizations),
+            "entry_count_denominator": len(entry_plan.fillable),
             "enforcement_status": (
                 "PENDING_RUNTIME_ENFORCEMENT_AND_AUDIT"
                 if validation.valid
@@ -3957,7 +3992,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         }
         release_truths = _run_release_truths(
             blocked_truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
-            authorized=tuple(item.entry_id for item in entries.authorizations),
+            plan=entry_plan,
             blockers=[*blockers, *latest_problems, *baseline.problems], registry=registry,
             extra=(*budget.limitations(registry),
                    *(blocker_limitations(ladder.texts(), registry) if ladder is not None else ())),
@@ -3996,6 +4031,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             ),
             "DELIVERY_STATE": release_truths.delivery_state.value,
             "release_truths": release_truths.model_dump(mode="json", by_alias=True),
+            "entry_groups": _entry_groups(entry_plan, release_truths),
             "latest_deliverable": latest.summary() if latest is not None else None,
             "latest_deliverable_problems": list(latest_problems),
             "baseline": baseline.summary(),
@@ -4196,7 +4232,7 @@ def _handler_release_truths(
         not_delivered=_not_delivered_detail(
             {"status": "NOT_PRODUCED", "stage": "BUILD_OR_CERTIFY_FAILED", "reasons": [failure]}
         ),
-        authorized=(),
+        plan=None,
         blockers=(),
         registry=registry,
         extra=budget.limitations(registry) if budget is not None else (),
@@ -4261,6 +4297,7 @@ def command_cowork_run(args: argparse.Namespace) -> int:
                 else DeliveryState.NO_DELIVERABLE.value
             ),
             "release_truths": handler_truths,
+            "entry_groups": latest.summary()["entry_groups"] if latest is not None else [],
             "latest_deliverable": latest.summary() if latest is not None else None,
             "latest_deliverable_problems": list(latest_problems),
             "baseline": baseline.summary() if isinstance(baseline, _SlateBaseline) else None,

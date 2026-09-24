@@ -20,6 +20,7 @@ from typing import Iterable, Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
 from .dk import EntryTemplate, parse_entries, parse_entry_bytes, parse_salaries
+from .entry_groups import plan_entries
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup
 
@@ -943,9 +944,16 @@ def create_readable_review(
     expected_entries = tuple(entry.entry_id for entry in reparsed_template.authorizations)
     output_entries = tuple(entry.entry_id for entry in output_template.authorizations)
     assignment_entries = tuple(entry for entry, _roster in assignment_pairs)
+    # Per-row authority (Session 11): the assignment covers the plan's fillable
+    # rows; every other row keeps the template's own cells.
+    try:
+        fillable = plan_entries(reparsed_template, reparsed_slate).fillable
+    except ValueError as exc:
+        problems.append(_problem("READABLE_REVIEW_ENTRY_REPARSE_MISMATCH", f"{type(exc).__name__}:{exc}"))
+        fillable = expected_entries
     if output_entries != expected_entries:
         problems.append(_problem("READABLE_REVIEW_OUTPUT_ENTRY_ORDER_MISMATCH", output_entries))
-    if assignment_entries != expected_entries:
+    if assignment_entries != fillable:
         problems.append(_problem("READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH", assignment_entries))
     source_metadata = {
         entry.entry_id: (entry.contest_id, entry.contest_name, entry.entry_fee)
@@ -959,7 +967,9 @@ def create_readable_review(
         problems.append("READABLE_REVIEW_OUTPUT_ENTRY_METADATA_MISMATCH")
     output_rosters = {entry.entry_id: entry.existing_cells for entry in output_template.authorizations}
     assignment_rosters = dict(assignment_pairs)
-    if output_rosters != assignment_rosters:
+    source_rosters = {entry.entry_id: entry.existing_cells for entry in reparsed_template.authorizations}
+    expected_rosters = {eid: assignment_rosters.get(eid, source_rosters.get(eid, ())) for eid in output_rosters}
+    if output_rosters != expected_rosters or set(assignment_rosters) - set(output_rosters):
         problems.append("READABLE_REVIEW_OUTPUT_ASSIGNMENT_ROSTER_MISMATCH")
 
     selection_path_raw = artifacts.get("selection_report")
@@ -1064,7 +1074,10 @@ def create_readable_review(
     captain_counts: Counter[str] = Counter()
     people_by_entry: dict[str, frozenset[str]] = {}
     canonical_by_entry: dict[str, str] = {}
+    filled_rows = set(fillable)
     for authorization in reparsed_template.authorizations:
+        if authorization.entry_id not in filled_rows:
+            continue  # a preserved or unresolved row: the byte audit holds it
         roster = output_rosters.get(authorization.entry_id, ())
         validation = validate_lineup(reparsed_slate, roster)
         if not validation.valid or validation.lineup is None:

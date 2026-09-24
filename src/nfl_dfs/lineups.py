@@ -48,6 +48,22 @@ def _canonical_key(mode: EngineMode, players: list[SalaryPlayer]) -> str:
     return "|".join(sorted(player.dk_id for player in players))
 
 
+def roster_canonical_key(slate: SlateContract, roster_ids: Iterable[str]) -> str:
+    """A roster's identity (R29) from exact salary-pool IDs, legal or not.
+
+    The same key `validate_lineup` gives a legal lineup, so a prefilled roster
+    and a generated one compare exactly (Session 11). Raises on an ID outside
+    the pool: only exact current-slate IDs ever have an identity here.
+    """
+
+    by_id = {player.dk_id: player for player in slate.players}
+    roster = tuple(str(value).strip() for value in roster_ids)
+    outside = [value for value in roster if value not in by_id]
+    if outside or not roster:
+        raise LineupValidationError(f"LINEUP_DK_ID_NOT_IN_POOL: {outside or 'empty roster'}")
+    return _canonical_key(slate.mode, [by_id[value] for value in roster])
+
+
 def validate_lineup(
     slate: SlateContract,
     roster_ids: Iterable[str],
@@ -155,27 +171,32 @@ def write_upload_bytes(
 ) -> bytes:
     """The template's bytes with each assigned row's roster cells written in place.
 
-    Every authorized Entry ID is either assigned or named in `unfilled`, never
-    both, so a row can be left blank only on purpose (R28's partial delivery);
-    an unfilled row's bytes pass through untouched. A prefilled row refuses the
-    write whichever list it is in, exactly as before `unfilled` existed.
+    Per-row authority (Session 11): only a row whose roster cells are all blank
+    may be written. Every blank row is either assigned or named in `unfilled`,
+    never both, so a blank row is left blank only on purpose (R28's partial
+    delivery, or a group left unresolved). Every other row, prefilled or partly
+    filled, is in neither list and passes through byte for byte. A row with any
+    cell set in either list refuses the write (`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`).
     """
 
     authorized = {entry.entry_id: entry for entry in template.authorizations}
+    blank = {eid for eid, entry in authorized.items() if not any(entry.existing_cells)}
     left_blank = set(unfilled)
-    if set(assignments) | left_blank != set(authorized) or left_blank & set(assignments):
-        missing = sorted(set(authorized).difference(assignments).difference(left_blank))
-        extra = sorted(set(assignments).union(left_blank).difference(authorized))
-        both = sorted(left_blank.intersection(assignments))
-        raise LineupValidationError(
-            "ENTRY_AUTHORIZATION_MISMATCH: assignment authorization mismatch: "
-            f"missing={missing}, extra={extra}, assigned_and_unfilled={both}"
-        )
-    prefilled = sorted(entry_id for entry_id in left_blank if any(authorized[entry_id].existing_cells))
+    named = set(assignments) | left_blank
+    prefilled = [entry.entry_id for entry in template.authorizations
+                 if entry.entry_id in named and any(entry.existing_cells)]
     if prefilled:
         raise LineupValidationError(
             f"ENTRY_BLANK_CELL_AUTHORITY_REQUIRED: Entry {prefilled[0]} has prefilled cells; "
             "automatic replacement is not authorized"
+        )
+    if named != blank or left_blank & set(assignments):
+        missing = sorted(blank.difference(named))
+        extra = sorted(named.difference(authorized))
+        both = sorted(left_blank.intersection(assignments))
+        raise LineupValidationError(
+            "ENTRY_AUTHORIZATION_MISMATCH: assignment authorization mismatch: "
+            f"missing={missing}, extra={extra}, assigned_and_unfilled={both}"
         )
     raw = template.path.read_bytes()
     lines = split_byte_lines(raw)

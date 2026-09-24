@@ -34,7 +34,7 @@ from .classic_portfolio import (
 from .classic_portfolio_policy import NormalizedClassicPortfolioPolicy
 from .hashing import sha256_bytes
 from .kicker_roles import resolve_kicker_roles
-from .lineups import validate_lineup
+from .lineups import roster_canonical_key, validate_lineup
 from .opportunity import OpportunityModel
 from .offensive_roles import resolve_offensive_roles, verify_offensive_resolution
 from .qb_depth_roles import resolve_qb_depth_roles, verify_qb_depth_resolution
@@ -180,6 +180,7 @@ def select_prior_lineups(
     policy_candidate_per_solve_seconds: float = DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
     policy_selection_seconds: float | None = None,
     pool_scores_path: str | Path | None = None,
+    forbidden_rosters: Sequence[tuple[str, ...]] = (),
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
     """Solve for `count` distinct legal lineups over the permitted pool.
 
@@ -187,11 +188,15 @@ def select_prior_lineups(
     entry count" (`max(32, 4 * entries)` candidates, `max(30s, 2s * entries)`
     of bank generation, `max(10s, 1s * entries)` for the joint solve). An
     explicit value is used as given, so tests and diagnostics can pin small
-    bounds.
+    bounds. `forbidden_rosters` (Session 11) are the entry template's prefilled
+    rosters: C1 and sequential Showdown cut each from every solve, and the C2
+    and SD3 banks never hold one, so no selected lineup repeats one (R29).
     """
 
     if slate.mode not in {EngineMode.SHOWDOWN, EngineMode.CLASSIC}:
         raise SelectionError(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
+    forbidden_rosters = tuple(tuple(map(str, roster)) for roster in forbidden_rosters)
+    forbidden_keys = {roster_canonical_key(slate, roster) for roster in forbidden_rosters}
     if count < 1:
         raise SelectionError(f"LINEUP_COUNT_INVALID:{count}")
     if portfolio_policy is not None and count != portfolio_policy.entry_count:
@@ -284,6 +289,7 @@ def select_prior_lineups(
             objective,
             portfolio_policy,
             excluded_ids=excluded,
+            forbidden_rosters=forbidden_rosters,
         )
         if bank.blocking:
             raise SelectionError(
@@ -401,6 +407,7 @@ def select_prior_lineups(
         }
         verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
         verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
+        _refuse_prefilled_repeats(selected, forbidden_keys)
         return tuple(selected), scores, report
 
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
@@ -428,6 +435,7 @@ def select_prior_lineups(
             total_time_limit_seconds=candidate_seconds,
             per_solve_time_limit_seconds=policy_candidate_per_solve_seconds,
             policy=portfolio_policy,
+            forbidden_rosters=forbidden_rosters,
         )
         if bank.blocking:
             raise SelectionError(
@@ -535,11 +543,14 @@ def select_prior_lineups(
         }
         verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
         verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
+        _refuse_prefilled_repeats(selected, forbidden_keys)
         return tuple(selected), scores, report
 
     optimizer = LineupOptimizer(
         slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
     )
+    for roster in forbidden_rosters:
+        optimizer.add_no_good(roster)
     selection_profile_version = (
         PROFILE_VERSION
         if slate.mode is EngineMode.SHOWDOWN
@@ -567,6 +578,8 @@ def select_prior_lineups(
             optimizer = LineupOptimizer(
                 slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
             )
+            for roster in forbidden_rosters:
+                optimizer.add_no_good(roster)
             for earlier in selected:
                 optimizer.add_no_good(earlier.roster)
                 if effective_overlap is not None:
@@ -714,7 +727,16 @@ def select_prior_lineups(
     }
     verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
     verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
+    _refuse_prefilled_repeats(selected, forbidden_keys)
     return tuple(selected), scores, report
+
+
+def _refuse_prefilled_repeats(selected: Sequence[SelectedLineup], forbidden_keys: set[str]) -> None:
+    """The backstop (Session 11): no selected lineup is a prefilled roster (R29)."""
+
+    repeated = [lineup.index for lineup in selected if lineup.canonical_key in forbidden_keys]
+    if repeated:
+        raise SelectionError(f"ENTRY_PREFILLED_LINEUP_REPEATED:selection_indexes={repeated}")
 
 
 def assignments_for_entries(

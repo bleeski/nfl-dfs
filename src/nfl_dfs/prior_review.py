@@ -64,6 +64,7 @@ from .dk import (
     parse_salaries,
     reconcile_template,
 )
+from .entry_groups import plan_entries
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_bytes, sha256_file
 from .kicker_roles import verify_kicker_role_resolution
@@ -1407,16 +1408,16 @@ def run_prior_review(
         slate = parse_salaries(salary_path)
         template = parse_entries(entry_path)
         reconcile_template(template, slate)
-        prefilled = [
-            entry.entry_id
-            for entry in template.authorizations
-            if any(entry.existing_cells)
-        ]
-        if prefilled:
+        # Per-row authority (Session 11) replaces the whole-file refusal: prefilled
+        # rows are preserved and seed distinctness, partly filled rows, unresolved
+        # prefilled rosters and unstated groups are named, and only the plan's
+        # fillable blank rows are ever assigned.
+        entry_plan = plan_entries(template, slate)
+        if not entry_plan.fillable:
             raise PriorReviewError(
                 "ENTRY_BLANK_CELL_AUTHORITY_REQUIRED:"
-                f"prefilled_entries={prefilled}:prior_review may assign only exact "
-                "reserved Entry IDs whose roster cells are all blank"
+                f"fillable_entries=[]:rows={list(entry_plan.order)}:prior_review may assign only "
+                "exact reserved Entry IDs whose roster cells are all blank, and the template has none"
             )
     except (OSError, ValueError) as exc:
         return PriorReviewOutcome(
@@ -1469,6 +1470,11 @@ def run_prior_review(
         "contest_names": sorted({entry.contest_name for entry in template.authorizations}),
         "entry_fees": sorted({entry.entry_fee for entry in template.authorizations}),
         "blank_cell_authority": "PASS",
+        "entry_rows": entry_plan.slate_summary(),
+        "entry_findings": [
+            {"code": code, "entry_ids": list(ids), "detail": detail}
+            for code, ids, detail in entry_plan.findings
+        ],
         "appg_policy": "PRESENT_ONLY_IN_HASHED_UNTOUCHED_RAW_SALARY_BYTES",
     }
     stages.append(
@@ -2101,7 +2107,7 @@ def run_prior_review(
     reports["team_splits"] = resolved_splits.as_report()
 
     template = parse_entries(entry_path)
-    entry_ids = [entry.entry_id for entry in template.authorizations]
+    entry_ids = list(entry_plan.fillable)
     requested_count = int(lineup_count) if lineup_count else len(entry_ids)
     if portfolio_policy is None and requested_count < len(entry_ids):
         # Fewer lineups than reserved entries can only be filled by repeating a
@@ -2231,6 +2237,7 @@ def run_prior_review(
                 qb_depth_role_evidence_json=qb_depth_role_evidence_json,
                 as_of=as_of,
                 portfolio_policy=portfolio_policy,
+                forbidden_rosters=entry_plan.forbidden_rosters,
                 **selection_limits,
             )
         if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):

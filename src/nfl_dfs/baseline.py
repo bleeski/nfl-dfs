@@ -10,8 +10,12 @@ than its bytes support:
   and parses only the snapshots;
 - only exact current-slate DraftKings IDs enter it: the salary file's own rows,
   cross-checked against the player table the entries export carries;
-- a Classic/Showdown mismatch, a prefilled row (until Session 11) or any other
-  integrity gate stops the file it protects;
+- a Classic/Showdown mismatch or any other file-scoped integrity gate stops
+  the file it protects;
+- authority is per row (Session 11, `entry_groups.plan_entries`): a prefilled
+  row is preserved byte for byte, a partly filled row, a prefilled roster that
+  does not resolve and a Contest ID group that cannot be stated are left as
+  they are and named, and every other group ships;
 - people DraftKings flags `OUT`, `IR` or `D` leave the pool through
   `contracts.unavailable_people`, exactly as `freeze_prior_package` derives it,
   and so does everyone an operator names by exact DraftKings ID or by an extra
@@ -23,12 +27,15 @@ than its bytes support:
   file only narrows the pool: its freshness and coverage stay certification
   checks, and a row or file it cannot apply is a named limitation;
 - lineups follow the registered `BASELINE_SALARY_RANK_V1` objective, distinct by
-  exact roster (R29), under a per-solve limit and a whole-run budget;
+  exact roster (R29) from each other and from every prefilled roster, under a
+  per-solve limit and a whole-run budget;
 - only blank authorized rows are filled, through `lineups.write_upload_bytes`,
   into a new `DK_BASELINE_ENTRY_V1_<run_id>.csv` (`nfl_baseline_entry_csv_v1`);
 - an independent audit reparses those bytes from disk before they are kept;
-- the run reports `DELIVERY_STATE` with every unfilled Entry ID, beside the four
-  v1 truths (`nfl_release_truths_v2`), and every gap as a registered limitation.
+- the run reports `DELIVERY_STATE` with every unfilled, preserved and
+  unresolved Entry ID, beside the four v1 truths (`nfl_release_truths_v3`),
+  each Contest ID group's rows (`entry_groups`), and every gap as a registered
+  limitation.
 
 The file is legal and byte-audited. It is not certified: `MODEL_STATUS` is
 `PRIOR_ONLY` and `RELEASE_DECISION` is `DO_NOT_UPLOAD`, and a `DELIVERABLE`
@@ -55,7 +62,7 @@ from .contracts import (
     GateClass,
     ModelStatus,
     ReleaseEvidenceState,
-    ReleaseTruthsV2,
+    ReleaseTruthsV3,
     SalaryPlayer,
     SlateContract,
     unavailable_people,
@@ -71,18 +78,20 @@ from .dk import (
     parse_entry_bytes,
     parse_salaries,
     reconcile_template,
-    single_contest_problems,
 )
+from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
 from .gate_registry import GateRegistry, load_gate_registry
 from .hashing import sha256_bytes, sha256_file
-from .lineups import validate_lineup, write_upload_bytes
+from .lineups import roster_canonical_key, validate_lineup, write_upload_bytes
 from .optimizer import LineupOptimizer
 from .referee import audit_output_bytes
-from .release import derive_delivery_state, derive_release_policy, release_truths_v2
+from .release import derive_delivery_state, derive_release_policy, release_truths_v3
 
 # v2 (Session 06b): v1 plus the operator and official exclusions in `pool` and
 # the official status file in `inputs`; v1 reports stay readable as written.
-REPORT_VERSION = "nfl_baseline_report_v2"
+# v3 (Session 11): `slate` names every row by kind and outcome, `entry_groups`
+# reports each Contest ID, and `release_truths` is `nfl_release_truths_v3`.
+REPORT_VERSION = "nfl_baseline_report_v3"
 OUTPUT_CONTRACT = "nfl_baseline_entry_csv_v1"
 OUTPUT_PREFIX = "DK_BASELINE_ENTRY_V1_"
 OBJECTIVE_VERSION = "BASELINE_SALARY_RANK_V1"
@@ -181,7 +190,7 @@ class BaselineOutcome:
     report_path: Path | None
     output_path: Path | None
     output_sha256: str | None
-    truths: ReleaseTruthsV2
+    truths: ReleaseTruthsV3
     assignments: Mapping[str, tuple[str, ...]]
     report: Mapping[str, object]
 
@@ -202,12 +211,15 @@ def build_distinct_lineups(
     per_solve_seconds: float,
     deadline: float,
     clock: Callable[[], float],
+    forbidden_rosters: Iterable[tuple[str, ...]] = (),
 ) -> BuildResult:
     """Up to `count` distinct legal lineups in `BASELINE_SALARY_RANK_V1` order.
 
     The clock is read once per solve, against `deadline`. A lineup is kept only
     if the shared validator passes it and its exact roster is new (R29); an exact
-    no-good cut then removes it from every later solve.
+    no-good cut then removes it from every later solve. `forbidden_rosters`
+    (Session 11) are the template's prefilled rosters: each is cut before the
+    first solve, so no lineup built here repeats one.
     """
 
     if count <= 0:
@@ -219,6 +231,9 @@ def build_distinct_lineups(
     zero = dict.fromkeys(by_salary, 0.0)
     built: list[BuiltLineup] = []
     seen: set[str] = set()
+    for roster in forbidden_rosters:
+        seen.add(roster_canonical_key(slate, roster))
+        optimizer.add_no_good(roster)
     levels: list[int] = []
     solves = 0
     limited = False  # once a solve stops at its limit, the order after it is unproven
@@ -354,13 +369,21 @@ def audit_baseline_bytes(
 
     Independent of the build: both snapshots are parsed afresh, the exclusion
     sets are re-derived from the salary bytes and the operator's exact IDs and
-    statuses, the byte audit compares every line against the template, and the
-    reparsed rows are validated again.
+    statuses, the byte audit compares every line against the template (every
+    row outside `assignments`, prefilled rows included, byte for byte), and the
+    reparsed rows are validated again. Only rows the template's own plan calls
+    fillable may be filled, and no filled roster may repeat a prefilled one
+    (`ENTRY_PREFILLED_LINEUP_REPEATED`, on the generated row).
     """
 
     problems: list[str] = []
     slate = parse_salaries(salary_path)
     source = parse_entries(entries_path)
+    reconcile_template(source, slate)
+    plan = plan_entries(source, slate)
+    not_fillable = sorted(set(assignments) - set(plan.fillable))
+    if not_fillable:
+        problems.append(f"ENTRY_AUTHORIZATION_MISMATCH:rows {not_fillable} are not fillable blank rows")
     byte_audit = audit_output_bytes(entries_path, raw, source, assignments)
     if not byte_audit.valid:
         problems.extend(f"BYTE_AUDIT:{problem}" for problem in byte_audit.problems)
@@ -372,8 +395,11 @@ def audit_baseline_bytes(
         return problems
     if [e.entry_id for e in reparsed.authorizations] != [e.entry_id for e in source.authorizations]:
         problems.append("BASELINE_AUDIT_ENTRY_ORDER_MISMATCH:the reparsed Entry IDs differ from the template's")
-    filled = {e.entry_id: e.existing_cells for e in reparsed.authorizations if any(e.existing_cells)}
-    blank = {e.entry_id for e in reparsed.authorizations if not any(e.existing_cells)}
+    source_blank = set(blank_entry_ids(source))
+    filled = {e.entry_id: e.existing_cells for e in reparsed.authorizations
+              if e.entry_id in source_blank and any(e.existing_cells)}
+    blank = {e.entry_id for e in reparsed.authorizations
+             if e.entry_id in source_blank and not any(e.existing_cells)}
     if filled != dict(assignments) or blank != set(unfilled):
         problems.append("REPARSE_ASSIGNMENT_MISMATCH:the reparsed rows are not the assigned and unfilled rows")
     by_id = {player.dk_id: player for player in slate.players}
@@ -393,6 +419,8 @@ def audit_baseline_bytes(
             continue
         if result.lineup.canonical_key in keys:
             problems.append(f"BASELINE_AUDIT_DUPLICATE_LINEUP:{entry_id}")
+        if result.lineup.canonical_key in plan.forbidden_keys:
+            problems.append(f"ENTRY_PREFILLED_LINEUP_REPEATED:{entry_id}")
         keys.add(result.lineup.canonical_key)
         people = {by_id[dk_id].underlying_id for dk_id in roster}
         if unavailable & people:
@@ -572,15 +600,13 @@ def run_baseline(
                    " salary file; they were never candidates"))
     else:
         cross_check = "PASS"
-    prefilled = tuple(e.entry_id for e in template.authorizations if any(e.existing_cells))
-    authorized = tuple(e.entry_id for e in template.authorizations if not any(e.existing_cells))
-    if prefilled:
-        limitations.append(registry.limitation(
-            "ENTRY_BLANK_CELL_AUTHORITY_REQUIRED", entry_ids=prefilled,
-            detail="the template has prefilled rows; the baseline fills only a template whose authorized"
-                   " rows are all blank, as prior_review does, until Session 11"))
-    for problem in single_contest_problems(template):
-        limitations.append(registry.limitation(_code(problem, "INTAKE_FAILED"), detail=problem))
+    # Per-row authority (Session 11): prefilled rows are preserved, partly filled
+    # rows, unresolved prefilled rosters and unstated groups are named, and only
+    # the plan's fillable blank rows are ever filled. Several contests and fees
+    # are groups now, not a limitation.
+    plan = plan_entries(template, slate)
+    limitations.extend(plan.limitations(registry))
+    authorized = plan.fillable
     exclusion_ids = tuple(str(value).strip() for value in operator_excluded_dk_ids if str(value).strip())
     exclusion_statuses = tuple(
         str(value).strip().upper() for value in extra_unavailable_statuses if str(value).strip())
@@ -629,10 +655,8 @@ def run_baseline(
         "salary_rows": len(slate.players),
         "games": [game.game_id for game in slate.games],
         "earliest_lock_at": earliest_lock.isoformat(),
-        "entry_rows": len(template.authorizations),
+        **plan.slate_summary(),
         "blank_authorized_rows": len(authorized),
-        "prefilled_rows": list(prefilled),
-        "contest_ids": sorted({e.contest_id for e in template.authorizations}),
     }
     report["pool"] = {
         "availability_contract": "contracts.unavailable_people",
@@ -649,9 +673,11 @@ def run_baseline(
         "eligible_salary_rows": len(slate.players) - len(excluded_ids),
         "entry_pool_cross_check": cross_check,
     }
-    if any(item.gate_class is GateClass.V for item in limitations):
+    scoped = set(authorized) | set(plan.unresolved)
+    if any(item.gate_class is GateClass.V and not (item.entry_ids and set(item.entry_ids) <= scoped)
+           for item in limitations):
         return _finish(report, registry, limitations, run_dir=run_dir, authorized=authorized,
-                       wall_start=wall_start)
+                       plan=plan, wall_start=wall_start)
 
     built = build_distinct_lineups(
         slate,
@@ -660,6 +686,7 @@ def run_baseline(
         per_solve_seconds=per_solve_seconds,
         deadline=started + budget_seconds,
         clock=clock,
+        forbidden_rosters=plan.forbidden_rosters,
     )
     assignments = {entry_id: lineup.roster for entry_id, lineup in zip(authorized, built.lineups)}
     unfilled = authorized[len(assignments):]
@@ -685,7 +712,8 @@ def run_baseline(
         limitations.append(registry.limitation(
             "BASELINE_DISTINCT_LINEUPS_EXHAUSTED", entry_ids=unfilled,
             detail=f"{detail}: the pool left after {len(excluded_people)} unavailable people holds no"
-                   " other legal lineup, and R29 never repeats one"))
+                   f" other legal lineup distinct from the {len(plan.forbidden_rosters)} prefilled"
+                   " rosters, and R29 never repeats one"))
     elif built.stop_reason == "BUDGET_EXHAUSTED":
         limitations.append(registry.limitation(
             "BASELINE_RUN_BUDGET_EXHAUSTED", detail=f"{detail} inside the {budget_seconds} s run budget"))
@@ -703,20 +731,21 @@ def run_baseline(
             detail=f"{detail}; the solver returned an exact roster already chosen, which R29 refuses"))
     if not assignments:
         return _finish(report, registry, limitations, run_dir=run_dir, authorized=authorized,
-                       wall_start=wall_start)
+                       plan=plan, wall_start=wall_start)
 
     output = run_dir / f"{OUTPUT_PREFIX}{run_id}.csv"
+    left_blank = tuple(eid for eid in plan.order if eid in set(unfilled) | set(plan.left_blank))
     written = _write_audited(
         output, template=template, salary_path=salary_path, entries_path=entries_path,
-        salary_hash=salary_hash, assignments=assignments, unfilled=unfilled, registry=registry,
+        salary_hash=salary_hash, assignments=assignments, unfilled=left_blank, registry=registry,
         limitations=limitations, report=report,
         exclusions={"operator_excluded_dk_ids": exclusion_ids,
                     "extra_unavailable_statuses": exclusion_statuses,
                     "official_status_csv": status_snapshot[0] if status_snapshot else None},
         status_hash=status_snapshot[1] if status_snapshot else None)
     return _finish(report, registry, limitations, run_dir=run_dir, authorized=authorized,
-                   assignments=assignments if written else {}, output=output if written else None,
-                   wall_start=wall_start)
+                   plan=plan, assignments=assignments if written else {},
+                   output=output if written else None, wall_start=wall_start)
 
 
 def _write_audited(
@@ -822,7 +851,7 @@ def _audit_and_keep(
         "bytes": len(on_disk),
         "contract_version": OUTPUT_CONTRACT,
         "filled_rows": len(assignments),
-        "unfilled_rows": list(unfilled),
+        "unfilled_rows": list(unfilled),  # every blank row left blank, an unresolved group's included
     }
     return True
 
@@ -835,6 +864,7 @@ def _finish(
     run_dir: Path,
     wall_start: float,
     authorized: tuple[str, ...] = (),
+    plan: EntryPlan | None = None,
     assignments: Mapping[str, tuple[str, ...]] | None = None,
     output: Path | None = None,
     write_report: bool = True,
@@ -885,9 +915,15 @@ def _finish(
         authorized_entry_ids=authorized,
         delivered_entry_ids=tuple(assignments) if file_valid else (),
         limitations=limitations,
+        preserved_entry_ids=plan.preserved if plan is not None else (),
+        unresolved_entry_ids=plan.unresolved if plan is not None else (),
     )
-    truths = release_truths_v2(policy, delivery)
+    truths = release_truths_v3(policy, delivery)
     report["release_truths"] = truths.model_dump(mode="json", by_alias=True)
+    report["entry_groups"] = (
+        group_report(plan, delivered=truths.delivered_entry_ids, unfilled=truths.unfilled_entry_ids,
+                     limitations=truths.delivery_limitations)
+        if plan is not None else [])
     report["status"] = policy.status
     report.setdefault("output", None)
     report["timing"] = {"wall_seconds": round(time.perf_counter() - wall_start, 3)}
@@ -923,6 +959,9 @@ def summary(outcome: BaselineOutcome) -> dict[str, object]:
         "baseline_entry_sha256": outcome.output_sha256,
         "delivered_rows": len(truths.delivered_entry_ids),
         "unfilled_entry_ids": list(truths.unfilled_entry_ids),
+        "preserved_entry_ids": list(truths.preserved_entry_ids),
+        "unresolved_entry_ids": list(truths.unresolved_entry_ids),
+        "entry_groups": list(outcome.report.get("entry_groups") or []),
         "limitations": [
             {"code": item.code, "class": item.gate_class.value, "stops": item.stops.value,
              "entry_ids": list(item.entry_ids), "detail": item.detail}

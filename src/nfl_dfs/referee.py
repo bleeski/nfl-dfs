@@ -52,6 +52,9 @@ def audit_output_bytes(
                 problems.append(f"line {line_number}: unauthorized bytes changed")
             continue
         seen.add(source_id)
+        if any(cell.strip() for cell in source_row[roster_start:roster_end]):
+            # Blank-cell authority (Session 11): only an all-blank row is ever written.
+            problems.append(f"line {line_number}: a prefilled roster cell was written")
         try:
             source_spans = csv_field_spans(source_body)
             output_spans = csv_field_spans(output_body)

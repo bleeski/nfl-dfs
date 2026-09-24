@@ -967,7 +967,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "4ec6b604ad71ef2e16c72b6c6477f1f4367d35a1f3acd8f9e8a004c9fc8dae95"
+REGISTRY_SHA256 = "214c1898cc15412c14767b512bd13c5792a3a5f66d5e910e97ef26693c123855"
 
 
 def test_the_registry_is_the_pinned_bytes():
@@ -1136,9 +1136,12 @@ AUDIT_SECTION_4 = [
     ("replacing prefilled or locked cells without authority", {"V"},
      ["CLASSIC_C3_EXPORT_PREFILLED_AUTHORIZED_ENTRY", "ENTRY_BLANK_CELL_AUTHORITY_REQUIRED",
       "PRIOR_OUTPUT_CHANGED_DURING_LATE_SWAP"]),
+    # Session 11: a partly filled row, or a prefilled roster that does not resolve,
+    # is preserved and named per row (P) instead of refusing the file.
     ("single contest, single fee, mixed prefilled and blank rows", {"P"},
      ["MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED", "MIXED_ENTRY_FEES_UNSUPPORTED",
-      "CURRENT_TEMPLATE_MUST_CONTAIN_ONE_CONTEST_ID", "CURRENT_TEMPLATE_MUST_BE_FULLY_PREFILLED"]),
+      "CURRENT_TEMPLATE_MUST_CONTAIN_ONE_CONTEST_ID", "CURRENT_TEMPLATE_MUST_BE_FULLY_PREFILLED",
+      "ENTRY_ROW_PARTLY_PREFILLED", "ENTRY_PREFILLED_ROSTER_UNRESOLVED"]),
     ("prohibited DraftKings automation or upload artifact", {"V"},
      ["CLASSIC_C3_DK_UPLOAD_ARTIFACT_PROHIBITED", "CLASSIC_C3_DK_UPLOAD_NAME_PROHIBITED"]),
     ("approved-source refusal: optional data is omitted, the boundary holds", {"P"},

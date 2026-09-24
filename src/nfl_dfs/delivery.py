@@ -1,15 +1,17 @@
 """The latest deliverable (Session 05, R28): the one validated file a run would hand over.
 
-`LATEST_DELIVERABLE.json` (`nfl_latest_deliverable_v1` in `docs/DATA_CONTRACTS.md`)
-sits in a run's output folder and names one entry file inside that folder: its
-path, SHA-256, the salary and entries snapshots it was built from, its Entry ID
-coverage and its `nfl_release_truths_v2`. Nothing advertises the file until
+`LATEST_DELIVERABLE.json` (`nfl_latest_deliverable_v2` in `docs/DATA_CONTRACTS.md`;
+v1 pointers stay readable) sits in a run's output folder and names one entry
+file inside that folder: its path, SHA-256, the salary and entries snapshots it
+was built from, its Entry ID coverage by row and by Contest ID group, and its
+`nfl_release_truths_v3`. Nothing advertises the file until
 `revalidate` has passed the bytes on disk, and `read_latest` revalidates again
 before it returns, so the pointer never vouches for bytes nobody just checked.
 
 - `publish` writes a run's first pointer.
 - `replace` swaps it for a file of the same two inputs whose coverage is equal
-  or better (Session 06: the baseline first, then an improvement).
+  or better in every Contest ID group (Session 06: the baseline first, then an
+  improvement; Session 11: per group, not a count).
 - `read_latest` reads it back and revalidates the file it names.
 
 Every write is atomic: the bytes go to a temporary file in the same folder, are
@@ -19,7 +21,9 @@ old pointer or the new one and never part of either.
 Revalidation is independent of whoever built the file. Both snapshots are
 parsed afresh, and the checks are the integrity gates `CLAUDE.md` names (exact
 DraftKings IDs, hashes, entry mapping, blank-cell authority, Classic/Showdown
-mode) plus R29 distinctness. It judges no evidence, model or policy; the truths
+mode) plus R29 distinctness, prefilled rosters included, and per-row authority:
+only the template's fillable blank rows may differ from it (Session 11). It
+judges no evidence, model or policy; the truths
 the pointer carries do that, and `RELEASE_DECISION` stays what they say.
 
 `discrepancy_limitations` and `blocker_limitations` turn codes into registry
@@ -40,15 +44,19 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .contracts import DeliveryLimitation, DeliveryState, GateClass, ReleaseTruthsV2
+from .contracts import DeliveryLimitation, DeliveryState, GateClass, ReleaseTruthsV2, ReleaseTruthsV3
 from .dk import parse_entries, parse_entry_bytes, parse_salaries, reconcile_template
+from .entry_groups import EntryPlan, group_coverage, group_report, plan_entries
 from .gate_registry import GateRegistry
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup
 from .referee import audit_output_bytes
 
 POINTER_NAME = "LATEST_DELIVERABLE.json"
-POINTER_VERSION = "nfl_latest_deliverable_v1"
+# v2 (Session 11): `coverage` adds preserved and unresolved rows and each
+# Contest ID group, `release_truths` is v3, and `supersedes` adds group coverage.
+POINTER_VERSION = "nfl_latest_deliverable_v2"
+POINTER_V1 = "nfl_latest_deliverable_v1"
 UPLOAD_PREFIX = "DK_UPLOAD_"
 CHECKS_RUN = (
     "NAME_NOT_UPLOAD_SHAPED_AND_INSIDE_THE_RUN_FOLDER",
@@ -62,6 +70,9 @@ CHECKS_RUN = (
     "BYTE_AUDIT_AGAINST_THE_TEMPLATE",
     "SHARED_VALIDATOR_ON_EVERY_FILLED_ROW",
     "EXACT_ROSTER_DISTINCTNESS",
+    "ONLY_FILLABLE_ROWS_FILLED",
+    "PRESERVED_AND_UNRESOLVED_ROWS_EQUAL_THE_TRUTHS",
+    "NO_FILLED_ROW_REPEATS_A_PREFILLED_ROSTER",
 )
 WARNING = (
     "PRIOR_ONLY / DO_NOT_UPLOAD unless RELEASE_DECISION says otherwise. DELIVERY_STATE "
@@ -95,7 +106,7 @@ class Deliverable:
     salary_sha256: str
     entry_path: Path
     entry_sha256: str
-    truths: ReleaseTruthsV2
+    truths: ReleaseTruthsV3 | ReleaseTruthsV2  # v2 only from a v1 pointer read back
 
 
 @dataclass(frozen=True)
@@ -119,6 +130,9 @@ class LatestDeliverable:
             "DELIVERY_STATE": truths.delivery_state.value,
             "delivered_rows": len(truths.delivered_entry_ids),
             "unfilled_entry_ids": list(truths.unfilled_entry_ids),
+            "preserved_entry_ids": list(truths.preserved_entry_ids),
+            "unresolved_entry_ids": list(truths.unresolved_entry_ids),
+            "entry_groups": list((self.record.get("coverage") or {}).get("entry_groups") or []),
         }
 
 
@@ -184,10 +198,10 @@ def _revalidate(item: Deliverable, root: Path, problems: list[str]) -> None:
     if [entry.entry_id for entry in reparsed.authorizations] != order:
         problems.append("DELIVERABLE_ENTRY_ORDER_MISMATCH:the file's Entry IDs are not the template's, in its order")
         return
-    authorized = [entry.entry_id for entry in template.authorizations if not any(entry.existing_cells)]
+    plan = plan_entries(template, slate)
     rows = {entry.entry_id: entry.existing_cells for entry in reparsed.authorizations}
-    filled = {eid: rows[eid] for eid in authorized if any(rows[eid])}
-    blank = tuple(eid for eid in authorized if not any(rows[eid]))
+    filled = {eid: rows[eid] for eid in plan.fillable if any(rows[eid])}
+    blank = tuple(eid for eid in plan.fillable if not any(rows[eid]))
     if (
         tuple(truths.delivered_entry_ids) != tuple(filled)
         or tuple(truths.unfilled_entry_ids) != blank
@@ -197,6 +211,17 @@ def _revalidate(item: Deliverable, root: Path, problems: list[str]) -> None:
             f"{list(filled)} and leaves {list(blank)} blank, the truths say "
             f"{list(truths.delivered_entry_ids)} and {list(truths.unfilled_entry_ids)}"
         )
+    if (
+        tuple(truths.preserved_entry_ids) != plan.preserved
+        or tuple(truths.unresolved_entry_ids) != plan.unresolved
+    ):
+        problems.append(
+            "DELIVERABLE_COVERAGE_MISMATCH:the template preserves "
+            f"{list(plan.preserved)} and leaves {list(plan.unresolved)} unresolved, the truths say "
+            f"{list(truths.preserved_entry_ids)} and {list(truths.unresolved_entry_ids)}"
+        )
+    # Every row outside `filled` (prefilled, partly filled, an unresolved
+    # group's blank rows) must be the template's bytes exactly.
     audit = audit_output_bytes(item.entry_path, raw, template, filled)
     problems.extend(f"DELIVERABLE_BYTE_AUDIT_FAILED:{problem}" for problem in audit.problems)
     keys: dict[str, str] = {}
@@ -208,6 +233,25 @@ def _revalidate(item: Deliverable, root: Path, problems: list[str]) -> None:
         earlier = keys.setdefault(result.lineup.canonical_key, entry_id)
         if earlier != entry_id:
             problems.append(f"DELIVERABLE_LINEUP_DUPLICATE:{entry_id} repeats {earlier}")
+        if result.lineup.canonical_key in plan.forbidden_keys:
+            problems.append(f"DELIVERABLE_LINEUP_DUPLICATE:{entry_id} repeats a prefilled roster")
+
+
+def _plan(item: Deliverable) -> EntryPlan:
+    template = parse_entries(item.entry_path)
+    slate = parse_salaries(item.salary_path)
+    reconcile_template(template, slate)
+    return plan_entries(template, slate)
+
+
+def as_v3(truths: ReleaseTruthsV3 | ReleaseTruthsV2) -> ReleaseTruthsV3:
+    """v2 truths as v3: v2 predates preserved rows, so it has none and nothing unresolved."""
+
+    if isinstance(truths, ReleaseTruthsV3):
+        return truths
+    return ReleaseTruthsV3.model_validate({
+        **truths.model_dump(mode="json", by_alias=True), "schema_version": "nfl_release_truths_v3",
+        "preserved_entry_ids": [], "unresolved_entry_ids": []})
 
 
 def _canonical(record: Mapping[str, object]) -> bytes:
@@ -255,8 +299,13 @@ def _record(
         "coverage": {
             "delivered_entry_ids": list(truths.delivered_entry_ids),
             "unfilled_entry_ids": list(truths.unfilled_entry_ids),
+            "preserved_entry_ids": list(truths.preserved_entry_ids),
+            "unresolved_entry_ids": list(truths.unresolved_entry_ids),
+            "entry_groups": group_report(
+                _plan(item), delivered=truths.delivered_entry_ids,
+                unfilled=truths.unfilled_entry_ids, limitations=truths.delivery_limitations),
         },
-        "release_truths": truths.model_dump(mode="json", by_alias=True),
+        "release_truths": as_v3(truths).model_dump(mode="json", by_alias=True),
         "revalidation": {"status": "PASS", "checks_run": list(CHECKS_RUN)},
         "supersedes": dict(supersedes) if supersedes is not None else None,
         "warning": WARNING,
@@ -298,8 +347,10 @@ def _load(root: Path) -> tuple[Path, bytes, dict[str, object], Deliverable] | No
         record = json.loads(raw.decode("utf-8"))
         if not isinstance(record, dict) or set(record) != _FIELDS:
             raise ValueError(f"fields {sorted(record) if isinstance(record, dict) else type(record).__name__}")
-        if record["schema_version"] != POINTER_VERSION:
+        if record["schema_version"] not in (POINTER_VERSION, POINTER_V1):
             raise ValueError(f"schema_version {record['schema_version']!r}")
+        # A v1 pointer (before Session 11) carries v2 truths and no preserved rows.
+        truths_model = ReleaseTruthsV3 if record["schema_version"] == POINTER_VERSION else ReleaseTruthsV2
         file, inputs = record["file"], record["inputs"]
         relative = Path(str(file["path"]))
         if relative.is_absolute() or ".." in relative.parts:
@@ -314,7 +365,7 @@ def _load(root: Path) -> tuple[Path, bytes, dict[str, object], Deliverable] | No
             salary_sha256=str(inputs["salaries"]["sha256"]),
             entry_path=Path(str(inputs["entries"]["path"])),
             entry_sha256=str(inputs["entries"]["sha256"]),
-            truths=ReleaseTruthsV2.model_validate(record["release_truths"]),
+            truths=truths_model.model_validate(record["release_truths"]),
         )
     except (UnicodeDecodeError, ValueError, KeyError, TypeError, ValidationError) as exc:
         raise DeliveryPointerError(f"DELIVERY_POINTER_INVALID:{pointer}:{type(exc).__name__}:{exc}") from exc
@@ -341,11 +392,12 @@ def read_latest(root: str | Path, *, run_id: str | None = None) -> LatestDeliver
 
 
 def replace(root: str | Path, item: Deliverable, *, now: datetime | None = None) -> LatestDeliverable:
-    """Point at `item` instead: same inputs, and at least as many delivered rows.
+    """Point at `item` instead: same inputs, and at least as many delivered rows in every group.
 
     A current file that no longer revalidates is replaced by any file that does,
     whatever its coverage; a current file that does is replaced only by one that
-    delivers as many rows or more.
+    delivers as many rows or more in every Contest ID group (Session 11), so a
+    higher total never buys a lost group.
     """
 
     base = Path(root).resolve()
@@ -358,15 +410,24 @@ def replace(root: str | Path, item: Deliverable, *, now: datetime | None = None)
                                    "salary or entries bytes than the file it would replace")
     current_problems = revalidate(current, root=base)
     have = len(current.truths.delivered_entry_ids)
-    offered = len(item.truths.delivered_entry_ids)
-    if not current_problems and offered < have:
-        raise DeliveryPointerError(f"DELIVERY_POINTER_COVERAGE_REGRESSION:the replacement delivers "
-                                   f"{offered} rows, the current file {have}")
+    by_group: dict[str, int] = {}
+    if not current_problems:
+        plan = _plan(current)
+        by_group = group_coverage(plan, current.truths.delivered_entry_ids)
+        offered = group_coverage(plan, item.truths.delivered_entry_ids)
+        short = [f"Contest ID {cid}: {offered[cid]} of the current {rows}"
+                 for cid, rows in by_group.items() if offered[cid] < rows]
+        if short:
+            raise DeliveryPointerError(
+                "DELIVERY_POINTER_COVERAGE_REGRESSION:the replacement delivers fewer rows in "
+                f"{'; '.join(short)} (it delivers {len(item.truths.delivered_entry_ids)} in all, "
+                f"the current file {have})")
     supersedes = {
         "pointer_sha256": sha256_bytes(raw),
         "file_sha256": current.sha256,
         "producer": current.producer,
         "delivered_rows": have,
+        "delivered_rows_by_group": by_group,
         "revalidation": "FAIL" if current_problems else "PASS",
         "problems": list(current_problems),
     }

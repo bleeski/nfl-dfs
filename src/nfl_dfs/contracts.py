@@ -799,37 +799,55 @@ def _check_delivery(
     delivered: tuple[str, ...],
     unfilled: tuple[str, ...],
     limitations: tuple[DeliveryLimitation, ...],
+    preserved: tuple[str, ...] = (),
+    unresolved: tuple[str, ...] = (),
 ) -> None:
-    """The invariants every delivery record keeps, however it was built."""
+    """The invariants every delivery record keeps, however it was built.
 
-    for label, ids in (("delivered", delivered), ("unfilled", unfilled)):
+    Since Session 11 a row is delivered, unfilled, preserved (a prefilled row
+    kept byte for byte) or unresolved (named by a limitation of any class),
+    never two; a `V` gate that names only rows scopes to them.
+    """
+
+    lists = (("delivered", delivered), ("unfilled", unfilled), ("preserved", preserved),
+             ("unresolved", unresolved))
+    for label, ids in lists:
         if any(not eid.strip() for eid in ids):
             raise ValueError(f"a blank {label} Entry ID names no row")
         if len(set(ids)) != len(ids):
             raise ValueError(f"a repeated {label} Entry ID: {sorted({e for e in ids if ids.count(e) > 1})}")
+    for index, (label, ids) in enumerate(lists):
+        for other, more in lists[index + 1:]:
+            if set(ids) & set(more):
+                raise ValueError(f"rows both {label} and {other}: {sorted(set(ids) & set(more))}")
     if not delivered_file_valid and state is not DeliveryState.NO_DELIVERABLE:
         raise ValueError("delivered_file_valid is false, so nothing can be delivered")
-    if set(delivered) & set(unfilled):
-        raise ValueError(f"rows both delivered and unfilled: {sorted(set(delivered) & set(unfilled))}")
     integrity = [item for item in limitations if item.gate_class is GateClass.V]
     blocked = {eid for item in integrity for eid in item.entry_ids}
     if blocked & set(delivered):
         raise ValueError(f"delivered rows an integrity gate blocks: {sorted(blocked & set(delivered))}")
+    named = {eid for item in limitations for eid in item.entry_ids}
+    unnamed_unresolved = [eid for eid in unresolved if eid not in named]
+    if unnamed_unresolved:
+        raise ValueError(f"every unresolved row needs a limitation naming it: {unnamed_unresolved}")
     if state is DeliveryState.DELIVERABLE:
-        if not delivered or unfilled or integrity:
+        if not delivered or unfilled or unresolved or integrity:
             raise ValueError(
-                "a DELIVERABLE record needs at least one delivered row, no unfilled "
-                "row and no integrity (V) limitation"
+                "a DELIVERABLE record needs at least one delivered row, no unfilled or "
+                "unresolved row and no integrity (V) limitation"
             )
     elif state is DeliveryState.DELIVERABLE_PARTIAL:
-        if not delivered or not unfilled:
-            raise ValueError("a DELIVERABLE_PARTIAL record needs delivered rows and unfilled rows")
+        if not delivered or not (unfilled or unresolved):
+            raise ValueError(
+                "a DELIVERABLE_PARTIAL record needs delivered rows and unfilled or unresolved rows")
         if any(not item.entry_ids for item in integrity):
             raise ValueError("a DELIVERABLE_PARTIAL record cannot carry a file-wide integrity gate")
-        outside = sorted(blocked - set(unfilled))
+        outside = sorted(blocked - set(unfilled) - set(unresolved))
         if outside:
             # The derivation treats such a gate as covering the whole file.
-            raise ValueError(f"a DELIVERABLE_PARTIAL record's integrity gates name only unfilled rows: {outside}")
+            raise ValueError(
+                "a DELIVERABLE_PARTIAL record's integrity gates name only unfilled or "
+                f"unresolved rows: {outside}")
         unnamed = [eid for eid in unfilled if eid not in blocked]
         if unnamed:
             raise ValueError(f"every unfilled row needs a V limitation naming it: {unnamed}")
@@ -845,11 +863,14 @@ class DeliveryTruth(FrozenModel):
     delivery_limitations: tuple[DeliveryLimitation, ...] = ()
     delivered_entry_ids: tuple[str, ...] = ()
     unfilled_entry_ids: tuple[str, ...] = ()
+    preserved_entry_ids: tuple[str, ...] = ()
+    unresolved_entry_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def coverage_matches_state(self) -> "DeliveryTruth":
         _check_delivery(self.delivery_state, self.delivered_file_valid, self.delivered_entry_ids,
-                        self.unfilled_entry_ids, self.delivery_limitations)
+                        self.unfilled_entry_ids, self.delivery_limitations,
+                        self.preserved_entry_ids, self.unresolved_entry_ids)
         return self
 
 
@@ -877,6 +898,52 @@ class ReleaseTruthsV2(FrozenModel):
     def truths_agree(self) -> "ReleaseTruthsV2":
         _check_delivery(self.delivery_state, self.delivered_file_valid, self.delivered_entry_ids,
                         self.unfilled_entry_ids, self.delivery_limitations)
+        if (
+            self.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE
+            and self.delivery_state is not DeliveryState.DELIVERABLE
+        ):
+            raise ValueError("a CERTIFIED_UPLOAD_PACKAGE requires DELIVERY_STATE=DELIVERABLE")
+        return self
+
+    @property
+    def preserved_entry_ids(self) -> tuple[str, ...]:
+        """v2 predates preserved rows: every row it describes was blank."""
+
+        return ()
+
+    @property
+    def unresolved_entry_ids(self) -> tuple[str, ...]:
+        return ()
+
+
+class ReleaseTruthsV3(FrozenModel):
+    """`nfl_release_truths_v3` (Session 11): v2 plus preserved and unresolved rows.
+
+    A template may hold prefilled rows now. A preserved row is a prefilled row
+    kept byte for byte whose roster resolves; an unresolved row is one the
+    engine left as it was and names (a partly filled row, a prefilled roster
+    that does not resolve, a group it cannot state). Neither is delivered or
+    unfilled, and an unresolved row keeps `DELIVERY_STATE` below `DELIVERABLE`.
+    """
+
+    schema_version: Literal["nfl_release_truths_v3"] = "nfl_release_truths_v3"
+    file_valid: bool = Field(alias="FILE_VALID")
+    evidence_state: ReleaseEvidenceState = Field(alias="EVIDENCE_STATE")
+    model_status: ModelStatus = Field(alias="MODEL_STATUS")
+    release_decision: ReleaseDecision = Field(alias="RELEASE_DECISION")
+    delivery_state: DeliveryState = Field(alias="DELIVERY_STATE")
+    delivered_file_valid: bool
+    delivery_limitations: tuple[DeliveryLimitation, ...] = ()
+    delivered_entry_ids: tuple[str, ...] = ()
+    unfilled_entry_ids: tuple[str, ...] = ()
+    preserved_entry_ids: tuple[str, ...] = ()
+    unresolved_entry_ids: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def truths_agree(self) -> "ReleaseTruthsV3":
+        _check_delivery(self.delivery_state, self.delivered_file_valid, self.delivered_entry_ids,
+                        self.unfilled_entry_ids, self.delivery_limitations,
+                        self.preserved_entry_ids, self.unresolved_entry_ids)
         if (
             self.release_decision is ReleaseDecision.CERTIFIED_UPLOAD_PACKAGE
             and self.delivery_state is not DeliveryState.DELIVERABLE

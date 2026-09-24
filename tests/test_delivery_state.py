@@ -342,7 +342,9 @@ def test_a_limitation_names_the_people_it_affects():
 
 def test_derivation_takes_no_model_or_evidence_input():
     params = set(inspect.signature(derive_delivery_state).parameters)
-    assert params == {"file_valid", "authorized_entry_ids", "delivered_entry_ids", "limitations"}
+    # Session 11 added the template's other rows; still no model or evidence input.
+    assert params == {"file_valid", "authorized_entry_ids", "delivered_entry_ids", "limitations",
+                      "preserved_entry_ids", "unresolved_entry_ids"}
 
 
 @pytest.mark.parametrize("evidence", list(ReleaseEvidenceState))
