@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 import traceback
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -18,6 +18,9 @@ from typing import Iterable, Mapping
 import numpy as np
 
 from .baseline import DEFAULT_BUDGET_SECONDS, DEFAULT_PER_SOLVE_SECONDS, run_baseline
+from .baseline import OBJECTIVE_VERSION as BASELINE_OBJECTIVE_VERSION
+from .baseline import OUTPUT_CONTRACT as BASELINE_OUTPUT_CONTRACT
+from .baseline import BaselineOutcome, audit_baseline_bytes
 from .baseline import summary as baseline_summary
 from .certification import certify_upload
 from .classic_review import ClassicReviewError
@@ -64,6 +67,7 @@ from .dk import (
     single_contest_problems,
 )
 from .delivery import (
+    POINTER_NAME,
     Deliverable,
     DeliveryPointerError,
     LatestDeliverable,
@@ -71,15 +75,16 @@ from .delivery import (
     discrepancy_limitations,
     publish as publish_deliverable,
     read_latest as read_latest_deliverable,
+    replace as replace_deliverable,
     withholds,
 )
 from .economics import evaluate_candidates_against_field
 from .evidence import EvidenceError, parse_official_inactive_snapshot, source_ledger_evidence
 from .field import generate_opponent_field, scale_field_multiplicities
-from .hashing import content_hash, sha256_file
+from .hashing import content_hash, sha256_bytes, sha256_file
 from .late_swap import LateSwapRunError, govern_late_swap
 from .learning import evaluate_challenger, should_rollback
-from .lineups import read_assignment_csv, validate_lineup
+from .lineups import read_assignment_csv, validate_lineup, write_upload_bytes
 from .metric_registry import (
     load_metric_registry,
     require_registry_precedes_evaluation,
@@ -2500,8 +2505,8 @@ def _review_release_truths(
     if outcome.file_valid and not has_csv:
         limitations.append(registry.limitation(
             "PROFILE_WRITES_NO_ENTRY_FILE",
-            detail="Classic C1 and C2 write review JSON only, so there is no entry file to "
-                   "hand over; Session 06 gives C1 the baseline"))
+            detail="the run's own review wrote no entry file to hand over; the baseline, when "
+                   "it was published, stays the deliverable"))
     delivery = derive_delivery_state(
         file_valid=has_csv,
         authorized_entry_ids=authorized,
@@ -2509,6 +2514,278 @@ def _review_release_truths(
         limitations=limitations,
     )
     return release_truths_v2(policy, delivery)
+
+
+# R28 (Session 06): the baseline goes first. `run-slate` builds `nfl baseline`'s
+# file straight after intake, inside its own output folder, and publishes it as
+# the latest deliverable before the session probe, policy validation, priors,
+# weather, roles or any solve. The run's own review is the improvement: it
+# replaces the pointer only through `delivery.replace`, and whatever fails after
+# the baseline leaves it named. Every result's `DELIVERY_STATE` and
+# `release_truths` delivery half describe the file the pointer names.
+BASELINE_DIRNAME = "baseline"
+BASELINE_PRODUCER = "run-slate:baseline"
+C1_PRODUCER = "run-slate:prior_review:CLASSIC_C1"
+_V1_KEYS = ("FILE_VALID", "EVIDENCE_STATE", "MODEL_STATUS", "RELEASE_DECISION")
+
+
+@dataclass(frozen=True)
+class _SlateBaseline:
+    """What the baseline step did: the build, the pointer it published, and why not."""
+
+    outcome: BaselineOutcome | None
+    latest: LatestDeliverable | None
+    problems: tuple[str, ...]
+
+    def summary(self) -> dict[str, object]:
+        outcome = self.outcome
+        truths = outcome.truths if outcome is not None else None
+        return {
+            "published": self.latest is not None,
+            "producer": BASELINE_PRODUCER,
+            "objective": BASELINE_OBJECTIVE_VERSION,
+            "path": str(outcome.output_path) if outcome is not None and outcome.output_path else None,
+            "sha256": outcome.output_sha256 if outcome is not None else None,
+            "DELIVERY_STATE": (
+                truths.delivery_state.value if truths is not None else DeliveryState.NO_DELIVERABLE.value
+            ),
+            "delivered_rows": len(truths.delivered_entry_ids) if truths is not None else 0,
+            "unfilled_entry_ids": list(truths.unfilled_entry_ids) if truths is not None else [],
+            "limitations": [item.code for item in truths.delivery_limitations] if truths is not None else [],
+            "report": str(outcome.report_path) if outcome is not None and outcome.report_path else None,
+            "wall_seconds": (
+                (outcome.report.get("timing") or {}).get("wall_seconds") if outcome is not None else None
+            ),
+            "problems": list(self.problems),
+        }
+
+
+def _pinned_as_of(args: argparse.Namespace) -> datetime | None:
+    """`--as-of` as an aware UTC moment, or None for the live clock."""
+
+    raw = getattr(args, "as_of", None)
+    if not raw:
+        return None
+    moment = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        raise ValueError("as_of must be timezone aware")
+    return moment.astimezone(timezone.utc)
+
+
+def _build_run_slate_baseline(
+    request: CoworkRunRequest, *, run_id: str, output_root: Path, args: argparse.Namespace
+) -> _SlateBaseline:
+    """The baseline for this run, published as its first deliverable. Never raises.
+
+    Built from the run's immutable snapshots into `<output_root>/baseline/`, with
+    the operator's exact exclusions and extra unavailable statuses, and published
+    under this run's id so the outer handler reads it back. A build that raises,
+    delivers nothing or is refused by `publish` is reported; the run goes on.
+    """
+
+    problems: list[str] = []
+    outcome: BaselineOutcome | None = None
+    latest: LatestDeliverable | None = None
+    try:
+        as_of = _pinned_as_of(args)
+        outcome = run_baseline(
+            salaries=request.salary_csv or "",
+            entries=request.entry_csv or "",
+            out_dir=output_root,
+            run_id=BASELINE_DIRNAME,
+            now=as_of,
+            operator_excluded_dk_ids=request.exclude_dk_ids,
+            extra_unavailable_statuses=request.unavailable_statuses,
+        )
+        if outcome.output_path is not None and outcome.output_sha256 is not None:
+            inputs = outcome.report["inputs"]
+            latest = publish_deliverable(
+                output_root,
+                Deliverable(
+                    path=outcome.output_path,
+                    sha256=outcome.output_sha256,
+                    file_kind=BASELINE_OUTPUT_CONTRACT,
+                    producer=BASELINE_PRODUCER,
+                    run_id=run_id,
+                    salary_path=Path(str(inputs["salaries"]["snapshot"])),
+                    salary_sha256=str(inputs["salaries"]["sha256"]),
+                    entry_path=Path(str(inputs["entries"]["snapshot"])),
+                    entry_sha256=str(inputs["entries"]["sha256"]),
+                    truths=outcome.truths,
+                ),
+                now=as_of,
+            )
+    except DeliveryPointerError as exc:
+        problems.extend(exc.problems)
+    except Exception as exc:  # noqa: BLE001 - the baseline never stops the run it backs
+        problems.append(f"BASELINE_RUN_FAILED:{type(exc).__name__}:{exc}")
+    return _SlateBaseline(outcome, latest, tuple(problems))
+
+
+def _run_release_truths(
+    v1: Mapping[str, object],
+    *,
+    latest: LatestDeliverable | None,
+    not_delivered: str | None,
+    authorized: tuple[str, ...],
+    blockers: Iterable[str],
+    registry: GateRegistry,
+) -> ReleaseTruthsV2:
+    """The run's own v1 truths beside the delivery half of the file its pointer names.
+
+    With a pointer, `DELIVERY_STATE`, `delivered_file_valid`, coverage and the
+    file's limitations are the pointer's; `not_delivered` adds
+    `IMPROVEMENT_NOT_DELIVERED` when that file is the baseline. Without one,
+    nothing is delivered and the run's blockers are the limitations.
+    """
+
+    head = {key: v1[key] for key in _V1_KEYS}
+    if latest is not None:
+        record = latest.deliverable.truths.model_dump(mode="json", by_alias=True)
+        limitations = list(record["delivery_limitations"])
+        if not_delivered is not None and latest.deliverable.producer == BASELINE_PRODUCER:
+            limitations.append(
+                registry.limitation("IMPROVEMENT_NOT_DELIVERED", detail=not_delivered)
+                .model_dump(mode="json", by_alias=True)
+            )
+        return ReleaseTruthsV2.model_validate({**record, **head, "delivery_limitations": limitations})
+    delivery = derive_delivery_state(
+        file_valid=False,
+        authorized_entry_ids=authorized,
+        delivered_entry_ids=(),
+        limitations=blocker_limitations(blockers, registry),
+    )
+    return ReleaseTruthsV2.model_validate({
+        **head,
+        "DELIVERY_STATE": delivery.delivery_state.value,
+        "delivered_file_valid": delivery.delivered_file_valid,
+        "delivery_limitations": [item.model_dump(mode="json", by_alias=True)
+                                 for item in delivery.delivery_limitations],
+        "delivered_entry_ids": list(delivery.delivered_entry_ids),
+        "unfilled_entry_ids": list(delivery.unfilled_entry_ids),
+    })
+
+
+def _baseline_next(latest: LatestDeliverable | None, next_action: str) -> str:
+    """The handoff names the baseline first whenever it is the file to hand over."""
+
+    if latest is None or latest.deliverable.producer != BASELINE_PRODUCER:
+        return next_action
+    truths = latest.deliverable.truths
+    return (
+        f"The baseline {latest.deliverable.path} is this run's deliverable "
+        f"(DELIVERY_STATE={truths.delivery_state.value}, {len(truths.delivered_entry_ids)} rows, "
+        "salary-ranked from the DraftKings bytes alone, PRIOR_ONLY / DO_NOT_UPLOAD); the run's "
+        "own review did not replace it. " + next_action
+    )
+
+
+def _improvement_record(
+    outcome, *, delivered: LatestDeliverable | None, withheld_by: str | None, reasons: Iterable[str]
+) -> dict[str, object]:
+    """What became of the run's own review file: `DELIVERED`, `WITHHELD` or `NOT_PRODUCED`."""
+
+    if delivered is not None:
+        return {
+            "status": "DELIVERED",
+            "stage": outcome.stage,
+            "path": str(delivered.deliverable.path),
+            "sha256": delivered.deliverable.sha256,
+            "producer": delivered.deliverable.producer,
+            "replaced": delivered.record.get("supersedes"),
+            "reasons": [],
+        }
+    record: dict[str, object] = {
+        "status": "WITHHELD" if withheld_by is not None else "NOT_PRODUCED",
+        "stage": outcome.stage,
+        "path": None,
+        "sha256": None,
+        "producer": None,
+        "replaced": None,
+        "reasons": list(dict.fromkeys(str(item) for item in reasons)),
+    }
+    if withheld_by is not None:
+        record["withheld_by"] = withheld_by
+    return record
+
+
+def _not_delivered_detail(improvement: Mapping[str, object]) -> str:
+    reasons = [str(item) for item in improvement.get("reasons") or ()]
+    return (
+        f"the run's own review is {improvement['status']} at stage {improvement['stage']}"
+        + (f" ({'; '.join(reasons[:5])})" if reasons else "")
+        + "; the delivered file is the salary-ranked baseline built from the DraftKings bytes alone"
+    )
+
+
+def _export_classic_c1_csv(
+    outcome, *, request: CoworkRunRequest, output_root: Path, run_id: str
+) -> tuple[object, tuple[str, ...]]:
+    """C1's own lineups as a review CSV, through the baseline's writer and audit (rung 4).
+
+    C1 writes review JSON and `assignments.csv`. The exact-byte writer the
+    baseline uses fills the entries snapshot from that assignment, the
+    baseline's independent audit passes the bytes on disk (fresh parses, byte
+    audit, shared validator, R29, no DraftKings-unavailable or operator-excluded
+    person), and only then is the CSV listed, so `delivery.replace` can put it
+    in place of the baseline. Any refusal lists nothing and leaves the baseline.
+    """
+
+    source = Path(str(outcome.artifacts.get("assignments") or ""))
+    target = output_root / "review" / f"DK_REVIEW_ENTRY_C1_{run_id}.csv"
+    if target.exists():
+        return outcome, (f"CLASSIC_C1_EXPORT_OUTPUT_EXISTS:{target}",)
+    try:
+        if not source.is_file() or sha256_file(source) != outcome.hashes.get("assignments"):
+            return outcome, (f"CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH:{source}",)
+        assignments = read_assignment_csv(source, EngineMode.CLASSIC)
+        template = parse_entries(request.entry_csv or "")
+        raw = write_upload_bytes(template, assignments)
+    except (OSError, ValueError) as exc:
+        return outcome, (f"CLASSIC_C1_EXPORT_FAILED:{type(exc).__name__}:{exc}",)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + ".tmp")
+    try:
+        temporary.write_bytes(raw)
+        on_disk = temporary.read_bytes()
+        audit_problems = audit_baseline_bytes(
+            on_disk,
+            salary_path=Path(request.salary_csv or ""),
+            entries_path=Path(request.entry_csv or ""),
+            assignments=assignments,
+            unfilled=(),
+            operator_excluded_dk_ids=request.exclude_dk_ids,
+            extra_unavailable_statuses=request.unavailable_statuses,
+        )
+        if audit_problems:
+            return outcome, (f"CLASSIC_C1_EXPORT_AUDIT_FAILED:{' | '.join(audit_problems)}",)
+        digest = sha256_bytes(on_disk)
+        temporary.replace(target)
+    except Exception as exc:  # noqa: BLE001 - an export that cannot finish lists nothing
+        return outcome, (f"CLASSIC_C1_EXPORT_FAILED:{type(exc).__name__}:{exc}",)
+    finally:
+        temporary.unlink(missing_ok=True)  # an unaudited copy never outlives the step
+    if sha256_file(target) != digest:
+        target.unlink(missing_ok=True)
+        return outcome, (f"CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH:{target}",)
+    export = {
+        **dict(outcome.export or {}),
+        "bulk_entry_csv": str(target),
+        "bulk_entry_sha256": digest,
+        "c1_export": {
+            "writer": "lineups.write_upload_bytes",
+            "audit": "baseline.audit_baseline_bytes",
+            "assignments": str(source),
+            "assignments_sha256": outcome.hashes.get("assignments"),
+            "status": "PASS",
+        },
+    }
+    return replace(
+        outcome,
+        artifacts={**outcome.artifacts, "bulk_entry_csv": str(target)},
+        hashes={**outcome.hashes, "bulk_entry_csv": digest},
+        export=export,
+    ), ()
 
 
 def _run_prior_review_profile(
@@ -2531,6 +2808,7 @@ def _run_prior_review_profile(
     portfolio_policy_normalized_path: str | None = None,
     portfolio_policy_normalized_sha256: str | None = None,
     policy_summary: Mapping[str, object] | None = None,
+    baseline: _SlateBaseline | None = None,
 ) -> int:
     """Drive the prior-only review chain from one gated Cowork command.
 
@@ -2539,16 +2817,13 @@ def _run_prior_review_profile(
     the derived policy is re-asserted before anything is written. There is no
     flag or profile value that can make this profile emit a certified package,
     and a generated assignment is never routed into the manual-guardrail path.
+
+    The run's review is the improvement on `baseline` (Session 06): a CSV it
+    lists replaces the pointer only through `delivery.replace`, and a review
+    that blocks, is withheld or writes no file leaves the baseline delivered.
     """
 
-    as_of_raw = getattr(args, "as_of", None)
-    if as_of_raw:
-        as_of = datetime.fromisoformat(str(as_of_raw).replace("Z", "+00:00"))
-        if as_of.tzinfo is None:
-            raise ValueError("as_of must be timezone aware")
-        as_of = as_of.astimezone(timezone.utc)
-    else:
-        as_of = None  # live profile advances the clock after source acquisition
+    as_of = _pinned_as_of(args)  # None: the live profile advances the clock itself
 
     outcome = run_prior_review(
         salary_csv=request.salary_csv or "",
@@ -2614,6 +2889,7 @@ def _run_prior_review_profile(
     authorized_ids = tuple(item.entry_id for item in entries.authorizations)
     readable_review = None
     readable_failed = False
+    withheld_by: str | None = None  # why a CSV this review produced is not listed
     review_limitations: list[DeliveryLimitation] = []
     if (
         outcome.file_valid
@@ -2652,6 +2928,7 @@ def _run_prior_review_profile(
             readable_failed = True
             review_limitations = list(discrepancy_limitations(str(discrepancy), registry))
             if withholds(review_limitations):
+                withheld_by = display_blocker
                 outcome = _withhold_classic_review_csv(outcome, display_blocker)
                 truths = _blocked_truth_values(
                     file_valid=False,
@@ -2722,6 +2999,7 @@ def _run_prior_review_profile(
                 limitations=review_limitations,
             )
             if withheld:
+                withheld_by = display_blocker
                 truths = _blocked_truth_values(
                     file_valid=False,
                     evidence_state=ReleaseEvidenceState.UNKNOWN,
@@ -2731,6 +3009,22 @@ def _run_prior_review_profile(
                 next_action = "Resolve the named readable-review discrepancy and rerun from stable exact artifacts."
             else:
                 next_action = _PRESENTATION_NEXT
+
+    # Rung 4 (R28, Session 06): C1 exports its own lineups through the
+    # baseline's writer and audit, so it ends with a CSV; a refusal leaves the
+    # baseline as the deliverable. C2/C3 keep their own audited export.
+    c1_export_problems: tuple[str, ...] = ()
+    if (
+        outcome.file_valid
+        and slate.mode is EngineMode.CLASSIC
+        and portfolio_policy is None
+        and "classic_export_audit" not in outcome.artifacts
+        and not outcome.artifacts.get("bulk_entry_csv")
+    ):
+        outcome, c1_export_problems = _export_classic_c1_csv(
+            outcome, request=request, output_root=output_root, run_id=run_id
+        )
+        blockers[0:0] = list(c1_export_problems)
 
     selection_report = outcome.reports.get("selection")
     if isinstance(selection_report, Mapping):
@@ -2754,8 +3048,10 @@ def _run_prior_review_profile(
             )
 
     # The delivery truth, then the pointer. A kept CSV is published only after
-    # `delivery.publish` revalidates it; a refusal, or a `V` gate among the
-    # blockers, withholds it exactly as a `V` display discrepancy would.
+    # `delivery.publish` revalidates it, or put in place of the baseline only
+    # through `delivery.replace` (same inputs, equal or better coverage, the
+    # same revalidation); a refusal, or a `V` gate among the blockers, withholds
+    # it exactly as a `V` display discrepancy would, and the baseline stays.
     release_truths = _review_release_truths(
         outcome=outcome, truths=truths, authorized=authorized_ids, blockers=blockers,
         extra=review_limitations, registry=registry,
@@ -2763,14 +3059,21 @@ def _run_prior_review_profile(
     latest: LatestDeliverable | None = None
     if outcome.file_valid and outcome.artifacts.get("bulk_entry_csv"):
         if release_truths.delivery_state is not DeliveryState.NO_DELIVERABLE:
+            write = (
+                replace_deliverable if (output_root / POINTER_NAME).exists() else publish_deliverable
+            )
             try:
-                latest = publish_deliverable(
+                latest = write(
                     output_root,
                     Deliverable(
                         path=Path(outcome.artifacts["bulk_entry_csv"]),
                         sha256=outcome.hashes["bulk_entry_csv"],
                         file_kind="DK_REVIEW_ENTRY_CSV",
-                        producer=f"run-slate:prior_review:{slate.mode.value}",
+                        producer=(
+                            C1_PRODUCER
+                            if "c1_export" in (outcome.export or {})
+                            else f"run-slate:prior_review:{slate.mode.value}"
+                        ),
                         run_id=run_id,
                         salary_path=Path(request.salary_csv or ""),
                         salary_sha256=outcome.hashes["salary_csv"],
@@ -2789,6 +3092,7 @@ def _run_prior_review_profile(
                 ) if item.gate_class is GateClass.V),
                 "FILE_VALIDATION_INCOMPLETE",
             )
+            withheld_by = refusal
             outcome = _withhold_at_delivery(outcome, refusal, blocker_limitations(blockers, registry))
             readable_review = None
             truths = _blocked_truth_values(
@@ -2808,7 +3112,33 @@ def _run_prior_review_profile(
                 artifacts={**outcome.artifacts, "latest_deliverable": str(latest.pointer_path)},
                 hashes={**outcome.hashes, "latest_deliverable": latest.pointer_sha256},
             )
-    csv_listed = latest is not None
+    improvement_latest = latest
+    # What the pointer names now: the improvement just written, the baseline it
+    # did not replace, or nothing. The result describes that file.
+    latest, latest_problems = _read_run_pointer(output_root, run_id)
+    improvement = _improvement_record(
+        outcome,
+        delivered=improvement_latest,
+        withheld_by=withheld_by,
+        reasons=(
+            [item.code for item in (*blocker_limitations(blockers, registry), *review_limitations)
+             if item.gate_class is GateClass.V]
+            if withheld_by is not None
+            else list(c1_export_problems or outcome.blockers)
+        ),
+    )
+    if latest is not None and improvement_latest is None:
+        release_truths = _run_release_truths(
+            truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
+            authorized=authorized_ids, blockers=blockers, registry=registry,
+        )
+    elif latest is None and improvement_latest is not None:
+        # Written, then no longer revalidating: nothing is advertised.
+        release_truths = _run_release_truths(
+            truths, latest=None, not_delivered=None, authorized=authorized_ids,
+            blockers=[*latest_problems, *blockers], registry=registry,
+        )
+    next_action = _baseline_next(latest, next_action)
     failure_record = outcome.reports.get("readable_review_failure")
     if slate.mode is EngineMode.SHOWDOWN and isinstance(failure_record, Mapping):
         # Written once the delivery decision is final, so the marker never says
@@ -2829,8 +3159,8 @@ def _run_prior_review_profile(
         report_path=report_path,
         truth_values=truths,
         readable_review=readable_review.data if readable_review is not None else None,
-        review_csv_path=outcome.artifacts.get("bulk_entry_csv") if csv_listed else None,
-        review_csv_sha256=outcome.hashes.get("bulk_entry_csv") if csv_listed else None,
+        review_csv_path=latest.deliverable.path if latest is not None else None,
+        review_csv_sha256=latest.deliverable.sha256 if latest is not None else None,
     )
     review_workbook_sha256 = sha256_file(review_path)
     result = {
@@ -2867,6 +3197,9 @@ def _run_prior_review_profile(
         "DELIVERY_STATE": release_truths.delivery_state.value,
         "release_truths": release_truths.model_dump(mode="json", by_alias=True),
         "latest_deliverable": latest.summary() if latest is not None else None,
+        "latest_deliverable_problems": list(latest_problems),
+        "baseline": baseline.summary() if baseline is not None else None,
+        "improvement": improvement,
         "next": next_action,
         "meaning": (
             "Legal and byte-audited, never certified. This profile reads no payout "
@@ -2876,8 +3209,12 @@ def _run_prior_review_profile(
                 "Classic C3 may emit an independently audited exact-template "
                 "DK_REVIEW_ENTRY CSV, but never a DK_UPLOAD package."
                 if "classic_export_audit" in outcome.artifacts
-                else "Classic emits machine-readable review JSON only and no "
-                "upload-shaped package."
+                else "Classic C1 writes review JSON and exports its own lineups through the "
+                "baseline's writer and audit as an exact-template DK_REVIEW_ENTRY CSV, "
+                "never a DK_UPLOAD package."
+                if slate.mode is EngineMode.CLASSIC
+                else "Showdown may emit a byte-audited exact-template DK_REVIEW_ENTRY CSV, "
+                "never a DK_UPLOAD package."
             )
         ),
     }
@@ -2911,7 +3248,10 @@ def _run_prior_review_profile(
         }
     _write_json(report_path, result)
     _print_json(result)
-    return 0 if outcome.file_valid and not readable_failed and (
+    # Exit codes keep their meaning (Session 06): 0 when the run's own review
+    # completed, 2 when it did not. A baseline in place never turns one into the
+    # other; `DELIVERY_STATE` and `latest_deliverable` say whether a file ships.
+    return 0 if outcome.file_valid and not readable_failed and not c1_export_problems and (
         slate.mode is EngineMode.CLASSIC or readable_review is not None
     ) else 2
 
@@ -3056,6 +3396,13 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     snapshotted = _snapshot_cowork_request(request, run_id, intake["hashes"])
     request_path = DEFAULT_RUNS_DIR / run_id / "run_request.json"
     _write_json(request_path, snapshotted.to_dict())
+    output_root = Path(args.output_dir).resolve() / run_id
+    output_root.mkdir(parents=True, exist_ok=True)
+    report_path = output_root / "cowork_run.json"
+    # R28 (Session 06): the baseline first, from the DraftKings bytes alone and
+    # before anything that needs the network, a policy or a model.
+    baseline = _build_run_slate_baseline(snapshotted, run_id=run_id, output_root=output_root, args=args)
+    args._run_slate_baseline = baseline
     # Session capability, before the run spends its window discovering it.
     if not getattr(args, "no_session_probe", False):
         probe_report = _session_probe(request.salary_csv)
@@ -3215,9 +3562,6 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             0,
             "ENVIRONMENT_DOCTOR_FAILED: the pinned runtime or workspace checks did not pass",
         )
-    output_root = Path(args.output_dir).resolve() / run_id
-    output_root.mkdir(parents=True, exist_ok=True)
-    report_path = output_root / "cowork_run.json"
 
     if (
         not doctor_report.pass_status
@@ -3237,6 +3581,20 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 else CertificationBasis.MODEL_ASSISTED
             )
         )
+        # The run stops before its review; the baseline, when published, is
+        # still the file to hand over, and the result says so.
+        registry = load_gate_registry()
+        stage = "PORTFOLIO_POLICY_ENFORCEMENT_BLOCKED" if policy_summary is not None else "RECONCILED"
+        latest, latest_problems = _read_run_pointer(output_root, run_id)
+        improvement = {
+            "status": "NOT_PRODUCED", "stage": stage, "path": None, "sha256": None,
+            "producer": None, "replaced": None, "reasons": list(blockers[:5]),
+        }
+        release_truths = _run_release_truths(
+            blocked_truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
+            authorized=tuple(item.entry_id for item in entries.authorizations),
+            blockers=blockers, registry=registry,
+        )
         review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
         create_cowork_status_workbook(
             output_path=review_path,
@@ -3244,16 +3602,14 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             blockers=blockers,
             report_path=report_path,
             truth_values=blocked_truths,
+            review_csv_path=latest.deliverable.path if latest is not None else None,
+            review_csv_sha256=latest.deliverable.sha256 if latest is not None else None,
         )
         result = {
             "run_id": run_id,
             "status": "DO_NOT_UPLOAD",
             **blocked_truths,
-            "stage": (
-                "PORTFOLIO_POLICY_ENFORCEMENT_BLOCKED"
-                if policy_summary is not None
-                else "RECONCILED"
-            ),
+            "stage": stage,
             "mode": slate.mode.value,
             "authorized_entries": len(entries.authorizations),
             "contest_ids": sorted({entry.contest_id for entry in entries.authorizations}),
@@ -3271,6 +3627,12 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 "Claude should gather and freeze approved public evidence, populate the request, "
                 "and ask the operator only for unavailable contest payout or field facts."
             ),
+            "DELIVERY_STATE": release_truths.delivery_state.value,
+            "release_truths": release_truths.model_dump(mode="json", by_alias=True),
+            "latest_deliverable": latest.summary() if latest is not None else None,
+            "latest_deliverable_problems": list(latest_problems),
+            "baseline": baseline.summary(),
+            "improvement": improvement,
         }
         if policy_summary is not None:
             result["portfolio_policy"] = policy_summary
@@ -3279,6 +3641,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 "Resolve every named policy or input blocker, then rerun from the immutable "
                 "salary, entry, source-policy and normalized-policy artifacts."
             )
+        result["next"] = _baseline_next(latest, str(result["next"]))
         _write_json(report_path, result)
         _print_json(result)
         return 2
@@ -3311,6 +3674,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 validated_policy.normalized_sha256 if validated_policy is not None else None
             ),
             policy_summary=policy_summary,
+            baseline=baseline,
         )
 
     assignment_path = snapshotted.assignment_csv
@@ -3371,6 +3735,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         staged_workbook=str(staged_workbook),
     )
     code, certification = _certify(certify_args)
+    latest, _latest_problems = _read_run_pointer(output_root, run_id)
     result = {
         "run_id": run_id,
         "status": certification["status"],
@@ -3396,16 +3761,24 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "CERTIFIED covers exact inputs, legality, evidence, authorization, and final bytes; "
             "it is not an EV, ROI, win-rate, or profitability claim."
         ),
+        # The certify path writes its own package; the baseline is named beside
+        # it, never mixed into its release decision.
+        "baseline": baseline.summary(),
+        "latest_deliverable": latest.summary() if latest is not None else None,
     }
     _write_json(report_path, result)
     _print_json(result)
     return code
 
 
-def _latest_after_failure(
+def _read_run_pointer(
     output_root: Path, run_id: str
 ) -> tuple[LatestDeliverable | None, tuple[str, ...]]:
-    """This run's validated deliverable, if its pointer still revalidates; the handler must finish."""
+    """This run's validated deliverable, if its pointer still revalidates. Never raises.
+
+    Every `run-slate` exit reads the pointer back through here, so its result
+    describes the file on disk now; the outer handler must finish whatever it finds.
+    """
 
     try:
         return read_latest_deliverable(output_root, run_id=run_id), ()
@@ -3415,17 +3788,25 @@ def _latest_after_failure(
         return None, (f"DELIVERABLE_REVALIDATION_FAILED:{type(exc).__name__}:{exc}",)
 
 
-def _handler_release_truths(latest: LatestDeliverable | None) -> dict[str, object] | None:
-    """v2 for a failed run: its own blocked v1 truths beside the pointer's delivery half."""
+def _handler_release_truths(latest: LatestDeliverable | None, failure: str) -> dict[str, object] | None:
+    """v2 for a failed run: its own blocked v1 truths beside the pointer's delivery half.
+
+    When the pointer still names the baseline, `IMPROVEMENT_NOT_DELIVERED` says
+    the run failed before anything replaced it.
+    """
 
     if latest is None:
         return None
-    v1 = _blocked_truth_values()
-    merged = {
-        **latest.deliverable.truths.model_dump(mode="json", by_alias=True),
-        **{key: v1[key] for key in ("FILE_VALID", "EVIDENCE_STATE", "MODEL_STATUS", "RELEASE_DECISION")},
-    }
-    return ReleaseTruthsV2.model_validate(merged).model_dump(mode="json", by_alias=True)
+    return _run_release_truths(
+        _blocked_truth_values(),
+        latest=latest,
+        not_delivered=_not_delivered_detail(
+            {"status": "NOT_PRODUCED", "stage": "BUILD_OR_CERTIFY_FAILED", "reasons": [failure]}
+        ),
+        authorized=(),
+        blockers=(),
+        registry=load_gate_registry(),
+    ).model_dump(mode="json", by_alias=True)
 
 
 def command_cowork_run(args: argparse.Namespace) -> int:
@@ -3464,7 +3845,14 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         # (Session 05). The handler names that file and never deletes it.
         # The pointer never names a `DK_UPLOAD_*` file (`delivery.revalidate`
         # refuses the name), so the sweep below cannot reach it.
-        latest, latest_problems = _latest_after_failure(output_root, run_id)
+        latest, latest_problems = _read_run_pointer(output_root, run_id)
+        failure = f"{type(exc).__name__}:{exc}"
+        try:
+            handler_truths = _handler_release_truths(latest, failure)
+        except Exception as truths_exc:  # noqa: BLE001 - the handler must finish
+            latest_problems = (*latest_problems, f"DELIVERABLE_REVALIDATION_FAILED:{truths_exc}")
+            latest, handler_truths = None, None
+        baseline = getattr(args, "_run_slate_baseline", None)
         removed_uploads: list[str] = []
         if output_root.is_dir():
             for upload_path in output_root.glob("DK_UPLOAD_*.csv"):
@@ -3476,9 +3864,19 @@ def command_cowork_run(args: argparse.Namespace) -> int:
                 if latest is not None
                 else DeliveryState.NO_DELIVERABLE.value
             ),
-            "release_truths": _handler_release_truths(latest),
+            "release_truths": handler_truths,
             "latest_deliverable": latest.summary() if latest is not None else None,
             "latest_deliverable_problems": list(latest_problems),
+            "baseline": baseline.summary() if isinstance(baseline, _SlateBaseline) else None,
+            "improvement": {
+                "status": (
+                    "DELIVERED"
+                    if latest is not None and latest.deliverable.producer != BASELINE_PRODUCER
+                    else "NOT_PRODUCED"
+                ),
+                "stage": "BUILD_OR_CERTIFY_FAILED",
+                "reasons": [failure],
+            },
         }
 
         diagnostic = {
@@ -3507,6 +3905,10 @@ def command_cowork_run(args: argparse.Namespace) -> int:
             "input_hashes": intake.get("hashes", {}),
             "upload_csv": None,
             **delivery_fields,
+            "next": _baseline_next(
+                latest,
+                "Read the diagnostic, fix the named failure and rerun under a new run id.",
+            ),
         }
         try:
             _write_json(diagnostic_path, diagnostic)

@@ -9,9 +9,14 @@ removes only the JSON and HTML. Nothing advertises a kept CSV until
 revalidated deliverable and never deletes it.
 
 The corruption cases below are the other half: wrong bytes or a wrong Entry ID
-mapping are withheld however the display failure is labelled. Classic C1/C2
-write no upload-shaped CSV, so their exit has nothing to preserve and reports
-`NO_DELIVERABLE` with `PROFILE_WRITES_NO_ENTRY_FILE`.
+mapping are withheld however the display failure is labelled.
+
+Session 06 changed the run-slate expectations here, visibly: `run-slate` now
+publishes the baseline before the review runs, so a withheld review CSV leaves
+the pointer on the baseline (`DELIVERABLE`, `IMPROVEMENT_NOT_DELIVERED`) instead
+of on nothing, the withholding code moves from the result's delivery
+limitations to `improvement.reasons`, and C1 ends with its own CSV instead of
+`NO_DELIVERABLE`. What is withheld is still never advertised.
 """
 
 from __future__ import annotations
@@ -435,6 +440,20 @@ def test_c3_withholds_everything_when_a_kept_file_cannot_be_read_back(
 # ------------------------------------------------ run-slate, Showdown
 
 
+def _assert_only_the_baseline_is_delivered(report: dict, root: Path, withheld: str | None) -> None:
+    """Session 06: a withheld review CSV leaves the pointer on the baseline, never on it."""
+
+    latest = delivery.read_latest(root)
+    assert latest is not None and latest.deliverable.producer == "run-slate:baseline"
+    assert withheld is None or latest.deliverable.path != Path(withheld).resolve()
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    assert report["latest_deliverable"]["path"] == str(latest.deliverable.path)
+    truths = report["release_truths"]
+    assert truths["FILE_VALID"] is False and truths["delivered_file_valid"] is True
+    codes = {item["code"]: item["class"] for item in truths["delivery_limitations"]}
+    assert codes["IMPROVEMENT_NOT_DELIVERED"] == "P" and "V" not in codes.values()
+
+
 def _showdown_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, failing=None, workbook=None):
     from nfl_dfs import cli
     from nfl_dfs import prior_review as prior_review_module
@@ -477,15 +496,15 @@ def test_showdown_roster_discrepancy_still_withholds_the_csv(tmp_path: Path, mon
     code, report, root = _showdown_run(tmp_path, monkeypatch, failing=failing)
     assert code == 2
     assert report["FILE_VALID"] is False
-    assert report["DELIVERY_STATE"] == "NO_DELIVERABLE"
-    assert report["bulk_entry_csv"] is None and report["latest_deliverable"] is None
+    assert report["bulk_entry_csv"] is None
     assert "bulk_entry_csv" not in report["prior_review_artifacts"]
     assert "bulk_entry_csv" not in report["prior_review_hashes"]
     withheld = report["prior_review_reports"]["readable_review_failure"]["withheld_artifacts"]["bulk_entry_csv"]
     assert sha256_file(withheld["path"]) == withheld["sha256"]
-    assert not (root / delivery.POINTER_NAME).exists()
-    codes = {item["code"]: item["class"] for item in report["release_truths"]["delivery_limitations"]}
-    assert codes["READABLE_REVIEW_SELECTION_SALARY_MISMATCH"] == "V"
+    # Session 06: the pointer stays on the baseline, never on the withheld CSV.
+    _assert_only_the_baseline_is_delivered(report, root, withheld["path"])
+    assert report["improvement"]["status"] == "WITHHELD"
+    assert "READABLE_REVIEW_SELECTION_SALARY_MISMATCH" in report["improvement"]["reasons"]
 
 
 @pytest.mark.parametrize("damage", ("unclassified", "entry_ids_swapped"))
@@ -505,12 +524,14 @@ def test_showdown_presentation_label_cannot_save_a_corrupt_or_unclassified_failu
 
     code, report, root = _showdown_run(tmp_path, monkeypatch, failing=failing)
     assert code == 2
-    assert report["FILE_VALID"] is False and report["DELIVERY_STATE"] == "NO_DELIVERABLE"
+    assert report["FILE_VALID"] is False
     assert report["bulk_entry_csv"] is None
     assert "bulk_entry_csv" not in report["prior_review_artifacts"]
-    assert not (root / delivery.POINTER_NAME).exists()
-    codes = {item["code"] for item in report["release_truths"]["delivery_limitations"]}
-    assert ("GATE_CODE_UNCLASSIFIED" if damage == "unclassified" else "DELIVERABLE_SHA256_MISMATCH") in codes
+    kept = report["prior_review_reports"]["readable_review_failure"]["withheld_artifacts"]["bulk_entry_csv"]
+    _assert_only_the_baseline_is_delivered(report, root, kept["path"])
+    assert report["improvement"]["status"] == "WITHHELD"
+    assert ("GATE_CODE_UNCLASSIFIED" if damage == "unclassified" else "DELIVERABLE_SHA256_MISMATCH") in (
+        report["improvement"]["reasons"])
     # Nothing on disk or in the report still calls the CSV kept.
     for record in (
         report["prior_review_reports"]["readable_review_failure"],
@@ -610,14 +631,17 @@ def test_c3_success_and_c1_exits_report_their_delivery(tmp_path: Path, monkeypat
     assert latest.deliverable.sha256 == report["bulk_entry_sha256"]
     assert latest.record["published_at"] == AS_OF.isoformat()  # the pinned clock, not the wall
 
+    # Session 06: C1 exports its own lineups and replaces the baseline with them.
     code, report, root = _classic_run(tmp_path / "c1", monkeypatch, policy=False)
     assert code == 0 and report["stage"] == "PRIOR_ONLY_CLASSIC_REVIEW_ARTIFACTS"
-    assert report["FILE_VALID"] is True and report["DELIVERY_STATE"] == "NO_DELIVERABLE"
-    assert report["release_truths"]["delivered_file_valid"] is False
-    assert "PROFILE_WRITES_NO_ENTRY_FILE" in {
+    assert report["FILE_VALID"] is True and report["DELIVERY_STATE"] == "DELIVERABLE"
+    assert report["release_truths"]["delivered_file_valid"] is True
+    assert "PROFILE_WRITES_NO_ENTRY_FILE" not in {
         item["code"] for item in report["release_truths"]["delivery_limitations"]
     }
-    assert report["latest_deliverable"] is None and not (root / delivery.POINTER_NAME).exists()
+    latest = delivery.read_latest(root, run_id="classic-s05")
+    assert latest.deliverable.producer == "run-slate:prior_review:CLASSIC_C1"
+    assert str(latest.deliverable.path) == report["bulk_entry_csv"]
 
 
 def test_c3_internal_presentation_failure_is_listed_and_published(
@@ -660,11 +684,12 @@ def test_c3_display_failure_withholds_when_unclassified_or_the_csv_changed(
 
     code, report, root = _classic_run(tmp_path, monkeypatch, patch=patch)
     assert code == 2
-    assert report["FILE_VALID"] is False and report["DELIVERY_STATE"] == "NO_DELIVERABLE"
+    assert report["FILE_VALID"] is False
     assert report["bulk_entry_csv"] is None and report["export"]["bulk_entry_csv"] is None
     for key in ("classic_export_audit", "bulk_entry_csv", "readable_review_json", "readable_review_html"):
         assert key not in report["prior_review_artifacts"]
-    assert not (root / delivery.POINTER_NAME).exists()
+    _assert_only_the_baseline_is_delivered(report, root, None)
+    assert report["improvement"]["status"] == "WITHHELD"
     if damage == "unclassified":
         # A display code nobody classified: C3's four outputs go, as before R28.
         assert not list(root.rglob("DK_REVIEW_ENTRY_*.csv"))
@@ -674,5 +699,5 @@ def test_c3_display_failure_withholds_when_unclassified_or_the_csv_changed(
         withheld = report["prior_review_reports"]["delivery_withheld"]["withheld_artifacts"]["bulk_entry_csv"]
         assert Path(withheld["path"]).is_file() and sha256_file(withheld["path"]) != withheld["sha256"]
         assert report["stage"] == "PRIOR_REVIEW_DELIVERY_BLOCKED"
-    codes = {item["code"] for item in report["release_truths"]["delivery_limitations"]}
-    assert ("GATE_CODE_UNCLASSIFIED" if damage == "unclassified" else "DELIVERABLE_SHA256_MISMATCH") in codes
+    assert ("GATE_CODE_UNCLASSIFIED" if damage == "unclassified" else "DELIVERABLE_SHA256_MISMATCH") in (
+        report["improvement"]["reasons"])

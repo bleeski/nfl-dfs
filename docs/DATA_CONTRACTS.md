@@ -337,10 +337,11 @@ Runtime paths, run IDs, timestamps and solver elapsed seconds are excluded from
 these canonical payloads, so identical immutable inputs reproduce both hashes.
 `FILE_VALID` describes these two review JSON files only. `EVIDENCE_STATE`,
 `MODEL_STATUS=PRIOR_ONLY`, and `RELEASE_DECISION=DO_NOT_UPLOAD` are separate.
-C1 writes no Classic assignment CSV, `DK_REVIEW_ENTRY_*.csv`, or
-`DK_UPLOAD_*.csv`; C2 adds policy/candidates/joint selection as documented
-below, and C3 owns readable review, downstream independent export audit, and
-exact-template export.
+`prior_review` itself writes no `DK_REVIEW_ENTRY_*.csv` or `DK_UPLOAD_*.csv` for
+C1. Since Session 06 `run-slate` exports C1's `assignments.csv` as a review CSV
+(rung 4; § `run-slate` result, baseline first). C2 adds policy/candidates/joint
+selection as documented below, and C3 owns readable review, downstream
+independent export audit, and exact-template export.
 
 ## C2 Classic policy, candidate bank, assignment, and selection audit
 
@@ -1631,6 +1632,16 @@ so swapped flags still bind correctly and the report says which flag carried
 which file. Anything other than exactly one salary CSV and one entries CSV is
 `BASELINE_INPUT_SCHEMA_UNRESOLVED`.
 
+Since Session 06 `run_baseline` also takes `operator_excluded_dk_ids` and
+`extra_unavailable_statuses`, which `run-slate` fills from its request's
+`exclude_dk_ids` and `unavailable_statuses` (`nfl baseline` has no flag for
+them). `baseline.pool_exclusions` turns them into people: every salary row of a
+person an excluded ID belongs to leaves the pool, and so does everyone whose
+raw DraftKings status is an extra unavailable one. They only narrow the pool;
+`available_statuses` is not read. An excluded ID the salary file lacks is
+`OPERATOR_EXCLUSION_NOT_IN_POOL` (`V`), as in `participation`, and nothing is
+built.
+
 ### `nfl_baseline_entry_csv_v1`
 
 The entries template's exact bytes with the roster cells of assigned blank rows
@@ -1644,8 +1655,9 @@ from disk and, from fresh parses of both snapshots: runs `referee.audit_output_b
 against the template; reparses them and reconciles the mode; checks the Entry
 IDs, their order, and that exactly the assigned rows are filled and exactly the
 unfilled rows are blank; runs `lineups.validate_lineup` on every filled row;
-checks exact-roster distinctness; and re-derives `contracts.unavailable_people`
-to check no filled row holds one. A failure, or an audit that cannot finish
+checks exact-roster distinctness; and re-derives the exclusions to check no
+filled row holds a DraftKings-unavailable person (`BASELINE_AUDIT_UNAVAILABLE_PERSON`)
+or an operator-excluded one (`BASELINE_AUDIT_OPERATOR_EXCLUDED_PERSON`). A failure, or an audit that cannot finish
 (`BASELINE_AUDIT_FAILED`), withholds the file (`BYTE_AUDIT`, `BASELINE_AUDIT_*`,
 `REPARSE_ASSIGNMENT_MISMATCH`), and the temporary copy never outlives the run.
 Both snapshots are re-hashed before the write (`ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE`,
@@ -1710,7 +1722,7 @@ is DraftKings' price and the only number in its bytes the engine may read.
 | `command` | `per_solve_seconds`, `budget_seconds` |
 | `inputs` | `salaries` and `entries`: `supplied_as`, `path`, `sha256`, `snapshot`, `classified_by`; `supplied_schemas` by flag |
 | `slate` | Mode, draft group, both hashes, salary rows, games, `earliest_lock_at`, entry rows, blank and prefilled rows, Contest IDs |
-| `pool` | The availability contract, its statuses, `excluded_people`, excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`, `SALARY_SUBSET`) |
+| `pool` | The availability contract, its statuses, `excluded_people`, `operator_excluded_dk_ids`, `operator_excluded_people` and `extra_unavailable_statuses` (Session 06), excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`, `SALARY_SUBSET`) |
 | `objective` | `BASELINE_SALARY_RANK_V1`, as above |
 | `construction` | `stop_reason` (`FILLED`, `DISTINCT_LINEUPS_EXHAUSTED`, `BUDGET_EXHAUSTED`, `SOLVE_LIMIT_WITHOUT_LINEUP`, `SOLVER_PRODUCED_ILLEGAL_LINEUP`, `SOLVER_REPEATED_A_LINEUP`), lineups built, solves, salary levels, `people_used` and `most_used_person_lineups` (a concentration count for late-swap exposure, not a preference), `elapsed_seconds` |
 | `lineups` | Per filled row: `entry_id`, `roster`, `salary`, `found_by`, `time_limited`, `solve_seconds` |
@@ -1762,9 +1774,17 @@ as `release_truths`, with `DELIVERY_STATE` beside the four truths: its
 `delivery_limitations` are the run's blockers and any readable-review codes,
 each built by `delivery.blocker_limitations` or `discrepancy_limitations`
 through the registry, and a blocker the registry does not hold is
-`GATE_CODE_UNCLASSIFIED` (`V`, fail closed). Classic C1 and C2 write no entry
-file, so they report `NO_DELIVERABLE` with `PROFILE_WRITES_NO_ENTRY_FILE`.
-Sessions 06 to 09 wire it into the rest.
+`GATE_CODE_UNCLASSIFIED` (`V`, fail closed). Since Session 06 every `run-slate`
+exit reads the latest-deliverable pointer back and takes the delivery half from
+the file it names: when that is the review's own CSV, its truths are the
+review's; when it is still the baseline, the four v1 fields are the run's own
+and `DELIVERY_STATE`, `delivered_file_valid`, coverage and limitations are the
+baseline's, plus `IMPROVEMENT_NOT_DELIVERED` (`P`) naming why the review did not
+replace it. That is the case `delivered_file_valid` exists for: `FILE_VALID` can
+be false while a valid baseline ships. With no pointer, nothing is delivered and
+the run's blockers are the limitations (`PROFILE_WRITES_NO_ENTRY_FILE` when a
+review completed without a file). The pre-review blocked exit carries it too
+since Session 06.
 
 | Field | Meaning |
 |---|---|
@@ -1827,7 +1847,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `b800a8f43adc5f0938940ec75f0c4513a6633361294b3c10b00ec56af9b8ffa9`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `ac3d36234f3cfb9b9320c45b0eaf8e0d6c9d8d5e91b260678d720a5bfe6550d5`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -1898,16 +1918,17 @@ Registered 2026-09-23 by Session 05 (R28). `LATEST_DELIVERABLE.json`,
 `nfl_latest_deliverable_v1`, written by `delivery.py`, names the one entry file
 a run would hand over. It sits in the run's output folder
 (`<output-dir>/<run_id>/`), one per run: runs are immutable folders, and a
-pointer wider than its run could name another slate's file. `run-slate`
-publishes it for a Showdown or Classic C3 review CSV once the readable review
-has been classified and before the workbook is written, so a later failure
-cannot unpublish it. Session 06 publishes the baseline through it first and
-replaces it with an improvement; Session 14 adds the delivery record.
+pointer wider than its run could name another slate's file. Since Session 06
+`run-slate` publishes the baseline through it right after intake, and a review
+CSV (Showdown, C3, or C1's export) replaces it through `replace` once the
+readable review has been classified and before the workbook is written, so a
+later failure cannot unpublish it. A run whose baseline did not publish
+publishes the review CSV instead. Session 14 adds the delivery record.
 
 | Field | Meaning |
 |---|---|
 | `schema_version` | Exactly `nfl_latest_deliverable_v1` |
-| `published_at`, `run_id`, `producer` | UTC time, the run, and what built the file (`run-slate:prior_review:SHOWDOWN`, `run-slate:prior_review:CLASSIC`) |
+| `published_at`, `run_id`, `producer` | UTC time, the run, and what built the file: `run-slate:baseline`, `run-slate:prior_review:SHOWDOWN`, `run-slate:prior_review:CLASSIC` (C3) or `run-slate:prior_review:CLASSIC_C1` (C1's export) |
 | `file` | `path` relative to the pointer's folder (never absolute, never `..`), `sha256`, `bytes`, `file_kind` (`DK_REVIEW_ENTRY_CSV`; the baseline's is `nfl_baseline_entry_csv_v1`) |
 | `inputs` | `salaries` and `entries`: the snapshot `path` and `sha256` the file was built from |
 | `mode` | `CLASSIC` or `SHOWDOWN`, from a fresh parse of the entries snapshot |
@@ -1965,7 +1986,8 @@ After a failure `run-slate`'s outer handler reads this run's pointer. A file
 passed independent validation earlier in the run exactly when the pointer names
 it and it revalidates now; the handler reports that file (`DELIVERY_STATE`,
 `latest_deliverable`, and `release_truths` with the failed run's own v1 truths
-beside the pointer's delivery half) and never deletes it. It still removes every
+beside the pointer's delivery half, plus `IMPROVEMENT_NOT_DELIVERED` when it is
+the baseline) and never deletes it. It still removes every
 `DK_UPLOAD_*.csv`, a name the pointer can never hold. A pointer that does not revalidate is reported under
 `latest_deliverable_problems`, and its file is left on disk, unadvertised.
 
@@ -1978,3 +2000,50 @@ does not hold is `GATE_CODE_UNCLASSIFIED` (`V`, fail closed).
 Does not establish: upload clearance, certification, lineup quality, or any EV,
 ROI, win, cash, ownership or edge claim. It says which validated file to hand
 over and what it covers.
+
+## `run-slate` result, baseline first (Session 06)
+
+Registered 2026-09-24 by Session 06 (R28, R29). Every `run-slate` exit writes
+`cowork_run.json` with these fields beside the ones it always had. None changes
+a release truth or an exit code.
+
+| Field | Meaning |
+|---|---|
+| `baseline` | The baseline step: `published`, `producer` (`run-slate:baseline`), `objective`, `path`, `sha256`, `DELIVERY_STATE`, `delivered_rows`, `unfilled_entry_ids`, its limitation codes, `report`, `wall_seconds` and `problems` (a publish refusal's codes, or `BASELINE_RUN_FAILED` when the step raised) |
+| `improvement` | The run's own review file: `status` `DELIVERED` (it is the pointer's file; `replaced` is the pointer's `supersedes`), `WITHHELD` (it produced a CSV that a `V` code or a pointer refusal stopped; `withheld_by`, and the `V` codes as `reasons`) or `NOT_PRODUCED` (it blocked, crashed, never ran or wrote no file; its blockers as `reasons`), with its `stage` |
+| `latest_deliverable` | The pointer read back and revalidated at the end of the run: the file to hand over, with its `producer`; `null` when there is none |
+| `latest_deliverable_problems` | Why a pointer that exists did not revalidate |
+| `DELIVERY_STATE`, `release_truths` | As § `nfl_release_truths_v2`: the delivery half describes `latest_deliverable` |
+| `next` | Opens with the baseline's path whenever it is the deliverable |
+
+The baseline sits at `<output-dir>/<run_id>/baseline/`, a `nfl baseline` run
+folder with run id `baseline`: `inputs/`, `intake.json`,
+`DK_BASELINE_ENTRY_V1_baseline.csv` and `baseline_report.json`. It is built from
+the run's `data/runs/<run_id>/inputs/` snapshots (its own copies hash the same),
+with the pinned `--as-of` as its clock, the default 5 s per solve and 60 s
+budget, and the request's exclusions. The pointer's `run_id` is the `run-slate`
+run's, so the outer handler reads it back. A replaced baseline stays on disk,
+byte for byte. The status workbook's Upload sheet names the pointer's file.
+
+C1's export (rung 4) is `<output-dir>/<run_id>/review/DK_REVIEW_ENTRY_C1_<run_id>.csv`,
+`file_kind` `DK_REVIEW_ENTRY_CSV`: the entries snapshot with C1's hash-checked
+`assignments.csv` written in by `lineups.write_upload_bytes`, kept only after
+`baseline.audit_baseline_bytes` passes the bytes on disk, the request's
+exclusions included, and listed in `export.c1_export`. Refusals list nothing and
+leave the baseline: `CLASSIC_C1_EXPORT_OUTPUT_EXISTS`,
+`CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH`, `CLASSIC_C1_EXPORT_FAILED`,
+`CLASSIC_C1_EXPORT_AUDIT_FAILED`, `CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH`
+(all `V`). The pre-lock manifest binds the assignment this file renders, not the
+file. A run with a policy goes to C3 and never takes this path.
+
+A replacement never delivers fewer rows than the baseline while the baseline
+still revalidates (`DELIVERY_POINTER_COVERAGE_REGRESSION`); a partial review
+file never replaces a full baseline, and rows are never merged across the two.
+
+Exit codes are unchanged: 0 when the run's own review completed, 2 when it did
+not. A shipped baseline never turns a failed review into 0, and a refused C1
+export is 2.
+
+Does not establish: upload clearance, certification, lineup quality, or any EV,
+ROI, win, cash, ownership or edge claim. It says which file to hand over, which
+step made it, and why the other did not.
