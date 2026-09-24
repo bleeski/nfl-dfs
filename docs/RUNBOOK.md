@@ -1044,12 +1044,14 @@ Claude walks by hand. Nothing in the engine walks it yet, and
 `scripts/make_showdown_policy.py` has no ladder at all; Session 10 builds both.
 Rung 0 is every entry stacked with a bring-back on most of them; each rung
 relaxes one class; and rung 4 emits no policy at all and runs C1 sequential
-selection. **Rung 4 is the last structural rung, not a guaranteed file.** Until
-2026-09-23 this text called it "the proven floor" that "always produces a legal
-portfolio", and the 2026-09-22 audit showed that it does not. C1 writes review
-JSON only, no DraftKings-shaped CSV (`prior_review.py:3016`), and raises
-`SOLVER_RETURNED_NO_LINEUP` when distinct lineups run out
-(`selection.py:538-542`). Session 06 makes rung 4 end with a CSV. If a run
+selection. **Rung 4 is the last structural rung.** Until 2026-09-23 this text
+called it "the proven floor" that "always produces a legal portfolio", and the
+2026-09-22 audit showed that it did not: C1 wrote review JSON only. Since
+Session 06 it ends with a CSV. `run-slate` exports C1's own lineups through the
+baseline's writer and audit as `review/DK_REVIEW_ENTRY_C1_<run_id>.csv`, which
+replaces the baseline as the deliverable; if that export is refused, or C1
+raises `SOLVER_RETURNED_NO_LINEUP` when distinct lineups run out
+(`selection.py:538-542`), the baseline stays the deliverable. If a run
 reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
 `CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun
 immediately rather than diagnosing. Diagnose afterwards, in the changelog.
@@ -1070,8 +1072,35 @@ they were the only things that could make you miss a lock. Under R28 they no
 longer stop the file, so they no longer lead. Start the weather and
 official-activity captures alongside the baseline, not ahead of it: the engine's
 improved portfolio still waits on them until Session 09, but the file does not.
-**Run `baseline` first** (Session 04), the moment both DraftKings files are in
-hand and before anything else:
+
+**`run-slate` builds the baseline itself** (Session 06). Straight after intake,
+before the session probe, policy validation, priors, weather, roles or any
+solve, it writes `<output-dir>/<run_id>/baseline/DK_BASELINE_ENTRY_V1_baseline.csv`
+from the run's snapshots and publishes it as `LATEST_DELIVERABLE.json`. It honours
+the request's exact `--exclude` IDs and extra `--unavailable-status` codes, and
+nothing else from the request. The run's own review is the improvement: a review
+CSV (Showdown, C3, or C1's export) replaces the baseline only through
+`delivery.replace`, after its own readable-review classification and a fresh
+revalidation, with the same inputs and at least as many rows. When the review
+blocks (weather, identity, a policy gate), is withheld, crashes, or never runs
+(the pre-review blocked exit), the baseline is still the deliverable.
+Read the result, not the exit code:
+
+- `latest_deliverable` names the file to hand over, with its `producer`
+  (`run-slate:baseline`, or the review that replaced it) and SHA-256;
+- `DELIVERY_STATE` and `release_truths` describe that file;
+  `IMPROVEMENT_NOT_DELIVERED` among its limitations means it is the baseline
+  and says why the review did not replace it;
+- `baseline` and `improvement` say what each step did;
+- `next` opens with the baseline's path whenever it is the deliverable.
+
+Exit codes keep their meaning: 0 when the run's own review completed, 2 when it
+did not, whether or not the baseline ships. The workbook's Upload sheet names
+the deliverable's path. Both files stay on disk: a replaced baseline is kept,
+never rewritten.
+
+**Run `baseline` by hand** (Session 04) only when `run-slate` cannot start, for
+example an intake it refuses or a request that will not load:
 
     sh ./nfl.sh baseline --salaries <DKSalaries.csv> --entries <DKEntries.csv>
 
@@ -1088,8 +1117,9 @@ integrity gate, and the file stays withheld until its input is fixed.
 Every exit ends `PRIOR_ONLY / DO_NOT_UPLOAD`, and the report names the gaps it
 carries (official activity, current role, weather, model). Lineups rank by
 DraftKings salary alone (`BASELINE_SALARY_RANK_V1`), so treat the file as the
-baseline a later improvement replaces, not as a tuned portfolio. Until
-Session 06 makes `run-slate` baseline-first, run it by hand before `run-slate`.
+baseline a later improvement replaces, not as a tuned portfolio. It applies
+DraftKings' own `OUT`, `IR` and `D` flags and the operator's exact exclusions,
+not official activity reports: say so when it is the file you hand over.
 The Classic fallback path above stays the fallback for anything the baseline
 cannot build: since Sessions 02 and 02b its builder and writer refuse a wrong
 input by name (exit 2), QA exits 1 on a validity failure, and all three exit 3
