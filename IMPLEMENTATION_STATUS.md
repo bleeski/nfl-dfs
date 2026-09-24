@@ -1,5 +1,30 @@
 # Implementation Status
 
+## Capability added: 2026-09-24 (Session 10)
+
+The engine walks the rung ladder itself. `src/nfl_dfs/relaxation.py` owns the
+Classic table (moved from `scripts/make_classic_policy.py`, now a wrapper) and a
+Showdown one (`scripts/make_showdown_policy.py --rung`), and `run-slate`
+re-enters its review when a policy's selection fails on a trigger read from the
+review's structured `selection_failure`: an infeasible bank or joint solve
+takes the next rung; a bank or joint solve at its limit, a solver error, or a
+hash-bound search the window cannot hold re-sizes the bank at the same rung
+first and relaxes no structure, then takes rung 4 (C1, or sequential
+Showdown); an SD3 bank that ran out is deepened before any structure; a
+supplied policy whose only problems are `S` bounds enters the ladder at intake.
+Each rung's policy is the loosest of the one it replaces and the rung's table,
+written into the run folder, hashed, validated and normalized like a supplied
+one, and every step is an `nfl_relaxation_record_v1` record and an `S`
+limitation (`RELAXATION_*`). Uniqueness, exact exclusions and zero caps are
+never on the ladder; rung 4 carries a dropped policy's exclusions. Every rung
+must fit the deadline's window, and a window that cannot hold rung 4 stops the
+ladder by name with the baseline delivered. Verified through `run-slate` on
+the Classic fixture (an impossible cap, a bank timeout, a structural failure,
+a one-lineup slate, a spent window) and the Showdown fixture (a Captain cap, a
+short bank). Not yet: a prior_review shortfall still delivers all or nothing,
+so a pool too small for every entry ships the baseline with its unfilled
+Entry IDs (Session 11); the fallback builder keeps its own ladder.
+
 ## Capability added: 2026-09-24 (Session 09)
 
 R28 on the model path: three stops that held back the engine's own portfolio
@@ -38,7 +63,7 @@ file ships naming `CANDIDATE_BANK_STOPPED_AT_LIMIT` and
 `run-slate` on real HiGHS stopped by a node limit and by a time limit, and for
 SD3 through the Showdown export. Not yet: a stopped SD3 bank
 still blocks (no joint-solved witness), and nothing walks the rung ladder when
-a bank does block (Session 10).
+a bank does block (Session 10, since done).
 
 ## Capability added: 2026-09-24 (Session 07b)
 
@@ -54,7 +79,7 @@ timeout and retry pause at the time left; without IANA data it says so and
 keeps its fixed clocks. `scripts/make_classic_policy.py` sizes the bank to the
 window at this host's measured candidate rate and exits 2, writing nothing,
 when even the floor bank does not fit. Not yet: the engine walking the rung
-ladder (Session 10); an evidence fetch outside `run-slate` (the role-evidence
+ladder (Session 10, since done); an evidence fetch outside `run-slate` (the role-evidence
 script) still has only the fixed 30 s.
 
 ## Capability added: 2026-09-24 (Session 07)
@@ -70,7 +95,7 @@ limitation (`S`). A C2 policy's hash-bound limits either fit or stop the
 review. Every result carries measured stage durations, and `run-slate` records
 this host's candidate rate after every C2 bank. Not yet: the `diagnostic` and
 `registered` profiles' build and certify limits (only their start is gated),
-the relaxation ladder inside the budget (Session 10).
+the relaxation ladder inside the budget (Session 10, since done).
 
 ## Capability added: 2026-09-24 (Session 06b)
 

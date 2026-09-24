@@ -744,6 +744,25 @@ Every session follows this protocol, and the cards only add to it:
 - **Acceptance.** An impossible exposure cap relaxes to feasible and exports. A
   pool too small for distinct lineups reports unfilled IDs and never repeats a
   lineup. Budget exhaustion stops with the baseline intact.
+- **2026-09-24, Complete.** `src/nfl_dfs/relaxation.py` owns both ladders (the
+  Classic table moved out of `make_classic_policy.py`, now a wrapper; Showdown
+  rungs from the DAL@NYG retro, `make_showdown_policy.py --rung`), and
+  `run-slate` re-enters its review on a trigger read from the structured
+  `selection_failure` (`SelectionError` carries its status; `deadline.py`'s
+  regex is gone). Throughput failures (bank or joint limits, solver errors, a
+  search the window cannot hold) re-size the bank at the same rung first, then
+  take rung 4; structural ones take the next rung; an SD3 bank that ran out is
+  deepened first; a policy whose only problems are `S` bounds enters at intake.
+  Each rung's policy is the loosest of the last and the table, written, hashed,
+  validated and normalized in the run folder; every step is an
+  `nfl_relaxation_record_v1` record and an `S` limitation (`RELAXATION_*`).
+  Uniqueness, exclusions and zero caps are never relaxed; a window that cannot
+  hold rung 4 stops the ladder by name with the baseline delivered. Relaxed:
+  the diff passed the 1,500-line breakpoint with the Classic controller alone,
+  so the tested Showdown ladder stayed in rather than moving to a 10b row. Left
+  open: prior_review still delivers all or nothing, so a short pool ships the
+  baseline with its unfilled Entry IDs (Session 11). Decisions and numbers:
+  `changelog.md`.
 
 #### Session 11: entry groups
 

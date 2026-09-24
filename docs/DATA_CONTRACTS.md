@@ -2017,7 +2017,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `941f6d471a39c8170529b2691f2f297445ef1f18c060b3e7c97910f50cfd9ce1`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `770689f2e395a1617a82e2c96055d9109cde1d15a5d4d6e8a51bba7c50ca1026`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2109,8 +2109,10 @@ after intake, is the run's one clock and time budget; its record,
   sequential (C1) selection `min(10, window / (lineups + 1))` per solve,
   stopped under 0.5 s; an SD3 bank `min(scaled, 70%)` and its joint solve
   `min(scaled, 20%)`; a Classic C2 policy's bank and joint limits are
-  hash-bound, so they either fit the window or stop the review. A passed
-  deadline or a spent window skips the review before it starts.
+  hash-bound, so they either fit the window or stop the review (inside
+  `run-slate` the relaxation controller then re-sizes the bank or takes
+  rung 4, § Relaxation record). A passed deadline or a spent window skips
+  the review before it starts.
 - **Evidence fetches (Session 07b).** `sources.fetch_public_artifact` takes
   `Budget.fetch_seconds`: `min(30, the improvement window)`, from the budget
   passed or the one `deadline.activated` set (`run-slate` wraps its review in
@@ -2311,7 +2313,8 @@ leave the baseline: `CLASSIC_C1_EXPORT_OUTPUT_EXISTS`,
 C1 read), `CLASSIC_C1_EXPORT_FAILED`,
 `CLASSIC_C1_EXPORT_AUDIT_FAILED`, `CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH`
 (all `V`). The pre-lock manifest binds the assignment this file renders, not the
-file. A run with a policy goes to C3 and never takes this path.
+file. A run with a policy goes to C3, and takes this path only when the
+relaxation controller drops its policy for rung 4 (§ Relaxation record).
 
 A replacement never delivers fewer rows than the baseline while the baseline
 still revalidates (`DELIVERY_POINTER_COVERAGE_REGRESSION`); a partial review
@@ -2325,6 +2328,10 @@ Exit codes are unchanged: 0 when the run's own review completed, 2 when it did
 not. A shipped baseline never turns a failed review into 0, and a refused C1
 export is 2. A review the deadline skipped or stopped is 2 (Session 07).
 
+Since Session 10 a run with a policy also carries `relaxation`, the run's
+`nfl_relaxation_record_v1` record (§ Relaxation record); the pre-review exit
+carries it only when the ladder relaxed or stopped at intake.
+
 Since Session 07 every exit's result also carries `deadline`, the run's
 `nfl_deadline_budget_v1` record (§ Deadline budget; `null` from the outer
 handler when the budget itself could not be built), and the pre-review exit's
@@ -2334,3 +2341,93 @@ stopped the review.
 Does not establish: upload clearance, certification, lineup quality, or any EV,
 ROI, win, cash, ownership or edge claim. It says which file to hand over, which
 step made it, and why the other did not.
+
+## Relaxation record (Session 10)
+
+Registered 2026-09-24 by Session 10 (the 2026-09-12 lock-clock ruling, R28,
+R29, R31). `nfl_dfs.relaxation` owns the rung ladder and `run-slate` walks it
+inside one run when the run has a policy. The record, `nfl_relaxation_record_v1`,
+is the result's `relaxation` field and `data/runs/<run_id>/relaxation/relaxation.json`.
+
+**The ladder.** Classic rungs 0 to 3 are the generator's table (stack rules,
+overlap, exposure fraction, bank halved at 3; `scripts/make_classic_policy.py`
+is a wrapper over it); Showdown rungs 1 to 3 are `SHOWDOWN_RUNGS` (1: every
+capped Captain fraction at least 0.25, zeroed Captains kept; 2: zeroed Captains
+lifted and Captain caps at least 0.5; 3: no exposure caps, overlap at least 5;
+`scripts/make_showdown_policy.py --rung`); rung 4 is no policy (C1, or
+sequential Showdown selection). A rung's policy is the loosest of the policy it
+replaces and the rung's table, dimension by dimension, so it never tightens: a
+generator's rung-k policy becomes rung k+1 exactly. A supplied policy is
+`SUPPLIED` and starts at the first rung that changes it.
+
+**Triggers.** Read from the review's structured `selection_failure`
+(`{status, origin, facts, error}` in `prior_review_reports`; `SelectionError`
+carries `status` and `facts`), never from text.
+
+| Step | Statuses | What the ladder does |
+|---|---|---|
+| `STRUCTURE` | `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`, `STRUCTURAL_INFEASIBILITY`, `MODELED_BANK_INFEASIBLE_PROVEN`; a supplied policy whose only validation problems are `S` codes | The next rung that changes the policy; one the validator refuses on `S` codes is recorded in `attempts` and the next is tried |
+| `THROUGHPUT` | `CANDIDATE_BANK_TIMEOUT`, `CANDIDATE_BANK_SEARCH_LIMIT`, `CANDIDATE_BANK_TIME_LIMIT`, `PORTFOLIO_SELECTION_TIMEOUT`, `PORTFOLIO_SELECTION_SEARCH_LIMIT`, `PORTFOLIO_SELECTION_TIME_LIMIT`, `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`; intake `search_budget` codes | Once per rung, the same structure on a re-sized bank (Classic: `classic_limits` at the slowest of this host's rate and this run's measured one, to the window left; a joint limit halves the bank. SD3: half what it built). Then rung 4 |
+| `SOLVER_ERROR` | `CANDIDATE_BANK_SOLVER_ERROR`, `PORTFOLIO_SELECTION_SOLVER_ERROR` (`selection_claims`, `P`) | As `THROUGHPUT`: one smaller bank, then rung 4; never a structural rung |
+| `BANK_DEPTH` | `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE` (SD3) | Once, the SD3 bank deepened to `max(6 x entries, 1.5 x its size)`, then `STRUCTURE` |
+
+Never a trigger: `BOUNDED_TIME_LIMIT_STOP`, `BOUNDED_SEARCH_LIMIT_STOP`,
+`FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK` (Session 08 delivers and names them), and
+`SOLVER_RETURNED_NO_LINEUP` (C1 or Showdown out of distinct lineups: rung 4 is
+the floor, and the baseline stays the file with its unfilled Entry IDs).
+
+**Never relaxed.** `require_unique_lineups` (R29) is true in every rung's
+policy; a Classic policy's `exact_exclusions`, a Showdown policy's
+`excluded_people`, and any person a policy caps at zero entries (a Classic
+`maximum_entries` of 0, a Showdown combined fraction of 0) stay excluded at every
+rung, and rung 4 passes their exact DraftKings IDs to the review as operator
+exclusions. Official inactives and request exclusions are re-derived by the
+validator from the same run. No evidence gate is on the ladder.
+
+**The window.** Each rung must fit the improvement window less the last
+attempt's measured pre-selection time: a C2 rung's declared bank and joint
+budget (`classic_limits` against that window), an SD3 rung 2.5 s (the joint
+solve's 20% share must reach 0.5 s), rung 4 0.5 s per lineup plus one. A C2 or
+SD3 rung that does not fit takes rung 4; rung 4 not fitting stops the ladder
+(`RELAXATION_LADDER_STOPPED`) and the baseline stays the file.
+
+**Artifacts.** Each rung's policy is written to
+`data/runs/<run_id>/relaxation/attempt_<n>_rung_<r>[_bank]/`:
+`portfolio_policy.json` (canonical bytes), `portfolio_policy_validation.json`
+and `portfolio_policy.normalized.json`, validated by the supplied-policy
+validator against the hash of the bytes written, with the run's outside
+exclusions; the review re-checks both hashes before selection as it does a
+supplied one. Attempt 0's review root is `prior_review/`; attempt n's is
+`prior_review_attempt_<n>/`, reusing attempt 0's frozen priors when it built them.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | `nfl_relaxation_record_v1` |
+| `mode` | `CLASSIC` or `SHOWDOWN` |
+| `started_from`, `final_rung`, `final_policy` | The supplied rung and its binding; the rung the last attempt ran and its binding (`null` for rung 4) |
+| `attempts` | One per review attempt: `attempt`, `rung`, `run_root`, `policy`, `showdown_candidate_limit`, `outcome`, `failure` (the trigger, or `null`), `elapsed_seconds`, `pre_selection_seconds`; and one per rung the validator refused: `attempt` `null`, `outcome` `REFUSED_AT_VALIDATION`, `codes`, `policy` |
+| `relaxations` | One per relaxed constraint (below) |
+| `stop` | `RELAXATION_LADDER_STOPPED:<detail>` when the window or a validator refusal ended the ladder, else `null` |
+| `never_relaxed`, `does_not_establish` | As named |
+
+Each relaxation: `sequence`, `attempt` (the one it fed), `step` (`BANK`,
+`STRUCTURE`, `NO_POLICY`), `constraint` (`stack_rules.<rule_id>`,
+`player_exposure_bounds`, `team_exposure_bounds`, `game_exposure_bounds`,
+`groups`, `max_pairwise_person_overlap`, `search_limits`,
+`max_combined_person_exposure`, `max_captain_exposure`,
+`candidate_bank.candidate_limit`, `portfolio_policy`), `class`, `family` and
+`provenance` (the registry's), `original`, `final`, `trigger`, `trigger_kind`,
+`trigger_origin` (`SELECTION`, `DEADLINE`, `INTAKE`), `trigger_detail`,
+`rung_from`, `rung_to`, `why`, `at_utc` (the run's clock), `elapsed_seconds`,
+`entry_ids` (every authorized Entry ID: a policy binds them all), `policy`
+(the new rung's binding), `limitation_code` and `limitation_text`.
+
+Codes, each `S`, `CONSTRUCTION_PREFERENCE`, on every exit that reports the
+record, the delivered file's or the baseline's: `RELAXATION_STRUCTURE_RELAXED`
+and `RELAXATION_POLICY_DROPPED` (`portfolio_bounds`), `RELAXATION_BANK_RESIZED`
+(`search_budget`), `RELAXATION_LADDER_STOPPED` (`delivery_deadline`).
+`RELEASE_DECISION` stays `DO_NOT_UPLOAD`, and exit codes keep their meaning: 0
+only when the last attempt's review completed.
+
+Does not establish: upload clearance, certification, lineup quality, or that a
+tighter policy was infeasible outside the reported bank.

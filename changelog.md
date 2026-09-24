@@ -4,6 +4,179 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: the engine walks the rung ladder itself (Session 10)
+
+Until now the relaxation ladder was printed advice: `make_classic_policy.py`
+said "regenerate at --rung N+1", a person reran, and Showdown had no ladder at
+all. `run-slate` now walks both inside one run, inside the run's deadline
+budget, and records every step. On `claude/epic-planck-3jxp20`, claim
+`328166a`. Every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; no evidence gate,
+no integrity gate and no uniqueness rule is on the ladder.
+
+#### Added
+
+- **`src/nfl_dfs/relaxation.py`** owns the ladder. The Classic table (stack
+  rules, overlap, exposure fraction, `classic_limits`, the bank halved at rung
+  3) moved here verbatim; `scripts/make_classic_policy.py` is a wrapper that
+  keeps its names (`_stack_rules`, `_limits`, `BankDoesNotFit`) and output. A
+  Showdown table, `SHOWDOWN_RUNGS`: 1 widens every capped Captain fraction to at
+  least 0.25 (zeroed Captains stay zero), 2 lifts zeroed Captains and widens to
+  at least 0.5, 3 drops every exposure cap and raises the overlap cap to at
+  least 5; rung 4 in both modes is no policy. `make_showdown_policy.py --rung`
+  writes one by hand. A rung's policy is the loosest of the policy it replaces
+  and the rung's table, dimension by dimension, so a relaxation never tightens:
+  a generator's rung-k policy becomes rung k+1 exactly (tested at k = 0, 1, 2
+  on the 719-person fixture), and a supplied policy starts at the first rung
+  that changes it.
+- **The controller in `run-slate`.** `cli._run_prior_review_profile` loops at
+  its `run_prior_review` call: attempt 0 in `prior_review/`, attempt n in
+  `prior_review_attempt_<n>/` reusing attempt 0's frozen priors when it built
+  them, each on its rung's own policy, all inside the same budget. The pointer
+  logic below the loop is unchanged and sees the last attempt, so the baseline
+  stays on the pointer unless that attempt's file replaces it. A supplied
+  policy whose only validation problems are `S` codes (a capacity or bound it
+  cannot meet) takes its first rung at intake instead of stopping the run; any
+  other problem still stops it.
+- **Triggers**, read from the review's new structured `selection_failure`
+  (`SelectionError(status=, facts=)` at the bank, joint-solve and C1 raises;
+  `prior_review` records it, and its deadline stop too). `STRUCTURE`:
+  `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
+  `STRUCTURAL_INFEASIBILITY`, `MODELED_BANK_INFEASIBLE_PROVEN`. `THROUGHPUT`:
+  `CANDIDATE_BANK_TIMEOUT`, `CANDIDATE_BANK_SEARCH_LIMIT`,
+  `CANDIDATE_BANK_TIME_LIMIT`, `PORTFOLIO_SELECTION_TIMEOUT`,
+  `PORTFOLIO_SELECTION_SEARCH_LIMIT`, `PORTFOLIO_SELECTION_TIME_LIMIT`,
+  `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`. `SOLVER_ERROR`:
+  `CANDIDATE_BANK_SOLVER_ERROR`, `PORTFOLIO_SELECTION_SOLVER_ERROR`.
+  `BANK_DEPTH`: `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`. Never:
+  `BOUNDED_TIME_LIMIT_STOP`, `BOUNDED_SEARCH_LIMIT_STOP`,
+  `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK` (their names
+  `CANDIDATE_BANK_STOPPED_AT_LIMIT`, `PORTFOLIO_SELECTION_LIMIT_INCUMBENT`), and
+  `SOLVER_RETURNED_NO_LINEUP`.
+- **Bank before structure** (C4 retro #3). A throughput failure re-sizes the
+  bank at the same rung, once: Classic through `classic_limits` at the slowest
+  of this host's ledger rate and this run's measured one (its bank budget over
+  what it built), to the window left, halved for a joint-solve limit or a
+  solver error; SD3 to half what it built (its budget is the deadline's). A
+  re-size that changes nothing, or does not fit, and a second throughput
+  failure, take rung 4: structure does not fix throughput. An SD3 bank that ran
+  out is deepened once to `max(6 x entries, 1.5 x its size)` before any rung
+  (DAL@NYG retro §6, §7e), through the new `run_prior_review(showdown_candidate_limit=)`.
+- **The window.** Each rung must fit the improvement window less the last
+  attempt's measured pre-selection time: a C2 rung its `classic_limits` search,
+  an SD3 rung 2.5 s, rung 4 0.5 s per lineup plus one. A C2 or SD3 rung that
+  does not fit takes rung 4; rung 4 not fitting stops the ladder,
+  `RELAXATION_LADDER_STOPPED`, with the baseline delivered. A rung that cannot
+  be written or validated at all ends the ladder the same way, named.
+- **Records and artifacts.** `nfl_relaxation_record_v1` (`docs/DATA_CONTRACTS.md`
+  § Relaxation record) is the result's `relaxation` and
+  `data/runs/<run_id>/relaxation/relaxation.json`: every attempt, every rung the
+  validator refused, and one record per relaxed constraint with its class,
+  family, provenance, original and final value, trigger, rung, time, Entry IDs
+  and the new policy's binding. Each rung's policy is written to
+  `relaxation/attempt_<n>_rung_<r>[_bank]/` (source, validation, normalized),
+  validated by the supplied-policy validator against the hash of the bytes
+  written, and re-checked by the review before selection.
+- **Registry**: `RELAXATION_STRUCTURE_RELAXED` and `RELAXATION_POLICY_DROPPED`
+  (`portfolio_bounds`), `RELAXATION_BANK_RESIZED` (`search_budget`),
+  `RELAXATION_LADDER_STOPPED` (`delivery_deadline`), all `S`; the three
+  families' `covers` say so. 1,211 codes in 45 families, SHA-256
+  `770689f2e395a1617a82e2c96055d9109cde1d15a5d4d6e8a51bba7c50ca1026`, re-pinned
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`. They reach
+  `release_truths` on the delivered file's exit and, beside the baseline's own,
+  on the baseline's exits after the review and before it.
+
+#### Changed
+
+- `deadline.bank_rate_observation(reports, *, declared_bank_seconds)` reads a
+  timed-out bank's count from `selection_failure`; the `candidates=(\d+)` regex
+  over blocker text and `import re` are gone.
+- `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`'s text adds that `run-slate` takes
+  its steps itself.
+- Runbook: the ladder passages (the policy section, "Shipping under a lock
+  clock", the deadline paragraph) describe the engine walking it; the stale
+  `selection.py:538-542` cite is `:577-584`, where C1's raise sits after this change. `IMPLEMENTATION_STATUS.md` has a
+  Session 10 entry and its three "Session 10" not-yets say "since done".
+
+#### Decided, and why
+
+- **Solver errors** (Ben's lean): no structural rung. A solver error is a claim
+  failure, not a preference, so its registry family stays `selection_claims`
+  (`P`). It gets one smaller bank and then rung 4, the same as throughput.
+- **Rung policies are imported** from `relaxation.py`, never produced by
+  running the script (Ben's lean): no subprocess, one code path, and the
+  engine's validator checks the result.
+- **Structured failure** (Ben's lean): `SelectionError` carries `status` and
+  `facts`; the controller and the host-rate ledger read them. The deadline stop
+  is recorded structured too, its status the head of the budget's own
+  `CODE:detail` event.
+- **`DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW` is a trigger** though it is not a
+  selection status: its own text prescribed exactly the ladder's step
+  (re-size the bank to the window, or take rung 4), and the card's first line
+  is that the engine, not printed advice, takes it.
+- **Contract**: one name, `nfl_relaxation_record_v1`, for the run's record and
+  its items, in the result's `relaxation`. A relaxation's limitation family is
+  what it relaxed: the bank or its budget is `search_budget`, a bound or the
+  whole policy is `portfolio_bounds`, the window's stop is `delivery_deadline`.
+- **Showdown order** (DAL@NYG retro §6): the bank and the Captain strata bind
+  first, so after the bank step Captain caps widen, then zeroed Captains
+  captain, then every exposure cap and the tight overlap go.
+- **"The window cannot hold the next rung"** (Ben's lean): its declared
+  search from `classic_limits` against `improvement_remaining`, less the last
+  attempt's measured pre-selection time, since each retry repeats projection
+  and scoring before it selects.
+- **A zero cap is an exclusion.** A Classic `maximum_entries` of 0 or a Showdown
+  combined fraction of 0 is kept at every rung and carried into rung 4, because
+  the selector already treats a zero maximum as an exclusion; relaxing it would
+  put back a person someone took out. A zeroed Showdown Captain is a Captain
+  cap and rung 2 relaxes it (Ben's list names zeroed Captains).
+- **Intake**: a supplied policy whose only problems are `S` enters the ladder;
+  search-budget codes ask for the bank step, bound codes for structure.
+- **No 10b split.** The diff passed the 1,500-line breakpoint (about 1,900
+  changed lines), but the Classic controller alone passes it too, so moving the
+  already tested Showdown ladder to a later row would not have brought the diff
+  under it and would have left Showdown on printed advice.
+- **Unfilled Entry IDs** come from the baseline, as Ben expected: prior_review
+  is still all or nothing, so a pool too small for every entry walks to rung 4,
+  C1 runs out of distinct lineups, and the baseline ships with its unfilled
+  Entry IDs. Partial delivery by entry group stays Session 11's.
+
+#### Tests whose expectation changed (each its own edit)
+
+- `tests/test_deadline_controller.py`:
+  `test_a_c2_policy_whose_declared_search_does_not_fit_stops_the_review` is now
+  `test_a_c2_policy_whose_declared_search_does_not_fit_takes_rung_4`. The stop's
+  advice is the engine's now: no re-sized bank fits the 20 s window, so the
+  ladder drops the policy, C1 delivers (exit 0), and both
+  `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW` and `RELAXATION_POLICY_DROPPED` are
+  named `S`. `test_a_bank_rate_is_read_from_its_report_or_from_a_bank_time_limit`
+  passes the structured failure in place of blocker text.
+- `tests/test_classic_portfolio_c2.py`: the bank-rate call drops its blockers
+  argument.
+- `tests/test_gate_registry.py`: `test_the_rung_ladder_triggers_are_construction_preferences`
+  covers the full trigger list, the solver errors' `P` family, the never-triggers
+  and the four new codes.
+
+#### Verification
+
+- New `tests/test_relaxation_controller.py`, 12 tests, each acceptance a
+  `run-slate` run on a fake monotonic clock: an impossible exposure cap (every
+  person at one of three entries) is refused at rungs 0 to 2 and exports at 3;
+  a bank timeout re-sizes the bank (200 to fewer candidates, budget raised) with
+  identical controls and exports through C3; a one-lineup slate (a salary
+  squeeze, so no evidence gate is involved) walks to rung 4, C1 runs out of
+  distinct lineups, and the baseline ships one lineup and names the two
+  unfilled Entry IDs; a retry that leaves one second stops the ladder with
+  `RELAXATION_LADDER_STOPPED` and the baseline delivered (exit 2); a Showdown
+  10% Captain cap over two entries is refused at rung 1 and exports at 2. Also a
+  structural failure at selection takes rung 1 exactly, an SD3 bank that ran out
+  is deepened from 32 to 48 before any rung, and three unit tests of the merge.
+- Card command `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_classic_policy_generator.py -x --tb=short`:
+  `28 passed`. The complete pinned suite on Linux: `1710 passed, 1 skipped in
+  224.86s` (baseline before any change `1698 passed, 1 skipped in 212.05s`; the
+  skip is the junction test).
+- `sh ./nfl.sh doctor` passes; `compileall` on every changed module;
+  `git diff --check` clean; `python3 scripts/check_protected_paths.py` clean.
+
 ### 2026-09-24: missing weather, Classic activity and the P1 role change ship named (Session 09, R28)
 
 Three stops on the model path held back the engine's own portfolio for evidence
