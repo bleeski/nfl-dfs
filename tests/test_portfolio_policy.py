@@ -224,17 +224,19 @@ def test_unknown_ids_conflicting_roles_and_duplicate_overrides_are_rejected(
     )
 
 
-def test_duplicate_and_subset_entry_bindings_are_rejected(tmp_path: Path) -> None:
+def test_duplicate_reordered_and_unknown_entry_bindings_are_rejected(tmp_path: Path) -> None:
+    """Session 11b: a subset in template order now validates; everything else stays refused."""
+
     slate = _slate(tmp_path)
     duplicate = _document(slate, ("900000001", "900000001"))
     validation = _validate(slate, duplicate)
     assert "PORTFOLIO_POLICY_DUPLICATE_ENTRY_ID" in _codes(validation)
     assert "PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH" in _codes(validation)
 
-    subset = _document(slate, ("900000001",))
-    assert "PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH" in _codes(
-        _validate(slate, subset)
-    )
+    for bound in (("900000002", "900000001"), ("900000009",), ()):
+        assert "PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH" in _codes(
+            _validate(slate, _document(slate, bound))
+        ), bound
 
 
 def test_complete_person_identity_binding_detects_mutated_identity(tmp_path: Path) -> None:
@@ -778,3 +780,155 @@ def test_policy_assignment_artifact_mutation_fails_independent_audit_and_writes_
     assert outcome.reports["portfolio_policy_audit"]["status"] == "FAIL"
     assert retained.read_bytes() == b"keep"
     assert list(output_root.rglob("DK_REVIEW_ENTRY_audit-mutation.csv")) == []
+
+
+# ----------------------------------------------------------------- Session 11b: subset binding
+
+
+def test_integer_caps_and_denominators_follow_the_bound_rows_not_the_fillable_rows(tmp_path: Path) -> None:
+    """A 0.5 fraction over 4 bound rows of 10 fillable rows allows 2, not 5."""
+
+    slate = _slate(tmp_path)
+    fillable = tuple(str(900000001 + index) for index in range(10))
+    bound = (fillable[1], fillable[3], fillable[6], fillable[8])
+    document = _document(
+        slate, bound,
+        max_combined_person_exposure={"default_fraction": 0.5, "overrides": []},
+        max_captain_exposure={"default_fraction": 0.5, "overrides": []},
+    )
+    validation = _validate(slate, document, fillable)
+    assert validation.valid, validation.blockers()
+    policy = validation.policy
+    assert policy.entry_ids == bound and policy.entry_count == 4
+    assert {item.combined_max_entries for item in policy.effective_limits} == {2}
+    assert {item.captain_max_entries for item in policy.effective_limits} == {2}
+    assert policy.as_mapping()["effective"]["entry_count_denominator"] == 4
+    assert policy.as_mapping()["bindings"]["entry_ids"] == list(bound)
+    full = _validate(slate, _document(
+        slate, fillable, max_combined_person_exposure={"default_fraction": 0.5, "overrides": []}), fillable)
+    assert {item.combined_max_entries for item in full.policy.effective_limits} == {5}
+
+
+def test_classic_integer_domains_follow_the_bound_rows(tmp_path: Path) -> None:
+    from nfl_dfs.classic_portfolio_policy import (
+        classic_portfolio_policy_template,
+        default_search_limits,
+        validate_classic_portfolio_policy_bytes,
+    )
+
+    supplied = Path(__file__).resolve().parent / "fixtures" / "supplied"
+    slate = parse_salaries(supplied / "DKSalaries Salary CSV Classic.csv")
+    template = parse_entries(supplied / "DKEntries CSV 20 entries.csv")
+    fillable = tuple(entry.entry_id for entry in template.authorizations)[:10]
+    bound = fillable[2:6]
+
+    def validate(document):
+        return validate_classic_portfolio_policy_bytes(
+            json.dumps(document).encode("utf-8"), slate=slate, entry_ids=fillable,
+            entry_sha256=template.raw_hash)
+
+    document = classic_portfolio_policy_template(slate, bound, entry_sha256=template.raw_hash)
+    assert document["selection"]["limits"] == default_search_limits(4).as_mapping()
+    assert {rule["maximum_entries"] for rule in document["controls"]["stack_rules"]} == {4}
+    validation = validate(document)
+    assert validation.valid, validation.blockers()
+    assert validation.policy.entry_count == 4 and validation.policy.entry_ids == bound
+    assert {bound_.maximum_entries for bound_ in validation.policy.player_bounds} == {4}
+    assert validation.policy.as_mapping()["effective"]["entry_count_denominator"] == 4
+    person = document["bindings"]["people"][0]
+    reference = {key: person[key] for key in ("underlying_id", "dk_id")}
+    document["controls"]["player_exposure_bounds"] = [
+        {**reference, "minimum_entries": 0, "maximum_entries": 5}]
+    codes = {issue.code for issue in validate(document).problems}
+    assert codes and "CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH" not in codes  # 5 exceeds the 4 bound rows
+
+
+def _fill(tmp_path, *, fill_count, policy_controls=None, max_person_overlap=4, forbidden_rosters=()):
+    from nfl_dfs.selection import select_prior_lineups
+
+    from .test_prior_selection import _prepared
+
+    tmp_path.mkdir(exist_ok=True)
+    slate, model, contract, splits = _prepared(tmp_path)
+    bound = ("1", "2")
+    fillable = ("1", "2", *(str(3 + index) for index in range(fill_count)))
+    raw = json.dumps(portfolio_policy_template(slate, bound, controls=policy_controls or {})).encode("utf-8")
+    validation = validate_portfolio_policy_bytes(raw, slate=slate, entry_ids=fillable)
+    assert validation.valid, validation.blockers()
+    return slate, select_prior_lineups(
+        slate, model, splits, contract, count=2, fill_count=fill_count, portfolio_policy=validation.policy,
+        max_person_overlap=max_person_overlap, forbidden_rosters=forbidden_rosters)
+
+
+def test_sd3_fills_the_unbound_rows_after_its_joint_solve_under_the_runs_exclusions_only(tmp_path: Path) -> None:
+    from nfl_dfs.lineups import roster_canonical_key
+    from nfl_dfs.selection import select_prior_lineups
+
+    from .test_prior_selection import _prepared
+
+    (tmp_path / "top").mkdir()
+    slate, model, contract, splits = _prepared(tmp_path / "top")
+    (best,), _scores, _report = select_prior_lineups(slate, model, splits, contract, count=1)
+    by_id = {row.dk_id: row for row in slate.players}
+    faded = by_id[best.captain_dk_id].underlying_id
+    identity = next(item for item in salary_person_bindings(slate) if item.underlying_id == faded)
+    (second,), _scores, _report = select_prior_lineups(
+        slate, model, splits, contract, count=1, forbidden_rosters=(best.roster,))
+
+    slate, (lineups, _scores, report) = _fill(
+        tmp_path / "fill", fill_count=2, forbidden_rosters=(second.roster,),
+        policy_controls={"excluded_people": [identity.as_mapping()]})
+
+    assert len(lineups) == 4 and [lineup.index for lineup in lineups] == [1, 2, 3, 4]
+    people = [{by_id[dk_id].underlying_id for dk_id in lineup.roster} for lineup in lineups]
+    assert all(faded not in group for group in people[:2])  # the policy's exclusion binds its rows
+    assert lineups[2].roster == best.roster  # and not the fill's: its first lineup is the run's best
+    keys = [roster_canonical_key(slate, lineup.roster) for lineup in lineups]
+    assert len(set(keys)) == 4 and roster_canonical_key(slate, second.roster) not in keys
+    fill = report["unbound_fill"]
+    assert fill["source"] == "SHOWDOWN_SEQUENTIAL" and fill["lineups"] == 2
+    assert fill["lineup_indexes"] == [3, 4]
+    assert fill["no_good_rosters"] == {"policy_lineups": 2, "prefilled_rosters": 1}
+    assert report["selected_lineup_count"] == 2 and len(report["pairwise_person_overlap"]) == 1
+
+
+def test_an_unbound_fill_that_runs_out_of_distinct_lineups_delivers_nothing(tmp_path: Path) -> None:
+    from nfl_dfs.selection import SelectionError
+
+    with pytest.raises(SelectionError, match="SOLVER_RETURNED_NO_LINEUP:.*stage=UNBOUND_FILL") as caught:
+        _fill(tmp_path, fill_count=4, max_person_overlap=0)
+    assert caught.value.status == "SOLVER_RETURNED_NO_LINEUP"
+    assert caught.value.facts["stage"] == "UNBOUND_FILL"
+
+
+def test_the_sd3_audit_checks_the_bound_rows_and_holds_the_artifact_to_the_unbound_ones(tmp_path: Path) -> None:
+    from nfl_dfs.portfolio_enforcement import audit_policy_assignments, build_policy_candidate_bank
+
+    slate = _slate(tmp_path)
+    fillable = ("1", "2", "3")
+    raw = json.dumps(portfolio_policy_template(slate, ("1", "3"), controls={})).encode("utf-8")
+    policy = validate_portfolio_policy_bytes(raw, slate=slate, entry_ids=fillable).policy
+    objective = {row.dk_id: float(index) for index, row in enumerate(slate.players)}
+    bank = build_policy_candidate_bank(slate, objective, candidate_limit=3, total_time_limit_seconds=5,
+                                       per_solve_time_limit_seconds=1)
+    rosters = {entry: bank.candidates[index].roster for index, entry in enumerate(fillable)}
+
+    def audit(artifact_rows, unbound):
+        artifact = ("\n".join(["Entry ID,CPT,FLEX,FLEX,FLEX,FLEX,FLEX",
+                               *(",".join((entry, *rosters[entry])) for entry in artifact_rows)]) + "\n").encode()
+        normalized = policy.canonical_bytes()
+        return audit_policy_assignments(
+            slate=slate, policy=policy, assignments=[(entry, rosters[entry]) for entry in ("1", "3")],
+            salary_bytes=(tmp_path / "DKSalaries.csv").read_bytes(), entry_bytes=b"entries",
+            expected_entry_sha256=sha256_bytes(b"entries"), source_policy_bytes=raw,
+            expected_source_policy_sha256=sha256_bytes(raw), normalized_policy_bytes=normalized,
+            expected_normalized_policy_sha256=sha256_bytes(normalized), assignment_artifact_bytes=artifact,
+            expected_assignment_artifact_sha256=sha256_bytes(artifact), unbound_entry_ids=unbound)
+
+    passed = audit(("1", "2", "3"), ("2",))
+    assert passed.passed, passed.problems
+    assert passed.entry_ids == ("1", "3") and len(passed.pairwise_person_overlap) == 1
+    for artifact_rows, unbound in ((("1", "2", "3"), ()), (("1", "3"), ("2",)), (("1", "2", "2", "3"), ("2",))):
+        failed = audit(artifact_rows, unbound)
+        assert any(problem.startswith("PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH")
+                   for problem in failed.problems), (artifact_rows, unbound)

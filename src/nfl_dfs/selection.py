@@ -181,6 +181,8 @@ def select_prior_lineups(
     policy_selection_seconds: float | None = None,
     pool_scores_path: str | Path | None = None,
     forbidden_rosters: Sequence[tuple[str, ...]] = (),
+    fill_count: int = 0,
+    fill_time_limit_seconds: float | None = None,
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
     """Solve for `count` distinct legal lineups over the permitted pool.
 
@@ -191,6 +193,14 @@ def select_prior_lineups(
     bounds. `forbidden_rosters` (Session 11) are the entry template's prefilled
     rosters: C1 and sequential Showdown cut each from every solve, and the C2
     and SD3 banks never hold one, so no selected lineup repeats one (R29).
+
+    `fill_count` (Session 11b) is the fillable rows a subset SD3 policy leaves
+    unbound (a C2 subset is Session 11c's). After the joint solve, sequential
+    Showdown fills them: every policy lineup and every forbidden roster is a no-good, and only
+    the run's own exclusions apply (request, status, official, role), never the
+    policy's. The fill's lineups follow the policy's in the returned tuple and
+    its report is the policy report's `unbound_fill`; a fill that runs out of
+    distinct lineups raises, and nothing is returned (all or nothing).
     """
 
     if slate.mode not in {EngineMode.SHOWDOWN, EngineMode.CLASSIC}:
@@ -203,6 +213,17 @@ def select_prior_lineups(
         raise SelectionError(
             "PORTFOLIO_POLICY_ENTRY_COUNT_MISMATCH:"
             f"count={count}:policy_entries={portfolio_policy.entry_count}"
+        )
+    if fill_count < 0 or (fill_count and portfolio_policy is None):
+        raise SelectionError(
+            "PORTFOLIO_POLICY_ENTRY_COUNT_MISMATCH:"
+            f"fill_count={fill_count}:an unbound fill needs a subset policy"
+        )
+    if fill_count and isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+        raise SelectionError(
+            "CLASSIC_POLICY_SUBSET_UNSUPPORTED:a C2 policy binding a subset of the fillable rows is"
+            " Session 11c's (C3's package is bound to the C2 bank); bind every fillable row or omit"
+            " the policy"
         )
     if (
         isinstance(portfolio_policy, NormalizedPortfolioPolicy)
@@ -261,6 +282,9 @@ def select_prior_lineups(
                 }
             )
     )
+    # The run's own exclusions bind every row; a policy's own exclusions and zero
+    # caps (below) bind only the rows it binds, so the unbound fill uses these.
+    run_excluded = tuple(sorted(set(excluded_set)))
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
         for limit in portfolio_policy.effective_limits:
             if limit.combined_max_entries == 0:
@@ -271,18 +295,19 @@ def select_prior_lineups(
             if limit.maximum_entries == 0:
                 excluded_set.append(by_person[limit.entity_id].dk_id)
     excluded = tuple(sorted(set(excluded_set)))
-    # Every row of an unavailable person is scoreless as well as excluded, so a
-    # solver bug that ignored the exclusion could not profit from it either.
-    objective = {
-        dk_id: (0.0 if dk_id in set(excluded) else value)
-        for dk_id, value in scores.by_dk_id.items()
-    }
-    for player in slate.players:
-        objective.setdefault(player.dk_id, 0.0)
+    objective = _objective(slate, scores, excluded)
+
+    def fill(policy_lineups: list[SelectedLineup]) -> tuple[list[SelectedLineup], dict[str, object]]:
+        return _fill_unbound(
+            slate, _objective(slate, scores, run_excluded), run_excluded, contract,
+            policy_lineups=policy_lineups, forbidden_rosters=forbidden_rosters, count=fill_count,
+            differentiate_captain=differentiate_captain, max_person_overlap=max_person_overlap,
+            time_limit_seconds=(time_limit_seconds if fill_time_limit_seconds is None
+                                else fill_time_limit_seconds),
+        )
 
     by_id = {player.dk_id: player for player in slate.players}
     selected: list[SelectedLineup] = []
-    forbidden_captains: list[str] = []
     if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
         bank = build_classic_candidate_bank(
             slate,
@@ -541,26 +566,147 @@ def select_prior_lineups(
             },
             "never_calls": ["field.py", "economics.py", "portfolio economics"],
         }
+        if fill_count:
+            selected, report["unbound_fill"] = fill(selected)
         verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
         verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
         _refuse_prefilled_repeats(selected, forbidden_keys)
         return tuple(selected), scores, report
 
-    optimizer = LineupOptimizer(
-        slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
-    )
-    for roster in forbidden_rosters:
-        optimizer.add_no_good(roster)
     selection_profile_version = (
         PROFILE_VERSION
         if slate.mode is EngineMode.SHOWDOWN
         else CLASSIC_PROFILE_VERSION
     )
+    run = _sequential_lineups(
+        slate, objective, excluded, contract, count=count, first_index=1,
+        forbidden_rosters=forbidden_rosters, differentiate_captain=differentiate_captain,
+        max_person_overlap=max_person_overlap, time_limit_seconds=time_limit_seconds,
+    )
+    selected = run.selected
+    report = {
+        "profile_version": selection_profile_version,
+        "mode": slate.mode.value,
+        "score_version": scores.score_version,
+        "objective": "MAXIMIZE_PRIOR_POINTS_OF_THE_EXPECTED_STAT_LINE",
+        "objective_limits": [
+            "CENTRAL_ESTIMATE_NOT_A_CEILING",
+            "NO_OWNERSHIP_LEVERAGE_OR_DUPLICATION_TERM",
+            "NO_FIELD_OR_PAYOUT_ECONOMICS_CONSULTED",
+        ],
+        "differentiation": run.differentiation(slate),
+        "lineups": len(selected),
+        "excluded_rows": len(excluded),
+        "kicker_role_excluded_people": sorted(zero_share_people),
+        "kicker_roles": kicker_roles.as_report(),
+        "offensive_roles": offense.report,
+        "qb_depth_roles": qb_depth.report,
+        "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
+        "selectable_people": len(contract.selectable_people),
+        "person_exposure": run.person_exposure(slate),
+        "forbidden_captain_rows": run.forbidden_captains,
+        "non_optimal_lineups": [
+            lineup.index for lineup in selected if lineup.solver_status != "OPTIMAL"
+        ],
+        "threshold_sensitive": list(scores.threshold_sensitive),
+        "score_omissions": list(scores.omissions),
+        "never_calls": ["field.py", "economics.py", "portfolio economics"],
+    }
+    verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
+    verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
+    _refuse_prefilled_repeats(selected, forbidden_keys)
+    return tuple(selected), scores, report
+
+
+@dataclass
+class _Sequential:
+    """One run of sequential selection: C1, or Showdown's captain-differentiated chain."""
+
+    selected: list[SelectedLineup]
+    forbidden_captains: list[str]
+    captain_repeats_from_index: int | None
+    differentiate_captain: bool
+    effective_overlap: int | None
+
+    def differentiation(self, slate: SlateContract) -> dict[str, object]:
+        by_id = {player.dk_id: player for player in slate.players}
+        return {
+            "captain": (
+                "NOT_APPLICABLE_CLASSIC"
+                if slate.mode is EngineMode.CLASSIC
+                else (
+                    "DISTINCT_UNTIL_POOL_EXHAUSTED_THEN_REPEATED"
+                    if self.captain_repeats_from_index is not None
+                    else (
+                        "DISTINCT_PER_ENTRY"
+                        if self.differentiate_captain
+                        else "UNCONSTRAINED"
+                    )
+                )
+            ),
+            "captain_repeats_from_index": self.captain_repeats_from_index,
+            "captain_exposure": dict(
+                sorted(
+                    Counter(
+                        by_id[lineup.captain_dk_id].underlying_id
+                        for lineup in self.selected
+                        if lineup.captain_dk_id
+                    ).items(),
+                    key=lambda item: (-item[1], item[0]),
+                )
+            ),
+            "max_person_overlap": self.effective_overlap,
+            "basis": (
+                "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_ONLY_C1_NOT_A_PORTFOLIO_POLICY"
+                if slate.mode is EngineMode.CLASSIC
+                else "STRUCTURAL_UNIQUENESS_NOT_A_CORRELATED_EQUITY_CLAIM"
+            ),
+        }
+
+    def person_exposure(self, slate: SlateContract) -> dict[str, int]:
+        by_id = {player.dk_id: player for player in slate.players}
+        exposure: dict[str, int] = {}
+        for lineup in self.selected:
+            for dk_id in lineup.roster:
+                person = by_id[dk_id].underlying_id
+                exposure[person] = exposure.get(person, 0) + 1
+        return dict(sorted(exposure.items(), key=lambda item: (-item[1], item[0])))
+
+
+def _sequential_lineups(
+    slate: SlateContract,
+    objective: Mapping[str, float],
+    excluded: Sequence[str],
+    contract: ParticipationContract,
+    *,
+    count: int,
+    first_index: int,
+    forbidden_rosters: Sequence[tuple[str, ...]],
+    differentiate_captain: bool,
+    max_person_overlap: int | None,
+    time_limit_seconds: float,
+    stage: str = "SEQUENTIAL",
+) -> _Sequential:
+    """`count` distinct lineups, one solve each, none equal to a forbidden roster.
+
+    C1 (Classic) and sequential Showdown, and since Session 11b the fill of the
+    rows a subset policy leaves unbound. Lineups are numbered from `first_index`.
+    """
+
+    by_id = {player.dk_id: player for player in slate.players}
+    optimizer = LineupOptimizer(
+        slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
+    )
+    for roster in forbidden_rosters:
+        optimizer.add_no_good(roster)
     effective_overlap = (
         max_person_overlap if slate.mode is EngineMode.SHOWDOWN else None
     )
-    captain_repeats_from_index: int | None = None
-    for index in range(1, count + 1):
+    selected: list[SelectedLineup] = []
+    forbidden_captains: list[str] = []
+    captain_repeats_from: int | None = None  # position in this run, 1-based
+    for position in range(1, count + 1):
+        index = first_index + position - 1
         result = optimizer.solve(objective)
         if (
             result.roster is None
@@ -585,14 +731,17 @@ def select_prior_lineups(
                 if effective_overlap is not None:
                     optimizer.add_person_overlap_limit(earlier.roster, effective_overlap)
             differentiate_captain = False
-            captain_repeats_from_index = index
+            captain_repeats_from = position
             result = optimizer.solve(objective)
         if result.roster is None:
+            where = ("" if stage == "SEQUENTIAL" else
+                     ":stage=UNBOUND_FILL:no distinct lineup is left for a row the policy leaves"
+                     " unbound, so this review delivers nothing")
             raise SelectionError(
                 f"SOLVER_RETURNED_NO_LINEUP:index={index}:status={result.status}"
-                f":selectable_people={len(contract.selectable_people)}",
+                f":selectable_people={len(contract.selectable_people)}{where}",
                 status="SOLVER_RETURNED_NO_LINEUP",
-                facts={"stage": "SEQUENTIAL", "index": index, "selected": len(selected),
+                facts={"stage": stage, "index": index, "selected": len(selected),
                        "requested": count, "selectable_people": len(contract.selectable_people)},
             )
         roster = tuple(result.roster)
@@ -619,7 +768,7 @@ def select_prior_lineups(
                 solver_seconds=result.elapsed_seconds,
             )
         )
-        if index == count:
+        if position == count:
             break
         # Forbid this exact roster, cap how much personnel may carry over, and
         # optionally forbid a repeat captain. Without the overlap cap the next
@@ -635,12 +784,12 @@ def select_prior_lineups(
     if len(set(keys)) != len(keys):
         raise SelectionError("DUPLICATE_LINEUP_SELECTED")
     distinct_captain_span = (
-        selected[: captain_repeats_from_index - 1]
-        if captain_repeats_from_index is not None
+        selected[: captain_repeats_from - 1]
+        if captain_repeats_from is not None
         else selected
     )
     if slate.mode is EngineMode.SHOWDOWN and (
-        differentiate_captain or captain_repeats_from_index is not None
+        differentiate_captain or captain_repeats_from is not None
     ):
         captains = [lineup.captain_dk_id for lineup in distinct_captain_span]
         if len(set(captains)) != len(captains):
@@ -657,78 +806,82 @@ def select_prior_lineups(
                         f"OVERLAP_LIMIT_BREACHED:{earlier + 1}v{later + 1}:{shared}"
                         f">{effective_overlap}"
                     )
-
-    exposure: dict[str, int] = {}
-    for lineup in selected:
-        for dk_id in lineup.roster:
-            person = by_id[dk_id].underlying_id
-            exposure[person] = exposure.get(person, 0) + 1
-
-    report = {
-        "profile_version": selection_profile_version,
-        "mode": slate.mode.value,
-        "score_version": scores.score_version,
-        "objective": "MAXIMIZE_PRIOR_POINTS_OF_THE_EXPECTED_STAT_LINE",
-        "objective_limits": [
-            "CENTRAL_ESTIMATE_NOT_A_CEILING",
-            "NO_OWNERSHIP_LEVERAGE_OR_DUPLICATION_TERM",
-            "NO_FIELD_OR_PAYOUT_ECONOMICS_CONSULTED",
-        ],
-        "differentiation": {
-            "captain": (
-                "NOT_APPLICABLE_CLASSIC"
-                if slate.mode is EngineMode.CLASSIC
-                else (
-                    "DISTINCT_UNTIL_POOL_EXHAUSTED_THEN_REPEATED"
-                    if captain_repeats_from_index is not None
-                    else (
-                        "DISTINCT_PER_ENTRY"
-                        if differentiate_captain
-                        else "UNCONSTRAINED"
-                    )
-                )
-            ),
-            "captain_repeats_from_index": captain_repeats_from_index,
-            "captain_exposure": dict(
-                sorted(
-                    Counter(
-                        by_id[lineup.captain_dk_id].underlying_id
-                        for lineup in selected
-                        if lineup.captain_dk_id
-                    ).items(),
-                    key=lambda item: (-item[1], item[0]),
-                )
-            ),
-            "max_person_overlap": effective_overlap,
-            "basis": (
-                "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_ONLY_C1_NOT_A_PORTFOLIO_POLICY"
-                if slate.mode is EngineMode.CLASSIC
-                else "STRUCTURAL_UNIQUENESS_NOT_A_CORRELATED_EQUITY_CLAIM"
-            ),
-        },
-        "lineups": len(selected),
-        "excluded_rows": len(excluded),
-        "kicker_role_excluded_people": sorted(zero_share_people),
-        "kicker_roles": kicker_roles.as_report(),
-        "offensive_roles": offense.report,
-        "qb_depth_roles": qb_depth.report,
-        "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
-        "selectable_people": len(contract.selectable_people),
-        "person_exposure": dict(
-            sorted(exposure.items(), key=lambda item: (-item[1], item[0]))
+    return _Sequential(
+        selected=selected,
+        forbidden_captains=forbidden_captains,
+        captain_repeats_from_index=(
+            None if captain_repeats_from is None else first_index + captain_repeats_from - 1
         ),
-        "forbidden_captain_rows": forbidden_captains,
-        "non_optimal_lineups": [
-            lineup.index for lineup in selected if lineup.solver_status != "OPTIMAL"
-        ],
-        "threshold_sensitive": list(scores.threshold_sensitive),
-        "score_omissions": list(scores.omissions),
-        "never_calls": ["field.py", "economics.py", "portfolio economics"],
+        differentiate_captain=differentiate_captain,
+        effective_overlap=effective_overlap,
+    )
+
+
+def _objective(slate: SlateContract, scores: PriorScores, excluded: Sequence[str]) -> dict[str, float]:
+    """Prior points by DraftKings ID, zero for every excluded row.
+
+    Every row of an unavailable person is scoreless as well as excluded, so a
+    solver bug that ignored the exclusion could not profit from it either.
+    """
+
+    blocked = set(excluded)
+    objective = {
+        dk_id: (0.0 if dk_id in blocked else value)
+        for dk_id, value in scores.by_dk_id.items()
     }
-    verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
-    verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
-    _refuse_prefilled_repeats(selected, forbidden_keys)
-    return tuple(selected), scores, report
+    for player in slate.players:
+        objective.setdefault(player.dk_id, 0.0)
+    return objective
+
+
+def _fill_unbound(
+    slate: SlateContract,
+    objective: Mapping[str, float],
+    excluded: Sequence[str],
+    contract: ParticipationContract,
+    *,
+    policy_lineups: list[SelectedLineup],
+    forbidden_rosters: Sequence[tuple[str, ...]],
+    count: int,
+    differentiate_captain: bool,
+    max_person_overlap: int | None,
+    time_limit_seconds: float,
+) -> tuple[list[SelectedLineup], dict[str, object]]:
+    """The rows a subset policy leaves unbound, filled after its joint solve (Session 11b).
+
+    C1 (Classic) or sequential Showdown, under the run's own exclusions only,
+    with every policy lineup and every prefilled roster as a no-good (R29).
+    """
+
+    run = _sequential_lineups(
+        slate, objective, excluded, contract, count=count, first_index=len(policy_lineups) + 1,
+        forbidden_rosters=(*forbidden_rosters, *(lineup.roster for lineup in policy_lineups)),
+        differentiate_captain=differentiate_captain, max_person_overlap=max_person_overlap,
+        time_limit_seconds=time_limit_seconds, stage="UNBOUND_FILL",
+    )
+    policy_keys = {lineup.canonical_key for lineup in policy_lineups}
+    repeated = [lineup.index for lineup in run.selected if lineup.canonical_key in policy_keys]
+    if repeated:
+        raise SelectionError(
+            f"DUPLICATE_LINEUP_SELECTED:unbound fill indexes {repeated} repeat a policy lineup")
+    classic = slate.mode is EngineMode.CLASSIC
+    report = {
+        "source": "C1" if classic else "SHOWDOWN_SEQUENTIAL",
+        "profile_version": CLASSIC_PROFILE_VERSION if classic else PROFILE_VERSION,
+        "lineups": len(run.selected),
+        "lineup_indexes": [lineup.index for lineup in run.selected],
+        "no_good_rosters": {"policy_lineups": len(policy_lineups),
+                            "prefilled_rosters": len(forbidden_rosters)},
+        "exclusions": "THE_RUN_S_OWN_NOT_THE_POLICY_S",
+        "excluded_rows": len(excluded),
+        "differentiation": run.differentiation(slate),
+        "person_exposure": run.person_exposure(slate),
+        "forbidden_captain_rows": run.forbidden_captains,
+        "non_optimal_lineups": [
+            lineup.index for lineup in run.selected if lineup.solver_status != "OPTIMAL"
+        ],
+    }
+    return [*policy_lineups, *run.selected], report
 
 
 def _refuse_prefilled_repeats(selected: Sequence[SelectedLineup], forbidden_keys: set[str]) -> None:

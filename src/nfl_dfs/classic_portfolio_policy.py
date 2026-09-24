@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
+from .entry_groups import subset_binding_problems
 from .hashing import sha256_bytes
 from .portfolio_policy import canonical_decimal_json_bytes
 
@@ -823,10 +824,14 @@ def validate_classic_portfolio_policy_bytes(
     expected_people_tuple = classic_people(slate)
     expected_people = {person.underlying_id: person for person in expected_people_tuple}
     expected_identity = _complete_identity_payload(slate)
+    # `entry_ids` are the rows a policy may bind (the plan's fillable blank rows);
+    # the policy binds them all or, since Session 11b, a subset in template
+    # order, and its own list sets every integer domain below.
     requested_entries = tuple(str(entry) for entry in entry_ids)
     count = len(requested_entries)
     if count < 1 or len(set(requested_entries)) != count or any(not entry for entry in requested_entries):
         problems.append(_issue("CLASSIC_POLICY_ENTRY_SET_INVALID", "requested Entry IDs must be non-empty, exact, ordered, and unique", "repair the entry template before policy validation"))
+    bound_entries = requested_entries
 
     bindings = _mapping(root.get("bindings"), "bindings", problems)
     if bindings is not None:
@@ -849,7 +854,15 @@ def validate_classic_portfolio_policy_bytes(
                 problems.append(_issue(f"CLASSIC_POLICY_{name.upper()}_IDENTITY_MISMATCH", f"bindings.{name} is not the complete exact current identity set", "regenerate all bindings from the immutable salary contract"))
         declared_entries = bindings.get("entry_ids")
         if declared_entries != list(requested_entries):
-            problems.append(_issue("CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH", "entry_ids do not exactly match template order", "copy every reserved Entry ID once in original order"))
+            if not isinstance(declared_entries, list) or any(not isinstance(item, str) or not item for item in declared_entries):
+                binding = ["entry_ids is not an array of exact Entry ID strings"]
+            else:
+                binding = subset_binding_problems(tuple(declared_entries), requested_entries)
+            if binding:
+                problems.append(_issue("CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH", "entry_ids are not the template's fillable rows or a subset of them in template order: " + "; ".join(binding), "bind every fillable blank Entry ID, or a subset of them, once each in original order"))
+            else:
+                bound_entries = tuple(declared_entries)
+                count = len(bound_entries)
 
     selection = _mapping(root.get("selection"), "selection", problems)
     search_limits: SearchLimits | None = None
@@ -933,7 +946,7 @@ def validate_classic_portfolio_policy_bytes(
         draft_group=slate.draft_group,
         games=_game_bindings(slate),
         teams=_team_bindings(slate),
-        entry_ids=requested_entries,
+        entry_ids=bound_entries,
         people=expected_people_tuple,
         player_bounds=tuple(player_bounds),
         team_bounds=team_bounds,

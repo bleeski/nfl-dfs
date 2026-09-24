@@ -166,6 +166,11 @@ structural rung, not a guaranteed file: C1 raises when distinct lineups run
 out (`selection.py:577-584`) and the baseline stays the file. When no engine
 file is good enough, the Classic fallback path below still exists.
 
+A C2 policy binds every fillable row. `--entry-id` (repeatable) writes one
+binding only those rows, and the validator accepts it (Session 11b), but
+`run-slate` refuses a Classic subset by name, `CLASSIC_POLICY_SUBSET_UNSUPPORTED`,
+and the baseline ships: C2 with a C1 fill of the unbound rows is Session 11c.
+
 C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
 solver-error, structural-infeasibility, modeled-bank-infeasibility, and
 incomplete-bank-exhaustion states separately. Accept
@@ -369,6 +374,17 @@ infeasibility. A supplied policy on another profile is refused, not ignored.
 Only `ENFORCED_AND_INDEPENDENTLY_AUDITED` may create a new `DK_REVIEW_ENTRY`
 CSV, and it remains `PRIOR_ONLY / DO_NOT_UPLOAD`. Requests omitting the policy
 continue through the existing SD1/SD2 behavior.
+
+A Showdown policy may bind a subset of the fillable rows, in template order
+(Session 11b: a thesis or dart sleeve). Write it with
+`scripts/make_showdown_policy.py --entry-id <id>` once per row; a prefilled or
+unknown row is refused. Its fractions count its own rows (0.5 over 4 bound rows
+allows 2), its exclusions bind only its rows, and after its joint solve
+sequential Showdown fills the other fillable rows, never repeating a policy,
+fill or prefilled lineup. `row_sources` in the result and each entry's `source`
+in the readable review say which filled each row. If the fill runs out of
+distinct lineups the review delivers nothing and the baseline stays the file,
+named. The request's `lineup_count` is still every fillable row.
 
 Kicker roles are resolved after those exclusions. When one eligible kicker is
 listed for a team and no role artifact is supplied, the review may continue only

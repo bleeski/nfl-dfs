@@ -404,7 +404,7 @@ source mutation, and unregistered objective or rule names fail validation.
 The validated source is normalized to canonical
 `nfl_classic_portfolio_policy_normalized_c2_v1` bytes. All exposure limits use
 inclusive direct lineup counts with the exact requested Entry-ID count as the
-denominator:
+denominator (since Session 11b, the policy's own bound rows; below):
 
 - a player count is the number of selected lineups containing the exact bound
   underlying person/DK ID;
@@ -489,6 +489,23 @@ bounded-bank result. A limit with no valid incumbent keeps its code
 non-optimal, invalid-integrality and solver-error results fail closed. Selected
 lineups are paired one-to-one with `entry_ids` in exact template order; cycling
 is prohibited.
+
+**Subset binding (a rule change dated Session 11b, 2026-09-24; no new version).**
+`bindings.entry_ids` may be the plan's fillable blank rows (§ Entry groups) or a
+non-empty subset of them in template order, each once. The validator takes the
+fillable rows as the rows a policy may bind; a bound row that is prefilled,
+partly filled, unresolved, unknown, repeated or out of order is
+`CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH` (`V`, `policy_binding`), and an empty
+or malformed fillable list is still `CLASSIC_POLICY_ENTRY_SET_INVALID`. The
+bound list is the denominator: every integer bound's domain, the default bounds,
+the template's default stack rules and `default_search_limits` count it. The
+document's shape is unchanged, every policy valid before stays valid with the
+same meaning, and a reader that predates the rule refuses a subset (it compared
+the list with every fillable row). `run-slate` and `prior_review` refuse a
+Classic subset by name until C2 with a C1 fill of the unbound rows, and C3's
+package over both, exist (`CLASSIC_POLICY_SUBSET_UNSUPPORTED`, `P`,
+`implementation_limit`, ROADMAP Session 11c); the baseline ships. A policy that
+binds every fillable row gives the same file as before, byte for byte.
 
 These are new values of existing v1 fields, not a new version (Session 08): no
 key is added to or removed from `nfl_classic_candidate_bank_c2_v1` or
@@ -814,15 +831,23 @@ every requested Entry ID in template order. The complete shape is:
 Every override and excluded-person item repeats the exact three identity fields
 shown above; an override also has a numeric `fraction`. Names, salaries, or one
 role ID are never used to infer the other identity. Unknown, duplicated, missing,
-cross-person or CPT/FLEX-reversed identities fail. `entry_ids` must be the exact
-full requested sequence, with no duplicate, subset, reordered entry or silent
-`lineup_count` reduction.
+cross-person or CPT/FLEX-reversed identities fail. `entry_ids` is the plan's
+fillable blank rows (§ Entry groups) or, since Session 11b, a non-empty subset
+of them in template order, each once; a duplicate, reordered, prefilled, partly
+filled, unresolved or unknown row is `PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH`
+(`V`), with `PORTFOLIO_POLICY_DUPLICATE_ENTRY_ID` for a repeat. The request's
+`lineup_count` still describes the file, every fillable row, and
+`PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES` still refuses any other
+value. This is a rule change dated Session 11b, not a new version: the shape is
+unchanged, a policy valid before keeps its meaning, and an older reader refuses
+a subset.
 
 Fractions are JSON numbers in `[0,1]`, with the required unit
 `FRACTION_0_TO_1`. Booleans, numeric strings, nonfinite numbers, negative values,
-bare values such as `50`, and any alternative unit fail. The denominator is all
-requested entries. Each integer maximum is
-`floor(fraction * requested_entry_count)` using exact decimal arithmetic:
+bare values such as `50`, and any alternative unit fail. The denominator is the
+policy's own bound entries (every fillable row, or its subset since Session
+11b; 0.5 over 4 bound rows of 10 fillable rows allows 2). Each integer maximum is
+`floor(fraction * bound_entry_count)` using exact decimal arithmetic:
 
 | Entries | Fraction | Integer maximum |
 |---:|---:|---:|
@@ -874,6 +899,25 @@ Entry-ID count. The MILP enforces combined-person and Captain maxima, policy
 exclusions, configured pairwise overlap and canonical uniqueness. Repeated
 Captains are legal only when their explicit effective maximum permits them.
 
+**The unbound rows (Session 11b).** When the policy binds a subset, its joint
+solve fills its own rows first; then sequential Showdown (the no-policy
+selector) fills the fillable rows it leaves unbound, in template order, with
+every policy lineup and every preserved prefilled roster as a no-good and its
+own rules among the fill (a distinct Captain per lineup until the pool runs out,
+the request's `max_person_overlap`). The run's own exclusions bind every row
+(request, DraftKings status, official inactive, kicker and offensive role); the
+policy's exclusions and caps bind only its rows. Each fill solve's limit is what
+the bank and joint solve leave of the window, split across its solves, at most
+10 s and at least 0.5 s. A fill that runs out of distinct lineups raises
+`SOLVER_RETURNED_NO_LINEUP` (`stage=UNBOUND_FILL`, `V`, `distinct_lineups`) and
+the review delivers nothing: all or nothing, as before, with the baseline the
+file and the reason named. The selection report's policy section (counts,
+exposure, overlap, `selected_lineup_count`) covers the policy's rows; its
+`unbound_fill` section records the fill (`source`, `lineups`, `lineup_indexes`,
+`no_good_rosters`, `exclusions`, `differentiation`, `person_exposure`), and the
+review's `row_sources` maps every filled row to `POLICY` or
+`SHOWDOWN_SEQUENTIAL`.
+
 The bank is generated in policy-aware strata with the same lineup MILP, exact
 no-good cuts and deterministic vanishing perturbation throughout. Captain
 strata pin one eligible Captain row at a time, in descending CPT prior order,
@@ -919,14 +963,19 @@ infeasibility over a bounded incomplete bank is
 `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`, never a full-slate mathematical claim.
 
 Assignment never cycles for policy-bearing requests. The output must retain the
-exact policy Entry-ID order once each. Immediately before export, an independent
+exact policy Entry-ID order once each; `assignments.csv` holds every fillable row
+in template order, the policy's and the fill's. Immediately before export, an independent
 audit strictly reparses the canonical normalized-policy artifact, re-reads the
 assignment artifact and recomputes DraftKings legality, canonical lineup
 identities, combined-person counts, Captain counts, uniqueness and every pairwise
 underlying-person overlap from exact roster IDs. It uses the independently read
 limits and binds the current salary, entry, source-policy, normalized-policy and
 assignment bytes to their SHA-256 values; it reconciles, but never trusts,
-selector summaries.
+selector summaries. Since Session 11b the audit (`prior_only_showdown_portfolio_audit_sd4_v1`,
+unchanged) covers the policy's rows: its entry IDs, counts, caps, uniqueness and
+overlap are theirs, and the artifact's other rows must be exactly the unbound
+rows (`PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH` otherwise). The readable
+review checks the rows the fill wrote (§ SD5).
 
 Only `enforcement_status=ENFORCED_AND_INDEPENDENTLY_AUDITED` may write a new
 `DK_REVIEW_ENTRY` CSV. Invalid policies, the unsupported diagnostic profile,
@@ -942,8 +991,8 @@ Requests without a policy retain their SD1/SD2 selection and assignment behavior
 
 A successful Showdown `prior_review` creates canonical
 `prior_only_readable_review.json` with schema
-`prior_only_readable_review_sd5_v1`, a self-contained escaped HTML rendering,
-and an extended review workbook. This is a presentation contract, not a new
+`prior_only_readable_review_sd5_v2` (since Session 11b; v1 below), a
+self-contained escaped HTML rendering, and an extended review workbook. This is a presentation contract, not a new
 selection, evidence, model or release contract. The JSON records:
 
 - all four independent release truths and the explicit prior-only warning;
@@ -969,6 +1018,30 @@ normalized-policy and assignment hashes, and recomputes legality, salaries,
 canonical identities, person/Captain counts, limits, uniqueness and pairwise
 overlap from exact roster IDs. Names are display-only and never join people.
 Repeated names and distinct CPT/FLEX IDs retain exact identity and entry order.
+
+**`prior_only_readable_review_sd5_v2` (Session 11b).** Adds each entry's
+`source` (`POLICY`, or `SHOWDOWN_SEQUENTIAL` for a row the fill wrote, and for
+every row without a policy) and a top-level `unbound_rows`: `null` when the
+policy binds every fillable row or there is no policy, else `source`,
+`entry_ids`, `basis`, `checks`, the fill's configured and effective overlap,
+`pairwise_overlap` among its rows and `person_exposure`. With a subset policy the
+policy's checks (its normalized entry IDs, which must be the fillable rows or a
+subset of them in order, denominator, limits, counts, percentages, overlap and
+the audit's entry IDs and canonical lineups) cover its rows, and
+`exposure.entry_count_denominator` is their count; `reconciliation.entry_count`
+is every filled row. Every filled row is checked for legality, exact bytes and
+distinctness against every other filled row and every prefilled roster
+(`READABLE_REVIEW_CANONICAL_DUPLICATE`, `ENTRY_PREFILLED_LINEUP_REPEATED`); the
+unbound rows also for the run's own exclusions
+(`READABLE_REVIEW_UNBOUND_ROW_EXCLUDED_PERSON`, `V`), official inactives
+(`READABLE_REVIEW_UNBOUND_ROW_NOT_ACTIVE`, `P`) and the fill's overlap
+(`READABLE_REVIEW_PAIRWISE_OVERLAP_EXCEEDED`, `S`). The selection report's
+`row_sources` must agree (`READABLE_REVIEW_ROW_SOURCE_MISMATCH`, `V`; a record
+from before Session 11b names none and the review derives them), and so must its
+`unbound_fill` (`READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH`, `V`). A reader of
+v1 sees no `source` and no `unbound_rows`; for a run without a subset every
+other field means what it meant, and v1 files stay readable as written. v1 was
+never produced for a subset policy.
 
 Canonical JSON and HTML are written atomically and reported with independent
 SHA-256 values. HTML markup is escaped. Every user/provider-controlled workbook
@@ -2066,7 +2139,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `214c1898cc15412c14767b512bd13c5792a3a5f66d5e910e97ef26693c123855`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `7343565244853db9a14fb3b0163d8b236adb30c200eebbb725c7c4ce683ee932`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2447,7 +2520,16 @@ Since Session 11 every `prior_review` exit and the pre-review exit carry
 handler the pointer's; `baseline` adds `preserved_entry_ids` and
 `unresolved_entry_ids`, and `latest_deliverable` adds those and `entry_groups`.
 A policy (supplied, or a rung's) binds the plan's fillable rows in template
-order, and `PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES` counts those rows.
+order, or since Session 11b a subset of them, and
+`PORTFOLIO_POLICY_LINEUP_COUNT_MUST_MATCH_ENTRIES` counts every fillable row
+(the request's `lineup_count` describes the file).
+
+Since Session 11b every `prior_review` exit carries `row_sources`, each row the
+review's own selection filled mapped to `POLICY`, `C1` or `SHOWDOWN_SEQUENTIAL`
+(`null` when selection did not run), and a run with a policy adds to
+`portfolio_policy`: `entry_count_denominator` is the policy's bound rows,
+`bound_entry_ids` and `unbound_entry_ids` the rows it binds and the fillable rows
+the fill covers (`null` when the policy did not validate far enough to say).
 
 Since Session 10 a run with a policy also carries `relaxation`, the run's
 `nfl_relaxation_record_v1` record (§ Relaxation record); the pre-review exit
@@ -2502,7 +2584,10 @@ policy; a Classic policy's `exact_exclusions`, a Showdown policy's
 `excluded_people`, and any person a policy caps at zero entries (a Classic
 `maximum_entries` of 0, a team or game capped at 0, a Showdown combined fraction
 of 0) stay excluded at every rung, and rung 4 passes their exact DraftKings IDs
-to the review as operator exclusions. A fraction that only floors to zero
+to the review as operator exclusions. A subset policy's exclusions bind only its
+rows at every policy rung; rung 4 cannot tell rows apart, so it carries them to
+every row (Session 11b: widening a fade only tightens, and an exclusion is never
+relaxed). A fraction that only floors to zero
 entries is a cap, not an exclusion, and is relaxed. A supplied Showdown policy
 with `require_unique_lineups: false` runs every rung with it true (R29), and the
 record says so (`supplied_require_unique_lineups`). Official inactives and request exclusions are re-derived by the
@@ -2549,8 +2634,10 @@ Each relaxation: `sequence`, `attempt` (the one it fed), `step` (`BANK`,
 `provenance` (the registry's), `original`, `final`, `trigger`, `trigger_kind`,
 `trigger_origin` (`SELECTION`, `DEADLINE`, `INTAKE`), `trigger_detail`,
 `rung_from`, `rung_to`, `why`, `at_utc` (the run's clock), `elapsed_seconds`,
-`entry_ids` (the Entry IDs the policy binds: since Session 11 the plan's
-fillable blank rows, every one of them), `policy`
+`entry_ids` (the Entry IDs the supplied policy binds, which every rung's policy
+binds too: the plan's fillable blank rows, or since Session 11b the subset the
+supplied policy names; rung 4 has no policy and fills every fillable row, and
+its window check counts every fillable row), `policy`
 (the new rung's binding), `limitation_code` and `limitation_text`.
 
 Codes, on every exit that reports the record, the delivered file's or the

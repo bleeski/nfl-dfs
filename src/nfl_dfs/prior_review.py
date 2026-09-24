@@ -64,7 +64,7 @@ from .dk import (
     parse_salaries,
     reconcile_template,
 )
-from .entry_groups import plan_entries
+from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_bytes, sha256_file
 from .kicker_roles import verify_kicker_role_resolution
@@ -91,7 +91,7 @@ from .priors import (
     propose_prior_package,
 )
 from .projection import build_projection_package
-from .deadline import Budget
+from .deadline import BANK_SHARE, JOINT_SHARE, SOLVE_MINIMUM_SECONDS, Budget
 from .portfolio_enforcement import (
     DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
     audit_policy_assignments,
@@ -827,6 +827,37 @@ def _stage(name: str, status: str, **detail: object) -> dict[str, object]:
 # `select_prior_lineups`' own per-solve default for sequential (C1) selection,
 # which the run's budget shortens and never raises (Session 07).
 SEQUENTIAL_PER_SOLVE_SECONDS = 10.0
+# Where each filled row's lineup came from (Session 11b): the policy's joint
+# solve, or the sequential fill of the rows it leaves unbound (or of every row,
+# with no policy).
+ROW_SOURCE_POLICY = "POLICY"
+ROW_SOURCE_C1 = "C1"
+ROW_SOURCE_SHOWDOWN_SEQUENTIAL = "SHOWDOWN_SEQUENTIAL"
+
+
+def _fill_solve_seconds(budget: Budget | None, rows: int) -> float | None:
+    """The per-solve limit for a subset policy's unbound fill (Session 11b).
+
+    The fill runs after the bank and joint solve, which take their shares of the
+    window; it gets what they leave, split across its solves, never above the
+    sequential default and never under the solver's minimum.
+    """
+
+    if budget is None or rows < 1:
+        return None
+    window = 0.0 if budget.passed_at_start else max(0.0, budget.improvement_remaining())
+    share = max(0.0, 1.0 - BANK_SHARE - JOINT_SHARE) * window / (rows + 1)
+    return max(SOLVE_MINIMUM_SECONDS, min(SEQUENTIAL_PER_SOLVE_SECONDS, share))
+
+
+def row_sources(
+    entry_ids: Sequence[str], bound: Sequence[str], mode: EngineMode
+) -> dict[str, str]:
+    """Each filled row's source, in template order: `POLICY`, `C1` or `SHOWDOWN_SEQUENTIAL`."""
+
+    fill = ROW_SOURCE_C1 if mode is EngineMode.CLASSIC else ROW_SOURCE_SHOWDOWN_SEQUENTIAL
+    taken = set(bound)
+    return {entry_id: (ROW_SOURCE_POLICY if entry_id in taken else fill) for entry_id in entry_ids}
 
 
 def _deadline_selection_limits(
@@ -2109,6 +2140,11 @@ def run_prior_review(
     template = parse_entries(entry_path)
     entry_ids = list(entry_plan.fillable)
     requested_count = int(lineup_count) if lineup_count else len(entry_ids)
+    # Session 11b: a policy binds the fillable rows or a subset of them in
+    # template order; after its joint solve C1 or sequential Showdown fills the
+    # rest, with every policy lineup and prefilled roster as a no-good.
+    bound_ids = list(portfolio_policy.entry_ids) if portfolio_policy is not None else []
+    unbound_ids = list(unbound_rows(bound_ids, entry_ids)) if portfolio_policy is not None else []
     if portfolio_policy is None and requested_count < len(entry_ids):
         # Fewer lineups than reserved entries can only be filled by repeating a
         # roster across entries. The export would then carry duplicate lineups
@@ -2177,6 +2213,18 @@ def run_prior_review(
             assert policy_normalized_path is not None
             assert portfolio_policy_source_sha256 is not None
             assert portfolio_policy_normalized_sha256 is not None
+            binding = subset_binding_problems(bound_ids, entry_ids)
+            if binding:
+                raise PriorReviewError(
+                    "PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH:" + "; ".join(binding))
+            if unbound_ids and isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
+                raise PriorReviewError(
+                    "CLASSIC_POLICY_SUBSET_UNSUPPORTED:the C2 policy binds "
+                    f"{len(bound_ids)} of {len(entry_ids)} fillable rows; C2 with a C1 fill is Session 11c's")
+            if requested_count != len(entry_ids):
+                raise SelectionError(
+                    "PORTFOLIO_POLICY_ENTRY_COUNT_MISMATCH:"
+                    f"lineup_count={requested_count}:fillable_rows={len(entry_ids)}")
             if sha256_file(salary_path) != portfolio_policy.salary_sha256:
                 raise PriorReviewError("PORTFOLIO_POLICY_SALARY_CHANGED_BEFORE_SELECTION")
             if sha256_file(entry_path) != hashes["entry_csv"]:
@@ -2229,7 +2277,9 @@ def run_prior_review(
                 model,
                 splits,
                 contract,
-                count=requested_count,
+                count=(portfolio_policy.entry_count if portfolio_policy is not None else requested_count),
+                fill_count=len(unbound_ids),
+                fill_time_limit_seconds=_fill_solve_seconds(budget, len(unbound_ids)),
                 differentiate_captain=not allow_repeat_captain,
                 max_person_overlap=max_person_overlap,
                 role_evidence_json=role_evidence_json,
@@ -2240,18 +2290,27 @@ def run_prior_review(
                 forbidden_rosters=entry_plan.forbidden_rosters,
                 **selection_limits,
             )
+        policy_rosters = [lineup.roster for lineup in lineups[: len(bound_ids)]]
         if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
-            assignments = dict(
-                exact_classic_assignments(
-                    portfolio_policy.entry_ids,
-                    [lineup.roster for lineup in lineups],
-                )
+            bound_assignments = dict(
+                exact_classic_assignments(portfolio_policy.entry_ids, policy_rosters)
             )
         elif portfolio_policy is not None:
-            assignments = exact_assignments_for_entries(
-                portfolio_policy.entry_ids,
-                [lineup.roster for lineup in lineups],
+            bound_assignments = exact_assignments_for_entries(
+                portfolio_policy.entry_ids, policy_rosters
             )
+        if portfolio_policy is not None:
+            # Every fillable row once, in template order: the policy's rows from
+            # its joint solve, the rest from the fill, never cycled.
+            filled = [lineup.roster for lineup in lineups[len(bound_ids):]]
+            unbound_assignments = (
+                exact_assignments_for_entries(unbound_ids, filled) if unbound_ids or filled else {}
+            )
+            assignments = {
+                entry_id: (bound_assignments[entry_id] if entry_id in bound_assignments
+                           else unbound_assignments[entry_id])
+                for entry_id in entry_ids
+            }
         else:
             assignments = assignments_for_entries(entry_ids, lineups)
     except Exception as exc:  # noqa: BLE001 - named, never swallowed
@@ -2483,7 +2542,7 @@ def run_prior_review(
         assignments_hash = write_assignments_csv(
             assignments_path,
             assignments,
-            entry_order=portfolio_policy.entry_ids if portfolio_policy is not None else None,
+            entry_order=tuple(entry_ids) if portfolio_policy is not None else None,
         )
         artifacts["assignments"] = str(assignments_path)
         hashes["assignments"] = assignments_hash
@@ -2498,7 +2557,7 @@ def run_prior_review(
             assignments_path,
             assignments,
             entry_order=(
-                portfolio_policy.entry_ids
+                tuple(entry_ids)
                 if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
                 else None
             ),
@@ -2537,6 +2596,9 @@ def run_prior_review(
         "assignments": str(assignments_path) if slate.mode is EngineMode.SHOWDOWN else None,
         "assignments_sha256": assignments_hash or None,
         "reserved_entries": entry_ids,
+        # Session 11b: which source filled each row (the policy, or the fill).
+        "row_sources": row_sources(
+            list(assignments), bound_ids if portfolio_policy is not None else (), slate.mode),
         "lineups": [lineup.as_payload(names) for lineup in lineups],
         "selected_prior_points_by_dk_id": {
             dk_id: scores.by_dk_id[dk_id]
@@ -3307,7 +3369,10 @@ def run_prior_review(
             audit = audit_policy_assignments(
                 slate=slate,
                 policy=portfolio_policy,
-                assignments=list(assignments.items()),
+                # The policy's rows only (Session 11b); the readable review
+                # checks the rows the fill wrote.
+                assignments=[(entry_id, assignments[entry_id]) for entry_id in portfolio_policy.entry_ids],
+                unbound_entry_ids=unbound_ids,
                 salary_bytes=salary_path.read_bytes(),
                 entry_bytes=entry_path.read_bytes(),
                 expected_entry_sha256=hashes["entry_csv"],

@@ -569,8 +569,12 @@ def test_the_group_report_names_a_withheld_files_rows_unfilled(tmp_path):
 # ----------------------------------------------------------------- Showdown (review finding 1)
 
 
-def _run_showdown(tmp_path, monkeypatch, *, run_id, entry_ids, cells=None, policy_controls=None):
-    """`run-slate` on the Showdown fixture with `entry_ids` rows, some prefilled."""
+def _run_showdown(tmp_path, monkeypatch, *, run_id, entry_ids, cells=None, policy_controls=None, bound=None):
+    """`run-slate` on the Showdown fixture with `entry_ids` rows, some prefilled.
+
+    `bound` (Session 11b) is the Entry IDs the policy binds; every fillable row
+    when it is None.
+    """
 
     from datetime import datetime, timezone
 
@@ -596,7 +600,8 @@ def _run_showdown(tmp_path, monkeypatch, *, run_id, entry_ids, cells=None, polic
         policy_path = tmp_path / "policy" / "portfolio.json"
         policy_path.parent.mkdir()
         policy_path.write_text(json.dumps(portfolio_policy_template(
-            slate, list(plan.fillable), controls=policy_controls)), encoding="utf-8")
+            slate, list(plan.fillable if bound is None else bound), controls=policy_controls)),
+            encoding="utf-8")
         values["portfolio_policy_json"] = str(policy_path)
     monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
     real = prior_review_module.run_prior_review
@@ -800,3 +805,254 @@ def test_c3s_export_audit_still_refuses_a_written_prefilled_row(tmp_path):
         source_bytes=source, output_bytes=forged, encoding=template.encoding,
         roster_start=template.roster_start_index, roster_width=9, assignments={"5300000001": second})
     assert "CLASSIC_C3_EXPORT_PREFILLED_AUTHORIZED_ENTRY:5300000001" in problems
+
+
+# ----------------------------------------------------------------- Session 11b: subset binding
+#
+# A policy may bind a subset of the fillable rows, in template order. Its joint
+# solve fills its rows; sequential Showdown fills the rest with every policy
+# lineup and every prefilled roster as a no-good (R29). A Classic subset is
+# refused by name until Session 11c. A policy binding every fillable row gives
+# the file it gave before: the hashes below were captured on main at bd5a97f,
+# before any Session 11b change, with these fixtures and their pinned clock.
+
+SD3_FULL_FILLABLE_SHA256 = "1918820d809eea637425f1970b5bae65c406efca7b35fa3264b867863e43eed1"
+C2_FULL_FILLABLE_SHA256 = "48027a40a9fd9de47138ca1c619e72d78cd3a7cf76c6017f6ea1627aba28f8ce"
+SD3_CONTROLS = {"max_captain_exposure": {"default_fraction": 0.5, "overrides": []},
+                "max_pairwise_person_overlap": 4}
+
+
+def _readable(report) -> dict:
+    path = Path(report["prior_review_artifacts"]["readable_review_json"])
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_a_showdown_subset_policy_fills_its_rows_and_sequential_showdown_the_rest(tmp_path, monkeypatch):
+    """Five rows: one prefilled, two bound by an SD3 policy, two left to sequential Showdown."""
+
+    _code, plain, _entries, _slate = _run_showdown(
+        tmp_path / "plain", monkeypatch, run_id="sd-plain", entry_ids=("900000001", "900000002"),
+        policy_controls=SD3_CONTROLS)
+    first = _cells(Path(plain["latest_deliverable"]["path"]))["900000001"]
+    rows = tuple(f"90000000{index}" for index in range(1, 6))
+
+    code, report, entries, slate = _run_showdown(
+        tmp_path / "subset", monkeypatch, run_id="sd-subset", entry_ids=rows,
+        cells={"900000002": list(first)}, policy_controls=SD3_CONTROLS, bound=("900000003", "900000005"))
+
+    assert code == 0, report["blockers"]
+    assert report["latest_deliverable"]["producer"] == "run-slate:prior_review:SHOWDOWN"
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    truths = report["release_truths"]
+    assert truths["delivered_entry_ids"] == ["900000001", "900000003", "900000004", "900000005"]
+    assert truths["preserved_entry_ids"] == ["900000002"] and truths["unfilled_entry_ids"] == []
+    assert (truths["MODEL_STATUS"], truths["RELEASE_DECISION"]) == ("PRIOR_ONLY", "DO_NOT_UPLOAD")
+    assert report["row_sources"] == {
+        "900000001": "SHOWDOWN_SEQUENTIAL", "900000003": "POLICY",
+        "900000004": "SHOWDOWN_SEQUENTIAL", "900000005": "POLICY"}
+
+    policy = report["portfolio_policy"]
+    assert policy["enforcement_status"] == "ENFORCED_AND_INDEPENDENTLY_AUDITED"
+    assert policy["entry_count_denominator"] == 2
+    assert policy["bound_entry_ids"] == ["900000003", "900000005"]
+    assert policy["unbound_entry_ids"] == ["900000001", "900000004"]
+    assert policy["independent_audit"]["entry_ids"] == ["900000003", "900000005"]
+    assert policy["selector"]["entry_ids"] == ["900000003", "900000005"]
+    captains = [count for count in policy["independent_audit"]["captain_counts"].values()]
+    assert max(captains) <= 1  # floor(0.5 x 2 bound rows), not x 4 filled rows
+
+    output = Path(report["latest_deliverable"]["path"])
+    assert _raw_lines(output)["900000002"] == _raw_lines(entries)["900000002"]
+    cells = _cells(output)
+    filled = [cells[eid] for eid in truths["delivered_entry_ids"]]
+    assert all(validate_lineup(slate, roster).valid for roster in filled)
+    assert len(_keys(slate, filled)) == 4  # no policy lineup, fill lineup or prefilled one repeats
+    assert not _keys(slate, filled) & _keys(slate, [first])
+
+    readable = _readable(report)
+    assert readable["schema_version"] == "prior_only_readable_review_sd5_v2"
+    assert {entry["entry_id"]: entry["source"] for entry in readable["entries"]} == report["row_sources"]
+    assert readable["exposure"]["entry_count_denominator"] == 2
+    assert readable["reconciliation"]["entry_count"] == 4
+    assert readable["unbound_rows"]["entry_ids"] == ["900000001", "900000004"]
+    assert readable["unbound_rows"]["source"] == "SHOWDOWN_SEQUENTIAL"
+    assert [(row["entry_id_a"], row["entry_id_b"]) for row in readable["exposure"]["pairwise_overlap"]] == [
+        ("900000003", "900000005")]
+    selection = report["prior_review_reports"]["selection"]["selection"]
+    assert selection["selected_lineup_count"] == 2  # the policy's own summary: its rows only
+    assert selection["unbound_fill"]["lineups"] == 2
+    assert selection["unbound_fill"]["no_good_rosters"] == {"policy_lineups": 2, "prefilled_rosters": 1}
+
+
+def test_a_bound_prefilled_row_is_refused_v_and_the_baseline_ships(tmp_path, monkeypatch):
+    registry = load_gate_registry()
+    _code, plain, _entries, _slate = _run_showdown(
+        tmp_path / "plain", monkeypatch, run_id="sd-plain", entry_ids=("900000001",))
+    lineup = _cells(Path(plain["latest_deliverable"]["path"]))["900000001"]
+
+    code, report, _entries, _slate = _run_showdown(
+        tmp_path / "bound-prefilled", monkeypatch, run_id="sd-bound-prefilled",
+        entry_ids=("900000001", "900000002", "900000003"), cells={"900000002": list(lineup)},
+        policy_controls=SD3_CONTROLS, bound=("900000002", "900000003"))
+
+    assert code == 2
+    refusals = [text for text in report["blockers"]
+                if text.startswith("PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH")]
+    assert refusals and "900000002" in refusals[0], report["blockers"]
+    assert registry.family_of("PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH").gate_class is GateClass.V
+    assert report["latest_deliverable"]["producer"] == BASELINE
+    assert report["release_truths"]["preserved_entry_ids"] == ["900000002"]
+
+
+def test_a_bound_row_outside_the_fillable_rows_is_refused_by_both_validators(tmp_path):
+    from nfl_dfs.classic_portfolio_policy import validate_classic_portfolio_policy_bytes
+    from nfl_dfs.portfolio_policy import portfolio_policy_template, validate_portfolio_policy_bytes
+
+    from .test_baseline import showdown_template
+
+    registry = load_gate_registry()
+    showdown_salary = Path(__file__).resolve().parent / "fixtures" / "supplied" / "DKSalaries Salary CSV Showdown.csv"
+    showdown = parse_salaries(showdown_salary)
+    lineup = _salary_top(showdown, 1)[0]
+    template = parse_entries(showdown_template(tmp_path, 4, showdown_salary, prefilled={1: list(lineup)}))
+    plan = plan_entries(template, showdown)
+    (prefilled,) = plan.preserved
+    fillable = list(plan.fillable)
+    assert prefilled not in fillable and len(fillable) == 3
+    for bound in ((prefilled, fillable[0]), ("4880009999",), (fillable[2], fillable[0]),
+                  (fillable[0], fillable[0])):
+        raw = json.dumps(portfolio_policy_template(showdown, list(bound))).encode("utf-8")
+        codes = {issue.code for issue in validate_portfolio_policy_bytes(
+            raw, slate=showdown, entry_ids=plan.fillable).problems}
+        assert "PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH" in codes, bound
+    subset = json.dumps(portfolio_policy_template(showdown, [fillable[0], fillable[2]])).encode("utf-8")
+    valid = validate_portfolio_policy_bytes(subset, slate=showdown, entry_ids=plan.fillable)
+    assert valid.valid and valid.policy.entry_ids == (fillable[0], fillable[2])
+
+    classic = parse_salaries(CLASSIC_SALARY)
+    classic_entries = tmp_path / "classic_entries.csv"
+    classic_entries.write_bytes(CLASSIC_ENTRIES_20.read_bytes())
+    ids = [entry.entry_id for entry in parse_entries(classic_entries).authorizations]
+    _edit(classic_entries, cells={ids[0]: list(_salary_top(classic, 1)[0])})
+    classic_template = parse_entries(classic_entries)
+    classic_fillable = plan_entries(classic_template, classic).fillable
+    for bound in ((ids[0], ids[1]), ("999",), (ids[3], ids[2]), ()):
+        raw = json.dumps(classic_portfolio_policy_template(
+            classic, list(bound), entry_sha256=classic_template.raw_hash)).encode("utf-8")
+        codes = {issue.code for issue in validate_classic_portfolio_policy_bytes(
+            raw, slate=classic, entry_ids=classic_fillable, entry_sha256=classic_template.raw_hash).problems}
+        assert "CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH" in codes, bound
+    assert registry.family_of("CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH").gate_class is GateClass.V
+    raw = json.dumps(classic_portfolio_policy_template(
+        classic, [ids[2], ids[5]], entry_sha256=classic_template.raw_hash)).encode("utf-8")
+    valid = validate_classic_portfolio_policy_bytes(
+        raw, slate=classic, entry_ids=classic_fillable, entry_sha256=classic_template.raw_hash)
+    assert valid.valid, valid.blockers()
+    assert valid.policy.entry_ids == (ids[2], ids[5]) and valid.policy.entry_count == 2
+
+
+def test_a_classic_subset_policy_is_refused_by_name_until_session_11c(tmp_path, monkeypatch):
+    def subset(attachments: Path, plan) -> Path:
+        slate = parse_salaries(attachments / "salary.csv")
+        template = parse_entries(attachments / "entries.csv")
+        path = attachments.parent / "classic_subset.json"
+        path.write_text(json.dumps(classic_portfolio_policy_template(
+            slate, plan.fillable[:2], entry_sha256=template.raw_hash)), encoding="utf-8")
+        return path
+
+    code, report, _entries, _root = _run_slate(tmp_path, monkeypatch, run_id="c2-subset", entries=3,
+                                               policy=subset)
+    assert code == 2
+    (refusal,) = [text for text in report["blockers"] if text.startswith("CLASSIC_POLICY_SUBSET_UNSUPPORTED")]
+    assert "2 of 3 fillable rows" in refusal and "Session 11c" in refusal
+    assert load_gate_registry().family_of("CLASSIC_POLICY_SUBSET_UNSUPPORTED").gate_class is GateClass.P
+    assert report["latest_deliverable"]["producer"] == BASELINE
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+
+
+def test_a_policy_binding_every_fillable_row_gives_the_same_file_as_before(tmp_path, monkeypatch):
+    code, report, _entries, _slate = _run_showdown(
+        tmp_path / "sd", monkeypatch, run_id="sd-full", entry_ids=("900000001", "900000002", "900000003"),
+        policy_controls=SD3_CONTROLS)
+    assert code == 0 and report["latest_deliverable"]["producer"] == "run-slate:prior_review:SHOWDOWN"
+    assert sha256_file(report["latest_deliverable"]["path"]) == SD3_FULL_FILLABLE_SHA256
+    assert set(report["row_sources"].values()) == {"POLICY"}
+    assert _readable(report)["unbound_rows"] is None
+
+
+def test_a_classic_policy_binding_every_fillable_row_gives_the_same_file_as_before(tmp_path, monkeypatch):
+    code, report, _entries, _root = _run_slate(tmp_path, monkeypatch, run_id="c2-full", entries=3,
+                                               policy=_policy)
+    assert code == 0 and report["latest_deliverable"]["producer"] == C2, report["blockers"]
+    assert sha256_file(report["latest_deliverable"]["path"]) == C2_FULL_FILLABLE_SHA256
+
+
+def test_both_generators_bind_a_subset_with_entry_id_and_refuse_a_row_that_is_not_fillable(
+        tmp_path, capsys):
+    import importlib.util
+
+    from nfl_dfs.classic_portfolio_policy import validate_classic_portfolio_policy_bytes
+    from nfl_dfs.portfolio_policy import validate_portfolio_policy_bytes
+
+    from .test_baseline import showdown_template
+    from .test_classic_policy_generator import IMPROVEMENT_STOP
+
+    def load(name):
+        path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    showdown_salary = Path(__file__).resolve().parent / "fixtures" / "supplied" / "DKSalaries Salary CSV Showdown.csv"
+    showdown = parse_salaries(showdown_salary)
+    sd_entries = showdown_template(tmp_path, 4, showdown_salary, prefilled={1: list(_salary_top(showdown, 1)[0])})
+    template = parse_entries(sd_entries)
+    fillable = plan_entries(template, showdown).fillable
+    (prefilled,) = plan_entries(template, showdown).preserved
+    generator = load("make_showdown_policy")
+    sd_out = tmp_path / "showdown_subset.json"
+    arguments = ["--salaries", str(showdown_salary), "--entries", str(sd_entries), "--out", str(sd_out),
+                 "--combined-default", "0.5", "--captain-default", "0.5"]
+    assert generator.main([*arguments, "--entry-id", fillable[2], "--entry-id", fillable[0]]) == 0
+    capsys.readouterr()
+    written = json.loads(sd_out.read_text(encoding="utf-8"))
+    assert written["bindings"]["entry_ids"] == [fillable[0], fillable[2]]  # template order
+    validation = validate_portfolio_policy_bytes(sd_out.read_bytes(), slate=showdown, entry_ids=fillable)
+    assert validation.valid and validation.policy.entry_count == 2
+    for refused in (prefilled, "4880009999"):
+        with pytest.raises(SystemExit, match="ENTRY_ID_NOT_FILLABLE"):
+            generator.main([*arguments, "--entry-id", refused])
+    with pytest.raises(SystemExit, match="ENTRY_ID_REPEATED"):
+        generator.main([*arguments, "--entry-id", fillable[0], "--entry-id", fillable[0]])
+    rung_out = tmp_path / "showdown_subset_rung1.json"
+    assert generator.main(["--salaries", str(showdown_salary), "--entries", str(sd_entries), "--out",
+                           str(rung_out), "--combined-default", "0.5", "--captain-default", "0.1",
+                           "--entry-id", fillable[1], "--rung", "1"]) == 0
+    capsys.readouterr()
+    assert json.loads(rung_out.read_text(encoding="utf-8"))["bindings"]["entry_ids"] == [fillable[1]]
+
+    classic_entries = tmp_path / "classic_entries.csv"
+    classic_entries.write_bytes(CLASSIC_ENTRIES_20.read_bytes())
+    classic = parse_salaries(CLASSIC_SALARY)
+    classic_template = parse_entries(classic_entries)
+    classic_fillable = plan_entries(classic_template, classic).fillable
+    out = tmp_path / "classic_subset.json"
+    arguments = ["--salaries", str(CLASSIC_SALARY), "--entries", str(classic_entries), "--out", str(out),
+                 "--host-rates", str(tmp_path / "absent.json")]
+    wall = lambda: IMPROVEMENT_STOP - timedelta(days=1)  # noqa: E731 - the fixture's lock has passed
+    chosen = [classic_fillable[7], classic_fillable[1], classic_fillable[4], classic_fillable[12]]
+    code = load("make_classic_policy").main(
+        [*arguments, *(item for eid in chosen for item in ("--entry-id", eid))], wall=wall)
+    printed = capsys.readouterr().out
+    assert code == 0 and "Session 11c" in printed
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["bindings"]["entry_ids"] == [classic_fillable[i] for i in (1, 4, 7, 12)]
+    classic_validation = validate_classic_portfolio_policy_bytes(
+        out.read_bytes(), slate=classic, entry_ids=classic_fillable, entry_sha256=classic_template.raw_hash)
+    assert classic_validation.valid, classic_validation.blockers()
+    assert classic_validation.policy.entry_count == 4
+    rules = {rule["rule_id"]: rule for rule in document["controls"]["stack_rules"]}
+    assert rules["qb-pass-catcher"]["minimum_entries"] <= 4  # the rung table counts the bound rows
+    with pytest.raises(SystemExit, match="ENTRY_ID_NOT_FILLABLE"):
+        load("make_classic_policy").main([*arguments, "--entry-id", "999"], wall=wall)

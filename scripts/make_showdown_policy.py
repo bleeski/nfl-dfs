@@ -6,8 +6,12 @@ SHOWDOWN_RETROSPECTIVE_2026-09-13 recommendation: the policy schema was guessed
 wrong by hand on the prior slate and cost ~3 minutes under a lock clock.
 
 Emits absolute paths, exact-decimal fractions in FRACTION_0_TO_1, the complete
-person identity map derived from the salary bytes, and every Entry ID in
-template order as read from the entries file.
+person identity map derived from the salary bytes, and every fillable Entry ID
+in template order as read from the entries file. `--entry-id` (repeatable,
+Session 11b) binds only those rows instead, in template order; each must be a
+fillable blank row. run-slate fills the rows the policy leaves unbound with
+sequential Showdown after the policy's joint solve, and every fraction's
+denominator is the bound rows.
 
 RUNGS (Session 10). `--rung 0` is the policy the flags describe. Rungs 1 to 3
 are `nfl_dfs.relaxation.SHOWDOWN_RUNGS` applied to it, each the loosest of the
@@ -65,6 +69,21 @@ def read_entries(path, salary_path):
 
     return list(plan_entries(parse_entries(path), parse_salaries(salary_path)).fillable)
 
+def bound_entries(fillable, requested):
+    """The rows `--entry-id` names, in template order (Session 11b); every fillable row without it."""
+    if not requested:
+        return list(fillable)
+    wanted = [str(item).strip() for item in requested]
+    repeated = sorted({item for item in wanted if wanted.count(item) > 1})
+    if repeated:
+        sys.exit(f"ENTRY_ID_REPEATED: {repeated}")
+    outside = [item for item in wanted if item not in set(fillable)]
+    if outside:
+        sys.exit(f"ENTRY_ID_NOT_FILLABLE: {outside} are not fillable blank rows of the template"
+                 f" (a prefilled, partly filled, unresolved or unknown row is never bound);"
+                 f" fillable: {list(fillable)}")
+    return [item for item in fillable if item in set(wanted)]
+
 def game_id(path):
     with open(path, newline='', encoding='utf-8-sig') as f:
         for r in csv.DictReader(f):
@@ -93,6 +112,8 @@ def main(argv=None):
                     help='UNDERLYING_ID to exclude entirely (repeatable)')
     ap.add_argument('--rung', type=int, default=0, choices=(0, 1, 2, 3, 4),
                     help='relax the policy the flags describe to this rung (nfl_dfs.relaxation)')
+    ap.add_argument('--entry-id', action='append', default=[],
+                    help='bind only this fillable Entry ID (repeatable); the rest are filled sequentially')
     a = ap.parse_args(argv)
     if a.rung == 4:
         print("rung 4 emits no policy by design: run run-slate without --portfolio-policy-json, so"
@@ -101,7 +122,7 @@ def main(argv=None):
 
     sal = os.path.abspath(a.salaries); ent = os.path.abspath(a.entries)
     people = read_salary(sal)
-    entry_ids = read_entries(ent, sal)
+    entry_ids = bound_entries(read_entries(ent, sal), a.entry_id)
     n = len(entry_ids)
 
     def parse_ovr(items):
@@ -168,6 +189,7 @@ def main(argv=None):
         'policy': out,
         'policy_sha256': sha256(out),
         'entries': n,
+        'entry_ids': entry_ids,
         'people': len(people),
         'combined_default_integer_max': imax(a.combined_default),
         'captain_default_integer_max': imax(a.captain_default),
@@ -213,7 +235,7 @@ def relaxed_document(document, salary_path, entry_path, rung):
     if validation.policy is None:
         sys.exit("RUNG_0_POLICY_INVALID: " + "; ".join(validation.blockers()))
     controls = showdown_relaxed_controls(validation.policy, rung)
-    relaxed = portfolio_policy_template(slate, entry_ids, controls=controls)
+    relaxed = portfolio_policy_template(slate, validation.policy.entry_ids, controls=controls)
     return canonical_decimal_json_bytes(relaxed) + b"\n"
 
 

@@ -35,7 +35,7 @@ exact current-slate IDs ever does.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from .contracts import DeliveryLimitation, EntryAuthorization, SlateContract
@@ -258,6 +258,40 @@ def plan_entries(template: EntryTemplate, slate: SlateContract) -> EntryPlan:
         groups=groups,
         findings=tuple(findings),
     )
+
+
+def subset_binding_problems(bound: Sequence[str], fillable: Sequence[str]) -> list[str]:
+    """Why `bound` is not a policy's subset of `fillable`; empty when it is (Session 11b).
+
+    A policy binds a non-empty subset of the plan's fillable blank rows, in
+    template order, each once. Every other row (prefilled, partly filled,
+    unresolved, or not in the template at all) is outside `fillable`, so a
+    policy binding one is refused, as it was before subsets existed.
+    """
+
+    rows = tuple(fillable)
+    problems: list[str] = []
+    if not bound:
+        problems.append("it binds no Entry ID")
+    outside = [eid for eid in bound if eid not in set(rows)]
+    if outside:
+        problems.append(f"{outside} are not fillable blank rows of the template (a prefilled, partly"
+                        " filled, unresolved or unknown row is never bound)")
+    repeated = sorted({eid for eid in bound if list(bound).count(eid) > 1})
+    if repeated:
+        problems.append(f"it repeats {repeated}")
+    position = {eid: index for index, eid in enumerate(rows)}
+    known = [position[eid] for eid in bound if eid in position]
+    if not repeated and known != sorted(known):
+        problems.append("its Entry IDs are not in template order")
+    return problems
+
+
+def unbound_rows(bound: Sequence[str], fillable: Sequence[str]) -> tuple[str, ...]:
+    """The fillable rows a policy leaves to C1 or sequential Showdown, in template order."""
+
+    taken = set(bound)
+    return tuple(eid for eid in fillable if eid not in taken)
 
 
 def group_report(

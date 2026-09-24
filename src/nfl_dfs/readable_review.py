@@ -20,12 +20,17 @@ from typing import Iterable, Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
 from .dk import EntryTemplate, parse_entries, parse_entry_bytes, parse_salaries
-from .entry_groups import plan_entries
+from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup
 
 
-READABLE_REVIEW_VERSION = "prior_only_readable_review_sd5_v1"
+READABLE_REVIEW_VERSION = "prior_only_readable_review_sd5_v2"
+# Each row's source (Session 11b, the reason for v2): the policy's joint solve, or
+# sequential Showdown filling the rows a subset policy leaves unbound (every row
+# when there is no policy).
+ROW_SOURCE_POLICY = "POLICY"
+ROW_SOURCE_FILL = "SHOWDOWN_SEQUENTIAL"
 _ASSIGNMENT_HEADER = ("Entry ID", "CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX")
 
 
@@ -176,7 +181,9 @@ def _parse_normalized_policy(
         problems.append("READABLE_REVIEW_NORMALIZED_POLICY_SCHEMA_MISMATCH")
     bindings = _mapping(root.get("bindings"), "normalized_policy.bindings", problems)
     policy_entries = tuple(str(value) for value in _sequence(bindings.get("entry_ids"), "policy.entry_ids", problems))
-    if policy_entries != expected_entries:
+    # Since Session 11b the policy binds the fillable rows or a subset of them in
+    # template order, and its own rows are its denominator.
+    if policy_entries != expected_entries and subset_binding_problems(policy_entries, expected_entries):
         problems.append(
             _problem(
                 "READABLE_REVIEW_POLICY_ENTRY_ID_ORDER_MISMATCH",
@@ -199,7 +206,7 @@ def _parse_normalized_policy(
         problems.append("READABLE_REVIEW_POLICY_PERSON_BINDINGS_MISMATCH")
     controls = _mapping(root.get("controls"), "normalized_policy.controls", problems)
     effective = _mapping(root.get("effective"), "normalized_policy.effective", problems)
-    if effective.get("entry_count_denominator") != len(expected_entries):
+    if effective.get("entry_count_denominator") != len(policy_entries):
         problems.append("READABLE_REVIEW_POLICY_DENOMINATOR_MISMATCH")
     limit_rows: dict[str, dict[str, object]] = {}
     for raw in _sequence(effective.get("people"), "normalized_policy.effective.people", problems):
@@ -214,7 +221,7 @@ def _parse_normalized_policy(
                 not isinstance(value, int)
                 or isinstance(value, bool)
                 or value < 0
-                or value > len(expected_entries)
+                or value > len(policy_entries)
             ):
                 problems.append(_problem("READABLE_REVIEW_POLICY_LIMIT_INVALID", f"person={person}:field={label}"))
         limit_rows[person] = row
@@ -226,6 +233,74 @@ def _parse_normalized_policy(
         "max_pairwise_person_overlap": controls.get("max_pairwise_person_overlap"),
         "effective_pairwise_person_overlap": controls.get("effective_pairwise_person_overlap"),
         "require_unique_lineups": controls.get("require_unique_lineups"),
+    }
+
+
+def _unbound_rows_section(
+    unbound_entries: Sequence[str],
+    *,
+    output_rosters: Mapping[str, Sequence[str]],
+    people_by_entry: Mapping[str, frozenset[str]],
+    by_id: Mapping[str, object],
+    selection_payload: Mapping[str, object],
+    excluded_people: set[str],
+    official_statuses: Mapping[str, object],
+    problems: list[str],
+) -> dict[str, object] | None:
+    """The second section (Session 11b): the rows a subset policy leaves to the fill.
+
+    The policy's caps never covered them. Their legality, byte identity and
+    distinctness against every other row are checked with the rest; here, the
+    run's own exclusions and official inactives, and the fill's own overlap cap
+    among its rows. `None` when the policy binds every row, or there is none.
+    """
+
+    if not unbound_entries:
+        return None
+    fill = selection_payload.get("unbound_fill")
+    if not isinstance(fill, Mapping) or fill.get("lineups") != len(unbound_entries):
+        problems.append(_problem("READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH", list(unbound_entries)))
+        fill = {}
+    differentiation = fill.get("differentiation") if isinstance(fill.get("differentiation"), Mapping) else {}
+    configured = differentiation.get("max_person_overlap")
+    effective = 6 if configured is None else configured
+    exposure: Counter[str] = Counter()
+    for entry_id in unbound_entries:
+        for dk_id in output_rosters.get(entry_id, ()):
+            player = by_id.get(dk_id)
+            if player is None:
+                continue
+            person = getattr(player, "underlying_id")
+            if person in excluded_people:
+                problems.append(_problem("READABLE_REVIEW_UNBOUND_ROW_EXCLUDED_PERSON",
+                                         f"entry={entry_id}:person={person}"))
+            if official_statuses.get(dk_id) == "INACTIVE":
+                problems.append(_problem("READABLE_REVIEW_UNBOUND_ROW_NOT_ACTIVE",
+                                         f"entry={entry_id}:id={dk_id}"))
+        exposure.update(people_by_entry.get(entry_id, frozenset()))
+    pairwise: list[dict[str, object]] = []
+    for left_index, left in enumerate(unbound_entries):
+        for right in unbound_entries[left_index + 1:]:
+            shared = len(people_by_entry.get(left, frozenset()) & people_by_entry.get(right, frozenset()))
+            pairwise.append({"entry_id_a": left, "entry_id_b": right, "actual_people": shared,
+                             "maximum_people": effective})
+            if isinstance(effective, int) and shared > effective:
+                problems.append(_problem("READABLE_REVIEW_PAIRWISE_OVERLAP_EXCEEDED", f"entries={left},{right}"))
+    return {
+        "source": ROW_SOURCE_FILL,
+        "entry_ids": list(unbound_entries),
+        "basis": "THE_RUN_S_OWN_EXCLUSIONS_AND_THE_FILL_S_OVERLAP_NOT_THE_POLICY_S_CAPS",
+        "checks": [
+            "LEGALITY_AND_BYTES_WITH_EVERY_ROW",
+            "DISTINCT_FROM_EVERY_POLICY_FILL_AND_PREFILLED_LINEUP",
+            "NO_PERSON_THE_RUN_EXCLUDES",
+            "NO_OFFICIAL_INACTIVE_ROW",
+            "FILL_PAIRWISE_OVERLAP",
+        ],
+        "configured_pairwise_person_overlap": configured,
+        "effective_pairwise_person_overlap": effective,
+        "pairwise_overlap": pairwise,
+        "person_exposure": dict(sorted(exposure.items())),
     }
 
 
@@ -746,7 +821,8 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
         sections.append(
             f'<section class="entry"><h3>Entry {_escape(entry.get("entry_id"))} — {_escape(entry.get("contest_name") or "Contest label unavailable")}</h3>'
             f'<p>Contest ID {_escape(entry.get("contest_id"))} · Salary ${_escape(entry.get("salary_total"))} · Remaining ${_escape(entry.get("salary_remaining"))} · '
-            f'PRIOR_ONLY central estimate {_escape(entry.get("prior_only_central_estimate_points"))} points</p>'
+            f'PRIOR_ONLY central estimate {_escape(entry.get("prior_only_central_estimate_points"))} points · '
+            f'Source {_escape(entry.get("source"))}</p>'
         )
         slot_rows = []
         for raw_slot in _sequence(entry.get("slots"), "entry.slots", []):
@@ -799,6 +875,20 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
         if isinstance(row, Mapping)
     ]
     sections.append(_html_table(("Entry A", "Entry B", "Actual shared people", "Maximum"), overlap_rows))
+    unbound = data.get("unbound_rows")
+    if isinstance(unbound, Mapping):
+        sections.append("<h2>Rows the policy leaves unbound, filled sequentially</h2>")
+        sections.append(
+            f'<p>Entry IDs {_escape(unbound.get("entry_ids"))}, filled by {_escape(unbound.get("source"))} after '
+            "the policy's joint solve. The policy's caps and denominator do not cover them; they are checked "
+            f'for {_escape(unbound.get("checks"))}. Overlap maximum among them: '
+            f'{_escape(unbound.get("effective_pairwise_person_overlap"))}.</p>'
+        )
+        sections.append(_html_table(
+            ("Entry A", "Entry B", "Actual shared people", "Maximum"),
+            [(row.get("entry_id_a"), row.get("entry_id_b"), row.get("actual_people"), row.get("maximum_people"))
+             for row in _sequence(unbound.get("pairwise_overlap"), "unbound.pairwise_overlap", [])
+             if isinstance(row, Mapping)]))
     coverage = data.get("pool_coverage")
     if isinstance(coverage, Mapping):
         sections.append("<h2>Pool coverage: who could not be selected, and why</h2>")
@@ -948,8 +1038,11 @@ def create_readable_review(
     # and every other row keeps the template's own cells. From here on
     # `expected_entries` means the portfolio's rows (selection, policy,
     # denominators, overlap, audit), and the output keeps the template's order.
+    forbidden_keys: frozenset[str] = frozenset()
     try:
-        fillable = plan_entries(reparsed_template, reparsed_slate).fillable
+        entry_plan = plan_entries(reparsed_template, reparsed_slate)
+        fillable = entry_plan.fillable
+        forbidden_keys = entry_plan.forbidden_keys
     except ValueError as exc:
         problems.append(_problem("READABLE_REVIEW_ENTRY_REPARSE_MISMATCH", f"{type(exc).__name__}:{exc}"))
         fillable = template_entries
@@ -1043,6 +1136,24 @@ def create_readable_review(
                     f"actual={source_actual}:expected={source_expected}",
                 )
             )
+
+    # Session 11b: the policy's checks (counts, limits, denominator, overlap and
+    # the audit) cover the rows it binds; the rows the fill wrote get the second
+    # section below. Without a policy, or with one binding every row, the two are
+    # the same rows as before.
+    bound_entries = (
+        tuple(policy_view.get("entry_ids") or expected_entries) if policy_view is not None else expected_entries
+    )
+    bound_set = set(bound_entries)
+    unbound_entries = unbound_rows(bound_entries, expected_entries)
+    sources = {
+        entry_id: (ROW_SOURCE_POLICY if policy_view is not None and entry_id in bound_set else ROW_SOURCE_FILL)
+        for entry_id in expected_entries
+    }
+    # A selection record from before Session 11b names no sources; the review
+    # derives them. One that names them must agree.
+    if "row_sources" in selection_record and selection_record.get("row_sources") != sources:
+        problems.append(_problem("READABLE_REVIEW_ROW_SOURCE_MISMATCH", selection_record.get("row_sources")))
 
     by_id = {player.dk_id: player for player in reparsed_slate.players}
     role_findings = _role_findings(selection_record)
@@ -1147,12 +1258,16 @@ def create_readable_review(
                 problems.append(_problem("READABLE_REVIEW_SELECTION_PROJECTION_MISMATCH", authorization.entry_id))
         people = frozenset(by_id[dk_id].underlying_id for dk_id in roster if dk_id in by_id)
         people_by_entry[authorization.entry_id] = people
-        combined_counts.update(people)
-        captain_counts[by_id[roster[0]].underlying_id] += 1
+        if authorization.entry_id in bound_set:
+            combined_counts.update(people)
+            captain_counts[by_id[roster[0]].underlying_id] += 1
         canonical_by_entry[authorization.entry_id] = validation.lineup.canonical_key
+        if validation.lineup.canonical_key in forbidden_keys:
+            problems.append(_problem("ENTRY_PREFILLED_LINEUP_REPEATED", authorization.entry_id))
         entries_payload.append(
             {
                 "entry_id": authorization.entry_id,
+                "source": sources.get(authorization.entry_id),
                 "contest_id": authorization.contest_id,
                 "contest_name": authorization.contest_name or None,
                 "entry_fee": authorization.entry_fee,
@@ -1171,7 +1286,7 @@ def create_readable_review(
     display_by_person: dict[str, object] = {}
     for player in reparsed_slate.players:
         display_by_person.setdefault(player.underlying_id, player)
-    denominator = len(expected_entries)
+    denominator = len(bound_entries)
     participation = selection_record.get("participation_detail")
     external_exclusions: set[str] = set()
     if isinstance(participation, Mapping):
@@ -1247,8 +1362,8 @@ def create_readable_review(
         policy_view.get("effective_pairwise_person_overlap") if policy_view else (6 if configured_overlap is None else configured_overlap)
     )
     pairwise: list[dict[str, object]] = []
-    for left_index, left in enumerate(expected_entries):
-        for right in expected_entries[left_index + 1 :]:
+    for left_index, left in enumerate(bound_entries):
+        for right in bound_entries[left_index + 1 :]:
             actual_overlap = len(people_by_entry.get(left, frozenset()) & people_by_entry.get(right, frozenset()))
             pairwise.append(
                 {
@@ -1263,8 +1378,22 @@ def create_readable_review(
     canonical_counts = Counter(canonical_by_entry.values())
     duplicate_keys = sorted(key for key, count in canonical_counts.items() if count > 1)
     unique_required = bool(policy_view.get("require_unique_lineups")) if policy_view else True
-    if unique_required and duplicate_keys:
+    if (unique_required or unbound_entries) and duplicate_keys:
+        # R29 across the whole portfolio: policy rows, fill rows and prefilled rows.
         problems.append(_problem("READABLE_REVIEW_CANONICAL_DUPLICATE", duplicate_keys))
+    unbound_payload = _unbound_rows_section(
+        unbound_entries,
+        output_rosters=output_rosters,
+        people_by_entry=people_by_entry,
+        by_id=by_id,
+        selection_payload=selection_payload,
+        excluded_people={
+            *external_exclusions,
+            *(person for person, reason in coverage_reasons.items() if reason != "SELECTABLE"),
+        },
+        official_statuses=official_statuses,
+        problems=problems,
+    )
 
     if policy_view is not None:
         audit_path_raw = artifacts.get("portfolio_policy_audit")
@@ -1290,9 +1419,11 @@ def create_readable_review(
         ]
         if audit_record.get("status") != "PASS":
             problems.append("READABLE_REVIEW_PORTFOLIO_AUDIT_NOT_PASS")
-        if tuple(str(value) for value in audit_record.get("entry_ids", [])) != expected_entries:
+        if tuple(str(value) for value in audit_record.get("entry_ids", [])) != bound_entries:
             problems.append("READABLE_REVIEW_AUDIT_ENTRY_ID_MISMATCH")
-        if audit_record.get("canonical_lineups") != canonical_by_entry:
+        if audit_record.get("canonical_lineups") != {
+            entry_id: key for entry_id, key in canonical_by_entry.items() if entry_id in bound_set
+        }:
             problems.append("READABLE_REVIEW_AUDIT_CANONICAL_MISMATCH")
         if audit_record.get("combined_person_counts") != dict(sorted(combined_counts.items())):
             problems.append("READABLE_REVIEW_AUDIT_COMBINED_EXPOSURE_MISMATCH")
@@ -1355,7 +1486,7 @@ def create_readable_review(
         "reconciliation": {
             "status": "PASS",
             "basis": "INDEPENDENT_EXACT_BYTE_REPARSE_AND_RECOMPUTATION",
-            "entry_count": denominator,
+            "entry_count": len(expected_entries),
             "problems": [],
         },
         "entries": entries_payload,
@@ -1369,6 +1500,7 @@ def create_readable_review(
             "effective_pairwise_person_overlap": effective_overlap,
             "pairwise_overlap": pairwise,
         },
+        "unbound_rows": unbound_payload,
         "pool_coverage": (
             {key: value for key, value in pool_coverage.items() if key != "reason_by_person"}
             if pool_coverage is not None

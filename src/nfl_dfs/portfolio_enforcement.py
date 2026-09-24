@@ -1101,8 +1101,15 @@ def audit_policy_assignments(
     assignment_artifact_bytes: bytes,
     expected_assignment_artifact_sha256: str,
     selector_summary: Mapping[str, object] | None = None,
+    unbound_entry_ids: Sequence[str] = (),
 ) -> PortfolioAudit:
-    """Recompute every SD4 control from exact final roster IDs and artifacts."""
+    """Recompute every SD4 control from exact final roster IDs and artifacts.
+
+    `assignments` are the policy's rows. Since Session 11b a policy may bind a
+    subset of the fillable rows; the assignment artifact then also holds
+    `unbound_entry_ids`, the rows the fill wrote, and must hold exactly those
+    beside the policy's. Their rosters are the readable review's to check.
+    """
 
     problems: list[str] = []
     try:
@@ -1193,11 +1200,23 @@ def audit_policy_assignments(
             )
         )
     else:
-        if artifact_pairs != tuple(normalized_pairs):
+        bound = set(expected_entries)
+        others = [entry for entry, _roster in artifact_pairs if entry not in bound]
+        if tuple(pair for pair in artifact_pairs if pair[0] in bound) != tuple(normalized_pairs):
             problems.append(
                 _audit_problem(
                     "PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH",
                     "assignment rows, order, or roster IDs differ from the final in-memory assignment",
+                )
+            )
+        if sorted(others) != sorted(str(entry).strip() for entry in unbound_entry_ids) or len(
+            set(others)
+        ) != len(others):
+            problems.append(
+                _audit_problem(
+                    "PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH",
+                    f"rows outside the policy {others} are not exactly the unbound rows"
+                    f" {list(unbound_entry_ids)}",
                 )
             )
 
