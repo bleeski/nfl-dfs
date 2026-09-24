@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "fad1fa5d-69b6-5095-88b8-033d132fe828",
-      "branch": "claude/roadmap-session-09-jizzh0",
-      "chunk": "S09",
-      "claimed_at": "2026-09-24T13:35:49Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

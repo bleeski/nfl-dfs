@@ -751,7 +751,7 @@ Every session follows this protocol, and the cards only add to it:
 - **Depends on.** Session 06.
 - **Scope.**
   - Replace the whole-file `ENTRY_BLANK_CELL_AUTHORITY_REQUIRED` refusal
-    (`prior_review.py:1271-1281`) with per-row authority. Prefilled rows are
+    (`prior_review.py:1407-1417` as of Session 09's merge) with per-row authority. Prefilled rows are
     preserved byte-identical; blank rows are filled.
   - `lineups.py:143-147, 163-166` accepts a subset with preserved rows.
   - Groups by Contest ID are delivered independently, and unresolved Entry IDs
@@ -1146,4 +1146,4 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 08 | Pending to In Progress | `d236025` | Claim pushed on `claude/session-08-nonoptimal-bank-gkusm7` |
 | 2026-09-24 | Session 08 | In Progress to Complete | `b0066f8` | Limit-stopped banks and joint solves keep validated incumbents; C3 and SD3 exports name them; suite `1677 passed, 1 skipped`; merged as PR #61 |
 | 2026-09-24 | Session 09 | Pending to In Progress | `82014e5` | Claim pushed on `claude/roadmap-session-09-jizzh0` |
-| 2026-09-24 | Session 09 | In Progress to Complete | recorded by the next session | Weather `UNOBSERVED`, Classic activity and P1 ship named; suite `1692 passed, 1 skipped` |
+| 2026-09-24 | Session 09 | In Progress to Complete | recorded by the next session | Weather `UNOBSERVED`, Classic activity and P1 ship named; suite `1698 passed, 1 skipped` |

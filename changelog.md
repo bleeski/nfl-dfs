@@ -187,13 +187,53 @@ gate is untouched, and the baseline consumes none of this.
   `test_r28_model_path`, `test_run_slate_baseline_first`,
   `test_projection_producer`, `test_prelock_manifest`, `test_deadline_controller`):
   `538 passed in 132.68s`.
-- Complete pinned suite on `020708e`: `1692 passed, 1 skipped in 274.35s`,
-  recorded with `scripts/record_verify.py`; the skip is the junction test.
+- Complete pinned suite on `020708e`: `1692 passed, 1 skipped in 274.35s`.
+- After the review round (`ea74fb4`), the three touched files: `103 passed in
+  53.10s`; complete pinned suite: `1698 passed, 1 skipped in 272.90s`, recorded
+  with `scripts/record_verify.py`; the skip is the junction test.
 - `sh ./nfl.sh doctor` `pass_status: true`; `compileall` and import of every
   changed module; `git diff --check` clean; `scripts/check_protected_paths.py`:
   no protected path touched, so no `ben-review` label.
 - Diff about 1,320 changed lines before the close-out documents, at the card's
   breakpoint with every item done, so no Session 09b row.
+
+#### Review round (the `reviewer` subagent, fresh context)
+
+- **Fixed, blocking.** `decide_weather` passed a typed state with no source on
+  for a dome or closed roof, and the legacy (scalar) freeze reads the
+  first-locking game's fields as the capture: a Classic request with an
+  unsourced `weather_state`, a dome first and two outdoor games stopped the
+  freeze on `CLASSIC_WEATHER_SCOPE_AMBIGUOUS`, while the same request with an
+  outdoor game first ran `UNOBSERVED`. Nothing unattributed is passed on for a
+  schedule roof now, and an open roof no longer passes a URI without its time
+  (it stopped at `WEATHER_OBSERVED_AT_REQUIRED`).
+  `test_an_unsourced_state_never_reaches_a_multi_game_classic_freeze` and
+  `test_nothing_unattributed_is_passed_on_for_a_schedule_roof` hold both.
+- **Fixed.** An unsourced state no longer keeps a retractable venue's blank
+  roof from resolving from its history, so the weather report agrees with the
+  freeze. A reused package whose state was typed without a source (Showdown's
+  standalone `priors freeze --weather-state` still writes one) is named
+  `WEATHER_UNOBSERVED`. `run-slate` names a P1 exclusion only on a file the
+  review delivered, as it does weather. The standalone `select` command lists
+  P1 exclusions under `limitations`. C3's no-file branch, which could never
+  fire, now refuses a tracked status file whose coverage says none was supplied.
+  Stale text corrected in the `prior_review` docstring and roof comment,
+  `docs/DATA_CONTRACTS.md` (the per-person activity sentence; only the coverage
+  embeds the gate) and `scripts/make_offensive_role_evidence.py`.
+- **Left open, with where it stands.** Showdown's readable review builds its
+  "named blockers" before `run-slate` inserts the activity, weather and P1
+  codes, so it lists none of them; that ordering predates this session (it
+  already omitted `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED`), and the delivery
+  limitations and `cowork_run.json` carry all three. Certification's weather
+  record reads an uncaptured `ROOF_OPEN` as `PASS`: nflverse writes `open` only
+  after a game is played, so no pre-lock game carries it, and `PRIOR_ONLY`
+  never certifies. The coverage schemas keep their versions though
+  `official_status_coverage` may now be `null` (documented), and the C3
+  readable review's activity observation may read `UNKNOWN` with a null
+  `observed_at` (its `state` already took `UNKNOWN` for roles). No `run-slate`
+  test drives the build path through a real Classic freeze, or weather and P1
+  through C2/C3 or Showdown; the pieces are covered at the freeze, the review
+  and the reuse-path `run-slate` levels.
 
 #### Found and left open
 
