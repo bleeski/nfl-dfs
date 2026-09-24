@@ -9,11 +9,12 @@ A per-candidate solve a limit stops with a legal roster keeps it, labelled
 when it holds the entry count and a `POLICY_FEASIBLE` witness. Both joint
 selectors (C2 and SD3) return a limit's valid integer incumbent after the
 optimum's own checks as `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`, with gap and
-nodes and no optimality scope; the C2 solve starts from the witness, so a
-limit returns at least that. C3 and SD3's review export accept both, and the
+nodes and no optimality scope; the C2 solve starts from the witness and, on a
+limit, returns whichever of HiGHS's incumbent and the witness scores higher. C3 and SD3's review export accept both, and the
 file ships naming `CANDIDATE_BANK_STOPPED_AT_LIMIT` and
 `PORTFOLIO_SELECTION_LIMIT_INCUMBENT` (`S`). Verified end to end through
-`run-slate` on real HiGHS stopped by a node limit. Not yet: a stopped SD3 bank
+`run-slate` on real HiGHS stopped by a node limit and by a time limit, and for
+SD3 through the Showdown export. Not yet: a stopped SD3 bank
 still blocks (no joint-solved witness), and nothing walks the rung ladder when
 a bank does block (Session 10).
 

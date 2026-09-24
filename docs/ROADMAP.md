@@ -679,11 +679,12 @@ Every session follows this protocol, and the cards only add to it:
   `POLICY_FEASIBLE` witness, and `CANDIDATE_BANK_TIMEOUT` or
   `CANDIDATE_BANK_SEARCH_LIMIT`, still blocking, without. Both joint selectors
   return a limit's valid incumbent as `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`
-  (no optimality scope; C2 starts from the witness). C3 and `run-slate` accept
+  (no optimality scope; C2 starts from the witness and never delivers less). C3 and `run-slate` accept
   and name both (`CANDIDATE_BANK_STOPPED_AT_LIMIT`,
   `PORTFOLIO_SELECTION_LIMIT_INCUMBENT`, `S`). The status test is deterministic
-  (20 of 20); the real-HiGHS acceptance runs on a node limit through
-  `run-slate` to the C3 export. Left open: a stopped SD3 bank still blocks, and
+  (20 of 20); the real-HiGHS acceptance runs on a node limit and on a 1e-9 s
+  time limit through `run-slate` to the C3 export, and SD3's through the
+  Showdown export. Left open: a stopped SD3 bank still blocks, and
   the rung ladder is still walked by hand (Session 10). Decisions and numbers:
   `changelog.md`.
 
@@ -1129,4 +1130,4 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 07b | Pending to In Progress | `b213492` | Claim pushed on `claude/session-07b-deadline-budget-iwheie` |
 | 2026-09-24 | Session 07b | In Progress to Complete | `e6673c2` | Fetch, weather-capture and generator allowances; `DEADLINE_FETCH_WINDOW_SPENT`; suite `1647 passed, 1 skipped`; merged as PR #60 |
 | 2026-09-24 | Session 08 | Pending to In Progress | `d236025` | Claim pushed on `claude/session-08-nonoptimal-bank-gkusm7` |
-| 2026-09-24 | Session 08 | In Progress to Complete | recorded by the next session | Limit-stopped banks and joint solves keep validated incumbents; C3 and SD3 exports name them; suite `1669 passed, 1 skipped` |
+| 2026-09-24 | Session 08 | In Progress to Complete | recorded by the next session | Limit-stopped banks and joint solves keep validated incumbents; C3 and SD3 exports name them; suite `1677 passed, 1 skipped`; PR #61 |
