@@ -77,14 +77,14 @@ Runs report four independent truths until Session 03: `FILE_VALID`,
 release. A `CERTIFIED` compatibility status derives only from
 `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` and is not a profitability claim.
 Every current path ends `MODEL_STATUS=PRIOR_ONLY` and
-`RELEASE_DECISION=DO_NOT_UPLOAD` until Q6 promotion; the Showdown `prior_review`
-profile may retain a byte-audited `DK_REVIEW_ENTRY_*.csv`, Classic C1/C2 emit no
-upload-shaped CSV, and no operating profile writes `DK_UPLOAD` (`certify` and
-governed `late-swap` can). Exit code 0 means review generation completed, not
-that uploading is cleared. Never describe `RECONCILED`, `MODELLED`, a legal
-lineup, or a green diagnostic as upload-ready. Never send a generated prior
-assignment to manual-guardrail certification; run `preflight` immediately before
-any separately certified manual upload.
+`RELEASE_DECISION=DO_NOT_UPLOAD` until Q6 promotion; `run-slate` writes a
+byte-audited baseline and may retain a byte-audited `DK_REVIEW_ENTRY_*.csv`
+(Showdown, C3, or C1's export), and no operating profile writes `DK_UPLOAD`
+(`certify` and governed `late-swap` can). Exit code 0 means review generation
+completed, not that uploading is cleared. Never describe `RECONCILED`,
+`MODELLED`, a legal lineup, or a green diagnostic as upload-ready. Never send a
+generated prior assignment to manual-guardrail certification; run `preflight`
+immediately before any separately certified manual upload.
 
 **R28 (Ben, 2026-09-22)** is in force; Sessions 03 to 12 implement it. A fifth
 truth, `DELIVERY_STATE`, says whether a valid file exists to hand over. A
@@ -102,9 +102,9 @@ portfolio can be late-swapped, a missed lock cannot. Three classes of rule:
   and search budgets, objective tuning) may be relaxed on Claude's own
   authority, without asking, whenever they stand between the run and a legal
   portfolio. The ladder is `scripts/make_classic_policy.py --rung`, walked by
-  hand; Showdown has none (Session 10). Rung 4 runs C1 with no policy: the last
-  structural rung, not a guaranteed file, since C1 writes JSON only
-  (`prior_review.py:3016`) and raises when distinct lineups run out
+  hand; Showdown has none (Session 10). Rung 4 runs C1 with no policy, the last
+  structural rung: `run-slate` exports C1's lineups, and the baseline stays the
+  deliverable when that is refused or C1 raises out of distinct lineups
   (`selection.py:538-542`). On `MODELED_BANK_INFEASIBILITY`,
   `INCOMPLETE_BANK_EXHAUSTION`, `CANDIDATE_BANK_TIMEOUT` or
   `CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun; diagnose afterwards in
@@ -117,8 +117,8 @@ portfolio can be late-swapped, a missed lock cannot. Three classes of rule:
   and expiry, identity, prior-package expiry, hash bindings) are truth claims.
   The ladder never touches them.
 
-After R28 the baseline goes first in the running order; until Sessions 04 and
-06 land, the nearest thing is the Classic fallback chain in `docs/RUNBOOK.md`.
+After R28 the baseline goes first in the running order: `run-slate` publishes
+it before any evidence, policy or model stage (`docs/RUNBOOK.md`).
 The default delivery deadline is the earliest relevant lock minus 5 minutes
 (R31; the engine enforces it from Session 07).
 
