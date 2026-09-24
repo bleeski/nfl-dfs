@@ -4,7 +4,9 @@ One `Budget`, built right after intake, gives every `run-slate` stage its time:
 the baseline (never below its floor), the session probe and the review's
 solver limits. When the window is spent the improvement stops and the baseline
 stays the deliverable, named by a registered limitation, never a silent
-timeout. Evidence fetches and the policy generator are Session 07b's.
+timeout. Session 07b added evidence fetches: each takes `min(30, window)` from
+the same budget, `run-slate` sets it for them with `deadline.activated`, and a
+window under 1 s starts no request.
 
 Every clock here is pinned or injected, a slow stage is a stub that moves the
 injected clock, and no test opens a socket.
@@ -16,6 +18,7 @@ import inspect
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -50,6 +53,7 @@ SHOWDOWN_LOCK = datetime(2026, 9, 10, 0, 20, tzinfo=timezone.utc)  # NE@SEA, 8:2
 DEADLINE_CODES = (
     "DEADLINE_PASSED_AT_START", "DEADLINE_IMPROVEMENT_WINDOW_SPENT",
     "DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW", "DEADLINE_STAGE_SHORTENED", "DEADLINE_AFTER_EARLIEST_LOCK", "DEADLINE_WALL_CLOCK_PAST_DEADLINE",
+    "DEADLINE_FETCH_WINDOW_SPENT",
 )
 
 
@@ -217,7 +221,10 @@ def test_the_budget_maps_onto_select_prior_lineups_keywords():
     classic.search_limits = Mock(candidate_total_milliseconds=60_000, selection_milliseconds=10_000)
     limits, stopped = _deadline_selection_limits(budget, count=1, portfolio_policy=classic)
     assert limits == {} and stopped.startswith("DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW:")
-    assert "--minutes" in stopped and "--delivery-deadline-utc" not in stopped  # a flag that exists
+    # Session 07b gave the generator the flag, so the detail names it and this deadline; a
+    # replay pinned by --as-of cannot use the wall-clock window, so --minutes stays named for it.
+    assert f"--delivery-deadline-utc {budget.deadline.isoformat()}" in stopped
+    assert "for a replay pinned by --as-of, a smaller --minutes" in stopped
     limits, stopped = _deadline_selection_limits(budget, count=2, portfolio_policy=None)
     assert (limits, stopped) == ({"time_limit_seconds": pytest.approx(10.0)}, None)
 
@@ -289,6 +296,24 @@ def test_the_rate_ledger_is_deterministic_and_never_overwrites_a_foreign_file(tm
         assert read_candidate_rate(path, mode="CLASSIC") is None
 
 
+def test_a_rate_no_bank_can_be_sized_from_is_not_read(tmp_path):
+    """Zero, negative, non-finite or boolean rates (a hand-edited ledger) are passed over."""
+
+    ledger = tmp_path / "rates.json"
+    moment = datetime(2026, 9, 24, 12, tzinfo=timezone.utc)
+    record_candidate_rate(ledger, mode="CLASSIC", candidates=50, seconds=0.0, basis="BANK_REPORT",
+                          run_id="instant", measured_at=moment, pool_people=719, entries=1)
+    assert read_candidate_rate(ledger, mode="CLASSIC") is None  # 0 s per candidate
+    stored = json.loads(ledger.read_text(encoding="utf-8"))
+    key = f"{deadline.host_key()}|CLASSIC"
+    for bad in (-1.0, float("nan"), float("inf"), True):
+        stored["hosts"][key].append({"seconds_per_candidate": bad, "run_id": "bad"})
+    stored["hosts"][key].append({"seconds_per_candidate": 2.5, "run_id": "real"})
+    ledger.write_text(json.dumps(stored), encoding="utf-8")
+    rate = read_candidate_rate(ledger, mode="CLASSIC")
+    assert rate["seconds_per_candidate"] == 2.5 and rate["observations"] == 1
+
+
 def test_a_bank_rate_is_read_from_its_report_or_from_a_bank_time_limit():
     report = {"selection": {"selection": {"portfolio_policy": {
         "candidate_bank": {"produced_candidates": 50, "elapsed_seconds": 14.0}}}}}
@@ -319,7 +344,8 @@ def _clocked(monkeypatch, clock: FakeClock, wall: datetime | None = None):
     monkeypatch.setattr(cli, "Budget", Clocked)
 
 
-def _classic(tmp_path, monkeypatch, *, run_id, deadline=None, as_of=AS_OF, policy=None, review=None):
+def _classic(tmp_path, monkeypatch, *, run_id, deadline=None, as_of=AS_OF, policy=None, review=None,
+             **extra):
     from nfl_dfs import cli
 
     salary, entry, package, role, status, _ = classic_fixture(tmp_path / "fixture", entries=1)
@@ -327,11 +353,14 @@ def _classic(tmp_path, monkeypatch, *, run_id, deadline=None, as_of=AS_OF, polic
     monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
     if review is not None:
         monkeypatch.setattr(cli, "run_prior_review", review)
-    overrides = {"portfolio_policy_json": str(policy(attachments))} if policy else {}
-    code = cli.command_cowork_run(_cowork_args(
-        tmp_path, attachments, label=run_id, run_id=run_id, prior_package_dir=str(package),
+    values = dict(
+        label=run_id, run_id=run_id, prior_package_dir=str(package),
         official_status_csv=str(status), offensive_role_evidence_json=str(role),
-        as_of=as_of.isoformat(), delivery_deadline_utc=deadline, **overrides))
+        as_of=as_of.isoformat(), delivery_deadline_utc=deadline)
+    if policy:
+        values["portfolio_policy_json"] = str(policy(attachments))
+    values.update(extra)
+    code = cli.command_cowork_run(_cowork_args(tmp_path, attachments, **values))
     root = tmp_path / "outputs" / run_id
     return code, json.loads((root / "cowork_run.json").read_text(encoding="utf-8")), root
 
@@ -567,3 +596,161 @@ def test_a_budget_that_cannot_be_built_still_ships_the_baseline_first(tmp_path, 
     assert message in report["message"]
     assert report["deadline"] is None
     _baseline_is_the_file(report, root)
+
+
+# ----------------------------------------------------------------- evidence fetches (Session 07b)
+
+GAMES_CSV = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+
+
+class _SlowClient:
+    """An `httpx.Client` stand-in on the fake clock: every request takes `seconds`."""
+
+    def __init__(self, clock: FakeClock, made: list[dict], *, seconds: float, fail: bool, **kwargs):
+        self.clock, self.seconds, self.fail = clock, seconds, fail
+        made.append(kwargs)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get(self, url):
+        import httpx
+
+        self.clock.advance(self.seconds)
+        if self.fail:
+            raise httpx.ConnectTimeout(f"no answer from {url}")
+        response = Mock(status_code=200, headers={"content-type": "text/csv"}, content=b"a,b\n1,2\n",
+                        is_redirect=False)
+        response.raise_for_status = lambda: None
+        return response
+
+
+def _slow_clients(monkeypatch, clock: FakeClock, *, seconds: float, fail: bool) -> list[dict]:
+    """Every client `sources` makes, by its keyword arguments (it passes no positional one)."""
+
+    from nfl_dfs import sources
+
+    made: list[dict] = []
+    monkeypatch.setattr(sources.httpx, "Client",
+                        lambda **kwargs: _SlowClient(clock, made, seconds=seconds, fail=fail, **kwargs))
+    return made
+
+
+def _fetch(tmp_path, **kwargs):
+    from nfl_dfs.sources import fetch_public_artifact
+
+    return fetch_public_artifact(GAMES_CSV, tmp_path / "raw", source="TEST",
+                                 license_decision="PERMITTED_REPOSITORY_LICENSE",
+                                 parser_version="test_v1", **kwargs)
+
+
+def _fetch_records(budget: Budget) -> list[tuple]:
+    return [(item["allowance_seconds"], item["elapsed_seconds"], item["outcome"])
+            for item in budget.as_record()["stages"] if item["name"] == "evidence_fetch"]
+
+
+def test_each_fetch_takes_its_timeout_from_the_window_and_none_starts_under_a_second(tmp_path, monkeypatch):
+    """The card's case: 40 s per failed request in a 100 s window."""
+
+    import httpx
+
+    from nfl_dfs.sources import SourceDeadlineError
+
+    clock = FakeClock()
+    budget = _budget(clock, as_of=CLASSIC_LOCK - timedelta(minutes=10, seconds=100))  # a 100 s window
+    made = _slow_clients(monkeypatch, clock, seconds=40, fail=True)
+    for _attempt in range(3):
+        with pytest.raises(httpx.ConnectTimeout):
+            _fetch(tmp_path, budget=budget)
+    with pytest.raises(SourceDeadlineError) as refused:
+        _fetch(tmp_path, budget=budget)
+    assert [kwargs["timeout"] for kwargs in made] == [30.0, 30.0, pytest.approx(20.0)]  # no fourth client
+    assert str(refused.value).startswith("DEADLINE_FETCH_WINDOW_SPENT:raw.githubusercontent.com: 0.0 s left")
+    # A fetch that raises is still measured; the refused one is its own skipped record.
+    assert _fetch_records(budget) == [
+        (30.0, 40.0, "RAISED"), (30.0, 40.0, "RAISED"), (20.0, 40.0, "RAISED"), (None, None, "SKIPPED")]
+    refused_record = budget.as_record()["stages"][-1]
+    assert refused_record["started_after_seconds"] == 120.0  # when the window ran out
+    assert [(code, detail.split(":")[0]) for code, detail in budget.events] == [
+        ("DEADLINE_STAGE_SHORTENED", "evidence_fetch"),  # 20 s instead of 30, named once
+        ("DEADLINE_FETCH_WINDOW_SPENT", "raw.githubusercontent.com")]
+    # The same host refused again at the same moment is one limitation, not two.
+    with pytest.raises(SourceDeadlineError):
+        _fetch(tmp_path, budget=budget)
+    assert [code for code, _ in budget.events].count("DEADLINE_FETCH_WINDOW_SPENT") == 1
+    assert len(made) == 3
+    registry = load_gate_registry()
+    assert {item.code: item.gate_class for item in budget.limitations(registry)}[
+        "DEADLINE_FETCH_WINDOW_SPENT"] is GateClass.S
+
+
+def test_a_fetch_reads_the_activated_budget_and_keeps_its_fixed_timeout_without_one(tmp_path, monkeypatch):
+    from nfl_dfs.deadline import activated, active_budget
+
+    clock = FakeClock()
+    budget = _budget(clock, as_of=CLASSIC_LOCK - timedelta(minutes=10, seconds=12))  # a 12 s window
+    made = _slow_clients(monkeypatch, clock, seconds=2, fail=False)
+    assert active_budget() is None
+    artifact = _fetch(tmp_path)  # no budget anywhere: the fixed 30 s, nothing measured (2 s pass)
+    assert made[-1]["timeout"] == 30.0 and artifact.byte_count == 8
+    assert budget.stages == []
+    with activated(budget) as active:
+        assert active is budget and active_budget() is budget
+        _fetch(tmp_path)
+        assert made[-1]["timeout"] == pytest.approx(10.0)  # the 10 s the window still holds
+        with activated(None):  # an inner block may clear it, and the outer one comes back
+            assert active_budget() is None
+        assert active_budget() is budget
+    assert active_budget() is None
+    assert _fetch_records(budget) == [(10.0, 2.0, "COMPLETED")]
+    # An explicit budget wins over the activated one.
+    other = _budget(FakeClock(), as_of=CLASSIC_LOCK - timedelta(hours=1))
+    with activated(budget):
+        _fetch(tmp_path, budget=other)
+    assert made[-1]["timeout"] == 30.0 and _fetch_records(other) == [(30.0, 0.0, "COMPLETED")]
+    assert len(_fetch_records(budget)) == 1
+
+
+def test_a_passed_deadline_starts_no_fetch(tmp_path, monkeypatch):
+    from nfl_dfs.sources import SourceDeadlineError
+
+    clock = FakeClock()
+    budget = _budget(clock, as_of=CLASSIC_LOCK + timedelta(hours=1))
+    made = _slow_clients(monkeypatch, clock, seconds=1, fail=False)
+    with pytest.raises(SourceDeadlineError, match="^DEADLINE_FETCH_WINDOW_SPENT:"):
+        _fetch(tmp_path, budget=budget)
+    assert made == [] and not (tmp_path / "raw").exists()
+
+
+def test_run_slate_reaches_the_prior_builds_fetches_and_names_a_refused_one(tmp_path, monkeypatch):
+    """`priors.freeze_sources` takes no budget; `activated` gives it the run's.
+
+    The refusal surfaces twice, by design: `propose`'s broad handler turns it
+    into the review's `PRIORS_PROPOSE_FAILED` blocker, and the budget's own
+    event puts `DEADLINE_FETCH_WINDOW_SPENT` on `release_truths`.
+    """
+
+    from nfl_dfs.sources import ALLOWED_HOSTS
+
+    clock = FakeClock()
+    _clocked(monkeypatch, clock)
+    made = _slow_clients(monkeypatch, clock, seconds=1, fail=False)
+    code, report, root = _classic(
+        tmp_path, monkeypatch, run_id="fetch-refused", prior_package_dir=None, build_priors=True,
+        deadline=(AS_OF + timedelta(minutes=5, seconds=0.5)).isoformat())  # a 0.5 s window
+    assert made == []  # no request was started
+    assert code == 2
+    _baseline_is_the_file(report, root)
+    blocker = report["blockers"][0]
+    assert blocker.startswith("PRIORS_PROPOSE_FAILED:SourceDeadlineError:DEADLINE_FETCH_WINDOW_SPENT:")
+    host = blocker.split(":")[3]
+    assert host in ALLOWED_HOSTS
+    assert _truth_codes(report)["DEADLINE_FETCH_WINDOW_SPENT"] == "S"
+    assert any(item["detail"].startswith(f"DEADLINE_FETCH_WINDOW_SPENT:{host}: 0.5 s left")
+               for item in report["release_truths"]["delivery_limitations"])
+    assert "DEADLINE_FETCH_WINDOW_SPENT" in report["deadline"]["limitations"]
+    fetches = [item for item in report["deadline"]["stages"] if item["name"] == "evidence_fetch"]
+    assert [(item["default_seconds"], item["outcome"]) for item in fetches] == [(30.0, "SKIPPED")]

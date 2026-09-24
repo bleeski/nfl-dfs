@@ -1,5 +1,22 @@
 # Implementation Status
 
+## Capability added: 2026-09-24 (Session 07b)
+
+The three clocks Session 07 left fixed keep the run's deadline.
+`sources.fetch_public_artifact` takes its timeout from the budget passed or the
+one `deadline.activated` set, which `run-slate` wraps around its review:
+`min(30 s, the improvement window)`, and no request under 1 s
+(`SourceDeadlineError`, `DEADLINE_FETCH_WINDOW_SPENT`, `S`). Each fetch is a
+measured `evidence_fetch` stage, one that raises included.
+`scripts/fetch_weather_captures.py` stops requests 5 minutes before the delivery
+deadline (default the earliest `Game Info` lock minus 5 minutes) and caps each
+timeout and retry pause at the time left; without IANA data it says so and
+keeps its fixed clocks. `scripts/make_classic_policy.py` sizes the bank to the
+window at this host's measured candidate rate and exits 2, writing nothing,
+when even the floor bank does not fit. Not yet: the engine walking the rung
+ladder (Session 10); an evidence fetch outside `run-slate` (the role-evidence
+script) still has only the fixed 30 s.
+
 ## Capability added: 2026-09-24 (Session 07)
 
 `run-slate` keeps a delivery deadline (R31): the request's
@@ -11,8 +28,7 @@ solver limits from the time left. A passed deadline or a spent window stops
 the review and leaves the baseline as the file, named by a `DEADLINE_*`
 limitation (`S`). A C2 policy's hash-bound limits either fit or stop the
 review. Every result carries measured stage durations, and `run-slate` records
-this host's candidate rate after every C2 bank. Not yet: fetch, weather-script
-and policy-generator allowances (Session 07b), the `diagnostic` and
+this host's candidate rate after every C2 bank. Not yet: the `diagnostic` and
 `registered` profiles' build and certify limits (only their start is gated),
 the relaxation ladder inside the budget (Session 10).
 

@@ -1898,7 +1898,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `e23f7d7c6f3ad6fc2ca7e04de66ed74a31e52f1d6a92f5da1b96d279a0e953bd`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `34ac114d295e4bef5bf633e35ed693a75fb0a8023551fe453bd7a1f3dbac6db3`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -1991,9 +1991,28 @@ after intake, is the run's one clock and time budget; its record,
   stopped under 0.5 s; an SD3 bank `min(scaled, 70%)` and its joint solve
   `min(scaled, 20%)`; a Classic C2 policy's bank and joint limits are
   hash-bound, so they either fit the window or stop the review. A passed
-  deadline or a spent window skips the review before it starts. Evidence
-  fetches (`sources.fetch_public_artifact`, the weather capture script) and
-  the policy generator's bank take their allowances in Session 07b.
+  deadline or a spent window skips the review before it starts.
+- **Evidence fetches (Session 07b).** `sources.fetch_public_artifact` takes
+  `Budget.fetch_seconds`: `min(30, the improvement window)`, from the budget
+  passed or the one `deadline.activated` set (`run-slate` wraps its review in
+  it, so the prior build's fetches read it; `sleeper_daily_player_snapshot`
+  fetches through the same function and inherits this); outside one, the
+  fixed 30 s. Under 1 s no request starts and it raises
+  `SourceDeadlineError("DEADLINE_FETCH_WINDOW_SPENT:<host>: ...")`. In
+  `run-slate` the review's `propose` names that as
+  `PRIORS_PROPOSE_FAILED:SourceDeadlineError:DEADLINE_FETCH_WINDOW_SPENT:...`,
+  and the budget's own event puts `DEADLINE_FETCH_WINDOW_SPENT` on
+  `release_truths`. `scripts/fetch_weather_captures.py` (standard library)
+  repeats both 5-minute reserves: its `--delivery-deadline-utc` defaults to the
+  earliest `Game Info` lock minus 5 minutes, requests stop 5 minutes before
+  it, each timeout is `min(30, left)` and each retry pause `min(2**n, left)`,
+  and under 1 s it exits `FETCH_DEADLINE_REACHED` without a request. Without
+  IANA data or a readable lock time it says so, names the flag and keeps its
+  fixed clocks. `scripts/make_classic_policy.py` sizes the bank to the window
+  before the improvement stops (the same deadline and `runtime.json` stop):
+  bank budget plus joint solve within 75% of it, the joint solve within 20%,
+  at this host's rate or 0.28 s with 2x headroom; when even the floor bank
+  does not fit, or the window has closed, it writes nothing and exits 2.
 
 | Field | Meaning |
 |---|---|
@@ -2003,7 +2022,7 @@ after intake, is the run's one clock and time budget; its record,
 | `stop_discretionary_optimization_minutes_before_lock`, `finish_reserve_seconds`, `improvement_stop_utc` | The runtime key, the reserve it gives, and when optimization stops |
 | `clock` | `deadline_against` (`PINNED_AS_OF` or `WALL_CLOCK`), `started_utc`, `wall_started_utc`, `elapsed` (`MONOTONIC`) |
 | `passed_at_start`, `seconds_to_deadline_at_start`, `elapsed_seconds` | As named |
-| `stages` | One per stage in order (`intake`, `baseline`, `session_probe`, `policy_validation`, `selection`, `review`, `finish`): `started_after_seconds`, `elapsed_seconds` (measured), `default_seconds`, `allowance_seconds`, `outcome` (`COMPLETED`, `SKIPPED`, `RAISED`) |
+| `stages` | One per stage in order (`intake`, `baseline`, `session_probe`, `policy_validation`, `evidence_fetch` once per fetch, `selection`, `review`, `finish`): `started_after_seconds`, `elapsed_seconds` (measured), `default_seconds`, `allowance_seconds`, `outcome` (`COMPLETED`, `SKIPPED`, `RAISED`); a refused fetch is `SKIPPED` with the moment it was refused |
 | `limitations` | The codes below, in the order they arose |
 | `candidate_rate` | The Classic C2 bank observation this run recorded, or `null` |
 | `does_not_establish` | Upload clearance, certification, lineup quality, that the deadline is met after the run ends |
@@ -2011,7 +2030,8 @@ after intake, is the run's one clock and time budget; its record,
 Codes. `delivery_deadline` (`S`, `CONSTRUCTION_PREFERENCE`, R31):
 `DEADLINE_PASSED_AT_START`, `DEADLINE_IMPROVEMENT_WINDOW_SPENT`,
 `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`, `DEADLINE_STAGE_SHORTENED` (a stage
-ran under its default or was skipped; once per stage) and
+ran under its default or was skipped; once per stage), `DEADLINE_FETCH_WINDOW_SPENT`
+(an evidence fetch not started; once per host and moment) and
 `DEADLINE_PASSED_DURING_REVIEW` (the review ended after the deadline; a file it
 delivered replaces the baseline as usual and is named late).
 `certification_prerequisite` (`P`): `DEADLINE_AFTER_EARLIEST_LOCK` and
@@ -2034,7 +2054,9 @@ committed). `hosts` maps `<node>|<system>|<machine>|cpus=<n>|<mode>` to its last
 appends one after every Classic C2 bank; `deadline.read_candidate_rate` returns
 the slowest of this host's last five for a mode. A file there that is not this
 ledger is refused and left as it is, and the review goes on. `scripts/make_classic_policy.py`
-reads it in Session 07b, in place of its 0.28 s constant.
+reads it (`--host-rates`) in place of its 0.28 s constant since Session 07b, and
+falls back to 0.28 s when this host has no Classic rate or the file is not
+this ledger.
 
 Does not establish: that any stage's allowance was enough, lineup quality,
 certification or upload clearance.

@@ -130,6 +130,16 @@ the joint MILP in 0.39s, `OPTIMAL_ACTUAL_CANDIDATE_BANK` with all 20 entries
 selected, and the selected portfolio carried `qb-pass-catcher` on 20 of 20 and
 `qb-bringback` on 14 of 20 with zero naked-QB lineups.
 
+Since Session 07b the bank also fits the lock clock. The generator reads this
+host's measured seconds per candidate from `data/runs/host_candidate_rates.json`
+(`--host-rates`; `run-slate` writes it after every C2 bank; 0.28 s when there is
+none) and the delivery deadline (`--delivery-deadline-utc`, default the earliest
+lock minus 5 minutes), and keeps the declared bank and joint solve within 75% of
+the window before the improvement stops. When even the floor bank does not fit
+it writes nothing, exits 2 and names rung 4; when the window has closed it says
+the baseline is the file. For a replay of a past slate, pass a later
+`--delivery-deadline-utc`.
+
 If a run reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
 `CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, regenerate one rung
 lower and rerun immediately. Do not stop to ask; see "Shipping under a lock
@@ -772,6 +782,13 @@ force for every slate run. Rulings attributed to Ben keep their dates.
            --salaries '<the salary CSV>' --plan '<run>/weather/plan.json' \
            --out-dir '<run>/weather'
 
+   The capture keeps the lock clock (Session 07b): requests stop 5 minutes
+   before the delivery deadline (`--delivery-deadline-utc`, default the
+   earliest `Game Info` lock minus 5 minutes), and with under 1 s left it
+   exits `FETCH_DEADLINE_REACHED` without a request. A bare Windows Python
+   has no IANA time zone data, so there it says so and keeps its fixed 30 s
+   timeouts; pass `--delivery-deadline-utc` to bound it.
+
    Then hand `<run>/weather/weather_evidence.json` to `run-slate` as
    `--weather-evidence-json`. Both scripts are standard library only, so neither
    needs `setup` or the project venv on that machine. Neither invents a state: a
@@ -1146,9 +1163,14 @@ before the deadline (lock minus 10 by default), and shortens or skips the
 probe and the review's solves to fit. `--delivery-deadline-utc` sets another
 deadline. A skipped or stopped review exits 2 with `DEADLINE_*` limitations
 (`S`) and the baseline as the file: hand it over. A C2 policy whose declared
-search no longer fits is refused by name; generate it again with a smaller
-`--minutes`, or take rung 4. Fetches, the weather capture script and the
-policy generator keep their own fixed clocks until Session 07b.
+search no longer fits is refused by name; generate it again with
+`make_classic_policy.py --delivery-deadline-utc <the deadline>`, or take rung 4.
+Since Session 07b the other clocks keep the same deadline: each evidence fetch
+the review makes gets `min(30 s, the window)` and none starts under 1 s
+(`DEADLINE_FETCH_WINDOW_SPENT`, `S`; the review stops and the baseline is the
+file), the weather capture script stops its requests 5 minutes before the
+deadline (`FETCH_DEADLINE_REACHED`), and the policy generator sizes its bank to
+the window at this host's measured rate, or writes nothing and exits 2.
 
 Three rules bound the autonomy above.
 

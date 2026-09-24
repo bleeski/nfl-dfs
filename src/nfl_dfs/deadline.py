@@ -30,9 +30,13 @@ registered limitation (`delivery_deadline`, `S`: a construction budget, never
 a gate that withholds a valid file), and every stage's allowance and measured
 duration is in the `nfl_deadline_budget_v1` record the run writes.
 
-Evidence fetches (`sources.fetch_public_artifact` and the forecast capture
-script) and the Classic policy generator take their allowances from it in
-Session 07b.
+Session 07b gave the three remaining clocks their allowances. An evidence fetch
+(`sources.fetch_public_artifact`) takes `fetch_seconds`: `min(30, the improvement
+window)`, never started under 1 s. `run-slate` sets the budget for the fetches
+it reaches with `activated`, a context variable, so the prior build needs no
+parameter threaded through it. The forecast capture script is standard library
+and repeats this module's two reserves, and the Classic policy generator sizes
+its bank to the improvement window from this host's candidate rate.
 """
 
 from __future__ import annotations
@@ -45,6 +49,7 @@ import re
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -64,6 +69,9 @@ BASELINE_CAP_SECONDS = 60.0
 BASELINE_PER_SOLVE_SECONDS = 5.0
 PROBE_SHARE, PROBE_MINIMUM_SECONDS = 0.10, 3.0
 SOLVE_MINIMUM_SECONDS = 0.5
+# An evidence fetch: its fixed timeout before Session 07b, and the least time
+# worth starting one in.
+FETCH_DEFAULT_SECONDS, FETCH_MINIMUM_SECONDS = 30.0, 1.0
 BANK_SHARE, JOINT_SHARE = 0.70, 0.20
 RATE_OBSERVATIONS_KEPT, RATE_OBSERVATIONS_READ = 20, 5
 
@@ -303,6 +311,29 @@ class Budget:
             self._shortened(name, f"{name}: {value:.1f} s instead of its {default:g} s default")
         return value
 
+    def fetch_seconds(self, default: float, host: str) -> tuple[float | None, str | None]:
+        """One evidence fetch's timeout, `min(default, the improvement window)`, or its refusal.
+
+        Each fetch is its own `evidence_fetch` stage record. Under
+        `FETCH_MINIMUM_SECONDS` the fetch is not started: its record is
+        `SKIPPED` and the returned text is the refusal, named once however
+        often the same host is refused at the same moment.
+        """
+
+        record = self._open("evidence_fetch")
+        value = self.allowance("evidence_fetch", default=default, minimum=FETCH_MINIMUM_SECONDS,
+                               name_skip=False)
+        if value is not None:
+            return value, None
+        record.started_after_seconds = self.elapsed()  # when the window ran out
+        window = 0.0 if self.passed_at_start else max(0.0, self.improvement_remaining())
+        detail = (f"{host}: {window:.1f} s left before {self.improvement_stop.isoformat()}, under"
+                  f" the {FETCH_MINIMUM_SECONDS:g} s minimum for a fetch; not started, and no"
+                  " bytes were captured")
+        if ("DEADLINE_FETCH_WINDOW_SPENT", detail) in self.events:
+            return None, f"DEADLINE_FETCH_WINDOW_SPENT:{detail}"
+        return None, self._limitation_event("DEADLINE_FETCH_WINDOW_SPENT", detail)
+
     def _shortened(self, name: str, detail: str) -> None:
         if not any(text.startswith(f"{name}:") for code, text in self.events
                    if code == "DEADLINE_STAGE_SHORTENED"):
@@ -379,8 +410,10 @@ class Budget:
             "DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW",
             f"the policy's bank and joint-solve limits total {declared_seconds:.1f} s and"
             f" {window:.1f} s are left before {self.improvement_stop.isoformat()}; its limits are"
-            " hash-bound, so regenerate it with a smaller make_classic_policy.py --minutes, or"
-            " take rung 4 (no --portfolio-policy-json); the baseline is the deliverable")
+            " hash-bound, so regenerate it with make_classic_policy.py --delivery-deadline-utc"
+            f" {self.deadline.isoformat()}, which sizes the bank to the window left (for a replay"
+            " pinned by --as-of, a smaller --minutes), or take rung 4 (no --portfolio-policy-json);"
+            " the baseline is the deliverable")
 
     def finished_late(self, stage: str) -> None:
         """Name a stage that ended after the delivery deadline (it ran; it was late)."""
@@ -433,6 +466,33 @@ class Budget:
             "candidate_rate": self.candidate_rate,
             "does_not_establish": list(DOES_NOT_ESTABLISH),
         }
+
+
+# -- the budget a fetch reads ------------------------------------------------
+
+_ACTIVE: ContextVar[Budget | None] = ContextVar("nfl_dfs_active_budget", default=None)
+
+
+@contextmanager
+def activated(budget: Budget | None) -> Iterator[Budget | None]:
+    """Make `budget` the one `active_budget` returns inside the block.
+
+    `run-slate` wraps its review in it, so every fetch the review reaches takes
+    its allowance from the run's budget without a parameter threaded through
+    the prior build. The previous value comes back when the block ends.
+    """
+
+    token = _ACTIVE.set(budget)
+    try:
+        yield budget
+    finally:
+        _ACTIVE.reset(token)
+
+
+def active_budget() -> Budget | None:
+    """The budget `activated` set, or None outside one."""
+
+    return _ACTIVE.get()
 
 
 # -- the per-host candidate rate ---------------------------------------------
@@ -505,13 +565,20 @@ def read_candidate_rate(path: str | Path, *, mode: str) -> dict[str, object] | N
     except ValueError:
         return None
     recent = [item for item in kept[-RATE_OBSERVATIONS_READ:]
-              if isinstance(item, dict) and isinstance(item.get("seconds_per_candidate"), (int, float))]
+              if isinstance(item, dict) and _usable_rate(item.get("seconds_per_candidate"))]
     if not recent:
         return None
     slowest = max(recent, key=lambda item: item["seconds_per_candidate"])
     return {"seconds_per_candidate": float(slowest["seconds_per_candidate"]),
             "observations": len(recent), "measured_at": slowest.get("measured_at"),
             "run_id": slowest.get("run_id")}
+
+
+def _usable_rate(value: object) -> bool:
+    """A rate a bank can be sized from: a finite number of seconds above zero."""
+
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value > 0)
 
 
 def _read_ledger(path: Path) -> dict[str, object]:

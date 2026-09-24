@@ -50,6 +50,7 @@ from .deadline import (
     PROBE_MINIMUM_SECONDS,
     PROBE_SHARE,
     Budget,
+    activated,
     bank_rate_observation,
     record_candidate_rate,
     runtime_stop_minutes,
@@ -2866,38 +2867,41 @@ def _run_prior_review_profile(
 
     # The review runs inside the run's budget (Session 07): its solves take their
     # limits from the window, and it stops before selection when none is left.
+    # Every evidence fetch it reaches reads the same budget (Session 07b); the
+    # session probe is a subprocess with its own allowance, so only this is wrapped.
     review_started = budget.elapsed() if budget is not None else 0.0
-    outcome = run_prior_review(
-        salary_csv=request.salary_csv or "",
-        entry_csv=request.entry_csv or "",
-        label=request.label,
-        as_of=as_of,
-        run_root=DEFAULT_RUNS_DIR / run_id / "prior_review",
-        output_root=output_root,
-        season=request.season,
-        prior_season=request.prior_season,
-        prior_package_dir=request.prior_package_dir,
-        build_priors=request.build_priors,
-        weather_state=request.weather_state,
-        weather_source_uri=request.weather_source_uri,
-        weather_observed_at=request.weather_observed_at,
-        weather_evidence_json=request.weather_evidence_json,
-        lineup_count=request.lineup_count,
-        max_person_overlap=request.max_person_overlap,
-        operator_excluded_dk_ids=request.exclude_dk_ids,
-        extra_unavailable_statuses=request.unavailable_statuses,
-        extra_available_statuses=request.available_statuses,
-        official_status_csv=request.official_status_csv,
-        role_evidence_json=request.role_evidence_json,
-        offensive_role_evidence_json=request.offensive_role_evidence_json,
-        qb_depth_role_evidence_json=request.qb_depth_role_evidence_json,
-        portfolio_policy=portfolio_policy,
-        portfolio_policy_source_path=portfolio_policy_source_path,
-        portfolio_policy_source_sha256=portfolio_policy_source_sha256,
-        portfolio_policy_normalized_path=portfolio_policy_normalized_path,
-        portfolio_policy_normalized_sha256=portfolio_policy_normalized_sha256,
-        budget=budget,
-    )
+    with activated(budget):
+        outcome = run_prior_review(
+            salary_csv=request.salary_csv or "",
+            entry_csv=request.entry_csv or "",
+            label=request.label,
+            as_of=as_of,
+            run_root=DEFAULT_RUNS_DIR / run_id / "prior_review",
+            output_root=output_root,
+            season=request.season,
+            prior_season=request.prior_season,
+            prior_package_dir=request.prior_package_dir,
+            build_priors=request.build_priors,
+            weather_state=request.weather_state,
+            weather_source_uri=request.weather_source_uri,
+            weather_observed_at=request.weather_observed_at,
+            weather_evidence_json=request.weather_evidence_json,
+            lineup_count=request.lineup_count,
+            max_person_overlap=request.max_person_overlap,
+            operator_excluded_dk_ids=request.exclude_dk_ids,
+            extra_unavailable_statuses=request.unavailable_statuses,
+            extra_available_statuses=request.available_statuses,
+            official_status_csv=request.official_status_csv,
+            role_evidence_json=request.role_evidence_json,
+            offensive_role_evidence_json=request.offensive_role_evidence_json,
+            qb_depth_role_evidence_json=request.qb_depth_role_evidence_json,
+            portfolio_policy=portfolio_policy,
+            portfolio_policy_source_path=portfolio_policy_source_path,
+            portfolio_policy_source_sha256=portfolio_policy_source_sha256,
+            portfolio_policy_normalized_path=portfolio_policy_normalized_path,
+            portfolio_policy_normalized_sha256=portfolio_policy_normalized_sha256,
+            budget=budget,
+        )
     if budget is not None:
         budget.record("review", started_after=review_started, elapsed=budget.elapsed() - review_started)
         budget.finished_late("review")

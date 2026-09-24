@@ -85,7 +85,7 @@
     "delivery_deadline": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
       "provenance": {"kind": "RULING", "ref": "R31"},
-      "covers": "The run's delivery deadline (the request's, or the earliest lock minus 5 minutes) left a stage less than its default time or none: a stage was shortened or skipped, a hash-bound search did not fit, the run's own review stopped, or it finished after the deadline; the baseline stayed on the pointer first."
+      "covers": "The run's delivery deadline (the request's, or the earliest lock minus 5 minutes) left a stage less than its default time or none: a stage was shortened or skipped, an evidence fetch was not started, a hash-bound search did not fit, the run's own review stopped, or it finished after the deadline; the baseline stayed on the pointer first."
     },
     "search_budget": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
@@ -606,6 +606,7 @@
     "CURRENT_TEMPLATE_MUST_BE_FULLY_PREFILLED": "implementation_limit",
     "CURRENT_TEMPLATE_MUST_CONTAIN_ONE_CONTEST_ID": "implementation_limit",
     "DEADLINE_AFTER_EARLIEST_LOCK": "certification_prerequisite",
+    "DEADLINE_FETCH_WINDOW_SPENT": "delivery_deadline",
     "DEADLINE_IMPROVEMENT_WINDOW_SPENT": "delivery_deadline",
     "DEADLINE_PASSED_AT_START": "delivery_deadline",
     "DEADLINE_PASSED_DURING_REVIEW": "delivery_deadline",
