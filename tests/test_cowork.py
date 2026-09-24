@@ -402,10 +402,16 @@ def test_a_v3_request_carries_an_aware_deadline_in_utc() -> None:
     assert request.schema_version == "nfl_cowork_run_request_v3"
     assert request.delivery_deadline_utc == "2026-09-27T16:55:00+00:00"
     assert CoworkRunRequest().delivery_deadline_utc is None  # absent: R31's default applies
-    for bad in ("2026-09-27T12:55:00", "tomorrow", 1790000000):
+    for bad in ("2026-09-27T12:55:00", "tomorrow", 1790000000, "0001-01-01T00:00:00+01:00",
+                "9999-12-31T23:59:59-01:00"):
         with pytest.raises(CoworkInputError, match="delivery_deadline_utc must be an ISO-8601"):
             CoworkRunRequest.from_mapping(
                 {"schema_version": COWORK_REQUEST_VERSION, "delivery_deadline_utc": bad}
+            )
+    for out_of_range in ("0001-01-01T00:04:00+00:00", "3000-01-01T00:00:00Z"):
+        with pytest.raises(CoworkInputError, match="years 2000 to 2999"):
+            CoworkRunRequest.from_mapping(
+                {"schema_version": COWORK_REQUEST_VERSION, "delivery_deadline_utc": out_of_range}
             )
 
 

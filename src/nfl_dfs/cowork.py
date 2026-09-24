@@ -382,15 +382,16 @@ class CoworkRunRequest:
         else:
             try:
                 moment = datetime.fromisoformat(str(deadline).strip().replace("Z", "+00:00"))
-            except ValueError as exc:
+                if not isinstance(deadline, str) or moment.tzinfo is None:
+                    raise ValueError("no UTC offset")
+                moment = moment.astimezone(timezone.utc)
+            except (ValueError, OverflowError) as exc:
                 raise CoworkInputError(
                     "delivery_deadline_utc must be an ISO-8601 moment with a UTC offset"
                 ) from exc
-            if not isinstance(deadline, str) or moment.tzinfo is None:
-                raise CoworkInputError(
-                    "delivery_deadline_utc must be an ISO-8601 moment with a UTC offset"
-                )
-            payload["delivery_deadline_utc"] = moment.astimezone(timezone.utc).isoformat()
+            if not 2000 <= moment.year <= 2999:  # keeps every reserve arithmetic in range
+                raise CoworkInputError("delivery_deadline_utc must fall in the years 2000 to 2999")
+            payload["delivery_deadline_utc"] = moment.isoformat()
         return cls(**payload)
 
     @classmethod

@@ -620,8 +620,7 @@ def run_baseline(
             "BASELINE_EARLIEST_LOCK_PASSED",
             detail=f"the run's clock {moment.isoformat()} is at or past the earliest lock"
                    f" {earliest_lock.isoformat()}; DraftKings refuses a lineup holding a locked player."
-                   " The baseline is still built, at its floor budget under `run-slate`'s deadline"
-                   " (Session 07), because it never judges which players have locked"))
+                   " The baseline is still built: it never judges which players have locked"))
     report["slate"] = {
         "mode": slate.mode.value,
         "draft_group": slate.draft_group,

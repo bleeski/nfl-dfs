@@ -30,13 +30,15 @@ registered limitation (`delivery_deadline`, `S`: a construction budget, never
 a gate that withholds a valid file), and every stage's allowance and measured
 duration is in the `nfl_deadline_budget_v1` record the run writes.
 
-Evidence fetches (`sources.fetch_public_artifact`, the weather capture script)
-and the Classic policy generator take their allowances from it in Session 07b.
+Evidence fetches (`sources.fetch_public_artifact` and the forecast capture
+script) and the Classic policy generator take their allowances from it in
+Session 07b.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import os
 import platform
 import re
@@ -104,8 +106,9 @@ def parse_moment(value: str) -> datetime:
 def finish_reserve(stop_minutes: float) -> timedelta:
     """How long before the delivery deadline discretionary optimization stops."""
 
-    if isinstance(stop_minutes, bool) or not isinstance(stop_minutes, (int, float)):
-        raise ValueError("stop_discretionary_optimization_minutes_before_lock must be a number")
+    if (isinstance(stop_minutes, bool) or not isinstance(stop_minutes, (int, float))
+            or not math.isfinite(stop_minutes)):
+        raise ValueError("stop_discretionary_optimization_minutes_before_lock must be a finite number")
     reserve = timedelta(minutes=float(stop_minutes)) - HANDOFF_RESERVE
     if not timedelta(0) <= reserve <= timedelta(hours=2):
         raise ValueError(
@@ -201,8 +204,8 @@ class Budget:
                 "DEADLINE_PASSED_AT_START",
                 f"the delivery deadline {budget.deadline.isoformat()} had passed when the run's"
                 f" clock read {budget.started.isoformat()}; the baseline is built at its"
-                f" {BASELINE_FLOOR_SECONDS:.0f} s floor and is the deliverable, and the run's own"
-                " review is not attempted")
+                f" {BASELINE_FLOOR_SECONDS:.0f} s floor and is the deliverable, and no discretionary"
+                " optimization is attempted")
         if requested is not None and requested > lock:
             budget._limitation_event(
                 "DEADLINE_AFTER_EARLIEST_LOCK",
@@ -277,11 +280,12 @@ class Budget:
         record.outcome = record.outcome or "COMPLETED"
 
     def allowance(self, name: str, *, default: float, share: float = 1.0,
-                  minimum: float = 0.0) -> float | None:
+                  minimum: float = 0.0, name_skip: bool = True) -> float | None:
         """`min(default, share x the improvement window)`, or None when under `minimum`.
 
         A value below `default` is a shortened construction budget and is named
-        once per stage; None means the stage is skipped, named the same way.
+        once per stage; None means the stage is skipped, named the same way
+        unless the caller names the stop itself (`name_skip=False`).
         """
 
         window = 0.0 if self.passed_at_start else self.improvement_remaining()
@@ -290,8 +294,9 @@ class Budget:
         record.default_seconds = float(default)
         if value < minimum or value <= 0:
             record.outcome = "SKIPPED"
-            self._shortened(name, f"{name}: {max(0.0, window):.1f} s left in the improvement window,"
-                                  f" under its {minimum:g} s minimum; skipped")
+            if name_skip:
+                self._shortened(name, f"{name}: {max(0.0, window):.1f} s left in the improvement"
+                                      f" window, under its {minimum:g} s minimum; skipped")
             return None
         record.allowance_seconds = value
         if value < default:
@@ -338,8 +343,8 @@ class Budget:
     def sequential_solve_seconds(self, *, count: int, default: float) -> tuple[float | None, str | None]:
         """C1's per-solve limit: `count` solves in the window, never above `default`."""
 
-        per_solve = self.allowance("selection", default=default,
-                                   share=1.0 / max(1, count + 1), minimum=SOLVE_MINIMUM_SECONDS)
+        per_solve = self.allowance("selection", default=default, share=1.0 / max(1, count + 1),
+                                   minimum=SOLVE_MINIMUM_SECONDS, name_skip=False)
         if per_solve is None:
             return None, self._selection_spent(f"{count} sequential solves")
         return per_solve, None
@@ -350,7 +355,7 @@ class Budget:
         """(bank, per-solve, joint) seconds for a candidate bank and its joint solve."""
 
         bank = self.allowance("selection", default=bank_default, share=BANK_SHARE,
-                              minimum=SOLVE_MINIMUM_SECONDS)
+                              minimum=SOLVE_MINIMUM_SECONDS, name_skip=False)
         if bank is None:
             return None, self._selection_spent("a candidate bank")
         joint = min(joint_default, JOINT_SHARE * max(0.0, self.improvement_remaining()))
@@ -374,8 +379,18 @@ class Budget:
             "DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW",
             f"the policy's bank and joint-solve limits total {declared_seconds:.1f} s and"
             f" {window:.1f} s are left before {self.improvement_stop.isoformat()}; its limits are"
-            " hash-bound, so regenerate it inside the window (make_classic_policy.py"
-            " --delivery-deadline-utc) or run without one; the baseline is the deliverable")
+            " hash-bound, so regenerate it with a smaller make_classic_policy.py --minutes, or"
+            " take rung 4 (no --portfolio-policy-json); the baseline is the deliverable")
+
+    def finished_late(self, stage: str) -> None:
+        """Name a stage that ended after the delivery deadline (it ran; it was late)."""
+
+        late = -self.remaining()
+        if late > 0:
+            self._limitation_event(
+                "DEADLINE_PASSED_DURING_REVIEW",
+                f"{stage}: ended {late:.1f} s after the delivery deadline {self.deadline.isoformat()};"
+                " whatever file it delivered is late, and the baseline was on the pointer before it")
 
     def _selection_spent(self, what: str) -> str:
         return self._limitation_event(
@@ -390,7 +405,9 @@ class Budget:
         return [f"{code}:{detail}" for code, detail in self.events]
 
     def limitations(self, registry: GateRegistry) -> tuple[DeliveryLimitation, ...]:
-        return tuple(registry.limitation(code, detail=detail) for code, detail in self.events)
+        # The detail is the whole `CODE:detail` text, as `delivery.blocker_limitations`
+        # builds it from the same text in the run's blockers.
+        return tuple(registry.limitation(code, detail=f"{code}:{detail}") for code, detail in self.events)
 
     def as_record(self) -> dict[str, object]:
         return {
@@ -483,9 +500,12 @@ def record_candidate_rate(
 def read_candidate_rate(path: str | Path, *, mode: str) -> dict[str, object] | None:
     """The slowest of this host's last few rates for `mode`, or None when it has none."""
 
-    kept = _read_ledger(Path(path))["hosts"].get(f"{host_key()}|{mode}", [])
+    try:
+        kept = _read_ledger(Path(path))["hosts"].get(f"{host_key()}|{mode}", [])
+    except ValueError:
+        return None
     recent = [item for item in kept[-RATE_OBSERVATIONS_READ:]
-              if isinstance(item.get("seconds_per_candidate"), (int, float))]
+              if isinstance(item, dict) and isinstance(item.get("seconds_per_candidate"), (int, float))]
     if not recent:
         return None
     slowest = max(recent, key=lambda item: item["seconds_per_candidate"])
@@ -495,11 +515,16 @@ def read_candidate_rate(path: str | Path, *, mode: str) -> dict[str, object] | N
 
 
 def _read_ledger(path: Path) -> dict[str, object]:
+    """The ledger, or a new one when none exists; anything else there is refused, never overwritten."""
+
+    if not path.exists():
+        return {"schema_version": RATE_LEDGER_VERSION, "hosts": {}}
     try:
         ledger = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        ledger = None
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{path} is not a readable {RATE_LEDGER_VERSION} ledger: {exc}") from exc
+    hosts = ledger.get("hosts") if isinstance(ledger, dict) else None
     if (not isinstance(ledger, dict) or ledger.get("schema_version") != RATE_LEDGER_VERSION
-            or not isinstance(ledger.get("hosts"), dict)):
-        return {"schema_version": RATE_LEDGER_VERSION, "hosts": {}}
+            or not isinstance(hosts, dict) or not all(isinstance(kept, list) for kept in hosts.values())):
+        raise ValueError(f"{path} is not a {RATE_LEDGER_VERSION} ledger; it is left as it is")
     return ledger

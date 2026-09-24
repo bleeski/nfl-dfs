@@ -39,15 +39,17 @@ budget and never withholds a valid file.
   (the bank's own count and time, or a `CANDIDATE_BANK_TIMEOUT` count over its
   declared budget). `deadline.read_candidate_rate` returns the slowest of the
   last five; `make_classic_policy.py` reads it in Session 07b.
-- Six codes. New family `delivery_deadline` (`S`, `CONSTRUCTION_PREFERENCE`,
+- Seven codes. New family `delivery_deadline` (`S`, `CONSTRUCTION_PREFERENCE`,
   RULING R31): `DEADLINE_PASSED_AT_START`, `DEADLINE_IMPROVEMENT_WINDOW_SPENT`,
-  `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`, `DEADLINE_STAGE_SHORTENED`. In
+  `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`, `DEADLINE_STAGE_SHORTENED`,
+  `DEADLINE_PASSED_DURING_REVIEW` (a review that ends after the deadline). In
   `certification_prerequisite` (`P`): `DEADLINE_AFTER_EARLIEST_LOCK`,
   `DEADLINE_WALL_CLOCK_PAST_DEADLINE`. Registry SHA-256 now
-  `dad33548434aad3eadad2bb63b973a394aa3dddd4f18a8002d93c2618a9d29a6`, 1,203
+  `e23f7d7c6f3ad6fc2ca7e04de66ed74a31e52f1d6a92f5da1b96d279a0e953bd`, 1,204
   codes in 45 families, re-pinned in `tests/test_gate_registry.py` and
-  `docs/DATA_CONTRACTS.md`. They reach `release_truths` on every exit.
-- `tests/test_deadline_controller.py`, 18 cases on a pinned `as_of` and an
+  `docs/DATA_CONTRACTS.md`. They reach `release_truths` on every exit that
+  reports them, each once; the certify exit carries them in its `deadline`.
+- `tests/test_deadline_controller.py`, 23 tests (25 cases) on a pinned `as_of` and an
   injected monotonic clock, no network: the default deadline on both fixture
   slates; the runtime key; an explicit deadline, one after lock named; the
   pinned clock; the baseline floor; allowances shorten, then skip, each named
@@ -56,8 +58,13 @@ budget and never withholds a valid file.
   `run-slate` runs: a deadline passed at start (the review never called), a
   slow review that spends the window before selection, a 12 s window that
   shortens C1 and still delivers, a C2 policy that does not fit, a replay that
-  records its stages, request v3 and the host rate, the outer handler, and a
-  budget that cannot be built still shipping the baseline first.
+  records its stages, request v3 and the host rate, a review that ends late,
+  a manual certification the deadline does not stop, the outer handler, and a
+  budget that cannot be built (malformed, non-finite or unreadable
+  `runtime.json`) still shipping the baseline first. Also the keyword mapping
+  onto `select_prior_lineups` for C1, SD3 and C2, the baseline limits matching
+  the baseline's defaults, and a rate ledger that is deterministic and never
+  overwrites a foreign file.
 - `tests/test_cowork.py`: v3 carries the deadline in UTC and refuses a naive
   one; v1 and v2 load unchanged and may not carry it; a flag on a reloaded v2
   request writes a v3 run request and leaves the file alone.
@@ -141,13 +148,56 @@ budget and never withholds a valid file.
 - `CLAUDE.md:123` still says the engine enforces the deadline "from Session
   07"; a separate `ben-review` pull request corrects it.
 
+#### Review
+
+The `reviewer` subagent read `dd1203d..f5e225f`. Fixed:
+
+- **Stale flag.** `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW` named a
+  `make_classic_policy.py --delivery-deadline-utc` flag that went to Session
+  07b. It now says a smaller `--minutes`, or rung 4.
+- **Baseline-first gaps.** A budget that failed other than by `ValueError`
+  (an unreadable `runtime.json`, a non-finite stop that overflowed
+  `timedelta`) skipped the baseline. Any failure now builds it first, and
+  `finish_reserve` refuses non-finite values.
+- **Late finish.** A review that ends after the deadline is now named
+  `DEADLINE_PASSED_DURING_REVIEW`. Its file still replaces the baseline (the
+  baseline was on the pointer before it); the rule is recorded here.
+- **Manual certification.** The deadline gate stopped a manual-guardrail
+  certification, which optimizes nothing. It no longer does.
+- **Deadline years.** Deadlines outside the years 2000 to 2999, and ones that
+  overflow, are refused as input.
+- **Rate ledger.** It never costs a finished review, refuses and leaves a
+  foreign file alone, and is deterministic.
+- **Duplicate codes.** One cause now gives one code (a stopped selection is no
+  longer also a shortened stage), and a probe the environment switched off is
+  not named.
+- **Detail text.** Deadline limitations carry the same `CODE:detail` text on
+  every path.
+- **Other fixes.**
+  - The `BASELINE_EARLIEST_LOCK_PASSED` detail no longer claims a floor
+    budget.
+  - The weather word is out of `deadline.py`.
+  - The release-truths claim now names the certify exit.
+- **Tests.**
+  - Selection's shortening is asserted by its own detail.
+  - No duplicate limitations are allowed.
+  - The baseline's own report proves it ran on the budget's limits.
+  - The C1, SD3 and C2 keyword mapping is tested.
+  - The handler test pins the wall clock.
+  - The baseline constants are pinned to the baseline's own.
+
+Left as is: a v2 request may carry `"delivery_deadline_utc": null`, as v1 may
+carry a null `qb_depth_role_evidence_json` (the existing precedent). The
+`diagnostic` and `registered` build-and-certify limits stay unbudgeted.
+
 #### Verification
 
 - Baseline before any change: `1593 passed, 1 skipped in 228.99s`.
 - The card's command (`tests/test_deadline_controller.py tests/test_cowork.py
-  tests/test_fetch_weather_captures.py`): `44 passed, 1 skipped in 9.32s`.
-- Complete pinned suite: `1614 passed, 1 skipped in 227.87s` (Linux), 21 more
-  than the baseline (18 deadline, 3 request). Recorded with `record_verify.py`.
+  tests/test_fetch_weather_captures.py`): `51 passed, 1 skipped in 10.92s`.
+- Complete pinned suite: `1621 passed, 1 skipped in 229.23s` (Linux), 28 more
+  than the baseline (25 deadline cases, 3 request). Before the review's fixes:
+  `1614 passed, 1 skipped in 227.87s`. Recorded with `record_verify.py`.
 - `doctor` passes; `compileall` of every changed module, `git diff --check` and
   `check_protected_paths.py` (no protected path) are clean.
 

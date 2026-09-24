@@ -190,6 +190,43 @@ def test_selection_limits_come_from_the_window():
     clock.advance(29.9)
     per_solve, stopped = budget.sequential_solve_seconds(count=1, default=10.0)
     assert per_solve is None and stopped.startswith("DEADLINE_IMPROVEMENT_WINDOW_SPENT:selection:")
+    # One cause, one code: the stop is not also named as a shortened stage.
+    assert not any(code == "DEADLINE_STAGE_SHORTENED" and "skipped" in detail
+                   for code, detail in budget.events)
+
+
+def test_the_budget_maps_onto_select_prior_lineups_keywords():
+    """C1 gets a per-solve limit, SD3 its bank and joint budgets, C2 fits or stops."""
+
+    from unittest.mock import Mock
+
+    from nfl_dfs.classic_portfolio_policy import NormalizedClassicPortfolioPolicy
+    from nfl_dfs.portfolio_policy import NormalizedPortfolioPolicy
+    from nfl_dfs.prior_review import _deadline_selection_limits
+
+    budget = _budget(FakeClock(), as_of=CLASSIC_LOCK - timedelta(minutes=10, seconds=60))  # 60 s
+    showdown = Mock(spec=NormalizedPortfolioPolicy, entry_count=20)
+    limits, stopped = _deadline_selection_limits(budget, count=20, portfolio_policy=showdown)
+    assert stopped is None
+    assert limits == {"policy_candidate_seconds": pytest.approx(40.0),  # min(max(30, 40), 70%)
+                      "policy_candidate_per_solve_seconds": 2.0,
+                      "policy_selection_seconds": pytest.approx(12.0)}  # min(max(10, 20), 20%)
+    classic = Mock(spec=NormalizedClassicPortfolioPolicy)
+    classic.search_limits = Mock(candidate_total_milliseconds=30_000, selection_milliseconds=10_000)
+    assert _deadline_selection_limits(budget, count=1, portfolio_policy=classic) == ({}, None)
+    classic.search_limits = Mock(candidate_total_milliseconds=60_000, selection_milliseconds=10_000)
+    limits, stopped = _deadline_selection_limits(budget, count=1, portfolio_policy=classic)
+    assert limits == {} and stopped.startswith("DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW:")
+    assert "--minutes" in stopped and "--delivery-deadline-utc" not in stopped  # a flag that exists
+    limits, stopped = _deadline_selection_limits(budget, count=2, portfolio_policy=None)
+    assert (limits, stopped) == ({"time_limit_seconds": pytest.approx(10.0)}, None)
+
+
+def test_the_baseline_limits_match_the_baselines_own_defaults():
+    from nfl_dfs import baseline
+
+    assert BASELINE_CAP_SECONDS == baseline.DEFAULT_BUDGET_SECONDS
+    assert deadline.BASELINE_PER_SOLVE_SECONDS == baseline.DEFAULT_PER_SOLVE_SECONDS
 
 
 def test_the_c1_default_matches_select_prior_lineups():
@@ -234,6 +271,24 @@ def test_the_host_candidate_rate_is_recorded_and_read_back_conservatively(tmp_pa
     assert list(stored["hosts"]) == [f"{deadline.host_key()}|CLASSIC"]
 
 
+def test_the_rate_ledger_is_deterministic_and_never_overwrites_a_foreign_file(tmp_path):
+    moment = datetime(2026, 9, 24, 12, tzinfo=timezone.utc)
+    observation = dict(mode="CLASSIC", candidates=50, seconds=14.0, basis="BANK_REPORT",
+                       run_id="r", measured_at=moment, pool_people=719, entries=1)
+    first, second = tmp_path / "a.json", tmp_path / "b.json"
+    record_candidate_rate(first, **observation)
+    record_candidate_rate(second, **observation)
+    assert first.read_bytes() == second.read_bytes()  # same observation, same bytes
+    for foreign in (b"not json", b'{"schema_version": "nfl_host_candidate_rate_v1", "hosts": {"h": 3}}',
+                    b'{"schema_version": "other_v1", "hosts": {}}'):
+        path = tmp_path / "foreign.json"
+        path.write_bytes(foreign)
+        with pytest.raises(ValueError):
+            record_candidate_rate(path, **observation)
+        assert path.read_bytes() == foreign  # refused, left as it is
+        assert read_candidate_rate(path, mode="CLASSIC") is None
+
+
 def test_a_bank_rate_is_read_from_its_report_or_from_a_bank_time_limit():
     report = {"selection": {"selection": {"portfolio_policy": {
         "candidate_bank": {"produced_candidates": 50, "elapsed_seconds": 14.0}}}}}
@@ -248,17 +303,18 @@ def test_a_bank_rate_is_read_from_its_report_or_from_a_bank_time_limit():
 # ----------------------------------------------------------------- run-slate
 
 
-def _clocked(monkeypatch, clock: FakeClock):
-    """`run-slate`'s budget on the fake monotonic clock."""
+def _clocked(monkeypatch, clock: FakeClock, wall: datetime | None = None):
+    """`run-slate`'s budget on the fake monotonic clock, and a pinned wall clock if given."""
 
     from nfl_dfs import cli
 
     build = Budget.build.__func__
+    pinned_wall = {"wall": (lambda: wall)} if wall is not None else {}
 
     class Clocked(Budget):
         @classmethod
         def build(cls, games, **kwargs):
-            return build(cls, games, clock=clock, **kwargs)
+            return build(cls, games, clock=clock, **pinned_wall, **kwargs)
 
     monkeypatch.setattr(cli, "Budget", Clocked)
 
@@ -281,7 +337,10 @@ def _classic(tmp_path, monkeypatch, *, run_id, deadline=None, as_of=AS_OF, polic
 
 
 def _truth_codes(report) -> dict[str, str]:
-    return {item["code"]: item["class"] for item in report["release_truths"]["delivery_limitations"]}
+    items = report["release_truths"]["delivery_limitations"]
+    pairs = [(item["code"], item["detail"]) for item in items]
+    assert len(pairs) == len(set(pairs)), "a limitation is reported twice"
+    return {item["code"]: item["class"] for item in items}
 
 
 def _baseline_is_the_file(report, root):
@@ -315,6 +374,9 @@ def test_a_deadline_passed_at_start_ships_the_baseline_and_skips_the_review(tmp_
     baseline_stage = next(item for item in record["stages"] if item["name"] == "baseline")
     assert baseline_stage["allowance_seconds"] == BASELINE_FLOOR_SECONDS
     assert report["baseline"]["DELIVERY_STATE"] == "DELIVERABLE"
+    # The baseline was built on the budget's limits, not its own defaults.
+    built = json.loads(Path(report["baseline"]["report"]).read_text(encoding="utf-8"))
+    assert built["command"] == {"per_solve_seconds": 5.0, "budget_seconds": BASELINE_FLOOR_SECONDS}
 
 
 def test_a_window_spent_before_selection_stops_the_review_and_keeps_the_baseline(tmp_path, monkeypatch):
@@ -361,6 +423,8 @@ def test_a_short_window_shortens_c1_solves_and_the_review_still_delivers(tmp_pat
     assert code == 0 and report["improvement"]["status"] == "DELIVERED"
     codes = _truth_codes(report)
     assert codes["DEADLINE_STAGE_SHORTENED"] == "S"  # a shortened search budget is reported
+    assert any(item["detail"].startswith("DEADLINE_STAGE_SHORTENED:selection: 6.0 s")
+               for item in report["release_truths"]["delivery_limitations"])
     assert "IMPROVEMENT_NOT_DELIVERED" not in codes
     selection = next(item for item in report["deadline"]["stages"] if item["name"] == "selection")
     assert (selection["default_seconds"], selection["allowance_seconds"]) == (10.0, 6.0)
@@ -414,10 +478,63 @@ def test_a_replay_records_its_stages_its_request_v3_and_the_hosts_candidate_rate
     assert read_candidate_rate(ledger, mode="CLASSIC")["seconds_per_candidate"] == rate["seconds_per_candidate"]
 
 
+def test_a_review_that_ends_after_the_deadline_is_named(tmp_path, monkeypatch):
+    from nfl_dfs import prior_review as prior_review_module
+
+    clock = FakeClock()
+    _clocked(monkeypatch, clock)
+    real = prior_review_module.run_prior_review
+
+    def late_review(**kwargs):
+        outcome = real(**kwargs)  # selection had its window; the rest ran long
+        clock.advance(15 * 60)
+        return outcome
+
+    code, report, root = _classic(
+        tmp_path, monkeypatch, run_id="late-finish", review=late_review,
+        deadline=(AS_OF + timedelta(minutes=10)).isoformat())
+    assert code == 0 and report["improvement"]["status"] == "DELIVERED"
+    assert _truth_codes(report)["DEADLINE_PASSED_DURING_REVIEW"] == "S"
+    assert "DEADLINE_PASSED_DURING_REVIEW" in report["deadline"]["limitations"]
+
+
+def test_certifying_a_manual_assignment_is_not_stopped_by_the_deadline(tmp_path, monkeypatch):
+    """The gate stops discretionary optimization; a supplied assignment optimizes nothing."""
+
+    from nfl_dfs import cli
+    from nfl_dfs.cowork import CLASSIC_ASSIGNMENT_HEADER
+
+    from .test_cowork import _attachment_pair, _PassingDoctor
+
+    attachments = tmp_path / "attachments"
+    attachments.mkdir()
+    _attachment_pair(attachments)
+    (attachments / "assignment.csv").write_text(",".join(CLASSIC_ASSIGNMENT_HEADER) + "\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(cli, "doctor", lambda _root: _PassingDoctor())
+    monkeypatch.setattr(cli, "_cowork_core_blockers", lambda _request: ())
+    called = []
+
+    def certify(args):
+        called.append(args.assignments)
+        return 2, {"status": "DO_NOT_UPLOAD", "FILE_VALID": False, "EVIDENCE_STATE": "UNKNOWN",
+                   "MODEL_STATUS": "UNVALIDATED", "RELEASE_DECISION": "DO_NOT_UPLOAD"}
+
+    monkeypatch.setattr(cli, "_certify", certify)
+    args = cli.argparse.Namespace(
+        input_dir=str(attachments), request=None, salaries=None, entries=None, label="manual",
+        run_id="manual", output_dir=str(tmp_path / "outputs"), as_of=None, delivery_deadline_utc=None)
+    assert cli.command_cowork_run(args) == 2
+    assert called  # certification ran although the fixture's deadline passed long ago
+    report = json.loads((tmp_path / "outputs" / "manual" / "cowork_run.json").read_text(encoding="utf-8"))
+    assert report["stage"] == "DO_NOT_UPLOAD" and report["deadline"]["passed_at_start"]
+
+
 def test_the_outer_handler_carries_the_budget(tmp_path, monkeypatch):
     def crash(**_kwargs):
         raise RuntimeError("forced crash")
 
+    _clocked(monkeypatch, FakeClock(), wall=datetime(2026, 9, 24, 12, tzinfo=timezone.utc))
     code, report, root = _classic(tmp_path, monkeypatch, run_id="crashed", review=crash)
     assert code == 2 and report["stage"] == "BUILD_OR_CERTIFY_FAILED"
     assert report["deadline"]["schema_version"] == "nfl_deadline_budget_v1"
@@ -426,20 +543,27 @@ def test_the_outer_handler_carries_the_budget(tmp_path, monkeypatch):
     _baseline_is_the_file(report, root)
 
 
-def test_a_budget_that_cannot_be_built_still_ships_the_baseline_first(tmp_path, monkeypatch):
+@pytest.mark.parametrize("broken, message", (
+    (2, "at least R31's 5 minutes"),
+    (float("inf"), "must be a finite number"),
+    (OSError("runtime.json is locked"), "runtime.json is locked"),
+))
+def test_a_budget_that_cannot_be_built_still_ships_the_baseline_first(tmp_path, monkeypatch, broken, message):
     from nfl_dfs import cli
 
     real_load = cli._load_config
 
     def load(name):
+        if name == "runtime.json" and isinstance(broken, Exception):
+            raise broken
         value = real_load(name)
         if name == "runtime.json":
-            value = {**value, "stop_discretionary_optimization_minutes_before_lock": 2}
+            value = {**value, "stop_discretionary_optimization_minutes_before_lock": broken}
         return value
 
     monkeypatch.setattr(cli, "_load_config", load)
     code, report, root = _classic(tmp_path, monkeypatch, run_id="bad-runtime")
     assert code == 2 and report["stage"] == "BUILD_OR_CERTIFY_FAILED"
-    assert "at least R31's 5 minutes" in report["message"]
+    assert message in report["message"]
     assert report["deadline"] is None
     _baseline_is_the_file(report, root)

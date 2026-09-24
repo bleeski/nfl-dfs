@@ -2900,6 +2900,7 @@ def _run_prior_review_profile(
     )
     if budget is not None:
         budget.record("review", started_after=review_started, elapsed=budget.elapsed() - review_started)
+        budget.finished_late("review")
         _record_bank_rate(budget, outcome, portfolio_policy, run_id=run_id, slate=slate, entries=entries)
     finish_started = budget.elapsed() if budget is not None else 0.0
 
@@ -3342,27 +3343,28 @@ def _record_bank_rate(budget: Budget, outcome, portfolio_policy, *, run_id: str,
     """This host's candidate rate from a Classic C2 bank, into the run's runs folder.
 
     `data/runs/` is per machine and never committed, which is what a per-host
-    measurement needs; `make_classic_policy.py` reads it back. Never raises.
+    measurement needs; Session 07b's policy generator reads it. Never raises:
+    a ledger it cannot read or write is reported and left as it is.
     """
 
     limits = getattr(portfolio_policy, "search_limits", None)
     if slate.mode is not EngineMode.CLASSIC or limits is None:
         return
-    observed = bank_rate_observation(
-        outcome.reports, outcome.blockers,
-        declared_bank_seconds=limits.candidate_total_milliseconds / 1000.0,
-    )
-    if observed is None:
-        return
-    candidates, seconds, basis = observed
     try:
+        observed = bank_rate_observation(
+            outcome.reports, outcome.blockers,
+            declared_bank_seconds=limits.candidate_total_milliseconds / 1000.0,
+        )
+        if observed is None:
+            return
+        candidates, seconds, basis = observed
         budget.candidate_rate = record_candidate_rate(
             DEFAULT_RUNS_DIR / HOST_RATES_FILENAME, mode=slate.mode.value, candidates=candidates,
             seconds=seconds, basis=basis, run_id=run_id, measured_at=datetime.now(timezone.utc),
             pool_people=len({player.underlying_id for player in slate.players}),
             entries=len(entries.authorizations),
         )
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001 - a rate never costs the review it measured
         budget.candidate_rate = {"recorded": False, "detail": f"{type(exc).__name__}:{exc}"}
 
 
@@ -3526,9 +3528,10 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             as_of=_pinned_as_of(args),
             stop_minutes=runtime_stop_minutes(_load_config("runtime.json")),
         )
-    except ValueError:
-        # A clock or runtime setting the budget cannot read never costs the
-        # baseline: it is built on its fixed defaults, then the run fails by name.
+    except Exception:  # noqa: BLE001 - re-raised below, after the baseline
+        # A clock or runtime setting the budget cannot read (malformed, missing,
+        # unreadable) never costs the baseline: it is built on its fixed
+        # defaults, then the run fails by name.
         args._run_slate_baseline = _build_run_slate_baseline(
             snapshotted, run_id=run_id, output_root=output_root, args=args
         )
@@ -3546,15 +3549,19 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     # Session capability, before the run spends its window discovering it, for
     # as long as the window allows.
     if not getattr(args, "no_session_probe", False):
-        probe_seconds = budget.allowance(
+        # A probe the environment switched off takes no allowance, so none is named.
+        switched_off = os.environ.get(SESSION_PROBE_SKIP_ENV) == "1"
+        probe_seconds = None if switched_off else budget.allowance(
             "session_probe", default=SESSION_PROBE_TIMEOUT_SECONDS,
             share=PROBE_SHARE, minimum=PROBE_MINIMUM_SECONDS,
         )
-        if probe_seconds is not None:
+        if switched_off or probe_seconds is not None:
             with budget.stage("session_probe") as probe_stage:
-                probe_report = _session_probe(request.salary_csv, timeout=probe_seconds)
+                probe_report = _session_probe(
+                    request.salary_csv, timeout=probe_seconds or SESSION_PROBE_TIMEOUT_SECONDS
+                )
                 if probe_report is None:
-                    probe_stage.outcome = "SKIPPED"  # switched off by the environment
+                    probe_stage.outcome = "SKIPPED"
             if probe_report is not None:
                 _write_json(DEFAULT_RUNS_DIR / run_id / "session_probe.json", probe_report)
                 _announce_session_probe(probe_report)
@@ -3718,7 +3725,10 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
 
     # The deadline's gate on the improvement: a deadline already passed, or a
     # window already spent, leaves the baseline as the file (named, never silent).
-    deadline_stop = budget.review_gate()
+    # Certifying a supplied manual-guardrail assignment optimizes nothing, so it
+    # is not discretionary optimization and the gate does not stop it.
+    manual_certification = snapshotted.profile != "prior_review" and snapshotted.assignment_csv is not None
+    deadline_stop = None if manual_certification else budget.review_gate()
     if (
         not doctor_report.pass_status
         or contest_problems
@@ -3911,6 +3921,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     )
     code, certification = _certify(certify_args)
     budget.record("review", started_after=review_started, elapsed=budget.elapsed() - review_started)
+    budget.finished_late("review")
     latest, latest_problems = _read_run_pointer(output_root, run_id)
     result = {
         "run_id": run_id,

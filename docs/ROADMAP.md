@@ -595,8 +595,8 @@ Every session follows this protocol, and the cards only add to it:
   and SD3 solver limits through `select_prior_lineups`' own parameters; a C2
   policy's hash-bound limits fit or stop the review. A passed deadline or spent
   window leaves the baseline as the file, exit 2, `DEADLINE_*` (`S`). Stage
-  durations and the host's C2 candidate rate are recorded. Six codes: four `S`
-  in a new `delivery_deadline` family, two `P`. The diff reached about 2,000
+  durations and the host's C2 candidate rate are recorded. Seven codes: five
+  `S` in a new `delivery_deadline` family, two `P`. The diff reached about 2,000
   lines, so the fetch, weather-script and generator allowances went to Session
   07b, built and tested first. None of Session 08's files was edited. Numbers:
   `changelog.md`.
@@ -630,7 +630,9 @@ Every session follows this protocol, and the cards only add to it:
     takes `seconds_per_candidate` and `window_seconds` and keeps the declared
     bank plus joint solve within 75% of the window (joint at most 20% of it,
     the 2x generation headroom kept); exit 2 naming rung 4 when even the floor
-    bank does not fit.
+    bank does not fit. Read the stop from `config/runtime.json`
+    (`deadline.runtime_stop_minutes`), not the default 10, and name the flag
+    again in `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`'s detail once it exists.
 - **Tests.** A slow `httpx.Client` stub on a fake clock (40 s per failed
   request in a 100 s window: timeouts 30, 30, 20, then refused, no client
   made); a slow `urlopen` stub (a 45 s stop gives timeouts `[30, 14]`, pauses

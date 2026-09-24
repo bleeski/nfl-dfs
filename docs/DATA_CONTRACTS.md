@@ -1898,7 +1898,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `dad33548434aad3eadad2bb63b973a394aa3dddd4f18a8002d93c2618a9d29a6`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `e23f7d7c6f3ad6fc2ca7e04de66ed74a31e52f1d6a92f5da1b96d279a0e953bd`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2010,12 +2010,18 @@ after intake, is the run's one clock and time budget; its record,
 
 Codes. `delivery_deadline` (`S`, `CONSTRUCTION_PREFERENCE`, R31):
 `DEADLINE_PASSED_AT_START`, `DEADLINE_IMPROVEMENT_WINDOW_SPENT`,
-`DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW` and `DEADLINE_STAGE_SHORTENED` (a stage
-ran under its default or was skipped; once per stage). `certification_prerequisite`
-(`P`): `DEADLINE_AFTER_EARLIEST_LOCK` and `DEADLINE_WALL_CLOCK_PAST_DEADLINE`
-(a pinned clock before the deadline while the wall clock is past it: a replay).
-None is `V`: a deadline never withholds a valid file. They reach the result's
-`release_truths` on every exit, beside the delivered file's own.
+`DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`, `DEADLINE_STAGE_SHORTENED` (a stage
+ran under its default or was skipped; once per stage) and
+`DEADLINE_PASSED_DURING_REVIEW` (the review ended after the deadline; a file it
+delivered replaces the baseline as usual and is named late).
+`certification_prerequisite` (`P`): `DEADLINE_AFTER_EARLIEST_LOCK` and
+`DEADLINE_WALL_CLOCK_PAST_DEADLINE` (a pinned clock before the deadline while
+the wall clock is past it: a replay). None is `V`: a deadline never withholds a
+valid file. They reach `release_truths` on every exit that reports them, beside
+the delivered file's own, each once; the certify exit, which reports four
+truths, carries them in `deadline.limitations`. Certifying a supplied
+manual-guardrail assignment optimizes nothing, so the deadline does not stop
+it. A request deadline must fall in the years 2000 to 2999.
 
 ### `nfl_host_candidate_rate_v1`
 
@@ -2026,7 +2032,8 @@ committed). `hosts` maps `<node>|<system>|<machine>|cpus=<n>|<mode>` to its last
 `CANDIDATE_BANK_TIMEOUT` count over the policy's declared bank budget),
 `pool_people`, `entries`, `run_id`, `measured_at` (wall clock). `run-slate`
 appends one after every Classic C2 bank; `deadline.read_candidate_rate` returns
-the slowest of this host's last five for a mode. `scripts/make_classic_policy.py`
+the slowest of this host's last five for a mode. A file there that is not this
+ledger is refused and left as it is, and the review goes on. `scripts/make_classic_policy.py`
 reads it in Session 07b, in place of its 0.28 s constant.
 
 Does not establish: that any stage's allowance was enough, lineup quality,
