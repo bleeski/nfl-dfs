@@ -1911,6 +1911,10 @@ def command_select(args: argparse.Namespace) -> int:
         "redistribution": redistribution,
         "selection": selection,
         "prior_scores": scores.as_report(),
+        # R28 (Session 09): who the P1 gate left out of these assignments.
+        "limitations": list(
+            dict(selection.get("offensive_roles") or {}).get("material_role_change_exclusions") or ()
+        ),
         "next": (
             "Run review-export with these assignments to write the byte-audited"
             " bulk-entry CSV."
@@ -3112,7 +3116,7 @@ def _run_prior_review_profile(
         # R28 absorbs the P1 stop (Session 09): each unresolved role change the
         # market disagrees with left the pool, and travels with the file by name.
         offensive = selector.get("offensive_roles") if isinstance(selector, Mapping) else None
-        if isinstance(offensive, Mapping):
+        if outcome.file_valid and isinstance(offensive, Mapping):
             for code in reversed(list(offensive.get("material_role_change_exclusions") or ())):
                 blockers.insert(0, str(code))
         if isinstance(selector, Mapping) and selector.get("non_optimal_lineups"):

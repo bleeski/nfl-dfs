@@ -18,9 +18,10 @@ Three gates are genuinely human and stay human:
    or `IR`: the availability contract makes those people unselectable, so an
    accepted-but-uncertain identity can never reach a lineup. Every auto-accept
    and its reason is recorded.
-2. Weather. The enum has no `UNKNOWN` member and `api.weather.gov` is
-   unreachable from a session, so a game the schedule artifact cannot resolve on
-   its own blocks for an operator capture with its URI and observation time.
+2. Weather. A game the schedule artifact cannot resolve on its own needs an
+   operator capture with its URI and observation time. Since Session 09 (R28) a
+   game without one is frozen `UNOBSERVED` and named, never blocked, and a state
+   typed without a capture is never used.
 3. Staleness. The team prior inherits `MARKET_LINE_MOVES_INTRADAY` from
    `games.csv`, which expires twelve hours after capture. A same-day re-run is
    the normal case. An expired package is rebuilt, never widened.
@@ -121,8 +122,9 @@ CLASSIC_COVERAGE_SCHEMA_C2 = "nfl_classic_slate_coverage_c2_v1"
 
 # nflverse roof values the frozen schedule artifact resolves without any
 # operator input. `priors._ROOF_WEATHER` also maps "open", but a retractable
-# roof left open is played in the weather, so this profile still asks for the
-# capture rather than treating the schedule as the whole answer.
+# roof left open is played in the weather, so this profile still names a
+# missing capture (WEATHER_UNOBSERVED) rather than treating the schedule as the
+# whole answer.
 SCHEDULE_DERIVABLE_ROOFS = frozenset({"dome", "closed"})
 ROOF_STATE_IS_SCHEDULE_AUTHORITATIVE = frozenset({"dome", "closed", "open"})
 
@@ -704,7 +706,9 @@ def decide_weather(
     observed = (weather_observed_at or "").strip() or None
     attributed = bool(uri and observed)
 
-    if not normalized and not attributed and not state:
+    # A typed state with no capture is dropped below, so it does not keep a
+    # blank from resolving here: the freeze resolves the same blank the same way.
+    if not normalized and not attributed:
         resolved = resolve_blank_roof(
             home_team_of(game_id or ""),
             venue_roof_history,
@@ -720,12 +724,16 @@ def decide_weather(
                 basis=venue_basis,
             )
 
+    # Nothing unattributed is passed on from here, not even for a game the
+    # schedule resolves: the legacy freeze reads the first game's fields as
+    # the scalar capture, and an unsourced state there would stop a multi-game
+    # Classic freeze (CLASSIC_WEATHER_SCOPE_AMBIGUOUS) on a value nobody observed.
     if normalized in SCHEDULE_DERIVABLE_ROOFS:
         return WeatherDecision(
             roof=normalized,
-            freeze_weather_state=state,
-            freeze_source_uri=uri,
-            freeze_observed_at=observed,
+            freeze_weather_state=state if attributed else None,
+            freeze_source_uri=uri if attributed else None,
+            freeze_observed_at=observed if attributed else None,
             basis=f"SCHEDULE_ROOF_IS_AUTHORITATIVE:{normalized}",
         )
 
@@ -741,8 +749,8 @@ def decide_weather(
         return WeatherDecision(
             roof=normalized,
             freeze_weather_state=None,
-            freeze_source_uri=uri,
-            freeze_observed_at=observed,
+            freeze_source_uri=uri if attributed else None,
+            freeze_observed_at=observed if attributed else None,
             basis=f"SCHEDULE_ROOF_IS_AUTHORITATIVE_CAPTURE_REPORTED_ONLY:{normalized}",
             limitations=() if attributed else (unobserved,),
         )
@@ -992,6 +1000,12 @@ def _unobserved_weather(team_source: str | Path) -> list[str]:
             limitations.append(
                 f"WEATHER_UNOBSERVED:{game_id}:{text}:the roof is open and nobody captured the"
                 " weather the game is played in"
+            )
+        elif text.endswith("OPERATOR_SUPPLIED_UNATTRIBUTED"):
+            # A package frozen outside run-slate with a typed state and no source.
+            limitations.append(
+                f"WEATHER_UNOBSERVED:{game_id}:{text}:the state was typed without a captured"
+                " source, so it is not an observation"
             )
     limitations.extend(
         f"WEATHER_UNOBSERVED:{game_id}:the frozen team prior records this game as UNOBSERVED"

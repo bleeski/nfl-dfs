@@ -875,7 +875,7 @@ def create_classic_review_package(
             activity_coverage = _mapping(coverage_activity, label="OFFICIAL_STATUS_COVERAGE")
             if activity_coverage.get("selected_without_row") != activity_missing:
                 problems.append("CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH")
-        elif status_path is None and activity_missing != sorted(selected_people):
+        elif status_path is not None:
             problems.append("CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH")
 
         selection_lineups: dict[tuple[str, ...], Mapping[str, object]] = {}

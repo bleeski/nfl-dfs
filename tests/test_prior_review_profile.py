@@ -255,6 +255,38 @@ def test_a_state_without_attribution_is_never_passed_on() -> None:
     assert decision.freeze_weather_state is None
 
 
+@pytest.mark.parametrize("roof", ["dome", "closed", "open"])
+def test_nothing_unattributed_is_passed_on_for_a_schedule_roof(roof) -> None:
+    """Session 09 review: the legacy freeze reads the first game's fields as the
+    scalar capture, so an unsourced state or a half capture passed on for a dome
+    stopped a multi-game Classic freeze (CLASSIC_WEATHER_SCOPE_AMBIGUOUS), and a
+    URI without its time stopped an open roof (WEATHER_OBSERVED_AT_REQUIRED)."""
+
+    decision = decide_weather(
+        roof, weather_state="CLEAR",
+        weather_source_uri="https://api.weather.gov/gridpoints/SEW/125,67/forecast")
+    assert (decision.freeze_weather_state, decision.freeze_source_uri,
+            decision.freeze_observed_at) == (None, None, None)
+    attributed = decide_weather(
+        roof, weather_state="CLEAR",
+        weather_source_uri="https://api.weather.gov/gridpoints/SEW/125,67/forecast",
+        weather_observed_at="2026-09-08T16:37:07+00:00")
+    assert attributed.freeze_source_uri and attributed.freeze_observed_at
+    assert attributed.limitations == ()
+
+
+def test_an_unsourced_state_does_not_stop_a_retractable_blank_resolving() -> None:
+    """The freeze resolves the same blank from the venue's history, so the
+    weather report and the frozen package now say the same thing."""
+
+    decision = decide_weather(
+        "", game_id="WAS@DAL", venue_roof_history={"DAL": {"closed": 17}},
+        venue_roof_seasons=(2025, 2026), weather_state="RAIN")
+    assert decision.limitations == ()
+    assert decision.freeze_weather_state is None
+    assert decision.basis.startswith("DERIVED_FROM_VENUE_ROOF_HISTORY")
+
+
 def test_a_capture_that_carries_no_state_is_unobserved() -> None:
     decision = decide_weather(
         "outdoors",

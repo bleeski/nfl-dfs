@@ -350,8 +350,9 @@ the sole exact `dk_id` rather than CPT/FLEX IDs. Every declaration's team and
 game must match the salary contract. Every selected offensive person must have
 state `SOURCE_SUPPORTED_ADJUSTMENT`; a selected person with historical-only,
 missing, transfer-unknown, synthetic, stale, or absent current role evidence
-stops publication and reports the smallest evidence action. Every selected
-person also needs a fresh exact-ID official ACTIVE/INACTIVE row. Nonselected
+stops publication and reports the smallest evidence action. A selected person
+with no fresh exact-ID official ACTIVE/INACTIVE row is named, not stopped, since
+Session 09 (below); an `INACTIVE` row still takes him out first. Nonselected
 uncertainty stays visible and can keep overall `EVIDENCE_STATE=UNKNOWN` without
 creating an upload file.
 
@@ -365,7 +366,7 @@ A successful Classic C1 run writes two atomic canonical JSON artifacts:
   game, salary, activity state, inclusion/exclusion reason, unallocated share,
   conservation totals and smallest evidence action.
 
-Both embed the selected-evidence gate. Since Session 09 (R28) it is
+The coverage record embeds the selected-evidence gate. Since Session 09 (R28) it is
 `nfl_classic_selected_evidence_gate_c1_v3`; v2 stays as written. v3 keeps
 `gaps` for what still blocks (synthetic role sources, a selected unavailable
 person, a missing or unselectable current role) and adds `activity_gaps`, one

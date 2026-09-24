@@ -271,3 +271,70 @@ def test_build_priors_authority_persists_through_a_request_rerun(tmp_path, monke
         assert report["DELIVERY_STATE"] == "DELIVERABLE"
         assert report["latest_deliverable"]["producer"] == "run-slate:baseline"
     assert len(rebuilds) == 2
+
+
+def test_an_unsourced_state_never_reaches_a_multi_game_classic_freeze(tmp_path):
+    """Session 09 review, the blocking case. A Classic request with a typed
+    `weather_state` and no source, whose first-locking game is under a dome,
+    used to hand that state to the legacy freeze as the scalar capture, and two
+    outdoor games then stopped it (CLASSIC_WEATHER_SCOPE_AMBIGUOUS). Nothing
+    unattributed reaches the freeze now, whatever the game order."""
+
+    from nfl_dfs.prior_review import run_prior_review
+
+    salary, entry, _package, _role, _status, _ = classic_fixture(tmp_path / "fixture", entries=1)
+    slate = parse_salaries(salary)
+    first, *rest = [game.game_id for game in slate.games]
+    seen: dict[str, object] = {}
+
+    def propose(**kwargs):
+        root = Path(kwargs["output_dir"])
+        (root / "raw").mkdir(parents=True)
+        proposals = [
+            {"dk_id": player.dk_id, "captain_dk_id": player.dk_id, "dk_name": player.name,
+             "dk_team": player.team, "dk_position": player.position,
+             "underlying_id": player.underlying_id, "nflverse_team": player.team,
+             "provider_player_id": f"00-{int(player.dk_id) % 10_000_000:07d}",
+             "provider_name": player.name, "provider_pfr_id": "", "provider_team": player.team,
+             "provider_status": "ACT", "match_method": "NORMALIZED_NAME_TEAM_POSITION",
+             "candidates": []}
+            for player in slate.players
+        ]
+        (root / "identity_proposals.json").write_text(json.dumps({"proposals": proposals}), encoding="utf-8")
+        return {"package_dir": str(root), "identity_proposals": str(root / "identity_proposals.json"),
+                "source_manifest": str(root / "source_manifest.json"), "hashes": {},
+                "markets": {first: {"roof": "dome"}, **{game: {"roof": "outdoors"} for game in rest}}}
+
+    def freeze(**kwargs):
+        seen.update(kwargs)
+        raise RuntimeError("FREEZE_REACHED")
+
+    outcome = run_prior_review(
+        salary_csv=salary, entry_csv=entry, label="unsourced", as_of=AS_OF,
+        run_root=tmp_path / "run", output_root=tmp_path / "out", build_priors=True,
+        weather_state="CLEAR", propose=propose, freeze=freeze)
+    assert outcome.blockers == ("PRIORS_FREEZE_FAILED:RuntimeError:FREEZE_REACHED",)
+    assert (seen["weather_state"], seen["weather_source_uri"], seen["weather_observed_at"]) == (None, None, None)
+    games = outcome.reports["weather"]["games"]
+    assert games[first]["limitations"] == []
+    for game in rest:
+        [limitation] = games[game]["limitations"]
+        assert "the unattributed state CLEAR was not used" in limitation
+
+
+def test_a_reused_package_with_an_unsourced_state_is_named(tmp_path):
+    """A package frozen outside run-slate may carry a typed state with no
+    source (Showdown's standalone freeze still writes one). Reusing it names
+    the game rather than reading the state as an observation."""
+
+    from nfl_dfs.prior_review import _unobserved_weather
+
+    team = tmp_path / "team_prior.json"
+    team.write_text(json.dumps({
+        "metadata": {"coverage": {"weather_basis_by_game": {
+            "NE@SEA": "OPERATOR_SUPPLIED:roof=outdoors|OPERATOR_SUPPLIED_UNATTRIBUTED",
+            "DAL@PHI": "DERIVED_FROM_SCHEDULE_ROOF:dome"}}},
+        "records": [{"game_id": "NE@SEA", "weather_state": "RAIN"}]}), encoding="utf-8")
+    [named] = _unobserved_weather(team)
+    assert named.startswith("WEATHER_UNOBSERVED:NE@SEA:OPERATOR_SUPPLIED:roof=outdoors|")
+    assert "typed without a captured source" in named
