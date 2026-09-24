@@ -120,7 +120,7 @@ portfolio can be late-swapped, a missed lock cannot. Three classes of rule:
 After R28 the baseline goes first in the running order: `run-slate` publishes
 it before any evidence, policy or model stage (`docs/RUNBOOK.md`).
 The default delivery deadline is the earliest relevant lock minus 5 minutes
-(R31; the engine enforces it from Session 07).
+(R31); `run-slate` enforces it since Session 07, fetches and the generator from 07b.
 
 Three bounds: **never fabricate an observation to clear a gate**; never relax a
 gate a real source could still clear; a gate no real source can ever clear is a
