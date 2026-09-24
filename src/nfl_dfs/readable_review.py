@@ -941,17 +941,20 @@ def create_readable_review(
         or reparsed_template.encoding != template.encoding
     ):
         problems.append("READABLE_REVIEW_ENTRY_REPARSE_MISMATCH")
-    expected_entries = tuple(entry.entry_id for entry in reparsed_template.authorizations)
+    template_entries = tuple(entry.entry_id for entry in reparsed_template.authorizations)
     output_entries = tuple(entry.entry_id for entry in output_template.authorizations)
     assignment_entries = tuple(entry for entry, _roster in assignment_pairs)
-    # Per-row authority (Session 11): the assignment covers the plan's fillable
-    # rows; every other row keeps the template's own cells.
+    # Per-row authority (Session 11): the portfolio is the plan's fillable rows,
+    # and every other row keeps the template's own cells. From here on
+    # `expected_entries` means the portfolio's rows (selection, policy,
+    # denominators, overlap, audit), and the output keeps the template's order.
     try:
         fillable = plan_entries(reparsed_template, reparsed_slate).fillable
     except ValueError as exc:
         problems.append(_problem("READABLE_REVIEW_ENTRY_REPARSE_MISMATCH", f"{type(exc).__name__}:{exc}"))
-        fillable = expected_entries
-    if output_entries != expected_entries:
+        fillable = template_entries
+    expected_entries = fillable
+    if output_entries != template_entries:
         problems.append(_problem("READABLE_REVIEW_OUTPUT_ENTRY_ORDER_MISMATCH", output_entries))
     if assignment_entries != fillable:
         problems.append(_problem("READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH", assignment_entries))

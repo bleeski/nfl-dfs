@@ -5,9 +5,9 @@ authority is per row, and every producer reads it from `plan_entries`:
 
 - a **blank** row (every roster cell empty) may be filled;
 - a **prefilled** row (every roster cell set) is preserved byte for byte. Its
-  cells are parsed into exact current-slate DraftKings IDs where they resolve,
-  and its roster joins the set no generated lineup may repeat (R29: "within a
-  given portfolio keep all submitted lineups distinct and unique");
+  cells are parsed into exact current-slate DraftKings IDs, and a roster that
+  resolves joins the set no generated lineup may repeat (R29: "within a given
+  portfolio keep all submitted lineups distinct and unique");
 - a **partly filled** row (some cells set, some blank) is neither. It is
   preserved, never touched, and named unresolved: filling around existing
   cells is governed late swap's (Session 12).
@@ -26,9 +26,10 @@ that is the producers' own gates, unchanged.
 
 A prefilled cell resolves as a bare DraftKings ID or as text ending in `(ID)`,
 the form the fallback scripts read (`scripts/write_dk_entries.py`). Nothing else
-is guessed: a name, a stale ID or another slate's player does not resolve, and
-since such a row cannot equal an exact-ID roster it stays out of the
-distinctness set. Only exact current-slate IDs ever enter it.
+is guessed: a name, a stale ID or another slate's player does not resolve. A
+row resolves when every cell does and the shared validator passes the roster;
+only a resolved roster enters the distinctness set, so only a legal lineup of
+exact current-slate IDs ever does.
 """
 
 from __future__ import annotations
@@ -220,12 +221,14 @@ def plan_entries(template: EntryTemplate, slate: SlateContract) -> EntryPlan:
             continue
         read = read_prefilled(entry, slate)
         prefilled[entry.entry_id] = read
-        if read.roster is not None and read.canonical_key is not None:
-            forbidden.setdefault(read.canonical_key, read.roster)
-        if not read.resolved:
-            unresolved_prefilled[entry.entry_id] = "; ".join(read.errors)
+        if not read.resolved or read.roster is None or read.canonical_key is None:
+            # Out of the distinctness set: a roster the validator refuses is no
+            # lineup, and a Showdown one's person-level key can equal a legal
+            # lineup the DraftKings-ID no-good cut would not remove.
+            unresolved_prefilled[entry.entry_id] = "; ".join(read.errors) or "does not resolve"
             continue
-        earlier = first_holder.setdefault(str(read.canonical_key), entry.entry_id)
+        forbidden.setdefault(read.canonical_key, read.roster)
+        earlier = first_holder.setdefault(read.canonical_key, entry.entry_id)
         if earlier != entry.entry_id:
             unresolved_prefilled[entry.entry_id] = (
                 f"repeats the prefilled roster of Entry {earlier}, which R29 never allows; "

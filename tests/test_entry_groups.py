@@ -564,3 +564,239 @@ def test_the_group_report_names_a_withheld_files_rows_unfilled(tmp_path):
     plan = plan_entries(template, slate)
     (group,) = group_report(plan, delivered=(), unfilled=plan.fillable)
     assert group["unfilled"] == ["5300000001", "5300000002"] and group["filled"] == []
+
+
+# ----------------------------------------------------------------- Showdown (review finding 1)
+
+
+def _run_showdown(tmp_path, monkeypatch, *, run_id, entry_ids, cells=None, policy_controls=None):
+    """`run-slate` on the Showdown fixture with `entry_ids` rows, some prefilled."""
+
+    from datetime import datetime, timezone
+
+    from nfl_dfs import cli
+    from nfl_dfs import prior_review as prior_review_module
+    from nfl_dfs.portfolio_policy import portfolio_policy_template
+
+    from .test_prior_review_profile import _prepared_run
+    from .test_prior_selection import _entries_bytes
+
+    _clocked(monkeypatch, FakeClock())
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=datetime.now(timezone.utc) + timedelta(hours=6))
+    entry_path.write_bytes(_entries_bytes(entry_ids))
+    if cells:
+        _edit(entry_path, cells=cells)
+    attachments = _attachments(tmp_path, salary_path, entry_path)
+    values = dict(run_id=run_id, prior_package_dir=str(package_dir))
+    if policy_controls is not None:
+        slate = parse_salaries(salary_path)
+        plan = plan_entries(parse_entries(entry_path), slate)
+        policy_path = tmp_path / "policy" / "portfolio.json"
+        policy_path.parent.mkdir()
+        policy_path.write_text(json.dumps(portfolio_policy_template(
+            slate, list(plan.fillable), controls=policy_controls)), encoding="utf-8")
+        values["portfolio_policy_json"] = str(policy_path)
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    real = prior_review_module.run_prior_review
+    monkeypatch.setattr(cli, "run_prior_review", lambda **kwargs: real(**kwargs, project=project))
+    code = cli.command_cowork_run(_cowork_args(tmp_path, attachments, **values))
+    root = tmp_path / "outputs" / run_id
+    report = json.loads((root / "cowork_run.json").read_text(encoding="utf-8"))
+    return code, report, attachments / "entries.csv", parse_salaries(salary_path)
+
+
+@pytest.mark.parametrize("policy_controls", [None, {
+    "max_captain_exposure": {"default_fraction": 0.5, "overrides": []}, "max_pairwise_person_overlap": 4,
+}], ids=["sequential", "sd3"])
+def test_a_showdown_review_with_a_prefilled_row_ships_and_never_repeats_it(
+    tmp_path, monkeypatch, policy_controls
+):
+    _code, plain, _entries, _slate = _run_showdown(
+        tmp_path / "plain", monkeypatch, run_id="sd-plain", entry_ids=("900000001", "900000002"),
+        policy_controls=policy_controls)
+    assert plain["latest_deliverable"]["producer"] == "run-slate:prior_review:SHOWDOWN", plain["blockers"]
+    first = _cells(Path(plain["latest_deliverable"]["path"]))["900000001"]
+
+    code, report, entries, slate = _run_showdown(
+        tmp_path / "prefilled", monkeypatch, run_id="sd-prefilled",
+        entry_ids=("900000001", "900000002", "900000003"), cells={"900000002": list(first)},
+        policy_controls=policy_controls)
+
+    assert code == 0, report["blockers"]
+    assert report["latest_deliverable"]["producer"] == "run-slate:prior_review:SHOWDOWN"
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    truths = report["release_truths"]
+    assert truths["delivered_entry_ids"] == ["900000001", "900000003"]
+    assert truths["preserved_entry_ids"] == ["900000002"]
+    output = Path(report["latest_deliverable"]["path"])
+    assert _raw_lines(output)["900000002"] == _raw_lines(entries)["900000002"]
+    cells = _cells(output)
+    filled = [cells["900000001"], cells["900000003"]]
+    assert not _keys(slate, filled) & _keys(slate, [first]) and len(_keys(slate, filled)) == 2
+
+
+def test_an_illegal_showdown_prefilled_roster_never_stops_the_baseline(tmp_path):
+    """A FLEX-role ID in the Captain cell shares a legal lineup's person-level key.
+
+    It does not resolve, so it stays out of the distinctness set; before the
+    review's fix it was forbidden by key but not cut by ID, and the baseline
+    stopped on SOLVER_REPEATED_A_LINEUP with nothing delivered.
+    """
+
+    from .test_baseline import showdown_template, tiny_showdown
+
+    salary = tiny_showdown(tmp_path)
+    entries = showdown_template(tmp_path, 3, salary, prefilled={
+        2: ["8105", "8103", "8100", "8102", "8104", "8101"]})
+    outcome = baseline.run_baseline(salaries=salary, entries=entries, out_dir=tmp_path / "runs", now=AS_OF)
+
+    truths = outcome.truths
+    assert truths.delivery_state is DeliveryState.DELIVERABLE_PARTIAL and outcome.exit_code == 3
+    assert truths.delivered_entry_ids == ("4880000001", "4880000003")
+    assert truths.unresolved_entry_ids == ("4880000002",)
+    named = {item.code: item.entry_ids for item in truths.delivery_limitations}
+    assert named["ENTRY_PREFILLED_ROSTER_UNRESOLVED"] == ("4880000002",)
+    assert "DUPLICATE_LINEUP_SELECTED" not in named
+
+
+# ----------------------------------------------------------------- the generators (review finding 3)
+
+
+def test_both_policy_generators_bind_only_the_fillable_rows(tmp_path, capsys):
+    import importlib.util
+
+    from nfl_dfs.classic_portfolio_policy import validate_classic_portfolio_policy_bytes
+    from nfl_dfs.portfolio_policy import validate_portfolio_policy_bytes
+
+    def load(name):
+        path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    supplied = Path(__file__).resolve().parent / "fixtures" / "supplied"
+    classic = parse_salaries(CLASSIC_SALARY)
+    top = _salary_top(classic, 1)[0]
+    classic_entries = tmp_path / "classic_entries.csv"
+    classic_entries.write_bytes(CLASSIC_ENTRIES_20.read_bytes())
+    first_id = parse_entries(classic_entries).authorizations[0].entry_id
+    _edit(classic_entries, cells={first_id: list(top)})
+    template = parse_entries(classic_entries)
+    fillable = plan_entries(template, classic).fillable
+    assert first_id not in fillable and len(fillable) == 19
+    out = tmp_path / "classic_policy.json"
+    from .test_classic_policy_generator import IMPROVEMENT_STOP
+
+    code = load("make_classic_policy").main(
+        ["--salaries", str(CLASSIC_SALARY), "--entries", str(classic_entries), "--out", str(out),
+         "--host-rates", str(tmp_path / "absent.json")],
+        wall=lambda: IMPROVEMENT_STOP - timedelta(days=1))  # the fixture's lock has passed
+    capsys.readouterr()
+    assert code == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["bindings"]["entry_ids"] == list(fillable)
+    assert validate_classic_portfolio_policy_bytes(
+        out.read_bytes(), slate=classic, entry_ids=fillable, entry_sha256=template.raw_hash).valid
+
+    from .test_baseline import showdown_template
+
+    showdown_salary = supplied / "DKSalaries Salary CSV Showdown.csv"
+    showdown = parse_salaries(showdown_salary)
+    lineup = _salary_top(showdown, 1)[0]
+    sd_entries = showdown_template(tmp_path, 3, showdown_salary, prefilled={1: list(lineup)})
+    sd_fillable = plan_entries(parse_entries(sd_entries), showdown).fillable
+    assert len(sd_fillable) == 2
+    sd_out = tmp_path / "showdown_policy.json"
+    code = load("make_showdown_policy").main(
+        ["--salaries", str(showdown_salary), "--entries", str(sd_entries), "--out", str(sd_out),
+         "--combined-default", "0.5", "--captain-default", "0.5"])
+    capsys.readouterr()
+    assert code == 0
+    assert validate_portfolio_policy_bytes(sd_out.read_bytes(), slate=showdown, entry_ids=sd_fillable).valid
+
+
+# ----------------------------------------------------------------- revalidation mutations
+
+
+def _prefilled_root(tmp_path):
+    salary = tmp_path / "inputs" / "salary.csv"
+    salary.parent.mkdir(parents=True)
+    salary.write_bytes(CLASSIC_SALARY.read_bytes())
+    entries = tmp_path / "inputs" / "entries.csv"
+    entries.write_bytes(CLASSIC_ENTRIES_20.read_bytes())
+    ids = [entry.entry_id for entry in parse_entries(entries).authorizations]
+    rosters = _salary_top(parse_salaries(salary), 3)
+    _edit(entries, cells={ids[1]: list(rosters[0])})
+    return salary, entries, ids, rosters
+
+
+def test_revalidation_refuses_a_changed_preserved_row_wrong_truths_and_a_prefilled_repeat(tmp_path):
+    salary, entries, ids, rosters = _prefilled_root(tmp_path)
+    fill = {eid: roster for eid, roster in zip(
+        [eid for eid in ids if eid != ids[1]], _salary_top(parse_salaries(salary), 20)[1:])}
+    good = _file(tmp_path, entries, salary, fill, "good")
+    root = tmp_path / "run"
+    assert delivery.revalidate(good, root=root) == ()
+
+    raw = good.path.read_bytes()
+    kept = _raw_lines(entries)[ids[1]]
+    changed = kept.replace(rosters[0][0].encode(), rosters[1][0].encode(), 1)
+    assert changed != kept
+    tampered = good.path.with_name("tampered.csv")
+    tampered.write_bytes(raw.replace(kept, changed, 1))
+    item = delivery.Deliverable(**{**good.__dict__, "path": tampered, "sha256": sha256_file(tampered)})
+    assert any(p.startswith("DELIVERABLE_BYTE_AUDIT_FAILED") for p in delivery.revalidate(item, root=root))
+
+    wrong = derive_delivery_state(file_valid=True, authorized_entry_ids=good.truths.delivered_entry_ids,
+                                  delivered_entry_ids=good.truths.delivered_entry_ids)
+    unaware = release_truths_v3(
+        derive_release_policy(file_valid=True, evidence_state=ReleaseEvidenceState.UNKNOWN,
+                              model_status=ModelStatus.PRIOR_ONLY,
+                              certification_basis=CertificationBasis.MODEL_ASSISTED), wrong)
+    item = delivery.Deliverable(**{**good.__dict__, "truths": unaware})
+    assert any("DELIVERABLE_COVERAGE_MISMATCH" in p and "preserves" in p
+               for p in delivery.revalidate(item, root=root))
+
+    repeat = _file(tmp_path, entries, salary, {**fill, ids[0]: rosters[0]}, "repeat")
+    assert any(p == f"DELIVERABLE_LINEUP_DUPLICATE:{ids[0]} repeats a prefilled roster"
+               for p in delivery.revalidate(repeat, root=root))
+
+
+def test_a_v1_pointer_still_reads_back(tmp_path):
+    salary, entries, ids, rosters = _prefilled_root(tmp_path)
+    entries.write_bytes(CLASSIC_ENTRIES_20.read_bytes())  # a v1 template: every row blank
+    fill = dict(zip(ids, _salary_top(parse_salaries(salary), 20)))
+    item = _file(tmp_path, entries, salary, fill, "v1")
+    root = tmp_path / "run"
+    delivery.publish(root, item, now=AS_OF)
+    pointer = root / delivery.POINTER_NAME
+    record = json.loads(pointer.read_text(encoding="utf-8"))
+    record["schema_version"] = "nfl_latest_deliverable_v1"
+    truths = record["release_truths"]
+    truths["schema_version"] = "nfl_release_truths_v2"
+    del truths["preserved_entry_ids"], truths["unresolved_entry_ids"]
+    record["coverage"] = {key: record["coverage"][key]
+                          for key in ("delivered_entry_ids", "unfilled_entry_ids")}
+    pointer.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    latest = delivery.read_latest(root)
+    assert latest is not None and latest.deliverable.truths.schema_version == "nfl_release_truths_v2"
+    assert latest.summary()["preserved_entry_ids"] == [] and latest.summary()["entry_groups"] == []
+    assert delivery.as_v3(latest.deliverable.truths).schema_version == "nfl_release_truths_v3"
+
+
+def test_c3s_export_audit_still_refuses_a_written_prefilled_row(tmp_path):
+    from nfl_dfs.classic_review import _audit_template_bytes
+
+    slate = parse_salaries(tiny_classic(tmp_path))
+    first, second = _salary_top(slate, 2)
+    path = _edit(tiny_classic_template(tmp_path, 1), cells={"5300000001": list(first)})
+    source = path.read_bytes()
+    forged = source.replace(",".join(first).encode(), ",".join(second).encode(), 1)
+    template = parse_entries(path)
+    problems = _audit_template_bytes(
+        source_bytes=source, output_bytes=forged, encoding=template.encoding,
+        roster_start=template.roster_start_index, roster_width=9, assignments={"5300000001": second})
+    assert "CLASSIC_C3_EXPORT_PREFILLED_AUTHORIZED_ENTRY:5300000001" in problems

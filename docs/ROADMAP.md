@@ -1214,5 +1214,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 10 | Pending to In Progress | `328166a` | Claim pushed on `claude/epic-planck-3jxp20` |
 | 2026-09-24 | Session 10 | In Progress to Complete | `1f7efcf` | Relaxation controller, both ladders, `nfl_relaxation_record_v1`; suite `1715 passed, 1 skipped`; merged as PR #63 |
 | 2026-09-24 | Session 11 | Pending to In Progress | `3cf7537` | Claim pushed on `claude/festive-lovelace-ffryd8` |
-| 2026-09-24 | Session 11 | In Progress to Complete | recorded by the next session | Per-row authority, prefilled rows preserved and forbidden, `entry_groups` by Contest ID, truths v3, pointer v2; suite `1730 passed, 1 skipped` |
+| 2026-09-24 | Session 11 | In Progress to Complete | recorded by the next session | Per-row authority, prefilled rows preserved and forbidden, `entry_groups` by Contest ID, truths v3, pointer v2; suite `1737 passed, 1 skipped`; PR #65 |
 | 2026-09-24 | Session 11b | Added as Pending | recorded by the next session | Subset binding, split at Ben's breakpoint |

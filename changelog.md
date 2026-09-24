@@ -25,9 +25,10 @@ meaning.
   every row of a group whose contest cannot be stated), or left for the
   producer to fill or name unfilled. A prefilled cell resolves as a bare ID or
   as text ending `(ID)`, the form `scripts/write_dk_entries.py` already reads;
-  anything else does not, and is never guessed. Every prefilled roster whose
-  cells are all current-slate IDs, legal or not, joins the forbidden set;
-  one that does not resolve cannot equal an exact-ID roster and stays out.
+  anything else does not, and is never guessed. Every preserved roster joins
+  the forbidden set; one that does not resolve stays out (the brief's rule,
+  and a Showdown roster with a FLEX-role ID as Captain would otherwise share a
+  legal lineup's key without the no-good cut removing it).
   `group_report` gives each Contest ID's name, fee, rows by kind and outcome,
   and each undelivered row's codes.
 - **Distinctness across the portfolio (R29).** `baseline.build_distinct_lineups`
@@ -51,8 +52,10 @@ meaning.
   (`distinct_lineups`, `V`). 1,218 codes in 46 families; SHA-256
   `214c1898cc15412c14767b512bd13c5792a3a5f66d5e910e97ef26693c123855`, re-pinned
   in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
-- **`tests/test_entry_groups.py`**, 15 tests, five of them full `run-slate`
-  runs on the synthetic Classic fixture.
+- **`tests/test_entry_groups.py`**, 22 tests, seven of them driving
+  `run-slate` (Classic C1 and C2, damaged rows, two contests twice, Showdown
+  sequential and SD3, each producer shown its own first lineup prefilled),
+  plus the generators, the revalidation mutations and a v1 pointer read back.
 
 #### Changed
 
@@ -70,7 +73,12 @@ meaning.
   prior_review (its intake refusal is now only "no blank row at all"), C1's
   export, the Showdown export and readable review, and C3
   (`CLASSIC_C3_BLANK_CELL_AUTHORITY_REQUIRED` likewise). A policy binds exactly
-  the fillable rows, and so does every relaxation rung (`Ladder.entry_ids`).
+  the fillable rows, and so does every relaxation rung (`Ladder.entry_ids`)
+  and both generators (`scripts/make_classic_policy.py`,
+  `scripts/make_showdown_policy.py`), which read the plan instead of every row.
+  The Showdown readable review treats the fillable rows as the portfolio
+  (selection, policy, denominators, overlap, audit) and the template's order
+  as the output's.
 - **`derive_delivery_state`** takes `preserved_entry_ids` and
   `unresolved_entry_ids`. A `V` gate covers the file when it names no row or a
   row that is neither fillable nor unresolved; an unresolved row keeps the
@@ -119,12 +127,37 @@ meaning.
   binding, so `entry_ids` binding a subset moved to Session 11b with Ben's lean
   for the unbound rows (C1 fills them after the joint solve).
 
+#### Review
+
+The `reviewer` subagent found three blocking gaps after the first push, each
+fixed with a test that fails without the fix:
+
+1. A Showdown run with any prefilled row withheld its own review file: the
+   readable review compared the selection's `reserved_entries` (the fillable
+   rows) with every template row (`READABLE_REVIEW_SELECTION_ENTRY_ORDER_MISMATCH`,
+   `V`), and with a policy the policy, denominator and audit checks too. Fixed
+   in `readable_review.py`; the Showdown `run-slate` tests reproduce it.
+2. A Showdown prefilled row with a FLEX-role ID in the Captain cell entered the
+   forbidden set by its person-level key, which the DraftKings-ID no-good cut
+   cannot enforce, so the baseline stopped on `SOLVER_REPEATED_A_LINEUP` and
+   delivered nothing. Only a resolved roster enters the set now, as the brief
+   says.
+3. The policy generators bound every template row, so C2 and SD3 could not run
+   on a prefilled template. They bind the fillable rows now.
+
+Also added from its open list: revalidation mutation tests, a v1 pointer read
+back, and a C3 unit test for the `CLASSIC_C3_EXPORT_PREFILLED_AUTHORIZED_ENTRY`
+backstop. Left as noted: `authorized_entries` in the intake summary still
+counts every row, prefilled ones included, beside `entry_groups`.
+
 #### Verification
 
 - `sh ./nfl.sh test tests/test_entry_groups.py tests/test_byte_line_fidelity.py -x --tb=short`:
-  `22 passed in 43.92s`.
-- Full suite before changes: `1715 passed, 1 skipped in 393.80s`. After:
-  `1730 passed, 1 skipped in 432.18s` (the 15 new tests; the skip is the junction test).
+  `29 passed in 63.69s (0:01:03)`.
+- Full suite before changes: `1715 passed, 1 skipped in 393.80s`. After the
+  first push: `1730 passed, 1 skipped in 432.18s`. After the review fixes:
+  `1737 passed, 1 skipped in 444.63s (0:07:24)` (the 22 new tests; the skip is
+  the junction test). `doctor` `pass_status` true.
 - Left open: the prefilled cell form is unverified against a real DraftKings
   download with entered rows (none in `tests/fixtures/supplied` or any
   `data/` snapshot; a schema-level scan found only blank rows), so Session 12's

@@ -2253,12 +2253,14 @@ take their rows from it:
   or entry fee leaves every row in it unresolved (`ENTRY_GROUP_UNRESOLVED`, `V`,
   `entry_authority`, scoped to those rows); every other group ships.
 
-Every prefilled roster whose cells are all current-slate IDs, legal or not,
-joins the forbidden set: the baseline and C1 cut each from every solve, the C2
+Every preserved roster (resolved: exact current-slate IDs the shared validator
+passes) joins the forbidden set: the baseline and C1 cut each from every solve, the C2
 and SD3 banks never hold one, and every export audit refuses a filled roster
 equal to one (`ENTRY_PREFILLED_LINEUP_REPEATED`, `V`, `distinct_lineups`, on
-the generated row). A row that does not resolve cannot equal an exact-ID
-roster, so it stays out of the set. The cell form is unverified against a real
+the generated row). A row that does not resolve stays out of the set: it is
+no legal lineup, and a Showdown roster with a FLEX-role ID in the Captain cell
+would share a legal lineup's person-level key without the DraftKings-ID cut
+removing that lineup. The cell form is unverified against a real
 DraftKings download with entered rows (ROADMAP Session 12).
 
 One file per producer carries every group; each group stands or falls inside

@@ -71,6 +71,7 @@ from pathlib import Path
 from nfl_dfs.classic_portfolio_policy import classic_portfolio_policy_template
 from nfl_dfs.deadline import SOLVE_MINIMUM_SECONDS, Budget, read_candidate_rate, runtime_stop_minutes
 from nfl_dfs.dk import parse_entries, parse_salaries
+from nfl_dfs.entry_groups import plan_entries
 from nfl_dfs.relaxation import (
     DEFAULT_SECONDS_PER_CANDIDATE,
     GENERATION_HEADROOM,
@@ -147,10 +148,13 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
 
     slate = parse_salaries(Path(args.salaries))
     entries = parse_entries(Path(args.entries))
-    entry_ids = tuple(item.entry_id for item in entries.authorizations)
+    # The rows a policy binds: the template's fillable blank rows (Session 11),
+    # the same list `run-slate` validates the policy against; its intake checks
+    # the mode.
+    entry_ids = plan_entries(entries, slate).fillable
     count = len(entry_ids)
     if count == 0:
-        raise SystemExit("the entries file reserves no Entry IDs")
+        raise SystemExit("the entries file reserves no blank Entry ID to fill")
 
     people = {row.underlying_id for row in slate.players}
     seconds_per_candidate, rate_line = _rate(Path(args.host_rates))
