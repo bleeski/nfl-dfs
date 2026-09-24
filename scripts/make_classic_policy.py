@@ -35,6 +35,18 @@ NOTHING ON THIS LADDER TOUCHES EVIDENCE. Official activity, current role,
 weather, identity, expiry and hash binding are truth claims and are not
 construction preferences. They are never relaxed here or anywhere else.
 
+THE LOCK CLOCK (R31, Session 07b). The bank is sized to the time `run-slate`
+will have, not only to `--minutes`. The delivery deadline is
+`--delivery-deadline-utc`, or the earliest lock minus 5 minutes; the improvement
+stops `config/runtime.json`'s reserve before it, as `run-slate`'s does. The
+declared bank budget plus the joint solve stay within 75% of the window left
+(the joint solve at most 20% of it), at this host's measured seconds per
+candidate (`--host-rates`, the slowest of its last five Classic banks) or
+0.28 s when it has none. When even the floor bank does not fit, or the window
+has already closed, it writes nothing and exits 2, naming rung 4 or saying the
+baseline is the file. A replay of a past slate passes a later
+`--delivery-deadline-utc`.
+
 Example:
 
     python scripts/make_classic_policy.py \\
@@ -49,12 +61,28 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 from nfl_dfs.classic_portfolio_policy import classic_portfolio_policy_template
+from nfl_dfs.deadline import SOLVE_MINIMUM_SECONDS, Budget, read_candidate_rate, runtime_stop_minutes
 from nfl_dfs.dk import parse_entries, parse_salaries
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+RUNTIME_JSON = REPO_ROOT / "config" / "runtime.json"
+DEFAULT_HOST_RATES = REPO_ROOT / "data" / "runs" / "host_candidate_rates.json"
 ROSTER_SIZE = 9
+# The 2026-09-12 cloud measurement below, with the room kept for it: a declared
+# bank budget is twice the expected generation time, and the bank plus joint
+# solve may declare 75% of the improvement window, the joint solve at most 20%.
+DEFAULT_SECONDS_PER_CANDIDATE = 0.28
+GENERATION_HEADROOM = 2.0
+WINDOW_SHARE, JOINT_SHARE = 0.75, 0.20
+
+
+class BankDoesNotFit(ValueError):
+    """Even the floor bank and its joint solve exceed the window's share."""
 
 
 def _stack_rules(count: int, rung: int) -> list[dict[str, object]]:
@@ -122,33 +150,87 @@ def _exposure_fraction(rung: int) -> float | None:
     return {0: 0.50, 1: 0.50, 2: 0.65}.get(rung)
 
 
-def _limits(count: int, pool_people: int, rung: int, *, minutes: float) -> dict[str, int]:
-    """Size the bank to the pool, not to the entry count.
+def _limits(
+    count: int,
+    pool_people: int,
+    rung: int,
+    *,
+    minutes: float,
+    seconds_per_candidate: float = DEFAULT_SECONDS_PER_CANDIDATE,
+    window_seconds: float | None = None,
+) -> dict[str, int]:
+    """Size the bank to the pool, not to the entry count, and to the window.
 
     Measured on the 719-person supplied fixture in the cloud container at 20
     entries, two processors: a 1000-candidate bank with the rung-0 HARD stack
     rules generated in 273.6s and the joint MILP then solved it in 0.39s,
     selecting all 20 entries. Generation is the whole cost, the joint solve is
     free, and hard stack rules make generation slower per candidate than the
-    unconstrained default. The rate below is the measured constrained rate with
-    headroom, so a bank that fits the requested minutes does not then trip
-    CANDIDATE_BANK_TIMEOUT and cost a rung for nothing.
+    unconstrained default. The declared budget is twice the expected time at
+    `seconds_per_candidate`, so a bank that fits the requested minutes does not
+    then trip CANDIDATE_BANK_TIMEOUT and cost a rung for nothing.
+
+    Session 07b. `seconds_per_candidate` is this host's measured rate when it
+    has one (the C4 retrospective measured 4 to 6 s). With `window_seconds`,
+    the seconds left before the improvement stops, the declared bank budget
+    plus the joint solve stay within `WINDOW_SHARE` of it and the joint solve
+    within `JOINT_SHARE`; the rest is the run's own before selection. Raises
+    `BankDoesNotFit` when even the floor bank, `max(32, entries + 24)`, does not.
     """
-    per_candidate_seconds = 0.28
+    per_candidate_seconds = float(seconds_per_candidate)
+    floor = max(32, count + 24)
     affordable = int((minutes * 60.0) / per_candidate_seconds)
-    target = max(32, count + 24, min(2000, affordable))
+    selection_seconds = min(3_600.0, max(10.0, 1.0 * count))
+    if window_seconds is not None:
+        selection_seconds = min(selection_seconds, JOINT_SHARE * window_seconds)
+        generation_seconds = WINDOW_SHARE * window_seconds - selection_seconds
+        affordable = min(affordable, max(0, int(
+            generation_seconds / (per_candidate_seconds * GENERATION_HEADROOM))))
+    target = max(floor, min(2000, affordable))
     if rung >= 3:
-        target = max(32, count + 24, target // 2)
-    total_ms = int(min(3_600_000, max(30_000, target * per_candidate_seconds * 1000 * 2.0)))
+        target = max(floor, target // 2)
+
+    def declared_ms(candidates: int) -> int:
+        return int(min(3_600_000, max(
+            30_000, candidates * per_candidate_seconds * 1000 * GENERATION_HEADROOM)))
+
+    total_ms = declared_ms(target)
+    selection_ms = int(1_000 * selection_seconds)
+    # A bank above the floor was sized to fit, so only the floor bank (or the
+    # 30 s least budget any bank declares) can fail this.
+    if window_seconds is not None and (
+            selection_seconds < SOLVE_MINIMUM_SECONDS
+            or (total_ms + selection_ms) / 1000.0 > WINDOW_SHARE * window_seconds):
+        floor_ms = declared_ms(floor)
+        raise BankDoesNotFit(
+            f"even the floor bank of {floor} candidates at {per_candidate_seconds:g} s each"
+            f" declares {floor_ms / 1000:.0f} s and its joint solve {selection_ms / 1000:.1f} s,"
+            f" {(floor_ms + selection_ms) / 1000:.1f} s together, over {WINDOW_SHARE:.0%} of the"
+            f" {window_seconds:.1f} s window ({WINDOW_SHARE * window_seconds:.1f} s)"
+        )
     return {
         "candidate_limit": target,
         "candidate_total_milliseconds": total_ms,
         "candidate_per_solve_milliseconds": 5_000,
-        "selection_milliseconds": int(min(3_600_000, max(10_000, 1_000 * count))),
+        "selection_milliseconds": selection_ms,
     }
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def _rate(path: Path) -> tuple[float, str]:
+    """This host's seconds per Classic candidate, and where the number came from."""
+
+    measured = read_candidate_rate(path, mode="CLASSIC")
+    if measured is None:
+        return DEFAULT_SECONDS_PER_CANDIDATE, (
+            f"{DEFAULT_SECONDS_PER_CANDIDATE:g} s per candidate (the default: {path} holds no"
+            " Classic rate for this host)")
+    seconds = float(measured["seconds_per_candidate"])
+    return seconds, (
+        f"{seconds:g} s per candidate (this host's slowest of its last"
+        f" {measured['observations']} Classic banks, {path})")
+
+
+def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | None" = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--salaries", required=True)
     parser.add_argument("--entries", required=True)
@@ -159,6 +241,17 @@ def main(argv: "list[str] | None" = None) -> int:
         type=float,
         default=4.0,
         help="wall-clock minutes to spend generating candidates (default 4)",
+    )
+    parser.add_argument(
+        "--delivery-deadline-utc",
+        default=None,
+        help="aware ISO-8601 delivery deadline (default: the earliest lock minus 5 minutes);"
+             " the bank fits the window before the improvement stops",
+    )
+    parser.add_argument(
+        "--host-rates",
+        default=str(DEFAULT_HOST_RATES),
+        help="this host's measured candidate rates (default data/runs/host_candidate_rates.json)",
     )
     args = parser.parse_args(argv)
 
@@ -178,7 +271,40 @@ def main(argv: "list[str] | None" = None) -> int:
         raise SystemExit("the entries file reserves no Entry IDs")
 
     people = {row.underlying_id for row in slate.players}
-    limits = _limits(count, len(people), args.rung, minutes=args.minutes)
+    seconds_per_candidate, rate_line = _rate(Path(args.host_rates))
+    # The same arithmetic `run-slate` keeps: its deadline, its stop, its reserve.
+    try:
+        budget = Budget.build(
+            slate.games,
+            requested_deadline=args.delivery_deadline_utc,
+            stop_minutes=runtime_stop_minutes(json.loads(RUNTIME_JSON.read_text(encoding="utf-8"))),
+            **({"wall": wall} if wall is not None else {}),
+        )
+    except ValueError as exc:
+        parser.error(f"--delivery-deadline-utc: {exc}")
+    window = 0.0 if budget.passed_at_start else max(0.0, budget.improvement_remaining())
+    clock_line = (f"delivery deadline {budget.deadline.isoformat()} ({budget.deadline_source});"
+                  f" the improvement stops at {budget.improvement_stop.isoformat()}")
+    if window < SOLVE_MINIMUM_SECONDS:
+        print(clock_line)
+        print(
+            f"No policy written: the improvement window closed at {budget.improvement_stop.isoformat()}"
+            f" ({budget.now().isoformat()} now). run-slate will skip its review and hand over the"
+            " baseline; hand that file over. For a replay of a past slate, pass a later"
+            " --delivery-deadline-utc."
+        )
+        return 2
+    try:
+        limits = _limits(count, len(people), args.rung, minutes=args.minutes,
+                         seconds_per_candidate=seconds_per_candidate, window_seconds=window)
+    except BankDoesNotFit as exc:
+        print(clock_line)
+        print(f"rate:              {rate_line}")
+        print(
+            f"No policy written: {exc}. Take rung 4: run-slate without --portfolio-policy-json,"
+            " so C1 sequential selection builds the portfolio in the time left."
+        )
+        return 2
     fraction = _exposure_fraction(args.rung)
 
     controls: dict[str, object] = {
@@ -221,6 +347,9 @@ def main(argv: "list[str] | None" = None) -> int:
     print(f"candidate bank:    {limits['candidate_limit']} "
           f"(template default would be {max(32, count + 24)})")
     print(f"candidate budget:  {limits['candidate_total_milliseconds'] / 1000:.0f}s")
+    print(f"joint solve:       {limits['selection_milliseconds'] / 1000:.1f}s")
+    print(f"rate:              {rate_line}")
+    print(f"window:            {window:.0f}s before the improvement stops; {clock_line}")
     print(f"QB+pass catcher:   HARD on {rules['qb-pass-catcher']['minimum_entries']}/{count} entries")
     print(f"bring-back:        {rules['qb-bringback']['strength']} on "
           f"{rules['qb-bringback']['minimum_entries']}/{count} entries")

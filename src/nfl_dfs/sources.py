@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import ssl
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -10,11 +11,16 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from .contracts import SourceArtifact
+from .deadline import FETCH_DEFAULT_SECONDS, Budget, active_budget
 from .hashing import sha256_bytes, sha256_file
 
 
 class SourcePolicyError(ValueError):
     pass
+
+
+class SourceDeadlineError(RuntimeError):
+    """A fetch the run's budget left too little time to start (Session 07b, R31)."""
 
 
 # Operator opt-in for a TLS-terminating egress proxy whose CA certificate lacks
@@ -191,14 +197,34 @@ def fetch_public_artifact(
     license_decision: str,
     parser_version: str,
     optional_odds_key_configured: bool = False,
-    timeout_seconds: float = 30.0,
+    timeout_seconds: float = FETCH_DEFAULT_SECONDS,
+    budget: Budget | None = None,
 ) -> SourceArtifact:
+    """Fetch one approved artifact and keep its bytes under their hash.
+
+    With a budget, `budget` or the one `deadline.activated` set, the timeout is
+    `Budget.fetch_seconds`: `min(timeout_seconds, the improvement window)`. A
+    window under its 1 s minimum starts no request and raises
+    `SourceDeadlineError`, whose text is the budget's
+    `DEADLINE_FETCH_WINDOW_SPENT` limitation. Every fetch is measured as stage
+    `evidence_fetch`, one that raises included. Without a budget the timeout
+    is `timeout_seconds`, as before.
+    """
+
     validate_url_policy(url, optional_odds_key_configured=optional_odds_key_configured)
+    active = budget if budget is not None else active_budget()
+    timeout = timeout_seconds
+    if active is not None:
+        allowed, stopped = active.fetch_seconds(timeout_seconds, (urlparse(url).hostname or "").lower())
+        if allowed is None:
+            raise SourceDeadlineError(stopped)
+        timeout = allowed
     headers = {"User-Agent": "nfl-dfs-local-evidence-engine/0.1 (operator-controlled)"}
     resolved_uri = url
     strict_tls = not tls_nonstrict_ca_enabled()
-    with httpx.Client(
-        timeout=timeout_seconds,
+    measured = active.stage("evidence_fetch") if active is not None else nullcontext()
+    with measured, httpx.Client(
+        timeout=timeout,
         follow_redirects=False,
         headers=headers,
         verify=build_verify_context(),
