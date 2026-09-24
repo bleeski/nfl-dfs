@@ -1,5 +1,30 @@
 # Implementation Status
 
+## Capability added: 2026-09-24 (Session 11)
+
+A template with rows already entered ships instead of refusing the file.
+`src/nfl_dfs/entry_groups.py` reads every row against the slate: a blank row is
+fillable, a prefilled row is preserved byte for byte when its cells are exact
+current-slate DraftKings IDs (a bare ID or `Name (ID)`), and a partly filled
+row, a prefilled roster that does not resolve or repeats another, and every row
+of a Contest ID whose rows disagree on name or fee are left as they are and
+named unresolved. The baseline, C1's export, the Showdown review export and C3
+fill only fillable rows through `lineups.write_upload_bytes`, whose rule is now
+per row; writing into a prefilled cell is still refused (`V`), and the byte
+audit refuses one too. Distinctness covers the whole portfolio: the baseline
+and C1 cut every prefilled roster from every solve, the C2 and SD3 banks never
+hold one, and every export audit refuses a filled roster equal to one. Rows
+group by Contest ID: `entry_groups` in the baseline report, the `run-slate`
+result and the pointer reports each group's filled, unfilled, preserved and
+unresolved rows with reasons, and `delivery.replace` refuses a replacement that
+delivers fewer rows in any group. New records: `nfl_release_truths_v3`,
+`nfl_latest_deliverable_v2`, `nfl_baseline_report_v3`. Verified through
+`run-slate` on the Classic fixture (C1 and C2 with the producers' own first
+lineups prefilled, damaged rows, two contests) and at unit level for the SD3
+bank. Not yet: a policy binding a subset of the blank rows (Session 11b); the
+prefilled cell form is unverified against a real DraftKings download with
+entered rows; prior_review still fills all of its fillable rows or none.
+
 ## Capability added: 2026-09-24 (Session 10)
 
 The engine walks the rung ladder itself. `src/nfl_dfs/relaxation.py` owns the
@@ -726,7 +751,8 @@ acceptance are SD6.
   assignment, derives replaceable cells only from exact IDs and lock times,
   preserves locked and unauthorized bytes, independently audits and reparses
   the candidate bytes, and writes a new immutable output only after every gate
-  passes. The ordinary pre-lock writer still rejects prefilled rows.
+  passes. The ordinary pre-lock writer writes only blank rows and passes
+  prefilled rows through byte for byte (Session 11).
 - Hard evidence is typed and fail-closed. Current official status uses exact IDs
   and operator-controlled source evidence; fuzzy names cannot certify. Official
   activity rows retain their real observation times and expire after the

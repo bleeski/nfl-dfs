@@ -12,7 +12,8 @@ format that `cowork.py` validates, not labels. `run-slate` is the name to use.
 ## Classic C3 governed prior review: current operating path (2026-09-11)
 
 The same normal two-CSV command now accepts a multi-game DraftKings NFL Classic
-salary file and matching blank reserved-entry file:
+salary file and matching reserved-entry file (blank rows are filled; rows
+already entered are kept byte for byte since Session 11):
 
 ```sh
 sh ./nfl.sh run-slate --input-dir '<input-directory>' --profile prior_review --build-priors --label '<slate-label>'
@@ -1194,7 +1195,19 @@ reads those files and nothing else: no network, priors, weather or roles. It wri
 `data/runs/` holding `DK_BASELINE_ENTRY_V1_<run_id>.csv`, byte-audited, and
 `baseline_report.json` with the five truths. Exit 0 fills every blank row; exit
 3 fills some and names every unfilled Entry ID (hand that list over with the
-file); exit 2 fills none and names why. When the reason, on exit 3 or 2, is
+file); exit 2 fills none and names why.
+
+Rows already entered are kept (Session 11). A template may hold rows you
+entered on DraftKings: every prefilled row passes through byte for byte, no
+generated lineup repeats one (R29), and only blank rows are filled, by
+`run-slate` and `nfl baseline` alike. A partly filled row, a prefilled row whose
+cells are not exact current-slate DraftKings IDs (a bare ID or `Name (ID)`), and
+every row of a Contest ID whose rows disagree on the contest name or fee are
+left as they are and named `unresolved`; the rest ships and the state is
+`DELIVERABLE_PARTIAL` (exit 3 from `nfl baseline`). Fix those rows on
+DraftKings by hand. Several contests in one template are fine: `entry_groups`
+in the result and on the pointer reports each Contest ID's filled, unfilled,
+preserved and unresolved rows, with the reason for each row not delivered. When the reason, on exit 3 or 2, is
 `BASELINE_RUN_BUDGET_EXHAUSTED` or `BASELINE_SOLVE_LIMIT_WITHOUT_LINEUP`, the
 budget is a construction preference: rerun at once with a larger
 `--budget-seconds` or `--per-solve-seconds`. Any other exit-2 reason is an
