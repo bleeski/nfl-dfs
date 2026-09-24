@@ -300,3 +300,16 @@ def test_an_unreadable_game_time_is_not_guessed_around(tmp_path):
     assert lock is None and "MIA@SF 09/20/2026 TBD" in why
     stop, line = fetch.request_stop(None, salary)
     assert stop is None and line.startswith("NO DELIVERY DEADLINE:")
+
+
+def test_the_script_imports_only_the_standard_library():
+    """It must run on a machine with no project environment, a bare Windows Python included."""
+
+    import ast
+
+    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    imported = {alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import)
+                for alias in node.names}
+    imported |= {node.module.split(".")[0] for node in ast.walk(tree)
+                 if isinstance(node, ast.ImportFrom) and node.module and node.level == 0}
+    assert imported and imported <= set(sys.stdlib_module_names), imported - set(sys.stdlib_module_names)

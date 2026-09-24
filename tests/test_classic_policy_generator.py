@@ -255,3 +255,40 @@ def test_the_stop_is_runtime_jsons_and_a_naive_deadline_is_refused(tmp_path, cap
     with pytest.raises(SystemExit) as caught:
         _run(module, tmp_path, window=700.0, extra=("--delivery-deadline-utc", "2026-09-13T12:55:00"))
     assert caught.value.code == 2 and "has no UTC offset" in capsys.readouterr().err
+
+
+def test_a_rate_no_bank_can_be_sized_from_is_refused() -> None:
+    module = _generator()
+    for bad in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="finite number above zero"):
+            module._limits(20, 719, 0, minutes=4.0, seconds_per_candidate=bad, window_seconds=700.0)
+
+
+def test_a_deadline_after_lock_is_warned_and_a_bad_runtime_json_is_not_blamed_on_the_flag(
+        tmp_path, capsys, monkeypatch) -> None:
+    module = _generator()
+    code, _ = _run(module, tmp_path, window=700.0, extra=("--delivery-deadline-utc", "2026-09-13T17:30:00Z"))
+    assert code == 0
+    assert "WARNING DEADLINE_AFTER_EARLIEST_LOCK: the request's delivery deadline" in capsys.readouterr().out
+    broken = tmp_path / "runtime.json"
+    broken.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(module, "RUNTIME_JSON", broken)
+    with pytest.raises(json.JSONDecodeError):  # its own traceback, not an exit 2 naming the flag
+        _run(module, tmp_path, window=700.0)
+
+
+def test_a_generated_policy_leaves_run_slate_a_quarter_of_the_window_before_selection() -> None:
+    """The 75% share against `run-slate`'s own check: 25% of the window covers intake to selection."""
+
+    from nfl_dfs.deadline import Budget
+
+    module = _generator()
+    limits = module._limits(24, 719, 0, minutes=4.0, seconds_per_candidate=5.0, window_seconds=700.0)
+    declared = _declared(limits)  # 504 s of a 700 s window
+    generated_at = IMPROVEMENT_STOP - timedelta(seconds=700)
+    games = parse_salaries(SALARY).games
+    for later, fits in ((0, True), (196, True), (197, False)):
+        budget = Budget.build(games, as_of=generated_at + timedelta(seconds=later), clock=lambda: 0.0,
+                              wall=lambda: generated_at)
+        stopped = budget.fits_declared_search(declared_seconds=declared)
+        assert (stopped is None) is fits, (later, stopped)

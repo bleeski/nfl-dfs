@@ -221,8 +221,10 @@ def test_the_budget_maps_onto_select_prior_lineups_keywords():
     classic.search_limits = Mock(candidate_total_milliseconds=60_000, selection_milliseconds=10_000)
     limits, stopped = _deadline_selection_limits(budget, count=1, portfolio_policy=classic)
     assert limits == {} and stopped.startswith("DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW:")
-    # Session 07b gave the generator the flag, so the detail names it and this deadline.
+    # Session 07b gave the generator the flag, so the detail names it and this deadline; a
+    # replay pinned by --as-of cannot use the wall-clock window, so --minutes stays named for it.
     assert f"--delivery-deadline-utc {budget.deadline.isoformat()}" in stopped
+    assert "for a replay pinned by --as-of, a smaller --minutes" in stopped
     limits, stopped = _deadline_selection_limits(budget, count=2, portfolio_policy=None)
     assert (limits, stopped) == ({"time_limit_seconds": pytest.approx(10.0)}, None)
 
@@ -292,6 +294,24 @@ def test_the_rate_ledger_is_deterministic_and_never_overwrites_a_foreign_file(tm
             record_candidate_rate(path, **observation)
         assert path.read_bytes() == foreign  # refused, left as it is
         assert read_candidate_rate(path, mode="CLASSIC") is None
+
+
+def test_a_rate_no_bank_can_be_sized_from_is_not_read(tmp_path):
+    """Zero, negative, non-finite or boolean rates (a hand-edited ledger) are passed over."""
+
+    ledger = tmp_path / "rates.json"
+    moment = datetime(2026, 9, 24, 12, tzinfo=timezone.utc)
+    record_candidate_rate(ledger, mode="CLASSIC", candidates=50, seconds=0.0, basis="BANK_REPORT",
+                          run_id="instant", measured_at=moment, pool_people=719, entries=1)
+    assert read_candidate_rate(ledger, mode="CLASSIC") is None  # 0 s per candidate
+    stored = json.loads(ledger.read_text(encoding="utf-8"))
+    key = f"{deadline.host_key()}|CLASSIC"
+    for bad in (-1.0, float("nan"), float("inf"), True):
+        stored["hosts"][key].append({"seconds_per_candidate": bad, "run_id": "bad"})
+    stored["hosts"][key].append({"seconds_per_candidate": 2.5, "run_id": "real"})
+    ledger.write_text(json.dumps(stored), encoding="utf-8")
+    rate = read_candidate_rate(ledger, mode="CLASSIC")
+    assert rate["seconds_per_candidate"] == 2.5 and rate["observations"] == 1
 
 
 def test_a_bank_rate_is_read_from_its_report_or_from_a_bank_time_limit():

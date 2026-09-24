@@ -411,8 +411,9 @@ class Budget:
             f"the policy's bank and joint-solve limits total {declared_seconds:.1f} s and"
             f" {window:.1f} s are left before {self.improvement_stop.isoformat()}; its limits are"
             " hash-bound, so regenerate it with make_classic_policy.py --delivery-deadline-utc"
-            f" {self.deadline.isoformat()}, which sizes the bank to the window left, or take"
-            " rung 4 (no --portfolio-policy-json); the baseline is the deliverable")
+            f" {self.deadline.isoformat()}, which sizes the bank to the window left (for a replay"
+            " pinned by --as-of, a smaller --minutes), or take rung 4 (no --portfolio-policy-json);"
+            " the baseline is the deliverable")
 
     def finished_late(self, stage: str) -> None:
         """Name a stage that ended after the delivery deadline (it ran; it was late)."""
@@ -564,13 +565,20 @@ def read_candidate_rate(path: str | Path, *, mode: str) -> dict[str, object] | N
     except ValueError:
         return None
     recent = [item for item in kept[-RATE_OBSERVATIONS_READ:]
-              if isinstance(item, dict) and isinstance(item.get("seconds_per_candidate"), (int, float))]
+              if isinstance(item, dict) and _usable_rate(item.get("seconds_per_candidate"))]
     if not recent:
         return None
     slowest = max(recent, key=lambda item: item["seconds_per_candidate"])
     return {"seconds_per_candidate": float(slowest["seconds_per_candidate"]),
             "observations": len(recent), "measured_at": slowest.get("measured_at"),
             "run_id": slowest.get("run_id")}
+
+
+def _usable_rate(value: object) -> bool:
+    """A rate a bank can be sized from: a finite number of seconds above zero."""
+
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value > 0)
 
 
 def _read_ledger(path: Path) -> dict[str, object]:

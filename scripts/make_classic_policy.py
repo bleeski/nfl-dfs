@@ -178,6 +178,8 @@ def _limits(
     `BankDoesNotFit` when even the floor bank, `max(32, entries + 24)`, does not.
     """
     per_candidate_seconds = float(seconds_per_candidate)
+    if not (math.isfinite(per_candidate_seconds) and per_candidate_seconds > 0):
+        raise ValueError(f"seconds_per_candidate must be a finite number above zero, not {seconds_per_candidate!r}")
     floor = max(32, count + 24)
     affordable = int((minutes * 60.0) / per_candidate_seconds)
     selection_seconds = min(3_600.0, max(10.0, 1.0 * count))
@@ -273,15 +275,20 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
     people = {row.underlying_id for row in slate.players}
     seconds_per_candidate, rate_line = _rate(Path(args.host_rates))
     # The same arithmetic `run-slate` keeps: its deadline, its stop, its reserve.
+    # A runtime.json it cannot read fails here, by its own name.
+    stop_minutes = runtime_stop_minutes(json.loads(RUNTIME_JSON.read_text(encoding="utf-8")))
     try:
         budget = Budget.build(
             slate.games,
             requested_deadline=args.delivery_deadline_utc,
-            stop_minutes=runtime_stop_minutes(json.loads(RUNTIME_JSON.read_text(encoding="utf-8"))),
+            stop_minutes=stop_minutes,
             **({"wall": wall} if wall is not None else {}),
         )
     except ValueError as exc:
         parser.error(f"--delivery-deadline-utc: {exc}")
+    for code, detail in budget.events:
+        if code == "DEADLINE_AFTER_EARLIEST_LOCK":
+            print(f"WARNING {code}: {detail}")
     window = 0.0 if budget.passed_at_start else max(0.0, budget.improvement_remaining())
     clock_line = (f"delivery deadline {budget.deadline.isoformat()} ({budget.deadline_source});"
                   f" the improvement stops at {budget.improvement_stop.isoformat()}")

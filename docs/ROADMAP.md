@@ -1113,4 +1113,4 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 07 | In Progress to Complete | `7b8997c` | Request v3, the run's budget through `run-slate`, the baseline and the review's solves; merged as PR #58; `CLAUDE.md` follow-up merged as `0af6cd4` (PR #59) |
 | 2026-09-24 | Session 07b | Added as Pending | `7b8997c` | Fetch, weather-script and generator allowances, split at Ben's breakpoint; merged with PR #58 |
 | 2026-09-24 | Session 07b | Pending to In Progress | `b213492` | Claim pushed on `claude/session-07b-deadline-budget-iwheie` |
-| 2026-09-24 | Session 07b | In Progress to Complete | recorded by the next session | Fetch, weather-capture and generator allowances; `DEADLINE_FETCH_WINDOW_SPENT`; suite `1642 passed, 1 skipped`; PR opened at close-out |
+| 2026-09-24 | Session 07b | In Progress to Complete | recorded by the next session | Fetch, weather-capture and generator allowances; `DEADLINE_FETCH_WINDOW_SPENT`; suite `1647 passed, 1 skipped`; PR #60 |

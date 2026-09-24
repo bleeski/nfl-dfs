@@ -66,9 +66,14 @@ ends `PRIOR_ONLY / DO_NOT_UPLOAD`; none of this changes an evidence gate.
   headroom; with no window, or a far one, and the default rate it returns
   exactly what it returned before (857 candidates, 480 s, 20 s at 20 entries).
   When even the floor bank does not fit it writes nothing, exits 2 and names
-  rung 4.
+  rung 4. A request deadline after the earliest lock prints
+  `WARNING DEADLINE_AFTER_EARLIEST_LOCK`; an unreadable `runtime.json` fails by
+  its own error, not as a flag error.
+- `deadline.read_candidate_rate` passes over a rate no bank can be sized from
+  (zero, negative, non-finite, boolean), and `_limits` refuses one: a
+  hand-edited ledger, or a bank reporting 0 s, no longer divides by zero.
 - Tests, all on pinned or injected clocks with stubbed clients, no network:
-  `tests/test_deadline_controller.py` +4 (the card's 40 s per failed request in
+  `tests/test_deadline_controller.py` +5 (unusable rates passed over; the card's 40 s per failed request in
   a 100 s window gives client timeouts 30, 30, 20 and then a refusal with no
   fourth client; an activated budget read, restored and overridden by an
   explicit one; a passed deadline starts no fetch; a `run-slate` run with
@@ -78,21 +83,26 @@ ends `PRIOR_ONLY / DO_NOT_UPLOAD`; none of this changes an evidence gate.
   timeouts `[30, 14]` and pauses `[1, 0]`; the fixed clocks unchanged without
   a stop; a passed deadline writes nothing; the reserves; the default deadline
   equal to `deadline.default_deadline` on both fixture slates; an explicit and
-  a naive flag; no IANA data; an unreadable game time);
-  `tests/test_classic_policy_generator.py` +7 (the card's 48 candidates in
+  a naive flag; no IANA data; an unreadable game time; an AST check that it
+  imports only the standard library);
+  `tests/test_classic_policy_generator.py` +10 (the card's 48 candidates in
   700 s at 5 s each and a refusal at 600 s; the 20% joint cap; the old numbers
   without a window; `main` reading this host's rate and writing a policy the
   validator accepts; a foreign ledger left alone; exit 2 naming rung 4; a
-  closed window and a passed deadline; `runtime.json`'s stop and a naive flag).
+  closed window and a passed deadline; `runtime.json`'s stop and a naive flag;
+  unusable rates refused; the after-lock warning and a broken `runtime.json`;
+  a generated 700 s policy against `run-slate`'s own `fits_declared_search`,
+  which holds it for 196 s of intake-to-selection and refuses it at 197 s).
 
 #### Changed
 
 - `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`'s detail now says to regenerate the
   policy with `make_classic_policy.py --delivery-deadline-utc <the deadline>`
-  instead of a smaller `--minutes`. `tests/test_deadline_controller.py`
-  asserted the flag was absent because it did not exist yet; that assertion is
-  changed, visibly and on its own, to require the flag and this run's
-  deadline.
+  first, keeping a smaller `--minutes` for a replay pinned by `--as-of` (the
+  generator's window is the wall clock's, so the flag cannot size a pinned
+  run). `tests/test_deadline_controller.py` asserted the flag was absent
+  because it did not exist yet; that assertion is changed, visibly and on its
+  own, to require the flag, this run's deadline and the replay wording.
 - `tests/test_deadline_controller.py`'s `_classic` helper takes extra request
   fields, so a run can drop the prior package and set `build_priors`.
 - Docs: `docs/DATA_CONTRACTS.md` § Deadline budget (fetch, weather-script and
@@ -132,13 +142,31 @@ ends `PRIOR_ONLY / DO_NOT_UPLOAD`; none of this changes an evidence gate.
   stage list is the run's timeline, and the record shows where the window ran
   out.
 
+#### Left open
+
+- A fetch's timeout is httpx's per-operation timeout (connect, each read,
+  write, pool), as the card defines it, not a total: a large file that
+  trickles in, or the GitHub release hop's second request, can run past the
+  stop. `finished_late("review")` names a review that ends after the
+  deadline. The weather script's `urlopen` timeout has the same property.
+- `evidence_fetch` joins the `nfl_deadline_budget_v1` stage names in place;
+  the record's fields are unchanged and nothing keys stages by name.
+- The generator's 5 s per-solve limit is not scaled to a measured rate
+  (Session 08 or 10); `scripts/make_classic_policy.py` still prints and
+  documents rung 4 as "the proven floor" that "always produces a legal
+  portfolio", which Session 01 corrected elsewhere (Session 10 owns the file's
+  ladder).
+- The adversarial review of the diff found nothing blocking; its five
+  correctness and coverage items are fixed above.
+
 #### Verification
 
 - Baseline before changes on `0af6cd4`: `1621 passed, 1 skipped in 252.00s`.
 - The card's command, `sh ./nfl.sh test tests/test_deadline_controller.py
   tests/test_fetch_weather_captures.py tests/test_classic_policy_generator.py
-  tests/test_sources_tls.py -x --tb=short`: `70 passed in 10.03s`.
-- Complete pinned suite: `1642 passed, 1 skipped in 243.58s (0:04:03)`, 21 more than the baseline. The skip is the Windows junction test.
+  tests/test_sources_tls.py -x --tb=short`: `75 passed in 10.04s`.
+- Complete pinned suite: `1647 passed, 1 skipped in 242.28s (0:04:02)`, 26 more than the baseline (the
+  first close-out run, before the review's fixes, was `1642 passed, 1 skipped in 243.58s`). The skip is the Windows junction test.
 - `sh ./nfl.sh doctor`: `pass_status: true`. `git diff --check` clean; `compileall` of the
   five changed modules and four test files clean;
   `python3 scripts/check_protected_paths.py`: no protected path.
