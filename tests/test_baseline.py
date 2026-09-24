@@ -231,7 +231,8 @@ def test_the_supplied_fixtures_deliver_at_1_20_and_150_entries(tmp_path, mode, c
     assert salaries == sorted(salaries, reverse=True)  # BASELINE_SALARY_RANK_V1 order
 
     report = json.loads(outcome.report_path.read_text(encoding="utf-8"))
-    assert report["schema_version"] == "nfl_baseline_report_v1"
+    # v2 since Session 06b: v1 plus the exclusion fields (`docs/DATA_CONTRACTS.md`).
+    assert report["schema_version"] == "nfl_baseline_report_v2"
     assert report["objective"]["version"] == "BASELINE_SALARY_RANK_V1"
     assert report["output"]["contract_version"] == "nfl_baseline_entry_csv_v1"
     assert report["release_truths"]["schema_version"] == "nfl_release_truths_v2"
@@ -557,7 +558,8 @@ def test_the_objective_is_registered_with_what_it_does_not_establish():
     assert objective["version"] == baseline.OBJECTIVE_VERSION == "BASELINE_SALARY_RANK_V1"
     assert objective["direction"] == "MAXIMIZE" and objective["does_not_establish"]
     contracts = (REPO / "docs" / "DATA_CONTRACTS.md").read_text(encoding="utf-8")
-    for name in ("BASELINE_SALARY_RANK_V1", "nfl_baseline_entry_csv_v1", "nfl_baseline_report_v1"):
+    for name in ("BASELINE_SALARY_RANK_V1", "nfl_baseline_entry_csv_v1", "nfl_baseline_report_v1",
+                 "nfl_baseline_report_v2"):
         assert name in contracts
 
 

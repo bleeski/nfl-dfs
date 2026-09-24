@@ -4,6 +4,107 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: the run's official inactives bind the baseline (Session 06b, R32)
+
+Ben's ruling on Session 06's open question, 2026-09-24: "For the ruling that
+needs me do your recommendation." The recommendation: a run's validated
+official `INACTIVE` IDs take their people out of the baseline. Recorded as R32
+in `docs/ROADMAP.md` §2.5, amending R28's "built only from the DraftKings
+salary and entries bytes". On `claude/roadmap-session-06-ond9qs`, claim
+`3f4ff04`. Every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; activity is not
+certified by this.
+
+#### Added
+
+- `baseline.run_baseline(official_status_csv=)`: the file is snapshotted into
+  the baseline's `inputs/` and bound in `inputs.official_status`, parsed by
+  `evidence.parse_official_inactive_snapshot` (exact current-slate DraftKings
+  ID on its own team, `ACTIVE`/`INACTIVE`, public HTTPS source, aware time),
+  and every person with an identity-valid `INACTIVE` row leaves the pool, all
+  their salary rows included, a row that disagrees with another for the same
+  ID included. `baseline.official_inactive_people` does the reading for the
+  build and, independently, the audit.
+- Five codes: `BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED` and
+  `BASELINE_OFFICIAL_STATUS_UNREADABLE` (`official_activity`, `P`: named, the
+  baseline still ships); `BASELINE_OFFICIAL_STATUS_CHANGED_DURING_RUN`
+  (`delivered_bytes`, `V`) and `BASELINE_AUDIT_OFFICIAL_INACTIVE_PERSON`
+  (`audited_selection`, `V`), `CLASSIC_C1_EXPORT_OFFICIAL_STATUS_CHANGED`
+  (`delivered_bytes`, `V`: the C1 export's status snapshot is not the one C1
+  read). Registry SHA-256 now
+  `41f6647ed55527b97e510ac86a9de487c2dc285ab9b9a7157e826d05eaf6ce27`, 1,197
+  codes, re-pinned in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+- `nfl_baseline_report_v2`: v1 plus the exclusion fields (`pool`
+  `official_status_applied`, `official_inactive_people`,
+  `official_status_conflicts`, `official_status_rows_not_applied`, and Session
+  06's operator fields) and `inputs.official_status`; audit check
+  `NO_OFFICIAL_INACTIVE_PERSON`. Session 06 had added its fields to reports
+  still labelled `v1`, against the rule that v1 is never mutated; v2 names them.
+- `run-slate` passes its request's official status file to the baseline and to
+  the C1 export audit; `nfl baseline --official-status <csv>`.
+- Nine cases in `tests/test_run_slate_baseline_first.py`: an `INACTIVE` row
+  takes its person out, the file hash-bound; refused rows and an unreadable
+  file are named `P` and the baseline still ships; a CSV-reader error is
+  named, not a stop; disagreeing rows, and Showdown roles that disagree, take
+  the person out and are not counted as refused; a snapshot changed before the
+  write withholds; the audit refuses a roster holding an official inactive;
+  the C1 export audit reads the run's snapshot, and a snapshot changed after
+  C1 falls back to the baseline; the hand-run flag; and the case R32 was ruled
+  on, a `run-slate` whose review never finishes, delivering a baseline without
+  a player the plain baseline held.
+
+#### Changed
+
+- `OFFICIAL_STATUS_REQUIRED` stays on every baseline (`P`); when a file was
+  applied its detail says how many people it took out and that freshness and
+  coverage were not judged.
+- The baseline's warning, `next` text, `IMPROVEMENT_NOT_DELIVERED` detail and
+  `nfl baseline` help now say "less every excluded or officially inactive
+  person" instead of "the DraftKings bytes alone".
+- `tests/test_baseline.py` expected `nfl_baseline_report_v1`; it now expects
+  `v2`, and both names in `docs/DATA_CONTRACTS.md` (a visible change for the
+  version bump).
+- `docs/DATA_CONTRACTS.md` (baseline section, report fields, `run-slate`
+  result), `docs/RUNBOOK.md` (what the baseline honours), `IMPLEMENTATION_STATUS.md`.
+
+#### Decisions
+
+- **Now, not Session 09.** The recommendation put it in Session 09 "once
+  activity validation runs before the baseline". The exact-ID parser is local,
+  needs no network or model and already guards the model path, so it can run
+  before the baseline today, and a slate can run before Session 09 lands. That also makes the
+  interim step (name, but still ship, an inactive person) unnecessary.
+- **Narrowing only.** The parser's row checks decide what applies; freshness is
+  not judged, because an `INACTIVE` row can only remove a player: a stale file
+  costs the baseline a player at worst. A row the parser set aside only because
+  it disagreed with an earlier row for the same ID still takes its person out,
+  as do disagreeing salary roles: disagreement is not a reason to keep a player.
+- **Named, never a stop.** A refused row or an unreadable file is `P`: the
+  baseline ships without what it could not apply, and says so. Only a snapshot
+  that changes mid-run (`V`) or an audit failure (`V`) withholds, like every
+  other input binding.
+
+#### Review
+
+The `reviewer` subagent found two blockers, both fixed: a status file the CSV
+reader cannot read (a stray quote making one oversized field raises
+`_csv.Error`, which is not a `ValueError`) stopped the baseline as
+`BASELINE_RUN_FAILED`, and the audit check and the C1 export's use of the file
+were untested. Also fixed from its list: an `INACTIVE` row the parser set aside
+as a conflict left its person in; Showdown role conflicts were counted as
+refused rows; the "bytes alone" wording; a run-slate test whose inactive player
+the plain baseline never held; the C1 export not checking the status snapshot's
+hash; and the report schema change without a version.
+
+#### Verification
+
+- Card command (`tests/test_run_slate_baseline_first.py`, `tests/test_baseline.py`):
+  `61 passed in 33.84s`.
+- Complete pinned suite, Linux: `1593 passed, 1 skipped in 204.74s`, recorded
+  with `scripts/record_verify.py` (1584 before this session). The skip is the
+  Windows junction test. Before the review fixes: `1589 passed, 1 skipped in
+  219.98s`.
+- `sh ./nfl.sh doctor` passes; `git diff --check` clean; no protected path.
+
 ### 2026-09-24: `run-slate` is baseline-first (Session 06)
 
 All of the Session 06 card, both modes, on `claude/roadmap-session-06-ond9qs`,
