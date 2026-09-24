@@ -1038,6 +1038,9 @@ and `docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md`.
   Showdown policy constraints from the DAL@NYG retrospective §9 #1 and the
   debrief's bank-cap point. Depends on Session 10 because both generators
   change there first. Uniqueness is fixed by R29 and stays off its ladder.
+  R33 sets the target: several thesis sleeves in one policy, each with its
+  own captain team, per-team bounds and required pieces, distinct across
+  sleeves, and a backup-quarterback default exclusion from the depth chart.
 - **Session 24 (P3a).** `docs/chunks/P3a-scenario-bank.md`. Depends on
   Session 18, not "none": its acceptance uses P0's top-1% proxy
   (`P3a-scenario-bank.md:17-18`). The brief wins over the old queue row.
@@ -1144,6 +1147,24 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
   only narrows the pool; freshness and coverage remain certification checks,
   and a row or file that cannot be applied is a named limitation, never a
   stop. Session 06b.
+- **R33, Showdown game theses** (Ben, 2026-09-24, on the ATL@GB Showdown).
+  - "Ideally, each lineup should adhere to a specific game thesis. this isn't
+    an exhaustive list but here are some examples: GB win big, ATL win big, GB
+    win close, ATL win close, defensive battle, offensive shootout. You can
+    have sub variants of each of those for example, high scoring or low
+    scoring, etc.." Every Showdown lineup carries one named thesis, reported
+    per Entry ID, and the portfolio spreads rows across theses.
+  - "Backup quarterbacks, generally requiring an injury, which is why I would
+    exclude them." A quarterback below his team's depth-chart starter is out
+    of the pool by default.
+  - "I would not exclude DST just like I would not exclude kickers." DSTs and
+    kickers stay eligible, Captain included.
+  - Not buildable on 2026-09-24. A policy has no per-team bounds, no required
+    pieces and one rule set per run, and the prior is one mean per person, so
+    six thesis sleeves assembled by hand collapsed onto the same core and
+    repeated lineups across sleeves (R29). Session 23 adds the per-thesis rule
+    sets; Sessions 24 and 28 add script-conditioned scenarios and thesis
+    coverage. A thesis never moves a projection by a typed multiplier.
 
 Still in force from earlier, with full text in the backlog archive:
 

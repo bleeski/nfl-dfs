@@ -4,6 +4,52 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: ATL@GB Showdown slate, and R33 (game theses)
+
+A slate operation, not a roadmap session. Twenty reserved Showdown entries,
+salary `74b5ffd6…`, entries `c7e400f5…`, lock 20:15 ET. On
+`claude/atl-gb-showdown-lineups-u7zsba`. Every run ended
+`PRIOR_ONLY / DO_NOT_UPLOAD`; no code changed.
+
+#### Delivered
+
+- Baseline first (`20260924T231305Z-atl-gb-sd-0924`), then the review stopped
+  at `KICKER_ROLE_UNRESOLVED` (GB lists Krieg and Smack).
+- The file handed over: `20260924T232352Z-atl-gb-sd-A-c75`,
+  `DK_REVIEW_ENTRY_atl-gb-sd-A-c75.csv` `6842f5c9…`, 20 rows, supplied rung,
+  no relaxation. `qa_showdown_portfolio.py`: PASS, 0 defects, max overlap 4,
+  salary 46,900 to 50,000, every lineup one or two starting quarterbacks.
+- Inputs: the nflverse depth chart captured through `sources.py`
+  (`depth_charts_2026.csv` `8ca09ff7…`, snapshot 2026-09-24T12:42:08Z) as a
+  `nfl_qb_depth_role_evidence_v1` package (ATL Penix, GB Love). Krieg excluded
+  by exact ID: that snapshot lists Smack as GB's only place kicker and Krieg on
+  no GB row since NYJ in March. Backup quarterbacks (Taylor, Slovis, Tua)
+  excluded at Ben's direction.
+- Policy: Captain 0.25, combined 0.75, both kickers 0.3, overlap 4. Combined
+  0.65 left the last row with no quarterback and $10,700 unspent; a policy
+  binding 19 rows with the 20th filled sequentially failed QA (overlap 5), since
+  the fill is outside the policy's overlap cap by design.
+
+#### Found
+
+- **A gate no allowlisted source clears.** `kicker_roles._SOLE_CUES` holds
+  "placekicker", but nflverse writes `pos_name` as "Place kicker", so a
+  depth-chart excerpt can never satisfy `QUALITATIVE_SOLE`. Recommendation:
+  accept "place kicker". The run used an exact-ID exclusion and still shows
+  Smack under the sole-listed assumption.
+- `scripts/make_offensive_role_evidence.py` still prints that `run-slate` has
+  no QB-depth flag; `--qb-depth-role-evidence-json` exists and worked.
+- MarShawn Lloyd, GB's depth-chart RB1 with Jacobs `OUT`, had zero exposure:
+  Jacobs' prior volume goes to nobody without a numerical role source.
+- R33 (`docs/ROADMAP.md` §2.5): six thesis sleeves, run one policy each and
+  assembled by row, failed QA twice with repeated lineups across sleeves, and
+  were not handed over.
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_roadmap_queue.py -x --tb=short`: 24 passed.
+- Full suite `sh ./nfl.sh test`: `1758 passed, 1 skipped in 307.12s`.
+
 ### 2026-09-24: a Showdown policy may bind some of the rows (Session 11b)
 
 A policy bound every fillable row or none. Now a Showdown policy may bind a
