@@ -17,12 +17,11 @@ Paste this into a fresh Claude Code session:
 
 > Read `docs/ROADMAP.md` and execute Session 08 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S08`, on the branch your session was assigned or `claude/s08-timeout-incumbents`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 07b is in progress: it gives evidence fetches, the weather capture
-script and the Classic policy generator their allowances from the run's
-budget. Session 08 keeps validated time-limited incumbents instead of
-discarding them, and makes the timing-sensitive C2 status test deterministic.
-It shares no target file with 07b and may run beside it in a separate
-worktree. Sessions 09 and 11 are also startable.
+Sessions 07 and 07b put one delivery budget through `run-slate`, its evidence
+fetches, the weather capture script and the Classic policy generator. Session
+08 keeps validated time-limited incumbents instead of discarding them, and
+makes the timing-sensitive C2 status test deterministic. Sessions 09 and 11 are
+also startable; Session 10 now waits only on Session 08.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -103,7 +102,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 06 | Standalone | Baseline-first `run-slate`: the baseline is built and published right after intake, before priors, weather, roles or solves; an improvement replaces it only after independent validation; any improvement failure leaves the baseline reachable; C1 (rung 4) ends with a CSV | Audit D2, DD-2 | `src/nfl_dfs/cli.py`, `src/nfl_dfs/cowork.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/delivery.py` | V | Session 04, Session 05 | `sh ./nfl.sh test tests/test_run_slate_baseline_first.py tests/test_prior_review_profile.py tests/test_classic_prior_review.py -x --tb=short` | Complete |
 | Session 06b | Standalone | R32 on the baseline: the run's official status CSV takes every person a valid `INACTIVE` row names out of the baseline's pool, before the baseline is built; only identity-valid rows count (a disagreeing row takes its person out), refused rows and an unreadable file are named, the file is snapshotted, hash-bound and re-checked by the audit; `nfl baseline --official-status` | R32; Session 06 open question | `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | V | Session 06 | `sh ./nfl.sh test tests/test_run_slate_baseline_first.py tests/test_baseline.py -x --tb=short` | Complete |
 | Session 07 | Standalone | Deadline controller: run request v3 with an optional delivery deadline (default: earliest lock minus 5 minutes); one budget passed through every stage; retries, solver limits and bank sizes set from remaining time; dead `runtime.json` keys consumed or removed; measured stage durations | R31; audit D3, DD-3; C4 retro #3 | `src/nfl_dfs/cowork.py`, new `src/nfl_dfs/deadline.py`, `src/nfl_dfs/sources.py`, `scripts/fetch_weather_captures.py`, `scripts/make_classic_policy.py`, `config/runtime.json` | P | Session 06 | `sh ./nfl.sh test tests/test_deadline_controller.py tests/test_cowork.py tests/test_fetch_weather_captures.py -x --tb=short` | Complete |
-| Session 07b | Standalone | Deadline allowances, split from Session 07 at its breakpoint: `sources.fetch_public_artifact` takes its timeout from the run's budget and refuses to start a fetch the window cannot hold; the weather capture script's timeouts and retry pauses stop at the deadline; `make_classic_policy._limits` sizes the bank to the window from this host's measured candidate rate | R31; audit D3; C4 retro #3; Session 07 breakpoint | `src/nfl_dfs/sources.py`, `src/nfl_dfs/deadline.py`, `src/nfl_dfs/cli.py`, `scripts/fetch_weather_captures.py`, `scripts/make_classic_policy.py`, `config/gate_registry_v1.json` | P | Session 07 | `sh ./nfl.sh test tests/test_deadline_controller.py tests/test_fetch_weather_captures.py tests/test_classic_policy_generator.py tests/test_sources_tls.py -x --tb=short` | In Progress |
+| Session 07b | Standalone | Deadline allowances, split from Session 07 at its breakpoint: `sources.fetch_public_artifact` takes its timeout from the run's budget and refuses to start a fetch the window cannot hold; the weather capture script's timeouts and retry pauses stop at the deadline; `make_classic_policy._limits` sizes the bank to the window from this host's measured candidate rate | R31; audit D3; C4 retro #3; Session 07 breakpoint | `src/nfl_dfs/sources.py`, `src/nfl_dfs/deadline.py`, `src/nfl_dfs/cli.py`, `scripts/fetch_weather_captures.py`, `scripts/make_classic_policy.py`, `config/gate_registry_v1.json` | P | Session 07 | `sh ./nfl.sh test tests/test_deadline_controller.py tests/test_fetch_weather_captures.py tests/test_classic_policy_generator.py tests/test_sources_tls.py -x --tb=short` | Complete |
 | Session 08 | Standalone | Timeout incumbents: validated time-limited candidates are kept; a bank with a feasible witness does not block; both joint selectors validate and return an integer incumbent on a time or search limit under a non-optimal status; C3 accepts it labelled; the timing-sensitive C2 status test becomes deterministic | Audit D5, DD-4, §1 test failure | `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_review.py` | P | Session 06 | `sh ./nfl.sh test tests/test_classic_portfolio_c2.py tests/test_portfolio_enforcement.py tests/test_classic_review_c3.py -x --tb=short`; then the C2 status test 20 times in a row | Pending |
 | Session 09 | Batched | R28 on the model path: missing weather (including a derived roof) and missing Classic official activity become named limitations, not stops; a real identity or timestamp conflict still invalidates its evidence; `build_priors` authority persists for the run; weather pre-capture becomes optional in the runbook | R28; audit D8, DD-7; archive § R23, R24, F7 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/cowork.py`, `docs/RUNBOOK.md` | P | Session 03b, Session 06 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_classic_prior_review.py tests/test_gate_registry.py -x --tb=short` | Pending |
 | Session 10 | Batched | Relaxation controller: the engine, not printed advice, walks a bounded rung ladder inside the cumulative budget; the full trigger list; bank timeouts shrink the bank before relaxing structure; Showdown gets a real ladder; uniqueness is never on it; every relaxation is a structured record | R29; audit D5, DD-4; Showdown retro #6; C4 retro #3 | new `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `scripts/make_showdown_policy.py`, `src/nfl_dfs/cli.py` | S | Session 07, Session 07b, Session 08 | `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_classic_policy_generator.py -x --tb=short` | Pending |
@@ -638,6 +637,19 @@ Every session follows this protocol, and the cards only add to it:
   `[1, 0]`); a passed deadline starts no request; the generator at 5 s per
   candidate fits 48 candidates in a 700 s window and refuses a 600 s one.
 - **Conflict.** `sources.py` (Session 17) and `make_classic_policy.py` (Session 10).
+- **2026-09-24, Complete.** Rebuilt from this card (Session 07's draft did not
+  survive its container). `Budget.fetch_seconds` and `deadline.activated`:
+  every fetch `run-slate`'s review reaches takes `min(30, window)`, none starts
+  under 1 s (`DEADLINE_FETCH_WINDOW_SPENT`, `S`, registered; the review's
+  `PRIORS_PROPOSE_FAILED` blocker and the limitation both name it), and each is
+  a measured `evidence_fetch` stage, a raised one included. The weather
+  capture script keeps the deadline with the standard library and says so
+  where it cannot derive one; the generator sizes its bank to the window at
+  this host's rate and `runtime.json`'s stop, and exits 2 writing nothing when
+  the floor bank does not fit or the window has closed. Decisions and numbers:
+  `changelog.md`. Left open: fetches outside `run-slate` (the role-evidence
+  script) keep the fixed 30 s; the generator's 5 s per-solve limit is not
+  scaled to a measured rate (Session 08 or 10).
 
 #### Session 08: timeout incumbents
 
@@ -1098,6 +1110,7 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 06b | Added as In Progress | `3f4ff04` | R32 (Ben, 2026-09-24); claim pushed on `claude/roadmap-session-06-ond9qs` |
 | 2026-09-24 | Session 06b | In Progress to Complete | `1afd006` | Official inactives bind the baseline; baseline report v2; merged as PR #57 |
 | 2026-09-24 | Session 07 | Pending to In Progress | `dd1203d` | Claim pushed on `claude/session-07-deadline-budget-hxfvfa` |
-| 2026-09-24 | Session 07 | In Progress to Complete | recorded by the next session | Request v3, the run's budget through `run-slate`, the baseline and the review's solves; PR opened at close-out |
-| 2026-09-24 | Session 07b | Added as Pending | recorded by the next session | Fetch, weather-script and generator allowances, split at Ben's breakpoint |
-| 2026-09-24 | Session 07b | Pending to In Progress | recorded at close-out | Claim pushed on `claude/session-07b-deadline-budget-iwheie` |
+| 2026-09-24 | Session 07 | In Progress to Complete | `7b8997c` | Request v3, the run's budget through `run-slate`, the baseline and the review's solves; merged as PR #58; `CLAUDE.md` follow-up merged as `0af6cd4` (PR #59) |
+| 2026-09-24 | Session 07b | Added as Pending | `7b8997c` | Fetch, weather-script and generator allowances, split at Ben's breakpoint; merged with PR #58 |
+| 2026-09-24 | Session 07b | Pending to In Progress | `b213492` | Claim pushed on `claude/session-07b-deadline-budget-iwheie` |
+| 2026-09-24 | Session 07b | In Progress to Complete | recorded by the next session | Fetch, weather-capture and generator allowances; `DEADLINE_FETCH_WINDOW_SPENT`; suite `1642 passed, 1 skipped`; PR opened at close-out |

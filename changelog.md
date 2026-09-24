@@ -4,6 +4,147 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: fetches, the weather capture and the policy generator keep the deadline (Session 07b, R31)
+
+Session 07 put one delivery budget through `run-slate` and left three clocks
+fixed: 30 s per evidence fetch, the weather capture script's 30 s timeouts and
+1 s and 2 s pauses (about 93 s per URL), and the policy generator's 0.28 s per
+candidate. Session 07's own draft of this work lived only in its container and
+is gone, so this was rebuilt from the card. On
+`claude/session-07b-deadline-budget-iwheie`, claim `b213492`. Every run still
+ends `PRIOR_ONLY / DO_NOT_UPLOAD`; none of this changes an evidence gate.
+
+#### Added
+
+- `deadline.Budget.fetch_seconds(default, host)`, beside `allowance`:
+  `min(default, the improvement window)`, `FETCH_MINIMUM_SECONDS` 1 s. Each
+  fetch is its own `evidence_fetch` stage record; a shortened one is named once
+  (`DEADLINE_STAGE_SHORTENED`); under 1 s the fetch is refused, its record is
+  `SKIPPED` with the moment it was refused, and
+  `DEADLINE_FETCH_WINDOW_SPENT:<host>: ...` is emitted through
+  `_limitation_event`, once per identical detail.
+- `deadline.activated(budget)` and `deadline.active_budget()`, a `ContextVar`.
+  `run-slate` wraps `run_prior_review` in it, so `priors.freeze_sources`, which
+  takes no budget, reaches the run's budget unchanged.
+- `sources.fetch_public_artifact(budget=None)` uses `budget` or the activated
+  one; with neither, the fixed 30 s as before. A refusal raises
+  `sources.SourceDeadlineError` with the budget's text and starts no client.
+  The `httpx.Client` block runs inside `budget.stage("evidence_fetch")`
+  (`nullcontext()` without one), so a fetch that raises still records its
+  elapsed time and `RAISED`. The client is still built from keyword arguments
+  only. `sleeper_daily_player_snapshot` fetches through the same function and
+  inherits all of this; nothing in `run-slate` calls it today, and
+  `scripts/make_offensive_role_evidence.py` calls the function with no budget,
+  so it keeps the fixed 30 s.
+- `DEADLINE_FETCH_WINDOW_SPENT` in `delivery_deadline` (`S`,
+  `CONSTRUCTION_PREFERENCE`, R31); the family's `covers` names a fetch not
+  started. Registry SHA-256 now
+  `34ac114d295e4bef5bf633e35ed693a75fb0a8023551fe453bd7a1f3dbac6db3`, 1,205
+  codes in 45 families, re-pinned in `tests/test_gate_registry.py` and
+  `docs/DATA_CONTRACTS.md`. In `run-slate` a refused fetch surfaces twice, by
+  design: `propose`'s broad handler makes it the review's
+  `PRIORS_PROPOSE_FAILED:SourceDeadlineError:DEADLINE_FETCH_WINDOW_SPENT:...`
+  blocker, and the budget's own event puts `DEADLINE_FETCH_WINDOW_SPENT` on
+  `release_truths`; the baseline is the file.
+- `scripts/fetch_weather_captures.py`, still standard library:
+  `--delivery-deadline-utc` (default the earliest `Game Info` lock minus 5
+  minutes, parsed as `nfl_dfs.dk` parses it, through `zoneinfo`); requests stop
+  5 minutes before the deadline; each `urlopen` timeout is `min(30, left)` and
+  each pause `min(2**n, left)`; under 1 s it exits `FETCH_DEADLINE_REACHED`
+  without a request, before it creates a directory when the stop has already
+  passed. Its two reserves repeat `deadline.py`'s, and a test holds them equal
+  to `HANDOFF_RESERVE` and `finish_reserve(runtime_stop_minutes(runtime.json))`.
+  A naive flag value is refused (exit 2).
+- `scripts/make_classic_policy.py`: `--delivery-deadline-utc` and
+  `--host-rates` (default `data/runs/host_candidate_rates.json`). The rate is
+  `deadline.read_candidate_rate(..., mode="CLASSIC")` or 0.28 s. The window is
+  built by `deadline.Budget.build` with the stop read from `config/runtime.json`
+  through `runtime_stop_minutes`, so the generator and `run-slate` agree on
+  when the improvement stops. `_limits(..., seconds_per_candidate,
+  window_seconds)` keeps the declared bank budget plus joint solve within 75%
+  of the window and the joint solve within 20%, with the 2x generation
+  headroom; with no window, or a far one, and the default rate it returns
+  exactly what it returned before (857 candidates, 480 s, 20 s at 20 entries).
+  When even the floor bank does not fit it writes nothing, exits 2 and names
+  rung 4.
+- Tests, all on pinned or injected clocks with stubbed clients, no network:
+  `tests/test_deadline_controller.py` +4 (the card's 40 s per failed request in
+  a 100 s window gives client timeouts 30, 30, 20 and then a refusal with no
+  fourth client; an activated budget read, restored and overridden by an
+  explicit one; a passed deadline starts no fetch; a `run-slate` run with
+  `build_priors` whose first prior-build fetch is refused, asserting the
+  blocker, the `S` limitation and the skipped stage);
+  `tests/test_fetch_weather_captures.py` +9 (the card's 45 s stop gives
+  timeouts `[30, 14]` and pauses `[1, 0]`; the fixed clocks unchanged without
+  a stop; a passed deadline writes nothing; the reserves; the default deadline
+  equal to `deadline.default_deadline` on both fixture slates; an explicit and
+  a naive flag; no IANA data; an unreadable game time);
+  `tests/test_classic_policy_generator.py` +7 (the card's 48 candidates in
+  700 s at 5 s each and a refusal at 600 s; the 20% joint cap; the old numbers
+  without a window; `main` reading this host's rate and writing a policy the
+  validator accepts; a foreign ledger left alone; exit 2 naming rung 4; a
+  closed window and a passed deadline; `runtime.json`'s stop and a naive flag).
+
+#### Changed
+
+- `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`'s detail now says to regenerate the
+  policy with `make_classic_policy.py --delivery-deadline-utc <the deadline>`
+  instead of a smaller `--minutes`. `tests/test_deadline_controller.py`
+  asserted the flag was absent because it did not exist yet; that assertion is
+  changed, visibly and on its own, to require the flag and this run's
+  deadline.
+- `tests/test_deadline_controller.py`'s `_classic` helper takes extra request
+  fields, so a run can drop the prior package and set `build_priors`.
+- Docs: `docs/DATA_CONTRACTS.md` § Deadline budget (fetch, weather-script and
+  generator allowances; `evidence_fetch` back in the stage list; the code; the
+  rate ledger's reader), `docs/RUNBOOK.md` (the generator and capture usage,
+  and the lock-clock paragraph that said these clocks stayed fixed until
+  Session 07b), `IMPLEMENTATION_STATUS.md`. `CLAUDE.md` already says "fetches
+  and the generator from 07b" and is unchanged, so this needs no `ben-review`.
+
+#### Decisions
+
+- `activated(budget)` wraps only `run_prior_review`. The session probe is a
+  subprocess: a context variable cannot reach it, and its timeout is already
+  the budget's `session_probe` allowance.
+- The weather script, when it cannot derive a deadline (no IANA data on a bare
+  Windows Python, or a `Game Info` time it cannot read), keeps its old fixed
+  timeouts and pauses, prints `NO DELIVERY DEADLINE` with the reason, and names
+  `--delivery-deadline-utc`. Refusing would cost a capture a real source could
+  still give, and `run-slate`'s own budget bounds the delivery either way. It
+  never takes the earliest of the times it could read when one cell is
+  unreadable, since that cell could be earlier.
+- The generator exits 2 and writes nothing when even the floor bank does not
+  fit: a floor-bank policy `run-slate` is sure to refuse costs the operator a
+  rerun, and rung 4 is the useful answer. A closed improvement window or a
+  passed deadline also exits 2 and writes nothing, saying `run-slate` will ship
+  the baseline without a review; a replay passes a later
+  `--delivery-deadline-utc`.
+- 75% of the window, the joint solve at most 20%, and the 2x headroom kept
+  even when the rate is this host's own measurement. The slowest of the last
+  five banks still comes from other slates, entry counts and rungs; a bank
+  timeout costs a rung until Session 08 keeps its incumbents; and a declared
+  budget is a ceiling, so a bank that finishes early costs nothing. The other
+  25% covers what `run-slate` spends before selection (intake, the baseline's
+  30 to 60 s, the probe, priors and evidence).
+- A refused fetch gets its own `evidence_fetch` record (`SKIPPED`) as well as
+  the limitation, as the probe and the review get theirs when skipped: the
+  stage list is the run's timeline, and the record shows where the window ran
+  out.
+
+#### Verification
+
+- Baseline before changes on `0af6cd4`: `1621 passed, 1 skipped in 252.00s`.
+- The card's command, `sh ./nfl.sh test tests/test_deadline_controller.py
+  tests/test_fetch_weather_captures.py tests/test_classic_policy_generator.py
+  tests/test_sources_tls.py -x --tb=short`: `70 passed in 10.03s`.
+- Complete pinned suite: `1642 passed, 1 skipped in 243.58s (0:04:03)`, 21 more than the baseline. The skip is the Windows junction test.
+- `sh ./nfl.sh doctor`: `pass_status: true`. `git diff --check` clean; `compileall` of the
+  five changed modules and four test files clean;
+  `python3 scripts/check_protected_paths.py`: no protected path.
+- `python3 scripts/fetch_weather_captures.py --help` runs on the system Python,
+  outside the project environment.
+
 ### 2026-09-24: `run-slate` keeps a delivery deadline (Session 07, R31)
 
 R31 sets the default delivery deadline at 5 minutes before the earliest
