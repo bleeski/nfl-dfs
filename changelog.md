@@ -77,10 +77,14 @@ changed, and distinct lineups (R29) are untouched.
   (`BOUNDED_SEARCH_LIMIT_STOP`, later strata skipped, the chain still built),
   and still block with two candidates or no witness; a real-HiGHS bank at
   `mip_max_improving_sols=1` keeps `kSolutionLimit` rosters and audits.
-  `tests/test_portfolio_enforcement.py` +5: SD3's incumbent at each limit and
+  `tests/test_portfolio_enforcement.py` +6: SD3's incumbent at each limit and
   its failed checks; real HiGHS from a feasible start at `mip_max_nodes=0`
   (presolve off: presolve alone solves three candidates); a scripted SD3 bank
-  keeping two limit rosters.
+  keeping two limit rosters; and `run-slate` on the Showdown fixture with SD3's
+  joint model re-solved from its own answer at `mip_max_nodes=0`, a genuine
+  kSolutionLimit incumbent, delivered through the Showdown review export with
+  `PORTFOLIO_SELECTION_LIMIT_INCUMBENT` as an `S` limitation and the
+  independent audit `PASS`.
   `tests/test_classic_review_c3.py` +5: the incumbent accepted and named, the
   over-claimed scope withheld, both stop statuses accepted and named, and the
   card's acceptance through `run-slate` (below).

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 
 import highspy
@@ -442,6 +443,81 @@ def test_a_limit_stopped_showdown_candidate_solve_keeps_its_roster_labelled(tmp_
     assert [candidate.roster for candidate in bank.candidates] == rosters
     assert {candidate.source_solver_status for candidate in bank.candidates} == {"FEASIBLE_LIMIT"}
     assert bank.as_report()["limit_incumbent_candidates"] == 2
+
+
+def test_run_slate_delivers_an_sd3_limit_incumbent_through_the_showdown_export(
+    tmp_path, monkeypatch
+) -> None:
+    """Session 08 for SD3, end to end: the Showdown review export ships it named.
+
+    Real HiGHS: SD3's joint model is solved, then solved again from that answer
+    as a MIP start with `mip_max_nodes=0` and presolve off, so the delivered
+    selection is a genuine kSolutionLimit incumbent, stopped by a search limit
+    no clock decides.
+    """
+
+    from datetime import datetime, timedelta, timezone
+
+    from nfl_dfs import cli, selection
+    from nfl_dfs import prior_review as prior_review_module
+    from nfl_dfs.dk import parse_entries, parse_salaries
+
+    from .test_prior_review_profile import _attachments, _cowork_args, _prepared_run
+
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=datetime.now(timezone.utc) + timedelta(hours=6)
+    )
+    attachments = _attachments(tmp_path, salary_path, entry_path)
+    slate = parse_salaries(salary_path)
+    entries = parse_entries(entry_path)
+    policy_path = tmp_path / "policy" / "portfolio.json"
+    policy_path.parent.mkdir()
+    policy_path.write_text(json.dumps(portfolio_policy_template(
+        slate, [entry.entry_id for entry in entries.authorizations],
+        controls={"max_pairwise_person_overlap": 4},
+    )), encoding="utf-8")
+
+    class Restarted(highspy.Highs):
+        def run(self):
+            super().run()
+            values = np.asarray(self.getSolution().col_value)
+            start = np.flatnonzero(np.rint(values) > 0).astype(np.int32)
+            counts = np.rint(values[start])
+            self.clearSolver()
+            self.setOptionValue("mip_max_nodes", 0)
+            self.setOptionValue("presolve", "off")
+            self.setSolution(len(start), start, counts)
+            return super().run()
+
+    real_solve = selection.solve_policy_portfolio
+    seen = []
+
+    def limited(policy, bank, **kwargs):
+        result = real_solve(policy, bank, solver_factory=Restarted, **kwargs)
+        seen.append(result)
+        return result
+
+    monkeypatch.setattr(selection, "solve_policy_portfolio", limited)
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    real_review = prior_review_module.run_prior_review
+    monkeypatch.setattr(cli, "run_prior_review", lambda **kwargs: real_review(**kwargs, project=project))
+    outputs = tmp_path / "outputs"
+    code = cli.command_cowork_run(_cowork_args(
+        tmp_path, attachments, run_id="sd3-limited", output_dir=str(outputs),
+        portfolio_policy_json=str(policy_path), prior_package_dir=str(package_dir),
+    ))
+    report = json.loads((outputs / "sd3-limited" / "cowork_run.json").read_text(encoding="utf-8"))
+    assert code == 0, report["blockers"][:3]
+    assert [(item.status, item.model_status) for item in seen] == [
+        ("FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK", "kSolutionLimit")]
+    assert report["FILE_VALID"] is True and report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert Path(report["bulk_entry_csv"]).is_file()
+    assert report["latest_deliverable"]["producer"] != "run-slate:baseline"
+    limitations = {item["code"]: item["class"] for item in report["release_truths"]["delivery_limitations"]}
+    assert limitations["PORTFOLIO_SELECTION_LIMIT_INCUMBENT"] == "S"
+    solve = report["prior_review_reports"]["selection"]["selection"]["portfolio_policy"]["solve"]
+    assert solve["status"] == "FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK" and solve["optimality_scope"] is None
+    assert report["prior_review_reports"]["portfolio_policy_audit"]["status"] == "PASS"
 
 
 def _assignment_csv_bytes(pairs):
