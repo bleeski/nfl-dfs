@@ -1079,8 +1079,8 @@ solve, it writes `<output-dir>/<run_id>/baseline/DK_BASELINE_ENTRY_V1_baseline.c
 from the run's snapshots and publishes it as `LATEST_DELIVERABLE.json`. It honours
 the request's exact `--exclude` IDs and extra `--unavailable-status` codes, and
 takes out everyone the request's official status file marks `INACTIVE` (R32:
-only rows with exact current-slate DraftKings IDs and an HTTPS source apply;
-refused rows are named, never a stop). Nothing else from the request reaches it. The run's own review is the improvement: a review
+only rows with exact current-slate DraftKings IDs and an HTTPS source count, and
+a disagreeing row takes its person out; refused rows are named, never a stop). Nothing else from the request reaches it. The run's own review is the improvement: a review
 CSV (Showdown, C3, or C1's export) replaces the baseline only through
 `delivery.replace`, after its own readable-review classification and a fresh
 revalidation, with the same inputs and at least as many rows. When the review
@@ -1114,7 +1114,7 @@ example an intake it refuses or a request that will not load:
 `--unavailable-status <code>`, each repeatable, for every fade or late scratch
 the run request carries, and `--official-status <csv>` for the official status
 file: a hand-run baseline knows only what you pass it. It
-reads the two files and nothing else: no network, priors, weather or roles. It writes a new run folder under
+reads those files and nothing else: no network, priors, weather or roles. It writes a new run folder under
 `data/runs/` holding `DK_BASELINE_ENTRY_V1_<run_id>.csv`, byte-audited, and
 `baseline_report.json` with the five truths. Exit 0 fills every blank row; exit
 3 fills some and names every unfilled Entry ID (hand that list over with the

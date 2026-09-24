@@ -32,7 +32,7 @@ from nfl_dfs.hashing import sha256_file
 from nfl_dfs.readable_review import ReadableReviewError
 
 from .test_artifact_preservation import _classic_run, _showdown_run
-from .test_baseline import CLASSIC_SALARY, NOW, classic_template
+from .test_baseline import CLASSIC_SALARY, NOW, SHOWDOWN_SALARY, classic_template, showdown_template
 from .test_classic_prior_review import AS_OF as CLASSIC_AS_OF
 from .test_classic_prior_review import _fixture as classic_fixture
 from .test_cowork import _attachment_pair
@@ -719,11 +719,15 @@ def test_run_slate_delivers_a_baseline_without_the_runs_official_inactives(
 
     from nfl_dfs import cli
 
-    salary, entry, package, _role, status, inactive_id = classic_fixture(
-        tmp_path / "fixture", entries=2, inactive_dst=True)
+    salary, entry, package, _role, _status, _ = classic_fixture(tmp_path / "fixture", entries=2)
     attachments = _attachments(tmp_path, salary, entry)
     slate = parse_salaries(salary)
-    inactive_person = next(p.underlying_id for p in slate.players if p.dk_id == inactive_id)
+    plain = run_baseline(salaries=salary, entries=entry, out_dir=tmp_path / "plain", run_id="plain",
+                         now=CLASSIC_AS_OF)
+    held = {dk_id for roster in plain.assignments.values() for dk_id in roster}
+    target = max((p for p in slate.players if p.dk_id in held), key=lambda p: p.salary)
+    status = _status_csv(tmp_path / "evidence" / "status.csv", [(target.team, target.dk_id, "INACTIVE", SOURCE)]) \
+        if (tmp_path / "evidence").mkdir() is None else None
 
     def crash(**kwargs):
         raise RuntimeError("the review never finishes")
@@ -738,7 +742,107 @@ def test_run_slate_delivers_a_baseline_without_the_runs_official_inactives(
     report = _report(root)
     latest = _assert_baseline_delivered(report, root, "inactive")
     written = parse_entries(latest.deliverable.path)
-    rows = _rows_of(slate, inactive_person)
-    assert all(not rows & set(item.existing_cells) for item in written.authorizations)
+    rows = _rows_of(slate, target.underlying_id)
+    assert all(not rows & set(item.existing_cells) for item in written.authorizations)  # the plain one held him
     baseline_report = json.loads(Path(report["baseline"]["report"]).read_text(encoding="utf-8"))
-    assert baseline_report["pool"]["official_inactive_people"] == [inactive_person]
+    assert baseline_report["pool"]["official_inactive_people"] == [target.underlying_id]
+
+
+def test_conflicting_rows_take_the_person_out_and_are_not_counted_as_refused(tmp_path: Path) -> None:
+    template = classic_template(tmp_path, 5)
+    slate = parse_salaries(CLASSIC_SALARY)
+    top = max(slate.players, key=lambda player: player.salary)
+    status = _status_csv(tmp_path / "status.csv", [
+        (top.team, top.dk_id, "ACTIVE", SOURCE),
+        (top.team, top.dk_id, "INACTIVE", SOURCE),  # the parser sets this aside as a conflict
+    ])
+    outcome = run_baseline(salaries=CLASSIC_SALARY, entries=template, out_dir=tmp_path / "runs",
+                           run_id="conflict", now=NOW, official_status_csv=status)
+    pool = outcome.report["pool"]
+    assert pool["official_inactive_people"] == [top.underlying_id]
+    assert len(pool["official_status_conflicts"]) == 1 and pool["official_status_rows_not_applied"] == []
+    assert not any(_rows_of(slate, top.underlying_id) & set(r) for r in outcome.assignments.values())
+    assert "BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED" not in {
+        item.code for item in outcome.truths.delivery_limitations}
+
+    # Showdown: a captain row ACTIVE and a flex row INACTIVE take the person out of both roles.
+    sd_slate = parse_salaries(SHOWDOWN_SALARY)
+    person = max((p for p in sd_slate.players if p.role == "FLEX"), key=lambda p: p.salary)
+    captain = next(p for p in sd_slate.players if p.underlying_id == person.underlying_id and p.role != "FLEX")
+    sd_status = _status_csv(tmp_path / "sd_status.csv", [
+        (captain.team, captain.dk_id, "ACTIVE", SOURCE),
+        (person.team, person.dk_id, "INACTIVE", SOURCE),
+    ])
+    sd = run_baseline(salaries=SHOWDOWN_SALARY, entries=showdown_template(tmp_path, 5), out_dir=tmp_path / "runs",
+                      run_id="roles", now=NOW, official_status_csv=sd_status)
+    assert sd.report["pool"]["official_inactive_people"] == [person.underlying_id]
+    assert sd.report["pool"]["official_status_rows_not_applied"] == []
+    assert not any(_rows_of(sd_slate, person.underlying_id) & set(r) for r in sd.assignments.values())
+
+
+def test_a_file_the_csv_reader_cannot_read_is_named_not_a_stop(tmp_path: Path) -> None:
+    status = tmp_path / "status.csv"
+    status.write_text("TEAM,PLAYER_OR_GSIS_ID,STATUS,SOURCE_URL,OBSERVED_AT\n\"" + "x" * 140_000 + "\n",
+                      encoding="utf-8")  # a stray quote swallows the file into one oversized field
+    outcome = run_baseline(salaries=CLASSIC_SALARY, entries=classic_template(tmp_path, 3),
+                           out_dir=tmp_path / "runs", run_id="huge", now=NOW, official_status_csv=status)
+    assert outcome.truths.delivery_state.value == "DELIVERABLE"
+    codes = {item.code: item for item in outcome.truths.delivery_limitations}
+    assert codes["BASELINE_OFFICIAL_STATUS_UNREADABLE"].gate_class.value == "P"
+    assert "Error" in codes["BASELINE_OFFICIAL_STATUS_UNREADABLE"].detail
+
+
+def test_the_audit_refuses_a_roster_holding_an_official_inactive(tmp_path: Path) -> None:
+    from nfl_dfs.baseline import audit_baseline_bytes
+
+    template = classic_template(tmp_path, 3)
+    slate = parse_salaries(CLASSIC_SALARY)
+    plain = run_baseline(salaries=CLASSIC_SALARY, entries=template, out_dir=tmp_path / "runs",
+                         run_id="plain", now=NOW)
+    first = plain.assignments[next(iter(plain.assignments))][0]
+    player = next(p for p in slate.players if p.dk_id == first)
+    status = _status_csv(tmp_path / "status.csv", [(player.team, player.dk_id, "INACTIVE", SOURCE)])
+    kwargs = dict(salary_path=CLASSIC_SALARY, entries_path=template, assignments=plain.assignments,
+                  unfilled=())
+    raw = plain.output_path.read_bytes()
+    assert audit_baseline_bytes(raw, **kwargs) == []
+    problems = audit_baseline_bytes(raw, **kwargs, official_status_csv=status)
+    holders = [eid for eid, roster in plain.assignments.items()
+               if _rows_of(slate, player.underlying_id) & set(roster)]
+    assert problems == [f"BASELINE_AUDIT_OFFICIAL_INACTIVE_PERSON:{eid}" for eid in holders]
+
+
+def test_the_c1_export_audit_reads_the_runs_status_snapshot_and_its_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[object] = []
+
+    def patch(cli):
+        real = cli.audit_baseline_bytes
+
+        def recording(raw, **kwargs):
+            seen.append(kwargs.get("official_status_csv"))
+            return real(raw, **kwargs)
+
+        monkeypatch.setattr(cli, "audit_baseline_bytes", recording)
+
+    code, report, root = _classic_run(tmp_path / "read", monkeypatch, policy=False, patch=patch)
+    assert code == 0 and report["latest_deliverable"]["producer"] == "run-slate:prior_review:CLASSIC_C1"
+    snapshot = report["prior_review_artifacts"]["official_status_csv"]
+    assert seen == [snapshot] and Path(snapshot).parent.name == "inputs"
+
+    def change(cli):
+        real = cli.run_prior_review
+
+        def review(**kwargs):
+            outcome = real(**kwargs)
+            path = Path(kwargs["official_status_csv"])
+            path.write_bytes(path.read_bytes() + b"\n")  # after C1 read it
+            return outcome
+
+        monkeypatch.setattr(cli, "run_prior_review", review)
+
+    code, report, root = _classic_run(tmp_path / "changed", monkeypatch, policy=False, patch=change)
+    assert code == 2
+    assert report["blockers"][0].startswith("CLASSIC_C1_EXPORT_OFFICIAL_STATUS_CHANGED:")
+    _assert_baseline_delivered(report, root, "classic-s05")

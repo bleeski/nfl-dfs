@@ -1610,7 +1610,8 @@ Registered 2026-09-23 by Session 04 (R28, R29). `nfl baseline --salaries <csv>
 --entries <csv> [--out-dir] [--run-id] [--per-solve-seconds] [--budget-seconds]
 [--exclude <DK ID>]... [--unavailable-status <code>]... [--official-status <csv>]`
 (`baseline.run_baseline`) builds distinct legal lineups from the two DraftKings
-files alone: no network, no prior, no weather, no role evidence. It is the
+files, less the people an exclusion or an official `INACTIVE` row takes out
+(Sessions 06 and 06b): no network, no prior, no weather, no role evidence. It is the
 file R28 ships first. Exit 0 fills every blank authorized row, 3 fills some and
 names the rest, 2 fills none; no exit clears an upload.
 
@@ -1626,7 +1627,7 @@ into it. Inside:
 | `inputs/<sha256>.csv` | Byte copies of the two supplied files, hash-checked on arrival; everything after intake reads these |
 | `intake.json` | Each input's supplied flag, original path, SHA-256, snapshot path and schema |
 | `DK_BASELINE_ENTRY_V1_<run_id>.csv` | The delivered file, `nfl_baseline_entry_csv_v1`, only when the audit passes |
-| `baseline_report.json` | `nfl_baseline_report_v1` |
+| `baseline_report.json` | `nfl_baseline_report_v2` since Session 06b (`v1` before) |
 
 Inputs are bound by schema (`cowork.classify_csv`), not by flag or file name,
 so swapped flags still bind correctly and the report says which flag carried
@@ -1648,16 +1649,20 @@ Since Session 06b (R32) `run_baseline` also takes `official_status_csv`, which
 `--official-status`. The file is snapshotted into `inputs/` and bound in the
 report's `inputs.official_status` (`path`, `sha256`, `snapshot`), then parsed by
 `evidence.parse_official_inactive_snapshot`, the exact-ID parser the model path
-uses: a row is accepted only for an exact current-slate DraftKings ID on its own
+uses, through `baseline.official_inactive_people`. A row counts only when it
+passes the parser's checks: an exact current-slate DraftKings ID on its own
 team, `ACTIVE` or `INACTIVE`, from a public HTTPS source at a timezone-aware
-time. Every person with an accepted `INACTIVE` row leaves the pool, all of their
-salary rows included, and so does a person whose roles disagree. Nothing else
-in the file is read, and it only narrows the pool: freshness and whether it
-covers every selected person stay certification checks, so
-`OFFICIAL_STATUS_REQUIRED` stays, its detail saying what was applied. Refused
-rows are `BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED` and a file that cannot be
-read is `BASELINE_OFFICIAL_STATUS_UNREADABLE`, both `P`: the baseline still
-ships, without them. A snapshot that changes before the write is
+time. Every person with such an `INACTIVE` row leaves the pool, all of their
+salary rows included. That includes a row the parser set aside only because it
+disagreed with an earlier row for the same ID, and salary roles that disagree:
+the baseline only narrows, so disagreement takes the person out
+(`official_status_conflicts`). Nothing else in the file is read: freshness and
+whether it covers every selected person stay certification checks, so
+`OFFICIAL_STATUS_REQUIRED` stays, its detail saying what was applied. A row
+that fails those checks is `BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED` and a
+file that cannot be read at all (a wrong header, a decode or CSV error) is
+`BASELINE_OFFICIAL_STATUS_UNREADABLE`, both `P`: the baseline still ships,
+without them. A snapshot that changes before the write is
 `BASELINE_OFFICIAL_STATUS_CHANGED_DURING_RUN` (`V`).
 
 ### `nfl_baseline_entry_csv_v1`
@@ -1741,7 +1746,7 @@ is DraftKings' price and the only number in its bytes the engine may read.
 | `command` | `per_solve_seconds`, `budget_seconds` |
 | `inputs` | `salaries` and `entries`: `supplied_as`, `path`, `sha256`, `snapshot`, `classified_by`; `supplied_schemas` by flag |
 | `slate` | Mode, draft group, both hashes, salary rows, games, `earliest_lock_at`, entry rows, blank and prefilled rows, Contest IDs |
-| `pool` | The availability contract, its statuses, `excluded_people`, `operator_excluded_dk_ids`, `operator_excluded_people` and `extra_unavailable_statuses` (Session 06), `official_status_applied`, `official_inactive_people` and `official_status_rows_not_applied` (Session 06b), excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`, `SALARY_SUBSET`) |
+| `pool` | The availability contract, its statuses, `excluded_people`, excluded and eligible salary rows, `entry_pool_cross_check` (`PASS`, `ABSENT`, `MISMATCH`, `SALARY_SUBSET`) |
 | `objective` | `BASELINE_SALARY_RANK_V1`, as above |
 | `construction` | `stop_reason` (`FILLED`, `DISTINCT_LINEUPS_EXHAUSTED`, `BUDGET_EXHAUSTED`, `SOLVE_LIMIT_WITHOUT_LINEUP`, `SOLVER_PRODUCED_ILLEGAL_LINEUP`, `SOLVER_REPEATED_A_LINEUP`), lineups built, solves, salary levels, `people_used` and `most_used_person_lineups` (a concentration count for late-swap exposure, not a preference), `elapsed_seconds` |
 | `lineups` | Per filled row: `entry_id`, `roster`, `salary`, `found_by`, `time_limited`, `solve_seconds` |
@@ -1766,6 +1771,23 @@ it carries `BASELINE_EARLIEST_LOCK_PASSED`.
 
 Does not establish: upload clearance, certification, lineup quality, or any
 expected-points, return, win, cash, ownership or edge claim.
+
+### `nfl_baseline_report_v2`
+
+Registered 2026-09-24 by Session 06b. Every `v1` field, unchanged in meaning,
+plus the exclusions Sessions 06 and 06b added. Session 06 wrote its fields into
+reports still labelled `v1`; those reports are read as `v2` without the
+official-status fields.
+
+| Field | Added |
+|---|---|
+| `pool.operator_excluded_dk_ids`, `pool.operator_excluded_people`, `pool.extra_unavailable_statuses` | The operator's exact exclusions and extra unavailable statuses, as applied |
+| `pool.official_status_applied` | Whether an official status file was read and applied |
+| `pool.official_inactive_people` | Every person it took out |
+| `pool.official_status_conflicts` | The disagreeing rows whose people it took out |
+| `pool.official_status_rows_not_applied` | The rows it refused |
+| `inputs.official_status` | `path`, `sha256` and `snapshot` of the file, when one was given |
+| `audit.checks_run` | Adds `NO_OPERATOR_EXCLUDED_PERSON` and `NO_OFFICIAL_INACTIVE_PERSON` |
 
 ## Release truths
 
@@ -1866,7 +1888,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `392befaadd9cdbafda632ecb306f68d1971fb8d1837d71ac53eb5257787e2e56`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `41f6647ed55527b97e510ac86a9de487c2dc285ab9b9a7157e826d05eaf6ce27`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2055,7 +2077,9 @@ C1's export (rung 4) is `<output-dir>/<run_id>/review/DK_REVIEW_ENTRY_C1_<run_id
 `baseline.audit_baseline_bytes` passes the bytes on disk, the request's
 exclusions and official status file included, and listed in `export.c1_export`. Refusals list nothing and
 leave the baseline: `CLASSIC_C1_EXPORT_OUTPUT_EXISTS`,
-`CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH`, `CLASSIC_C1_EXPORT_FAILED`,
+`CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH`,
+`CLASSIC_C1_EXPORT_OFFICIAL_STATUS_CHANGED` (the status snapshot is not the one
+C1 read), `CLASSIC_C1_EXPORT_FAILED`,
 `CLASSIC_C1_EXPORT_AUDIT_FAILED`, `CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH`
 (all `V`). The pre-lock manifest binds the assignment this file renders, not the
 file. A run with a policy goes to C3 and never takes this path.

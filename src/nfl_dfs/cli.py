@@ -2680,7 +2680,8 @@ def _baseline_next(latest: LatestDeliverable | None, next_action: str) -> str:
     return (
         f"The baseline {latest.deliverable.path} is this run's deliverable "
         f"(DELIVERY_STATE={truths.delivery_state.value}, {len(truths.delivered_entry_ids)} rows, "
-        "salary-ranked from the DraftKings bytes alone, PRIOR_ONLY / DO_NOT_UPLOAD); the run's "
+        "salary-ranked from the DraftKings bytes less every excluded or officially inactive "
+        "person, PRIOR_ONLY / DO_NOT_UPLOAD); the run's "
         "own review did not replace it. " + next_action
     )
 
@@ -2719,7 +2720,8 @@ def _not_delivered_detail(improvement: Mapping[str, object]) -> str:
     return (
         f"the run's own review is {improvement['status']} at stage {improvement['stage']}"
         + (f" ({'; '.join(reasons[:5])})" if reasons else "")
-        + "; the delivered file is the salary-ranked baseline built from the DraftKings bytes alone"
+        + "; the delivered file is the salary-ranked baseline built from the DraftKings bytes,"
+          " less every excluded or officially inactive person"
     )
 
 
@@ -2743,6 +2745,9 @@ def _export_classic_c1_csv(
     try:
         if not source.is_file() or sha256_file(source) != outcome.hashes.get("assignments"):
             return outcome, (f"CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH:{source}",)
+        status = request.official_status_csv
+        if status is not None and sha256_file(status) != outcome.hashes.get("official_status_csv"):
+            return outcome, (f"CLASSIC_C1_EXPORT_OFFICIAL_STATUS_CHANGED:{status}",)
         assignments = read_assignment_csv(source, EngineMode.CLASSIC)
         template = parse_entries(request.entry_csv or "")
         raw = write_upload_bytes(template, assignments)
@@ -4224,8 +4229,9 @@ def build_parser() -> argparse.ArgumentParser:
     baseline_parser = subparsers.add_parser(
         "baseline",
         help=(
-            "distinct legal lineups from the DraftKings salary and entries bytes alone, into a"
-            " new byte-audited DK_BASELINE_ENTRY file; no network, priors, weather or roles"
+            "distinct legal lineups from the DraftKings salary and entries bytes, less any"
+            " excluded or officially inactive person, into a new byte-audited DK_BASELINE_ENTRY"
+            " file; no network, priors, weather or roles"
         ),
     )
     baseline_parser.add_argument("--salaries", required=True)

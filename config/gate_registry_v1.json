@@ -315,6 +315,7 @@
     "CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH": "audited_selection",
     "CLASSIC_C1_EXPORT_AUDIT_FAILED": "delivered_bytes",
     "CLASSIC_C1_EXPORT_FAILED": "delivered_bytes",
+    "CLASSIC_C1_EXPORT_OFFICIAL_STATUS_CHANGED": "delivered_bytes",
     "CLASSIC_C1_EXPORT_OUTPUT_EXISTS": "no_overwrite",
     "CLASSIC_C1_EXPORT_POST_WRITE_HASH_MISMATCH": "delivered_bytes",
     "CLASSIC_C3_ASSIGNMENT_BYTES_NOT_CANONICAL": "audited_selection",

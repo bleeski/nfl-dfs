@@ -61,7 +61,7 @@ from .contracts import (
     unavailable_people,
 )
 from .cowork import classify_csv
-from .evidence import EvidenceError, parse_official_inactive_snapshot
+from .evidence import parse_official_inactive_snapshot
 from .dk import (
     DraftKingsParseError,
     EntryTemplate,
@@ -79,7 +79,9 @@ from .optimizer import LineupOptimizer
 from .referee import audit_output_bytes
 from .release import derive_delivery_state, derive_release_policy, release_truths_v2
 
-REPORT_VERSION = "nfl_baseline_report_v1"
+# v2 (Session 06b): v1 plus the operator and official exclusions in `pool` and
+# the official status file in `inputs`; v1 reports stay readable as written.
+REPORT_VERSION = "nfl_baseline_report_v2"
 OUTPUT_CONTRACT = "nfl_baseline_entry_csv_v1"
 OUTPUT_PREFIX = "DK_BASELINE_ENTRY_V1_"
 OBJECTIVE_VERSION = "BASELINE_SALARY_RANK_V1"
@@ -135,7 +137,8 @@ OBJECTIVE: Mapping[str, object] = {
 
 WARNING = (
     "PRIOR_ONLY / DO_NOT_UPLOAD. A legal, byte-audited baseline built from the DraftKings"
-    " bytes alone, ranked by salary. It is not certified and carries no expected-points,"
+    " bytes, less any person excluded by the operator or marked INACTIVE by the run's official"
+    " status file, ranked by salary. It is not certified and carries no expected-points,"
     " return, win, cash, ownership or edge claim. DELIVERY_STATE says a valid file exists"
     " to hand over, not that uploading is cleared; uploading stays Ben's manual decision."
 )
@@ -289,16 +292,30 @@ def pool_exclusions(
     return unavailable, operator, sorted(named - set(by_id))
 
 
-def official_inactive_people(
-    path: str | Path, players: Iterable[SalaryPlayer]
-) -> tuple[set[str], tuple[str, ...]]:
-    """Every person an accepted official row marks `INACTIVE`, and the rows refused.
+_ROW_CONFLICT = re.compile(r"row \d+: conflicting status for (?P<dk_id>\S+)$")
+_ROLE_CONFLICT = re.compile(r"conflicting status across salary roles for (?P<person>.+)$")
 
-    `evidence.parse_official_inactive_snapshot` accepts a row only for an exact
-    current-slate DraftKings ID on its own team, `ACTIVE` or `INACTIVE`, from a
-    public HTTPS source at a timezone-aware time. A person with any accepted
-    `INACTIVE` row leaves, all of their salary rows included; a person whose
-    salary roles disagree leaves too. Raises when the file cannot be read.
+
+@dataclass(frozen=True)
+class OfficialInactives:
+    """What the baseline takes from an official status file (R32)."""
+
+    people: frozenset[str]
+    conflicts: tuple[str, ...]  # identity-valid rows that disagreed; their people left
+    refused: tuple[str, ...]    # rows that never passed the parser's checks; not applied
+
+
+def official_inactive_people(path: str | Path, players: Iterable[SalaryPlayer]) -> OfficialInactives:
+    """Every person an identity-valid official row marks `INACTIVE`, and what was not applied.
+
+    `evidence.parse_official_inactive_snapshot` checks each row: an exact
+    current-slate DraftKings ID on its own team, `ACTIVE` or `INACTIVE`, a
+    public HTTPS source, a timezone-aware time. A person leaves when any row
+    that passed those checks says `INACTIVE`, all of their salary rows
+    included. That covers a row the parser set aside only because it disagreed
+    with an earlier row for the same ID, and salary roles that disagree: the
+    baseline only narrows, so disagreement takes the person out. Every other
+    refused row is not applied. Raises when the file cannot be read at all.
     """
 
     rows = tuple(players)
@@ -306,7 +323,19 @@ def official_inactive_people(
     by_id = {player.dk_id: player for player in rows}
     inactive = {by_id[dk_id].underlying_id for dk_id, status in snapshot.statuses.items()
                 if status == "INACTIVE"}
-    return inactive, snapshot.problems
+    conflicts: list[str] = []
+    refused: list[str] = []
+    for problem in snapshot.problems:
+        row_conflict = _ROW_CONFLICT.match(problem)
+        if row_conflict and row_conflict.group("dk_id") in by_id:
+            # Only ACTIVE and INACTIVE pass, so a conflicting row means one said INACTIVE.
+            inactive.add(by_id[row_conflict.group("dk_id")].underlying_id)
+            conflicts.append(problem)
+        elif _ROLE_CONFLICT.match(problem):
+            conflicts.append(problem)  # its person has an INACTIVE role, so already left
+        else:
+            refused.append(problem)
+    return OfficialInactives(frozenset(inactive), tuple(conflicts), tuple(refused))
 
 
 def audit_baseline_bytes(
@@ -352,9 +381,9 @@ def audit_baseline_bytes(
         extra_unavailable_statuses=extra_unavailable_statuses)
     if unknown:
         problems.append(f"OPERATOR_EXCLUSION_NOT_IN_POOL:{unknown}")
-    inactive: set[str] = set()
+    inactive: frozenset[str] = frozenset()
     if official_status_csv is not None:
-        inactive, _refused = official_inactive_people(official_status_csv, slate.players)
+        inactive = official_inactive_people(official_status_csv, slate.players).people
     keys: set[str] = set()
     for entry_id, roster in filled.items():
         result = validate_lineup(slate, roster)
@@ -562,16 +591,21 @@ def run_baseline(
             "OPERATOR_EXCLUSION_NOT_IN_POOL",
             detail=f"the operator excluded {unknown}, which the salary file does not hold; an exclusion"
                    " that names nobody cannot be honoured, so the baseline is not built"))
-    inactive_people: set[str] = set()
+    inactive_people: frozenset[str] = frozenset()
     refused_rows: tuple[str, ...] = ()
+    conflicts: tuple[str, ...] = ()
     if status_snapshot is not None:
         try:
-            inactive_people, refused_rows = official_inactive_people(status_snapshot[0], slate.players)
-        except (EvidenceError, OSError, ValueError) as exc:
+            official = official_inactive_people(status_snapshot[0], slate.players)
+        except Exception as exc:  # noqa: BLE001 - a status file is named, never a stop (R32)
+            # `EvidenceError`, `OSError`, a decode error and `csv.Error` (a field
+            # past the reader's limit, from a stray quote) are the known ones.
             status_snapshot = None
             limitations.append(registry.limitation(
                 "BASELINE_OFFICIAL_STATUS_UNREADABLE",
                 detail=f"{type(exc).__name__}: {exc}; no official activity row was applied"))
+        else:
+            inactive_people, refused_rows, conflicts = official.people, official.refused, official.conflicts
         if refused_rows:
             limitations.append(registry.limitation(
                 "BASELINE_OFFICIAL_STATUS_ROWS_NOT_APPLIED",
@@ -608,6 +642,7 @@ def run_baseline(
         "extra_unavailable_statuses": sorted(set(exclusion_statuses)),
         "official_status_applied": status_snapshot is not None,
         "official_inactive_people": sorted(inactive_people),
+        "official_status_conflicts": list(conflicts),
         "official_status_rows_not_applied": list(refused_rows),
         "excluded_salary_rows": len(excluded_ids),
         "eligible_salary_rows": len(slate.players) - len(excluded_ids),
@@ -813,8 +848,11 @@ def _finish(
             "the baseline applied DraftKings' own OUT, IR and D flags, any exact operator exclusion,"
             f" and the run's official status file only to take out the {inactive} "
             + ("person" if inactive == 1 else "people")
-            + " its accepted rows mark INACTIVE (R32); the file's freshness and whether it covers"
-              " every selected person were not judged, so activity is not certified")
+            + " its rows mark INACTIVE (R32)"
+            + (f", {len(pool.get('official_status_conflicts') or ())} of its rows disagreeing"
+               if pool.get("official_status_conflicts") else "")
+            + "; the file's freshness and whether it covers every selected person were not"
+              " judged, so activity is not certified")
     else:
         activity = (
             "the baseline reads the DraftKings bytes alone: only DraftKings' own OUT, IR and D"
