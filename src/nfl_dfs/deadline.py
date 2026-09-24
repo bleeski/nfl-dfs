@@ -45,7 +45,6 @@ import json
 import math
 import os
 import platform
-import re
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
@@ -410,10 +409,12 @@ class Budget:
             "DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW",
             f"the policy's bank and joint-solve limits total {declared_seconds:.1f} s and"
             f" {window:.1f} s are left before {self.improvement_stop.isoformat()}; its limits are"
-            " hash-bound, so regenerate it with make_classic_policy.py --delivery-deadline-utc"
-            f" {self.deadline.isoformat()}, which sizes the bank to the window left (for a replay"
-            " pinned by --as-of, a smaller --minutes), or take rung 4 (no --portfolio-policy-json);"
-            " the baseline is the deliverable")
+            " hash-bound, so this policy's review stopped before selection. Inside run-slate the"
+            " relaxation controller then re-sizes the bank to the window or takes rung 4 (Session"
+            " 10), and its record names which file ships; outside it, regenerate the policy with"
+            f" make_classic_policy.py --delivery-deadline-utc {self.deadline.isoformat()} (for a"
+            " replay pinned by --as-of, a smaller --minutes) or take rung 4 (no"
+            " --portfolio-policy-json)")
 
     def finished_late(self, stage: str) -> None:
         """Name a stage that ended after the delivery deadline (it ran; it was late)."""
@@ -505,12 +506,13 @@ def host_key() -> str:
 
 
 def bank_rate_observation(
-    reports: Mapping[str, object], blockers: Iterable[str], *, declared_bank_seconds: float | None
+    reports: Mapping[str, object], *, declared_bank_seconds: float | None
 ) -> tuple[int, float, str] | None:
     """(candidates, seconds, basis) from a Classic C2 bank, or None.
 
     A finished bank reports its own count and elapsed time. A bank stopped by its
-    time limit reports only its count; it ran for its declared budget.
+    time limit reports only its count, in the review's structured
+    `selection_failure` (Session 10); it ran for its declared budget.
     """
 
     selection = reports.get("selection") if isinstance(reports, Mapping) else None
@@ -521,11 +523,13 @@ def bank_rate_observation(
         produced, elapsed = bank.get("produced_candidates"), bank.get("elapsed_seconds")
         if isinstance(produced, int) and produced > 0 and isinstance(elapsed, (int, float)):
             return produced, float(elapsed), "BANK_REPORT"
-    for text in blockers:
-        if "CANDIDATE_BANK_TIMEOUT" in str(text) and declared_bank_seconds:
-            found = re.search(r"candidates=(\d+)", str(text))
-            if found and int(found.group(1)) > 0:
-                return int(found.group(1)), float(declared_bank_seconds), "BANK_TIME_LIMIT"
+    failure = reports.get("selection_failure") if isinstance(reports, Mapping) else None
+    facts = failure.get("facts") if isinstance(failure, Mapping) else None
+    if (isinstance(facts, Mapping) and failure.get("status") == "CANDIDATE_BANK_TIMEOUT"
+            and declared_bank_seconds):
+        produced = facts.get("candidates")
+        if isinstance(produced, int) and not isinstance(produced, bool) and produced > 0:
+            return produced, float(declared_bank_seconds), "BANK_TIME_LIMIT"
     return None
 
 

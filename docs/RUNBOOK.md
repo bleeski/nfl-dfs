@@ -145,18 +145,25 @@ it writes nothing, exits 2 and names rung 4; when the window has closed it says
 the baseline is the file. For a replay of a past slate, pass a later
 `--delivery-deadline-utc`.
 
-If a run reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
-`CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, regenerate one rung
-lower and rerun immediately. Since Session 08 the last two mean the bank
-stopped at a limit without the entry count or a policy-feasible witness; a bank
-that stopped with both reports `BOUNDED_TIME_LIMIT_STOP` or
-`BOUNDED_SEARCH_LIMIT_STOP`, delivers, and names `CANDIDATE_BANK_STOPPED_AT_LIMIT`,
-which is not a reason to drop a rung. Do not stop to ask; see "Shipping under a lock
-clock", summarized in `CLAUDE.md` and reproduced in full at the end of this runbook. Rung 4 emits no policy and runs C1 sequential selection.
-It is the last structural rung, not a guaranteed file: C1 writes review JSON
-only (`prior_review.py:3016`) and raises when distinct lineups run out
-(`selection.py:538-542`). When it hands you no file, the Classic fallback path
-below does.
+Pass the rung-0 policy and let the run walk the rest. Since Session 10
+`run-slate` walks the ladder itself inside one run and inside its deadline: on
+`MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION` or
+`STRUCTURAL_INFEASIBILITY` it takes the next rung; on `CANDIDATE_BANK_TIMEOUT`,
+`CANDIDATE_BANK_SEARCH_LIMIT`, a joint-solve limit, a solver error or
+`DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW` it first re-sizes the bank at the
+same rung from the rate it just measured (C4 retro #3), and a second such
+failure takes rung 4; a supplied policy whose only validation problems are
+construction preferences (a capacity or bound it cannot meet) enters the
+ladder at intake. Each step is a record in the result's `relaxation` and a
+named `S` limitation (`RELAXATION_*`; `docs/DATA_CONTRACTS.md` § Relaxation
+record). Do not regenerate and rerun by hand. A bank that stopped at a limit
+with the entry count and a policy-feasible witness reports
+`BOUNDED_TIME_LIMIT_STOP` or `BOUNDED_SEARCH_LIMIT_STOP`, delivers, and names
+`CANDIDATE_BANK_STOPPED_AT_LIMIT`, which is not a trigger. Rung 4 emits no policy
+and runs C1 sequential selection, which exports its own CSV; it is the last
+structural rung, not a guaranteed file: C1 raises when distinct lineups run
+out (`selection.py:577-584`) and the baseline stays the file. When no engine
+file is good enough, the Classic fallback path below still exists.
 
 C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
 solver-error, structural-infeasibility, modeled-bank-infeasibility, and
@@ -1085,29 +1092,42 @@ distinct lineups run out, report the unfilled Entry IDs; never repeat a lineup
 to fill a row. Lineup identity is the exact roster, so a different Showdown
 captain makes a different lineup.
 
-`scripts/make_classic_policy.py` encodes the ladder as a `--rung` flag that
-Claude walks by hand. Nothing in the engine walks it yet, and
-`scripts/make_showdown_policy.py` has no ladder at all; Session 10 builds both.
-Rung 0 is every entry stacked with a bring-back on most of them; each rung
-relaxes one class; and rung 4 emits no policy at all and runs C1 sequential
-selection. **Rung 4 is the last structural rung.** Until 2026-09-23 this text
-called it "the proven floor" that "always produces a legal portfolio", and the
+The ladder lives in `src/nfl_dfs/relaxation.py` (Session 10), and `run-slate`
+walks it inside one run, inside the run's deadline budget. Classic rung 0 is
+every entry stacked with a bring-back on most of them; each rung relaxes one
+class; rung 4 emits no policy at all and runs C1 sequential selection.
+Showdown's rungs widen the Captain caps first, then let zeroed Captains
+captain, then drop every exposure cap and the tight overlap (the DAL@NYG retro:
+the bank and the Captain strata bind first); its rung 4 is sequential Showdown
+selection. `scripts/make_classic_policy.py --rung` and
+`scripts/make_showdown_policy.py --rung` write one rung by hand from the same
+tables. A rung's policy is the loosest of the one it replaces and the rung's
+table, so it never tightens anything, and it is a real artifact: written into
+the run folder, hashed, validated and normalized like a supplied policy.
+Throughput failures (a bank or joint solve at its time or search limit, a
+solver error, a hash-bound search the window cannot hold) re-size the bank at
+the same rung first and relax no structure; a second one takes rung 4. When
+the window cannot hold the next rung, the ladder takes rung 4, and when it
+cannot hold rung 4 either it stops, names `RELAXATION_LADDER_STOPPED`, and the
+baseline is the file. Every step is reported (the result's `relaxation`, one
+`RELAXATION_*` limitation each). Diagnose afterwards, in the changelog.
+
+**Rung 4 is the last structural rung.** Until 2026-09-23 this text called it
+"the proven floor" that "always produces a legal portfolio", and the
 2026-09-22 audit showed that it did not: C1 wrote review JSON only. Since
 Session 06 it ends with a CSV. `run-slate` exports C1's own lineups through the
 baseline's writer and audit as `review/DK_REVIEW_ENTRY_C1_<run_id>.csv`, which
 replaces the baseline as the deliverable; if that export is refused, or C1
 raises `SOLVER_RETURNED_NO_LINEUP` when distinct lineups run out
-(`selection.py:538-542`), the baseline stays the deliverable. If a run
-reports `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`,
-`CANDIDATE_BANK_TIMEOUT` or `CANDIDATE_BANK_SEARCH_LIMIT`, drop a rung and rerun
-immediately rather than diagnosing. Diagnose afterwards, in the changelog.
-Since Session 08 the bank keeps the rosters a limit-stopped solve returns, and
-those two codes appear only when a limit left the bank without the entry count
-or a policy-feasible witness; a bank with both delivers under
-`BOUNDED_TIME_LIMIT_STOP` or `BOUNDED_SEARCH_LIMIT_STOP`, and a joint solve a
-limit stopped with a valid incumbent delivers it as
-`FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`. Both are named limitations, not rung
-triggers.
+(`selection.py:577-584`), the baseline stays the deliverable with its unfilled
+Entry IDs named. Neither uniqueness nor any exact exclusion (a policy's own, or
+a person it caps at zero) is ever on the ladder; rung 4 carries the dropped
+policy's exclusions as operator exclusions. Since Session 08 the bank keeps
+the rosters a limit-stopped solve returns: a bank with the entry count and a
+policy-feasible witness delivers under `BOUNDED_TIME_LIMIT_STOP` or
+`BOUNDED_SEARCH_LIMIT_STOP`, and a joint solve a limit stopped with a valid
+incumbent delivers it as `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK`. Both are named
+limitations, never rung triggers.
 
 **Evidence gates** are truth claims: official activity, current offensive role,
 weather capture and its expiry, identity resolution, prior-package expiry, and
@@ -1202,8 +1222,9 @@ before the deadline (lock minus 10 by default), and shortens or skips the
 probe and the review's solves to fit. `--delivery-deadline-utc` sets another
 deadline. A skipped or stopped review exits 2 with `DEADLINE_*` limitations
 (`S`) and the baseline as the file: hand it over. A C2 policy whose declared
-search no longer fits is refused by name; generate it again with
-`make_classic_policy.py --delivery-deadline-utc <the deadline>`, or take rung 4.
+search no longer fits is refused by name, and since Session 10 the run then
+re-sizes the bank to the window itself or, when even the floor bank does not
+fit, takes rung 4 (`RELAXATION_POLICY_DROPPED`).
 Since Session 07b the other clocks keep the same deadline: each evidence fetch
 the review makes gets `min(30 s, the window)` and none starts under 1 s
 (`DEADLINE_FETCH_WINDOW_SPENT`, `S`; the review stops and the baseline is the

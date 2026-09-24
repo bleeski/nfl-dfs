@@ -106,7 +106,7 @@ from .prelock_manifest import (
     write_prelock_manifest,
 )
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
-from .selection import assignments_for_entries, select_prior_lineups
+from .selection import SelectionError, assignments_for_entries, select_prior_lineups
 from .sources import SourcePolicyError, validate_source_reference_policy
 from .venues import home_team_of, resolve_blank_roof
 
@@ -1380,6 +1380,7 @@ def run_prior_review(
     freeze: Callable[..., dict[str, object]] = freeze_prior_package,
     project: Callable[..., object] = build_projection_package,
     budget: Budget | None = None,
+    showdown_candidate_limit: int | None = None,
 ) -> PriorReviewOutcome:
     """Drive priors, identity, projection, selection and export as one gate.
 
@@ -1387,6 +1388,8 @@ def run_prior_review(
     genuinely required, and never writes an export on any blocked or failed path.
     `budget` (Session 07) sets selection's time limits from the run's window and
     stops the review before selection when the window cannot hold it.
+    `showdown_candidate_limit` (Session 10) is the relaxation controller's SD3
+    bank size, in place of `max(32, 4 x entries)`.
     """
 
     run_dir = Path(run_root).resolve()
@@ -2129,6 +2132,11 @@ def run_prior_review(
             budget, count=requested_count, portfolio_policy=portfolio_policy)
         if deadline_stop is not None:
             stages.append(_stage("SELECT", "STOPPED_FOR_DEADLINE", error=deadline_stop))
+            reports["selection_failure"] = {
+                "status": deadline_stop.split(":", 1)[0], "origin": "DEADLINE",
+                "facts": {"improvement_remaining_seconds": round(budget.improvement_remaining(), 3)},
+                "error": deadline_stop,
+            }
             return PriorReviewOutcome(
                 profile_version=profile_version,
                 stage="SELECT",
@@ -2140,6 +2148,8 @@ def run_prior_review(
                 reports=reports,
                 error=deadline_stop,
             )
+    if showdown_candidate_limit is not None and isinstance(portfolio_policy, NormalizedPortfolioPolicy):
+        selection_limits = {**selection_limits, "policy_candidate_limit": int(showdown_candidate_limit)}
     try:
         if slate.mode is EngineMode.CLASSIC:
             if sha256_file(salary_path) != salary_digest:
@@ -2242,6 +2252,9 @@ def run_prior_review(
         stages.append(_stage("SELECT", "FAILED", error=error))
         if isinstance(exc, OffensiveRoleError):
             reports["offensive_roles"] = exc.report
+        if isinstance(exc, SelectionError) and exc.status:
+            # Structured (Session 10): the relaxation controller reads this, not the text.
+            reports["selection_failure"] = exc.as_report(error=error)
         return PriorReviewOutcome(
             profile_version=profile_version,
             stage="SELECT",
