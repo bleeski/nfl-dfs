@@ -1264,5 +1264,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 11 | In Progress to Complete | `bd5a97f` | Per-row authority, prefilled rows preserved and forbidden, `entry_groups` by Contest ID, truths v3, pointer v2; suite `1737 passed, 1 skipped`; merged as PR #65 |
 | 2026-09-24 | Session 11b | Added as Pending | `bd5a97f` | Subset binding, split at Ben's breakpoint; merged with PR #65 |
 | 2026-09-24 | Session 11b | Pending to In Progress | `6d24bc3` | Claim pushed on `claude/affectionate-bohr-mnr8vz` |
-| 2026-09-24 | Session 11b | In Progress to Complete | recorded by the next session | Showdown subset binding with a sequential fill, the ladder over the subset, `--entry-id`, readable review `sd5_v2`; suite SUITE_LINE |
+| 2026-09-24 | Session 11b | In Progress to Complete | recorded by the next session | Showdown subset binding with a sequential fill, the ladder over the subset, `--entry-id`, readable review `sd5_v2`; suite `1753 passed, 1 skipped` |
 | 2026-09-24 | Session 11c | Added as Pending | recorded by the next session | C2 and C3 over a subset policy, split at Ben's breakpoint |

@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "102a8508-e15e-568a-b0f9-017e8a72b19c",
-      "branch": "claude/affectionate-bohr-mnr8vz",
-      "chunk": "S11b",
-      "claimed_at": "2026-09-24T18:25:53Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

@@ -52,7 +52,7 @@ On `claude/affectionate-bohr-mnr8vz`, claim `6d24bc3`. Every run still ends
   own). 1,223 codes in 46 families; SHA-256
   `7343565244853db9a14fb3b0163d8b236adb30c200eebbb725c7c4ce683ee932`, re-pinned
   in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
-- **Tests**: 8 in `tests/test_entry_groups.py` (the Showdown subset through
+- **Tests**: 7 in `tests/test_entry_groups.py` (the Showdown subset through
   `run-slate` with a prefilled row, a bound prefilled row refused `V` with the
   baseline shipping, both validators' refusals, the Classic refusal, both
   generators, and the two full-fillable golden hashes), 5 in
@@ -135,7 +135,8 @@ On `claude/affectionate-bohr-mnr8vz`, claim `6d24bc3`. Every run still ends
 - `sh ./nfl.sh test tests/test_entry_groups.py tests/test_relaxation_controller.py tests/test_portfolio_policy.py -x --tb=short`:
   `82 passed in 92.94s (0:01:32)`.
 - Full suite before changes: `1737 passed, 1 skipped in 295.12s (0:04:55)`.
-  After: SUITE_LINE (the skip is the junction test).
+  After: `1753 passed, 1 skipped in 309.81s (0:05:09)` (16 new tests; the skip is
+  the junction test). `doctor` `pass_status` true.
 
 ### 2026-09-24: rows already entered ship, and every group is reported (Session 11)
 
