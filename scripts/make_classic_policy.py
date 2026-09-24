@@ -50,6 +50,12 @@ has already closed, it writes nothing and exits 2, naming rung 4 or saying the
 baseline is the file. A replay of a past slate passes a later
 `--delivery-deadline-utc`.
 
+SUBSETS (Session 11b). `--entry-id`, repeatable, binds only those rows, in
+template order; each must be a fillable blank row. The rung table and the bank
+count the bound rows, and the validator accepts the policy. run-slate refuses a
+Classic subset by name (`CLASSIC_POLICY_SUBSET_UNSUPPORTED`, the baseline ships)
+until Session 11c builds C2 with a C1 fill of the rest; Showdown's twin is live.
+
 Example:
 
     python scripts/make_classic_policy.py \\
@@ -113,6 +119,23 @@ def _rate(path: Path) -> tuple[float, str]:
         f" {measured['observations']} Classic banks, {path})")
 
 
+def _bound(fillable: "tuple[str, ...]", requested: "list[str]") -> "tuple[str, ...]":
+    """The rows `--entry-id` names, in template order (Session 11b); every fillable row without it."""
+
+    if not requested:
+        return tuple(fillable)
+    wanted = [str(item).strip() for item in requested]
+    repeated = sorted({item for item in wanted if wanted.count(item) > 1})
+    if repeated:
+        raise SystemExit(f"ENTRY_ID_REPEATED: {repeated}")
+    outside = [item for item in wanted if item not in set(fillable)]
+    if outside:
+        raise SystemExit(
+            f"ENTRY_ID_NOT_FILLABLE: {outside} are not fillable blank rows of the template (a prefilled,"
+            f" partly filled, unresolved or unknown row is never bound); fillable: {list(fillable)}")
+    return tuple(item for item in fillable if item in set(wanted))
+
+
 def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | None" = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--salaries", required=True)
@@ -136,6 +159,12 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
         default=str(DEFAULT_HOST_RATES),
         help="this host's measured candidate rates (default data/runs/host_candidate_rates.json)",
     )
+    parser.add_argument(
+        "--entry-id",
+        action="append",
+        default=[],
+        help="bind only this fillable Entry ID (repeatable); C1 fills the rest after the joint solve",
+    )
     args = parser.parse_args(argv)
 
     if args.rung == 4:
@@ -151,10 +180,11 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
     # The rows a policy binds: the template's fillable blank rows (Session 11),
     # the same list `run-slate` validates the policy against; its intake checks
     # the mode.
-    entry_ids = plan_entries(entries, slate).fillable
-    count = len(entry_ids)
-    if count == 0:
+    fillable = plan_entries(entries, slate).fillable
+    if not fillable:
         raise SystemExit("the entries file reserves no blank Entry ID to fill")
+    entry_ids = _bound(fillable, args.entry_id)
+    count = len(entry_ids)
 
     people = {row.underlying_id for row in slate.players}
     seconds_per_candidate, rate_line = _rate(Path(args.host_rates))
@@ -213,7 +243,10 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
     rules = {rule["rule_id"]: rule for rule in controls["stack_rules"]}
     print(f"wrote {out}")
     print(f"rung:              {args.rung}")
-    print(f"entries:           {count}")
+    print(f"entries:           {count}" + (f" of {len(fillable)} fillable" if count < len(fillable) else ""))
+    if count < len(fillable):
+        print("subset:            run-slate refuses a Classic subset until Session 11c"
+              " (CLASSIC_POLICY_SUBSET_UNSUPPORTED); the baseline ships")
     print(f"salary people:     {len(people)}")
     print(f"candidate bank:    {limits['candidate_limit']} "
           f"(template default would be {max(32, count + 24)})")

@@ -15,14 +15,15 @@ retrospective and session prompt in the repository.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 11b exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S11b`, on the branch your session was assigned or `claude/s11b-subset-binding`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 11c exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S11c`, on the branch your session was assigned or `claude/s11c-classic-subset`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 11 made per-row authority real: prefilled rows ship byte for byte,
-distinctness covers them, and every result reports each Contest ID group.
-Session 11b, subset binding, split from it at the breakpoint, is next; Sessions
-12, 13 and 14 are startable too. Session 11b edits `prior_review.py`,
-`selection.py` and `cli.py`, which Sessions 13 and 14 also edit, so run them
-one at a time; Session 12 shares only `docs/DATA_CONTRACTS.md` with it.
+Session 11b made subset binding real for Showdown: a policy may bind some of
+the fillable rows, and sequential Showdown fills the rest. Session 11c, the
+Classic half (C2 with a C1 fill, and C3's package over both), split from it at
+the breakpoint and is next; Sessions 12, 13 and 14 are startable too. Session
+11c edits `selection.py`, `prior_review.py` and `cli.py`, which Sessions 13 and
+14 also edit, so run them one at a time; Session 12 shares only
+`docs/DATA_CONTRACTS.md` with it.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -108,7 +109,8 @@ Every session follows this protocol, and the cards only add to it:
 | Session 09 | Batched | R28 on the model path: missing weather (including a derived roof) and missing Classic official activity become named limitations, not stops; a real identity or timestamp conflict still invalidates its evidence; `build_priors` authority persists for the run; weather pre-capture becomes optional in the runbook | R28; audit D8, DD-7; archive § R23, R24, F7 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/cowork.py`, `docs/RUNBOOK.md` | P | Session 03b, Session 06 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_classic_prior_review.py tests/test_gate_registry.py -x --tb=short` | Complete |
 | Session 10 | Batched | Relaxation controller: the engine, not printed advice, walks a bounded rung ladder inside the cumulative budget; the full trigger list; bank timeouts shrink the bank before relaxing structure; Showdown gets a real ladder; uniqueness is never on it; every relaxation is a structured record | R29; audit D5, DD-4; Showdown retro #6; C4 retro #3 | new `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `scripts/make_showdown_policy.py`, `src/nfl_dfs/cli.py` | S | Session 07, Session 07b, Session 08 | `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_classic_policy_generator.py -x --tb=short` | Complete |
 | Session 11 | Standalone | Entry groups: prefilled rows are preserved byte-identical instead of refusing the file; blank rows are filled; each Contest ID group is delivered on its own; unresolved Entry IDs are listed; distinctness covers prefilled lineups; `entry_ids` may bind a subset | R29; audit D7, DD-6; Showdown retro #4 | `src/nfl_dfs/lineups.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/baseline.py`, `src/nfl_dfs/dk.py` | V | Session 06 | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_byte_line_fidelity.py -x --tb=short` | Complete |
-| Session 11b | Standalone | Subset binding, split from Session 11 at its breakpoint: a policy's `entry_ids` may bind a subset of the fillable blank rows, in template order (a bound prefilled or unknown row is still a `V` refusal); after the policy's joint solve C1 fills the unbound blank rows with every policy lineup and every prefilled roster as no-goods; the relaxation ladder and each rung's document bind the same subset | Showdown retro #4 and §7c; Session 11 breakpoint | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/relaxation.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md` | S | Session 11 | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_relaxation_controller.py tests/test_portfolio_policy.py -x --tb=short` | Pending |
+| Session 11b | Standalone | Subset binding, split from Session 11 at its breakpoint: a policy's `entry_ids` may bind a subset of the fillable blank rows, in template order (a bound prefilled or unknown row is still a `V` refusal); after the policy's joint solve C1 fills the unbound blank rows with every policy lineup and every prefilled roster as no-goods; the relaxation ladder and each rung's document bind the same subset | Showdown retro #4 and §7c; Session 11 breakpoint | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/relaxation.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md` | S | Session 11 | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_relaxation_controller.py tests/test_portfolio_policy.py -x --tb=short` | Complete |
+| Session 11c | Standalone | C2 and C3 over a subset policy, split from Session 11b at its breakpoint: C2's joint solve fills the policy's rows and C1 the unbound rows, with every C2 lineup and prefilled roster as no-goods; prior_review's C2 records, the C2 audit and C3's package split policy rows from C1 rows; C3 names each row's source; the three `CLASSIC_POLICY_SUBSET_UNSUPPORTED` refusals go | Showdown retro #4 and §7c; Session 11b breakpoint | `src/nfl_dfs/selection.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md` | S | Session 11b | `sh ./nfl.sh test tests/test_entry_groups.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py -x --tb=short` | Pending |
 | Session 12 | Standalone | Late-swap bridge and C5: a hash-bound record of the entries actually submitted (Ben's post-upload DKEntries download) anchors governed late swap without claiming certification; multi-contest by group; locked cells byte-identical; later-lock players preferred in flexible slots | Audit D9, DD-6; archive § C5 | `src/nfl_dfs/late_swap.py`, `src/nfl_dfs/lineups.py`, `docs/DATA_CONTRACTS.md` | V | Session 11 | `sh ./nfl.sh test tests/test_governed_late_swap.py tests/test_late_swap_learning.py -x --tb=short` | Pending |
 | Session 13 | Batched | Run-start preflight report (identity, pool completeness, evidence and participation vocabulary against the actual inputs, one report before the first solve) and the scored player pool as a first-class hash-bound artifact | C4 retro #2, #4; Showdown retro #7; audit §5 | `scripts/session_probe.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/prior_review.py` | P | Session 09 | `sh ./nfl.sh test tests/test_session_probe_gate.py tests/test_prior_selection.py tests/test_preflight_report.py -x --tb=short` | Pending |
 | Session 14 | Batched | Delivery record: `delivery_outcome`, timing, coverage, artifact identity, recovery, relaxation and intervention fields in one versioned run record; "presented" means path and hash in the handoff; submission receipt only from an operator-downloaded file | Audit §9, DD-8 | `src/nfl_dfs/delivery.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md` | P | Session 07, Session 10 | `sh ./nfl.sh test tests/test_delivery_record.py -x --tb=short` | Pending |
@@ -820,6 +822,51 @@ Every session follows this protocol, and the cards only add to it:
     rung's document binds the same subset.
 - **Acceptance.** A policy binding a subset validates and fills its rows; the
   unbound blank rows are filled distinctly; a bound prefilled row is refused `V`.
+- **2026-09-24, Complete (Showdown; Classic C2/C3 split to Session 11c).** Both
+  validators accept the fillable rows or a non-empty subset of them in template
+  order (`entry_groups.subset_binding_problems`); anything else is the `V`
+  binding refusal, and the bound list is every integer cap's denominator. After
+  the SD3 joint solve, sequential Showdown fills the unbound rows with every
+  policy lineup and prefilled roster as a no-good, under the run's own
+  exclusions only (`selection._fill_unbound`); all or nothing. The SD3 audit
+  covers the policy's rows; the readable review (`sd5_v2`) checks the fill's
+  rows and names each row's `source`; the result carries `row_sources` and the
+  bound and unbound lists. The ladder binds the supplied subset at every rung
+  and rung 4 budgets for every fillable row. Both generators take a repeatable
+  `--entry-id`. A policy binding every fillable row gives `main`'s bytes (SD3
+  and C2 hashes pinned). Breakpoint used: the diff passed about 1,500 lines with
+  the Showdown path, so a Classic subset is refused by name
+  (`CLASSIC_POLICY_SUBSET_UNSUPPORTED`, `P`) and C2/C3 moved to Session 11c.
+  Decisions and numbers: `changelog.md`.
+
+#### Session 11c: C2 and C3 over a subset policy
+
+- **Depends on.** Session 11b.
+- **Scope.** Split from Session 11b at Ben's breakpoint (2026-09-24).
+  - Remove the three `CLASSIC_POLICY_SUBSET_UNSUPPORTED` refusals (`cli.py`
+    intake, `prior_review.py` before selection, `selection.py`) and call
+    `_fill_unbound` after the C2 joint solve, as the SD3 branch does: C1 fills
+    the unbound rows with every C2 lineup and prefilled roster as no-goods,
+    under the run's own exclusions only.
+  - Split every Classic record that equates the policy's rows with the fillable
+    rows: `prior_review.py`'s `stable_selection` (`entry_assignments` over the
+    policy's rows, a C1 section for the rest), the C2 audit
+    (`classic_portfolio.py` `exact_classic_assignments`, the audit's expected
+    entries), and C3 (`classic_review.py`: the policy entry-order check, the
+    assignment coverage and order check, uniqueness and the pairwise loop, the
+    denominator, and `CLASSIC_C3_ASSIGNMENT_OUTSIDE_CANDIDATE_BANK`, which a C1
+    row is by construction). Policy counts, bounds and overlap over the bound
+    rows; legality, distinctness, exclusions, activity and the byte audit over
+    every filled row.
+  - C3's package names each row's source (a new version of its readable review
+    record), as Session 11b's Showdown review does.
+- **Must hold.** No filled cell changes; a bound prefilled or unknown row stays
+  a `V` refusal; R29 across policy, C1 and prefilled rows; a C2 policy binding
+  every fillable row gives the same file (`C2_FULL_FILLABLE_SHA256` in
+  `tests/test_entry_groups.py`).
+- **Acceptance.** Through `run-slate`: a Classic policy binding a subset fills
+  its rows by C2 and the rest by C1, distinctly, on a template with a prefilled
+  row; C3 accepts the mixed portfolio and names each row's source.
 
 #### Session 12: late-swap bridge and C5
 
@@ -1214,5 +1261,8 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 10 | Pending to In Progress | `328166a` | Claim pushed on `claude/epic-planck-3jxp20` |
 | 2026-09-24 | Session 10 | In Progress to Complete | `1f7efcf` | Relaxation controller, both ladders, `nfl_relaxation_record_v1`; suite `1715 passed, 1 skipped`; merged as PR #63 |
 | 2026-09-24 | Session 11 | Pending to In Progress | `3cf7537` | Claim pushed on `claude/festive-lovelace-ffryd8` |
-| 2026-09-24 | Session 11 | In Progress to Complete | recorded by the next session | Per-row authority, prefilled rows preserved and forbidden, `entry_groups` by Contest ID, truths v3, pointer v2; suite `1737 passed, 1 skipped`; PR #65 |
-| 2026-09-24 | Session 11b | Added as Pending | recorded by the next session | Subset binding, split at Ben's breakpoint |
+| 2026-09-24 | Session 11 | In Progress to Complete | `bd5a97f` | Per-row authority, prefilled rows preserved and forbidden, `entry_groups` by Contest ID, truths v3, pointer v2; suite `1737 passed, 1 skipped`; merged as PR #65 |
+| 2026-09-24 | Session 11b | Added as Pending | `bd5a97f` | Subset binding, split at Ben's breakpoint; merged with PR #65 |
+| 2026-09-24 | Session 11b | Pending to In Progress | `6d24bc3` | Claim pushed on `claude/affectionate-bohr-mnr8vz` |
+| 2026-09-24 | Session 11b | In Progress to Complete | recorded by the next session | Showdown subset binding with a sequential fill, the ladder over the subset, `--entry-id`, readable review `sd5_v2`; suite `1758 passed, 1 skipped` |
+| 2026-09-24 | Session 11c | Added as Pending | recorded by the next session | C2 and C3 over a subset policy, split at Ben's breakpoint |

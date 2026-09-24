@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
+from .entry_groups import subset_binding_problems
 from .hashing import sha256_bytes
 from .lineups import validate_lineup
 
@@ -740,7 +741,12 @@ def validate_portfolio_policy_bytes(
     entry_ids: Sequence[str],
     externally_excluded_people: Sequence[str] = (),
 ) -> PortfolioPolicyValidation:
-    """Validate exact input bindings and derive integer limits without solving."""
+    """Validate exact input bindings and derive integer limits without solving.
+
+    `entry_ids` are the rows a policy may bind: the plan's fillable blank rows in
+    template order. The policy binds all of them or, since Session 11b, a
+    non-empty subset in the same order, and its own list is the denominator.
+    """
 
     source_sha256 = sha256_bytes(raw)
     problems: list[PolicyIssue] = []
@@ -870,12 +876,21 @@ def validate_portfolio_policy_bytes(
                         "retain every requested Entry ID exactly once in template order",
                     )
                 )
-            if requested_entry_ids != tuple(entry_ids):
+            # Session 11b: a policy binds the fillable rows (`entry_ids`) or a
+            # non-empty subset of them in template order; its own list is the
+            # denominator. A template with no fillable row keeps the exact rule.
+            binding = (
+                subset_binding_problems(requested_entry_ids, tuple(entry_ids))
+                if entry_ids else (["it binds Entry IDs the template does not offer"]
+                                   if requested_entry_ids else [])
+            )
+            if binding:
                 problems.append(
                     _issue(
                         "PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH",
-                        "the policy Entry IDs do not exactly equal the requested template sequence",
-                        "regenerate the policy from all requested entries without subsetting or reordering",
+                        "the policy Entry IDs are not the template's fillable rows or a subset of them"
+                        " in template order: " + "; ".join(binding),
+                        "bind every fillable blank Entry ID, or a subset of them, once each in template order",
                     )
                 )
         declared_people = _identity_list(
@@ -1004,7 +1019,7 @@ def validate_portfolio_policy_bytes(
     if problems or combined_rule is None or captain_rule is None or excluded_people is None:
         return PortfolioPolicyValidation(source_sha256, None, tuple(problems), tuple(findings))
 
-    count = len(entry_ids)
+    count = len(requested_entry_ids)
     if count < 1:
         problems.append(
             _issue(
@@ -1063,7 +1078,7 @@ def validate_portfolio_policy_bytes(
     policy = NormalizedPortfolioPolicy(
         salary_sha256=slate.salary_hash,
         game_id=slate.games[0].game_id,
-        entry_ids=tuple(entry_ids),
+        entry_ids=requested_entry_ids,
         people=expected_people_tuple,
         combined_rule=combined_rule,
         captain_rule=captain_rule,

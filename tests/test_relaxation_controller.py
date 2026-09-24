@@ -713,3 +713,146 @@ def test_the_showdown_ladder_widens_captains_first_and_never_touches_an_exclusio
         assert relaxed["excluded_people"] == [out.as_mapping()] and relaxed["require_unique_lineups"] is True
     assert set(own_exclusion_dk_ids(policy)) == {out.cpt_dk_id, out.flex_dk_id, benched.cpt_dk_id,
                                                  benched.flex_dk_id}
+
+
+# ----------------------------------------------------------------- Session 11b: a subset policy's ladder
+
+
+class _Window:
+    """A budget stub: a fixed improvement window, for the ladder's window arithmetic."""
+
+    passed_at_start = False
+
+    def __init__(self, seconds: float) -> None:
+        self.seconds = seconds
+
+    def improvement_remaining(self) -> float:
+        return self.seconds
+
+    def elapsed(self) -> float:
+        return 0.0
+
+    def now(self):
+        return AS_OF
+
+
+def _subset_ladder(tmp_path, *, bound, budget=None):
+    from nfl_dfs.gate_registry import load_gate_registry
+    from nfl_dfs.relaxation import Ladder, supplied_rung
+
+    slate, entries, entry_ids = _supplied()
+    count = len(bound)
+    supplied = _normalized(classic_portfolio_policy_template(
+        slate, bound, entry_sha256=entries.raw_hash, controls=classic_rung_controls(slate, count, 0),
+        limits=classic_limits(count, len(slate.players), 0, minutes=1.0)), slate, entry_ids, entries).policy
+    assert supplied.entry_ids == tuple(bound)
+    return Ladder(slate=slate, entries=entries, folder=tmp_path / "relaxation", registry=load_gate_registry(),
+                  supplied=supplied_rung(supplied, source_path=None, source_sha256=None, normalized_path=None,
+                                         normalized_sha256=supplied.normalized_sha256), budget=budget)
+
+
+def test_each_rung_binds_the_supplied_subset_and_each_record_names_it(tmp_path):
+    from nfl_dfs.relaxation import Failure, STRUCTURE
+
+    _slate, _entries, entry_ids = _supplied()
+    bound = (entry_ids[1], entry_ids[4], entry_ids[5], entry_ids[9], entry_ids[17])
+    ladder = _subset_ladder(tmp_path, bound=bound)
+    assert ladder.entry_ids == bound and ladder.fillable == entry_ids
+    rung = ladder.next(Failure("MODELED_BANK_INFEASIBILITY", STRUCTURE, "joint infeasible"))
+    assert rung is not None and rung.rung == 1
+    document = json.loads(Path(rung.source_path).read_text(encoding="utf-8"))
+    assert document["bindings"]["entry_ids"] == list(bound)
+    assert rung.policy.entry_ids == bound and rung.policy.entry_count == 5
+    normalized = json.loads(Path(rung.normalized_path).read_text(encoding="utf-8"))
+    assert normalized["effective"]["entry_count_denominator"] == 5
+    assert ladder.records and all(record["entry_ids"] == list(bound) for record in ladder.records)
+
+
+def test_rung_4_budgets_for_every_fillable_row_not_the_bound_ones(tmp_path):
+    from nfl_dfs.relaxation import Failure, SOLVER_ERROR
+
+    _slate, _entries, entry_ids = _supplied()
+    bound = entry_ids[:5]
+    failure = Failure("PORTFOLIO_SELECTION_SOLVER_ERROR", SOLVER_ERROR, "solver error")
+    # 20 fillable rows need (20 + 1) x 0.5 s = 10.5 s; the 5 bound rows would need 3 s.
+    short = _subset_ladder(tmp_path / "short", bound=bound, budget=_Window(6.0))
+    assert short._no_policy(short.current, failure, 0.0, why="the test") is None
+    assert short.stop is not None and "20 sequential solves" in short.stop
+    roomy = _subset_ladder(tmp_path / "roomy", bound=bound, budget=_Window(11.0))
+    floor = roomy._no_policy(roomy.current, failure, 0.0, why="the test")
+    assert floor is not None and floor.rung == 4 and floor.policy is None
+    (drop,) = roomy.records
+    assert drop["constraint"] == "portfolio_policy" and drop["entry_ids"] == list(bound)
+
+
+def _showdown_subset_run(tmp_path, monkeypatch, *, run_id, controls, bound, rows):
+    from nfl_dfs import cli
+    from nfl_dfs import prior_review as prior_review_module
+
+    from .test_prior_selection import _entries_bytes
+
+    _clocked(monkeypatch, FakeClock())
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=datetime.now(timezone.utc) + timedelta(hours=6))
+    entry_path.write_bytes(_entries_bytes(rows))
+    attachments = _attachments(tmp_path, salary_path, entry_path)
+    slate = parse_salaries(salary_path)
+    policy_path = tmp_path / "policy" / "portfolio.json"
+    policy_path.parent.mkdir()
+    policy_path.write_text(json.dumps(portfolio_policy_template(slate, list(bound), controls=controls)),
+                           encoding="utf-8")
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    real = prior_review_module.run_prior_review
+    monkeypatch.setattr(cli, "run_prior_review", lambda **kwargs: real(**kwargs, project=project))
+    code = cli.command_cowork_run(_cowork_args(
+        tmp_path, attachments, run_id=run_id, portfolio_policy_json=str(policy_path),
+        prior_package_dir=str(package_dir)))
+    return code, json.loads((tmp_path / "outputs" / run_id / "cowork_run.json").read_text(encoding="utf-8"))
+
+
+def test_a_showdown_subset_policy_relaxes_on_its_own_rows_and_the_fill_covers_the_rest(tmp_path, monkeypatch):
+    """A 10% Captain cap over the two bound rows floors to zero; rung 2's 50% allows one each."""
+
+    rows = ("900000001", "900000002", "900000003", "900000004")
+    bound = ("900000002", "900000004")
+    code, report = _showdown_subset_run(
+        tmp_path, monkeypatch, run_id="sd-subset-ladder", rows=rows, bound=bound,
+        controls={"max_captain_exposure": {"default_fraction": 0.1, "overrides": []},
+                  "max_pairwise_person_overlap": 4})
+    assert code == 0 and report["improvement"]["status"] == "DELIVERED", report["blockers"]
+    relaxation = report["relaxation"]
+    assert relaxation["final_rung"] == "2"
+    assert all(record["entry_ids"] == list(bound) for record in relaxation["relaxations"])
+    final = json.loads(Path(relaxation["final_policy"]["source_path"]).read_text(encoding="utf-8"))
+    assert final["bindings"]["entry_ids"] == list(bound)
+    assert report["row_sources"] == {"900000001": "SHOWDOWN_SEQUENTIAL", "900000002": "POLICY",
+                                     "900000003": "SHOWDOWN_SEQUENTIAL", "900000004": "POLICY"}
+    rosters = _exported_rosters_showdown(report)
+    assert len(rosters) == 4 and len(set(rosters)) == 4
+
+
+def test_rung_4_drops_a_subset_policy_and_fills_every_fillable_row(tmp_path, monkeypatch):
+    from nfl_dfs import selection
+
+    real_solve = selection.solve_policy_portfolio
+
+    def infeasible(policy, bank, **kwargs):
+        result = real_solve(policy, bank, **kwargs)
+        return replace(result, status="MODELED_BANK_INFEASIBLE_PROVEN", selected_candidate_indexes=())
+
+    monkeypatch.setattr(selection, "solve_policy_portfolio", infeasible)
+    rows = ("900000001", "900000002", "900000003")
+    bound = ("900000003",)
+    code, report = _showdown_subset_run(
+        tmp_path, monkeypatch, run_id="sd-subset-floor", rows=rows, bound=bound,
+        controls={"max_captain_exposure": {"default_fraction": 1, "overrides": []},
+                  "max_pairwise_person_overlap": 4})
+    assert code == 0 and report["improvement"]["status"] == "DELIVERED", report["blockers"]
+    relaxation = report["relaxation"]
+    assert relaxation["final_rung"] == "4" and relaxation["final_policy"] is None
+    (drop,) = [record for record in relaxation["relaxations"] if record["constraint"] == "portfolio_policy"]
+    assert drop["entry_ids"] == list(bound)
+    assert report["row_sources"] == {entry: "SHOWDOWN_SEQUENTIAL" for entry in rows}
+    assert report["release_truths"]["delivered_entry_ids"] == list(rows)
+    rosters = _exported_rosters_showdown(report)
+    assert len(rosters) == 3 and len(set(rosters)) == 3

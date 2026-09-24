@@ -641,7 +641,11 @@ class Ladder:
         self.mode = slate.mode
         self.entries = entries
         # The rows a policy may bind: the template's fillable blank rows (Session 11).
-        self.entry_ids = plan_entries(entries, slate).fillable
+        self.fillable = plan_entries(entries, slate).fillable
+        # The rows the supplied policy binds, which every rung's policy binds too:
+        # the fillable rows, or since Session 11b a subset of them. Rung 4 has no
+        # policy and fills every fillable row.
+        self.entry_ids = supplied.policy.entry_ids if supplied.policy is not None else self.fillable
         self.folder = Path(folder)
         self.registry = registry
         self.external = tuple(externally_excluded_people)
@@ -815,9 +819,9 @@ class Ladder:
 
     def _no_policy(self, current: Rung, failure: Failure, overhead_seconds: float, *, why: str) -> Rung | None:
         window = self._window(overhead_seconds)
-        needed = (len(self.entry_ids) + 1) * SOLVE_MINIMUM_SECONDS
+        needed = (len(self.fillable) + 1) * SOLVE_MINIMUM_SECONDS
         if window is not None and window < needed:
-            self._stop(failure, f"rung 4 needs {needed:g} s for {len(self.entry_ids)} sequential solves and"
+            self._stop(failure, f"rung 4 needs {needed:g} s for {len(self.fillable)} sequential solves and"
                                 f" {max(0.0, window):.1f} s are left after the last attempt's"
                                 f" {max(0.0, overhead_seconds):.1f} s before selection ({why}); the ladder"
                                 " stopped and the baseline is the file")
@@ -839,12 +843,12 @@ class Ladder:
         digest = sha256_bytes(raw)
         if self.mode is EngineMode.CLASSIC:
             validation = validate_classic_portfolio_policy_file(
-                source, slate=self.slate, entry_ids=self.entry_ids, entry_sha256=self.entries.raw_hash,
+                source, slate=self.slate, entry_ids=self.fillable, entry_sha256=self.entries.raw_hash,
                 externally_excluded_people=self.external, expected_sha256=digest)
             write_classic_portfolio_policy_validation(folder / "portfolio_policy_validation.json", validation)
         else:
             validation = validate_portfolio_policy_file(
-                source, slate=self.slate, entry_ids=self.entry_ids,
+                source, slate=self.slate, entry_ids=self.fillable,
                 externally_excluded_people=self.external, expected_sha256=digest)
             write_portfolio_policy_validation(folder / "portfolio_policy_validation.json", validation)
         normalized = folder / "portfolio_policy.normalized.json"
