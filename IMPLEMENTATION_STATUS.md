@@ -1,5 +1,28 @@
 # Implementation Status
 
+## Capability added: 2026-09-24 (Session 11b)
+
+A Showdown policy may bind a subset of the fillable blank rows, in template
+order: a thesis or dart sleeve. Both validators accept the fillable rows or a
+non-empty ordered subset of them and refuse anything else (`V`), and the bound
+list is the denominator for every integer cap (0.5 over 4 bound rows of 10
+allows 2). After the SD3 joint solve, sequential Showdown fills the unbound
+rows with every policy lineup and prefilled roster as a no-good, under the
+run's own exclusions only; a fill that runs out of distinct lineups delivers
+nothing and the baseline stays the file, named. The SD3 audit covers the
+policy's rows, the readable review (`prior_only_readable_review_sd5_v2`) checks
+the fill's rows (exclusions, inactives, overlap, distinctness against every row
+and every prefilled roster) and names each row's `source`, and the result
+carries `row_sources`. The relaxation ladder binds the supplied subset at every
+rung, and rung 4 budgets for and fills every fillable row. Both generators take
+a repeatable `--entry-id`. A policy binding every fillable row gives the same
+file as before, byte for byte (SD3 and C2 hashes captured on `main`). Verified
+through `run-slate` on the Showdown fixture with a prefilled row, the ladder at
+rung 2 and rung 4, and at unit level. Not yet: a Classic subset validates and
+the Classic generator writes one, but `run-slate` refuses it by name
+(`CLASSIC_POLICY_SUBSET_UNSUPPORTED`, `P`) and the baseline ships; C2 with a C1
+fill, the C2 records and C3's package over both are Session 11c.
+
 ## Capability added: 2026-09-24 (Session 11)
 
 A template with rows already entered ships instead of refusing the file.

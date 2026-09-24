@@ -4,6 +4,139 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: a Showdown policy may bind some of the rows (Session 11b)
+
+A policy bound every fillable row or none. Now a Showdown policy may bind a
+subset, a thesis or dart sleeve (Showdown retro #4 and §7c): its joint solve
+fills its rows, and sequential Showdown fills the rest without repeating any
+lineup. A Classic subset validates but is refused by name until Session 11c.
+On `claude/affectionate-bohr-mnr8vz`, claim `6d24bc3`. Every run still ends
+`PRIOR_ONLY / DO_NOT_UPLOAD`; exit codes keep their meaning.
+
+#### Added
+
+- **The subset rule**, `entry_groups.subset_binding_problems`: a policy binds
+  the plan's fillable rows or a non-empty subset of them in template order,
+  each once. Both validators take the fillable rows as the rows a policy may
+  bind; a prefilled, partly filled, unresolved, unknown, repeated or
+  out-of-order row is still `PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH` or
+  `CLASSIC_POLICY_ENTRY_ID_BINDING_MISMATCH` (`V`). The bound list is the
+  denominator: Showdown's `floor(fraction x bound rows)` (0.5 over 4 bound rows
+  of 10 fillable allows 2, not 5), Classic's integer domains, default bounds,
+  default stack rules and `default_search_limits`.
+- **The unbound fill**, `selection._fill_unbound`: after the SD3 joint solve,
+  sequential Showdown fills the unbound rows (`fill_count`), every policy
+  lineup and prefilled roster a no-good, under the run's own exclusions only.
+  The sequential loop moved into `_sequential_lineups`, shared with the
+  no-policy path unchanged. The policy report's `unbound_fill` records it;
+  `prior_review` merges the two into one assignment in template order, never
+  cycled, and `selection_report.row_sources` names each row's source.
+- **The readable review, `prior_only_readable_review_sd5_v2`**: each entry's
+  `source`, and `unbound_rows` (the fill's rows, checks, overlap and exposure).
+  With a subset the policy's checks cover its rows and the denominator is
+  theirs; every filled row is checked for legality, bytes and distinctness
+  against every other row and every prefilled roster; the unbound rows also for
+  the run's exclusions, official inactives and the fill's overlap.
+- **The result** carries `row_sources`; `portfolio_policy` adds
+  `bound_entry_ids` and `unbound_entry_ids`, and its `entry_count_denominator`
+  is the bound rows.
+- **Generators**: a repeatable `--entry-id` in `scripts/make_showdown_policy.py`
+  and `scripts/make_classic_policy.py` binds those rows in template order; a
+  row that is not fillable is `ENTRY_ID_NOT_FILLABLE`, a repeat
+  `ENTRY_ID_REPEATED`. The Showdown generator's `--rung` keeps the subset.
+- **Registry**: `CLASSIC_POLICY_SUBSET_UNSUPPORTED` (`implementation_limit`,
+  `P`); `READABLE_REVIEW_ROW_SOURCE_MISMATCH` and
+  `READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH` (`audited_selection`, `V`);
+  `READABLE_REVIEW_UNBOUND_ROW_EXCLUDED_PERSON` (`operator_restriction`, `V`);
+  `READABLE_REVIEW_UNBOUND_ROW_NOT_ACTIVE` (`official_activity`, `P`, as C3's
+  own). 1,223 codes in 46 families; SHA-256
+  `7343565244853db9a14fb3b0163d8b236adb30c200eebbb725c7c4ce683ee932`, re-pinned
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+- **Tests**: 8 in `tests/test_entry_groups.py` (the Showdown subset through
+  `run-slate` with a prefilled row, a bound prefilled row refused `V` with the
+  baseline shipping, both validators' refusals, the Classic refusal, both
+  generators, and the two full-fillable golden hashes), 5 in
+  `tests/test_portfolio_policy.py` (bound-count caps in both modes, the fill
+  under the run's exclusions, all or nothing, the audit's artifact rule), 4 in
+  `tests/test_relaxation_controller.py` (rung documents and records bind the
+  subset, rung 4's window counts every fillable row, a subset relaxing to rung
+  2 through `run-slate`, and rung 4 filling every row).
+
+#### Changed
+
+- **The SD3 audit** (`audit_policy_assignments`, record unchanged) takes the
+  policy's rows and the new `unbound_entry_ids`: the assignment artifact's
+  policy rows must equal the audited assignment, and its other rows must be
+  exactly the unbound rows. For a policy binding every row this is the old
+  check, row for row.
+- **The ladder** binds the supplied policy's list: `Ladder.entry_ids` is it,
+  every rung's document and each record's `entry_ids` carry it, and the
+  validator gets `Ladder.fillable`. Rung 4 has no policy and fills every
+  fillable row, so its window check counts them all.
+- **`assignments.csv`** under a policy is every fillable row in template order
+  (the policy's order before; the same bytes when the policy binds every row).
+- **A Classic subset is refused by name** at `run-slate` intake, in
+  `prior_review` and in `selection` (`CLASSIC_POLICY_SUBSET_UNSUPPORTED`); the
+  baseline ships and the pre-review exit names why.
+- **Contracts**: `docs/DATA_CONTRACTS.md` C2 and SD3 (a rule change dated
+  Session 11b, no new policy version), SD4's unbound rows and audit, SD5 v2,
+  the `run-slate` result, the relaxation record's `entry_ids` and rung 4's
+  exclusions; `docs/RUNBOOK.md` for both policy steps.
+- **One test edited, a visible change the card's rule moved**:
+  `test_portfolio_policy.py::test_duplicate_and_subset_entry_bindings_are_rejected`
+  became `test_duplicate_reordered_and_unknown_entry_bindings_are_rejected`. It
+  pinned a one-row subset as refused; that subset now validates. The duplicate
+  case is unchanged, and reordered, unknown and empty bindings are refused in
+  its place.
+
+#### Decided (Ben's leans, recorded)
+
+- **Order of the solves**: the policy's joint solve first, then the fill,
+  seeded with the policy lineups and prefilled rosters as no-goods. The fill is
+  the no-policy selector's rules among its own rows (a distinct Captain per
+  lineup until the pool runs out, the request's `max_person_overlap`); it does
+  not inherit the policy's caps, overlap or Captain rule, because those are
+  the thesis, not the portfolio.
+- **Exclusions**: a policy's exclusions and zero caps bind only its rows. At
+  rung 4 the dropped policy has no rows of its own, so a subset's exclusions
+  carry to every row, as Session 10's never-relaxed rule says: widening a fade
+  only tightens.
+- **Audits**: the SD3 audit over the bound rows, record unchanged; the readable
+  review is the second section for the unbound rows, because it already
+  re-derives every filled row independently. v2 because a field was added.
+- **`lineup_count`** still describes the file, every fillable row; the policy's
+  own count is its list.
+- **Partial fill**: all or nothing, as before. A fill that runs out of distinct
+  lineups raises `SOLVER_RETURNED_NO_LINEUP` with `stage=UNBOUND_FILL`, the
+  review delivers nothing and the baseline stays the file, named. A partial
+  review file could never replace a fuller baseline anyway.
+- **Fill time**: each fill solve gets what the bank (70%) and joint solve (20%)
+  leave of the window, split across its solves, at most 10 s and at least
+  0.5 s. The SD3 rung window checks do not add the fill; a late fill is named
+  by `DEADLINE_PASSED_DURING_REVIEW` like any late stage.
+- **Generator flag**: repeatable `--entry-id`; the rows are bound in template
+  order whatever order they were given, and a row that is not fillable stops
+  the script.
+- **Policy contracts**: no new version (the shape is unchanged, a valid policy
+  keeps its meaning, an older reader refuses a subset).
+- **Breakpoint used.** With the Showdown path the diff passed about 1,500
+  changed lines, so C2 with a C1 fill and C3 over a mixed portfolio moved to
+  Session 11c. Selection refuses a Classic fill rather than carrying a C2 path
+  nothing exercises. C3's export names no row source yet; a Classic file is
+  still all C2 or all C1, and the result's `row_sources` says which.
+
+#### Verification
+
+- Golden hashes captured on `main` (bd5a97f) in a scratch worktree, twice, the
+  same both times: SD3 full-fillable `1918820d…eed1`, C2 full-fillable
+  `48027a40…f8ce`. This branch reproduces both
+  (`test_a_policy_binding_every_fillable_row_gives_the_same_file_as_before`,
+  and its Classic twin).
+- `sh ./nfl.sh test tests/test_entry_groups.py tests/test_relaxation_controller.py tests/test_portfolio_policy.py -x --tb=short`:
+  `82 passed in 92.94s (0:01:32)`.
+- Full suite before changes: `1737 passed, 1 skipped in 295.12s (0:04:55)`.
+  After: SUITE_LINE (the skip is the junction test).
+
 ### 2026-09-24: rows already entered ship, and every group is reported (Session 11)
 
 One prefilled row used to refuse the whole file on five paths (prior_review
