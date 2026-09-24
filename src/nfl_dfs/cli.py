@@ -3326,10 +3326,7 @@ def _run_prior_review_profile(
         # Written once the delivery decision is final, so the marker never says
         # "kept" about a CSV that revalidation then withheld.
         try:
-            _write_json(
-                DEFAULT_RUNS_DIR / run_id / "prior_review" / "READABLE_REVIEW_FAILED.json",
-                failure_record,
-            )
+            _write_json(run_root / "READABLE_REVIEW_FAILED.json", failure_record)
             _write_json(output_root / "review" / "READABLE_REVIEW_FAILED.json", failure_record)
         except OSError:
             pass
@@ -3437,6 +3434,17 @@ def _run_prior_review_profile(
             "selector": selector_policy,
             "independent_audit": audit_report,
         }
+        if ladder is not None:
+            # `valid` and the hashes above are the supplied policy's; the
+            # enforcement, selector and audit are the policy the last attempt ran.
+            result["portfolio_policy"].update({
+                "enforced_rung": ladder.current.label,
+                "enforced_policy": ladder.current.binding(),
+                "enforced_policy_is_supplied": (
+                    ladder.current.policy is not None
+                    and ladder.current.normalized_sha256 == ladder.started_from.normalized_sha256
+                ),
+            })
     _write_json(report_path, result)
     _print_json(result)
     # Exit codes keep their meaning (Session 06): 0 when the run's own review
@@ -3934,6 +3942,9 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         blockers.extend(
             deadline_text for deadline_text in budget.blocker_texts() if deadline_text not in blockers
         )
+        if ladder is not None:
+            # An intake relaxation, or its stop, is named here too (Session 10).
+            blockers[0:0] = [text for text in ladder.texts() if text not in blockers]
         stage = (
             "DEADLINE_IMPROVEMENT_SKIPPED" if deadline_stop is not None
             else "PORTFOLIO_POLICY_ENFORCEMENT_BLOCKED" if policy_summary is not None
@@ -3991,8 +4002,12 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "improvement": improvement,
             "deadline": budget.as_record(),
         }
-        if ladder is not None and (ladder.records or ladder.stop):
+        if ladder is not None and (ladder.records or ladder.stop or ladder.defects):
             result["relaxation"] = ladder.as_record()
+            try:
+                _write_json(DEFAULT_RUNS_DIR / run_id / "relaxation" / "relaxation.json", result["relaxation"])
+            except OSError as exc:
+                result["relaxation_record_problems"] = [f"RELAXATION_RECORD_UNWRITTEN:{exc}"]
         if policy_summary is not None:
             result["portfolio_policy"] = policy_summary
             result["bulk_entry_csv"] = None

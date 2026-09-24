@@ -210,7 +210,7 @@
     "stage_failure": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "C1 Classic intake and prior-review artifacts"},
-      "covers": "A model-path stage (priors, projection, selection or its export) failed, or its file was not delivered and the run's baseline ships in its place; the stage's own code is in the detail."
+      "covers": "A model-path stage (priors, projection, selection or its export) failed, or its file was not delivered and the run's baseline ships in its place; the stage's own code is in the detail. Since Session 10 also a relaxation rung the validator refused on a code no rung loosens, or one that could not be built at all."
     },
     "prelock_manifest": {
       "class": "P", "stops": "CERTIFICATION",
@@ -1284,6 +1284,7 @@
     "RELAXATION_BANK_RESIZED": "search_budget",
     "RELAXATION_LADDER_STOPPED": "delivery_deadline",
     "RELAXATION_POLICY_DROPPED": "portfolio_bounds",
+    "RELAXATION_RUNG_UNBUILDABLE": "stage_failure",
     "RELAXATION_STRUCTURE_RELAXED": "portfolio_bounds",
     "RELEASE_TRUTHS_INCOMPLETE": "certification_prerequisite",
     "REPARSE_ASSIGNMENT_MISMATCH": "delivered_bytes",

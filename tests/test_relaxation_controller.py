@@ -168,6 +168,11 @@ def test_an_impossible_exposure_cap_relaxes_to_feasible_and_exports(tmp_path, mo
     assert report["prior_review_hashes"]["portfolio_policy_source"] == binding["source_sha256"]
     assert report["prior_review_hashes"]["portfolio_policy_normalized"] == binding["normalized_sha256"]
     assert relaxation["final_policy"] == binding
+    # The result's policy block says which policy was enforced: not the supplied one.
+    enforced = report["portfolio_policy"]
+    assert enforced["valid"] is False and enforced["enforced_rung"] == "3"
+    assert enforced["enforced_policy"] == binding and enforced["enforced_policy_is_supplied"] is False
+    assert enforced["enforcement_status"] == "ENFORCED_AND_INDEPENDENTLY_AUDITED"
     assert _truth_codes(report)["RELAXATION_STRUCTURE_RELAXED"] == "S"
     rosters = _exported_rosters(report)
     assert len(rosters) == 3 and len(set(rosters)) == 3
@@ -438,6 +443,145 @@ def test_an_sd3_bank_that_ran_out_is_deepened_before_any_structure(tmp_path, mon
     assert _truth_codes(report)["RELAXATION_BANK_RESIZED"] == "S"
 
 
+def test_a_rung_policy_changed_after_it_is_written_is_refused_before_selection(tmp_path, monkeypatch):
+    """The review re-checks a generated policy's bytes as it does a supplied one's."""
+
+    from nfl_dfs import cli
+    from nfl_dfs import prior_review as prior_review_module
+
+    real = prior_review_module.run_prior_review
+
+    def review(**kwargs):
+        source = Path(kwargs["portfolio_policy_source_path"])
+        source.write_bytes(source.read_bytes() + b" ")  # one byte after the ladder hashed it
+        return real(**kwargs)
+
+    def policy(attachments):
+        slate = parse_salaries(attachments / "salary.csv")
+        bounds = [{"underlying_id": row.underlying_id, "dk_id": row.dk_id, "minimum_entries": 0,
+                   "maximum_entries": 1, "hard": True} for row in slate.players]
+        return _policy_file(attachments, controls={"player_exposure_bounds": bounds})
+
+    code, report, root = _classic(tmp_path, monkeypatch, run_id="mutated", policy=policy, review=review)
+    assert code == 2
+    _baseline_is_the_file(report, root)
+    assert any("PORTFOLIO_POLICY_SOURCE_CHANGED_BEFORE_SELECTION" in text for text in report["blockers"])
+    assert report["relaxation"]["attempts"][-1]["failure"] is None  # not a trigger: the ladder ends
+    assert not list((root / "review").glob("DK_REVIEW_ENTRY_*.csv"))
+
+
+def test_the_same_inputs_write_byte_identical_rung_policies(tmp_path):
+    from nfl_dfs.gate_registry import load_gate_registry
+    from nfl_dfs.relaxation import Failure, Ladder, STRUCTURE, supplied_rung
+
+    slate, entries, entry_ids = _supplied()
+    count = len(entry_ids)
+    supplied = _normalized(classic_portfolio_policy_template(
+        slate, entry_ids, entry_sha256=entries.raw_hash, controls=classic_rung_controls(slate, count, 0),
+        limits=classic_limits(count, len(slate.players), 0, minutes=1.0)), slate, entry_ids, entries).policy
+    written = []
+    for name in ("first", "second"):
+        ladder = Ladder(slate=slate, entries=entries, folder=tmp_path / name, registry=load_gate_registry(),
+                        supplied=supplied_rung(supplied, source_path=None, source_sha256=None,
+                                               normalized_path=None, normalized_sha256=supplied.normalized_sha256))
+        rung = ladder.next(Failure("MODELED_BANK_INFEASIBILITY", STRUCTURE, "joint infeasible"))
+        assert rung is not None and rung.rung == 1
+        written.append((Path(rung.source_path).read_bytes(), Path(rung.normalized_path).read_bytes(),
+                        rung.source_sha256, rung.normalized_sha256))
+    assert written[0] == written[1]
+    # A folder that already holds a rung is never written over.
+    ladder = Ladder(slate=slate, entries=entries, folder=tmp_path / "first", registry=load_gate_registry(),
+                    supplied=supplied_rung(supplied, source_path=None, source_sha256=None,
+                                           normalized_path=None, normalized_sha256=supplied.normalized_sha256))
+    with pytest.raises(FileExistsError):
+        ladder.next(Failure("MODELED_BANK_INFEASIBILITY", STRUCTURE, "joint infeasible"))
+
+
+def test_a_rung_the_validator_refuses_on_a_code_no_rung_loosens_is_named_and_rung_4_still_runs(
+        tmp_path, monkeypatch):
+    from nfl_dfs import relaxation
+    from nfl_dfs.classic_portfolio_policy import PolicyIssue
+    from nfl_dfs.gate_registry import load_gate_registry
+
+    slate, entries, entry_ids = _supplied()
+    count = len(entry_ids)
+    supplied = _normalized(classic_portfolio_policy_template(
+        slate, entry_ids, entry_sha256=entries.raw_hash, controls=classic_rung_controls(slate, count, 0),
+        limits=classic_limits(count, len(slate.players), 0, minutes=1.0)), slate, entry_ids, entries).policy
+    real = relaxation.validate_classic_portfolio_policy_file
+
+    def refuse(path, **kwargs):
+        validation = real(path, **kwargs)
+        issue = PolicyIssue("CLASSIC_POLICY_DRAFT_GROUP_MISMATCH", "a defect", "fix the generator")
+        return replace(validation, problems=(issue,))
+
+    monkeypatch.setattr(relaxation, "validate_classic_portfolio_policy_file", refuse)
+    ladder = relaxation.Ladder(slate=slate, entries=entries, folder=tmp_path / "relaxation",
+                               registry=load_gate_registry(),
+                               supplied=relaxation.supplied_rung(supplied, source_path=None, source_sha256=None,
+                                                                 normalized_path=None,
+                                                                 normalized_sha256=supplied.normalized_sha256))
+    rung = ladder.next(relaxation.Failure("MODELED_BANK_INFEASIBILITY", relaxation.STRUCTURE, "infeasible"))
+    assert rung is not None and rung.rung == 4 and rung.policy is None
+    (defect,) = ladder.defects
+    assert defect.startswith("RELAXATION_RUNG_UNBUILDABLE:after MODELED_BANK_INFEASIBILITY at rung SUPPLIED")
+    assert "CLASSIC_POLICY_DRAFT_GROUP_MISMATCH" in defect and ladder.stop is None
+    assert defect in ladder.texts()
+    assert load_gate_registry().family_of("RELAXATION_RUNG_UNBUILDABLE").name == "stage_failure"
+
+
+def test_an_intake_relaxation_the_window_cannot_hold_is_named_on_the_pre_review_exit(tmp_path, monkeypatch):
+    """No window at all: the ladder cannot take even rung 4, stops by name, and records it."""
+
+    def policy(attachments):
+        slate = parse_salaries(attachments / "salary.csv")
+        bounds = [{"underlying_id": row.underlying_id, "dk_id": row.dk_id, "minimum_entries": 0,
+                   "maximum_entries": 1, "hard": True} for row in slate.players]
+        return _policy_file(attachments, controls={"player_exposure_bounds": bounds})
+
+    code, report, root = _classic(tmp_path, monkeypatch, run_id="no-window", policy=policy, window=0.0)
+    assert code == 2
+    _baseline_is_the_file(report, root)
+    relaxation = report["relaxation"]
+    assert relaxation["stop"].startswith("RELAXATION_LADDER_STOPPED:")
+    assert _truth_codes(report)["RELAXATION_LADDER_STOPPED"] == "S"
+    assert any(text.startswith("RELAXATION_LADDER_STOPPED:") for text in report["blockers"])
+    assert (tmp_path / "runs" / "no-window" / "relaxation" / "relaxation.json").is_file()
+
+
+def test_the_showdown_generator_writes_each_rung_and_rung_4_writes_nothing(tmp_path, capsys):
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "make_showdown_policy.py"
+    spec = importlib.util.spec_from_file_location("make_showdown_policy", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    salaries, entries_path = SUPPLIED / "DKSalaries Salary CSV Showdown.csv", SUPPLIED / "DKEntries CSV 20 entries.csv"
+    slate = parse_salaries(salaries)
+    entry_ids = [item.entry_id for item in parse_entries(entries_path).authorizations]
+    captains = []
+    for rung in (0, 1, 2, 3, 4):
+        out = tmp_path / f"rung{rung}.json"
+        code = module.main(["--salaries", str(salaries), "--entries", str(entries_path), "--out", str(out),
+                            "--combined-default", "0.5", "--captain-default", "0.1", "--rung", str(rung)])
+        printed = capsys.readouterr().out
+        assert code == 0
+        if rung == 4:
+            assert not out.exists() and "rung 4 emits no policy" in printed
+            continue
+        summary = json.loads(printed)
+        assert summary["rung"] == rung
+        if rung:
+            written = json.loads(out.read_text(encoding="utf-8"))["controls"]["max_captain_exposure"]
+            assert summary["written_controls"]["captain_default_fraction"] == (
+                None if written["default_fraction"] is None else str(Decimal(str(written["default_fraction"]))))
+        validation = validate_portfolio_policy_bytes(out.read_bytes(), slate=slate, entry_ids=entry_ids)
+        assert validation.valid, validation.blockers()
+        assert validation.policy.require_unique_lineups is True
+        captains.append(validation.policy.captain_rule.default_fraction)
+    assert captains == [Decimal("0.1"), Decimal("0.25"), Decimal("0.5"), None]
+
+
 def _exported_rosters_showdown(report) -> list[tuple[str, ...]]:
     path = Path(report["latest_deliverable"]["path"])
     rows = list(csv.reader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
@@ -489,6 +633,9 @@ def test_a_relaxation_never_tightens_and_keeps_every_exclusion():
     count = len(entry_ids)
     people = sorted({row.underlying_id: row for row in slate.players}.values(), key=lambda row: row.underlying_id)
     excluded, zeroed, floored = people[0], people[1], people[2]
+    benched_team = next(team for team in sorted({row.team for row in slate.players})
+                        if team not in {excluded.team, zeroed.team, floored.team, people[3].team,
+                                        slate.players[0].team})
     controls = {
         "player_exposure_bounds": [
             {"underlying_id": zeroed.underlying_id, "dk_id": zeroed.dk_id, "minimum_entries": 0,
@@ -497,6 +644,8 @@ def test_a_relaxation_never_tightens_and_keeps_every_exclusion():
              "maximum_entries": 4, "hard": True},
         ],
         "team_exposure_bounds": [{"team": slate.players[0].team, "minimum_entries": 0, "maximum_entries": 5,
+                                  "hard": True},
+                                 {"team": benched_team, "minimum_entries": 0, "maximum_entries": 0,
                                   "hard": True}],
         "exact_exclusions": [{"underlying_id": excluded.underlying_id, "dk_id": excluded.dk_id}],
         "stack_rules": [{"rule_id": "stack", "rule_type": "QB_PASS_CATCHER", "minimum_value": 2,
@@ -517,14 +666,16 @@ def test_a_relaxation_never_tightens_and_keeps_every_exclusion():
         assert bounds[zeroed.underlying_id]["maximum_entries"] == 0  # a zero cap is an exclusion
         assert floored.underlying_id not in bounds or bounds[floored.underlying_id]["maximum_entries"] >= 4
         assert people[3].underlying_id not in bounds  # an outside exclusion is re-derived, not written
-        assert relaxed["team_exposure_bounds"] == []
+        assert relaxed["team_exposure_bounds"] == [  # the 5-cap goes; a zero cap is an exclusion
+            {"team": benched_team, "minimum_entries": 0, "maximum_entries": 0, "hard": True}]
         (rule,) = relaxed["stack_rules"]
         assert rule["minimum_entries"] <= count and rule["minimum_value"] <= 2 and rule["maximum_value"] >= 3
         assert relaxed["max_pairwise_person_overlap"] >= 3
         again = _normalized(classic_portfolio_policy_template(
             slate, entry_ids, entry_sha256=entries.raw_hash, controls=relaxed), slate, entry_ids, entries,
             external).policy
-        assert set(own_exclusion_dk_ids(again)) == {excluded.dk_id, zeroed.dk_id}
+        benched = {row.dk_id for row in slate.players if row.team == benched_team}
+        assert set(own_exclusion_dk_ids(again)) == {excluded.dk_id, zeroed.dk_id} | benched
 
 
 def test_the_showdown_ladder_widens_captains_first_and_never_touches_an_exclusion():

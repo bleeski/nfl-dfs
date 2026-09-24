@@ -176,8 +176,26 @@ def main(argv=None):
         'captain_overrides_nonzero_integer': {u: imax(f) for u, f in sorted(capt_ovr.items()) if f > 0},
         'max_pairwise_person_overlap': a.max_overlap,
         'rung': a.rung,
+        **({'note': 'the integer caps above are the flags (rung 0); written_controls is the relaxed policy'}
+           if a.rung else {}),
+        **({'written_controls': _written_controls(out)} if a.rung else {}),
     }, indent=2))
     return 0
+
+
+def _written_controls(path):
+    from decimal import Decimal
+
+    with open(path, encoding='utf-8') as f:
+        controls = json.load(f, parse_float=Decimal)['controls']
+    text = lambda value: None if value is None else str(value)
+    captain = controls['max_captain_exposure']
+    return {
+        'combined_default_fraction': text(controls['max_combined_person_exposure']['default_fraction']),
+        'captain_default_fraction': text(captain['default_fraction']),
+        'captain_zeroed': sorted(o['underlying_id'] for o in captain['overrides'] if o['fraction'] == 0),
+        'max_pairwise_person_overlap': controls['max_pairwise_person_overlap'],
+    }
 
 
 def relaxed_document(document, salary_path, entry_path, rung):

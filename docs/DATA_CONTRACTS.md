@@ -2017,7 +2017,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `770689f2e395a1617a82e2c96055d9109cde1d15a5d4d6e8a51bba7c50ca1026`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `4ec6b604ad71ef2e16c72b6c6477f1f4367d35a1f3acd8f9e8a004c9fc8dae95`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2367,7 +2367,7 @@ carries `status` and `facts`), never from text.
 | Step | Statuses | What the ladder does |
 |---|---|---|
 | `STRUCTURE` | `MODELED_BANK_INFEASIBILITY`, `INCOMPLETE_BANK_EXHAUSTION`, `STRUCTURAL_INFEASIBILITY`, `MODELED_BANK_INFEASIBLE_PROVEN`; a supplied policy whose only validation problems are `S` codes | The next rung that changes the policy; one the validator refuses on `S` codes is recorded in `attempts` and the next is tried |
-| `THROUGHPUT` | `CANDIDATE_BANK_TIMEOUT`, `CANDIDATE_BANK_SEARCH_LIMIT`, `CANDIDATE_BANK_TIME_LIMIT`, `PORTFOLIO_SELECTION_TIMEOUT`, `PORTFOLIO_SELECTION_SEARCH_LIMIT`, `PORTFOLIO_SELECTION_TIME_LIMIT`, `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`; intake `search_budget` codes | Once per rung, the same structure on a re-sized bank (Classic: `classic_limits` at the slowest of this host's rate and this run's measured one, to the window left; a joint limit halves the bank. SD3: half what it built). Then rung 4 |
+| `THROUGHPUT` | `CANDIDATE_BANK_TIMEOUT`, `CANDIDATE_BANK_SEARCH_LIMIT`, `CANDIDATE_BANK_TIME_LIMIT`, `PORTFOLIO_SELECTION_TIMEOUT`, `PORTFOLIO_SELECTION_SEARCH_LIMIT`, `PORTFOLIO_SELECTION_TIME_LIMIT`, `DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW`; intake `search_budget` codes | Once per rung, the same structure on a re-sized bank (Classic: `classic_limits` at the slowest of this host's rate and this run's measured one, to the window left; a joint limit halves the bank and keeps at least the joint budget that ran out, within the window's 20%. SD3: half what it built). Then rung 4 |
 | `SOLVER_ERROR` | `CANDIDATE_BANK_SOLVER_ERROR`, `PORTFOLIO_SELECTION_SOLVER_ERROR` (`selection_claims`, `P`) | As `THROUGHPUT`: one smaller bank, then rung 4; never a structural rung |
 | `BANK_DEPTH` | `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE` (SD3) | Once, the SD3 bank deepened to `max(6 x entries, 1.5 x its size)`, then `STRUCTURE` |
 
@@ -2379,9 +2379,12 @@ the floor, and the baseline stays the file with its unfilled Entry IDs).
 **Never relaxed.** `require_unique_lineups` (R29) is true in every rung's
 policy; a Classic policy's `exact_exclusions`, a Showdown policy's
 `excluded_people`, and any person a policy caps at zero entries (a Classic
-`maximum_entries` of 0, a Showdown combined fraction of 0) stay excluded at every
-rung, and rung 4 passes their exact DraftKings IDs to the review as operator
-exclusions. Official inactives and request exclusions are re-derived by the
+`maximum_entries` of 0, a team or game capped at 0, a Showdown combined fraction
+of 0) stay excluded at every rung, and rung 4 passes their exact DraftKings IDs
+to the review as operator exclusions. A fraction that only floors to zero
+entries is a cap, not an exclusion, and is relaxed. A supplied Showdown policy
+with `require_unique_lineups: false` runs every rung with it true (R29), and the
+record says so (`supplied_require_unique_lineups`). Official inactives and request exclusions are re-derived by the
 validator from the same run. No evidence gate is on the ladder.
 
 **The window.** Each rung must fit the improvement window less the last
@@ -2389,7 +2392,11 @@ attempt's measured pre-selection time: a C2 rung's declared bank and joint
 budget (`classic_limits` against that window), an SD3 rung 2.5 s (the joint
 solve's 20% share must reach 0.5 s), rung 4 0.5 s per lineup plus one. A C2 or
 SD3 rung that does not fit takes rung 4; rung 4 not fitting stops the ladder
-(`RELAXATION_LADDER_STOPPED`) and the baseline stays the file.
+(`RELAXATION_LADDER_STOPPED`) and the baseline stays the file. A rung the
+validator refuses on a code no rung loosens is a defect
+(`RELAXATION_RUNG_UNBUILDABLE`, in `defects`), and rung 4, which needs no
+generated policy, is still tried; a rung that cannot be written or validated at
+all stops the ladder under the same code.
 
 **Artifacts.** Each rung's policy is written to
 `data/runs/<run_id>/relaxation/attempt_<n>_rung_<r>[_bank]/`:
@@ -2407,7 +2414,9 @@ supplied one. Attempt 0's review root is `prior_review/`; attempt n's is
 | `started_from`, `final_rung`, `final_policy` | The supplied rung and its binding; the rung the last attempt ran and its binding (`null` for rung 4) |
 | `attempts` | One per review attempt: `attempt`, `rung`, `run_root`, `policy`, `showdown_candidate_limit`, `outcome`, `failure` (the trigger, or `null`), `elapsed_seconds`, `pre_selection_seconds`; and one per rung the validator refused: `attempt` `null`, `outcome` `REFUSED_AT_VALIDATION`, `codes`, `policy` |
 | `relaxations` | One per relaxed constraint (below) |
-| `stop` | `RELAXATION_LADDER_STOPPED:<detail>` when the window or a validator refusal ended the ladder, else `null` |
+| `stop` | `RELAXATION_LADDER_STOPPED:<detail>` when the window ended the ladder, `RELAXATION_RUNG_UNBUILDABLE:<detail>` when the next rung could not be built at all, else `null` |
+| `defects` | `RELAXATION_RUNG_UNBUILDABLE:<detail>` for each rung the validator refused on a code no rung loosens |
+| `supplied_require_unique_lineups` | The supplied policy's own value; every rung requires distinct lineups whatever it says |
 | `never_relaxed`, `does_not_establish` | As named |
 
 Each relaxation: `sequence`, `attempt` (the one it fed), `step` (`BANK`,
@@ -2422,10 +2431,15 @@ Each relaxation: `sequence`, `attempt` (the one it fed), `step` (`BANK`,
 `entry_ids` (every authorized Entry ID: a policy binds them all), `policy`
 (the new rung's binding), `limitation_code` and `limitation_text`.
 
-Codes, each `S`, `CONSTRUCTION_PREFERENCE`, on every exit that reports the
-record, the delivered file's or the baseline's: `RELAXATION_STRUCTURE_RELAXED`
-and `RELAXATION_POLICY_DROPPED` (`portfolio_bounds`), `RELAXATION_BANK_RESIZED`
-(`search_budget`), `RELAXATION_LADDER_STOPPED` (`delivery_deadline`).
+Codes, on every exit that reports the record, the delivered file's or the
+baseline's, the pre-review exit included: `RELAXATION_STRUCTURE_RELAXED` and
+`RELAXATION_POLICY_DROPPED` (`portfolio_bounds`), `RELAXATION_BANK_RESIZED`
+(`search_budget`), `RELAXATION_LADDER_STOPPED` (`delivery_deadline`), each `S`,
+`CONSTRUCTION_PREFERENCE`; `RELAXATION_RUNG_UNBUILDABLE` (`stage_failure`, `P`,
+`CERTIFICATION`). The result's `portfolio_policy` keeps `valid` and the source
+and normalized hashes of the supplied policy, and adds `enforced_rung`,
+`enforced_policy` and `enforced_policy_is_supplied`: its `enforcement_status`,
+`selector` and `independent_audit` describe the enforced policy.
 `RELEASE_DECISION` stays `DO_NOT_UPLOAD`, and exit codes keep their meaning: 0
 only when the last attempt's review completed.
 

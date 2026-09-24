@@ -53,7 +53,10 @@ rung's bank and joint budget from `classic_limits` at this host's slowest
 measured rate, an SD3 rung the least window its budget allowances take, rung 4
 one C1 solve per lineup at the least time a solve is given. A C2 or SD3 rung
 that does not fit takes rung 4; rung 4 not fitting stops the ladder, named
-`RELAXATION_LADDER_STOPPED`, and the baseline stays the file.
+`RELAXATION_LADDER_STOPPED`, and the baseline stays the file. A rung the
+validator refuses on a code no rung loosens is a defect, named
+`RELAXATION_RUNG_UNBUILDABLE`, and rung 4, which needs no generated policy, is
+still tried.
 """
 
 from __future__ import annotations
@@ -193,6 +196,7 @@ def classic_limits(
     seconds_per_candidate: float = DEFAULT_SECONDS_PER_CANDIDATE,
     window_seconds: float | None = None,
     candidate_cap: int | None = None,
+    minimum_selection_seconds: float | None = None,
 ) -> dict[str, int]:
     """Size the bank to the pool, not to the entry count, and to the window.
 
@@ -212,14 +216,16 @@ def classic_limits(
     within `JOINT_SHARE`; the rest is the run's own before selection. Raises
     `BankDoesNotFit` when even the floor bank, `max(32, entries + 24)`, does not.
     Session 10: `candidate_cap` holds the bank at or under a size (never under
-    the floor), for a joint solve that could not finish over the last one.
+    the floor), for a joint solve that could not finish over the last one, and
+    `minimum_selection_seconds` keeps that retry's joint budget from falling
+    below the one that ran out (within the window's joint share).
     """
     per_candidate_seconds = float(seconds_per_candidate)
     if not (math.isfinite(per_candidate_seconds) and per_candidate_seconds > 0):
         raise ValueError(f"seconds_per_candidate must be a finite number above zero, not {seconds_per_candidate!r}")
     floor = max(32, count + 24)
     affordable = int((minutes * 60.0) / per_candidate_seconds)
-    selection_seconds = min(3_600.0, max(10.0, 1.0 * count))
+    selection_seconds = min(3_600.0, max(10.0, 1.0 * count, float(minimum_selection_seconds or 0.0)))
     if window_seconds is not None:
         selection_seconds = min(selection_seconds, JOINT_SHARE * window_seconds)
         generation_seconds = WINDOW_SHARE * window_seconds - selection_seconds
@@ -317,11 +323,12 @@ def classic_relaxed_controls(policy: NormalizedClassicPortfolioPolicy, rung: int
                            "maximum_entries": high, "hard": True})
 
     def entity_bounds(items, key: str) -> list[dict[str, object]]:
-        if rung is not None:
-            return []
-        return [{key: item.entity_id, "minimum_entries": item.minimum_entries,
+        # The table carries no team or game bound, so a rung drops them, except a
+        # zero cap, which takes the team or game out and stays an exclusion.
+        return [{key: item.entity_id, "minimum_entries": 0 if rung is not None else item.minimum_entries,
                  "maximum_entries": item.maximum_entries, "hard": True}
-                for item in items if (item.minimum_entries, item.maximum_entries) != (0, count)]
+                for item in items if (item.minimum_entries, item.maximum_entries) != (0, count)
+                and (rung is None or item.maximum_entries == 0)]
 
     groups = []
     for group in policy.groups:
@@ -569,9 +576,14 @@ def own_exclusion_dk_ids(policy) -> tuple[str, ...]:
 
     if isinstance(policy, NormalizedClassicPortfolioPolicy):
         people = policy.people_by_id
+        teams = {bound.entity_id for bound in policy.team_bounds if bound.maximum_entries == 0}
+        games = {bound.entity_id for bound in policy.game_bounds if bound.maximum_entries == 0}
         return tuple(sorted(people[bound.entity_id].dk_id for bound in policy.player_bounds
                             if bound.exclusion_source == "POLICY_EXCLUSION"
-                            or (bound.exclusion_source is None and bound.maximum_entries == 0)))
+                            or (bound.exclusion_source is None and bound.maximum_entries == 0)
+                            or (bound.exclusion_source is None
+                                and (people[bound.entity_id].team in teams
+                                     or people[bound.entity_id].game_id in games))))
     if isinstance(policy, NormalizedPortfolioPolicy):
         zeroed = {item.person for item in policy.effective_limits
                   if item.exclusion_source is None and item.combined_fraction == 0}
@@ -638,6 +650,7 @@ class Ladder:
         self.records: list[dict[str, object]] = []
         self.attempts: list[dict[str, object]] = []
         self.stop: str | None = None
+        self.defects: list[str] = []  # rungs the validator refused on a code no rung loosens
         self._attempt = -1  # the last attempt run; an intake relaxation feeds attempt 0
         self._bank_why = ""  # why the last bank step could not be taken
 
@@ -676,8 +689,6 @@ class Ladder:
             candidate = self._bank_step(current, failure, overhead_seconds)
             if candidate is not None:
                 return self._take(candidate, failure, step="BANK")
-            if self.stop is not None:
-                return None
         if failure.kind in {THROUGHPUT, SOLVER_ERROR}:
             return self._no_policy(current, failure, overhead_seconds,
                                    why="the bank was already re-sized at this rung, and structure does not fix"
@@ -709,12 +720,14 @@ class Ladder:
         if isinstance(current.policy, NormalizedClassicPortfolioPolicy):
             policy = current.policy
             seconds, basis = self._classic_rate(failure, policy)
-            cap = None
+            cap = joint = None
             if failure.status in _JOINT_LIMITS or failure.kind == SOLVER_ERROR:
                 cap = int(failure.facts.get("candidates") or policy.search_limits.candidate_limit) // 2
+                joint = policy.search_limits.selection_milliseconds / 1000.0
             try:
                 limits = classic_limits(count, len(policy.people), current.rung or 0, minutes=DEFAULT_MINUTES,
-                                        seconds_per_candidate=seconds, window_seconds=window, candidate_cap=cap)
+                                        seconds_per_candidate=seconds, window_seconds=window, candidate_cap=cap,
+                                        minimum_selection_seconds=joint)
             except BankDoesNotFit as exc:
                 self._bank_why = f"no re-sized bank fits the window at {basis}: {exc}"
                 return None
@@ -728,8 +741,8 @@ class Ladder:
             if isinstance(made, Rung):
                 return replace(made, bank_steps=1)
             if not made.relaxable:
-                self._stop(failure, f"the re-sized bank's policy was refused by the validator"
-                                    f" ({', '.join(made.codes)}, {made.folder})")
+                self._unbuildable(failure, f"the re-sized bank's policy was refused by the validator"
+                                           f" ({', '.join(made.codes)}, {made.folder})")
             self._bank_why = f"the re-sized bank's policy was refused ({', '.join(made.codes)})"
             return None
         # SD3's bank budget is the deadline's (`Budget.policy_search_seconds`); its size is the lever.
@@ -788,9 +801,12 @@ class Ladder:
             if isinstance(made, _Refused):
                 if made.relaxable:
                     continue  # a looser rung may still pass; the refusal is in `attempts`
-                self._stop(failure, f"rung {rung}'s policy was refused by the validator"
-                                    f" ({', '.join(made.codes)}, {made.folder})")
-                return None
+                # Not a preference the next rung could loosen: a defect, named; the
+                # floor needs no generated policy, so it is still tried.
+                self._unbuildable(failure, f"rung {rung}'s policy was refused by the validator"
+                                           f" ({', '.join(made.codes)}, {made.folder})")
+                return self._no_policy(current, failure, overhead_seconds,
+                                       why=f"rung {rung}'s policy could not be built")
             return self._take(replace(made, showdown_candidate_limit=current.showdown_candidate_limit),
                               failure, step="STRUCTURE")
         return self._no_policy(current, failure, overhead_seconds, why="no structural rung is left")
@@ -935,8 +951,14 @@ class Ladder:
     def halt(self, failure: Failure, exc: BaseException) -> None:
         """End the ladder by name when the next rung could not be built at all."""
 
-        self._stop(failure, f"the next rung could not be built ({type(exc).__name__}: {exc}); the"
-                            " baseline, or the last delivered file, stays")
+        self.stop = _limitation_text(
+            "RELAXATION_RUNG_UNBUILDABLE",
+            f"after {failure.status} at rung {self.current.label}: the next rung could not be built"
+            f" ({type(exc).__name__}: {exc}); the ladder stopped and the baseline stays the file")
+
+    def _unbuildable(self, failure: Failure, detail: str) -> None:
+        self.defects.append(_limitation_text(
+            "RELAXATION_RUNG_UNBUILDABLE", f"after {failure.status} at rung {self.current.label}: {detail}"))
 
     def _stop(self, failure: Failure, detail: str) -> None:
         self.stop = _limitation_text("RELAXATION_LADDER_STOPPED",
@@ -951,7 +973,8 @@ class Ladder:
     def texts(self) -> list[str]:
         """Each relaxation and the stop as `CODE:detail`, the form a run's blockers take."""
 
-        return [str(record["limitation_text"]) for record in self.records] + ([self.stop] if self.stop else [])
+        return ([str(record["limitation_text"]) for record in self.records] + list(self.defects)
+                + ([self.stop] if self.stop else []))
 
     def as_record(self) -> dict[str, object]:
         return {
@@ -963,6 +986,11 @@ class Ladder:
             "attempts": list(self.attempts),
             "relaxations": list(self.records),
             "stop": self.stop,
+            "defects": list(self.defects),
+            # R29: every rung requires distinct lineups, whatever the supplied policy said.
+            "supplied_require_unique_lineups": (
+                self.started_from.policy.require_unique_lineups
+                if self.started_from.policy is not None else None),
             "never_relaxed": list(NEVER_RELAXED),
             "does_not_establish": list(DOES_NOT_ESTABLISH),
         }

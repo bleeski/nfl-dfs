@@ -409,11 +409,12 @@ class Budget:
             "DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW",
             f"the policy's bank and joint-solve limits total {declared_seconds:.1f} s and"
             f" {window:.1f} s are left before {self.improvement_stop.isoformat()}; its limits are"
-            " hash-bound, so regenerate it with make_classic_policy.py --delivery-deadline-utc"
-            f" {self.deadline.isoformat()}, which sizes the bank to the window left (for a replay"
-            " pinned by --as-of, a smaller --minutes), or take rung 4 (no --portfolio-policy-json);"
-            " the baseline is the deliverable. Inside run-slate the relaxation controller takes"
-            " these steps itself (Session 10)")
+            " hash-bound, so this policy's review stopped before selection. Inside run-slate the"
+            " relaxation controller then re-sizes the bank to the window or takes rung 4 (Session"
+            " 10), and its record names which file ships; outside it, regenerate the policy with"
+            f" make_classic_policy.py --delivery-deadline-utc {self.deadline.isoformat()} (for a"
+            " replay pinned by --as-of, a smaller --minutes) or take rung 4 (no"
+            " --portfolio-policy-json)")
 
     def finished_late(self, stage: str) -> None:
         """Name a stage that ended after the delivery deadline (it ran; it was late)."""
