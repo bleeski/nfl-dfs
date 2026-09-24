@@ -15,13 +15,13 @@ retrospective and session prompt in the repository.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 09 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S09`, on the branch your session was assigned or `claude/s09-r28-model-path`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 10 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S10`, on the branch your session was assigned or `claude/s10-relaxation-controller`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
-Session 08 made a time- or search-limited bank and joint solve keep their
-validated incumbents and ship them named. Session 10, the relaxation
-controller, depends on Sessions 07, 07b and 08, all complete, so it is
-startable too, as is Session 11. Sessions 09 and 11 both edit
-`src/nfl_dfs/prior_review.py`, so do not run them beside each other.
+Session 09 is in progress: R28 on the model path (missing weather, Classic
+missing official activity and the P1 role-change stop become named
+limitations). It edits `src/nfl_dfs/prior_review.py` and `src/nfl_dfs/cli.py`,
+which are in Session 11's and Session 10's Target Files, so do not run either
+beside it; wait for 09's merge.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
