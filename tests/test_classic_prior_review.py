@@ -466,7 +466,14 @@ def test_classic_prior_identity_and_schedule_bind_every_team_person_and_game(tmp
     assert len(slate_people(slate)) == len(slate.players) == 20
 
 
-def test_classic_frozen_prior_producer_covers_every_game_team_and_person(tmp_path: Path) -> None:
+@pytest.mark.parametrize("second_roof", ["closed", "outdoors"])
+def test_classic_frozen_prior_producer_covers_every_game_team_and_person(
+    tmp_path: Path, second_roof: str
+) -> None:
+    """`outdoors` added by Session 09: an outdoor game with a typed state and no
+    captured source used to raise CLASSIC_WEATHER_SOURCE_REQUIRED. The typed
+    state is never written; the game is frozen UNOBSERVED and the package is v2."""
+
     salary = tmp_path / "salary.csv"
     salary.write_bytes(_salary_bytes())
     slate = parse_salaries(salary)
@@ -492,7 +499,7 @@ def test_classic_frozen_prior_producer_covers_every_game_team_and_person(tmp_pat
         ),
         [
             ("2026_01_NE_SEA", "2026", "REG", "1", "2026-09-13", "NE", "SEA", "-2", "44", "dome"),
-            ("2026_01_DAL_PHI", "2026", "REG", "1", "2026-09-13", "DAL", "PHI", "1", "46", "closed"),
+            ("2026_01_DAL_PHI", "2026", "REG", "1", "2026-09-13", "DAL", "PHI", "1", "46", second_roof),
         ],
     )
     team_week_rows = []
@@ -635,10 +642,23 @@ def test_classic_frozen_prior_producer_covers_every_game_team_and_person(tmp_pat
         as_of=AS_OF.isoformat(),
         output_dir=tmp_path / "frozen",
         salary_observed_at=OBSERVED.isoformat(),
+        weather_state="RAIN" if second_roof == "outdoors" else None,
     )
     assert result["teams"] == 4
     assert result["people"] == 20
     assert set(result["weather_by_game"]) == {game.game_id for game in slate.games}
+    team_prior = json.loads(
+        (Path(result["output_dir"]) / priors.TEAM_PRIOR_FILENAME).read_text(encoding="utf-8"))
+    outdoor = next(game.game_id for game in slate.games if game.home_team == "PHI")
+    if second_roof == "outdoors":
+        assert result["weather_by_game"][outdoor] == "UNOBSERVED"
+        assert "RAIN" not in result["weather_by_game"].values()
+        assert result["weather_basis_by_game"][outdoor] == (
+            "WEATHER_UNOBSERVED:roof=outdoors:UNATTRIBUTED_STATE_NOT_WRITTEN")
+        assert team_prior["schema_version"] == "nfl_team_projection_source_v2"
+    else:
+        assert "UNOBSERVED" not in result["weather_by_game"].values()
+        assert team_prior["schema_version"] == "nfl_team_projection_source_v1"
     package = build_projection_package(
         salaries=salary,
         salary_sha256=sha256_file(salary),

@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from nfl_dfs.hashing import sha256_file
+
 import pytest
 
 from nfl_dfs.dk import parse_entries, parse_salaries
@@ -29,7 +31,7 @@ def _run_slate(tmp_path, monkeypatch, *, run_id, mutate=None, **extra):
 
     salary, entry, package, role, status, _ = classic_fixture(tmp_path / "fixture", entries=2)
     if mutate is not None:
-        mutate(salary=salary, status=status)
+        mutate(salary=salary, status=status, package=package)
     attachments = _attachments(tmp_path, salary, entry)
     monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
     values = dict(
@@ -75,7 +77,7 @@ def test_a_selected_person_without_an_activity_row_ships_named(tmp_path, monkeyp
     baseline stayed the deliverable. Now C1's file goes out with the gap named,
     exactly as Showdown's already did."""
 
-    def keep_two_rows(*, salary, status):
+    def keep_two_rows(*, salary, status, package):
         rows = status.read_text(encoding="utf-8").splitlines()
         status.write_text("\n".join(rows[:3]) + "\n", encoding="utf-8")
 
@@ -141,3 +143,131 @@ def test_an_unresolved_role_change_leaves_the_pool_and_the_file_ships(tmp_path, 
     row = next(item for item in pool["people"] if item["person"] == chosen.underlying_id)
     assert row["reason"] == "OFFENSIVE_ROLE_GATE_EXCLUDED:OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE"
     assert not any(value.startswith("SELECTION_FAILED:") for value in report["blockers"])
+
+
+def test_an_unobserved_game_ships_named_and_moves_no_number(tmp_path, monkeypatch):
+    """Missing weather (R28, Session 09). A frozen package whose team prior
+    records one game `UNOBSERVED` (team source v2) projects, selects and ships;
+    the game is named, `EVIDENCE_STATE` is not `PASS`, and the file is the same
+    one the fully observed package builds, because weather moves no number."""
+
+    code, observed, _salary = _run_slate(tmp_path / "observed", monkeypatch, run_id="observed")
+    _the_models_file_is_delivered(code, observed)
+    unobserved_game: dict[str, str] = {}
+
+    def unobserve_one_game(*, salary, status, package):
+        team_path = package / "team_prior.json"
+        team = json.loads(team_path.read_text(encoding="utf-8"))
+        game = sorted({record["game_id"] for record in team["records"]})[0]
+        unobserved_game["id"] = game
+        team["schema_version"] = "nfl_team_projection_source_v2"
+        for record in team["records"]:
+            if record["game_id"] == game:
+                record["weather_state"] = "UNOBSERVED"
+        team_path.write_text(json.dumps(team, indent=2), encoding="utf-8")
+        manifest_path = package / "prior_package.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["artifacts"]["team_prior.json"] = sha256_file(team_path)
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    code, report, _salary = _run_slate(
+        tmp_path / "unobserved", monkeypatch, run_id="unobserved", mutate=unobserve_one_game)
+    _the_models_file_is_delivered(code, report)
+    [item] = _limitations(report)["WEATHER_UNOBSERVED"]
+    assert (item["class"], item["stops"]) == ("P", "CERTIFICATION")
+    assert item["detail"].startswith(f"WEATHER_UNOBSERVED:{unobserved_game['id']}:")
+    assert (observed["EVIDENCE_STATE"], report["EVIDENCE_STATE"]) == ("PASS", "UNKNOWN")
+    # R24: the same lineups, entry for entry.
+    assert _delivered_rosters(report) == _delivered_rosters(observed)
+    team_csv = Path(report["prior_review_artifacts"]["team_projections"]).read_text(encoding="utf-8")
+    assert ",UNOBSERVED," in team_csv
+    # The team CSV holding it is declared v2; the observed run's is still v1.
+    for run, version in ((report, "nfl_team_projections_csv_v2"), (observed, "nfl_team_projections_csv_v1")):
+        manifest = Path(run["prior_review_artifacts"]["prelock_manifest"]).read_text(encoding="utf-8")
+        assert f'"{version}"' in manifest
+
+
+def test_a_v1_team_source_can_never_hold_an_unobserved_game(tmp_path):
+    """v1 is never mutated: only `nfl_team_projection_source_v2` may say it."""
+
+    from pydantic import ValidationError
+
+    from nfl_dfs.projection import TeamSource
+
+    _salary, _entry, package, _role, _status, _ = classic_fixture(tmp_path / "fixture", entries=1)
+    team = json.loads((package / "team_prior.json").read_text(encoding="utf-8"))
+    team["records"][0]["weather_state"] = "UNOBSERVED"
+    with pytest.raises(ValidationError, match="UNOBSERVED weather needs nfl_team_projection_source_v2"):
+        TeamSource.model_validate(team)
+    team["schema_version"] = "nfl_team_projection_source_v2"
+    assert TeamSource.model_validate(team).records[0].weather_state == "UNOBSERVED"
+
+
+def test_certification_never_reads_an_unobserved_game_as_weather_evidence():
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from nfl_dfs.cli import _base_evidence
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    def weather_record(state):
+        model = SimpleNamespace(teams=[
+            SimpleNamespace(team=team, market_total=45, market_spread=0, market_observed_at=now,
+                            weather_state=state)
+            for team in ("NE", "SEA")])
+        records = _base_evidence(
+            slate_hash="a" * 64, entries_hash="b" * 64, payout_path="unused", payout_hash="c" * 64,
+            manual_guardrail=False, model_input_hash="d" * 64, model=model)
+        return next(record for record in records if record.field == "weather_if_required")
+
+    assert weather_record("CLEAR").state == "PASS"
+    unobserved = weather_record("UNOBSERVED")
+    assert (unobserved.state, unobserved.hard_gate) == ("UNKNOWN", True)
+    assert "NE, SEA" in unobserved.reason
+
+
+def test_build_priors_authority_persists_through_a_request_rerun(tmp_path, monkeypatch):
+    """The card's `build_priors` item (audit D8). A request that authorizes the
+    rebuild never stops to ask for that authority again: not on its own run,
+    and not on a plain `--request` rerun of the request it saved, which carries
+    `build_priors: true`. The rebuild is stubbed at `propose` so no network is
+    touched; reaching it is the proof that nothing asked first."""
+
+    from nfl_dfs import cli
+    from nfl_dfs import prior_review as prior_review_module
+
+    salary, entry, _package, _role, _status, _ = classic_fixture(tmp_path / "fixture", entries=1)
+    attachments = _attachments(tmp_path, salary, entry)
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
+    rebuilds: list[str] = []
+
+    def propose(**kwargs):
+        rebuilds.append(str(kwargs["output_dir"]))
+        raise RuntimeError("REBUILD_REACHED_WITHOUT_ASKING")
+
+    real = prior_review_module.run_prior_review
+    monkeypatch.setattr(cli, "run_prior_review", lambda **kwargs: real(**kwargs, propose=propose))
+
+    def asked(report) -> list[str]:
+        return [value for value in report["blockers"]
+                if value.startswith(("PRIOR_PACKAGE_REQUIRED", "PRIOR_PACKAGE_EXPIRED"))]
+
+    code = cli.command_cowork_run(_cowork_args(
+        tmp_path, attachments, run_id="first", build_priors=True, as_of=AS_OF.isoformat()))
+    first = json.loads((tmp_path / "outputs" / "first" / "cowork_run.json").read_text(encoding="utf-8"))
+    saved = json.loads(Path(first["request"]).read_text(encoding="utf-8"))
+    assert saved["build_priors"] is True and saved["prior_package_dir"] is None
+
+    code = cli.command_cowork_run(_cowork_args(
+        tmp_path, attachments, run_id="rerun", request=first["request"], input_dir=None,
+        build_priors=False, as_of=AS_OF.isoformat()))
+    rerun = json.loads((tmp_path / "outputs" / "rerun" / "cowork_run.json").read_text(encoding="utf-8"))
+    assert code == 2  # the stubbed rebuild fails; the baseline is the file
+    for report in (first, rerun):
+        assert asked(report) == []
+        assert any(value.startswith("PRIORS_PROPOSE_FAILED:RuntimeError:REBUILD_REACHED_WITHOUT_ASKING")
+                   for value in report["blockers"])
+        assert report["DELIVERY_STATE"] == "DELIVERABLE"
+        assert report["latest_deliverable"]["producer"] == "run-slate:baseline"
+    assert len(rebuilds) == 2

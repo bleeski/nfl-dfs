@@ -78,8 +78,6 @@ SCORING_MODULES = frozenset({
 NON_NUMERIC_SITES = {
     ("prior_review.py", "run_prior_review", "weather_path.parent / source_relative"):
         "a filesystem path join on the weather capture's directory",
-    ("prior_review.py", "run_prior_review", "weather_blockers + gate.blockers"):
-        "concatenates two tuples of blocker strings",
     ("venues.py", "roof_history", "counts.setdefault(team, Counter())[roof] += 1"):
         "the R26 resolver's evidence: completed games per recorded roof value",
     ("venues.py", "resolve_blank_roof", "int(tally.get(RESOLVED_ROOF_VALUE, 0))"):
@@ -103,6 +101,8 @@ PLUMBING_FUNCTIONS = frozenset({
     ("src/nfl_dfs/priors.py", "resolve_weather_state"),
     ("src/nfl_dfs/priors.py", "_venue_roof_history_for"),
     ("src/nfl_dfs/priors.py", "_weather_evidence_basis"),
+    # Session 09: refuses a v1 team source that holds an UNOBSERVED game.
+    ("src/nfl_dfs/projection.py", "v1_never_holds_an_unobserved_game"),
 })
 # Every read of a weather value in numeric code, with how many times it occurs.
 PINNED_READS = {
@@ -471,6 +471,20 @@ def test_a_derived_roof_moves_no_prior_score(tmp_path):
         assert all(team.weather_state == state for team in varied.teams)
         assert score_pool(slate, varied, splits).by_dk_id == baseline_scores, state
         assert team_volumes(varied, splits) == baseline_volumes, state
+
+
+def test_an_unobserved_game_moves_no_prior_score(tmp_path):
+    """Session 09 (R28): a game nobody observed resolves to UNOBSERVED instead of
+    stopping, and it is a member the loop above already scores identically."""
+
+    unobserved, basis = resolve_weather_state({"home_team": "GB", "roof": "outdoors"}, None)
+    assert (unobserved, basis) == ("UNOBSERVED", "WEATHER_UNOBSERVED:roof=outdoors")
+    assert unobserved in WEATHER_STATES
+
+    slate, model, _contract, splits = _prepared(tmp_path)
+    varied = replace(model, teams=tuple(replace(team, weather_state=unobserved) for team in model.teams))
+    assert score_pool(slate, varied, splits).by_dk_id == score_pool(slate, model, splits).by_dk_id
+    assert team_volumes(varied, splits) == team_volumes(model, splits)
 
 
 # ================================================================= Session 03b
@@ -953,7 +967,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "92abd16b04d7631f814e34c1a2274d082645f58c57a893997eb8874acfc875fc"
+REGISTRY_SHA256 = "941f6d471a39c8170529b2691f2f297445ef1f18c060b3e7c97910f50cfd9ce1"
 
 
 def test_the_registry_is_the_pinned_bytes():
@@ -1149,8 +1163,8 @@ AUDIT_SECTION_4 = [
      ["OFFENSIVE_CURRENT_ROLE_UNRESOLVED", "KICKER_ROLE_UNRESOLVED", "QB_DEPTH_SOURCE_EXPIRED_DURING_SELECTION",
       "OFFENSIVE_ROLE_NUMERICAL_SOURCE_REQUIRED"]),
     ("weather capture, roof, six-hour expiry, source binding", {"P"},
-     ["WEATHER_CAPTURE_REQUIRED", "WEATHER_CAPTURE_STALE", "WEATHER_STATE_REQUIRED",
-      "WEATHER_EVIDENCE_SOURCE_HASH_MISMATCH", "CLASSIC_WEATHER_SOURCE_REQUIRED"]),
+     ["WEATHER_CAPTURE_REQUIRED", "WEATHER_CAPTURE_STALE", "WEATHER_UNOBSERVED",
+      "WEATHER_EVIDENCE_SOURCE_HASH_MISMATCH", "WEATHER_STATE_CONFLICT"]),
     ("market spread and total, and freshness", {"P"},
      ["SOURCE_VALUE_ABSENT", "SOURCE_VALUE_NOT_NUMERIC", "FUTURE_MARKET_EVIDENCE"]),
     ("prior and projection package schema, hash, expiry, artifacts", {"P"},

@@ -217,14 +217,19 @@ def test_a_resolved_proposal_keeps_its_own_method_as_its_basis() -> None:
 
 def test_a_fixed_roof_resolves_from_the_schedule_alone() -> None:
     decision = decide_weather("dome")
-    assert decision.blockers == ()
+    assert decision.limitations == ()
     assert decision.freeze_weather_state is None
 
 
 @pytest.mark.parametrize("roof", ["outdoors", "", "open"])
-def test_every_other_roof_asks_for_the_weather_capture(roof) -> None:
+def test_every_other_roof_without_a_capture_is_named_unobserved(roof) -> None:
+    """Session 09 (R28). Until then each of these blocked the run with
+    `WEATHER_CAPTURE_REQUIRED` (and `WEATHER_STATE_REQUIRED` for the non-roof
+    cases). Now the game is named and the run continues; nothing is observed."""
+
     decision = decide_weather(roof)
-    assert any(value.startswith("WEATHER_CAPTURE_REQUIRED:") for value in decision.blockers)
+    [limitation] = decision.limitations
+    assert limitation.startswith(f"WEATHER_UNOBSERVED:roof={roof or 'BLANK'}:")
     assert decision.freeze_weather_state is None
 
 
@@ -235,13 +240,30 @@ def test_an_attributed_capture_clears_the_outdoor_gate() -> None:
         weather_source_uri="https://api.weather.gov/gridpoints/SEW/125,67/forecast",
         weather_observed_at="2026-09-08T16:37:07+00:00",
     )
-    assert decision.blockers == ()
+    assert decision.limitations == ()
     assert decision.freeze_weather_state == "CLEAR"
 
 
-def test_a_state_without_attribution_is_still_blocked() -> None:
+def test_a_state_without_attribution_is_never_passed_on() -> None:
+    """Until Session 09 this blocked (`WEATHER_CAPTURE_REQUIRED`). A typed state
+    with no capture is not an observation: it is dropped, and the game named."""
+
     decision = decide_weather("outdoors", weather_state="CLEAR")
-    assert any(value.startswith("WEATHER_CAPTURE_REQUIRED:") for value in decision.blockers)
+    [limitation] = decision.limitations
+    assert limitation.startswith("WEATHER_UNOBSERVED:roof=outdoors:")
+    assert "the unattributed state CLEAR was not used" in limitation
+    assert decision.freeze_weather_state is None
+
+
+def test_a_capture_that_carries_no_state_is_unobserved() -> None:
+    decision = decide_weather(
+        "outdoors",
+        weather_source_uri="https://api.weather.gov/gridpoints/SEW/125,67/forecast",
+        weather_observed_at="2026-09-08T16:37:07+00:00",
+    )
+    [limitation] = decision.limitations
+    assert limitation.startswith("WEATHER_UNOBSERVED:roof=outdoors:the capture carries no weather state")
+    assert (decision.freeze_weather_state, decision.freeze_source_uri) == (None, None)
 
 
 # --------------------------------------------------------------------------- #
@@ -1131,34 +1153,41 @@ def test_a_retractable_venue_blank_roof_resolves_from_its_own_history() -> None:
         venue_roof_history={"DAL": {"closed": 17}},
         venue_roof_seasons=(2025, 2026),
     )
-    assert decision.blockers == ()
+    assert decision.limitations == ()
     assert decision.freeze_weather_state is None
     assert decision.basis == (
         "DERIVED_FROM_VENUE_ROOF_HISTORY:retractable:closed=17/17:seasons=2025,2026"
     )
 
 
-def test_a_blank_roof_with_no_history_still_asks_for_the_capture() -> None:
+# Session 09 (R28): the three cases below still derive no roof, exactly as
+# before; they now name the game unobserved where they used to ask for the
+# capture with `WEATHER_CAPTURE_REQUIRED` and stop.
+def test_a_blank_roof_with_no_history_is_still_unobserved() -> None:
     decision = decide_weather("", game_id="WAS@DAL")
-    assert any(value.startswith("WEATHER_CAPTURE_REQUIRED:") for value in decision.blockers)
+    [limitation] = decision.limitations
+    assert limitation.startswith("WEATHER_UNOBSERVED:roof=BLANK:")
+    assert not decision.basis.startswith("DERIVED_FROM_VENUE_ROOF_HISTORY")
 
 
-def test_an_outdoor_venue_blank_roof_still_asks_for_the_capture() -> None:
+def test_an_outdoor_venue_blank_roof_is_still_unobserved() -> None:
     decision = decide_weather(
         "",
         game_id="MIA@SF",
         venue_roof_history={"SF": {"outdoors": 17}},
     )
-    assert any(value.startswith("WEATHER_CAPTURE_REQUIRED:") for value in decision.blockers)
+    [limitation] = decision.limitations
+    assert limitation.startswith("WEATHER_UNOBSERVED:roof=BLANK:")
 
 
-def test_a_mixed_retractable_history_still_asks_for_the_capture() -> None:
+def test_a_mixed_retractable_history_is_still_unobserved() -> None:
     decision = decide_weather(
         "",
         game_id="JAX@HOU",
         venue_roof_history={"HOU": {"closed": 16, "open": 1}},
     )
-    assert any(value.startswith("WEATHER_CAPTURE_REQUIRED:") for value in decision.blockers)
+    [limitation] = decision.limitations
+    assert limitation.startswith("WEATHER_UNOBSERVED:roof=BLANK:")
 
 
 def test_an_attributed_capture_still_wins_at_a_retractable_venue() -> None:
@@ -1171,6 +1200,6 @@ def test_an_attributed_capture_still_wins_at_a_retractable_venue() -> None:
         weather_source_uri="https://api.weather.gov/gridpoints/FWD/89,104/forecast",
         weather_observed_at="2026-09-20T18:00:00+00:00",
     )
-    assert decision.blockers == ()
+    assert decision.limitations == ()
     assert decision.freeze_weather_state == "RAIN"
     assert decision.basis.startswith("OPERATOR_CAPTURE")

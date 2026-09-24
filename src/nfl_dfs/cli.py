@@ -116,7 +116,7 @@ from .portfolio_policy import (
 from .projection import SOURCES_DIRNAME as PROJECTION_SOURCES_DIRNAME
 from .projection import build_projection_package
 from .prior_review import PROFILE_VERSION as PRIOR_REVIEW_PROFILE_VERSION
-from .prior_review import run_prior_review
+from .prior_review import run_prior_review, team_projections_csv_version
 from .readable_review import (
     ReadableReviewArtifacts,
     ReadableReviewError,
@@ -468,6 +468,7 @@ def _base_evidence(
     market_observed_at: datetime | None = None
     market_expires_at: datetime | None = None
     model_state = EvidenceState.NOT_APPLICABLE if manual_guardrail else EvidenceState.UNKNOWN
+    weather_record_state = model_state
     market_reason = "manual legality guardrail makes no projection or market claim"
     weather_reason = "manual legality guardrail makes no model or weather claim"
     market_value = None
@@ -504,6 +505,12 @@ def _base_evidence(
         )
         market_reason = f"{reason_prefix}; {ledger_reason}"
         weather_reason = f"{reason_prefix}; weather states use model inputs whose {ledger_reason}"
+        # A game nobody observed (Session 09) is never weather evidence.
+        weather_record_state = model_state
+        unobserved = sorted(team for team, state in weather_value.items() if state == "UNOBSERVED")
+        if unobserved and weather_record_state is EvidenceState.PASS:
+            weather_record_state = EvidenceState.UNKNOWN
+            weather_reason = f"weather was not observed for {', '.join(unobserved)} (UNOBSERVED)"
     return [
         EvidenceRecord(
             subject="slate",
@@ -543,7 +550,7 @@ def _base_evidence(
             observed_at=market_observed_at,
             expires_at=market_expires_at,
             hard_gate=True,
-            state=model_state,
+            state=weather_record_state,
             reason=weather_reason,
         ),
         EvidenceRecord(
@@ -1783,7 +1790,9 @@ def command_build(args: argparse.Namespace) -> int:
             "entries": "dk_entry_csv_v1",
             "payouts": "nfl_payout_contract_v1",
             "assignments": "nfl_assignment_csv_v1",
-            "team_projections": "nfl_team_projections_csv_v1",
+            "team_projections": team_projections_csv_version(
+                team.weather_state for team in model.teams
+            ),
             "player_opportunities": "nfl_player_opportunities_csv_v1",
             "DESIGN": "nfl_scenario_bank_v1",
             "SELECT": "nfl_scenario_bank_v1",
@@ -3082,6 +3091,11 @@ def _run_prior_review_profile(
         )
         blockers[0:0] = list(c1_export_problems)
 
+    # R28 (Session 09): each game the model ran without a weather observation
+    # travels with the file it shaped, by name.
+    if outcome.file_valid:
+        for weather_code in reversed(list(outcome.reports.get("weather_unobserved") or ())):
+            blockers.insert(0, str(weather_code))
     selection_report = outcome.reports.get("selection")
     if isinstance(selection_report, Mapping):
         coverage = selection_report.get("official_status_coverage")

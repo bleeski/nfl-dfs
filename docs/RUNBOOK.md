@@ -22,7 +22,8 @@ Classic C1 validates and binds the exact salary and entry bytes, draft group,
 complete game/team/opponent/lock set, contest and Entry IDs, and blank-cell
 authority. It builds or reuses the shared frozen prior package, produces the
 shared deterministic projection package, applies full-slate participation,
-official activity, current role, weather and expiry gates. With no policy, the
+current role and expiry gates, and names missing official activity and weather
+as limitations rather than stopping (R28, Session 09). With no policy, the
 byte-compatible C1 sequential selection remains in place. To invoke governed
 C2 joint selection, supply the exact-input C2 policy on the command line or in
 the generated request:
@@ -249,7 +250,11 @@ artifacts; it never changes `DO_NOT_UPLOAD`. The input workbook contract remains
 five sheets, while this successful output copy has eight sheets: Run Control,
 Evidence Paste, Portfolio, QA, Upload, Exposure, Review Evidence and Artifacts.
 
-For outdoor weather, capture the relevant NWS gridpoint forecast through
+Weather is an improvement, not a precondition (R28, Session 09). A game with no
+attributed capture is frozen `UNOBSERVED`, named per game as
+`WEATHER_UNOBSERVED` (`P`), and moves no number (R24); the portfolio still ships.
+A state typed without a capture is never used. To observe an outdoor game,
+capture the relevant NWS gridpoint forecast through
 `sources.fetch_public_artifact`, retain the original response and hash, and
 populate the request's `weather_state`, `weather_source_uri`, and
 `weather_observed_at` from that capture. NWS was reachable during the September
@@ -257,7 +262,10 @@ populate the request's `weather_state`, `weather_source_uri`, and
 Use the forecast's `generatedAt`, never the time you typed the request. The
 six-hour weather expiry survives freezing, projection, selection and export.
 
-Rerun using the generated request with the completed weather fields. If the
+To replace an unobserved game with that observation, rerun using the generated
+request with the completed weather fields. A supplied capture that is invalid,
+stale or conflicted still stops the review; drop it and the game runs
+`UNOBSERVED`. If the
 command stops for identity decisions, resolve only the named ambiguities from
 verifiable identity evidence.
 
@@ -781,8 +789,11 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    prints both commands when `api.weather.gov` is the blocked host, because on
    2026-09-20 that chain already existed and went unused on two lost slates.
 
-   **Capture the weather before the session, not inside it.** This is the whole
-   fix for a blocked `api.weather.gov`, and it is operator work on a machine that
+   **When there is time, capture the weather before the session.** Since
+   Session 09 (R28) a blocked `api.weather.gov` no longer stops the model: each
+   uncaptured outdoor game is frozen `UNOBSERVED` and named, and the portfolio
+   ships. The capture is an improvement, not a precondition; it turns
+   `UNOBSERVED` into an observation. It is operator work on a machine that
    reaches the host (the Windows desktop). A capture expires six hours after it is
    taken, capped at lock, so the window for a 1pm ET slate opens at 7am ET. One
    pass, in that window:
@@ -858,6 +869,8 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    retain its raw bytes and hash. Use its actual `generatedAt` observation time
    and game-period conditions to populate `weather_state`,
    `weather_source_uri`, and `weather_observed_at` in the request, then rerun.
+   Without one the game is frozen `UNOBSERVED` and named (R28, Session 09): the
+   capture improves the model, it does not unlock it.
    For multi-game Classic, use a hash-bound
    `nfl_classic_weather_evidence_c1_v1` JSON file through
    `weather_evidence_json`; it must bind the salary hash and contain exactly one
@@ -875,7 +888,8 @@ force for every slate run. Rulings attributed to Ben keep their dates.
    already proven reachable by that same run's own prior build minutes earlier,
    and carried a snapshot from that morning naming three starters the filter had
    rejected. An unprobed absence is a guess.
-   Weather capture expires after six hours. Use a fresh run before kickoff.
+   Weather capture expires after six hours. Use a fresh run before kickoff; an
+   expired capture stops the review, and without it the game runs `UNOBSERVED`.
    `prior_review` already produces its model inputs; the manual fallback is
    `sh ./nfl.sh project` (or
    `./nfl.ps1 project` on Windows), supplying the exact expected SHA-256 for
@@ -1108,9 +1122,12 @@ the file they protect.
 a file built from the DraftKings salary and entries bytes alone, before priors,
 weather, roles or solves. This section used to put evidence gates first because
 they were the only things that could make you miss a lock. Under R28 they no
-longer stop the file, so they no longer lead. Start the weather and
-official-activity captures alongside the baseline, not ahead of it: the engine's
-improved portfolio still waits on them until Session 09, but the file does not.
+longer stop the file, so they no longer lead. Since Session 09 the improved
+portfolio does not wait on them either: an uncaptured game ships as
+`WEATHER_UNOBSERVED` and a selected person with no activity row as
+`OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED` (or `OFFICIAL_STATUS_REQUIRED` with no
+file). Start the weather and official-activity captures alongside the baseline
+when there is time, as improvements.
 
 **`run-slate` builds the baseline itself** (Session 06). Straight after intake,
 before the session probe, policy validation, priors, weather, roles or any
@@ -1123,7 +1140,7 @@ a disagreeing row takes its person out; refused rows are named, never a stop). N
 CSV (Showdown, C3, or C1's export) replaces the baseline only through
 `delivery.replace`, after its own readable-review classification and a fresh
 revalidation, with the same inputs and at least as many rows. When the review
-blocks (weather, identity, a policy gate), is withheld, crashes, or never runs
+blocks (identity, a policy gate, invalid evidence), is withheld, crashes, or never runs
 (the pre-review blocked exit), the baseline is still the deliverable.
 Read the result, not the exit code:
 

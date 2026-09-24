@@ -135,7 +135,7 @@
     "weather": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "RULING", "ref": "R28"},
-      "covers": "Weather capture, state, roof or expiry evidence is missing, stale, unbound or conflicted."
+      "covers": "Weather capture, state, roof or expiry evidence is missing, stale, unbound or conflicted. Since Session 09 a game nobody observed is frozen as UNOBSERVED, delivered and named per game (WEATHER_UNOBSERVED); present but invalid evidence still stops the review."
     },
     "source_policy": {
       "class": "P", "stops": "CERTIFICATION",
@@ -598,7 +598,6 @@
     "CLASSIC_ROW_HAS_ROLE": "slate_mode",
     "CLASSIC_STACK_RULE_UNREGISTERED": "classic_policy_input",
     "CLASSIC_WEATHER_SCOPE_AMBIGUOUS": "weather",
-    "CLASSIC_WEATHER_SOURCE_REQUIRED": "weather",
     "CONFLICTED_EVIDENCE": "projection_package",
     "CONTEST_ID_MISMATCH": "settlement",
     "CONTEST_PAYOUT_REQUIRED": "contest_economics",
@@ -1431,8 +1430,8 @@
     "WEATHER_SOURCE_CHANGED_BEFORE_ARTIFACT_PUBLISH": "weather",
     "WEATHER_SOURCE_UNAPPROVED": "source_policy",
     "WEATHER_STATE_CONFLICT": "weather",
-    "WEATHER_STATE_REQUIRED": "weather",
     "WEATHER_STATE_UNSUPPORTED": "weather",
+    "WEATHER_UNOBSERVED": "weather",
     "WRITTEN_BYTES_DID_NOT_MATCH_THE_AUDITED_BYTES": "delivered_bytes",
     "WRITTEN_HASH_MISMATCH": "prior_package",
     "ZERO_DENOMINATOR": "model_arithmetic",

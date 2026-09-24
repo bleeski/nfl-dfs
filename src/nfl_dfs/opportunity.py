@@ -94,6 +94,9 @@ PLAYER_COLUMNS = (
     "EVIDENCE_STATE",
 )
 
+# `UNOBSERVED` (Session 09, R28, `nfl_team_projections_csv_v2`) is a game
+# nobody observed: it is never an observation, never operator-suppliable, and
+# like every other member it moves no number (R24).
 WEATHER_STATES = frozenset(
     {
         "CLEAR",
@@ -104,6 +107,7 @@ WEATHER_STATES = frozenset(
         "ROOF_CLOSED",
         "ROOF_OPEN",
         "SNOW",
+        "UNOBSERVED",
         "WIND",
     }
 )

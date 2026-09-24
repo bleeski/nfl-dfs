@@ -144,9 +144,15 @@ def _outdoor_proposer(slate):
 # ------------------------------------------------ the card's three runs
 
 
-def test_blocked_weather_with_no_network_still_delivers_the_baseline(
+def test_an_unobserved_game_with_no_network_still_delivers_the_baseline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network: list[object]
 ) -> None:
+    """Session 06's first run, moved by Session 09 (R28). It was
+    `test_blocked_weather_with_no_network_still_delivers_the_baseline`: the
+    outdoor game stopped the review at WEATHER with `WEATHER_CAPTURE_REQUIRED`.
+    Weather no longer blocks, so the game is named unobserved and the review
+    reaches the freeze, which fails here instead; the baseline stays the file."""
+
     from nfl_dfs import cli
     from nfl_dfs import prior_review as prior_review_module
 
@@ -155,8 +161,9 @@ def test_blocked_weather_with_no_network_still_delivers_the_baseline(
     root = tmp_path / "outputs" / "prior-review-test"
     seen: dict[str, object] = {}
 
-    def freeze(**kwargs):  # pragma: no cover - reaching this is the failure
-        raise AssertionError("freeze must not run while the weather gate is open")
+    def freeze(**kwargs):
+        seen["freeze_weather_state"] = kwargs.get("weather_state")
+        raise RuntimeError("PRIORS_UNAVAILABLE_OFFLINE")
 
     real = prior_review_module.run_prior_review
 
@@ -171,16 +178,22 @@ def test_blocked_weather_with_no_network_still_delivers_the_baseline(
 
     report = _report(root)
     assert code == 2
-    assert report["stage"] == "PRIOR_REVIEW_WEATHER_BLOCKED"
-    assert any("WEATHER_CAPTURE_REQUIRED:" in value for value in report["blockers"])
+    assert report["stage"] == "PRIOR_REVIEW_PRIORS_BLOCKED"
+    assert any(value.startswith("PRIORS_FREEZE_FAILED:") for value in report["blockers"])
+    weather = next(item for item in report["prior_review_stages"] if item["stage"] == "WEATHER")
+    assert weather["status"] == "UNOBSERVED_GAMES_NAMED"
+    [game] = weather["games"].values()
+    assert game["limitations"][0].startswith("WEATHER_UNOBSERVED:roof=outdoors:")
+    assert seen["freeze_weather_state"] is None  # nothing observed is ever passed on
+    assert not any("WEATHER_CAPTURE_REQUIRED:" in value for value in report["blockers"])
     assert report["FILE_VALID"] is False and report["bulk_entry_csv"] is None
     assert report["MODEL_STATUS"] == "PRIOR_ONLY"
     assert seen["pointer_before_review"] == BASELINE  # published before priors and weather
     _assert_baseline_delivered(report, root, "prior-review-test")
     assert report["release_truths"]["FILE_VALID"] is False  # the review's own v1 truth
     assert report["improvement"]["status"] == "NOT_PRODUCED"
-    assert report["improvement"]["stage"] == "WEATHER"
-    assert "WEATHER_CAPTURE_REQUIRED" in next(
+    assert report["improvement"]["stage"] == "PRIORS"
+    assert "PRIORS_FREEZE_FAILED" in next(
         item["detail"] for item in report["release_truths"]["delivery_limitations"]
         if item["code"] == "IMPROVEMENT_NOT_DELIVERED")
     assert _upload_sheet_names(report, report["latest_deliverable"]["path"])

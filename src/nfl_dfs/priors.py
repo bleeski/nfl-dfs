@@ -46,6 +46,7 @@ from .projection import (
     PLAYER_SOURCE_SCHEMA,
     TEAM_SOURCE_PARSER,
     TEAM_SOURCE_SCHEMA,
+    TEAM_SOURCE_SCHEMA_V2,
 )
 from .sources import (
     SourcePolicyError,
@@ -111,6 +112,9 @@ _ROOF_WEATHER = {
 _OPERATOR_WEATHER_STATES = frozenset(
     {"CLEAR", "INDOOR_OR_CLEAR", "MIXED", "RAIN", "SNOW", "WIND"}
 )
+# A game nobody observed (Session 09, R28). Not an operator state: it records
+# the absence of an observation and moves no number (R24).
+WEATHER_UNOBSERVED = "UNOBSERVED"
 
 
 class PriorsBuildError(ValueError):
@@ -1460,12 +1464,15 @@ def resolve_weather_state(
     venue_roof_history: Mapping[str, Mapping[str, int]] | None = None,
     venue_roof_seasons: Iterable[int | str] | None = None,
 ) -> tuple[str, str]:
-    """Resolve the weather enum, which has no UNKNOWN member.
+    """Resolve the weather enum, or record that nobody observed the game.
 
     A fixed or retracted roof is decided by the frozen schedule artifact. An
-    outdoor game is not: `api.weather.gov` is unreachable from a session, and
-    the contract offers no way to say so. Rather than invent a value, an outdoor
-    game requires an operator-supplied state and otherwise fails closed.
+    outdoor game is not, and `api.weather.gov` is often unreachable from a
+    session. Until Session 09 such a game with no operator-supplied state failed
+    closed here (`WEATHER_STATE_REQUIRED`). Under R28 missing weather stops
+    certification, not the model: the game resolves to `UNOBSERVED` under a
+    `WEATHER_UNOBSERVED` basis, which is never an observation and moves no
+    number (R24). A conflicting or unsupported supplied state still raises.
 
     One case sits between the two, and `venue_roof_history` is what resolves it.
     nflverse writes the `roof` column only after the game is played, so an
@@ -1497,11 +1504,7 @@ def resolve_weather_state(
             )
         return derived, f"DERIVED_FROM_SCHEDULE_ROOF:{roof or 'blank'}"
     if not operator_weather_state:
-        raise PriorsBuildError(
-            f"WEATHER_STATE_REQUIRED:roof={roof or 'blank'}"
-            ":supply --weather-state; the enum has no UNKNOWN member and"
-            " api.weather.gov is unreachable from a session"
-        )
+        return WEATHER_UNOBSERVED, f"WEATHER_UNOBSERVED:roof={roof or 'blank'}"
     supplied = operator_weather_state.upper()
     if supplied not in _OPERATOR_WEATHER_STATES:
         raise PriorsBuildError(
@@ -2380,10 +2383,14 @@ def freeze_prior_package(
                 supplied_source_uri, supplied_observed_at, as_of=when
             )
             if slate.mode is EngineMode.CLASSIC and evidence_basis.endswith("UNATTRIBUTED"):
-                raise PriorsBuildError(
-                    f"CLASSIC_WEATHER_SOURCE_REQUIRED:{game_id}:outdoor weather must "
-                    "be bound to an approved captured source URI and observation time"
+                # Until Session 09 this raised CLASSIC_WEATHER_SOURCE_REQUIRED. A
+                # state with no captured source is not an observation, so it is
+                # never written: the game is unobserved and named (R28).
+                weather_by_game[game_id] = WEATHER_UNOBSERVED
+                weather_basis_by_game[game_id] = (
+                    f"WEATHER_UNOBSERVED:roof={roof or 'blank'}:UNATTRIBUTED_STATE_NOT_WRITTEN"
                 )
+                continue
             weather_basis = f"{weather_basis}|{evidence_basis}"
             if supplied_source_uri and supplied_observed_at is not None:
                 weather_expiries.append(
@@ -2417,7 +2424,11 @@ def freeze_prior_package(
     )
 
     team_payload = {
-        "schema_version": TEAM_SOURCE_SCHEMA,
+        "schema_version": (
+            TEAM_SOURCE_SCHEMA_V2
+            if WEATHER_UNOBSERVED in weather_by_game.values()
+            else TEAM_SOURCE_SCHEMA
+        ),
         "metadata": _artifact_metadata(
             [frozen["games"], frozen["teams"], frozen["team_stats"]],
             parser_version=TEAM_SOURCE_PARSER,

@@ -845,14 +845,16 @@ def test_spread_is_signed_per_team_from_the_home_perspective(package, tmp_path):
     assert Decimal(str(by_provider["nflverse:SEA:2026"]["market_spread"])) == Decimal("3.5")
 
 
-def test_weather_state_is_derived_for_a_roof_and_required_outdoors():
+def test_weather_state_is_derived_for_a_roof_and_unobserved_outdoors():
+    """Session 09 (R28): an outdoor or blank roof with no state used to raise
+    `WEATHER_STATE_REQUIRED`; it is now recorded as unobserved, never observed."""
+
     assert resolve_weather_state({"roof": "dome"}, None)[0] == "INDOOR"
     assert resolve_weather_state({"roof": "closed"}, None)[0] == "ROOF_CLOSED"
     assert resolve_weather_state({"roof": "open"}, None)[0] == "ROOF_OPEN"
-    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
-        resolve_weather_state({"roof": "outdoors"}, None)
-    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
-        resolve_weather_state({"roof": ""}, None)
+    assert resolve_weather_state({"roof": "outdoors"}, None) == (
+        "UNOBSERVED", "WEATHER_UNOBSERVED:roof=outdoors")
+    assert resolve_weather_state({"roof": ""}, None) == ("UNOBSERVED", "WEATHER_UNOBSERVED:roof=blank")
     assert resolve_weather_state({"roof": "outdoors"}, "rain")[0] == "RAIN"
     with pytest.raises(PriorsBuildError, match="WEATHER_STATE_UNSUPPORTED"):
         resolve_weather_state({"roof": "outdoors"}, "INDOOR")
@@ -860,7 +862,7 @@ def test_weather_state_is_derived_for_a_roof_and_required_outdoors():
         resolve_weather_state({"roof": "dome"}, "RAIN")
 
 
-def test_outdoor_game_needs_an_operator_weather_state_to_freeze(tmp_path):
+def test_an_unobserved_outdoor_game_freezes_as_v2_and_a_supplied_state_as_v1(tmp_path):
     salary = tmp_path / "DKSalaries.csv"
     _write_salary(salary)
     digest = sha256_file(salary)
@@ -902,12 +904,19 @@ def test_outdoor_game_needs_an_operator_weather_state_to_freeze(tmp_path):
         "as_of": AS_OF,
         "output_dir": tmp_path / "outdoor_out",
     }
-    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
-        freeze_prior_package(**arguments)
-    assert not (tmp_path / "outdoor_out").exists()
-    supplied = freeze_prior_package(**{**arguments, "weather_state": "WIND"})
+    # Until Session 09 this freeze raised WEATHER_STATE_REQUIRED and wrote nothing.
+    unobserved = freeze_prior_package(**arguments)
+    assert unobserved["weather_state"] == "UNOBSERVED"
+    assert unobserved["weather_basis"] == "WEATHER_UNOBSERVED:roof=outdoors"
+    team = json.loads(Path(unobserved["team_source"]).read_text(encoding="utf-8"))
+    assert team["schema_version"] == "nfl_team_projection_source_v2"
+    assert {record["weather_state"] for record in team["records"]} == {"UNOBSERVED"}
+    supplied = freeze_prior_package(
+        **{**arguments, "weather_state": "WIND", "output_dir": tmp_path / "outdoor_wind"})
     assert supplied["weather_state"] == "WIND"
     assert supplied["weather_basis"].startswith("OPERATOR_SUPPLIED")
+    wind = json.loads(Path(supplied["team_source"]).read_text(encoding="utf-8"))
+    assert wind["schema_version"] == "nfl_team_projection_source_v1"
 
 
 # --------------------------------------------------------------------------- #
@@ -1279,29 +1288,30 @@ def test_a_blank_roof_at_a_retractable_venue_resolves_from_its_own_history():
     )
 
 
-def test_a_blank_roof_still_blocks_without_venue_history():
+# Session 09 (R28): these three derive no roof, exactly as before R28, and a
+# game nobody has observed is now recorded UNOBSERVED where it used to raise
+# WEATHER_STATE_REQUIRED.
+def test_a_blank_roof_is_unobserved_without_venue_history():
     # The default is the behaviour that shipped before R26: a blank roof and no
     # history is a game nobody has observed.
-    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
-        resolve_weather_state({"roof": "", "home_team": "DAL"}, None)
+    assert resolve_weather_state({"roof": "", "home_team": "DAL"}, None) == (
+        "UNOBSERVED", "WEATHER_UNOBSERVED:roof=blank")
 
 
-def test_a_blank_roof_at_an_outdoor_venue_still_blocks_with_history_supplied():
-    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
-        resolve_weather_state(
-            {"roof": "", "home_team": "GB"},
-            None,
-            venue_roof_history={"GB": {"outdoors": 17}},
-        )
+def test_a_blank_roof_at_an_outdoor_venue_is_unobserved_with_history_supplied():
+    assert resolve_weather_state(
+        {"roof": "", "home_team": "GB"},
+        None,
+        venue_roof_history={"GB": {"outdoors": 17}},
+    )[0] == "UNOBSERVED"
 
 
-def test_a_mixed_retractable_history_still_blocks():
-    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
-        resolve_weather_state(
-            {"roof": "", "home_team": "HOU"},
-            None,
-            venue_roof_history={"HOU": {"closed": 16, "open": 1}},
-        )
+def test_a_mixed_retractable_history_is_unobserved():
+    assert resolve_weather_state(
+        {"roof": "", "home_team": "HOU"},
+        None,
+        venue_roof_history={"HOU": {"closed": 16, "open": 1}},
+    )[0] == "UNOBSERVED"
 
 
 def test_an_operator_observation_outranks_the_venue_history():
@@ -1318,12 +1328,11 @@ def test_an_operator_observation_outranks_the_venue_history():
 def test_an_outdoors_roof_is_never_resolved_by_venue_history():
     # 'outdoors' is a recorded observation, not a blank. History never overrides
     # what the artifact actually says.
-    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
-        resolve_weather_state(
-            {"roof": "outdoors", "home_team": "DAL"},
-            None,
-            venue_roof_history={"DAL": {"closed": 17}},
-        )
+    assert resolve_weather_state(
+        {"roof": "outdoors", "home_team": "DAL"},
+        None,
+        venue_roof_history={"DAL": {"closed": 17}},
+    ) == ("UNOBSERVED", "WEATHER_UNOBSERVED:roof=outdoors")
 
 
 def test_the_proposal_carries_venue_history_only_for_a_retractable_venue():
@@ -1403,8 +1412,10 @@ def test_a_retractable_venue_blank_roof_freezes_without_a_capture(tmp_path, monk
     )
 
 
-def test_a_retractable_venue_with_one_open_game_still_blocks_the_freeze(tmp_path, monkeypatch):
-    """The same fixture, one recorded open roof. The gate holds."""
+def test_a_retractable_venue_with_one_open_game_still_derives_no_roof(tmp_path, monkeypatch):
+    """The same fixture, one recorded open roof. R26's bound holds: no roof is
+    derived. Until Session 09 the freeze raised WEATHER_STATE_REQUIRED; now the
+    game is frozen UNOBSERVED (R28), never as the roof its history suggests."""
 
     monkeypatch.setattr(priors, "RETRACTABLE_ROOF_HOME_TEAMS", frozenset({"SEA"}))
     monkeypatch.setattr(
@@ -1446,17 +1457,17 @@ def test_a_retractable_venue_with_one_open_game_still_blocks_the_freeze(tmp_path
     )
     review = root / priors.REVIEW_FILENAME
     review.write_bytes(priors.review_csv_bytes(proposals))
-    with pytest.raises(PriorsBuildError, match="WEATHER_STATE_REQUIRED"):
-        freeze_prior_package(
-            package_dir=root,
-            reviewed=review,
-            reviewed_sha256=sha256_file(review),
-            salaries=salary,
-            salary_sha256=digest,
-            as_of=AS_OF,
-            output_dir=tmp_path / "mixed_out",
-        )
-    assert not (tmp_path / "mixed_out").exists()
+    frozen = freeze_prior_package(
+        package_dir=root,
+        reviewed=review,
+        reviewed_sha256=sha256_file(review),
+        salaries=salary,
+        salary_sha256=digest,
+        as_of=AS_OF,
+        output_dir=tmp_path / "mixed_out",
+    )
+    assert frozen["weather_state"] == "UNOBSERVED"
+    assert frozen["weather_basis"] == "WEATHER_UNOBSERVED:roof=blank"
 
 
 # --- P7: a provenance-only source must not cost the lock path ------------
