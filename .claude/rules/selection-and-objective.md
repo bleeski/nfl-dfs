@@ -40,3 +40,8 @@ paths:
   the mutation tests that prove it stay green.
 - Showdown Captain scoring is 1.5x and CPT salary comes from the CPT row; the
   underlying person is the identity for exposure, uniqueness and overlap.
+- Ben's two goals (R34) are large prizes and minimizing washouts, through
+  leverage and diversification. A change that raises total mean prior points
+  by concentrating captains or exposure moves away from both. Measure both,
+  captain spread and shared failure points first, as named diagnostic columns
+  before either becomes an objective term.

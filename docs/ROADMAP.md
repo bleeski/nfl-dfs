@@ -123,7 +123,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 21 | Batched | Prior-model triage: confirm or refute the per-game `TARGET_SHARE` against season `ROLE_CAPACITY` unit mismatch, then fix it or close it with evidence; F8 alternate-name identity proposals for review, with auto-accept unchanged | Showdown retro §9 #2; archive § F8 | `src/nfl_dfs/opportunity.py`, `src/nfl_dfs/prior_score.py`, `src/nfl_dfs/priors.py` | P | Session 00 | `sh ./nfl.sh test tests/test_offensive_roles.py tests/test_priors_adapter.py -x --tb=short` | Pending |
 | Session 22 | Standalone | P0b: run-folder provenance completeness, manifests for hand-built entries, a pre-registration record per slate | Chunk P0b | `src/nfl_dfs/prelock_manifest.py`, `src/nfl_dfs/prior_review.py`, new `src/nfl_dfs/preregistration.py` | P | Session 18 | `sh ./nfl.sh test tests/test_prelock_manifest.py -x --tb=short` | Pending |
 | Session 23 | Standalone | P2: contest-aware assignment, structural hygiene bounds and `max_person_share`; its Showdown bounds and 23b's theses share one constraint vocabulary, and one share limit | Chunk P2; debrief §6 | both policy contracts, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, both policy generators | S | Session 18, Session 10 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_classic_policy_generator.py -x --tb=short` | Pending |
-| Session 23b | Standalone | Showdown game theses as sleeves: a core plus small sleeves, each betting on one game script Ben names (blowout either way, shootout, one-sided explosion, grind, ground and clock, defensive score); a thesis shapes the whole lineup, captain first; one portfolio-wide limit on any player's share so the theses cannot collapse onto the same chalk; a thesis that cannot be built is dropped and named, never bent | Chunk P8; Showdown retro §7c, §9 #1 and #4; standings findings §8.1 C, §8.2 G | the Showdown policy, selection, relaxation and review paths; `docs/DATA_CONTRACTS.md` | S | Session 11b, Session 10 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_relaxation_controller.py -x --tb=short`, plus the tests the session adds | Pending |
+| Session 23b | Standalone | Showdown game theses (R33, R34): every lineup follows one named thesis Ben chooses (each team wins big, each team wins close, high or low scoring, a defensive battle, a shootout); a thesis shapes the whole lineup, captain first, kicker and DST captains included; rows and captains spread across theses; one portfolio-wide share limit so no player is a shared failure point; a thesis is never bent to fit, it is dropped and named; backup quarterbacks out by default | Chunk P8; R33, R34; ATL@GB slate 2026-09-24; Showdown retro §7c, §9 #1; standings findings §8.1 C | the Showdown policy, selection, relaxation and review paths; `docs/DATA_CONTRACTS.md` | S | Session 11b, Session 10 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_relaxation_controller.py -x --tb=short`, plus the tests the session adds | Pending |
 | Session 24 | Standalone | P3a: bounded DESIGN scenario bank on the `prior_review` path, with p50, p90 and p99 per lineup | Chunk P3a | `src/nfl_dfs/simulation.py`, `src/nfl_dfs/prior_review.py`, the review writers | P | Session 18 | `sh ./nfl.sh test tests/test_simulation.py -x --tb=short` | Pending |
 | Session 25 | Standalone | P3b: registered tail objective and tail sleeve, including captain strata on a ceiling statistic, the dart rules and DST-inclusive families | Chunk P3b; Showdown retro #5; C4 retro #6, #9, #16; debrief §6 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/candidate_families.py`, both policy contracts | S | Session 23, Session 24 | `sh ./nfl.sh test tests/test_prior_selection.py -x --tb=short` | Pending |
 | Session 26 | Standalone | P4a: mass-conserving ownership challenger graded by slate, with projected against realized ownership logged | Chunk P4a; C4 retro #11, #12, #15 | `src/nfl_dfs/ownership.py`, `src/nfl_dfs/prior_review.py` | P | Session 18 | `sh ./nfl.sh test tests/test_ownership_field.py -x --tb=short` | Pending |
@@ -1038,18 +1038,20 @@ and `docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md`.
 - **Session 23 (P2).** `docs/chunks/P2-contest-aware-policy.md`, plus the
   debrief's bank-cap point. Depends on Session 10 because both generators
   change there first. Uniqueness is fixed by R29 and stays off its ladder. The
-  Showdown policy constraints from the DAL@NYG retrospective §9 #1 moved to
-  Session 23b on 2026-09-25; P2's Showdown hygiene bounds use the same
-  constraint vocabulary, and its `max_person_share` is 23b's portfolio-wide
-  share limit, one control, not two.
+  Showdown policy constraints (DAL@NYG retrospective §9 #1) and R33's thesis
+  target moved to Session 23b on 2026-09-25, at Ben's request for a dedicated
+  item. P2's Showdown hygiene bounds use the same constraint vocabulary, and its
+  `max_person_share` is 23b's portfolio-wide share limit, one control, not two.
 - **Session 23b (P8).** `docs/chunks/P8-showdown-thesis-sleeves.md`, the
-  strategy: build a Showdown portfolio as a core plus small thesis sleeves, each
-  following one game script Ben names. The brief holds the theory, the theses
-  and the principles; how to build it is the session's call. It depends only on
+  strategy behind R33 and R34: every Showdown lineup follows one named game
+  thesis Ben chooses, the portfolio spreads its rows and its captains across
+  theses, and each build is read against large prizes and washouts. The brief
+  holds the theory, the evidence (DAL@NYG, ATL@GB, the standings findings) and
+  the principles; how to build it is the session's call. It depends only on
   Sessions 10 and 11b, so it does not wait on the standings chain. It ranks
-  behind the delivery sessions (01 to 16) per Ben's 2026-09-22 order; retro §9
-  ranked it the highest-value strategy item, so moving it up is his call. It
-  touches the files Sessions 11c, 13 and 14 edit, so it runs alone.
+  behind the delivery sessions (01 to 16) per Ben's 2026-09-22 order; moving it
+  up is his call. It touches the files Sessions 11c, 13 and 14 edit, so it runs
+  alone.
 - **Session 24 (P3a).** `docs/chunks/P3a-scenario-bank.md`. Depends on
   Session 18, not "none": its acceptance uses P0's top-1% proxy
   (`P3a-scenario-bank.md:17-18`). The brief wins over the old queue row.
@@ -1156,6 +1158,45 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
   only narrows the pool; freshness and coverage remain certification checks,
   and a row or file that cannot be applied is a named limitation, never a
   stop. Session 06b.
+- **R33, Showdown game theses** (Ben, 2026-09-24, on the ATL@GB Showdown).
+  - "Ideally, each lineup should adhere to a specific game thesis. this isn't
+    an exhaustive list but here are some examples: GB win big, ATL win big, GB
+    win close, ATL win close, defensive battle, offensive shootout. You can
+    have sub variants of each of those for example, high scoring or low
+    scoring, etc.." Every Showdown lineup carries one named thesis, reported
+    per Entry ID, and the portfolio spreads rows across theses.
+  - The purpose is Captain diversification: "The fundamental problem with
+    your build is that there is incredible concentration risk. Especially
+    within the captain ranks. The goal of the game thesis adherence is to make
+    sure there's diversification in captains for example, on a Green Bay win
+    with a low scoring game it might make sense to captain their kicker or
+    DST." A thesis may require its Captain from a named set, K and DST
+    included, which no policy on 2026-09-24 could force.
+  - "Backup quarterbacks, generally requiring an injury, which is why I would
+    exclude them." A quarterback below his team's depth-chart starter is out
+    of the pool by default.
+  - "I would not exclude DST just like I would not exclude kickers." DSTs and
+    kickers stay eligible, Captain included.
+  - Not buildable on 2026-09-24. A policy has no per-team bounds, no required
+    pieces and one rule set per run, and the prior is one mean per person, so
+    six thesis sleeves assembled by hand collapsed onto the same core and
+    repeated lineups across sleeves (R29). Session 23b adds the per-thesis rule
+    sets (moved from Session 23 on 2026-09-25, `docs/chunks/P8-showdown-thesis-sleeves.md`);
+    Sessions 24 and 28 add script-conditioned scenarios and thesis coverage. A
+    thesis never moves a projection by a typed multiplier.
+- **R34, the two portfolio goals** (Ben, 2026-09-24, after R33). "This is the
+  type of thought process I want you to have one building these lineups and
+  ultimately implementing this engine are two goals are winning large prizes,
+  and minimizing washouts. Both require identifying leverage and
+  diversification, and this is a way within showdown contests to do that."
+  - Every build and every engine change is judged against both: the prize
+    tail (Session 25) and washouts, a portfolio where nothing cashes (Session
+    28's bank-estimated P(zero paid)). Leverage needs an ownership input
+    (Session 26); until one exists, say leverage is unmeasured.
+  - A legal, QA-clean portfolio can fail both. The first ATL@GB file had five
+    captains at 25% each and four people in 13 of 20 lineups.
+  - The no-EV rule is unchanged: these are goals, never reported as EV or a
+    probability of winning.
 
 Still in force from earlier, with full text in the backlog archive:
 
@@ -1278,4 +1319,4 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 11b | Pending to In Progress | `6d24bc3` | Claim pushed on `claude/affectionate-bohr-mnr8vz` |
 | 2026-09-24 | Session 11b | In Progress to Complete | `6394eda` | Showdown subset binding with a sequential fill, the ladder over the subset, `--entry-id`, readable review `sd5_v2`; suite `1758 passed, 1 skipped`; merged as PR #66 |
 | 2026-09-24 | Session 11c | Added as Pending | `6394eda` | C2 and C3 over a subset policy, split at Ben's breakpoint; merged with PR #66 |
-| 2026-09-25 | Session 23b | Added as Pending | recorded by the next session | Showdown game theses as sleeves (chunk P8), on Ben's request; Session 23 gives it the Showdown constraint vocabulary and keeps P2 |
+| 2026-09-25 | Session 23b | Added as Pending | recorded by the next session | Showdown game theses (chunk P8, R33 and R34), on Ben's request; Session 23 gives it R33's thesis target and the Showdown constraint vocabulary and keeps P2 |

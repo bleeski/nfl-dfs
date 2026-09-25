@@ -6,27 +6,28 @@ This file records completed implementation work and verification evidence for th
 
 ### 2026-09-25: Showdown game theses are queued as Session 23b (chunk P8)
 
-Ben asked for a backlog item for the Showdown discipline the DAL@NYG
-retrospective set out, and for the strategy and theory only, not the
-implementation. On `claude/affectionate-bohr-mnr8vz`. Documents only; no code,
-contract or gate changed.
+Ben asked for a backlog item for the Showdown discipline behind R33 and R34
+(the ATL@GB slate), with the strategy and theory only, not the implementation.
+On `claude/affectionate-bohr-mnr8vz`. Documents only; no code, contract or gate
+changed.
 
 #### Added
 
-- **`docs/chunks/P8-showdown-thesis-sleeves.md`**: build a Showdown portfolio
-  as a core plus small sleeves, each betting on one game script Ben names
-  (blowout either way, shootout, one-sided explosion, low-scoring grind, ground
-  and clock, defensive score). It gives the evidence (four engine portfolios
-  each one thesis; concentration a ruin mechanism across 8,007 field
-  portfolios; the retro's five-thesis merge collapsing to Dak 20 of 20), the
-  theses as game scripts, and seven principles:
-  - a thesis is a structure, captain first, not an exclusion list;
-  - Ben names the thesis and its teams, and the engine never infers them;
-  - the core carries the paid count, and the sleeves carry the tail;
-  - one portfolio-wide share limit, about 0.80;
-  - a thesis is never bent to fit;
-  - lineups are distinct across the portfolio;
-  - a thesis is a choice, not a forecast.
+- **`docs/chunks/P8-showdown-thesis-sleeves.md`**: every Showdown lineup
+  follows one named game thesis Ben chooses, and the portfolio spreads its rows
+  and captains across theses, judged against R34's two goals (large prizes, no
+  washouts). It gives:
+  - R33 and R34 in Ben's words;
+  - the evidence (the rejected ATL@GB file, the hand-built ATL@GB sleeves that
+    repeated lineups and lost their theses to relaxation, DAL@NYG's collapse to
+    Dak 20 of 20, and concentration as a ruin mechanism across 8,007 field
+    portfolios);
+  - Ben's theses as game scripts: each team wins big, each team wins close
+    (high or low scoring), a defensive battle, a shootout;
+  - nine principles, among them: no filler rows; a thesis shapes the lineup
+    captain first, kicker and DST included; Ben names the teams and the engine
+    never infers a script; one portfolio-wide share limit; a thesis is never
+    bent to fit; backup quarterbacks out by default.
 
   How to build it is the implementing session's call.
 - **`docs/ROADMAP.md`**: the Session 23b row and card, and its ledger row.
@@ -34,9 +35,10 @@ contract or gate changed.
 #### Changed
 
 - **Session 23** keeps P2 (contest-aware assignment, hygiene bounds,
-  `max_person_share`, the debrief's bank-cap point). The retrospective's §9 #1
-  Showdown constraints moved to Session 23b, so the two share one constraint
-  vocabulary and one share limit.
+  `max_person_share`, the debrief's bank-cap point). R33's thesis target and
+  the retrospective's §9 #1 Showdown constraints moved to Session 23b, and R33's
+  routing line in §2.5 says so. The two sessions share one constraint vocabulary
+  and one share limit.
 - **Ledger**: Session 11b's close and Session 11c's addition record `6394eda`
   (PR #66).
 
@@ -45,13 +47,77 @@ contract or gate changed.
 - **Placement.** 23b follows Session 23 in priority, behind the delivery
   sessions (Ben's 2026-09-22 order). It depends only on Sessions 10 and 11b,
   both complete, so it is startable now and does not wait on the standings
-  chain (Sessions 17 and 18, O1, O2) that Session 23 needs. The retrospective
-  ranked it its highest-value strategy item; moving it up is Ben's call.
+  chain (Sessions 17 and 18, O1, O2) that Session 23 needs. Moving it up is
+  Ben's call.
 
 #### Verification
 
 - `sh ./nfl.sh test tests/test_roadmap_queue.py tests/test_harness_orientation.py -x --tb=short`:
-  `79 passed in 0.85s`. `repo_state.py` lists Session 23b as startable.
+  `79 passed in 0.62s`. `repo_state.py` lists Session 23b as startable.
+
+### 2026-09-24: ATL@GB Showdown slate, and R33 (game theses)
+
+A slate operation, not a roadmap session. Twenty reserved Showdown entries,
+salary `74b5ffd6…`, entries `c7e400f5…`, lock 20:15 ET. On
+`claude/atl-gb-showdown-lineups-u7zsba`. Every run ended
+`PRIOR_ONLY / DO_NOT_UPLOAD`; no code changed.
+
+#### Delivered
+
+- Baseline first (`20260924T231305Z-atl-gb-sd-0924`), then the review stopped
+  at `KICKER_ROLE_UNRESOLVED` (GB lists Krieg and Smack).
+- First file handed over: `20260924T232352Z-atl-gb-sd-A-c75`,
+  `DK_REVIEW_ENTRY_atl-gb-sd-A-c75.csv` `6842f5c9…`, 20 rows, supplied rung,
+  no relaxation. `qa_showdown_portfolio.py`: PASS, 0 defects, max overlap 4,
+  salary 46,900 to 50,000, every lineup one or two starting quarterbacks.
+  Ben rejected its captain concentration: five captains at 25% each.
+- The file that replaced it: `20260924T234658Z-atl-gb-sd-E-cpt10`,
+  `DK_REVIEW_ENTRY_atl-gb-sd-E-cpt10.csv` `05b1698f…`: Captain 0.1, combined
+  0.75, kickers 0.3, overlap 4, no Captain at FLEX salary 1,600 or less, K and
+  DST Captain allowed. Supplied rung. QA PASS, 0 defects, 11 captains at 2 or
+  fewer, salary 43,800 to 50,000, one zero-quarterback row. Combined 0.6 held
+  the rung but left four zero-quarterback rows at 34,000 to 39,300.
+- Inputs: the nflverse depth chart captured through `sources.py`
+  (`depth_charts_2026.csv` `8ca09ff7…`, snapshot 2026-09-24T12:42:08Z) as a
+  `nfl_qb_depth_role_evidence_v1` package (ATL Penix, GB Love). Krieg excluded
+  by exact ID: that snapshot lists Smack as GB's only place kicker and Krieg on
+  no GB row since NYJ in March. Backup quarterbacks (Taylor, Slovis, Tua)
+  excluded at Ben's direction.
+- Policy: Captain 0.25, combined 0.75, both kickers 0.3, overlap 4. Combined
+  0.65 left the last row with no quarterback and $10,700 unspent; a policy
+  binding 19 rows with the 20th filled sequentially failed QA (overlap 5), since
+  the fill is outside the policy's overlap cap by design.
+
+#### Found
+
+- **A gate no allowlisted source clears.** `kicker_roles._SOLE_CUES` holds
+  "placekicker", but nflverse writes `pos_name` as "Place kicker", so a
+  depth-chart excerpt can never satisfy `QUALITATIVE_SOLE`. Recommendation:
+  accept "place kicker". The run used an exact-ID exclusion and still shows
+  Smack under the sole-listed assumption.
+- `scripts/make_offensive_role_evidence.py` still prints that `run-slate` has
+  no QB-depth flag; `--qb-depth-role-evidence-json` exists and worked.
+- MarShawn Lloyd, GB's depth-chart RB1 with Jacobs `OUT`, had zero exposure:
+  Jacobs' prior volume goes to nobody without a numerical role source.
+- No kicker or DST Captain can be forced. The prior never chooses one, and a
+  sleeve whose only allowed captains were K, DST or a backup RB (GB win low,
+  ATL win low) was attempted at rung 2 only, with no supplied attempt, so the
+  zeroed captains came back and the sleeve lost its thesis. A GB win big sleeve
+  with Lloyd among four required captains went to rung 3. Unexplained; it
+  belongs to Session 23's per-thesis rule sets.
+- R33 (`docs/ROADMAP.md` §2.5): six thesis sleeves, run one policy each and
+  assembled by row, failed QA three times with repeated lineups across
+  sleeves (the third also lost its captains to rung 2), and were not handed
+  over.
+- R34 (`docs/ROADMAP.md` §2.5): Ben's two goals, large prizes and minimizing
+  washouts, through leverage and diversification. Written into
+  `.claude/rules/slate-operation.md` (a pre-handoff read against both goals)
+  and `.claude/rules/selection-and-objective.md`.
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_roadmap_queue.py -x --tb=short`: 24 passed.
+- Full suite `sh ./nfl.sh test`: `1758 passed, 1 skipped in 307.12s`.
 
 ### 2026-09-24: a Showdown policy may bind some of the rows (Session 11b)
 
