@@ -4,6 +4,59 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-25: prompt audit of the Claude Code surface
+
+Not a roadmap session. An audit of every file Claude Code loads as text
+(`CLAUDE.md`, `docs/START_HERE.md`, `.claude/rules/`, the skills, the agents)
+for instructions that are stale or were tuned for an earlier model, then the
+fixes Ben approved ("Implement all"). On `claude/api-prompt-audit-4h51qe`. No
+code changed. `CLAUDE.md` is touched, so the pull request carries
+`ben-review`.
+
+#### Changed
+
+- **Slate rules reach a slate.** `.claude/rules/slate-operation.md` loads only
+  on a Read of `docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md` or `scripts/**`
+  (Claude Code loads path-scoped rules on Read, not on Grep or Bash), and a
+  slate greps the runbook and runs scripts through Bash. `stops-and-reports.md`,
+  which always loads, now says to Read it before a slate's first command.
+- **Stale facts in `CLAUDE.md`.** "Four independent truths until Session 03"
+  now names the five truths and the exits that report `DELIVERY_STATE`
+  (Sessions 03 to 11b are `Complete`). `selection.py:577-584`, which had
+  drifted to 736-746, is now the status code `SOLVER_RETURNED_NO_LINEUP`.
+  `1177 passed` and 155s are gone: the session-start digest carries the last
+  recorded suite line, and the suite takes about five minutes on Linux.
+- **Standings skill.** Its description and "This is not" section named
+  `nfl-classic-lineups` and `nfl-showdown-lineups`, which exist only in the
+  archives; both now name `run-slate`. Rule 5 said `prior_review` never emits
+  `nfl_prelock_run_manifest_v1`; it has since `7edddee` (2026-09-14). "Run it"
+  now leads with the Windows command, where `data/runs/` lives.
+- **Delegation.** "More than five files: `explorer`" becomes a wide multi-file
+  sweep where the conclusion, not the text, is needed (`CLAUDE.md`,
+  `START_HERE.md`, `explorer.md`). Close-out runs `reviewer` only when the
+  diff changes `src/`, `scripts/`, `tests/` or `config/`.
+- **Wording.** `git-authority.md` states the protected list as it is, without
+  "It was twelve", "now" and "no longer"; Ben's 2026-09-20 quote and both
+  reasons are kept. `reviewer.md` drops "no praise".
+
+#### Found, not changed
+
+- Session-number tags ("since Session 07", "(Session 10)") across `CLAUDE.md`,
+  `START_HERE.md` and `operating-path.md`: accurate, left for their next edit.
+- `explorer.md` and `reviewer.md` tell the subagent to Read `CLAUDE.md`, which
+  subagents already inherit.
+- Windows suite time: CI's `windows` job ran pytest 06:45:42 to 06:55:59
+  (about 617s), past the 600000 ms tool maximum. `CLAUDE.md` and `/verify` now
+  say to run the complete suite in the background on Windows.
+
+#### Verification
+
+- `python3` check: all 16 `CLAUDE_MD_BOUNDARY` provenance refs in
+  `config/gate_registry_v1.json` still appear in the edited `CLAUDE.md`.
+- `sh ./nfl.sh test tests/test_gate_registry.py tests/test_repo_boundaries.py tests/test_roadmap_queue.py tests/test_harness_orientation.py -x --tb=short`: 367 passed in 8.78s.
+- Full suite `sh ./nfl.sh test`: `1758 passed, 1 skipped in 378.14s` (the skip is `tests/test_cowork.py:115`, Windows junction behavior); `doctor` `pass_status: true`.
+- `git diff --check` clean; `CLAUDE.md` 199 lines.
+
 ### 2026-09-24: ATL@GB Showdown slate, and R33 (game theses)
 
 A slate operation, not a roadmap session. Twenty reserved Showdown entries,
