@@ -72,9 +72,10 @@ status from this file or an earlier conversation.
 
 ## Release truths
 
-Runs report four independent truths until Session 03: `FILE_VALID`,
-`EVIDENCE_STATE`, `MODEL_STATUS`, `RELEASE_DECISION`. `FILE_VALID` never implies
-release. A `CERTIFIED` compatibility status derives only from
+Runs report `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS` and
+`RELEASE_DECISION` independently; `nfl baseline` and `run-slate`'s review,
+blocked and failure exits add R28's `DELIVERY_STATE`. `FILE_VALID` never
+implies release. A `CERTIFIED` compatibility status derives only from
 `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` and is not a profitability claim.
 Every current path ends `MODEL_STATUS=PRIOR_ONLY` and
 `RELEASE_DECISION=DO_NOT_UPLOAD` until Q6 promotion; `run-slate` writes a
@@ -106,7 +107,7 @@ portfolio can be late-swapped, a missed lock cannot. Three classes of rule:
   re-sizes the bank before any structure, an infeasible policy takes the next
   rung, and rung 4 is no policy (C1, or sequential Showdown). The baseline stays
   the deliverable when rung 4's export is refused or it raises out of distinct
-  lineups (`selection.py:577-584`). Never rerun a rung by hand; diagnose
+  lineups (`SOLVER_RETURNED_NO_LINEUP`). Never rerun a rung by hand; diagnose
   afterwards in the changelog. Report every relaxation (the result's `relaxation`).
 - **Distinct lineups (R29)** are never relaxed. Ben: "within a given portfolio
   keep all submitted lineups distinct and unique." When distinct lineups run
@@ -136,9 +137,9 @@ only unrecoverable error. Full text: `docs/RUNBOOK.md`.
   `sh ./nfl.sh <same>` on `.venv-linux`. Both pin pytest's temp and cache roots;
   pass pytest flags after `test`, never a bare `-p`, never a second `-q`. Never
   mix the two venvs in one session.
-- Focused tests first (`-x --tb=short`), then the complete suite: 155s on Linux,
-  200 to 365s on Windows. It needs an extended tool timeout (600000 ms) or a
-  background run; a run killed at two minutes is a tooling artifact, not a
+- Focused tests first (`-x --tb=short`), then the complete suite: ~5 min on Linux,
+  ~10 on Windows (CI, 2026-09-25), past the 600000 ms tool maximum. Run it in
+  the background on Windows; a run killed by a timeout is a tooling artifact, not a
   failure. Record the result: `python3 scripts/record_verify.py --from-log <log>`.
 - Python 3.13.7 under `uv.lock`; `uv sync` needs `README.md` present.
   `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1` is the approved opt-in and clears only
@@ -169,8 +170,8 @@ only unrecoverable error. Full text: `docs/RUNBOOK.md`.
 - Never Read a standings export, salary CSV, run artifact or test fixture into
   context; print a schema-level summary with a script. `.claude/settings.json`
   denies `Read` on the inbox for this reason.
-- More than five files to investigate: `explorer` subagent. Pre-close-out diff
-  review: `reviewer`. Both return conclusions from their own context.
+- A wide multi-file sweep, when you need the conclusion and not the text:
+  `explorer`. Pre-close-out diff review: `reviewer`. Both answer from their own context.
 - `git diff --stat` before `git diff`; one session per conversation, then `/clear`.
 
 ### Repo etiquette and gotchas
@@ -185,9 +186,9 @@ only unrecoverable error. Full text: `docs/RUNBOOK.md`.
   `OPTIMAL` is scoped to the reported bank; sample size is declared, not inferred.
 - `data/standings/inbox/`, `data/runs/**/inputs/`, and
   `tests/fixtures/supplied/` are immutable snapshots; a new run is a new folder.
-- No known failing test as of 2026-09-23: `1177 passed, 1 skipped` on Linux; the
-  skip is the junction test (symlink permission on Windows). Any other failure or
-  skip is a finding, not a known issue: `.claude/rules/tests.md`.
+- No known failing test; the session-start digest carries the last recorded
+  suite line. The one skip is the junction test (symlink permission on Windows).
+  Any other failure or skip is a finding, not a known issue: `.claude/rules/tests.md`.
 - When Ben corrects the same thing twice, add the rule here or to
   `.claude/rules/`, and say that you did.
 - When compacting, preserve the session ID, the branch, the list of modified

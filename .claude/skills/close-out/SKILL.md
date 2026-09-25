@@ -30,8 +30,9 @@ Close out the current roadmap session.
    Added / Changed / Verification, exact test counts and timings, artifact
    hashes, and the branch name.
 4. `IMPLEMENTATION_STATUS.md` (LF): only if working capability changed.
-5. Run the `reviewer` subagent on the diff against the session's card and
-   briefs; fix or record what it finds before committing.
+5. If the diff changes `src/`, `scripts/`, `tests/` or `config/`, run the
+   `reviewer` subagent on it against the session's card and briefs; fix or
+   record what it finds before committing. A docs- or ledger-only diff skips it.
 6. Record the suite result where the next session will see it:
    `python3 scripts/record_verify.py --from-log <log>`.
 7. Release the claim: `python3 scripts/claim.py release <SNN>`. Commit the

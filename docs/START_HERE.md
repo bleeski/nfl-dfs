@@ -123,5 +123,6 @@ Never infer status from a document or an earlier conversation.
 Ledgers are read by section, never whole. History lives in
 `docs/backlog-archive/` and `docs/changelog-archive/`; grep them, do not read
 them. Never read a standings export, salary CSV, run artifact or test fixture
-into context; print a schema-level summary with a script instead. An
-investigation touching more than five files goes to the `explorer` subagent.
+into context; print a schema-level summary with a script instead. A wide
+multi-file sweep, when you need the conclusion and not the text, goes to the
+`explorer` subagent; a few reads you will act on stay in the main session.
