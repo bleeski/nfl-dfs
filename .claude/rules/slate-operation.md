@@ -110,6 +110,32 @@ is DraftKings-`OUT` — then the backup is the starter.
 State what the portfolio does not have. With no ownership input there is no
 leverage model, and mean-max in a large field is chalk.
 
+## Build for both goals: large prizes and no washouts
+
+Ben's two goals (R34, 2026-09-24) are winning large prizes and minimizing
+washouts, and both come from leverage and diversification. On 2026-09-24 an
+ATL@GB Showdown file passed every gate and QA with 0 defects, and Ben rejected
+it: five captains at 25% each, four people in 13 of 20 lineups. QA PASS says
+the file is legal, not that the portfolio is any good.
+
+Before a handoff, read the portfolio against both goals and put what you find
+in the handoff:
+
+- **Washouts.** Name the players whose bad night sinks the most lineups: each
+  captain's count, and every person in more than half the rows. That is the
+  portfolio's shared failure point.
+- **Large prizes.** Every lineup needs a game script where all six players hit
+  together (R33's theses: a team wins big or close, a shootout, a defensive
+  battle). The same core with a rotating captain is one bet placed many times.
+- **Captains carry Showdown leverage.** Spread them across theses, and let a
+  kicker or DST captain where the script supports it (a low-scoring win).
+- **Leverage needs ownership.** With no ownership input, say leverage is
+  unmeasured; never call a low-salary pick leverage.
+
+Captain caps and exposure caps are construction preferences, yours to set
+under the lock clock ruling. Set them for these goals, not for the highest
+total of mean prior points.
+
 ## Decide what is yours to decide
 
 Ben's standing preference is that a menu of approaches is work handed back to
