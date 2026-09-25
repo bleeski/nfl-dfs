@@ -10,8 +10,11 @@ repository runs (claude.dev blog, 2026-09-22). That model works longer on its
 own than earlier ones and keeps Ben posted as it goes; on a long task it
 sometimes stops to report instead of going on. It follows a rule that names
 those stops, so this file names them, for every kind of session.
-`slate-operation.md` adds the stops a slate wants; `git-authority.md` says what
-needs no asking. Nothing here relaxes a boundary in `CLAUDE.md`.
+`slate-operation.md` adds the stops and habits a slate wants. Read it before a
+slate's first command: its `paths:` scope loads it only on a Read of
+`docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md` or `scripts/**`, and a slate greps
+the runbook and runs scripts through Bash. `git-authority.md` says what needs
+no asking. Nothing here relaxes a boundary in `CLAUDE.md`.
 
 ## Keep going
 

@@ -23,5 +23,5 @@ You did not write the code; evaluate the result on its own terms.
    pytest file if the prompt names one. Do not run the complete suite.
 4. Report: `BLOCKING` items (a correctness or acceptance gap, with `path:line`
    and the failing scenario), then `OPEN` items (unverified claims), then one
-   line saying what you did not review. No style comments, no refactoring
-   suggestions, no praise. If nothing blocks, say so in one sentence.
+   line saying what you did not review. Style and refactoring are outside
+   this review. If nothing blocks, say so in one sentence.

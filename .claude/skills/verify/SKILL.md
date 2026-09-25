@@ -7,8 +7,9 @@ disable-model-invocation: true
 Run the full verification stack and report evidence, not summaries.
 
 1. Focused: `.\nfl.ps1 test tests/<changed test files>` (Linux: `sh ./nfl.sh test ...`).
-2. Complete pinned suite with an extended tool timeout (600000 ms) or in the
-   background with polling: `.\nfl.ps1 test`, or on Linux
+2. Complete pinned suite, in the background on Windows (about ten minutes
+   there, past the 600000 ms tool maximum) and with an extended tool timeout
+   or in the background on Linux: `.\nfl.ps1 test`, or on Linux
    `sh ./nfl.sh test 2>&1 | tee /tmp/pytest.log` so step 7 records this run
    rather than a second one. Record the exact
    `N passed, M skipped[, K failed] in Ns` line. A run killed by the tool timeout
