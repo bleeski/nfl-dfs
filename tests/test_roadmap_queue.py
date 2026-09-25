@@ -83,12 +83,22 @@ def test_every_session_row_sits_inside_the_markers(repo_state, roadmap_lines):
     )
 
 
-def test_session_ids_are_unique_and_in_order(board, repo_state):
+def test_session_ids_are_unique_and_session_00_leads(board, repo_state):
+    """Row order is priority; a session's number is its stable name.
+
+    Until 2026-09-25 this test also required the numbers to ascend, which made
+    the number the rank. The consolidation of that date re-ranked the board by
+    expected winnings and kept every number (the rulings, the changelog and the
+    chunk briefs cite them), so a new session takes the next free number
+    wherever its row sits. `docs/ROADMAP.md` §2.1 and `.claude/rules/ledger.md`
+    state the rule; the dependency test below still forbids a row that depends
+    on a later row, which is the invariant the ordering actually protects.
+    """
+
     sessions, _ = board
     ids = [row["session"] for row in sessions]
     assert len(ids) == len(set(ids)), "a session is listed twice"
-    numbers = [int(repo_state._SESSION_ID.match(value).group("number")) for value in ids]
-    assert numbers == sorted(numbers), "rows are out of order, and order is priority"
+    assert all(repo_state._SESSION_ID.match(value) for value in ids)
     assert ids[0] == "Session 00"
 
 
