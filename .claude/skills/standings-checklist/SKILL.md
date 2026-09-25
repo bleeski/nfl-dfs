@@ -1,6 +1,6 @@
 ---
 name: standings-checklist
-description: Generate the list of DraftKings NFL contests Ben has entered that still need their standings export pulled and dropped in data/standings/inbox/, in the nfl-dfs workspace, and hand it back as a clickable HTML checklist plus a regenerated CONTESTS_AWAITING_STANDINGS.md. Use this whenever Ben asks what NFL standings we need to pull, what contests are missing standings, to regenerate or refresh the awaiting-standings list, for a pull checklist, or says something like "what do we need to pull down", "give me the standings checklist", or "what's left to pull", even if he doesn't name the file or the tool. Also use it to record a contest as unrecoverable (DK's export is gone) or as a placeholder/synthetic ID so future runs stop listing it. This is not nfl-classic-lineups or nfl-showdown-lineups, which build lineups from an uploaded salary/entries CSV, and not `nfl.sh settle`, which scores a complete hash-bound standings artifact: this skill only finds which already-entered contests are missing an export.
+description: Generate the list of DraftKings NFL contests Ben has entered that still need their standings export pulled and dropped in data/standings/inbox/, in the nfl-dfs workspace, and hand it back as a clickable HTML checklist plus a regenerated CONTESTS_AWAITING_STANDINGS.md. Use this whenever Ben asks what NFL standings we need to pull, what contests are missing standings, to regenerate or refresh the awaiting-standings list, for a pull checklist, or says something like "what do we need to pull down", "give me the standings checklist", or "what's left to pull", even if he doesn't name the file or the tool. Also use it to record a contest as unrecoverable (DK's export is gone) or as a placeholder/synthetic ID so future runs stop listing it. This is not `run-slate`, which builds lineups from an uploaded salary/entries CSV, and not `nfl.sh settle`, which scores a complete hash-bound standings artifact: this skill only finds which already-entered contests are missing an export.
 ---
 
 # NFL standings pull checklist
@@ -35,9 +35,15 @@ fact; the entry CSV does not contain a contest date, and the outputs say so.
 
 ## Run it
 
-```bash
-.venv-linux/bin/python scripts/standings_checklist.py
+Run it in the checkout that holds the runs. `data/runs/` and the inbox are
+gitignored, so a cloud clone has neither and its list is empty by
+construction; the Windows desktop checkout is where the corpus lives.
+
+```powershell
+.venv\Scripts\python.exe scripts\standings_checklist.py
 ```
+
+In a Linux session the same script runs under `.venv-linux/bin/python`.
 
 That's the whole command: it writes the markdown and both HTML files and
 prints the counts. `--json` prints the machine-readable report and writes
@@ -111,11 +117,12 @@ about what happened to a contest.
    salary snapshot for that slate, and refuses by name without them. Never
    invent an ad hoc filer inside this skill; run that tool, or report what it
    refused.
-5. **A settled contest is the only one that counts for validation.** As of
-   2026-09-14 the corpus holds zero, because no `data/runs/` snapshot carries
-   the `nfl_prelock_run_manifest_v1` and `nfl_scenario_bank_v1` that
-   `settle --request` binds — the `prior_review`/C1-C3 path never emits them.
-   A pre-lock prediction record must never be reconstructed after the fact.
+5. **A settled contest is the only one that counts for validation.** The
+   session-start digest reports how many slates are graded; do not restate a
+   count here. `settle --request` binds the run's own
+   `nfl_prelock_run_manifest_v1`, which `prior_review` writes before lock
+   when it can describe the slate. A pre-lock prediction record must never be
+   reconstructed after the fact.
    See Q1B in `docs/backlog-archive/backlog-through-2026-09-22.md` and
    `docs/ROADMAP.md` Session 30.
 
@@ -127,9 +134,9 @@ uploaded bytes and earlier outputs are never overwritten. This skill reads
 
 ## This is not
 
-- **nfl-classic-lineups / nfl-showdown-lineups** — they build a portfolio
-  from an uploaded DK salary + entries CSV. They produce the entries; this
-  one chases the results after the contest is over.
+- **`run-slate`** (`docs/RUNBOOK.md`) — builds a portfolio from an uploaded
+  DK salary + entries CSV. It produces the entries; this one chases the
+  results after the contest is over.
 - **`sh ./nfl.sh settle`** — the scoring/settlement pipeline, which needs a
   normalized, complete-field, hash-bound standings artifact. A raw export
   sitting in the inbox is not that.

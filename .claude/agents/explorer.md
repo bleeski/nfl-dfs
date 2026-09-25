@@ -1,6 +1,6 @@
 ---
 name: explorer
-description: Read-only codebase investigation for nfl-dfs. Use for any question that would touch more than five files (how does X flow through the engine, where is Y enforced, which tests cover Z). Returns conclusions with file:line references, never file dumps.
+description: Read-only codebase investigation for nfl-dfs. Use for a question that sweeps many files (how does X flow through the engine, where is Y enforced, which tests cover Z) when the caller needs the conclusion rather than the file text. Returns conclusions with file:line references, never file dumps.
 tools: Read, Grep, Glob, Bash
 model: inherit
 effort: low
