@@ -4,6 +4,30 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-24: Session 23b added, the Showdown thesis portfolio
+
+Ben asked for a backlog item carrying the Showdown discipline from the ATL@GB
+slate, as strategy without implementation detail. Following the ledger rule
+(a new task gets a row and a card, and a brief when a card cannot hold it):
+
+#### Added
+
+- `docs/chunks/P2b-showdown-thesis-portfolio.md`, the strategy: every lineup
+  built for one named game script, the portfolio spread across scripts,
+  captains diversified through theses (a kicker or DST captain in a
+  low-scoring win), exposure following the scripts a person scores in rather
+  than his mean, leverage inside each thesis once ownership exists, R33's pool
+  rules, R29 across theses, and a washout read in the review. A thesis acts
+  through roster shape only until a registered scenario model exists.
+- `docs/ROADMAP.md`: Session 23b row (`S`, `Pending`, depends on Session 23),
+  its card in the prize-tail program, pointers from Session 23's card and R33,
+  and the §4 ledger row.
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_roadmap_queue.py -x --tb=short`: 24 passed.
+- Full suite `sh ./nfl.sh test`: `1758 passed, 1 skipped in 318.34s (0:05:18)`.
+
 ### 2026-09-24: ATL@GB Showdown slate, and R33 (game theses)
 
 A slate operation, not a roadmap session. Twenty reserved Showdown entries,
