@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "f2b8254a-83e2-5bd8-883e-0bfc34388b1e",
-      "branch": "claude/laughing-keller-b7cr5q",
-      "chunk": "S11c",
-      "claimed_at": "2026-09-25T18:23:32Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

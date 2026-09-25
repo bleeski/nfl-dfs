@@ -18,8 +18,8 @@ meaning.
 - **The C1 fill after C2** (`selection.py`): the C2 branch calls the fill SD3
   already used (`_fill_unbound`, C1 through `_sequential_lineups`). Every C2
   lineup and prefilled roster is a no-good, only the run's own exclusions
-  apply, and it is all or nothing. The selection report's
-  `portfolio_policy.unbound_fill` records it with `source: "C1"`; the policy's
+  apply, and it is all or nothing. The selection report's `unbound_fill`
+  records it with `source: "C1"`; the policy's
   exposure and overlap stay its own rows.
 - **Fill time for C2** (`prior_review._fill_solve_seconds`): each fill solve
   gets what the policy's declared bank and joint-solve limits leave of the
@@ -122,6 +122,46 @@ meaning.
 - **C1 rows have no overlap cap.** C1 cuts only exact rosters, as it does with
   no policy. The C1 section reports the largest overlap rather than capping it
   (R34: concentration is measured before it becomes a rule).
+
+#### Review
+
+The `reviewer` subagent read the diff against the card. It found no path that
+writes a wrong or repeated lineup, and no check that a policy binding every
+row now evaluates differently. What it raised, and what became of each:
+
+1. `docs/DATA_CONTRACTS.md` and this entry put the fill's record at
+   `portfolio_policy.unbound_fill`; it is the selection report's
+   `unbound_fill`. Fixed in both.
+2. The C2 window check counts only the policy's declared limits, not the fill,
+   so a tight window could run the fill's 0.5 s solves past the deadline. This
+   stays as 11b decided for SD3: a late fill is named
+   `DEADLINE_PASSED_DURING_REVIEW` like any late stage.
+3. C3's run-exclusion check has nothing to check when the coverage lists no
+   people. Only the synthetic scale-acceptance record lacks the list; every
+   `prior_review` coverage writes it, and a malformed list refuses. Stays.
+4. The card asked for "a C1 section" in `classic_selection.json`; none was
+   added. The C1 rows are already there, hash-bound, in
+   `assignments_by_entry_id` and `lineups`, and C3 derives each row's source
+   from the policy's binding and the plan, not from a label the selection
+   writes about itself. A section would be a new selection schema version,
+   which `classic_scale_acceptance.py` pins as well, for a self-description
+   C3 does not need. On Ben's list to overturn.
+5. Missing tests.
+   - Added `test_a_policys_exclusion_binds_its_rows_and_never_the_c1_rows`:
+     the person C1 chose for both of its rows is excluded by the policy; he
+     stays out of the policy's rows, stays in a C1 row, and C3 passes.
+   - Added a clean replay of the mixed package to the mutation test: the CSV
+     and the export audit come out byte for byte. Its capture now snapshots the
+     call's dicts, which `prior_review` extends after C3 returns.
+   - Renamed the direct test to `..._filled_by_prior_review_called_directly`,
+     since it no longer calls selection itself.
+   - Not added: a Classic fill that runs out of distinct lineups. The
+     fixture's pool is too large to exhaust; the all-or-nothing path is
+     `_fill_unbound`, shared with SD3 and tested there.
+6. Rung 4 carries a subset policy's exclusions to every row. That was 11b's
+   decision and is on Ben's list; a Classic subset can now reach it too.
+7. The ledger's placeholder SHAs were filled in place. That is the protocol
+   (the next session records the merge commit), as 11b did.
 
 #### Verification
 

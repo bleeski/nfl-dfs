@@ -512,7 +512,7 @@ roster a no-good, under the run's own exclusions only (a policy's exclusions
 and zero caps bind its rows). The fill is all or nothing, as SD3's is: one that
 runs out of distinct lineups raises `SOLVER_RETURNED_NO_LINEUP` with
 `stage=UNBOUND_FILL` and the baseline stays the file. The selection report's
-`portfolio_policy.unbound_fill` records it, with `source: "C1"`. Each fill solve
+`unbound_fill` records it, with `source: "C1"`. Each fill solve
 gets what the policy's declared bank and joint-solve limits leave of the
 window, split across its solves, from 0.5 s to 10 s. `classic_assignment.json`
 and the C2 audit keep their versions and cover the policy's rows only; the C1

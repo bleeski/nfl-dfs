@@ -953,7 +953,7 @@ def test_a_bound_row_outside_the_fillable_rows_is_refused_by_both_validators(tmp
     assert valid.policy.entry_ids == (ids[2], ids[5]) and valid.policy.entry_count == 2
 
 
-def _subset_policy(*indexes: int):
+def _subset_policy(*indexes: int, controls=None):
     """A Classic policy binding the plan's fillable rows at `indexes`, in template order."""
 
     def write(attachments: Path, plan) -> Path:
@@ -961,14 +961,14 @@ def _subset_policy(*indexes: int):
         template = parse_entries(attachments / "entries.csv")
         path = attachments.parent / "classic_subset.json"
         path.write_text(json.dumps(classic_portfolio_policy_template(
-            slate, [plan.fillable[index] for index in indexes], entry_sha256=template.raw_hash)),
-            encoding="utf-8")
+            slate, [plan.fillable[index] for index in indexes], entry_sha256=template.raw_hash,
+            controls=controls)), encoding="utf-8")
         return path
 
     return write
 
 
-def _classic_subset_run(tmp_path, monkeypatch, *, run_id="c2-subset"):
+def _classic_subset_run(tmp_path, monkeypatch, *, run_id="c2-subset", controls=None):
     """Five rows: 910000002 prefilled, 910000003 and 910000005 bound by a C2 policy, two left to C1."""
 
     holder: dict[str, object] = {}
@@ -979,7 +979,7 @@ def _classic_subset_run(tmp_path, monkeypatch, *, run_id="c2-subset"):
         _edit(entry, cells={"910000002": _named(slate, holder["prefilled"])})
 
     code, report, entries, root = _run_slate(tmp_path, monkeypatch, run_id=run_id, entries=5,
-                                             edit=prefill, policy=_subset_policy(1, 3))
+                                             edit=prefill, policy=_subset_policy(1, 3, controls=controls))
     return code, report, entries, root, holder["slate"], holder["prefilled"]
 
 
@@ -1036,6 +1036,37 @@ def test_a_classic_subset_policy_fills_its_rows_by_c2_and_the_rest_by_c1(tmp_pat
     assert selection["unbound_fill"]["no_good_rosters"] == {"policy_lineups": 2, "prefilled_rosters": 1}
 
 
+def test_a_policys_exclusion_binds_its_rows_and_never_the_c1_rows(tmp_path, monkeypatch):
+    """The policy's exact exclusion keeps a person out of its rows; C1 may still select him (11b's rule).
+
+    The person is one C1 chose for both of its rows in a run without the
+    exclusion; with it, he stays in a C1 row and C3 still passes, because the
+    policy's exclusions and counts cover only the policy's rows.
+    """
+
+    _code, plain, _entries, _root, slate, _prefilled = _classic_subset_run(
+        tmp_path / "plain", monkeypatch, run_id="c2-plain-subset")
+    plain_cells = {eid: tuple(prefilled_cell_id(cell) for cell in roster)
+                   for eid, roster in _cells(Path(plain["latest_deliverable"]["path"])).items()}
+    by_id = {player.dk_id: player for player in slate.players}
+    shared = sorted(set(plain_cells["910000001"]) & set(plain_cells["910000004"]), key=int)
+    assert shared, plain_cells
+    person = by_id[shared[0]]
+
+    code, report, _entries, _root, _slate, _prefilled = _classic_subset_run(
+        tmp_path / "excluded", monkeypatch, run_id="c2-excluded-subset",
+        controls={"exact_exclusions": [{"underlying_id": person.underlying_id, "dk_id": person.dk_id}]})
+    assert code == 0, report["blockers"]
+    assert report["latest_deliverable"]["producer"] == C2
+    cells = _cells(Path(report["latest_deliverable"]["path"]))
+    people = {eid: {by_id[prefilled_cell_id(cell)].underlying_id for cell in roster}
+              for eid, roster in cells.items()}
+    assert all(person.underlying_id not in people[eid] for eid in ("910000003", "910000005"))
+    assert any(person.underlying_id in people[eid] for eid in ("910000001", "910000004"))
+    audit = report["prior_review_reports"]["classic_export_audit"]
+    assert audit["status"] == "PASS" and audit["recomputed"]["player_counts"].get(person.underlying_id, 0) == 0
+
+
 def test_a_classic_policy_run_with_an_official_inactive_reaches_c3(tmp_path, monkeypatch):
     """C3 re-validates the source with the run's own exclusions (fixed in Session 11c).
 
@@ -1074,7 +1105,9 @@ def test_c3_refuses_each_mutation_of_a_mixed_portfolio(tmp_path, monkeypatch):
     captured: dict[str, object] = {}
 
     def record(**kwargs):
-        captured.update(kwargs)
+        # A snapshot: `prior_review` adds C3's outputs to its own dicts after the call.
+        captured.update({key: dict(value) if isinstance(value, dict) else value
+                         for key, value in kwargs.items()})
         return create_classic_review_package(**kwargs)
 
     monkeypatch.setattr(prior_review, "create_classic_review_package", record)
@@ -1085,6 +1118,14 @@ def test_c3_refuses_each_mutation_of_a_mixed_portfolio(tmp_path, monkeypatch):
     original = json.loads(selection_path.read_text(encoding="utf-8"))
     by_roster = {tuple(value): eid for eid, value in original["assignments_by_entry_id"].items()}
     assert set(by_roster.values()) == {"910000001", "910000003", "910000004", "910000005"}
+
+    # A clean replay of the mixed package writes the same CSV and export audit, byte for byte.
+    run_review = Path(captured["output_path"]).parent
+    clean = tmp_path / "clean" / "review"
+    create_classic_review_package(**dict(
+        captured, output_path=clean / Path(captured["output_path"]).name, output_dir=clean))
+    for name in (Path(captured["output_path"]).name, "classic_review_export_audit.json"):
+        assert (clean / name).read_bytes() == (run_review / name).read_bytes(), name
 
     def canonical(artifact, payload) -> bytes:
         """`payload` in the byte form the run wrote `artifact` in, which C3 requires."""
@@ -1330,7 +1371,7 @@ def test_the_readable_reviews_second_section_refuses_each_mutation(tmp_path, mon
     assert "ENTRY_PREFILLED_LINEUP_REPEATED:900000001" in replay("prefilled", entry_bytes=template.read_bytes())
 
 
-def test_a_classic_subset_is_filled_by_prior_review_and_selection_called_directly(tmp_path):
+def test_a_classic_subset_is_filled_by_prior_review_called_directly(tmp_path):
     """Selection returns the C2 lineups, then C1's; `prior_review` merges them in template order."""
 
     from nfl_dfs.classic_portfolio_policy import (
