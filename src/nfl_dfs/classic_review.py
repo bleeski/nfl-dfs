@@ -29,7 +29,7 @@ from .classic_portfolio_policy import (
 )
 from .contracts import EngineMode, SlateContract
 from .dk import CLASSIC_COLUMNS, parse_entries, parse_entry_bytes, parse_salaries, reconcile_template
-from .entry_groups import plan_entries
+from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup, write_upload_bytes
@@ -37,8 +37,12 @@ from .portfolio_policy import canonical_decimal_json_bytes
 from .readable_review import _render_html
 
 
-AUDIT_VERSION = "prior_only_classic_export_audit_c3_v2"
-READABLE_VERSION = "prior_only_readable_review_classic_c3_v1"
+# v3 and v2 (Session 11c): each row's source, and the rows a subset policy
+# leaves to C1. v2 and v1 stay as written.
+AUDIT_VERSION = "prior_only_classic_export_audit_c3_v3"
+READABLE_VERSION = "prior_only_readable_review_classic_c3_v2"
+ROW_SOURCE_POLICY = "POLICY"
+ROW_SOURCE_C1 = "C1"
 SCORE_SNAPSHOT_VERSION = "nfl_classic_selected_prior_scores_c3_v1"
 
 _REQUIRED_ARTIFACTS = (
@@ -612,11 +616,21 @@ def create_classic_review_package(
         source_raw = tracked["portfolio_policy_source"].read_bytes()
         normalized_raw = tracked["portfolio_policy_normalized"].read_bytes()
         policy = parse_normalized_classic_policy_bytes(normalized_raw)
+        # Intake validated the source with the run's own exclusions (official
+        # inactives, operator exclusions), which the normalized policy marks as
+        # `SOURCE_OR_PARTICIPATION_PRECEDENCE`. Re-validating without them could
+        # never reproduce its bytes (Session 11c). They only add zero caps.
+        run_exclusions = tuple(
+            bound.entity_id
+            for bound in policy.player_bounds
+            if bound.exclusion_source == "SOURCE_OR_PARTICIPATION_PRECEDENCE"
+        )
         source_validation = validate_classic_portfolio_policy_bytes(
             source_raw,
             slate=slate,
             entry_ids=entry_ids,
             entry_sha256=template.raw_hash,
+            externally_excluded_people=run_exclusions,
         )
         if not source_validation.valid or source_validation.policy is None:
             raise ClassicReviewError(
@@ -624,8 +638,19 @@ def create_classic_review_package(
             )
         if source_validation.policy.canonical_bytes() != normalized_raw:
             raise ClassicReviewError("CLASSIC_C3_SOURCE_NORMALIZED_POLICY_DISAGREEMENT")
-        if policy.entry_ids != entry_ids:
+        # Session 11c: the policy binds the fillable rows or a subset of them in
+        # template order, and C1 filled the rest after its joint solve. Bank,
+        # counts, bounds and overlap are the policy's rows; legality, distinctness,
+        # activity and the bytes are every filled row.
+        if subset_binding_problems(policy.entry_ids, entry_ids):
             raise ClassicReviewError("CLASSIC_C3_POLICY_ENTRY_ORDER_MISMATCH")
+        bound_ids = tuple(policy.entry_ids)
+        bound_set = set(bound_ids)
+        unbound_ids = unbound_rows(bound_ids, entry_ids)
+        row_sources = {
+            entry_id: ROW_SOURCE_POLICY if entry_id in bound_set else ROW_SOURCE_C1
+            for entry_id in entry_ids
+        }
 
         bank = _strict_json(
             tracked["classic_candidate_bank"].read_bytes(), label="CANDIDATE_BANK", canonical=True
@@ -767,11 +792,34 @@ def create_classic_review_package(
                     tuple(str(value) for value in _sequence(item.get("roster"), label="ASSIGNMENT_ROSTER")),
                 )
             )
-        if tuple(entry for entry, _roster in pairs) != entry_ids:
+        if tuple(entry for entry, _roster in pairs) != bound_ids:
             problems.append("CLASSIC_C3_ASSIGNMENT_ENTRY_ORDER_OR_COVERAGE_MISMATCH")
-        assignments = {entry: roster for entry, roster in pairs}
-        if len(assignments) != len(pairs):
+        policy_assignments = {entry: roster for entry, roster in pairs}
+        if len(policy_assignments) != len(pairs):
             problems.append("CLASSIC_C3_ASSIGNMENT_ENTRY_DUPLICATE")
+        # C1's rows come from the selection record, which binds every filled row;
+        # its rows outside the policy must be exactly the unbound rows.
+        selection_assignment_map = _mapping(
+            selection.get("assignments_by_entry_id"), label="SELECTION_ASSIGNMENT_MAP"
+        )
+        others = sorted(str(entry) for entry in selection_assignment_map if entry not in bound_set)
+        if others != sorted(unbound_ids):
+            problems.append(
+                f"CLASSIC_C3_UNBOUND_ROWS_MISMATCH:selection_rows={others}:unbound_rows={list(unbound_ids)}"
+            )
+        assignments: dict[str, tuple[str, ...]] = {}
+        for entry_id in entry_ids:
+            if entry_id in bound_set:
+                assignments[entry_id] = policy_assignments.get(entry_id, ())
+            elif selection_assignment_map.get(entry_id) is not None:
+                assignments[entry_id] = tuple(
+                    str(value)
+                    for value in _sequence(
+                        selection_assignment_map.get(entry_id), label="SELECTION_ASSIGNMENT_ROSTER"
+                    )
+                )
+            else:
+                assignments[entry_id] = ()
 
         by_id = {row.dk_id: row for row in slate.players}
         people_by_entry: dict[str, frozenset[str]] = {}
@@ -792,7 +840,7 @@ def create_classic_review_package(
                 problems.append(f"CLASSIC_C3_SCORE_INVALID:{dk_id}")
             else:
                 score_map[str(dk_id)] = float(value)
-        selected_ids = {dk_id for _entry, roster in pairs for dk_id in roster}
+        selected_ids = {dk_id for roster in assignments.values() for dk_id in roster}
         if set(score_map) != selected_ids:
             problems.append("CLASSIC_C3_SELECTED_SCORE_COVERAGE_MISMATCH")
         if score_snapshot.get("salary_sha256") != slate.salary_hash:
@@ -894,7 +942,9 @@ def create_classic_review_package(
             if authorization.entry_id not in fillable:
                 continue  # a preserved or unresolved row: the byte audit holds it (Session 11)
             roster = assignments.get(authorization.entry_id, ())
-            if roster not in candidate_by_roster:
+            bound = authorization.entry_id in bound_set
+            # A C1 row is outside the C2 bank by construction.
+            if bound and roster not in candidate_by_roster:
                 problems.append(f"CLASSIC_C3_ASSIGNMENT_OUTSIDE_CANDIDATE_BANK:{authorization.entry_id}")
             valid = validate_lineup(slate, roster)
             if not valid.valid or valid.lineup is None:
@@ -909,30 +959,33 @@ def create_classic_review_package(
             games = frozenset(row.game_id for row in rows)
             people_by_entry[authorization.entry_id] = people
             canonical_by_entry[authorization.entry_id] = valid.lineup.canonical_key
-            player_counts.update(people)
-            team_counts.update(teams)
-            game_counts.update(games)
+            if bound:
+                player_counts.update(people)
+                team_counts.update(teams)
+                game_counts.update(games)
             group_matches: list[str] = []
             for group in policy.groups:
                 count = len(people.intersection(group.member_ids))
                 if group.minimum_players <= count <= group.maximum_players:
                     group_matches.append(group.group_id)
-            group_counts.update(group_matches)
+            if bound:
+                group_counts.update(group_matches)
             group_matches_by_entry[authorization.entry_id] = group_matches
             stack_values: dict[str, int] = {}
             for rule in policy.stack_rules:
                 value = _stack_value(slate, roster, rule.rule_type)
                 stack_values[rule.rule_id] = value
-                if rule.minimum_value <= value <= rule.maximum_value:
+                if bound and rule.minimum_value <= value <= rule.maximum_value:
                     stack_counts.update((rule.rule_id,))
             stack_values_by_entry[authorization.entry_id] = stack_values
-            candidate = candidate_by_roster.get(roster, {})
-            if candidate.get("canonical_key") != valid.lineup.canonical_key:
-                problems.append(f"CLASSIC_C3_CANDIDATE_CANONICAL_MISMATCH:{authorization.entry_id}")
-            if candidate.get("people") != sorted(people):
-                problems.append(f"CLASSIC_C3_CANDIDATE_PEOPLE_MISMATCH:{authorization.entry_id}")
-            if candidate.get("teams") != sorted(teams) or candidate.get("games") != sorted(games):
-                problems.append(f"CLASSIC_C3_CANDIDATE_SCOPE_MISMATCH:{authorization.entry_id}")
+            if bound:
+                candidate = candidate_by_roster.get(roster, {})
+                if candidate.get("canonical_key") != valid.lineup.canonical_key:
+                    problems.append(f"CLASSIC_C3_CANDIDATE_CANONICAL_MISMATCH:{authorization.entry_id}")
+                if candidate.get("people") != sorted(people):
+                    problems.append(f"CLASSIC_C3_CANDIDATE_PEOPLE_MISMATCH:{authorization.entry_id}")
+                if candidate.get("teams") != sorted(teams) or candidate.get("games") != sorted(games):
+                    problems.append(f"CLASSIC_C3_CANDIDATE_SCOPE_MISMATCH:{authorization.entry_id}")
             lineup_score = sum(score_map.get(dk_id, 0.0) for dk_id in roster)
             selected_lineup = selection_lineups.get(roster)
             if selected_lineup is None:
@@ -976,6 +1029,7 @@ def create_classic_review_package(
             entries_payload.append(
                 {
                     "entry_id": authorization.entry_id,
+                    "source": row_sources[authorization.entry_id],
                     "contest_id": authorization.contest_id,
                     "contest_name": authorization.contest_name or None,
                     "entry_fee": authorization.entry_fee,
@@ -991,15 +1045,18 @@ def create_classic_review_package(
                 }
             )
 
-        if policy.require_unique_lineups and len(set(canonical_by_entry.values())) != len(entry_ids):
+        # R29: distinct across every filled row, policy and C1 alike.
+        if (policy.require_unique_lineups or unbound_ids) and len(
+            set(canonical_by_entry.values())
+        ) != len(entry_ids):
             problems.append("CLASSIC_C3_CANONICAL_LINEUP_DUPLICATE")
         problems.extend(
             f"ENTRY_PREFILLED_LINEUP_REPEATED:{entry_id}"
             for entry_id, key in canonical_by_entry.items() if key in entry_plan.forbidden_keys
         )
         pairwise: list[dict[str, object]] = []
-        for left_index, left in enumerate(entry_ids):
-            for right in entry_ids[left_index + 1 :]:
+        for left_index, left in enumerate(bound_ids):
+            for right in bound_ids[left_index + 1 :]:
                 overlap = len(people_by_entry.get(left, frozenset()) & people_by_entry.get(right, frozenset()))
                 pairwise.append(
                     {
@@ -1071,6 +1128,50 @@ def create_classic_review_package(
         for person in policy.exact_exclusions:
             if player_counts[person]:
                 problems.append(f"CLASSIC_C3_EXACT_EXCLUSION_SELECTED:{person}")
+        # The policy's exclusions bind its rows (above); the run's own bind every
+        # filled row (Session 11c): the bound coverage names who was not selectable.
+        # A coverage that lists no people (the scale-acceptance record) names none.
+        pool = coverage.get("pool_coverage")
+        pool_people = pool.get("people") if isinstance(pool, Mapping) else None
+        run_excluded = {
+            str(item.get("person")): str(item.get("reason"))
+            for item in (
+                _sequence(pool_people, label="POOL_COVERAGE_PEOPLE") if pool_people is not None else ()
+            )
+            if isinstance(item, Mapping) and item.get("reason") != "SELECTABLE"
+        }
+        for entry_id in entry_ids:
+            for person in sorted(people_by_entry.get(entry_id, frozenset()).intersection(run_excluded)):
+                problems.append(
+                    f"CLASSIC_C3_SELECTED_PERSON_EXCLUDED_BY_RUN:entry={entry_id}:person={person}"
+                    f":reason={run_excluded[person]}"
+                )
+        unbound_payload: dict[str, object] | None = None
+        if unbound_ids:
+            unbound_exposure: Counter[str] = Counter()
+            for entry_id in unbound_ids:
+                unbound_exposure.update(people_by_entry.get(entry_id, frozenset()))
+            unbound_payload = {
+                "source": ROW_SOURCE_C1,
+                "entry_ids": list(unbound_ids),
+                "basis": "THE_RUN_S_OWN_EXCLUSIONS_NOT_THE_POLICY_S_BOUNDS_C1_CUTS_EXACT_ROSTERS_ONLY",
+                "checks": [
+                    "LEGALITY_ACTIVITY_AND_BYTES_WITH_EVERY_ROW",
+                    "DISTINCT_FROM_EVERY_POLICY_C1_AND_PREFILLED_LINEUP",
+                    "SELECTION_RECORD_ROSTER_SALARY_AND_SCORE",
+                    "NO_PERSON_THE_RUN_EXCLUDES",
+                ],
+                "maximum_person_overlap_with_any_filled_row": max(
+                    (
+                        len(people_by_entry.get(left, frozenset()) & people_by_entry.get(right, frozenset()))
+                        for left in unbound_ids
+                        for right in entry_ids
+                        if right != left
+                    ),
+                    default=0,
+                ),
+                "person_exposure": dict(sorted(unbound_exposure.items())),
+            }
 
         c2_hashes = _mapping(c2_audit.get("hashes"), label="C2_AUDIT_HASHES")
         for label, recorded_digest in sorted(c2_hashes.items()):
@@ -1081,8 +1182,11 @@ def create_classic_review_package(
                 problems.append(f"CLASSIC_C3_C2_AUDIT_HASH_SOURCE_MISSING:{label}")
             elif recorded_digest != actual_hash[artifact_name]:
                 problems.append(f"CLASSIC_C3_C2_AUDIT_HASH_DISAGREEMENT:{label}")
+        policy_canonical = {
+            entry_id: key for entry_id, key in canonical_by_entry.items() if entry_id in bound_set
+        }
         expected_c2_maps = {
-            "canonical_lineups": canonical_by_entry,
+            "canonical_lineups": policy_canonical,
             "player_counts": dict(sorted(player_counts.items())),
             "team_counts": dict(sorted(team_counts.items())),
             "game_counts": dict(sorted(game_counts.items())),
@@ -1118,9 +1222,6 @@ def create_classic_review_package(
         )
         if selection_pairs != tuple(pairs):
             problems.append("CLASSIC_C3_SELECTION_ASSIGNMENT_DISAGREEMENT")
-        selection_assignment_map = _mapping(
-            selection.get("assignments_by_entry_id"), label="SELECTION_ASSIGNMENT_MAP"
-        )
         if selection_assignment_map != {
             entry_id: list(roster) for entry_id, roster in sorted(assignments.items())
         }:
@@ -1197,6 +1298,9 @@ def create_classic_review_package(
             "problems": [],
             "mode": "CLASSIC",
             "entry_ids": list(entry_ids),
+            "bound_entry_ids": list(bound_ids),
+            "unbound_entry_ids": list(unbound_ids),
+            "row_sources": row_sources,
             "truths": {
                 "FILE_VALID": True,
                 "EVIDENCE_STATE": selection.get("EVIDENCE_STATE", "UNKNOWN"),
@@ -1250,6 +1354,7 @@ def create_classic_review_package(
                 "EVERY_SELECTED_LINEUP_ELIGIBILITY_SALARY_TWO_GAME_RULE",
                 "ALL_HARD_PLAYER_TEAM_GAME_GROUP_STACK_COUNTS",
                 "EXACT_EXCLUSIONS_CANONICAL_UNIQUENESS_ALL_PAIRWISE_OVERLAPS",
+                "POLICY_AND_C1_ROW_PARTITION_AND_THE_RUN_S_EXCLUSIONS_OVER_EVERY_ROW",
                 (
                     "SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW"
                     if activity_missing
@@ -1281,7 +1386,8 @@ def create_classic_review_package(
         # presentation. A failure in it keeps the export and its audit, once
         # `_verify_kept_export` passes them again, and removes only the JSON and HTML.
         presenting = True
-        denominator = len(entry_ids)
+        # The policy's rows are its exposure denominator; every filled row is reconciled.
+        denominator = len(bound_ids)
         display_by_person = {row.underlying_id: row for row in slate.players}
         for row in player_rows:
             person = str(row["id"])
@@ -1318,7 +1424,7 @@ def create_classic_review_package(
             "reconciliation": {
                 "status": "PASS",
                 "basis": "INDEPENDENT_EXACT_BYTE_REPARSE_AND_RECOMPUTATION_C3",
-                "entry_count": denominator,
+                "entry_count": len(entry_ids),
                 "problems": [],
             },
             "portfolio_scope": {
@@ -1327,6 +1433,7 @@ def create_classic_review_package(
                 "downstream_export_audit": "PASS",
             },
             "entries": entries_payload,
+            "unbound_rows": unbound_payload,
             "exposure": {
                 "entry_count_denominator": denominator,
                 "people": player_rows,

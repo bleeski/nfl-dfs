@@ -1,5 +1,28 @@
 # Implementation Status
 
+## Capability added: 2026-09-25 (Session 11c)
+
+A Classic policy may bind a subset of the fillable blank rows, as a Showdown
+policy may since Session 11b. C2's joint solve fills the bound rows; then C1
+fills the rest, every C2 lineup and prefilled roster a no-good, under the run's
+own exclusions only, all or nothing. The `CLASSIC_POLICY_SUBSET_UNSUPPORTED`
+refusal is gone from intake, `prior_review` and selection. The C2 audit covers
+the policy's rows; C3 takes the C1 rows from the hash-bound selection record and
+checks the partition, then bank membership, counts, bounds and overlap over the
+policy's rows, and legality, distinctness (R29), activity, the run's exclusions
+and the template bytes over every filled row. Its readable review
+(`prior_only_readable_review_classic_c3_v2`) and export audit
+(`prior_only_classic_export_audit_c3_v3`) name each row's `source`. A C2 policy
+binding every fillable row gives the same file as before (the C2 golden hash).
+Also fixed: C3 re-validates the source policy with the run's own exclusions, so
+a C2 run that excluded anyone (an official inactive, an operator exclusion) now
+reaches C3; before, every such run ended
+`CLASSIC_C3_SOURCE_NORMALIZED_POLICY_DISAGREEMENT` and shipped the baseline.
+Verified through `run-slate` on the Classic fixture with a prefilled row and
+with an official inactive, by replaying C3 with each bound artifact mutated,
+and at unit level. Not yet: C1 cuts only exact rosters, so no overlap cap
+covers the C1 rows.
+
 ## Capability added: 2026-09-24 (Session 11b)
 
 A Showdown policy may bind a subset of the fillable blank rows, in template

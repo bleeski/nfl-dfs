@@ -970,3 +970,7 @@ def test_each_fill_solve_gets_what_the_bank_and_joint_solve_leave_of_the_window(
     assert _fill_solve_seconds(Window(10_000.0), 4) == 10.0  # never above the sequential default
     assert _fill_solve_seconds(Window(1.0), 4) == 0.5  # never under the solver's minimum
     assert _fill_solve_seconds(Window(100.0, passed=True), 4) == 0.5
+    # Session 11c: a C2 policy's bank and joint solve take its declared limits.
+    assert _fill_solve_seconds(Window(100.0), 4, declared_search_seconds=60.0) == pytest.approx(8.0)
+    assert _fill_solve_seconds(Window(100.0), 4, declared_search_seconds=120.0) == 0.5
+    assert _fill_solve_seconds(Window(1_000.0), 4, declared_search_seconds=60.0) == 10.0

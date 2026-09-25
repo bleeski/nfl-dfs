@@ -166,10 +166,16 @@ structural rung, not a guaranteed file: C1 raises when distinct lineups run
 out (`selection.py:577-584`) and the baseline stays the file. When no engine
 file is good enough, the Classic fallback path below still exists.
 
-A C2 policy binds every fillable row. `--entry-id` (repeatable) writes one
-binding only those rows, and the validator accepts it (Session 11b), but
-`run-slate` refuses a Classic subset by name, `CLASSIC_POLICY_SUBSET_UNSUPPORTED`,
-and the baseline ships: C2 with a C1 fill of the unbound rows is Session 11c.
+A C2 policy binds every fillable row, or a subset of them in template order:
+`scripts/make_classic_policy.py --entry-id <id>`, once per row (Session 11b); a
+prefilled or unknown row is refused. Its bounds, stack rules and bank count its
+own rows, its exclusions bind only its rows, and after its joint solve C1 fills
+the other fillable rows, never repeating a C2, C1 or prefilled lineup (Session
+11c). C1 cuts only exact rosters, so no overlap cap covers those rows.
+`row_sources` in the result and each entry's `source` in C3's readable review
+say which filled each row. If C1 runs out of distinct lineups the review
+delivers nothing and the baseline stays the file, named. The request's
+`lineup_count` is still every fillable row.
 
 C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
 solver-error, structural-infeasibility, modeled-bank-infeasibility, and

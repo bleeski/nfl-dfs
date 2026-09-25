@@ -194,9 +194,9 @@ def select_prior_lineups(
     rosters: C1 and sequential Showdown cut each from every solve, and the C2
     and SD3 banks never hold one, so no selected lineup repeats one (R29).
 
-    `fill_count` (Session 11b) is the fillable rows a subset SD3 policy leaves
-    unbound (a C2 subset is Session 11c's). After the joint solve, sequential
-    Showdown fills them: every policy lineup and every forbidden roster is a no-good, and only
+    `fill_count` (Session 11b, C2 since Session 11c) is the fillable rows a
+    subset policy leaves unbound. After the joint solve, sequential Showdown
+    (SD3) or C1 (C2) fills them: every policy lineup and every forbidden roster is a no-good, and only
     the run's own exclusions apply (request, status, official, role), never the
     policy's. The fill's lineups follow the policy's in the returned tuple and
     its report is the policy report's `unbound_fill`; a fill that runs out of
@@ -218,12 +218,6 @@ def select_prior_lineups(
         raise SelectionError(
             "PORTFOLIO_POLICY_ENTRY_COUNT_MISMATCH:"
             f"fill_count={fill_count}:an unbound fill needs a subset policy"
-        )
-    if fill_count and isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
-        raise SelectionError(
-            "CLASSIC_POLICY_SUBSET_UNSUPPORTED:a C2 policy binding a subset of the fillable rows is"
-            " Session 11c's (C3's package is bound to the C2 bank); bind every fillable row or omit"
-            " the policy"
         )
     if (
         isinstance(portfolio_policy, NormalizedPortfolioPolicy)
@@ -430,6 +424,11 @@ def select_prior_lineups(
                 "readable_review.py",
             ],
         }
+        # Session 11c: C1 fills the rows a subset leaves unbound, after the joint
+        # solve, with every C2 lineup and prefilled roster a no-good. The
+        # exposure and overlap above are the policy's rows, as SD3's are.
+        if fill_count:
+            selected, report["unbound_fill"] = fill(selected)
         verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
         verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
         _refuse_prefilled_repeats(selected, forbidden_keys)

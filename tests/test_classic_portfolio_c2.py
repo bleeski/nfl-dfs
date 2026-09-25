@@ -304,6 +304,37 @@ def test_candidate_bank_and_assignment_replay_are_byte_deterministic() -> None:
     assert assignment_artifact_bytes(policy, first_pairs, candidate_bank_sha256=candidate_hash) == assignment_artifact_bytes(policy, second_pairs, candidate_bank_sha256=candidate_hash)
 
 
+def test_the_c2_audit_covers_a_subset_policys_rows_and_refuses_an_unbound_row() -> None:
+    """Session 11c: C2's artifact and audit are the policy's rows; C1's rows are C3's to check."""
+
+    slate = _slate()
+    fillable = ("E001", "E002", "E003")
+    entry_bytes = b"entry"
+    raw = json.dumps(classic_portfolio_policy_template(
+        slate, fillable[:2], entry_sha256=sha256_bytes(entry_bytes)), ensure_ascii=False, indent=2).encode("utf-8")
+    validation = validate_classic_portfolio_policy_bytes(
+        raw, slate=slate, entry_ids=fillable, entry_sha256=sha256_bytes(entry_bytes))
+    assert validation.valid and validation.policy is not None, validation.blockers()
+    policy = validation.policy
+    assert policy.entry_ids == fillable[:2]
+    bank = build_classic_candidate_bank(slate, _objective(slate), policy)
+    selection = solve_classic_portfolio(policy, bank)
+    assert selection.passed, selection.as_report()
+    audit, candidate, _assignment = _audit(slate, policy, raw, entry_bytes, bank, selection)
+    assert audit.passed, audit.problems
+    assert audit.as_report()["entry_ids"] == list(fillable[:2])
+
+    rosters = [bank.candidates[index].roster for index in selection.selected_candidate_indexes]
+    other = next(item.roster for item in bank.candidates if item.roster not in rosters)
+    pairs = (*exact_classic_assignments(policy.entry_ids, rosters), ("E003", other))
+    widened = assignment_artifact_bytes(policy, pairs, candidate_bank_sha256=sha256_bytes(candidate))
+    refused, _candidate, _assignment = _audit(
+        slate, policy, raw, entry_bytes, bank, selection,
+        assignment_bytes=widened, expected_assignment_sha256=sha256_bytes(widened))
+    assert not refused.passed
+    assert any("CLASSIC_AUDIT_ENTRY_ID_ORDER_OR_COVERAGE_MISMATCH" in item for item in refused.problems)
+
+
 @pytest.mark.parametrize(
     ("mutator", "expected"),
     [
@@ -1089,7 +1120,7 @@ def test_c2_required_player_without_current_activity_is_delivered_and_named(
     else:
         assert missing == sorted(gate["selected_people"])
     audit = outcome.reports["classic_export_audit"]
-    assert audit["schema_version"] == "prior_only_classic_export_audit_c3_v2"
+    assert audit["schema_version"] == "prior_only_classic_export_audit_c3_v3"
     assert audit["recomputed"]["selected_activity"] == "INCOMPLETE"
     assert audit["recomputed"]["selected_activity_without_row"] == missing
     assert "SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE" not in audit["checks_run"]
