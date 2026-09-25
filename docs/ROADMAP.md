@@ -122,7 +122,8 @@ Every session follows this protocol, and the cards only add to it:
 | Session 20 | Batched | X1 per-host egress lines in `doctor` with a prohibited-host test; `docs/CLAUDE_CODE_SETUP.md` facts replaced by the probe; a test for `sync.ps1` | Chunk X1; changelog 2026-09-22 "left open" | `src/nfl_dfs/cli.py`, `scripts/session_probe.py`, `docs/CLAUDE_CODE_SETUP.md`, `sync.ps1` | P | Session 00 | `sh ./nfl.sh test tests/test_session_probe.py -x --tb=short`; `sh ./nfl.sh doctor` completes offline | Pending |
 | Session 21 | Batched | Prior-model triage: confirm or refute the per-game `TARGET_SHARE` against season `ROLE_CAPACITY` unit mismatch, then fix it or close it with evidence; F8 alternate-name identity proposals for review, with auto-accept unchanged | Showdown retro §9 #2; archive § F8 | `src/nfl_dfs/opportunity.py`, `src/nfl_dfs/prior_score.py`, `src/nfl_dfs/priors.py` | P | Session 00 | `sh ./nfl.sh test tests/test_offensive_roles.py tests/test_priors_adapter.py -x --tb=short` | Pending |
 | Session 22 | Standalone | P0b: run-folder provenance completeness, manifests for hand-built entries, a pre-registration record per slate | Chunk P0b | `src/nfl_dfs/prelock_manifest.py`, `src/nfl_dfs/prior_review.py`, new `src/nfl_dfs/preregistration.py` | P | Session 18 | `sh ./nfl.sh test tests/test_prelock_manifest.py -x --tb=short` | Pending |
-| Session 23 | Standalone | P2: contest-aware assignment, structural hygiene bounds and `max_person_share`, plus the Showdown policy constraints (captain team, per-team bounds, pair rules) | Chunk P2; Showdown retro #1; debrief §6 | both policy contracts, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, both policy generators | S | Session 18, Session 10 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_classic_policy_generator.py -x --tb=short` | Pending |
+| Session 23 | Standalone | P2: contest-aware assignment, structural hygiene bounds and `max_person_share`; its Showdown bounds are Session 23b's count rules, and `max_person_share` reuses 23b's control | Chunk P2; debrief §6 | both policy contracts, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, both policy generators | S | Session 18, Session 10 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_classic_policy_generator.py -x --tb=short` | Pending |
+| Session 23b | Standalone | Showdown game theses as sleeves: the Showdown policy constraints (Captain team and position, per-team and per-position counts, pair rules, salary left) as count rules in policy v2; a registered thesis catalog whose teams Ben binds (blowout, shootout, one-sided explosion, grind, ground and clock, defensive score); a portfolio plan of a core plus disjoint thesis sleeves on a subset of rows each, with a portfolio-wide `max_person_share`; a thesis rule is never relaxed, and a sleeve that cannot be built is dropped by name | Chunk P8; Showdown retro §7c, §9 #1 and #4; standings findings §8.1 C, §8.2 G | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/readable_review.py`, `src/nfl_dfs/relaxation.py`, `src/nfl_dfs/cli.py`, new `src/nfl_dfs/showdown_plan.py`, new `config/showdown_theses_v1.json`, new `scripts/make_showdown_plan.py`, `docs/DATA_CONTRACTS.md` | S | Session 11b, Session 10 | `sh ./nfl.sh test tests/test_showdown_theses.py tests/test_portfolio_policy.py tests/test_relaxation_controller.py -x --tb=short`; seam: the vocabulary, the catalog and one sleeve, then the multi-sleeve plan as Session 23c | Pending |
 | Session 24 | Standalone | P3a: bounded DESIGN scenario bank on the `prior_review` path, with p50, p90 and p99 per lineup | Chunk P3a | `src/nfl_dfs/simulation.py`, `src/nfl_dfs/prior_review.py`, the review writers | P | Session 18 | `sh ./nfl.sh test tests/test_simulation.py -x --tb=short` | Pending |
 | Session 25 | Standalone | P3b: registered tail objective and tail sleeve, including captain strata on a ceiling statistic, the dart rules and DST-inclusive families | Chunk P3b; Showdown retro #5; C4 retro #6, #9, #16; debrief §6 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/candidate_families.py`, both policy contracts | S | Session 23, Session 24 | `sh ./nfl.sh test tests/test_prior_selection.py -x --tb=short` | Pending |
 | Session 26 | Standalone | P4a: mass-conserving ownership challenger graded by slate, with projected against realized ownership logged | Chunk P4a; C4 retro #11, #12, #15 | `src/nfl_dfs/ownership.py`, `src/nfl_dfs/prior_review.py` | P | Session 18 | `sh ./nfl.sh test tests/test_ownership_field.py -x --tb=short` | Pending |
@@ -1035,9 +1036,28 @@ and `docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md`.
 
 - **Session 22 (P0b).** `docs/chunks/P0b-provenance-completeness.md`.
 - **Session 23 (P2).** `docs/chunks/P2-contest-aware-policy.md`, plus the
-  Showdown policy constraints from the DAL@NYG retrospective §9 #1 and the
   debrief's bank-cap point. Depends on Session 10 because both generators
-  change there first. Uniqueness is fixed by R29 and stays off its ladder.
+  change there first. Uniqueness is fixed by R29 and stays off its ladder. The
+  Showdown policy constraints from the DAL@NYG retrospective §9 #1 moved to
+  Session 23b on 2026-09-25. P2's Showdown hygiene bounds are 23b's count rules,
+  and whatever 23b's vocabulary cannot express is the next policy version, never
+  a second v2. `max_person_share` reuses 23b's control.
+- **Session 23b (P8).** `docs/chunks/P8-showdown-thesis-sleeves.md`: the
+  Showdown discipline from the DAL@NYG retrospective §7c. A thesis is a
+  correlated structure the solver must satisfy, Captain included, not an
+  exclusion list. Each thesis owns a sleeve of rows (Session 11b's subset
+  binding), the core fills the rest, and a portfolio-wide `max_person_share`
+  keeps the sleeves from collapsing onto one player (retro §7c's blocker 2: five
+  theses merged gave Dak Prescott 20 of 20). A thesis's teams are Ben's to bind;
+  the engine never infers a favorite or a script. Thesis rules are never
+  relaxed: a sleeve that cannot be built is dropped by name. It does not depend
+  on Session 23 or the standings chain, so it can run once Session 11b is
+  merged. It ranks behind the delivery sessions (01 to 16) per Ben's 2026-09-22
+  order; retro §9 ranked it the highest-value strategy item, so it is his to
+  move up. It edits `selection.py`, `prior_review.py` and `cli.py`, which
+  Sessions 11c, 13 and 14 edit, so it runs on its own. Seam: the vocabulary,
+  the catalog and one sleeve first; the multi-sleeve plan, the cap, the ladder
+  per sleeve and readable review v3 as Session 23c.
 - **Session 24 (P3a).** `docs/chunks/P3a-scenario-bank.md`. Depends on
   Session 18, not "none": its acceptance uses P0's top-1% proxy
   (`P3a-scenario-bank.md:17-18`). The brief wins over the old queue row.
@@ -1264,5 +1284,6 @@ session, because a commit cannot contain its own merge.
 | 2026-09-24 | Session 11 | In Progress to Complete | `bd5a97f` | Per-row authority, prefilled rows preserved and forbidden, `entry_groups` by Contest ID, truths v3, pointer v2; suite `1737 passed, 1 skipped`; merged as PR #65 |
 | 2026-09-24 | Session 11b | Added as Pending | `bd5a97f` | Subset binding, split at Ben's breakpoint; merged with PR #65 |
 | 2026-09-24 | Session 11b | Pending to In Progress | `6d24bc3` | Claim pushed on `claude/affectionate-bohr-mnr8vz` |
-| 2026-09-24 | Session 11b | In Progress to Complete | recorded by the next session | Showdown subset binding with a sequential fill, the ladder over the subset, `--entry-id`, readable review `sd5_v2`; suite `1758 passed, 1 skipped` |
-| 2026-09-24 | Session 11c | Added as Pending | recorded by the next session | C2 and C3 over a subset policy, split at Ben's breakpoint |
+| 2026-09-24 | Session 11b | In Progress to Complete | `6394eda` | Showdown subset binding with a sequential fill, the ladder over the subset, `--entry-id`, readable review `sd5_v2`; suite `1758 passed, 1 skipped`; merged as PR #66 |
+| 2026-09-24 | Session 11c | Added as Pending | `6394eda` | C2 and C3 over a subset policy, split at Ben's breakpoint; merged with PR #66 |
+| 2026-09-25 | Session 23b | Added as Pending | recorded by the next session | Showdown game theses as sleeves (chunk P8), on Ben's request; Session 23 gives it the Showdown constraint vocabulary and keeps P2 |
