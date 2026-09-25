@@ -6,38 +6,37 @@ This file records completed implementation work and verification evidence for th
 
 ### 2026-09-25: Showdown game theses are queued as Session 23b (chunk P8)
 
-Ben asked for a backlog item implementing the Showdown discipline the DAL@NYG
-retrospective set out: game theses as correlated structures, each on its own
-sleeve of rows. On `claude/affectionate-bohr-mnr8vz`. Documents only; no code,
+Ben asked for a backlog item for the Showdown discipline the DAL@NYG
+retrospective set out, and for the strategy and theory only, not the
+implementation. On `claude/affectionate-bohr-mnr8vz`. Documents only; no code,
 contract or gate changed.
 
 #### Added
 
-- **`docs/chunks/P8-showdown-thesis-sleeves.md`**, the specification:
-  - Showdown policy v2's count rules (Captain team and position, per-team and
-    per-position counts, pair rules, salary left), each a MILP constraint and
-    each recomputed by the audit;
-  - a registered thesis catalog whose roles Ben binds to teams: `BLOWOUT`
-    (favorite, or upset with the roles swapped), `SHOOTOUT`,
-    `ONE_SIDED_EXPLOSION`, `LOW_SCORING_GRIND`, `GROUND_AND_CLOCK`,
-    `DEFENSIVE_SCORE`;
-  - a portfolio plan of a core plus disjoint thesis sleeves on subsets of rows,
-    with a portfolio-wide `max_person_share` (default 0.80);
-  - sleeves solved first and the core last, under that cap's leftover capacity;
-  - each sleeve's caps on Session 10's ladder, never its thesis rules: a sleeve
-    that cannot be built is dropped by name;
-  - the audit and readable review v3 per sleeve;
-  - `scripts/make_showdown_plan.py`;
-  - acceptance on the supplied NE@SEA fixture.
+- **`docs/chunks/P8-showdown-thesis-sleeves.md`**: build a Showdown portfolio
+  as a core plus small sleeves, each betting on one game script Ben names
+  (blowout either way, shootout, one-sided explosion, low-scoring grind, ground
+  and clock, defensive score). It gives the evidence (four engine portfolios
+  each one thesis; concentration a ruin mechanism across 8,007 field
+  portfolios; the retro's five-thesis merge collapsing to Dak 20 of 20), the
+  theses as game scripts, and seven principles:
+  - a thesis is a structure, captain first, not an exclusion list;
+  - Ben names the thesis and its teams, and the engine never infers them;
+  - the core carries the paid count, and the sleeves carry the tail;
+  - one portfolio-wide share limit, about 0.80;
+  - a thesis is never bent to fit;
+  - lineups are distinct across the portfolio;
+  - a thesis is a choice, not a forecast.
+
+  How to build it is the implementing session's call.
 - **`docs/ROADMAP.md`**: the Session 23b row and card, and its ledger row.
 
 #### Changed
 
 - **Session 23** keeps P2 (contest-aware assignment, hygiene bounds,
   `max_person_share`, the debrief's bank-cap point). The retrospective's §9 #1
-  Showdown constraints moved to Session 23b. P2's Showdown bounds become
-  instances of 23b's count rule, so the two sessions share one vocabulary and
-  one v2, and `max_person_share` is one control, not two.
+  Showdown constraints moved to Session 23b, so the two share one constraint
+  vocabulary and one share limit.
 - **Ledger**: Session 11b's close and Session 11c's addition record `6394eda`
   (PR #66).
 
@@ -45,22 +44,14 @@ contract or gate changed.
 
 - **Placement.** 23b follows Session 23 in priority, behind the delivery
   sessions (Ben's 2026-09-22 order). It depends only on Sessions 10 and 11b,
-  both complete, so it does not wait on the standings chain (Sessions 17 and 18,
-  O1, O2) that Session 23 needs. It is startable now. The retrospective ranked
-  it its highest-value strategy item; moving it up is Ben's call.
-- **Theses are bound, never inferred.** The engine does not pick a favorite,
-  underdog or game script from a spread, total, contest name or model.
-- **Thesis rules are never relaxed.** A relaxed thesis is a different bet;
-  shipping it under the old name would be silent. The sleeve drops by name
-  instead, and the core takes its rows.
-- **Out of it**: a per-sleeve objective, darts and ceiling captains (Session
-  25), ownership (Sessions 26 and 27), contest-aware row placement (Session 23),
-  Classic theses (after Session 11c).
+  both complete, so it is startable now and does not wait on the standings
+  chain (Sessions 17 and 18, O1, O2) that Session 23 needs. The retrospective
+  ranked it its highest-value strategy item; moving it up is Ben's call.
 
 #### Verification
 
 - `sh ./nfl.sh test tests/test_roadmap_queue.py tests/test_harness_orientation.py -x --tb=short`:
-  `79 passed in 0.81s`. `repo_state.py` lists Session 23b as startable.
+  `79 passed in 0.85s`. `repo_state.py` lists Session 23b as startable.
 
 ### 2026-09-24: a Showdown policy may bind some of the rows (Session 11b)
 
