@@ -4,6 +4,56 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-25: Showdown game theses are queued as Session 23b (chunk P8)
+
+Ben asked for a backlog item for the Showdown discipline behind R33 and R34
+(the ATL@GB slate), with the strategy and theory only, not the implementation.
+On `claude/affectionate-bohr-mnr8vz`. Documents only; no code, contract or gate
+changed.
+
+#### Added
+
+- **`docs/chunks/P8-showdown-thesis-sleeves.md`**: every Showdown lineup
+  follows one named game thesis Ben chooses, and the portfolio spreads its rows
+  and captains across theses, judged against R34's two goals (large prizes, no
+  washouts). It gives:
+  - R33 and R34 in Ben's words;
+  - the evidence (the rejected ATL@GB file, the hand-built ATL@GB sleeves that
+    repeated lineups and lost their theses to relaxation, DAL@NYG's collapse to
+    Dak 20 of 20, and concentration as a ruin mechanism across 8,007 field
+    portfolios);
+  - Ben's theses as game scripts: each team wins big, each team wins close
+    (high or low scoring), a defensive battle, a shootout;
+  - nine principles, among them: no filler rows; a thesis shapes the lineup
+    captain first, kicker and DST included; Ben names the teams and the engine
+    never infers a script; one portfolio-wide share limit; a thesis is never
+    bent to fit; backup quarterbacks out by default.
+
+  How to build it is the implementing session's call.
+- **`docs/ROADMAP.md`**: the Session 23b row and card, and its ledger row.
+
+#### Changed
+
+- **Session 23** keeps P2 (contest-aware assignment, hygiene bounds,
+  `max_person_share`, the debrief's bank-cap point). R33's thesis target and
+  the retrospective's §9 #1 Showdown constraints moved to Session 23b, and R33's
+  routing line in §2.5 says so. The two sessions share one constraint vocabulary
+  and one share limit.
+- **Ledger**: Session 11b's close and Session 11c's addition record `6394eda`
+  (PR #66).
+
+#### Decided
+
+- **Placement.** 23b follows Session 23 in priority, behind the delivery
+  sessions (Ben's 2026-09-22 order). It depends only on Sessions 10 and 11b,
+  both complete, so it is startable now and does not wait on the standings
+  chain (Sessions 17 and 18, O1, O2) that Session 23 needs. Moving it up is
+  Ben's call.
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_roadmap_queue.py tests/test_harness_orientation.py -x --tb=short`:
+  `79 passed in 0.62s`. `repo_state.py` lists Session 23b as startable.
 ### 2026-09-25: prompt audit of the Claude Code surface
 
 Not a roadmap session. An audit of every file Claude Code loads as text
