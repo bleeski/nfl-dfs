@@ -21,6 +21,12 @@ paths:
   outside the markers, an undeclared status or an unreadable dependency fails
   the test. Change a status in place; never delete a row; a split session gets
   a `Session NNb` row directly below. Every status change adds a row to §4.
+- **Row order is priority; the number is a name.** Since 2026-09-25 the board
+  is ranked by expected winnings (§2.8) and session numbers are stable
+  identifiers, because rulings, the changelog and the chunk briefs cite them.
+  A new session takes the next free number wherever its row sits. A
+  re-prioritization moves rows, never renumbers them, and records what moved
+  and why in §2.8 and §4. A dependency still points only at an earlier row.
 - At close-out rewrite §1's Quick-Start to the next startable session; the test
   fails if it names anything else. Session prompt files are retired
   (`docs/session-prompts/archive/`); the card in §2.3 is the prompt.

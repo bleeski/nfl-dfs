@@ -4,6 +4,104 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-25: full code review and one consolidated, money-ranked board
+
+Ben's instruction: review the code, review every plan, backlog and fragment,
+consolidate them into one backlog in chunks a single session finishes before a
+compaction, and rank each chunk by what wins large amounts of money, with
+dependencies respected. `docs/ROADMAP.md` stays the one queue (its 2026-09-22
+charter and `backlog.md`'s stub test both say so); this entry records what
+changed in it. No engine code changed. Every path still ends
+`PRIOR_ONLY / DO_NOT_UPLOAD`.
+
+#### Added
+
+- **`docs/critiques/Code_Review_2026-09-25.md`**: five read-only review passes
+  over `src/`, `scripts/`, the hooks, the launchers and the workflows at
+  `bedf6a3`, partitioned by module and each verified against the code path it
+  names, with the highest findings confirmed a second time in this session.
+  No BLOCKER: every writer of a DraftKings entry file goes through the
+  exact-byte writer, the byte audit, a reparse and R29 distinctness. Findings
+  by class: 14 that can cost a file or an entry fee (a Showdown policy may
+  switch off distinctness and the duplicate reaches the CSV; the Showdown QA
+  passes an export that overwrote a prefilled row; a certified upload is
+  deleted when the workbook throws after certification; `nfl.ps1` refuses
+  `baseline`; late swap's clock is `--as-of` alone), 10 that change which
+  lineups get built (the Session 21 unit mismatch confirmed at
+  `priors.py:1541-1565` against `:1661-1680`; no Classic overlap cap at
+  `selection.py:701-703`; the C2 witness chain is QB-swap clones), 10 in the
+  simulator that must land before it becomes the operating bank (sacks
+  counted as attempts, a zero group becoming uniform, market lines never read,
+  no registered versions), 12 in evidence and retrieval (the weather script
+  bypasses the allowlist and re-serialises its capture), 9 in the review
+  chain (a 2,090-line orchestrator and three copies of the truths), 6 in the
+  harness (a rename evades the protected-path check; the guard misses
+  `git -C`, a quoted `main`, `commit -a`, `restore`), plus dead code and
+  test gaps. `config/scoring.json` matches DraftKings scoring line by line;
+  `AvgPointsPerGame` is confined; nothing labels a prior EV.
+- **Ten new sessions, 37 to 46**, and eight split rows (15b, 18b, 23c, 23d,
+  24b, 24c, 25b, 44b), each with a card that states its files, its
+  changed-line estimate and what it must read. Session 37 (Showdown file
+  integrity) and 38 (run-path integrity) are first.
+- **`docs/ROADMAP.md` §2.8**, the ranking rule in nine tiers under R34, what
+  it reversed, the dependency re-cuts, and where every review finding and
+  every orphaned archive item landed.
+
+#### Changed
+
+- **Row order is priority; session numbers are stable names** (§2.1,
+  `.claude/rules/ledger.md`). Renumbering would have invalidated the rulings,
+  `CLAUDE.md` and 200 KB of changelog that cite the numbers.
+  `tests/test_roadmap_queue.py::test_session_ids_are_unique_and_in_order`
+  required ascending numbers, which made the number the rank; it is now
+  `test_session_ids_are_unique_and_session_00_leads` and keeps uniqueness,
+  the id shape and Session 00 first. The dependency test, which forbids a
+  row depending on a later row, is the invariant the ordering protects and is
+  unchanged.
+- **The order.** Pending rows now run 37, 38, 23, 21, 17, 39, 23b, 23c, 23d,
+  12, 41, 44, 44b, 24, 24b, 24c, 25, 25b, 28, 18, 18b, 26, 27, 29, 13, 14,
+  15, 15b, 16, 42, 43, 19, 20, 40, 22, 45, 46, 30, then the six deferred rows.
+  This reverses the 2026-09-22 order that put Sessions 12 to 16 ahead of all
+  construction and model work: the construction changes with measured lift on
+  graded standings (the hygiene bounds and the 0.80 share cap, Classic
+  diversification, Ben's game theses, contest-aware assignment) and the
+  confirmed prior-model defect now precede the delivery scaffolding, because
+  R28's baseline-first already ships a file before any model stage.
+- **Dependencies re-cut.** Session 23 no longer waits on Session 18: its
+  mechanism is accepted on the supplied fixtures and its standings grading is
+  Session 18b. Session 24b's top-1% proxy is a registered constant from the
+  2026-09-15 findings until Session 18b replaces it. Session 12 absorbs the
+  late-swap clock bound and the `Name (ID)` form; Session 13 absorbs the
+  session-probe and scored-pool open items; Session 19 absorbs the merge gate.
+- **Consolidated from the archives and ledgers**: 25 items open only in
+  `changelog.md`, the backlog and changelog archives or the retired prompts,
+  and about 40 open recommendations from `plan.md`, the critiques, the two
+  retrospectives, the debrief, the two standings findings and
+  `IMPLEMENTATION_STATUS.md`, each now in a session card or in §2.8. Nothing
+  was deleted from any of them.
+- The Session 11c merge SHA (`bedf6a3`) is recorded in §4.
+
+#### Verification
+
+- Suite on `bedf6a3` before any edit: `1762 passed, 1 skipped in 338.00s
+  (0:05:37)` on Linux, recorded with `scripts/record_verify.py`. The one skip
+  is the junction test.
+- After the edits: `tests/test_roadmap_queue.py`,
+  `tests/test_harness_orientation.py` and `tests/test_repo_boundaries.py`
+  `204 passed in 1.73s`; the full suite `1762 passed, 1 skipped in 321.20s
+  (0:05:21)`; `sh ./nfl.sh doctor` `SETUP_COMPLETE`; `git diff --check` clean;
+  `python3 scripts/check_protected_paths.py` "No protected path touched".
+- `python3 scripts/repo_state.py --stdout` reports `sessions startable: S37,
+  S38, S23 (+10 more)` and three open `[BEN:]` flags (Sessions 12, 46, 30).
+
+#### Left open
+
+- The findings are queued, not fixed; the engine on `main` is as the review
+  describes it until Sessions 37 and 38 land.
+- Two questions in the Session 12 and Session 46 cards and the Session 30
+  ruling wait on Ben and block nothing; §2.8 lists five more that are
+  bankroll or spending decisions.
+
 ### 2026-09-25: a Classic policy may bind some of the rows (Session 11c)
 
 Session 11b let a Showdown policy bind a subset of the fillable rows; a Classic
