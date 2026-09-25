@@ -52,9 +52,9 @@ baseline is the file. A replay of a past slate passes a later
 
 SUBSETS (Session 11b). `--entry-id`, repeatable, binds only those rows, in
 template order; each must be a fillable blank row. The rung table and the bank
-count the bound rows, and the validator accepts the policy. run-slate refuses a
-Classic subset by name (`CLASSIC_POLICY_SUBSET_UNSUPPORTED`, the baseline ships)
-until Session 11c builds C2 with a C1 fill of the rest; Showdown's twin is live.
+count the bound rows, and the validator accepts the policy. In run-slate C2
+fills the bound rows and C1 the rest, with every C2 lineup and prefilled roster
+a no-good (Session 11c); C3's package names each row's source.
 
 Example:
 
@@ -245,8 +245,8 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
     print(f"rung:              {args.rung}")
     print(f"entries:           {count}" + (f" of {len(fillable)} fillable" if count < len(fillable) else ""))
     if count < len(fillable):
-        print("subset:            run-slate refuses a Classic subset until Session 11c"
-              " (CLASSIC_POLICY_SUBSET_UNSUPPORTED); the baseline ships")
+        print(f"subset:            C1 fills the other {len(fillable) - count} fillable rows"
+              " after the C2 joint solve (Session 11c)")
     print(f"salary people:     {len(people)}")
     print(f"candidate bank:    {limits['candidate_limit']} "
           f"(template default would be {max(32, count + 24)})")

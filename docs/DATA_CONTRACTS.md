@@ -501,11 +501,25 @@ bound list is the denominator: every integer bound's domain, the default bounds,
 the template's default stack rules and `default_search_limits` count it. The
 document's shape is unchanged, every policy valid before stays valid with the
 same meaning, and a reader that predates the rule refuses a subset (it compared
-the list with every fillable row). `run-slate` and `prior_review` refuse a
-Classic subset by name until C2 with a C1 fill of the unbound rows, and C3's
-package over both, exist (`CLASSIC_POLICY_SUBSET_UNSUPPORTED`, `P`,
-`implementation_limit`, ROADMAP Session 11c); the baseline ships. A policy that
-binds every fillable row gives the same file as before, byte for byte.
+the list with every fillable row). A policy that binds every fillable row gives
+the same file as before, byte for byte.
+
+Rule change (Session 11c, 2026-09-25): `run-slate` and `prior_review` run a
+Classic subset (the `CLASSIC_POLICY_SUBSET_UNSUPPORTED` refusal and its
+registry entry are gone). C2's joint solve fills the bound rows; then C1 fills
+the fillable rows the policy leaves unbound, every C2 lineup and prefilled
+roster a no-good, under the run's own exclusions only (a policy's exclusions
+and zero caps bind its rows). The fill is all or nothing, as SD3's is: one that
+runs out of distinct lineups raises `SOLVER_RETURNED_NO_LINEUP` with
+`stage=UNBOUND_FILL` and the baseline stays the file. The selection report's
+`unbound_fill` records it, with `source: "C1"`. Each fill solve
+gets what the policy's declared bank and joint-solve limits leave of the
+window, split across its solves, from 0.5 s to 10 s. `classic_assignment.json`
+and the C2 audit keep their versions and cover the policy's rows only; the C1
+rows are C3's to check. `classic_selection.json` keeps
+`nfl_classic_prior_review_selection_c2_v1`: its `entry_assignments` are the
+policy's rows, as before, and `assignments_by_entry_id` and `lineups` every
+filled row, which is where C3 reads the C1 rows from.
 
 These are new values of existing v1 fields, not a new version (Session 08): no
 key is added to or removed from `nfl_classic_candidate_bank_c2_v1` or
@@ -576,6 +590,32 @@ closed. The C3 audit independently recomputes:
   (`CLASSIC_C3_SELECTED_ACTIVITY_COVERAGE_MISMATCH`), or a coverage that names a
   file the review does not track (`CLASSIC_C3_OFFICIAL_STATUS_ARTIFACT_REQUIRED`).
 
+Since Session 11c the policy may bind a subset of the fillable rows, and C1
+filled the rest (§ C2). C3 takes the policy's rows from `classic_assignment.json`
+and the C1 rows from `classic_selection.json`'s `assignments_by_entry_id`, whose
+rows outside the policy must be exactly the unbound rows
+(`CLASSIC_C3_UNBOUND_ROWS_MISMATCH`, `V`, `audited_selection`). Candidate-bank
+membership and identity, every count and bound, the policy's exact exclusions,
+the pairwise overlap cap, the comparison with the C2 audit and the exposure
+denominator cover the policy's rows. Roster legality, the selection record's
+roster, salary and score, canonical uniqueness (R29, whatever the policy flag
+says when rows are unbound), the prefilled repeat, official activity, role
+evidence and the template bytes cover every filled row, and so do the run's own
+exclusions: no filled row may hold a person the bound coverage's `pool_coverage`
+names with any reason but `SELECTABLE`
+(`CLASSIC_C3_SELECTED_PERSON_EXCLUDED_BY_RUN`, `V`, `operator_restriction`). A
+policy binding every fillable row passes the same checks as before and gives the
+same CSV bytes.
+
+C3 re-validates the source policy with the run's own exclusions, the people the
+normalized policy marks `SOURCE_OR_PARTICIPATION_PRECEDENCE` (fixed in Session
+11c). Intake validates with them, so a re-validation without them could never
+reproduce the normalized bytes: every C2 run that excluded anyone (an official
+inactive, an operator exclusion) ended
+`CLASSIC_C3_SOURCE_NORMALIZED_POLICY_DISAGREEMENT` and shipped the baseline.
+The marked people only add zero caps, and the canonical-bytes comparison still
+binds the rest.
+
 Only `ENFORCED_AND_INDEPENDENTLY_AUDITED`, C2 audit `PASS`, bank status
 `EXHAUSTIVE_COMPLETION`, `BOUNDED_COMPLETION`, `BOUNDED_TIME_LIMIT_STOP` or
 `BOUNDED_SEARCH_LIMIT_STOP`, a `POLICY_FEASIBLE` chain, and joint status
@@ -593,9 +633,9 @@ Successful C3 publication is atomic and adds:
 
 | Artifact | Contract |
 |---|---|
-| `classic_review_export_audit.json` | Canonical `prior_only_classic_export_audit_c3_v2` since Session 09 (v1 stays as written); every boundary hash, recomputed fact, exact output hash, status, limitations, truths, and one next action. v2 reports `recomputed.selected_activity` as `PASS` or `INCOMPLETE` (v1 always wrote `PASS`), adds `recomputed.selected_activity_without_row`, lists `SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE` in `checks_run` only when every selected person has an `ACTIVE` row (otherwise `SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW`), and names the gap in `limitations` as `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED:NO_EXACT_ID_ROW_IN_SUPPLIED_FILE:<n>_of_<m>_selected_people` or `OFFICIAL_STATUS_REQUIRED:NO_OFFICIAL_STATUS_FILE_SUPPLIED:<n>_of_<m>_selected_people` |
+| `classic_review_export_audit.json` | Canonical `prior_only_classic_export_audit_c3_v3` since Session 11c (v2 and v1 stay as written). v3 adds `bound_entry_ids`, `unbound_entry_ids`, `row_sources` (each filled row, `POLICY` or `C1`) and the `checks_run` item `POLICY_AND_C1_ROW_PARTITION_AND_THE_RUN_S_EXCLUSIONS_OVER_EVERY_ROW`; `entry_ids` and `output.entries` are every filled row, `recomputed`'s counts and `pairwise_person_overlap` the policy's rows, and `recomputed.canonical_lineups` every filled row. v2 since Session 09: every boundary hash, recomputed fact, exact output hash, status, limitations, truths, and one next action. v2 reports `recomputed.selected_activity` as `PASS` or `INCOMPLETE` (v1 always wrote `PASS`), adds `recomputed.selected_activity_without_row`, lists `SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE` in `checks_run` only when every selected person has an `ACTIVE` row (otherwise `SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW`), and names the gap in `limitations` as `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED:NO_EXACT_ID_ROW_IN_SUPPLIED_FILE:<n>_of_<m>_selected_people` or `OFFICIAL_STATUS_REQUIRED:NO_OFFICIAL_STATUS_FILE_SUPPLIED:<n>_of_<m>_selected_people` |
 | `DK_REVIEW_ENTRY_<label>.csv` | Exact reserved-entry template bytes with only nine previously blank authorized roster cells rewritten for each exact Entry ID in template order |
-| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v1` display data independently reconstructed from the accepted artifacts |
+| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v2` display data independently reconstructed from the accepted artifacts, since Session 11c (v1 stays as written and was never produced for a subset policy). v2 adds each entry's `source` (`POLICY` or `C1`) and `unbound_rows`: `null` when the policy binds every fillable row, otherwise the C1 rows' `entry_ids`, `source`, `basis`, `checks`, `person_exposure` and `maximum_person_overlap_with_any_filled_row` (C1 cuts only exact rosters, so no overlap cap covers them). `exposure.entry_count_denominator` is the policy's rows; `reconciliation.entry_count` is every filled row |
 | `prior_only_readable_review.html` | Self-contained escaped rendering of the canonical readable JSON |
 | `NFL_DFS_Cowork_Review_<run-id>.xlsx` | Eight sheets: Run Control, Evidence Paste, Portfolio, QA, Upload, Exposure, Review Evidence, and Artifacts |
 
@@ -2139,7 +2179,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `7343565244853db9a14fb3b0163d8b236adb30c200eebbb725c7c4ce683ee932`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `685d7109291e2d903097bb648c0b73787456cd6f06254f2bf24c55247cbb0f25`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2529,7 +2569,9 @@ review's own selection filled mapped to `POLICY`, `C1` or `SHOWDOWN_SEQUENTIAL`
 (`null` when selection did not run), and a run with a policy adds to
 `portfolio_policy`: `entry_count_denominator` is the policy's bound rows,
 `bound_entry_ids` and `unbound_entry_ids` the rows it binds and the fillable rows
-the fill covers (`null` when the policy did not validate far enough to say).
+the fill covers (`null` when the policy did not validate far enough to say). Since
+Session 11c a Classic file may mix `POLICY` and `C1` rows, as a Showdown file
+mixes `POLICY` and `SHOWDOWN_SEQUENTIAL` ones.
 
 Since Session 10 a run with a policy also carries `relaxation`, the run's
 `nfl_relaxation_record_v1` record (§ Relaxation record); the pre-review exit

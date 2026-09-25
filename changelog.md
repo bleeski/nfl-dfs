@@ -4,6 +4,189 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-25: a Classic policy may bind some of the rows (Session 11c)
+
+Session 11b let a Showdown policy bind a subset of the fillable rows; a Classic
+subset validated but was refused by name. Now C2's joint solve fills the
+policy's rows, C1 fills the rest, and C3 audits and packages the mixed file,
+naming each row's source. On `claude/laughing-keller-b7cr5q`, claim `e2d5e57`.
+Every run still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; exit codes keep their
+meaning.
+
+#### Added
+
+- **The C1 fill after C2** (`selection.py`): the C2 branch calls the fill SD3
+  already used (`_fill_unbound`, C1 through `_sequential_lineups`). Every C2
+  lineup and prefilled roster is a no-good, only the run's own exclusions
+  apply, and it is all or nothing. The selection report's `unbound_fill`
+  records it with `source: "C1"`; the policy's
+  exposure and overlap stay its own rows.
+- **Fill time for C2** (`prior_review._fill_solve_seconds`): each fill solve
+  gets what the policy's declared bank and joint-solve limits leave of the
+  window, split across its solves, from 0.5 s to 10 s. SD3's shares are
+  unchanged.
+- **C3 over a mixed portfolio** (`classic_review.py`): the policy binds the
+  fillable rows or a template-order subset. The policy's rows come from
+  `classic_assignment.json`, C1's from `classic_selection.json`'s
+  `assignments_by_entry_id`, whose rows outside the policy must be exactly the
+  unbound rows (`CLASSIC_C3_UNBOUND_ROWS_MISMATCH`, `V`).
+  - Over the policy's rows: bank membership and candidate identity, every count
+    and bound, the policy's exact exclusions, the pairwise cap, the C2-audit
+    comparison and the exposure denominator.
+  - Over every filled row: legality, the selection record's roster, salary and
+    score, canonical uniqueness (R29, forced whenever rows are unbound), the
+    prefilled repeat, activity, role evidence, the template bytes, and the
+    run's own exclusions: no filled row may hold a person the bound coverage's
+    `pool_coverage` names with any reason but `SELECTABLE`
+    (`CLASSIC_C3_SELECTED_PERSON_EXCLUDED_BY_RUN`, `V`).
+- **Records**: the readable review is `prior_only_readable_review_classic_c3_v2`
+  (each entry's `source`, and `unbound_rows` for the C1 rows: ids, checks,
+  person exposure, and the most people one shares with any filled row). The
+  export audit is `prior_only_classic_export_audit_c3_v3` (`bound_entry_ids`,
+  `unbound_entry_ids`, `row_sources`, one more `checks_run` item). The HTML shows
+  each row's source and a C1 section. v1 and v2 stay as written.
+- **Registry**: `CLASSIC_POLICY_SUBSET_UNSUPPORTED` removed (nothing emits it);
+  `CLASSIC_C3_UNBOUND_ROWS_MISMATCH`, `CLASSIC_C3_POOL_COVERAGE_PEOPLE_ARRAY_REQUIRED`
+  and `CLASSIC_C3_SELECTION_ASSIGNMENT_ROSTER_ARRAY_REQUIRED` (`audited_selection`,
+  `V`), and `CLASSIC_C3_SELECTED_PERSON_EXCLUDED_BY_RUN` (`operator_restriction`,
+  `V`) added. 1,226 codes in 46 families; SHA-256
+  `685d7109291e2d903097bb648c0b73787456cd6f06254f2bf24c55247cbb0f25`, re-pinned
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+- **Tests**:
+  - in `tests/test_entry_groups.py`: the acceptance through `run-slate` (five
+    rows, one prefilled, two bound, two C1); `prior_review` called directly; a
+    C2 run with an official inactive; and C3 replayed from the run's own call
+    with one bound artifact mutated per case (a C1 row repeating a policy row or
+    the prefilled roster, a missing or extra unbound row, an inactive and a
+    run-excluded person in a C1 row, a policy row outside the bank);
+  - in `tests/test_classic_portfolio_c2.py`: the C2 audit on a subset;
+  - in `tests/test_portfolio_policy.py`: the C2 fill-time arithmetic.
+
+#### Fixed
+
+- **C3 never ran when the run excluded anyone.** Intake validates a Classic
+  policy with the run's own exclusions (official inactives, operator
+  exclusions) and marks them `SOURCE_OR_PARTICIPATION_PRECEDENCE` in the
+  normalized policy. C3 re-validated the source without them, so it could never
+  reproduce those bytes. Every such C2 run ended
+  `CLASSIC_C3_SOURCE_NORMALIZED_POLICY_DISAGREEMENT`, and the baseline shipped
+  in its place.
+  - Confirmed on `main` (`adf4ef2`) with a full policy and the fixture's
+    inactive DST: exit 2, producer `run-slate:baseline`.
+  - No test had run C2 with an exclusion.
+  - C3 now re-validates with the people the normalized policy marks. They only
+    add zero caps, and the canonical-bytes comparison still binds everything
+    else.
+  - It is in `classic_review.py`, a file the card names. Without the fix, the
+    card's capability could not deliver on a slate with official inactives.
+
+#### Changed
+
+- **The refusals are gone**: `run-slate` intake, `prior_review` and
+  `selection` no longer refuse a Classic subset. With the intake refusal gone,
+  an S-only subset policy may take the relaxation ladder at intake, which
+  already binds the subset (Session 11b).
+- **`scripts/make_classic_policy.py`** prints what C1 will fill instead of the
+  refusal, and its docstring says a subset runs.
+- **Contracts and runbook**: `docs/DATA_CONTRACTS.md` C2 (a rule change dated
+  Session 11c, no new policy version), C3 (the split, the fix, both new record
+  versions) and the `run-slate` result's `row_sources`; `docs/RUNBOOK.md`'s
+  Classic policy step.
+- **Visible test edits, each one the card's rule moved**:
+  - `test_a_classic_subset_policy_is_refused_by_name_until_session_11c` became
+    the acceptance test;
+  - `test_a_classic_subset_is_refused_by_prior_review_and_selection_called_directly`
+    became `..._is_filled_by_prior_review_and_selection_called_directly`;
+  - the generator test's `"Session 11c" in printed` now checks the fill line;
+  - `test_every_prior_review_exit_names_its_row_sources`'s docstring no longer
+    says a Classic file is one source or the other;
+  - `test_c2_required_player_without_current_activity_is_delivered_and_named`
+    checks export audit v3.
+
+#### Decided
+
+- **The C2 audit is unchanged.** Its artifact and its expected entries were
+  always the policy's list, which is now the bound list, so it already covered
+  exactly the policy's rows. A test proves it passes on a subset and refuses an
+  artifact that lists an unbound row. C1's rows are C3's to check, as SD3
+  leaves the fill's rows to the readable review.
+- **`classic_selection.json` keeps its version.** Its `assignments_by_entry_id`
+  and `lineups` already held every filled row; its `entry_assignments` and
+  embedded C2 audit are the policy's rows and say so by their `entry_ids`.
+- **Export audit v3 as well as readable v2.** The card named only the readable
+  record. An integrity record whose counts cover some rows and whose
+  `entry_ids` cover all of them cannot say which is which without the row map.
+- **Run exclusions from `pool_coverage`.** It is the only bound C3 input that
+  names the run's own exclusions with a reason. The synthetic scale-acceptance
+  coverage lists no people, so it names none, and a malformed list refuses.
+- **C1 rows have no overlap cap.** C1 cuts only exact rosters, as it does with
+  no policy. The C1 section reports the largest overlap rather than capping it
+  (R34: concentration is measured before it becomes a rule).
+
+#### Review
+
+The `reviewer` subagent read the diff against the card. It found no path that
+writes a wrong or repeated lineup, and no check that a policy binding every
+row now evaluates differently. What it raised, and what became of each:
+
+1. `docs/DATA_CONTRACTS.md` and this entry put the fill's record at
+   `portfolio_policy.unbound_fill`; it is the selection report's
+   `unbound_fill`. Fixed in both.
+2. The C2 window check counts only the policy's declared limits, not the fill,
+   so a tight window could run the fill's 0.5 s solves past the deadline. This
+   stays as 11b decided for SD3: a late fill is named
+   `DEADLINE_PASSED_DURING_REVIEW` like any late stage.
+3. C3's run-exclusion check has nothing to check when the coverage lists no
+   people. Only the synthetic scale-acceptance record lacks the list; every
+   `prior_review` coverage writes it, and a malformed list refuses. Stays.
+4. The card asked for "a C1 section" in `classic_selection.json`; none was
+   added. The C1 rows are already there, hash-bound, in
+   `assignments_by_entry_id` and `lineups`, and C3 derives each row's source
+   from the policy's binding and the plan, not from a label the selection
+   writes about itself. A section would be a new selection schema version,
+   which `classic_scale_acceptance.py` pins as well, for a self-description
+   C3 does not need. On Ben's list to overturn.
+5. Missing tests.
+   - Added `test_a_policys_exclusion_binds_its_rows_and_never_the_c1_rows`:
+     the person C1 chose for both of its rows is excluded by the policy; he
+     stays out of the policy's rows, stays in a C1 row, and C3 passes.
+   - Added a clean replay of the mixed package to the mutation test: the CSV
+     and the export audit come out byte for byte. Its capture now snapshots the
+     call's dicts, which `prior_review` extends after C3 returns.
+   - Renamed the direct test to `..._filled_by_prior_review_called_directly`,
+     since it no longer calls selection itself.
+   - Not added: a Classic fill that runs out of distinct lineups. The
+     fixture's pool is too large to exhaust; the all-or-nothing path is
+     `_fill_unbound`, shared with SD3 and tested there.
+6. Rung 4 carries a subset policy's exclusions to every row. That was 11b's
+   decision and is on Ben's list; a Classic subset can now reach it too.
+7. The ledger's placeholder SHAs were filled in place. That is the protocol
+   (the next session records the merge commit), as 11b did.
+
+#### Verification
+
+- Full suite before changes: `1758 passed, 1 skipped in 384.59s (0:06:24)`.
+  After: `1761 passed, 1 skipped in 371.42s (0:06:11)`. The three added tests
+  are the official-inactive C2 run, the C3 mutation replay and the C2 audit on
+  a subset; the two refusal tests were replaced in place. The skip is the
+  junction test. After the review's additions (the policy-exclusion test, and
+  the clean replay inside the mutation test):
+  `1762 passed, 1 skipped in 370.74s (0:06:10)`. CI on the first push
+  (`fc256c5`): `suite`, `boundaries`, `protected-paths` and `windows` green.
+- The card's command plus the registry, policy and ladder files
+  (`tests/test_entry_groups.py tests/test_classic_review_c3.py
+  tests/test_classic_portfolio_c2.py tests/test_gate_registry.py
+  tests/test_portfolio_policy.py tests/test_relaxation_controller.py`):
+  `344 passed in 190.66s (0:03:10)`. That run predates the C3 re-validation
+  fix; the two tests that cover the fix then passed on their own
+  (`2 passed, 32 deselected in 3.99s`), and the full suite above covers all of
+  it.
+- `test_a_classic_policy_binding_every_fillable_row_gives_the_same_file_as_before`
+  reproduces `C2_FULL_FILLABLE_SHA256` (`48027a40…f8ce`, captured on `main` at
+  `bd5a97f`), so a policy binding every row gives the same bytes.
+- `doctor` `pass_status` true; `git diff --check` clean;
+  `check_protected_paths.py`: no protected path touched.
+
 ### 2026-09-25: Showdown game theses are queued as Session 23b (chunk P8)
 
 Ben asked for a backlog item for the Showdown discipline behind R33 and R34

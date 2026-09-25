@@ -658,7 +658,8 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
         entry = _mapping(raw_entry, "entry", [])
         sections.append(
             f'<section class="entry"><h3>Entry {_escape(entry.get("entry_id"))} — {_escape(entry.get("contest_name") or "Contest label unavailable")}</h3>'
-            f'<p>Contest ID {_escape(entry.get("contest_id"))} · Salary ${_escape(entry.get("salary_total"))} · '
+            f'<p>Source {_escape(entry.get("source"))} · '
+            f'Contest ID {_escape(entry.get("contest_id"))} · Salary ${_escape(entry.get("salary_total"))} · '
             f'Remaining ${_escape(entry.get("salary_remaining"))} · PRIOR_ONLY central estimate '
             f'{_escape(entry.get("prior_only_central_estimate_points"))} points · Games {_escape(entry.get("games"))} · '
             f'Groups {_escape(entry.get("group_matches"))} · Stack values {_escape(entry.get("stack_values"))}</p>'
@@ -737,6 +738,20 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
         if isinstance(row, Mapping)
     ]
     sections.append(_html_table(("Entry A", "Entry B", "Actual shared people", "Maximum"), overlap_rows))
+    unbound = data.get("unbound_rows")
+    if isinstance(unbound, Mapping):
+        # Session 11c: the rows a subset policy leaves to C1.
+        sections.append("<h2>Rows the policy leaves unbound, filled by C1</h2>")
+        sections.append(
+            f'<p>Entry IDs {_escape(unbound.get("entry_ids"))}, filled by {_escape(unbound.get("source"))} after '
+            "the policy's joint solve. The policy's bounds, overlap cap and denominator do not cover them; "
+            f'they are checked for {_escape(unbound.get("checks"))}. C1 cuts only exact rosters: the most '
+            "people one of them shares with any filled row is "
+            f'{_escape(unbound.get("maximum_person_overlap_with_any_filled_row"))}.</p>'
+        )
+        sections.append(_html_table(
+            ("Person ID", "Unbound rows holding them"),
+            list(_mapping(unbound.get("person_exposure"), "unbound.person_exposure", []).items())))
 
     coverage = data.get("pool_coverage")
     if isinstance(coverage, Mapping):

@@ -835,19 +835,32 @@ ROW_SOURCE_C1 = "C1"
 ROW_SOURCE_SHOWDOWN_SEQUENTIAL = "SHOWDOWN_SEQUENTIAL"
 
 
-def _fill_solve_seconds(budget: Budget | None, rows: int) -> float | None:
+def _classic_declared_search_seconds(policy: NormalizedClassicPortfolioPolicy) -> float:
+    """A C2 policy's hash-bound bank and joint-solve limits, in seconds."""
+
+    limits = policy.search_limits
+    return (limits.candidate_total_milliseconds + limits.selection_milliseconds) / 1000.0
+
+
+def _fill_solve_seconds(
+    budget: Budget | None, rows: int, *, declared_search_seconds: float | None = None
+) -> float | None:
     """The per-solve limit for a subset policy's unbound fill (Session 11b).
 
-    The fill runs after the bank and joint solve, which take their shares of the
-    window; it gets what they leave, split across its solves, never above the
+    The fill runs after the bank and joint solve. An SD3 policy's take their
+    shares of the window; a C2 policy's are its declared limits (Session 11c).
+    The fill gets what they leave, split across its solves, never above the
     sequential default and never under the solver's minimum.
     """
 
     if budget is None or rows < 1:
         return None
     window = 0.0 if budget.passed_at_start else max(0.0, budget.improvement_remaining())
-    share = max(0.0, 1.0 - BANK_SHARE - JOINT_SHARE) * window / (rows + 1)
-    return max(SOLVE_MINIMUM_SECONDS, min(SEQUENTIAL_PER_SOLVE_SECONDS, share))
+    if declared_search_seconds is None:
+        left = max(0.0, 1.0 - BANK_SHARE - JOINT_SHARE) * window
+    else:
+        left = max(0.0, window - declared_search_seconds)
+    return max(SOLVE_MINIMUM_SECONDS, min(SEQUENTIAL_PER_SOLVE_SECONDS, left / (rows + 1)))
 
 
 def row_sources(
@@ -871,8 +884,7 @@ def _deadline_selection_limits(
     """
 
     if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
-        limits = portfolio_policy.search_limits
-        declared = (limits.candidate_total_milliseconds + limits.selection_milliseconds) / 1000.0
+        declared = _classic_declared_search_seconds(portfolio_policy)
         return {}, budget.fits_declared_search(declared_seconds=declared)
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
         entries = portfolio_policy.entry_count
@@ -2140,9 +2152,10 @@ def run_prior_review(
     template = parse_entries(entry_path)
     entry_ids = list(entry_plan.fillable)
     requested_count = int(lineup_count) if lineup_count else len(entry_ids)
-    # Session 11b: a policy binds the fillable rows or a subset of them in
-    # template order; after its joint solve C1 or sequential Showdown fills the
-    # rest, with every policy lineup and prefilled roster as a no-good.
+    # Session 11b (C2 since 11c): a policy binds the fillable rows or a subset
+    # of them in template order; after its joint solve C1 or sequential
+    # Showdown fills the rest, with every policy lineup and prefilled roster as
+    # a no-good.
     bound_ids = list(portfolio_policy.entry_ids) if portfolio_policy is not None else []
     unbound_ids = list(unbound_rows(bound_ids, entry_ids)) if portfolio_policy is not None else []
     if portfolio_policy is None and requested_count < len(entry_ids):
@@ -2217,10 +2230,6 @@ def run_prior_review(
             if binding:
                 raise PriorReviewError(
                     "PORTFOLIO_POLICY_ENTRY_ID_BINDING_MISMATCH:" + "; ".join(binding))
-            if unbound_ids and isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
-                raise PriorReviewError(
-                    "CLASSIC_POLICY_SUBSET_UNSUPPORTED:the C2 policy binds "
-                    f"{len(bound_ids)} of {len(entry_ids)} fillable rows; C2 with a C1 fill is Session 11c's")
             if requested_count != len(entry_ids):
                 raise SelectionError(
                     "PORTFOLIO_POLICY_ENTRY_COUNT_MISMATCH:"
@@ -2279,7 +2288,11 @@ def run_prior_review(
                 contract,
                 count=(portfolio_policy.entry_count if portfolio_policy is not None else requested_count),
                 fill_count=len(unbound_ids),
-                fill_time_limit_seconds=_fill_solve_seconds(budget, len(unbound_ids)),
+                fill_time_limit_seconds=_fill_solve_seconds(
+                    budget, len(unbound_ids),
+                    declared_search_seconds=(
+                        _classic_declared_search_seconds(portfolio_policy)
+                        if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy) else None)),
                 differentiate_captain=not allow_repeat_captain,
                 max_person_overlap=max_person_overlap,
                 role_evidence_json=role_evidence_json,

@@ -3850,20 +3850,6 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         if validation.valid:
             validated_policy = validation.policy
         policy_blockers.extend(validation.blockers())
-        if (
-            slate.mode is EngineMode.CLASSIC
-            and validation.policy is not None
-            and validation.policy.entry_count < len(entry_plan.fillable)
-        ):
-            # Session 11b validates a Classic subset, and Showdown fills the rows
-            # a subset leaves unbound; C2 with a C1 fill, and C3's package over
-            # both, are Session 11c's. The baseline ships, and this names why.
-            policy_blockers.append(
-                "CLASSIC_POLICY_SUBSET_UNSUPPORTED: the C2 policy binds "
-                f"{validation.policy.entry_count} of {len(entry_plan.fillable)} fillable rows, and C2 with "
-                "a C1 fill of the rest is not built yet (ROADMAP Session 11c); next action: bind every "
-                "fillable row, or omit the policy so C1 fills them all"
-            )
         if snapshotted.profile != "prior_review":
             policy_profile_code = (
                 "PORTFOLIO_POLICY_PROFILE_UNSUPPORTED_SD4"
@@ -3891,8 +3877,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             "normalized_policy_sha256": validation.normalized_sha256,
             "validation_report": str(policy_report_path),
             "normalized_policy": str(normalized_path) if normalized_path else None,
-            # Session 11b: the policy's own rows are its denominator; C1 or
-            # sequential Showdown fills the fillable rows it leaves unbound.
+            # Session 11b (C2 since 11c): the policy's own rows are its denominator;
+            # C1 or sequential Showdown fills the fillable rows it leaves unbound.
             "entry_count_denominator": (
                 validation.policy.entry_count if validation.policy is not None else len(entry_plan.fillable)),
             "bound_entry_ids": list(validation.policy.entry_ids) if validation.policy is not None else None,

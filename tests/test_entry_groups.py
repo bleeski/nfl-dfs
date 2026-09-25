@@ -22,6 +22,7 @@ import io
 import json
 from dataclasses import replace
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -128,7 +129,7 @@ def _named(slate, roster) -> list[str]:
     return [f"{by_id[dk_id].name} ({dk_id})" for dk_id in roster]
 
 
-def _run_slate(tmp_path, monkeypatch, *, run_id, entries, edit=None, policy=None):
+def _run_slate(tmp_path, monkeypatch, *, run_id, entries, edit=None, policy=None, inactive_dst=False):
     """`run-slate` on the synthetic Classic fixture, its entries edited first.
 
     `policy(attachments, plan)` writes a Classic policy and returns its path; the
@@ -138,7 +139,8 @@ def _run_slate(tmp_path, monkeypatch, *, run_id, entries, edit=None, policy=None
     from nfl_dfs import cli
 
     _clocked(monkeypatch, FakeClock())
-    salary, entry, package, role, status, _ = classic_fixture(tmp_path / "fixture", entries=entries)
+    salary, entry, package, role, status, _ = classic_fixture(
+        tmp_path / "fixture", entries=entries, inactive_dst=inactive_dst)
     if edit is not None:
         edit(entry, parse_salaries(salary))
     attachments = _attachments(tmp_path, salary, entry)
@@ -810,11 +812,11 @@ def test_c3s_export_audit_still_refuses_a_written_prefilled_row(tmp_path):
 # ----------------------------------------------------------------- Session 11b: subset binding
 #
 # A policy may bind a subset of the fillable rows, in template order. Its joint
-# solve fills its rows; sequential Showdown fills the rest with every policy
-# lineup and every prefilled roster as a no-good (R29). A Classic subset is
-# refused by name until Session 11c. A policy binding every fillable row gives
-# the file it gave before: the hashes below were captured on main at bd5a97f,
-# before any Session 11b change, with these fixtures and their pinned clock.
+# solve fills its rows; sequential Showdown (SD3) or C1 (C2, Session 11c) fills
+# the rest with every policy lineup and every prefilled roster as a no-good
+# (R29). A policy binding every fillable row gives the file it gave before: the
+# hashes below were captured on main at bd5a97f, before any Session 11b change,
+# with these fixtures and their pinned clock.
 
 SD3_FULL_FILLABLE_SHA256 = "1918820d809eea637425f1970b5bae65c406efca7b35fa3264b867863e43eed1"
 C2_FULL_FILLABLE_SHA256 = "48027a40a9fd9de47138ca1c619e72d78cd3a7cf76c6017f6ea1627aba28f8ce"
@@ -951,23 +953,262 @@ def test_a_bound_row_outside_the_fillable_rows_is_refused_by_both_validators(tmp
     assert valid.policy.entry_ids == (ids[2], ids[5]) and valid.policy.entry_count == 2
 
 
-def test_a_classic_subset_policy_is_refused_by_name_until_session_11c(tmp_path, monkeypatch):
-    def subset(attachments: Path, plan) -> Path:
+def _subset_policy(*indexes: int, controls=None):
+    """A Classic policy binding the plan's fillable rows at `indexes`, in template order."""
+
+    def write(attachments: Path, plan) -> Path:
         slate = parse_salaries(attachments / "salary.csv")
         template = parse_entries(attachments / "entries.csv")
         path = attachments.parent / "classic_subset.json"
         path.write_text(json.dumps(classic_portfolio_policy_template(
-            slate, plan.fillable[:2], entry_sha256=template.raw_hash)), encoding="utf-8")
+            slate, [plan.fillable[index] for index in indexes], entry_sha256=template.raw_hash,
+            controls=controls)), encoding="utf-8")
         return path
 
-    code, report, _entries, _root = _run_slate(tmp_path, monkeypatch, run_id="c2-subset", entries=3,
-                                               policy=subset)
-    assert code == 2
-    (refusal,) = [text for text in report["blockers"] if text.startswith("CLASSIC_POLICY_SUBSET_UNSUPPORTED")]
-    assert "2 of 3 fillable rows" in refusal and "Session 11c" in refusal
-    assert load_gate_registry().family_of("CLASSIC_POLICY_SUBSET_UNSUPPORTED").gate_class is GateClass.P
-    assert report["latest_deliverable"]["producer"] == BASELINE
+    return write
+
+
+def _classic_subset_run(tmp_path, monkeypatch, *, run_id="c2-subset", controls=None):
+    """Five rows: 910000002 prefilled, 910000003 and 910000005 bound by a C2 policy, two left to C1."""
+
+    holder: dict[str, object] = {}
+
+    def prefill(entry, slate):
+        holder["slate"] = slate
+        holder["prefilled"] = _salary_top(slate, 1)[0]
+        _edit(entry, cells={"910000002": _named(slate, holder["prefilled"])})
+
+    code, report, entries, root = _run_slate(tmp_path, monkeypatch, run_id=run_id, entries=5,
+                                             edit=prefill, policy=_subset_policy(1, 3, controls=controls))
+    return code, report, entries, root, holder["slate"], holder["prefilled"]
+
+
+def test_a_classic_subset_policy_fills_its_rows_by_c2_and_the_rest_by_c1(tmp_path, monkeypatch):
+    """Session 11c's acceptance: C2 fills the bound rows, C1 the rest, distinctly; C3 names each source."""
+
+    code, report, entries, _root, slate, prefilled = _classic_subset_run(tmp_path, monkeypatch)
+
+    assert code == 0, report["blockers"]
+    assert report["latest_deliverable"]["producer"] == C2
     assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    truths = report["release_truths"]
+    assert truths["delivered_entry_ids"] == ["910000001", "910000003", "910000004", "910000005"]
+    assert truths["preserved_entry_ids"] == ["910000002"] and truths["unfilled_entry_ids"] == []
+    assert (truths["MODEL_STATUS"], truths["RELEASE_DECISION"]) == ("PRIOR_ONLY", "DO_NOT_UPLOAD")
+    sources = {"910000001": "C1", "910000003": "POLICY", "910000004": "C1", "910000005": "POLICY"}
+    assert report["row_sources"] == sources
+
+    policy = report["portfolio_policy"]
+    assert policy["enforcement_status"] == "ENFORCED_AND_INDEPENDENTLY_AUDITED"
+    assert policy["entry_count_denominator"] == 2
+    assert policy["bound_entry_ids"] == ["910000003", "910000005"]
+    assert policy["unbound_entry_ids"] == ["910000001", "910000004"]
+    assert policy["independent_audit"]["entry_ids"] == ["910000003", "910000005"]  # the C2 audit
+    assert policy["selector"]["entry_ids"] == ["910000003", "910000005"]
+
+    output = Path(report["latest_deliverable"]["path"])
+    assert _raw_lines(output)["910000002"] == _raw_lines(entries)["910000002"]  # no filled cell changes
+    cells = _cells(output)
+    filled = [cells[eid] for eid in truths["delivered_entry_ids"]]
+    assert all(validate_lineup(slate, roster).valid for roster in filled)
+    assert len(_keys(slate, filled)) == 4  # no C2, C1 or prefilled lineup repeats (R29)
+    assert not _keys(slate, filled) & _keys(slate, [prefilled])
+
+    readable = _readable(report)
+    assert readable["schema_version"] == "prior_only_readable_review_classic_c3_v2"
+    assert {entry["entry_id"]: entry["source"] for entry in readable["entries"]} == sources
+    assert readable["exposure"]["entry_count_denominator"] == 2
+    assert readable["reconciliation"]["entry_count"] == 4
+    assert [(row["entry_id_a"], row["entry_id_b"]) for row in readable["exposure"]["pairwise_overlap"]] == [
+        ("910000003", "910000005")]
+    unbound = readable["unbound_rows"]
+    assert unbound["entry_ids"] == ["910000001", "910000004"] and unbound["source"] == "C1"
+    reports = report["prior_review_reports"]
+    audit = reports["classic_export_audit"]
+    assert audit["schema_version"] == "prior_only_classic_export_audit_c3_v3"
+    assert audit["entry_ids"] == truths["delivered_entry_ids"]
+    assert audit["bound_entry_ids"] == ["910000003", "910000005"]
+    assert audit["unbound_entry_ids"] == ["910000001", "910000004"]
+    assert audit["row_sources"] == sources
+    selection = reports["selection"]["selection"]
+    assert selection["selected_lineup_count"] == 2  # the policy's own summary: its rows only
+    assert selection["unbound_fill"]["source"] == "C1" and selection["unbound_fill"]["lineups"] == 2
+    assert selection["unbound_fill"]["no_good_rosters"] == {"policy_lineups": 2, "prefilled_rosters": 1}
+
+
+def test_a_policys_exclusion_binds_its_rows_and_never_the_c1_rows(tmp_path, monkeypatch):
+    """The policy's exact exclusion keeps a person out of its rows; C1 may still select him (11b's rule).
+
+    The person is one C1 chose for both of its rows in a run without the
+    exclusion; with it, he stays in a C1 row and C3 still passes, because the
+    policy's exclusions and counts cover only the policy's rows.
+    """
+
+    _code, plain, _entries, _root, slate, _prefilled = _classic_subset_run(
+        tmp_path / "plain", monkeypatch, run_id="c2-plain-subset")
+    plain_cells = {eid: tuple(prefilled_cell_id(cell) for cell in roster)
+                   for eid, roster in _cells(Path(plain["latest_deliverable"]["path"])).items()}
+    by_id = {player.dk_id: player for player in slate.players}
+    shared = sorted(set(plain_cells["910000001"]) & set(plain_cells["910000004"]), key=int)
+    assert shared, plain_cells
+    person = by_id[shared[0]]
+
+    code, report, _entries, _root, _slate, _prefilled = _classic_subset_run(
+        tmp_path / "excluded", monkeypatch, run_id="c2-excluded-subset",
+        controls={"exact_exclusions": [{"underlying_id": person.underlying_id, "dk_id": person.dk_id}]})
+    assert code == 0, report["blockers"]
+    assert report["latest_deliverable"]["producer"] == C2
+    cells = _cells(Path(report["latest_deliverable"]["path"]))
+    people = {eid: {by_id[prefilled_cell_id(cell)].underlying_id for cell in roster}
+              for eid, roster in cells.items()}
+    assert all(person.underlying_id not in people[eid] for eid in ("910000003", "910000005"))
+    assert any(person.underlying_id in people[eid] for eid in ("910000001", "910000004"))
+    audit = report["prior_review_reports"]["classic_export_audit"]
+    assert audit["status"] == "PASS" and audit["recomputed"]["player_counts"].get(person.underlying_id, 0) == 0
+
+
+def test_a_classic_policy_run_with_an_official_inactive_reaches_c3(tmp_path, monkeypatch):
+    """C3 re-validates the source with the run's own exclusions (fixed in Session 11c).
+
+    Intake adds an official inactive to the normalized policy as
+    `SOURCE_OR_PARTICIPATION_PRECEDENCE`; C3 re-validated the source without it,
+    so every C2 run that excluded anyone ended
+    `CLASSIC_C3_SOURCE_NORMALIZED_POLICY_DISAGREEMENT` and shipped the baseline.
+    """
+
+    code, report, entries, _root = _run_slate(
+        tmp_path, monkeypatch, run_id="c2-inactive", entries=3, policy=_subset_policy(0, 2), inactive_dst=True)
+    assert code == 0, report["blockers"]
+    assert report["latest_deliverable"]["producer"] == C2
+    assert report["DELIVERY_STATE"] == "DELIVERABLE"
+    assert report["row_sources"] == {"910000001": "POLICY", "910000002": "C1", "910000003": "POLICY"}
+    normalized = Path(report["portfolio_policy"]["normalized_policy"]).read_text(encoding="utf-8")
+    assert "SOURCE_OR_PARTICIPATION_PRECEDENCE" in normalized
+    assert report["prior_review_reports"]["classic_export_audit"]["status"] == "PASS"
+    slate = parse_salaries(entries.parent / "salary.csv")
+    inactive = next(p.dk_id for p in slate.players if p.team == "NE" and p.position == "DST")
+    filled = _cells(Path(report["latest_deliverable"]["path"]))
+    assert all(inactive not in roster for roster in filled.values())  # policy and C1 rows alike
+
+
+def test_c3_refuses_each_mutation_of_a_mixed_portfolio(tmp_path, monkeypatch):
+    """C3 replayed from the subset run's own call, one bound artifact changed each time.
+
+    A C1 row repeating a policy row or the prefilled roster, a missing or extra
+    unbound row, and an INACTIVE person in a C1 row each refuse the package; a
+    C1 row is never asked to be in the C2 bank, and a policy row still is.
+    """
+
+    from nfl_dfs import prior_review
+    from nfl_dfs.classic_review import ClassicReviewError, create_classic_review_package
+
+    captured: dict[str, object] = {}
+
+    def record(**kwargs):
+        # A snapshot: `prior_review` adds C3's outputs to its own dicts after the call.
+        captured.update({key: dict(value) if isinstance(value, dict) else value
+                         for key, value in kwargs.items()})
+        return create_classic_review_package(**kwargs)
+
+    monkeypatch.setattr(prior_review, "create_classic_review_package", record)
+    code, report, _entries, _root, slate, prefilled = _classic_subset_run(
+        tmp_path / "run", monkeypatch, run_id="c2-mutate")
+    assert code == 0 and captured, report["blockers"]
+    selection_path = Path(captured["artifacts"]["selection_report"])
+    original = json.loads(selection_path.read_text(encoding="utf-8"))
+    by_roster = {tuple(value): eid for eid, value in original["assignments_by_entry_id"].items()}
+    assert set(by_roster.values()) == {"910000001", "910000003", "910000004", "910000005"}
+
+    # A clean replay of the mixed package writes the same CSV and export audit, byte for byte.
+    run_review = Path(captured["output_path"]).parent
+    clean = tmp_path / "clean" / "review"
+    create_classic_review_package(**dict(
+        captured, output_path=clean / Path(captured["output_path"]).name, output_dir=clean))
+    for name in (Path(captured["output_path"]).name, "classic_review_export_audit.json"):
+        assert (clean / name).read_bytes() == (run_review / name).read_bytes(), name
+
+    def canonical(artifact, payload) -> bytes:
+        """`payload` in the byte form the run wrote `artifact` in, which C3 requires."""
+
+        original_bytes = Path(captured["artifacts"][artifact]).read_bytes()
+        writers = (
+            lambda value: (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+            lambda value: (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                           + "\n").encode(),
+        )
+        for write in writers:
+            if write(json.loads(original_bytes)) == original_bytes:
+                return write(payload)
+        from nfl_dfs.portfolio_policy import canonical_decimal_json_bytes
+
+        assert canonical_decimal_json_bytes(json.loads(original_bytes, parse_float=Decimal)) == original_bytes
+        return canonical_decimal_json_bytes(payload)
+
+    def replay(name, *, artifact="selection_report", payload=None, raw=None):
+        folder = tmp_path / name
+        folder.mkdir()
+        artifacts = dict(captured["artifacts"])
+        hashes = dict(captured["expected_hashes"])
+        path = folder / Path(artifacts[artifact]).name
+        if raw is None:
+            raw = canonical(artifact, payload)
+        path.write_bytes(raw)
+        artifacts[artifact] = str(path)
+        hashes[artifact] = sha256_file(path)
+        values = dict(captured, artifacts=artifacts, expected_hashes=hashes,
+                      output_path=folder / "review" / "DK_REVIEW_ENTRY_mutated.csv",
+                      output_dir=folder / "review")
+        with pytest.raises(ClassicReviewError) as caught:
+            create_classic_review_package(**values)
+        assert not list((folder / "review").glob("DK_REVIEW_ENTRY_*.csv"))
+        return str(caught.value)
+
+    def changed(**rows):
+        payload = json.loads(json.dumps(original))
+        for entry_id, roster in rows.items():
+            if roster is None:
+                del payload["assignments_by_entry_id"][entry_id]
+            else:
+                payload["assignments_by_entry_id"][entry_id] = list(roster)
+        return payload
+
+    policy_roster = original["assignments_by_entry_id"]["910000003"]
+    assert "CLASSIC_C3_CANONICAL_LINEUP_DUPLICATE" in replay(
+        "repeat-policy", payload=changed(**{"910000001": policy_roster}))
+    assert "ENTRY_PREFILLED_LINEUP_REPEATED:910000004" in replay(
+        "repeat-prefilled", payload=changed(**{"910000004": prefilled}))
+    assert "CLASSIC_C3_UNBOUND_ROWS_MISMATCH" in replay(
+        "missing", payload=changed(**{"910000004": None}))
+    extra = changed()
+    extra["assignments_by_entry_id"]["910000002"] = list(prefilled)
+    assert "CLASSIC_C3_UNBOUND_ROWS_MISMATCH" in replay("extra", payload=extra)
+
+    fill_player = original["assignments_by_entry_id"]["910000001"][0]
+    status = Path(captured["artifacts"]["official_status_csv"])
+    lines = status.read_bytes().decode("utf-8").splitlines(keepends=True)
+    header = next(csv.reader([lines[0]]))
+    rows = [row for row in csv.reader(lines[1:]) if row]
+    column, status_column = header.index("PLAYER_OR_GSIS_ID"), header.index("STATUS")
+    (match,) = [row for row in rows if row[column] == fill_player]
+    match[status_column] = "INACTIVE"
+    buffer = io.StringIO(newline="")
+    csv.writer(buffer, lineterminator="\r\n" if lines[0].endswith("\r\n") else "\n").writerows([header, *rows])
+    assert f"CLASSIC_C3_SELECTED_ACTIVITY_NOT_ACTIVE:{fill_player}" in replay(
+        "inactive", artifact="official_status_csv", raw=buffer.getvalue().encode("utf-8"))
+
+    coverage = json.loads(Path(captured["artifacts"]["complete_slate_coverage"]).read_text(encoding="utf-8"))
+    person = {player.dk_id: player for player in slate.players}[fill_player].underlying_id
+    (row,) = [item for item in coverage["pool_coverage"]["people"] if item["person"] == person]
+    row["reason"] = "OPERATOR_EXCLUDED"
+    assert (f"CLASSIC_C3_SELECTED_PERSON_EXCLUDED_BY_RUN:entry=910000001:person={person}:reason=OPERATOR_EXCLUDED"
+            in replay("run-excluded", artifact="complete_slate_coverage", payload=coverage))
+
+    bank_path = Path(captured["artifacts"]["classic_candidate_bank"])
+    bank = json.loads(bank_path.read_text(encoding="utf-8"), parse_float=Decimal)
+    bank["candidates"] = [item for item in bank["candidates"] if item["roster"] != policy_roster]
+    message = replay("bank", artifact="classic_candidate_bank", payload=bank)
+    assert "CLASSIC_C3_ASSIGNMENT_OUTSIDE_CANDIDATE_BANK:910000003" in message
+    assert "CLASSIC_C3_ASSIGNMENT_OUTSIDE_CANDIDATE_BANK:910000001" not in message
 
 
 def test_a_policy_binding_every_fillable_row_gives_the_same_file_as_before(tmp_path, monkeypatch):
@@ -1045,7 +1286,7 @@ def test_both_generators_bind_a_subset_with_entry_id_and_refuse_a_row_that_is_no
     code = load("make_classic_policy").main(
         [*arguments, *(item for eid in chosen for item in ("--entry-id", eid))], wall=wall)
     printed = capsys.readouterr().out
-    assert code == 0 and "Session 11c" in printed
+    assert code == 0 and f"C1 fills the other {len(classic_fillable) - 4} fillable rows" in printed
     document = json.loads(out.read_text(encoding="utf-8"))
     assert document["bindings"]["entry_ids"] == [classic_fillable[i] for i in (1, 4, 7, 12)]
     classic_validation = validate_classic_portfolio_policy_bytes(
@@ -1130,14 +1371,15 @@ def test_the_readable_reviews_second_section_refuses_each_mutation(tmp_path, mon
     assert "ENTRY_PREFILLED_LINEUP_REPEATED:900000001" in replay("prefilled", entry_bytes=template.read_bytes())
 
 
-def test_a_classic_subset_is_refused_by_prior_review_and_selection_called_directly(tmp_path):
+def test_a_classic_subset_is_filled_by_prior_review_called_directly(tmp_path):
+    """Selection returns the C2 lineups, then C1's; `prior_review` merges them in template order."""
+
     from nfl_dfs.classic_portfolio_policy import (
         validate_classic_portfolio_policy_bytes,
         write_normalized_classic_portfolio_policy,
     )
     from nfl_dfs.prior_review import run_prior_review
     from nfl_dfs.projection import build_projection_package
-    from nfl_dfs.selection import SelectionError, select_prior_lineups
 
     salary, entry, package, role, status, _ = classic_fixture(tmp_path / "fixture", entries=3)
     slate = parse_salaries(salary)
@@ -1150,9 +1392,6 @@ def test_a_classic_subset_is_refused_by_prior_review_and_selection_called_direct
         policy_path.read_bytes(), slate=slate, entry_ids=fillable, entry_sha256=entries.raw_hash)
     assert validation.valid and validation.policy.entry_count == 2, validation.blockers()
 
-    with pytest.raises(SelectionError, match="CLASSIC_POLICY_SUBSET_UNSUPPORTED"):
-        select_prior_lineups(slate, None, {}, None, count=2, fill_count=1, portfolio_policy=validation.policy)
-
     normalized = write_normalized_classic_portfolio_policy(tmp_path / "policy.normalized.json", validation.policy)
     outcome = run_prior_review(
         salary_csv=salary, entry_csv=entry, label="classic-subset", as_of=AS_OF,
@@ -1162,14 +1401,24 @@ def test_a_classic_subset_is_refused_by_prior_review_and_selection_called_direct
         portfolio_policy_source_sha256=sha256_file(policy_path), portfolio_policy_normalized_path=normalized,
         portfolio_policy_normalized_sha256=sha256_file(normalized), project=build_projection_package,
     )
-    assert outcome.blocked and outcome.stage == "SELECT"
-    (blocker,) = outcome.blockers
-    assert "CLASSIC_POLICY_SUBSET_UNSUPPORTED" in blocker and "2 of 3 fillable rows" in blocker
-    assert not list((tmp_path / "out").rglob("DK_REVIEW_ENTRY_*.csv"))
+    assert not outcome.blocked, outcome.blockers
+    selection = outcome.reports["selection"]
+    assert selection["row_sources"] == {fillable[0]: "POLICY", fillable[1]: "POLICY", fillable[2]: "C1"}
+    fill = selection["selection"]["unbound_fill"]
+    assert fill["source"] == "C1" and fill["lineups"] == 1 and fill["lineup_indexes"] == [3]
+    assert fill["no_good_rosters"] == {"policy_lineups": 2, "prefilled_rosters": 0}
+    assert fill["exclusions"] == "THE_RUN_S_OWN_NOT_THE_POLICY_S"
+    (export,) = list((tmp_path / "out").rglob("DK_REVIEW_ENTRY_*.csv"))
+    cells = _cells(export)
+    rosters = [cells[eid] for eid in fillable]
+    assert all(validate_lineup(slate, roster).valid for roster in rosters)
+    assert len(_keys(slate, rosters)) == 3
+    assigned = json.loads(Path(outcome.artifacts["classic_assignment"]).read_text(encoding="utf-8"))
+    assert [item["entry_id"] for item in assigned["entry_assignments"]] == list(fillable[:2])
 
 
 def test_every_prior_review_exit_names_its_row_sources(tmp_path, monkeypatch):
-    """C1 names every row `C1`; C2 names every row `POLICY` (a Classic file is one or the other)."""
+    """C1 names every row `C1`; a C2 policy binding every row names each `POLICY` (a subset: above)."""
 
     code, c1, _entries, _root = _run_slate(tmp_path / "c1", monkeypatch, run_id="c1-sources", entries=2)
     assert code == 0 and c1["latest_deliverable"]["producer"] == C1, c1["blockers"]
