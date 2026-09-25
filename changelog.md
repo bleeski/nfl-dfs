@@ -169,7 +169,10 @@ row now evaluates differently. What it raised, and what became of each:
   After: `1761 passed, 1 skipped in 371.42s (0:06:11)`. The three added tests
   are the official-inactive C2 run, the C3 mutation replay and the C2 audit on
   a subset; the two refusal tests were replaced in place. The skip is the
-  junction test.
+  junction test. After the review's additions (the policy-exclusion test, and
+  the clean replay inside the mutation test):
+  `1762 passed, 1 skipped in 370.74s (0:06:10)`. CI on the first push
+  (`fc256c5`): `suite`, `boundaries`, `protected-paths` and `windows` green.
 - The card's command plus the registry, policy and ladder files
   (`tests/test_entry_groups.py tests/test_classic_review_c3.py
   tests/test_classic_portfolio_c2.py tests/test_gate_registry.py
