@@ -1172,6 +1172,19 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
     repeated lineups across sleeves (R29). Session 23 adds the per-thesis rule
     sets; Sessions 24 and 28 add script-conditioned scenarios and thesis
     coverage. A thesis never moves a projection by a typed multiplier.
+- **R34, the two portfolio goals** (Ben, 2026-09-24, after R33). "This is the
+  type of thought process I want you to have one building these lineups and
+  ultimately implementing this engine are two goals are winning large prizes,
+  and minimizing washouts. Both require identifying leverage and
+  diversification, and this is a way within showdown contests to do that."
+  - Every build and every engine change is judged against both: the prize
+    tail (Session 25) and washouts, a portfolio where nothing cashes (Session
+    28's bank-estimated P(zero paid)). Leverage needs an ownership input
+    (Session 26); until one exists, say leverage is unmeasured.
+  - A legal, QA-clean portfolio can fail both. The first ATL@GB file had five
+    captains at 25% each and four people in 13 of 20 lineups.
+  - The no-EV rule is unchanged: these are goals, never reported as EV or a
+    probability of winning.
 
 Still in force from earlier, with full text in the backlog archive:
 

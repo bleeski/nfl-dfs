@@ -58,6 +58,10 @@ salary `74b5ffd6…`, entries `c7e400f5…`, lock 20:15 ET. On
   assembled by row, failed QA three times with repeated lineups across
   sleeves (the third also lost its captains to rung 2), and were not handed
   over.
+- R34 (`docs/ROADMAP.md` §2.5): Ben's two goals, large prizes and minimizing
+  washouts, through leverage and diversification. Written into
+  `.claude/rules/slate-operation.md` (a pre-handoff read against both goals)
+  and `.claude/rules/selection-and-objective.md`.
 
 #### Verification
 
