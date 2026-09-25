@@ -138,8 +138,8 @@ only unrecoverable error. Full text: `docs/RUNBOOK.md`.
   pass pytest flags after `test`, never a bare `-p`, never a second `-q`. Never
   mix the two venvs in one session.
 - Focused tests first (`-x --tb=short`), then the complete suite: ~5 min on Linux,
-  longer on Windows. It needs an extended tool timeout (600000 ms) or a
-  background run; a run killed at two minutes is a tooling artifact, not a
+  ~10 on Windows (CI, 2026-09-25), past the 600000 ms tool maximum. Run it in
+  the background on Windows; a run killed by a timeout is a tooling artifact, not a
   failure. Record the result: `python3 scripts/record_verify.py --from-log <log>`.
 - Python 3.13.7 under `uv.lock`; `uv sync` needs `README.md` present.
   `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1` is the approved opt-in and clears only

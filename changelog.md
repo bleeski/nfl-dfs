@@ -45,7 +45,9 @@ code changed. `CLAUDE.md` is touched, so the pull request carries
   `START_HERE.md` and `operating-path.md`: accurate, left for their next edit.
 - `explorer.md` and `reviewer.md` tell the subagent to Read `CLAUDE.md`, which
   subagents already inherit.
-- Not measured: whether a Windows suite run now nears the 600000 ms timeout.
+- Windows suite time: CI's `windows` job ran pytest 06:45:42 to 06:55:59
+  (about 617s), past the 600000 ms tool maximum. `CLAUDE.md` and `/verify` now
+  say to run the complete suite in the background on Windows.
 
 #### Verification
 
