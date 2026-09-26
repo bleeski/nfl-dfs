@@ -334,11 +334,11 @@ exit contract. No release truth changed; the fallback's output is still
   refused by name.
 - **`scripts/qa_showdown_portfolio.py`** reports `ZERO_QB`, `MULTIPLE_KICKERS`,
   `MULTIPLE_DST` and `DST_WITH_OWN_OFFENSE` as `OBSERVATIONS`, which never
-  change the exit code. Roster, identity, cap, one-team, repeated-lineup, byte
-  and Entry ID defects keep exit 2.
-- **Not yet:** Showdown QA's `--max-overlap` (default 4) and `--backup-pairs`
-  limits still exit 2 alongside true defects; Classic QA splits them to exit 2
-  apart from validity exit 1.
+  change the exit code. Since Session 37 (2026-09-26) it uses Classic QA's
+  exits: 1 for a roster, identity, cap, one-team, repeated-lineup, byte or
+  Entry ID defect; 3 when a template-blank row is left unfilled; 2 only for
+  the operator's `--max-overlap` and `--backup-pairs`. It audits raw lines,
+  exempts only template-blank rows, and identifies people by DraftKings ID.
 
 ## Capability added: 2026-09-23 (Session 02)
 

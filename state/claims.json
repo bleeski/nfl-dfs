@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "c19bc44f-7384-5483-8a61-6ed5e8fbe31f",
-      "branch": "claude/eager-ramanujan-5ylyix",
-      "chunk": "S37",
-      "claimed_at": "2026-09-26T20:57:39Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

@@ -4,6 +4,94 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-26: Showdown file integrity (Session 37)
+
+Branch `claude/eager-ramanujan-5ylyix`. The 2026-09-25 code review's V1, V2,
+V9, V10, V11 and E12. No release truth moved: every path still ends
+`PRIOR_ONLY / DO_NOT_UPLOAD`.
+
+#### Changed
+
+- **A Showdown policy can no longer switch off distinct lineups (V1, R29).**
+  `portfolio_policy.py` refuses `require_unique_lineups: false` as
+  `PORTFOLIO_POLICY_UNIQUENESS_REQUIRED`, as Classic's validator already did.
+  In `portfolio_enforcement.py` the joint solve's count bound is 1 on every
+  candidate (`repetition_allowed` is gone), the one-per-canonical-lineup rows
+  are unconditional, and the independent audit's
+  `PORTFOLIO_AUDIT_CANONICAL_DUPLICATE` check no longer reads the flag. A
+  normalized policy stored before this session that says `false` still loads,
+  and its duplicates are still named. The new code is registered as
+  `showdown_policy_input` in `config/gate_registry_v1.json`, re-pinned at
+  `6a528c7809145fe2b6d3fb556dfcbc38e2642920bd99aada9014ae5f8d5e2cad` in `tests/test_gate_registry.py` and
+  `docs/DATA_CONTRACTS.md`. The contract's two sentences on the flag say it is
+  refused. Treated as a validation tightening inside
+  `nfl_showdown_portfolio_policy_v1`, not a schema change: the field and its
+  type are unchanged, and Classic's policy v1 already refused `false`. A
+  `run-slate` given such a policy drops it by name (`showdown_policy_input` is
+  class P, stops certification only) and the baseline still ships.
+- **`scripts/qa_showdown_portfolio.py` audits bytes and exempts only blank rows
+  (V2, V11).** It now mirrors `qa_classic_portfolio.py`: raw lines through
+  `nfl_dfs.byte_lines`; only a row whose six roster cells are blank in the
+  template may change, and only inside them. An export that overwrote a
+  prefilled row, which printed `PASS` before, fails with
+  `LINE_n_BYTES_CHANGED on prefilled entry`. A prefilled row still counts for
+  R29 duplicates. People are the salary row's `team|position|name` for the DK
+  ID, never a bare `Name`; a lineup is its Captain ID and sorted FLEX IDs;
+  `--backup-pairs` takes an ID or a name. Exit codes are Classic's: 1 validity,
+  3 a sanctioned unfilled blank row (each named in `unfilled_entry_ids`), 2
+  only the operator's `--max-overlap` and `--backup-pairs` (now under
+  `LIMIT_BREACHES`), 0 otherwise. This closes Session 02b's open item.
+- **Showdown's entry file is held to intake's bytes (V9).** `prior_review.py`
+  no longer re-parses the entries file before SELECT; the intake parse is the
+  one the plan, pointer and export use. `ENTRY_INPUT_CHANGED_BEFORE_SELECTION`
+  now applies in both modes, not Classic alone.
+- **C3 packaging names any failure (V10).** The handler around
+  `create_classic_review_package` catches `Exception`, so a `KeyError` or
+  `TypeError` writes `prior_review.json` with `FAILED_C3_DOWNSTREAM_AUDIT` and
+  `CLASSIC_C3_REVIEW_EXPORT_FAILED:<type>:<message>` instead of escaping.
+- **The referee names a line with no CSV record (E12).** Both byte audits in
+  `referee.py` parse through `_first_record`; a changed line that decodes to
+  nothing (a lone byte-order mark) is
+  `line N: empty physical line holds no CSV record`, not `StopIteration`. The
+  pre-lock audit now also names a `csv.Error` or decode error as the late-swap
+  audit did.
+
+#### Tests
+
+Edited expectations, named here because a ruling-level change moved them:
+`tests/test_qa_showdown_portfolio.py`'s validity cases read exit 1 and verdict
+`FAIL` (exit 2 and `DEFECT` before); `_blank_cell`, `_contest_cell_changed` and
+`_row_dropped` read `PARTIALLY_FILLED_ROW`, `LINE_2_BYTES_CHANGED_OUTSIDE_ROSTER`
+and `LINE_COUNT_CHANGED`, the byte audit's names; the overlap and backup-pair
+test now pins exit 2 apart from validity. `tests/test_portfolio_enforcement.py`'s
+`_audit` helper defaults to `require_unique_lineups: true`. Each still fails
+what it failed before.
+
+New: the Showdown refusal by name; the audit naming a duplicate under a stored
+`false`; the joint solve never repeating a lineup under a waived policy; eight
+QA cases (prefilled overwrite fails, untouched prefilled passes and counts for
+R29, a sanctioned blank row exits 3, an export identical to the template fails,
+a changed line ending fails, identity by ID, a backup pair by ID, validity
+outranks a limit); a Showdown run whose entry file changes before SELECT stops
+by name; a C3 `KeyError` keeps the stage record; the referee's empty line.
+Every new or edited case was run against the pre-session code in a scratch
+worktree: all 27 failed there.
+
+#### Verification
+
+- Card command: `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_portfolio_enforcement.py tests/test_qa_showdown_portfolio.py tests/test_prior_review_profile.py -x --tb=short`: `165 passed in 51.66s`.
+- Full suite: `SUITE_LINE`.
+- `sh ./nfl.sh doctor`, `git diff --check`, `python3 scripts/check_protected_paths.py`: DOCTOR_LINE.
+
+#### Found
+
+- The salary-hash stop before SELECT (`SALARY_INPUT_CHANGED_BEFORE_SELECTION`)
+  is still Classic-only; a Showdown run with no policy has no salary stop at
+  SELECT (the policy path has its own). The card names only the entry stop.
+- The policy path's `PORTFOLIO_POLICY_ENTRY_BYTES_CHANGED_BEFORE_SELECTION`
+  is now shadowed by the general entry stop, which runs first on the same
+  condition. Left in place as a registered, still-emitted code.
+
 ### 2026-09-25: full code review and one consolidated, money-ranked board
 
 Ben's instruction: review the code, review every plan, backlog and fragment,
