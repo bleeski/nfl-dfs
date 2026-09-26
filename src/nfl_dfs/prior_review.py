@@ -2149,7 +2149,9 @@ def run_prior_review(
     hashes["frozen:team_stats"] = package.frozen_sources.get("team_stats", "")
     reports["team_splits"] = resolved_splits.as_report()
 
-    template = parse_entries(entry_path)
+    # Session 37 (review V9): the intake parse is the one the plan, the pointer
+    # and the export rest on. No second parse; the hash stop below holds the
+    # file to the bytes intake hashed, in both modes.
     entry_ids = list(entry_plan.fillable)
     requested_count = int(lineup_count) if lineup_count else len(entry_ids)
     # Session 11b (C2 since 11c): a policy binds the fillable rows or a subset
@@ -2206,11 +2208,11 @@ def run_prior_review(
     if showdown_candidate_limit is not None and isinstance(portfolio_policy, NormalizedPortfolioPolicy):
         selection_limits = {**selection_limits, "policy_candidate_limit": int(showdown_candidate_limit)}
     try:
+        if sha256_file(entry_path) != hashes["entry_csv"]:
+            raise PriorReviewError("ENTRY_INPUT_CHANGED_BEFORE_SELECTION")
         if slate.mode is EngineMode.CLASSIC:
             if sha256_file(salary_path) != salary_digest:
                 raise PriorReviewError("SALARY_INPUT_CHANGED_BEFORE_SELECTION")
-            if sha256_file(entry_path) != hashes["entry_csv"]:
-                raise PriorReviewError("ENTRY_INPUT_CHANGED_BEFORE_SELECTION")
             for source_path, expected_hash, label_name in (
                 (package.team_source, package.hashes[TEAM_PRIOR_FILENAME], "TEAM_PRIOR"),
                 (package.player_source, package.hashes[PLAYER_PRIOR_FILENAME], "PLAYER_PRIOR"),
@@ -3204,7 +3206,7 @@ def run_prior_review(
             except ClassicReviewPresentationError as exc:
                 classic_review = None
                 readable_failure = exc
-            except (OSError, ValueError) as exc:
+            except Exception as exc:  # noqa: BLE001 - review V10: any failure keeps the stage record
                 error = f"{type(exc).__name__}:{exc}"
                 stages.append(_stage("EXPORT", "FAILED_C3_DOWNSTREAM_AUDIT", error=error))
                 outcome = PriorReviewOutcome(

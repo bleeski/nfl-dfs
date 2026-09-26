@@ -696,7 +696,7 @@ def _necessary_capacity_issues(
                 _issue(
                     "PORTFOLIO_POLICY_UNIQUE_LINEUP_CAPACITY_INSUFFICIENT",
                     f"at most {unique_upper_bound} canonical lineups remain for {count} requested entries",
-                    "raise caps, permit more people, or explicitly disable canonical uniqueness",
+                    "raise caps or permit more people; distinct lineups are never relaxed (R29)",
                 )
             )
     by_id = {row.dk_id: row for row in slate.players}
@@ -1005,6 +1005,16 @@ def validate_portfolio_policy_bytes(
             )
         else:
             unique = unique_raw
+            if not unique:
+                # R29: every lineup in a portfolio is distinct. Classic refuses
+                # the same flag (`CLASSIC_POLICY_UNIQUENESS_REQUIRED`).
+                problems.append(
+                    _issue(
+                        "PORTFOLIO_POLICY_UNIQUENESS_REQUIRED",
+                        "require_unique_lineups must be true: every lineup in a portfolio is distinct (R29)",
+                        "set require_unique_lineups to true or omit it",
+                    )
+                )
 
     external = tuple(sorted(set(str(person).strip() for person in externally_excluded_people if str(person).strip())))
     unknown_external = sorted(set(external).difference(expected_people))

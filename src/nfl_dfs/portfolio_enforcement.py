@@ -722,11 +722,8 @@ def solve_policy_portfolio(
     variable_count = candidate_count * 2
     lower = np.zeros(variable_count, dtype=np.float64)
     upper = np.ones(variable_count, dtype=np.float64)
-    repetition_allowed = (
-        not policy.require_unique_lineups
-        and policy.effective_pairwise_person_overlap >= 6
-    )
-    upper[count_offset:used_offset] = float(count if repetition_allowed else 1)
+    # R29: a lineup fills at most one entry, whatever the policy says.
+    upper[count_offset:used_offset] = 1.0
 
     model = solver_factory()
     model.setOptionValue("output_flag", False)
@@ -782,17 +779,16 @@ def solve_policy_portfolio(
                 captain_coefficients,
             )
 
-    if policy.require_unique_lineups:
-        by_canonical: dict[str, list[int]] = {}
-        for index, candidate in enumerate(candidates):
-            by_canonical.setdefault(candidate.canonical_key, []).append(index)
-        for group in by_canonical.values():
-            _add_row(
-                model,
-                -highspy.kHighsInf,
-                1.0,
-                {index: 1.0 for index in group},
-            )
+    by_canonical: dict[str, list[int]] = {}
+    for index, candidate in enumerate(candidates):
+        by_canonical.setdefault(candidate.canonical_key, []).append(index)
+    for group in by_canonical.values():
+        _add_row(
+            model,
+            -highspy.kHighsInf,
+            1.0,
+            {index: 1.0 for index in group},
+        )
 
     overlap_cap = policy.effective_pairwise_person_overlap
     if overlap_cap < 6:
@@ -1245,7 +1241,6 @@ def audit_policy_assignments(
             person: (combined_limit, captain_limit)
             for person, combined_limit, captain_limit in audited_policy.person_limits
         }
-        require_unique_lineups = audited_policy.require_unique_lineups
         overlap_limit = audited_policy.max_pairwise_person_overlap
     else:
         limits = {
@@ -1255,7 +1250,6 @@ def audit_policy_assignments(
             )
             for item in policy.effective_limits
         }
-        require_unique_lineups = policy.require_unique_lineups
         overlap_limit = policy.effective_pairwise_person_overlap
     for person, total in sorted(combined.items()):
         limit = limits.get(person)
@@ -1285,15 +1279,16 @@ def audit_policy_assignments(
             )
 
     canonical_counts = Counter(key for _entry, key in canonical)
-    if require_unique_lineups:
-        for key, total in sorted(canonical_counts.items()):
-            if total > 1:
-                problems.append(
-                    _audit_problem(
-                        "PORTFOLIO_AUDIT_CANONICAL_DUPLICATE",
-                        f"count={total}:canonical={key}",
-                    )
+    # R29: unconditional. A stored `require_unique_lineups: false` from before
+    # Session 37 no longer switches the duplicate check off.
+    for key, total in sorted(canonical_counts.items()):
+        if total > 1:
+            problems.append(
+                _audit_problem(
+                    "PORTFOLIO_AUDIT_CANONICAL_DUPLICATE",
+                    f"count={total}:canonical={key}",
                 )
+            )
     overlaps: list[tuple[str, str, int]] = []
     for left_index, left in enumerate(expected_entries):
         if left not in people_by_entry:

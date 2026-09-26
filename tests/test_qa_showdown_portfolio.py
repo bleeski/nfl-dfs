@@ -7,6 +7,13 @@ two kickers, two defences, and a defence with its own offense. Those are now
 strategy observations, reported and never counted as defects. What DraftKings
 itself would reject, or what breaks the file, still exits 2.
 
+Session 37 (2026-09-26, code review V2 and V11) moved the script onto Classic
+QA's exit codes and byte audit. Every expectation below that read exit 2 for a
+validity failure now reads exit 1, with verdict `FAIL`; exit 2 is left to the
+operator's limits, and exit 3 is a sanctioned unfilled blank row. That is an
+edited expectation, named in `changelog.md`, not a loosened one: each case
+still fails.
+
 Nothing here touches the network or the engine.
 """
 
@@ -117,7 +124,8 @@ def codes(findings: list[str]) -> set[str]:
     out = set()
     for f in findings:
         parts = f.split()
-        out.add(parts[1] if parts[0].isdigit() and len(parts) > 1 else parts[0])
+        code = parts[1] if parts[0].isdigit() and len(parts) > 1 else parts[0]
+        out.add(code.rstrip(":"))
     return out
 
 
@@ -159,8 +167,8 @@ def test_all_four_observations_together_still_pass(tmp_path, capsys):
 def test_an_observation_never_masks_a_defect(tmp_path, capsys):
     tpl, exp = files(tmp_path, [ZERO_QB, ZERO_QB])
     code, rep = check(tmp_path, capsys, tpl, exp, ["--max-overlap", "6"])
-    assert code == 2
-    assert rep["VERDICT"] == "DEFECT"
+    assert code == 1
+    assert rep["VERDICT"] == "FAIL"
     assert codes(rep["DEFECTS"]) == {"DUPLICATE_LINEUPS"}
     assert codes(rep["OBSERVATIONS"]) == {"ZERO_QB"}
 
@@ -175,7 +183,7 @@ def test_a_different_captain_is_a_different_lineup(tmp_path, capsys):
 
 # ------------------------------------------------------------------ true defects
 # Each is something DraftKings would reject, or a file that is not the template
-# it claims to fill. Every one keeps exit 2.
+# it claims to fill. Every one exits 1 since Session 37 (exit 2 before).
 
 def _blank_cell(rows):
     rows[1][6] = ""
@@ -222,7 +230,7 @@ def _rows_swapped(rows):
 
 
 @pytest.mark.parametrize("mutate, expected", [
-    (_blank_cell, "INCOMPLETE_ROSTER"),
+    (_blank_cell, "PARTIALLY_FILLED_ROW"),
     (_unknown_id, "UNKNOWN_DK_ID"),
     (_flex_row_as_captain, "SLOT1_NOT_CPT_ROW"),
     (_captain_row_in_flex, "FLEX_SLOT_HAS_CPT_ROW"),
@@ -230,36 +238,126 @@ def _rows_swapped(rows):
     (_over_the_cap, "SALARY_CAP_EXCEEDED"),
     (_one_team, "SINGLE_TEAM_LINEUP"),
     (_repeated_lineup, "DUPLICATE_LINEUPS"),
-    (_contest_cell_changed, "ROW_1_COL_1_MUTATED"),
-    (_row_dropped, "ROW_COUNT_CHANGED"),
+    (_contest_cell_changed, "LINE_2_BYTES_CHANGED_OUTSIDE_ROSTER"),
+    (_row_dropped, "LINE_COUNT_CHANGED"),
     (_rows_swapped, "ENTRY_ID_ORDER_OR_COVERAGE_MISMATCH"),
 ])
-def test_a_true_roster_or_file_defect_keeps_exit_two(tmp_path, capsys, mutate, expected):
+def test_a_true_roster_or_file_defect_exits_one(tmp_path, capsys, mutate, expected):
     tpl, exp = files(tmp_path, [LEGAL, OTHER])
     rows = [line.split(",") for line in exp.read_text(encoding="utf-8").splitlines()]
     mutate(rows)
     exp.write_text("".join(",".join(r) + "\n" for r in rows), encoding="utf-8")
     code, rep = check(tmp_path, capsys, tpl, exp, ["--max-overlap", "6"])
-    assert code == 2
-    assert rep["VERDICT"] == "DEFECT"
+    assert code == 1
+    assert rep["VERDICT"] == "FAIL"
     assert expected in codes(rep["DEFECTS"])
 
 
-def test_an_officially_inactive_player_keeps_exit_two(tmp_path, capsys):
+def test_an_officially_inactive_player_exits_one(tmp_path, capsys):
     code, rep = run(tmp_path, capsys, [LEGAL, OTHER],
                     extra=["--inactive-dk-ids", FLEX["kc_wr2"]])
-    assert code == 2
+    assert code == 1
     assert "OFFICIALLY_INACTIVE_ROSTERED" in codes(rep["DEFECTS"])
 
 
-def test_overlap_and_backup_pairs_still_exit_two(tmp_path, capsys):
-    """Pinned as they stand. The Session 02b card names only the four findings
-    above; these two are the operator's limits and are noted for later."""
+def test_overlap_and_backup_pairs_are_operator_limits_at_exit_two(tmp_path, capsys):
+    """Session 37 closed the Session 02b open item: the operator's limits exit 2,
+    apart from the validity failures, which exit 1."""
 
     code, rep = run(tmp_path, capsys, [LEGAL, OTHER], extra=["--max-overlap", "2"])
-    assert code == 2 and any(d.startswith("OVERLAP_") for d in rep["DEFECTS"])
+    assert (code, rep["VERDICT"], rep["DEFECTS"]) == (2, "DEFECT", [])
+    assert any(d.startswith("OVERLAP_") for d in rep["LIMIT_BREACHES"])
     code, rep = run(tmp_path, capsys, [LEGAL, OTHER], extra=["--backup-pairs", "KC QB>KC WR2"])
-    assert code == 2 and "STARTER_WITH_OWN_BACKUP" in codes(rep["DEFECTS"])
+    assert (code, rep["DEFECTS"]) == (2, [])
+    assert "STARTER_WITH_OWN_BACKUP" in codes(rep["LIMIT_BREACHES"])
+
+
+def test_a_backup_pair_may_name_draftkings_ids(tmp_path, capsys):
+    """Either role's ID names the person: LEGAL has KC QB at Captain."""
+
+    code, rep = run(tmp_path, capsys, [LEGAL, OTHER],
+                    extra=["--backup-pairs", f"{FLEX['kc_qb']}>{FLEX['kc_wr2']}"])
+    assert code == 2 and "STARTER_WITH_OWN_BACKUP" in codes(rep["LIMIT_BREACHES"])
+
+
+def test_a_validity_failure_outranks_an_operator_limit(tmp_path, capsys):
+    code, rep = run(tmp_path, capsys, [LEGAL, OTHER],
+                    extra=["--max-overlap", "2", "--inactive-dk-ids", FLEX["kc_wr2"]])
+    assert (code, rep["VERDICT"]) == (1, "FAIL")
+    assert rep["LIMIT_BREACHES"]
+
+
+# ------------------------------------------------ Session 37: prefilled and blank rows
+
+def mixed(tmp_path, template_rows, export_rows):
+    """Template and export from per-row roster lists; None is a blank row."""
+
+    def body(rows):
+        return ENTRY_HEADER + "".join(
+            entry_line(n, ids(r) if r else ("",) * 6) for n, r in enumerate(rows))
+
+    tpl, exp = tmp_path / "tpl.csv", tmp_path / "exp.csv"
+    tpl.write_text(body(template_rows), encoding="utf-8")
+    exp.write_text(body(export_rows), encoding="utf-8")
+    return tpl, exp
+
+
+def test_an_export_that_overwrote_a_prefilled_row_fails(tmp_path, capsys):
+    """V2: the old loop exempted the roster cells of every row and printed PASS."""
+
+    tpl, exp = mixed(tmp_path, [LEGAL, None], [OTHER, LEGAL])
+    code, rep = check(tmp_path, capsys, tpl, exp, ["--max-overlap", "6"])
+    assert (code, rep["VERDICT"]) == (1, "FAIL")
+    assert any(d.startswith("LINE_2_BYTES_CHANGED on prefilled entry") for d in rep["DEFECTS"])
+
+
+def test_an_untouched_prefilled_row_passes_and_still_counts_for_r29(tmp_path, capsys):
+    tpl, exp = mixed(tmp_path, [LEGAL, None], [LEGAL, OTHER])
+    code, rep = check(tmp_path, capsys, tpl, exp, ["--max-overlap", "6"])
+    assert (code, rep["VERDICT"], rep["lineups"]) == (0, "PASS", 1)
+    assert rep["prefilled_entry_ids"] == [entry_id(0)]
+
+    tpl, exp = mixed(tmp_path, [LEGAL, None], [LEGAL, LEGAL])
+    code, rep = check(tmp_path, capsys, tpl, exp, ["--max-overlap", "6"])
+    assert code == 1 and "DUPLICATE_LINEUPS" in codes(rep["DEFECTS"])
+
+
+def test_a_sanctioned_blank_row_left_blank_exits_three_and_is_named(tmp_path, capsys):
+    """V11: R29 exhaustion leaves a row blank on purpose; that is PARTIAL, not a defect."""
+
+    tpl, exp = mixed(tmp_path, [None, None, None], [LEGAL, OTHER, None])
+    code, rep = check(tmp_path, capsys, tpl, exp, ["--max-overlap", "6"])
+    assert (code, rep["VERDICT"], rep["DEFECTS"]) == (3, "PARTIAL", [])
+    assert rep["unfilled_entry_ids"] == [entry_id(2)]
+
+
+def test_an_export_identical_to_the_template_fails(tmp_path, capsys):
+    tpl, exp = mixed(tmp_path, [None, None], [None, None])
+    code, rep = check(tmp_path, capsys, tpl, exp)
+    assert code == 1 and "EXPORT_IDENTICAL_TO_TEMPLATE" in codes(rep["DEFECTS"])
+
+
+def test_a_changed_line_ending_on_a_filled_row_fails(tmp_path, capsys):
+    """Bytes, not parsed cells: CRLF for LF on one filled row is a changed line."""
+
+    tpl, exp = files(tmp_path, [LEGAL, OTHER])
+    raw = exp.read_bytes().split(b"\n")
+    raw[1] += b"\r"
+    exp.write_bytes(b"\n".join(raw))
+    code, rep = check(tmp_path, capsys, tpl, exp, ["--max-overlap", "6"])
+    assert code == 1 and "LINE_2_BYTES_CHANGED_OUTSIDE_ROSTER" in codes(rep["DEFECTS"])
+
+
+def test_people_are_identified_by_draftkings_id_not_name(tmp_path, capsys):
+    """V11: two players who share a name on different teams are two people."""
+
+    tpl, exp = files(tmp_path, [LEGAL, OTHER])
+    sal = salary_csv(tmp_path)
+    sal.write_text(sal.read_text(encoding="utf-8").replace("DEN RB", "KC RB"), encoding="utf-8")
+    code = qa.main(["--salaries", str(sal), "--template", str(tpl), "--export", str(exp),
+                    "--max-overlap", "6"])
+    rep = json.loads(capsys.readouterr().out)
+    assert (code, rep["DEFECTS"]) == (0, [])
 
 
 def test_the_observation_rule_is_stated_in_the_report(tmp_path, capsys):

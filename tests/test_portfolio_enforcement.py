@@ -538,7 +538,7 @@ def _audit(
     slate = _slate(tmp_path)
     policy_controls = {
         "max_pairwise_person_overlap": 6,
-        "require_unique_lineups": False,
+        "require_unique_lineups": True,
     }
     policy_controls.update(controls or {})
     policy, source_policy = _policy(
@@ -668,6 +668,47 @@ def test_audit_recomputes_canonical_duplicate_and_exact_caps(tmp_path) -> None:
     assert "PORTFOLIO_AUDIT_CANONICAL_DUPLICATE" in codes
     assert "PORTFOLIO_AUDIT_COMBINED_PERSON_CAP_EXCEEDED" in codes
     assert "PORTFOLIO_AUDIT_CAPTAIN_CAP_EXCEEDED" in codes
+
+
+def test_audit_names_a_duplicate_even_when_a_stored_policy_waives_uniqueness(tmp_path) -> None:
+    """R29, Session 37: a pre-37 normalized policy may still say `false`; the
+    audit's duplicate check no longer reads it."""
+
+    slate = _slate(tmp_path)
+    objective = {row.dk_id: float(index) for index, row in enumerate(slate.players)}
+    roster = build_policy_candidate_bank(slate, objective, candidate_limit=1).candidates[0].roster
+    waived = replace(
+        _policy(slate, max_pairwise_person_overlap=6, require_unique_lineups=True)[0],
+        require_unique_lineups=False,
+    )
+    stored = waived.canonical_bytes()
+    assert b'"require_unique_lineups":false' in stored
+    audit = _audit(
+        tmp_path,
+        assignments=[("1", roster), ("2", roster)],
+        policy_mutator=lambda policy: replace(policy, require_unique_lineups=False),
+        normalized_policy_bytes=stored,
+        expected_normalized_policy_sha256=sha256_bytes(stored),
+    )
+    codes = {problem.split(":", 1)[0] for problem in audit.problems}
+    assert "PORTFOLIO_AUDIT_CANONICAL_DUPLICATE" in codes
+    assert not codes & {"PORTFOLIO_AUDIT_NORMALIZED_POLICY_BYTES_MISMATCH",
+                        "PORTFOLIO_AUDIT_NORMALIZED_POLICY_SHA256_MISMATCH"}, codes
+
+
+def test_the_joint_solve_never_repeats_a_lineup_whatever_the_policy_says(tmp_path) -> None:
+    """R29, Session 37: the count variable's upper bound is 1 on every candidate,
+    so a waived flag on an already-built policy cannot fill two entries with one
+    lineup."""
+
+    slate, model, contract, splits = _prepared(tmp_path)
+    entry_ids = tuple(str(index) for index in range(1, 6))
+    policy, _ = _policy(slate, entry_ids, max_pairwise_person_overlap=6)
+    waived = replace(policy, require_unique_lineups=False)
+    lineups, _scores, _report = select_prior_lineups(
+        slate, model, splits, contract, count=5, portfolio_policy=waived,
+    )
+    assert len({lineup.canonical_key for lineup in lineups}) == len(lineups) == 5
 
 
 @pytest.mark.parametrize(

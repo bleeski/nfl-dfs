@@ -17,6 +17,15 @@ class ByteAudit:
     problems: tuple[str, ...]
 
 
+def _first_record(line: bytes, encoding: str) -> list[str] | None:
+    """The one CSV record on a physical line, or None when the line holds none.
+
+    Review E12 (Session 37): `next()` on a line that decodes to nothing (a lone
+    byte-order mark) raised `StopIteration` instead of naming the line.
+    """
+    return next(csv.reader(StringIO(line.decode(encoding))), None)
+
+
 def audit_output_bytes(
     source_path: str | Path,
     output_bytes: bytes,
@@ -40,8 +49,16 @@ def audit_output_bytes(
         output_body, output_ending = split_line_ending(output_line)
         if source_ending != output_ending:
             problems.append(f"line {line_number}: line ending changed")
-        source_row = next(csv.reader(StringIO(source_line.decode(template.encoding))))
-        output_row = next(csv.reader(StringIO(output_line.decode(template.encoding))))
+        try:
+            source_row = _first_record(source_line, template.encoding)
+            output_row = _first_record(output_line, template.encoding)
+        except (UnicodeDecodeError, csv.Error) as exc:
+            problems.append(f"line {line_number}: CSV reparse failed: {exc}")
+            continue
+        if source_row is None or output_row is None:
+            if source_line != output_line:
+                problems.append(f"line {line_number}: empty physical line holds no CSV record")
+            continue
         source_id = source_row[0].strip() if source_row else ""
         output_id = output_row[0].strip() if output_row else ""
         if source_id != output_id:
@@ -112,10 +129,14 @@ def audit_late_swap_output_bytes(
         if source_ending != output_ending:
             problems.append(f"line {line_number}: line ending changed")
         try:
-            source_row = next(csv.reader(StringIO(source_line.decode(template.encoding))))
-            output_row = next(csv.reader(StringIO(output_line.decode(template.encoding))))
+            source_row = _first_record(source_line, template.encoding)
+            output_row = _first_record(output_line, template.encoding)
         except (UnicodeDecodeError, csv.Error) as exc:
             problems.append(f"line {line_number}: CSV reparse failed: {exc}")
+            continue
+        if source_row is None or output_row is None:
+            if source_line != output_line:
+                problems.append(f"line {line_number}: empty physical line holds no CSV record")
             continue
         source_id = source_row[0].strip() if source_row else ""
         output_id = output_row[0].strip() if output_row else ""
