@@ -40,6 +40,31 @@ def test_writer_and_referee_do_not_treat_unicode_separators_as_csv_lines(
     assert output.count(b"\xef\xbb\xbf") == 1
 
 
+def test_the_referee_names_a_physical_line_that_holds_no_csv_record(tmp_path: Path) -> None:
+    """Review E12 (Session 37): a last line of only a byte-order mark decodes to
+    nothing, and `next()` on it raised `StopIteration` instead of a named problem."""
+
+    source = tmp_path / "entry-template.csv"
+    original = (FIXTURE_ROOT / "DKEntries CSV.csv").read_bytes().decode("cp1252")
+    source.write_bytes(original.encode("utf-8-sig"))
+    template = parse_entries(source)
+    assert template.encoding == "utf-8-sig"
+    assignments = {
+        authorization.entry_id: tuple(
+            f"{index + 1}{authorization.entry_id[-2:]}" for index in range(9)
+        )
+        for authorization in template.authorizations
+    }
+    output = write_upload_bytes(template, assignments)
+    lines = split_byte_lines(output)
+    tampered = b"".join(lines[:-1]) + b"\xef\xbb\xbf"
+
+    audit = audit_output_bytes(source, tampered, template, assignments)
+
+    assert not audit.valid
+    assert f"line {len(lines)}: empty physical line holds no CSV record" in audit.problems
+
+
 def test_classic_entry_rows_carrying_the_embedded_player_pool_table_parse(tmp_path):
     """A real Classic export repeats DraftKings' pool table on the entry rows.
 

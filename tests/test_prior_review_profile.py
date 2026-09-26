@@ -477,6 +477,37 @@ def test_success_path_exports_a_byte_audited_file_and_never_certifies(tmp_path: 
     assert changed == [1, 2]
 
 
+def test_a_showdown_entries_file_that_changes_before_select_stops_by_name(tmp_path: Path) -> None:
+    """Session 37 (review V9): the stop was Classic-only, and Showdown re-parsed
+    the changed file instead, so the manifest bound the new hash and the pointer
+    the old one. Now intake's parse is the only one and the stop holds in both modes."""
+
+    salary_path, entry_path, package_dir, project = _prepared_run(
+        tmp_path, expires_at=AS_OF + timedelta(hours=6)
+    )
+
+    def project_then_edit(**kwargs):
+        # Between intake's hash and SELECT: the operator's file is replaced.
+        entry_path.write_bytes(entry_path.read_bytes() + b"\n")
+        return project(**kwargs)
+
+    outcome = run_prior_review(
+        salary_csv=salary_path,
+        entry_csv=entry_path,
+        label="ne-sea",
+        as_of=AS_OF,
+        run_root=tmp_path / "run",
+        output_root=tmp_path / "out",
+        prior_package_dir=package_dir,
+        project=project_then_edit,
+    )
+
+    assert outcome.blocked
+    assert outcome.stage == "SELECT"
+    assert any("ENTRY_INPUT_CHANGED_BEFORE_SELECTION" in blocker for blocker in outcome.blockers)
+    assert "bulk_entry_csv" not in outcome.artifacts
+
+
 def test_no_release_policy_input_can_certify_a_prior_only_package() -> None:
     for evidence_state in ReleaseEvidenceState:
         result = derive_release_policy(

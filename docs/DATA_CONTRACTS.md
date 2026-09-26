@@ -915,7 +915,8 @@ the Captain changes the canonical lineup. Pairwise overlap compares the two
 six-person underlying-person sets regardless of role. Combined exposure counts
 a person at most once per entry. `max_pairwise_person_overlap=null` means no
 additional overlap cap (effective six); otherwise it is an integer from zero
-through six. `require_unique_lineups` defaults to `true` when omitted. Repeated
+through six. `require_unique_lineups` defaults to `true` when omitted; `false`
+is refused as `PORTFOLIO_POLICY_UNIQUENESS_REQUIRED` (R29, Session 37). Repeated
 Captains are not implicitly prohibited: SD4 will govern them only through the
 explicit effective Captain maxima.
 
@@ -2179,7 +2180,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `685d7109291e2d903097bb648c0b73787456cd6f06254f2bf24c55247cbb0f25`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `6a528c7809145fe2b6d3fb556dfcbc38e2642920bd99aada9014ae5f8d5e2cad`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2631,8 +2632,9 @@ rows at every policy rung; rung 4 cannot tell rows apart, so it carries them to
 every row (Session 11b: widening a fade only tightens, and an exclusion is never
 relaxed). A fraction that only floors to zero
 entries is a cap, not an exclusion, and is relaxed. A supplied Showdown policy
-with `require_unique_lineups: false` runs every rung with it true (R29), and the
-record says so (`supplied_require_unique_lineups`). Official inactives and request exclusions are re-derived by the
+with `require_unique_lineups: false` is refused by the validator since Session
+37 (`PORTFOLIO_POLICY_UNIQUENESS_REQUIRED`); every rung requires distinct lineups
+(R29), and the record keeps the supplied value (`supplied_require_unique_lineups`). Official inactives and request exclusions are re-derived by the
 validator from the same run. No evidence gate is on the ladder.
 
 **The window.** Each rung must fit the improvement window less the last

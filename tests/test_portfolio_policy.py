@@ -165,6 +165,17 @@ def test_malformed_fraction_types_and_ranges_are_rejected(
     assert code in _codes(validation)
 
 
+def test_a_policy_that_waives_distinct_lineups_is_refused_by_name(tmp_path: Path) -> None:
+    """R29, Session 37: Classic refused the flag already; Showdown now does too."""
+
+    slate = _slate(tmp_path)
+    refused = _validate(slate, _document(slate, require_unique_lineups=False))
+    assert not refused.valid
+    assert refused.policy is None
+    assert "PORTFOLIO_POLICY_UNIQUENESS_REQUIRED" in _codes(refused)
+    assert _validate(slate, _document(slate, require_unique_lineups=True)).valid
+
+
 def test_nonfinite_number_and_ambiguous_unit_are_rejected(tmp_path: Path) -> None:
     slate = _slate(tmp_path)
     document = _document(slate)

@@ -1091,6 +1091,28 @@ def test_a_classic_policy_run_with_an_official_inactive_reaches_c3(tmp_path, mon
     assert all(inactive not in roster for roster in filled.values())  # policy and C1 rows alike
 
 
+def test_a_c3_packaging_failure_of_any_type_keeps_the_stage_record(tmp_path, monkeypatch):
+    """Session 37 (review V10): only `OSError` and `ValueError` were caught, so a
+    `KeyError` escaped without `prior_review.json`. Now every exception is named."""
+
+    from nfl_dfs import prior_review
+
+    def explode(**_kwargs):
+        raise KeyError("injected")
+
+    monkeypatch.setattr(prior_review, "create_classic_review_package", explode)
+    code, report, _entries, _root, _slate, _prefilled = _classic_subset_run(
+        tmp_path / "run", monkeypatch, run_id="c3-keyerror")
+    assert code != 0
+    blockers = " ".join(report["blockers"])
+    assert "CLASSIC_C3_REVIEW_EXPORT_FAILED:KeyError" in blockers, report["blockers"]
+    stage_record = tmp_path / "run" / "runs" / "c3-keyerror" / "prior_review" / "prior_review.json"
+    record = json.loads(stage_record.read_text(encoding="utf-8"))
+    assert record["prior_review_error"] == "KeyError:'injected'"
+    assert {stage["status"] for stage in record["prior_review_stages"] if stage["stage"] == "EXPORT"} == {
+        "FAILED_C3_DOWNSTREAM_AUDIT"}
+
+
 def test_c3_refuses_each_mutation_of_a_mixed_portfolio(tmp_path, monkeypatch):
     """C3 replayed from the subset run's own call, one bound artifact changed each time.
 
