@@ -80,8 +80,8 @@ worktree: all 27 failed there.
 #### Verification
 
 - Card command: `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_portfolio_enforcement.py tests/test_qa_showdown_portfolio.py tests/test_prior_review_profile.py -x --tb=short`: `165 passed in 51.66s`.
-- Full suite: `SUITE_LINE`.
-- `sh ./nfl.sh doctor`, `git diff --check`, `python3 scripts/check_protected_paths.py`: DOCTOR_LINE.
+- Full suite: `1776 passed, 1 skipped in 493.37s (0:08:13)` on Linux (1,762 before; the one skip is the junction test).
+- `sh ./nfl.sh doctor`, `git diff --check`, `python3 scripts/check_protected_paths.py`: doctor `pass_status: true`; diff check clean; `No protected path touched`.
 
 #### Found
 
