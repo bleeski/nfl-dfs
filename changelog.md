@@ -123,7 +123,9 @@ of Session 23e's card accidentally deleted the `#### Session 21` heading
 (`test_the_quick_start_names_the_first_startable_session`, expected while the
 row was `In Progress`, but this session closed 23 out in the same commit as
 adding 23e, so it needed a real fix, not just the known mismatch); both fixed
-and reverified above.
+and reverified above. Rerun clean after the reviewer's fix (the two new
+`test_readable_review.py` assertions/test above):
+`1798 passed, 1 skipped in 378.56s (0:06:18)`.
 
 `sh ./nfl.sh doctor`, `git diff --check` and
 `python3 scripts/check_protected_paths.py` are clean; no protected path
