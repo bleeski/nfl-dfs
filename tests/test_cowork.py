@@ -5,18 +5,23 @@ import json
 import os
 import shutil
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from openpyxl import load_workbook
 
 from nfl_dfs import cli
+from nfl_dfs.certification import certify_upload
+from nfl_dfs.contracts import EvidenceRecord, EvidenceState
 from nfl_dfs.cowork import (
     CoworkInputError,
     CoworkRunRequest,
     discover_csv_inputs,
     required_next_inputs,
 )
+from nfl_dfs.hashing import sha256_file
+from nfl_dfs.optimizer import LineupOptimizer
 
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "supplied"
@@ -236,6 +241,49 @@ def test_cowork_two_file_run_snapshots_and_fails_closed(
     assert workbook["Run Control"]["B7"].value == request["entry_csv"]
 
 
+def test_a_removed_run_folder_never_lets_a_rerun_reuse_its_output_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V5, Session 38: `outputs/<run_id>` used `exist_ok=True` while
+    `data/runs/<run_id>` was refused. Removing only the run folder (an
+    operator cleaning up `data/runs/`, or a retry after a partial failure)
+    left the output folder behind; a rerun under the same id then silently
+    reused it, overwriting its `cowork_run.json` and reporting the earlier
+    run's pointer as this run's.
+    """
+    attachments = tmp_path / "attachments"
+    attachments.mkdir()
+    _attachment_pair(attachments)
+    runs = tmp_path / "runs"
+    outputs = tmp_path / "outputs"
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", runs)
+    monkeypatch.setattr(cli, "DEFAULT_OUTPUT_DIR", outputs)
+    args = argparse.Namespace(
+        input_dir=str(attachments),
+        request=None,
+        salaries=None,
+        entries=None,
+        label="reused-output",
+        run_id="reused-output",
+        output_dir=str(outputs),
+        delivery_deadline_utc="2099-01-01T00:00:00+00:00",
+    )
+
+    assert cli.command_cowork_run(args) == 2
+    report_path = outputs / "reused-output" / "cowork_run.json"
+    original_bytes = report_path.read_bytes()
+
+    shutil.rmtree(runs / "reused-output")
+    assert not (runs / "reused-output").exists()
+    assert (outputs / "reused-output").exists()
+
+    with pytest.raises(ValueError, match="RUN_ID_COLLISION"):
+        cli.command_cowork_run(args)
+    # Nothing about the stray output folder's contents moved.
+    assert report_path.read_bytes() == original_bytes
+    assert not (outputs / "reused-output" / "cowork_diagnostic.json").exists()
+
+
 class _PassingDoctor:
     pass_status = True
 
@@ -388,6 +436,92 @@ def test_direct_certification_failure_removes_upload_and_keeps_diagnostic(
     )
     assert diagnostic["status"] == "DO_NOT_UPLOAD"
     assert diagnostic["upload_csv"] is None
+
+
+def _manual_guardrail_assignments(slate, entries):
+    scores = {player.dk_id: 50_000 / max(player.salary, 1) for player in slate.players}
+    optimizer = LineupOptimizer(slate)
+    result = {}
+    for entry in sorted(entries.authorizations, key=lambda item: item.entry_id):
+        solved = optimizer.solve(scores)
+        assert solved.roster is not None
+        result[entry.entry_id] = solved.roster
+        optimizer.add_no_good(solved.roster)
+    return result
+
+
+def test_a_workbook_lock_after_certification_never_deletes_the_certified_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, classic_slate, classic_entries
+) -> None:
+    """V3, Session 38: `certify_upload` writes the CERTIFIED CSV and its
+    manifest together, then `create_review_workbook` can raise
+    `WorkbookLockedError` (the operator has the workbook open in Excel). The
+    handler used to unconditionally delete whatever `DK_UPLOAD_*.csv` it
+    found, taking the certified file with it even though its manifest still
+    bound its exact bytes.
+    """
+    assignments = _manual_guardrail_assignments(classic_slate, classic_entries)
+    now = datetime.now(timezone.utc)
+    payout = tmp_path / "payouts.csv"
+    payout.write_text(
+        "rank_start,rank_end,prize_type,value\n1,1,CASH,10\n2,2,CASH,5\n",
+        encoding="utf-8",
+    )
+    evidence = [
+        EvidenceRecord(subject="slate", field="salary_pool", value=True, source_artifact_id=classic_slate.salary_hash, observed_at=now, hard_gate=True, state=EvidenceState.PASS, reason="parsed"),
+        EvidenceRecord(subject="entries", field="entry_authorization", value=True, source_artifact_id=classic_entries.raw_hash, observed_at=now, hard_gate=True, state=EvidenceState.PASS, reason="reconciled"),
+        EvidenceRecord(subject="contest", field="payout_contract", value=True, source_artifact_id=sha256_file(payout), observed_at=now, hard_gate=True, state=EvidenceState.PASS, reason="reconciled"),
+        EvidenceRecord(subject="selected", field="official_inactive_status", value=True, source_artifact_id="a" * 64, observed_at=now, hard_gate=True, state=EvidenceState.PASS, reason="official exact IDs"),
+        EvidenceRecord(subject="slate", field="weather_if_required", hard_gate=True, state=EvidenceState.NOT_APPLICABLE, reason="manual guardrail"),
+        EvidenceRecord(subject="slate", field="market_line", hard_gate=True, state=EvidenceState.NOT_APPLICABLE, reason="manual guardrail"),
+    ]
+
+    def certify_then_lose_the_workbook(args):
+        # A stand-in for `_certify`: the real `certify_upload` writes the
+        # CERTIFIED CSV and manifest exactly as `_certify` would, and then
+        # the workbook step (whatever runs after, inside real `_certify`)
+        # raises. This exercises `command_certify`'s except handler against
+        # a genuinely certified, hash-bound manifest without needing the
+        # full CLI-argument evidence assembly (lock times, source URLs, and
+        # so on) `_certify` itself would otherwise require.
+        output_dir = Path(args.output_dir).resolve() / args.run_id
+        manifest = certify_upload(
+            run_id=args.run_id,
+            slate=classic_slate,
+            template=classic_entries,
+            assignments=assignments,
+            evidence=evidence,
+            output_path=output_dir / f"DK_UPLOAD_{args.run_id}.csv",
+            manifest_path=output_dir / f"DK_UPLOAD_{args.run_id}.manifest.json",
+        )
+        assert manifest.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE"
+        raise cli.WorkbookLockedError("operator_input.xlsx is open in Excel")
+
+    monkeypatch.setattr(cli, "_certify", certify_then_lose_the_workbook)
+
+    args = argparse.Namespace(
+        run_id="workbook-lock",
+        label="workbook-lock",
+        output_dir=str(tmp_path / "outputs"),
+        manual_guardrail=True,
+    )
+
+    with pytest.raises(cli.WorkbookLockedError):
+        cli.command_certify(args)
+
+    output_root = tmp_path / "outputs" / "workbook-lock"
+    upload = output_root / "DK_UPLOAD_workbook-lock.csv"
+    manifest_path = output_root / "DK_UPLOAD_workbook-lock.manifest.json"
+    assert upload.is_file()
+    assert manifest_path.is_file()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["RELEASE_DECISION"] == "CERTIFIED_UPLOAD_PACKAGE"
+    assert sha256_file(upload) == manifest["output_sha256"]
+    diagnostic = json.loads(
+        (output_root / "certification_diagnostic.json").read_text(encoding="utf-8")
+    )
+    assert diagnostic["certified_upload_preserved"] is True
+    assert diagnostic["upload_csv"] == str(upload)
 
 
 # --- Session 07: request v3 and its delivery deadline ------------------------

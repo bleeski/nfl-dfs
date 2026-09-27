@@ -19,6 +19,7 @@ from .contracts import (
     SlateContract,
 )
 from .dk import EntryTemplate, parse_entry_bytes, reconcile_template
+from .entry_groups import plan_entries
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup, write_upload_bytes
 from .referee import audit_output_bytes
@@ -88,13 +89,26 @@ def certify_upload(
     file_blockers: list[str] = list(additional_file_blockers)
     safety_blockers: list[str] = list(additional_blockers)
     validated: dict[str, Lineup] = {}
+    plan = None
     try:
         reconcile_template(template, slate)
+        plan = plan_entries(template, slate)
     except ValueError as exc:
         file_blockers.append(f"TEMPLATE_MISMATCH:{exc}")
     if sha256_file(template.path) != template.raw_hash:
         file_blockers.append("ENTRY_TEMPLATE_BYTES_CHANGED_AFTER_PARSE")
-    authorized = {entry.entry_id for entry in template.authorizations}
+    # Per-row authority (Session 11): only the plan's fillable blank rows are
+    # this call's to assign; every prefilled or partly filled row passes
+    # through byte for byte (`write_upload_bytes` preserves it). Before
+    # Session 38 this compared against every reserved entry, so a template
+    # with any prefilled row could never certify: leaving it out of
+    # `assignments` failed here (`ENTRY_AUTHORIZATION_MISMATCH`) and
+    # including it failed in `write_upload_bytes`
+    # (`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`) instead.
+    authorized = (
+        set(plan.fillable) if plan is not None
+        else {entry.entry_id for entry in template.authorizations}
+    )
     contest_ids = {entry.contest_id for entry in template.authorizations}
     entry_fees = {entry.entry_fee for entry in template.authorizations}
     if len(contest_ids) != 1:
@@ -115,6 +129,10 @@ def certify_upload(
             )
         elif result.lineup is not None:
             validated[entry_id] = result.lineup
+            # R29: a fillable row may never repeat a prefilled row's already-
+            # locked-in roster, the same rule `review_export.py` enforces.
+            if plan is not None and result.lineup.canonical_key in plan.forbidden_keys:
+                file_blockers.append(f"ENTRY_PREFILLED_LINEUP_REPEATED:{entry_id}")
     if len({lineup.canonical_key for lineup in validated.values()}) != len(validated):
         file_blockers.append("DUPLICATE_SELECTED_LINEUPS")
 
@@ -135,9 +153,14 @@ def certify_upload(
                     output_bytes, source_name=str(output)
                 )
                 reconcile_template(reparsed, slate)
+                # Only the rows this call assigned are its to reconfirm
+                # (V7, Session 38): a prefilled row passes through unchanged
+                # and is not in `assignments`, so it is not compared here
+                # either, matching `review_export.py`'s own reparse check.
                 reparsed_assignments = {
                     entry.entry_id: entry.existing_cells
                     for entry in reparsed.authorizations
+                    if entry.entry_id in assignments
                 }
                 if reparsed_assignments != dict(assignments):
                     file_blockers.append("FINAL_REPARSE_ASSIGNMENT_MISMATCH")
