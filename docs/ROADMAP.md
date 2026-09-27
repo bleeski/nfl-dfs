@@ -1948,4 +1948,4 @@ session, because a commit cannot contain its own merge.
 | 2026-09-26 | Session 38 | Pending to In Progress | `7aab39b` | Claim pushed on `claude/s38-run-path-integrity` |
 | 2026-09-27 | Session 38 | In Progress to Complete | `1f0083b` | V3 to V8; suite `1784 passed, 1 skipped in 394.54s (0:06:34)` |
 | 2026-09-27 | Session 38 | Merged | `c6c00f3` | PR #74 |
-| 2026-09-27 | Session 23 | Pending to In Progress | (pending push) | Claim pushed on `claude/s23-structural-hygiene-izyvah` |
+| 2026-09-27 | Session 23 | Pending to In Progress | `581138d` | Claim pushed on `claude/s23-structural-hygiene-izyvah` |
