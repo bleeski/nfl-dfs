@@ -61,8 +61,10 @@ These are not preferences. None of them is ever relaxed to finish a run.
    probability, cash probability, calibrated ownership or proven edge.
 7. Only exact current-slate DraftKings IDs enter runtime joins. A fuzzy or
    normalized identity match is a proposal and cannot certify.
-8. Automated retrieval obeys `src/nfl_dfs/sources.py`. Never bypass its
-   allowlist with another client.
+8. Automated retrieval obeys `src/nfl_dfs/sources.py`: model inputs come only
+   through its allowlist. Research (news, inactives, forecasts) may use Claude
+   Code's web tools, never on a host it prohibits, and never becomes a number
+   or clears a gate.
 
 `tests/test_repo_boundaries.py` asserts the mechanical half of this list. If you
 are about to change something it guards, that is a pull request Ben reads.
