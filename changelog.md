@@ -129,6 +129,25 @@ and reverified above.
 `python3 scripts/check_protected_paths.py` are clean; no protected path
 touched.
 
+The `reviewer` subagent read the diff against the card (its snapshot predated
+the suite-line fix above, which it flagged as still a placeholder; already
+fixed by the time its report landed). It found one real blocking gap, fixed:
+review S7's new `exposure.captain_spread`/`exposure.max_person_share`
+(`readable_review.py`) had no test — added a direct unit test of
+`_spread_summary` (ties, zero denominator) and extended the existing
+Showdown readable-review integration test to cross-check both fields against
+the same run's already-verified per-person exposure rows, plus an HTML-text
+assertion. Two open, non-blocking findings recorded in `docs/DATA_CONTRACTS.md`
+rather than changed: `offense_against_own_dst`'s "own team" reading (matches
+the pre-existing `DST_WITH_OWN_OFFENSE` QA observation this bound promotes,
+not a new interpretation, but worth Ben's eyes given the 5-1 split it forces
+whenever a DST is rostered), and the generator defaults' salary/QB-count
+figures following the Session 23 card's own restated numbers over the P2
+brief's older text (the brief's two-QB-quota mechanism is a portfolio-level
+allotment, not implemented here — different from the per-lineup bounds this
+session built, and a natural fit for Session 23b/23c's thesis machinery
+instead).
+
 ### 2026-09-27: run-path integrity (Session 38)
 
 Branch `claude/s38-run-path-integrity`. The 2026-09-25 code review's V3 to V8.

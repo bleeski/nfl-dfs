@@ -1055,7 +1055,14 @@ already allows zero of either). `pass_catchers_with_rostered_qb` counts WR/TE
 teammates of each rostered QB; with zero QBs rostered it is vacuously satisfied.
 `offense_against_own_dst` is a Boolean: `true` forbids any non-DST person
 (any position, so it also covers a DST sharing the rostered QB's team) from
-sharing a rostered DST's team. `salary_left` is `slate.salary_cap` minus the
+sharing a rostered DST's team — the "own" reading, not "the DST's opponent":
+it matches the pre-existing `qa_showdown_portfolio.py` observation
+`DST_WITH_OWN_OFFENSE`, which this bound promotes from a printed observation
+to an enforced construction preference, and is not a new interpretation this
+session introduced. In a two-team Showdown pool this forces every other
+rostered person onto the opposing team whenever a DST is rostered (a 5-1
+split by construction); flag any objection to Ben before relying on it as a
+default. `salary_left` is `slate.salary_cap` minus the
 roster's total salary. Every bound binds SD3's candidate generation as a real
 MILP row on `LineupOptimizer` (`qb_count`/`kicker_count`/`dst_count` via
 `add_selected_count_bounds`; `salary_left` via `add_salary_band`;
@@ -1111,6 +1118,20 @@ fraction (they were in 45%/68% and 68%/82% of the top 1% in the graded games).
 `--captain-default` now defaults to 0.4 instead of requiring an explicit value
 (review S7): an unbounded default let the Captain strata and the summed-points
 objective put every entry under one Captain.
+
+These defaults follow the Session 23 card's own line (`docs/ROADMAP.md`
+§2.3, "salary_left ($1 to $500)") over `docs/chunks/P2-contest-aware-policy.md`'s
+older text ("$0 to $1,500 left ... two-QB lineups capped at the entry count
+times 0.4"), per the card's own instruction that its line numbers, and by
+extension its restated figures, are authoritative where the brief has
+drifted. `qb_count` defaults to exactly one rather than allowing an
+uncapped-but-minority two-QB share: the brief's "capped at 0.4 of entries" is
+a portfolio-level quota across the built bank, a different mechanism than
+this session's per-lineup `structural_bounds`, and is not implemented here.
+A two-QB build is still reachable by an explicit `--qb-count-max 2` override;
+a proper portfolio-level two-QB quota is future work (a natural fit for
+Session 23b/23c's thesis machinery, which already allots rows across bounded
+sleeves).
 
 ## SD5 prior-only readable review
 

@@ -24,6 +24,7 @@ from nfl_dfs.portfolio_policy import (
 from nfl_dfs.prior_review import run_prior_review
 from nfl_dfs.readable_review import (
     ReadableReviewError,
+    _spread_summary,
     create_readable_review,
     verify_readable_review_artifacts,
 )
@@ -174,6 +175,31 @@ def test_exact_lineups_exposures_truths_and_html_are_readable_and_inert(tmp_path
         and row["captain_percentage"] == round(100 * row["captain_count"] / 2, 3)
         for row in exposure["people"]
     )
+    # Session 23 (review S7): captain_spread and max_person_share, cross-checked
+    # against the already-verified per-person rows above, not hardcoded.
+    captain_counts = {
+        row["underlying_person_id"]: row["captain_count"]
+        for row in exposure["people"] if row["captain_count"] > 0
+    }
+    combined_counts = {
+        row["underlying_person_id"]: row["combined_count"]
+        for row in exposure["people"] if row["combined_count"] > 0
+    }
+    captain_spread = exposure["captain_spread"]
+    assert captain_spread["counts"] == captain_counts
+    assert captain_spread["distinct_people"] == len(captain_counts)
+    top_captain = max(captain_counts.values())
+    assert captain_spread["max_share_percentage"] == round(100 * top_captain / 2, 3)
+    assert set(captain_spread["max_share_people"]) == {
+        person for person, count in captain_counts.items() if count == top_captain
+    }
+    max_person_share = exposure["max_person_share"]
+    assert max_person_share["counts"] == combined_counts
+    top_combined = max(combined_counts.values())
+    assert max_person_share["max_share_percentage"] == round(100 * top_combined / 2, 3)
+    assert set(max_person_share["max_share_people"]) == {
+        person for person, count in combined_counts.items() if count == top_combined
+    }
     assert blockers == tuple(data["blockers"])
     assert verify_readable_review_artifacts(
         json_path=readable.json_path,
@@ -186,6 +212,7 @@ def test_exact_lineups_exposures_truths_and_html_are_readable_and_inert(tmp_path
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html_text
     assert "PRIOR_ONLY central estimates" in html_text
     assert "DO_NOT_UPLOAD" in html_text
+    assert "Captain spread:" in html_text and "max_person_share:" in html_text
     assert all(label in html_text for label in data["truths"])
     assert "Refresh exact official activity evidence and rerun." in html_text
     assert readable.json_sha256 in html_text
@@ -199,6 +226,29 @@ def test_exact_lineups_exposures_truths_and_html_are_readable_and_inert(tmp_path
     states = {(row["category"], row["state"]) for row in data["evidence_observations"]}
     assert ("official_activity", "MISSING") in states
     assert any(category == "offensive_role" for category, _state in states)
+
+
+def test_spread_summary_reports_every_tied_maximum_and_handles_zero_denominator() -> None:
+    """Session 23 (review S7): the pure function `captain_spread`/`max_person_share` share."""
+
+    from collections import Counter
+
+    from nfl_dfs.readable_review import _spread_summary
+
+    tied = Counter({"NE|WR|Alpha WR": 2, "SEA|QB|Sea QB": 2, "NE|K|NE Kicker": 1})
+    summary = _spread_summary(tied, 4)
+    assert summary == {
+        "distinct_people": 3,
+        "counts": {"NE|K|NE Kicker": 1, "NE|WR|Alpha WR": 2, "SEA|QB|Sea QB": 2},
+        "max_share_percentage": 50.0,
+        "max_share_people": ["NE|WR|Alpha WR", "SEA|QB|Sea QB"],
+    }
+    assert _spread_summary(Counter(), 0) == {
+        "distinct_people": 0,
+        "counts": {},
+        "max_share_percentage": 0.0,
+        "max_share_people": [],
+    }
 
 
 def test_missing_contest_and_stale_source_state_remain_visible(tmp_path: Path) -> None:
