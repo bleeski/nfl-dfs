@@ -4,6 +4,40 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-27: research allowed, procedure split out of CLAUDE.md (Ben's ruling)
+
+Ben, 2026-09-27, after a live slate where the retrieval boundary stopped an
+inactives search: "relax the self modification rules ... You need to have
+flexibility to get better, you search, be creative, etc. and I want to have
+some element of recursive self-improvement." He asked for this pull request and
+approved it in the session; it touches `CLAUDE.md`, so it carries `ben-review`.
+
+#### Changed
+
+- **Research clause** (`CLAUDE.md` permanent boundaries, mirrored in
+  `docs/START_HERE.md` item 8). "Automated retrieval obeys
+  `src/nfl_dfs/sources.py`" stays, and still binds every model input. Research
+  (news, inactives, forecasts) may now use Claude Code's own web tools, never
+  on a host `sources.py` prohibits (nfl.com and DraftKings stay off-limits, per
+  `plan.md`); it informs exclusions and construction, never a number or a gate.
+- **Procedure moved out of the protected file.** `CLAUDE.md`'s "Developing in
+  Claude Code" section (commands, session protocol, token discipline, repo
+  etiquette) moved verbatim to `.claude/rules/working.md`, which loads every
+  session and which Claude may change and merge on green. Two lines changed
+  wording to fit the new home. The versioned-contract bullet stayed in
+  `CLAUDE.md` under Release truths, because `config/gate_registry_v1.json`
+  cites its "`OPTIMAL` is scoped to the reported bank" as a boundary.
+- **Getting better** (new `CLAUDE.md` section): Claude owns every procedure,
+  rule, skill, script, test and doc outside the permanent boundaries, release
+  truths and lock-clock bounds; a procedural rule that blocks a clearly better
+  result outside those bounds is fixed, not obeyed into a corner; every slate or
+  session ends with the change that would have made it better. The boundaries
+  themselves still need `ben-review`. `scripts/repo_state.py`'s docstring
+  pointer to "Token discipline" follows the move.
+
+The protected list is unchanged (`CLAUDE.md`, `.github/protected-paths.txt`,
+`.claude/settings.json`). `CLAUDE.md` is 154 lines, down from 199.
+
 ### 2026-09-27 (slate run): Week 3 main slate Classic, 25 entries, prior-only review
 
 Cloud session, branch `claude/week-three-classic-lineups-fzggt8`.

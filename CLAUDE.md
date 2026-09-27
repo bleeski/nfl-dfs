@@ -8,7 +8,8 @@ sessions backed by GitHub. Read `docs/START_HERE.md` first; it is one page.
   and run the slate. Procedure: `docs/RUNBOOK.md`; command reference
   `docs/OPERATOR_GUIDE.md`.
 - **Developing the engine**: the only queue is `docs/ROADMAP.md`, briefs in
-  `docs/chunks/`. Protocol below; `/dev-session <SNN>`, `/verify`, `/close-out`.
+  `docs/chunks/`. Protocol: `.claude/rules/working.md`; `/dev-session <SNN>`,
+  `/verify`, `/close-out`.
 - **Committing, pushing, merging**: Claude's own authority on green CI
   (`.claude/rules/git-authority.md`; what only Ben sets:
   `docs/CLAUDE_CODE_SETUP.md`). Never `git add .` or `-A`, force-push, amend or
@@ -60,11 +61,12 @@ status from this file or an earlier conversation.
   normalized identity matches are proposals and cannot certify.
 - DESIGN, SELECT, and REFEREE scenario banks stay separate. REFEREE is
   report-only and may block; it never tunes or reselects.
-- Automated retrieval obeys `src/nfl_dfs/sources.py`. Never bypass its allowlist
-  with another client. Every capture keeps raw bytes, hash, URL, observed time,
-  parser version and license decision. A link without captured evidence is not a
-  model input. Never infer payout tiers, field size, ticket value, or player
-  status from a contest name.
+- Automated retrieval obeys `src/nfl_dfs/sources.py`. Model inputs come only
+  through its allowlist, with raw bytes, hash, URL, observed time, parser version
+  and license decision. Research (news, inactives, forecasts) may use Claude
+  Code's web tools, never on a host it prohibits; it informs exclusions and
+  construction, never a number or a gate. Never infer payout tiers, field size,
+  ticket value or player status from a contest name.
 - Official activity evidence needs an HTTPS source and a timezone-aware
   observation time. Pre-lock uses exact current-slate DK-ID rows; governed late
   swap uses versioned team-scoped official inactive lists. Corroborating sources
@@ -93,6 +95,11 @@ baseline built from the DraftKings bytes alone ships first; truth-claim gates
 travel with it as named limitations (boundary above). `RELEASE_DECISION`,
 `CERTIFIED` and the no-EV rule are unchanged. **R30:** C3 is complete for
 software acceptance; native Excel acceptance is deferred (Session 35).
+
+Every structured input has a versioned contract in `docs/DATA_CONTRACTS.md`; a
+schema change is a new version, v1 is never mutated. Objective, allocation and
+scoring rules are registered `*_version`s with `does_not_establish` text;
+`OPTIMAL` is scoped to the reported bank; sample size is declared, not inferred.
 
 ## Shipping under a lock clock (Ben's ruling, 2026-09-12; amended by R28, R29, R31)
 
@@ -129,71 +136,19 @@ and names the gap. If the clock beats a clearable gate, say so plainly, ship
 what the engine legally produces, and name the gap. Silence about a gap is the
 only unrecoverable error. Full text: `docs/RUNBOOK.md`.
 
-## Developing in Claude Code
+## Getting better (Ben, 2026-09-27)
 
-### Commands
+Ben wants Claude to improve itself, not to be boxed in by its own procedure.
 
-- Windows: `.\nfl.ps1 setup|test <pytest args>|doctor|<cli>` on `.venv`. Linux:
-  `sh ./nfl.sh <same>` on `.venv-linux`. Both pin pytest's temp and cache roots;
-  pass pytest flags after `test`, never a bare `-p`, never a second `-q`. Never
-  mix the two venvs in one session.
-- Focused tests first (`-x --tb=short`), then the complete suite: ~5 min on Linux,
-  ~10 on Windows (CI, 2026-09-25), past the 600000 ms tool maximum. Run it in
-  the background on Windows; a run killed by a timeout is a tooling artifact, not a
-  failure. Record the result: `python3 scripts/record_verify.py --from-log <log>`.
-- Python 3.13.7 under `uv.lock`; `uv sync` needs `README.md` present.
-  `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1` is the approved opt-in and clears only
-  `VERIFY_X509_STRICT`. Container facts: `docs/CLAUDE_CODE_SETUP.md`.
-- CI runs the pinned suite and `tests/test_repo_boundaries.py` on every push,
-  and the protected-path check on every pull request event, labels included.
-  Green CI replaced Ben reading each diff, so never push speculatively.
-
-### Session protocol: `docs/ROADMAP.md` §2.1, plus these
-
-- Never reset, clean, stash or reformat a dirty tree; it is often user-owned work.
-- Multi-file session: the plan, with assumptions and tradeoffs, goes in the task
-  file and work starts; no plan-approval wait (Ben, 2026-09-23). Ask Ben only for
-  facts he alone has (a ruling, a file, an unset threshold), or leave a
-  `[BEN: ...]` flag and continue; decide judgment calls and record why.
-- One session per branch (`claude/<sNN>-<slug>` or the one assigned). Touch only
-  what the card names; mention adjacent dead code instead of fixing it. Open the
-  spec and contracts only when the card names them.
-- Fixtures whose freshness matters pin their clock (`now`). Verify with
-  evidence, compile/import included; never summarize a run you did not see end.
-
-### Token discipline
-
-- Ledgers by section, never whole: `docs/ROADMAP.md` §1, §2.1 and the one card;
-  `changelog.md` first 80 lines. Big references (`DFS_SYSTEM_GREENFIELD_SPEC.md`,
-  `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md`) and the archive directories are
-  grepped, never read.
-- Never Read a standings export, salary CSV, run artifact or test fixture into
-  context; print a schema-level summary with a script. `.claude/settings.json`
-  denies `Read` on the inbox for this reason.
-- A wide multi-file sweep, when you need the conclusion and not the text:
-  `explorer`. Pre-close-out diff review: `reviewer`. Both answer from their own context.
-- `git diff --stat` before `git diff`; one session per conversation, then `/clear`.
-
-### Repo etiquette and gotchas
-
-- `docs/ROADMAP.md`, `changelog.md`, `IMPLEMENTATION_STATUS.md` and `backlog.md`
-  are LF (`tests/test_roadmap_queue.py`): match endings, append under existing
-  headings, never delete history. Status: `Pending`, `In Progress`, `Complete`,
-  `Deferred`.
-- Every structured input has a versioned contract in `docs/DATA_CONTRACTS.md`;
-  a schema change is a new version, v1 is never mutated. Objective, allocation
-  and scoring rules are registered `*_version`s with `does_not_establish` text;
-  `OPTIMAL` is scoped to the reported bank; sample size is declared, not inferred.
-- `data/standings/inbox/`, `data/runs/**/inputs/`, and
-  `tests/fixtures/supplied/` are immutable snapshots; a new run is a new folder.
-- No known failing test; the session-start digest carries the last recorded
-  suite line. The one skip is the junction test (symlink permission on Windows).
-  Any other failure or skip is a finding, not a known issue: `.claude/rules/tests.md`.
-- When Ben corrects the same thing twice, add the rule here or to
-  `.claude/rules/`, and say that you did.
-- When compacting, preserve the session ID, the branch, the list of modified
-  files, the last full-suite result line, and every open `[BEN: ...]` flag.
-- Keep this file under 200 lines and universal. Procedures go to `docs/` or
-  `.claude/skills/`; rules for one part of the tree go to `.claude/rules/` with
-  `paths:` frontmatter; anything that must happen every time goes to
-  `.claude/settings.json` permissions or hooks, not prose.
+- Claude owns every procedure, rule, skill, script, test and doc outside this
+  file's permanent boundaries, release truths and lock-clock bounds, and changes
+  them on its own authority, merging on green. Day-to-day procedure lives in
+  `.claude/rules/working.md` for that reason.
+- When a procedural rule blocks a clearly better result and no permanent
+  boundary is at stake, do the better thing, say so, and fix the rule in the
+  same or the next pull request. Getting stuck on procedure is a defect.
+- After every slate or session, write down what would have made it better and
+  make the change: a new script, a sharper rule, dead procedure removed.
+- Search, read widely and try unconventional constructions; label research and
+  judgment as such in the handoff.
+- Changing the boundaries themselves still goes through Ben (`ben-review`).
