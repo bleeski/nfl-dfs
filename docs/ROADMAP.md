@@ -17,18 +17,22 @@ full code review and a sweep of every plan, brief, archive and ledger.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 23 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S23`, on the branch your session was assigned or a new `claude/s23-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 23e exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S23e`, on the branch your session was assigned or a new `claude/s23e-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
 On 2026-09-25 a full code review (`docs/critiques/Code_Review_2026-09-25.md`)
 and a sweep of every plan, brief, retrospective, archive and ledger were
 consolidated into this board, and Ben re-prioritized it by expected winnings
-(§2.8). Session 38 closed on 2026-09-27; Sessions 23, 21 and 17 are startable.
-Take 23 first: the hygiene bounds and the share cap, the one construction
-change with measured lift in every graded game. Session 21 (the prior-model
-unit mismatch, now confirmed) shares no file with 23, so a second instance may
-take it. Session 17 needs only a cloud session and O1 for its acceptance.
-Sessions 23b, 23c and 23d (Ben's game theses and contest-aware assignment)
-follow 23 and run one at a time.
+(§2.8). Session 23 closed on 2026-09-27 (the Showdown half of the hygiene
+bounds and the share cap); its Classic half split to Session 23e at the
+card's own named seam, and 23e is now first. Sessions 21, 17, 23b and 23d also
+became startable when 23 closed (each depended only on Session 23, not on its
+Classic half). Session 21 (the prior-model unit mismatch, now confirmed)
+shares no file with 23e, so a second instance may take it. Session 17 needs
+only a cloud session and O1 for its acceptance. Session 23b (Ben's game
+theses) needs only Showdown's half, already Complete, but shares
+`relaxation.py` and `docs/DATA_CONTRACTS.md` with 23e; run them one at a time,
+or in separate worktrees with 23e's Classic-only edits merged first. Session
+23c still waits on 23b.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -1096,6 +1100,8 @@ Every session follows this protocol, and the cards only add to it:
   hygiene pass at rung 0, and infeasible bounds fail closed naming the rung;
   if those bytes are still not in the repo, prove it on the supplied Classic
   fixture instead and repeat the `[BEN: ...]` flag. Suite green.
+
+#### Session 21: prior-model triage
 
 - **Depends on.** Nothing. Startable now; no file overlaps Session 23.
 - **Scope.**
