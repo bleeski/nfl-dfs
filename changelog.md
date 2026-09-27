@@ -90,6 +90,48 @@ Found, not fixed (slate session, no code change):
   were unselectable with the package supplied. Deshaun Watson (CLE) was
   excluded as missing history.
 
+Superseded before lock by two instructions from Ben (the 25-row file above was
+never the final handoff):
+
+- **Leave out `NFL FREE 200-Player` (contest 196114372, Entry 5272123785).**
+  Rebuilt at 24 with the same limits (exposure 9 of 24);
+  `DK_REVIEW_ENTRY_wk3_fallback_24.csv`, `9fc6a8b9...4c77`. That row is left
+  blank on purpose, so the writer and QA exit 3 naming it; nothing else is
+  unfilled.
+- **Odds and a nor'easter.** Ben supplied an ESPN page of DraftKings lines as a
+  PDF (`6b7ad115...e692`; its text layer carries only the open column, the
+  current columns were read from a render). Current totals and spreads equal
+  the frozen nfldata lines except KC -10 and CAR -2.5, so implied totals moved
+  by a quarter point at most. The open-to-current moves locate the weather:
+  TEN@NYG 45.5 to 37.5, SEA@WAS 46.5 to 40.5, CIN@PIT 47.5 to 42.5, while
+  LAC@BUF rose 2 and NE@JAX 1; part of the first two is QB news (Jaxson Dart
+  IR, Jayden Daniels OUT). The NOAA WPC discussion Ben linked was not fetched:
+  `wpc.ncep.noaa.gov` is not in `sources.py`'s allowlist. No weather state was
+  written anywhere; every outdoor game stays `WEATHER_UNOBSERVED`.
+- **Final file: five theses, 24 lineups**, built by calling
+  `build_classic_portfolio.py` per thesis (three seeds each) on the gated
+  scores and selecting across all candidates under one cap set: exposure 7 of
+  24, overlap 5, unique rosters, at most two lineups per QB within a thesis.
+  Core with a storm tilt (8: TEN/NYG/SEA/WAS QB and pass catchers x0.80, RB
+  x1.05, DST x1.15; CIN/PIT passing x0.92), storm-proof indoor stacks with a
+  storm-team DST (4), storm-bust stacks in the storm games (4), underdog flip
+  with swapped totals for LAC, ARI, NE and PIT (4), and priors-wrong ranked on
+  DraftKings salary with flat totals and the 12 most-used players faded (4).
+  The multipliers and swapped totals are construction choices, not model
+  values; no engine score or exclusion changed.
+  `DK_REVIEW_ENTRY_wk3_theses_24_v4.csv`, `7ddac0e2...9d95`, 0 bytes changed
+  outside the roster cells. QA with `--max-exposure 7 --max-overlap 5
+  --min-salary 48500 --backup-pairs`: Tier 1 no validity failure and no limit
+  exceeded, the one intended blank row. Tier 2: max exposure 7 of 24 (Henry,
+  Achane, Pickens, Gibbs, McCaffrey), top-3 union 16 of 24, 102 distinct
+  players, overlap max 5 and mean 0.89, anti-correlation 0, QB pass-catcher
+  and bring-back 24 of 24, 15 QBs across 10 games. `Q` players: Zay Flowers 2,
+  Jaylen Warren 2.
+- One construction slip, caught before handoff: `build_classic_portfolio.py`
+  refuses an existing `--out`, and the selection script read the earlier file
+  when it did, so two re-runs silently reused the first candidates. The final
+  run used fresh paths and checks the builder's exit code.
+
 ### 2026-09-27: structural hygiene and the share cap, Showdown half (Session 23)
 
 Branch `claude/s23-structural-hygiene-izyvah`. Chunk P2; standings findings
