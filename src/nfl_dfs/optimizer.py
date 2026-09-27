@@ -250,13 +250,17 @@ class LineupOptimizer:
         """Bind selected-QB teammate or opponent skill-player counts.
 
         ``kind`` is ``PASS_CATCHER`` (same-team WR/TE) or ``BRINGBACK``
-        (opponent RB/WR/TE).  Exactly one Classic QB is already enforced, so
-        one pair of conditional linear rows per QB expresses the family without
-        introducing a second optimizer or heuristic post-filter.
+        (opponent RB/WR/TE). One pair of conditional linear rows per QB row
+        expresses the family without introducing a second optimizer or
+        heuristic post-filter. Originally Classic-only (one QB row per
+        lineup); SD3 also uses ``PASS_CATCHER`` for Showdown's
+        `pass_catchers_with_rostered_qb` structural bound (Session 23), where
+        a QB has a CPT row and a FLEX row and the same pair of rows is added
+        for each, so the bound holds whichever role he is rostered in.
+        ``BRINGBACK`` (opponent team) is Classic-only in practice: Showdown's
+        two-team pool makes "opponent" just the other team's roster.
         """
 
-        if self.slate.mode is not EngineMode.CLASSIC:
-            raise ValueError("QB correlation bounds require a Classic slate")
         if kind not in {"PASS_CATCHER", "BRINGBACK"}:
             raise ValueError(f"unsupported QB correlation kind: {kind}")
         if (
@@ -300,6 +304,46 @@ class LineupOptimizer:
                     qb_index: big_m - float(maximum),
                 },
             )
+
+    def add_salary_band(self, *, minimum: int | None = None, maximum: int | None = None) -> None:
+        """Bound total roster salary to `[minimum, maximum]` (Session 23: `salary_left`).
+
+        A dedicated row, independent of `set_salary_floor`'s reusable one; call
+        once per optimizer instance, not per solve.
+        """
+
+        if minimum is not None and (isinstance(minimum, bool) or minimum < 0):
+            raise ValueError("salary band minimum must be a non-negative integer or None")
+        if maximum is not None and (isinstance(maximum, bool) or maximum < 0):
+            raise ValueError("salary band maximum must be a non-negative integer or None")
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError("salary band minimum must not exceed maximum")
+        lower = -highspy.kHighsInf if minimum is None else float(minimum)
+        upper = highspy.kHighsInf if maximum is None else float(maximum)
+        self._add_row(lower, upper, {i: float(player.salary) for i, player in enumerate(self.players)})
+
+    def add_no_offense_with_dst(self) -> None:
+        """No other selected row may share a selected DST's team (Session 23).
+
+        Pairwise `x_dst + x_other <= 1` rows, one per (DST row, other-team-row)
+        pair; a person already selected at most once across roles (`_build`)
+        makes a DST's own two rows mutually exclusive on their own.
+        """
+
+        for team in sorted({player.team for player in self.players}):
+            dst_indices = [
+                i for i, player in enumerate(self.players)
+                if player.team == team and player.position == "DST"
+            ]
+            if not dst_indices:
+                continue
+            other_indices = [
+                i for i, player in enumerate(self.players)
+                if player.team == team and player.position != "DST"
+            ]
+            for dst_index in dst_indices:
+                for other_index in other_indices:
+                    self._add_row(-highspy.kHighsInf, 1.0, {dst_index: 1.0, other_index: 1.0})
 
     def add_person_overlap_limit(self, roster: Iterable[str], max_overlap: int) -> None:
         """Cap how many of a previous lineup's people may reappear in the next.

@@ -13,7 +13,7 @@ import json
 import math
 import time
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Callable, Mapping, Sequence
 
@@ -25,9 +25,14 @@ from .hashing import sha256_bytes
 from .lineups import roster_canonical_key, validate_lineup
 from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
 from .portfolio_policy import (
+    OPEN_RANGE,
+    OPEN_STRUCTURAL_BOUNDS,
     EffectivePersonLimit,
     NormalizedPortfolioPolicy,
+    StructuralBoundRange,
+    StructuralBounds,
     canonical_decimal_json_bytes,
+    structural_bound_violations,
 )
 
 
@@ -234,6 +239,7 @@ class PortfolioAudit:
     captain_counts: tuple[tuple[str, int], ...]
     pairwise_person_overlap: tuple[tuple[str, str, int], ...]
     hashes: tuple[tuple[str, str], ...]
+    max_person_share: Mapping[str, object] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -253,6 +259,7 @@ class PortfolioAudit:
                 {"entry_id_a": left, "entry_id_b": right, "people": overlap}
                 for left, right, overlap in self.pairwise_person_overlap
             ],
+            "max_person_share": dict(self.max_person_share),
             "hashes": dict(self.hashes),
             "checks_run": [
                 "EXACT_ENTRY_ID_SEQUENCE_AND_COVERAGE",
@@ -264,6 +271,7 @@ class PortfolioAudit:
                 "CAPTAIN_MAXIMA",
                 "CANONICAL_UNIQUENESS",
                 "EVERY_PAIRWISE_UNDERLYING_PERSON_OVERLAP",
+                "STRUCTURAL_HYGIENE_BOUNDS",
                 "SALARY_ENTRY_SOURCE_POLICY_NORMALIZED_POLICY_ASSIGNMENT_HASHES",
                 "SELECTOR_SUMMARY_RECONCILIATION",
             ],
@@ -275,6 +283,58 @@ def _finite_positive(value: float, label: str) -> float:
     if not math.isfinite(number) or number <= 0:
         raise ValueError(f"{label} must be positive and finite")
     return number
+
+
+def _apply_structural_bounds(
+    optimizer: LineupOptimizer, slate: SlateContract, bounds: StructuralBounds
+) -> None:
+    """Bind `bounds` as real MILP rows on `optimizer` (Session 23), not a post-filter.
+
+    `qb_count`, `kicker_count` and `dst_count` are plain selected-count bounds
+    over a position; `salary_left` is a total-salary band; `pass_catchers_
+    with_rostered_qb` reuses the Classic QB-correlation big-M rows (per QB
+    row, whichever role he is rostered in); `offense_against_own_dst` is
+    pairwise "not both" rows between every DST row and every other same-team
+    row. An open (`None`) side never adds a row, matching v1's fully-open
+    default.
+    """
+
+    if bounds.qb_count != OPEN_RANGE:
+        optimizer.add_selected_count_bounds(
+            [row.dk_id for row in slate.players if row.position == "QB"],
+            minimum=bounds.qb_count.minimum or 0,
+            maximum=bounds.qb_count.maximum,
+        )
+    if bounds.kicker_count_maximum is not None:
+        optimizer.add_selected_count_bounds(
+            [row.dk_id for row in slate.players if row.position == "K"],
+            maximum=bounds.kicker_count_maximum,
+        )
+    if bounds.dst_count_maximum is not None:
+        optimizer.add_selected_count_bounds(
+            [row.dk_id for row in slate.players if row.position == "DST"],
+            maximum=bounds.dst_count_maximum,
+        )
+    if bounds.salary_left != OPEN_RANGE:
+        salary_minimum = (
+            None if bounds.salary_left.maximum is None else slate.salary_cap - bounds.salary_left.maximum
+        )
+        salary_maximum = (
+            None if bounds.salary_left.minimum is None else slate.salary_cap - bounds.salary_left.minimum
+        )
+        optimizer.add_salary_band(minimum=salary_minimum, maximum=salary_maximum)
+    if bounds.pass_catchers_with_rostered_qb != OPEN_RANGE:
+        optimizer.add_classic_qb_correlation_bounds(
+            kind="PASS_CATCHER",
+            minimum=bounds.pass_catchers_with_rostered_qb.minimum or 0,
+            maximum=(
+                bounds.pass_catchers_with_rostered_qb.maximum
+                if bounds.pass_catchers_with_rostered_qb.maximum is not None
+                else 5
+            ),
+        )
+    if bounds.offense_against_own_dst:
+        optimizer.add_no_offense_with_dst()
 
 
 class _StratifiedEnumerator:
@@ -299,6 +359,7 @@ class _StratifiedEnumerator:
         total_budget: float,
         per_solve_budget: float,
         forbidden_rosters: Sequence[tuple[str, ...]] = (),
+        structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS,
     ) -> None:
         self.slate = slate
         self.objective = objective
@@ -306,6 +367,10 @@ class _StratifiedEnumerator:
         # The template's prefilled rosters (Session 11): cut from every solve and
         # held as already seen, so no candidate the joint solve sees repeats one.
         self.forbidden = tuple(tuple(map(str, roster)) for roster in forbidden_rosters)
+        # Session 23: a legal DraftKings roster the policy's structural bounds
+        # still reject never enters the bank; it is no-good'd and the search
+        # continues, the same way an already-seen candidate is.
+        self.structural_bounds = structural_bounds
         self.candidate_limit = candidate_limit
         self.total_budget = total_budget
         self.per_solve_budget = per_solve_budget
@@ -358,6 +423,7 @@ class _StratifiedEnumerator:
             excluded_ids=tuple(sorted(set(self.excluded_ids) | {str(x) for x in extra_excluded_ids})),
             time_limit_seconds=min(self.total_budget, self.per_solve_budget),
         )
+        _apply_structural_bounds(optimizer, self.slate, self.structural_bounds)
         for dk_id in required_ids:
             optimizer.add_required_row(dk_id)
         if seed_no_goods:
@@ -428,6 +494,11 @@ class _StratifiedEnumerator:
                 terminal = "ILLEGAL_SOLVER_ROSTER"
                 break
             roster = tuple(result.roster)
+            # The policy's structural hygiene bounds (Session 23) are MILP rows
+            # on `optimizer` itself (`_apply_structural_bounds` above), not a
+            # post-solve filter: every roster the solver returns already
+            # satisfies them, the same way every other policy cap does. The
+            # independent audit re-verifies them from the exact roster IDs.
             people = frozenset(self.by_id[dk_id].underlying_id for dk_id in roster)
             captain = self.by_id[roster[0]].underlying_id
             canonical = validation.lineup.canonical_key
@@ -602,6 +673,7 @@ def build_policy_candidate_bank(
         total_budget=total_budget,
         per_solve_budget=per_solve_budget,
         forbidden_rosters=forbidden_rosters,
+        structural_bounds=policy.structural_bounds if policy is not None else OPEN_STRUCTURAL_BOUNDS,
     )
     if policy is None:
         enumerator.enumerate(kind="fill", target=candidate_limit)
@@ -977,6 +1049,7 @@ class _AuditedPolicyControls:
     require_unique_lineups: bool
     max_pairwise_person_overlap: int
     person_limits: tuple[tuple[str, int, int], ...]
+    structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS
 
 
 def _strict_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -1004,6 +1077,37 @@ def _integer_at(value: object, label: str, *, minimum: int = 0) -> int:
     return value
 
 
+def _optional_integer_at(value: object, label: str, *, minimum: int = 0) -> int | None:
+    if value is None:
+        return None
+    return _integer_at(value, label, minimum=minimum)
+
+
+def _structural_bounds_at(value: object, label: str) -> StructuralBounds:
+    """Strictly reparse `controls.structural_bounds` (Session 23); always present."""
+
+    item = _mapping_at(value, label)
+
+    def _range(key: str) -> StructuralBoundRange:
+        sub = _mapping_at(item.get(key), f"{label}.{key}")
+        return StructuralBoundRange(
+            _optional_integer_at(sub.get("minimum"), f"{label}.{key}.minimum"),
+            _optional_integer_at(sub.get("maximum"), f"{label}.{key}.maximum"),
+        )
+
+    qb_count = _range("qb_count")
+    pass_catchers = _range("pass_catchers_with_rostered_qb")
+    salary_left = _range("salary_left")
+    kicker_count = _optional_integer_at(item.get("kicker_count"), f"{label}.kicker_count")
+    dst_count = _optional_integer_at(item.get("dst_count"), f"{label}.dst_count")
+    offense_against_own_dst = item.get("offense_against_own_dst")
+    if not isinstance(offense_against_own_dst, bool):
+        raise ValueError(f"{label}.offense_against_own_dst must be boolean")
+    return StructuralBounds(
+        qb_count, pass_catchers, salary_left, kicker_count, dst_count, offense_against_own_dst
+    )
+
+
 def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
     """Strictly reparse only the normalized controls the audit must enforce."""
 
@@ -1016,7 +1120,7 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
     root = _mapping_at(payload, "normalized policy")
     if canonical_decimal_json_bytes(root) != raw:
         raise ValueError("normalized policy bytes are not canonical")
-    if root.get("schema_version") != "nfl_showdown_portfolio_policy_normalized_v1":
+    if root.get("schema_version") != "nfl_showdown_portfolio_policy_normalized_v2":
         raise ValueError("normalized policy schema_version is unsupported")
 
     bindings = _mapping_at(root.get("bindings"), "bindings")
@@ -1073,12 +1177,14 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
         person_limits
     ):
         raise ValueError("effective.people contains duplicate underlying IDs")
+    structural_bounds = _structural_bounds_at(controls.get("structural_bounds"), "controls.structural_bounds")
     return _AuditedPolicyControls(
         salary_sha256=salary_sha256,
         entry_ids=entry_ids,
         require_unique_lineups=require_unique,
         max_pairwise_person_overlap=overlap,
         person_limits=tuple(person_limits),
+        structural_bounds=structural_bounds,
     )
 
 
@@ -1221,6 +1327,9 @@ def audit_policy_assignments(
     people_by_entry: dict[str, frozenset[str]] = {}
     combined: Counter[str] = Counter()
     captains: Counter[str] = Counter()
+    structural_bounds = (
+        audited_policy.structural_bounds if audited_policy is not None else policy.structural_bounds
+    )
     for entry, roster in normalized_pairs:
         validation = validate_lineup(slate, roster)
         if not validation.valid or validation.lineup is None:
@@ -1229,6 +1338,14 @@ def audit_policy_assignments(
                 for detail in validation.errors
             )
             continue
+        # Session 23: every structural hygiene bound recomputed from the exact
+        # roster IDs, never trusted from the generator's own claims.
+        for violation in structural_bound_violations(slate, roster, structural_bounds):
+            problems.append(
+                _audit_problem(
+                    "PORTFOLIO_AUDIT_STRUCTURAL_BOUND_VIOLATED", f"entry={entry}:bound={violation}"
+                )
+            )
         people = frozenset(by_id[dk_id].underlying_id for dk_id in roster)
         captain = by_id[roster[0]].underlying_id
         canonical.append((entry, validation.lineup.canonical_key))
@@ -1326,6 +1443,17 @@ def audit_policy_assignments(
                     )
                 )
 
+    # `max_person_share`: the portfolio-wide share cap Sessions 23b and 23c
+    # reuse (docs/RUNBOOK.md, R34). Not a second gate: it is exactly the
+    # already-audited combined-person maximum, reported with the person(s)
+    # named for the review.
+    denominator = len(people_by_entry)
+    top_combined = max(combined.values(), default=0)
+    max_person_share = {
+        "share_percentage": round(100 * top_combined / denominator, 3) if denominator else 0.0,
+        "entries": denominator,
+        "people": sorted(person for person, count in combined.items() if count == top_combined),
+    }
     return PortfolioAudit(
         problems=tuple(problems),
         entry_ids=actual_entries,
@@ -1334,4 +1462,5 @@ def audit_policy_assignments(
         captain_counts=tuple(sorted(captains.items())),
         pairwise_person_overlap=tuple(overlaps),
         hashes=tuple(sorted(actual_hashes.items())),
+        max_person_share=max_person_share,
     )

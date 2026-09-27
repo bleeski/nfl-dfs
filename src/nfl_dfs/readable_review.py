@@ -177,7 +177,7 @@ def _parse_normalized_policy(
         )
         return {}
     root = _mapping(payload, "normalized_policy", problems)
-    if root.get("schema_version") != "nfl_showdown_portfolio_policy_normalized_v1":
+    if root.get("schema_version") != "nfl_showdown_portfolio_policy_normalized_v2":
         problems.append("READABLE_REVIEW_NORMALIZED_POLICY_SCHEMA_MISMATCH")
     bindings = _mapping(root.get("bindings"), "normalized_policy.bindings", problems)
     policy_entries = tuple(str(value) for value in _sequence(bindings.get("entry_ids"), "policy.entry_ids", problems))
@@ -301,6 +301,19 @@ def _unbound_rows_section(
         "effective_pairwise_person_overlap": effective,
         "pairwise_overlap": pairwise,
         "person_exposure": dict(sorted(exposure.items())),
+    }
+
+
+def _spread_summary(counts: Counter[str], denominator: int) -> dict[str, object]:
+    """How concentrated `counts` is over `denominator` rows, the person(s) named."""
+
+    top = max(counts.values(), default=0)
+    share = round(100 * top / denominator, 3) if denominator else 0.0
+    return {
+        "distinct_people": len(counts),
+        "counts": dict(sorted(counts.items())),
+        "max_share_percentage": share,
+        "max_share_people": sorted(person for person, count in counts.items() if count == top),
     }
 
 
@@ -883,6 +896,15 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
     sections.append(
         f'<p>Canonical uniqueness: {_escape(exposure.get("canonical_uniqueness"))}. '
         f'Configured/effective overlap maximum: {_escape(exposure.get("configured_pairwise_person_overlap"))} / {_escape(exposure.get("effective_pairwise_person_overlap"))}.</p>'
+    )
+    captain_spread = _mapping(exposure.get("captain_spread"), "exposure.captain_spread", [])
+    max_share = _mapping(exposure.get("max_person_share"), "exposure.max_person_share", [])
+    sections.append(
+        f'<p>Captain spread: {_escape(captain_spread.get("distinct_people"))} distinct captains; '
+        f'max captain share {_escape(captain_spread.get("max_share_percentage"))}% '
+        f'({_escape(", ".join(captain_spread.get("max_share_people", []) or []))}). '
+        f'max_person_share: {_escape(max_share.get("max_share_percentage"))}% '
+        f'({_escape(", ".join(max_share.get("max_share_people", []) or []))}).</p>'
     )
     overlap_rows = [
         (row.get("entry_id_a"), row.get("entry_id_b"), row.get("actual_people"), row.get("maximum_people"))
@@ -1514,6 +1536,15 @@ def create_readable_review(
             "configured_pairwise_person_overlap": configured_overlap,
             "effective_pairwise_person_overlap": effective_overlap,
             "pairwise_overlap": pairwise,
+            # Review S7: a default captain cap alone does not show the resulting
+            # spread; this column does, recomputed from the same byte-reparsed
+            # rosters as `people` above, never from the generator's own claims.
+            "captain_spread": _spread_summary(captain_counts, denominator),
+            # `max_person_share`: the one portfolio-wide share cap Sessions 23b
+            # and 23c reuse (docs/DATA_CONTRACTS.md). Reported here from the
+            # combined-person counts already computed above; the audited cap
+            # itself is `people[*].combined_max_count`.
+            "max_person_share": _spread_summary(combined_counts, denominator),
         },
         "unbound_rows": unbound_payload,
         "pool_coverage": (

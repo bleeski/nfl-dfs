@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Generate an nfl_showdown_portfolio_policy_v1 artifact from DK salary + entries bytes.
+"""Generate an nfl_showdown_portfolio_policy_v2 artifact from DK salary + entries bytes.
 
 Twin of scripts/make_classic_policy.py. Written 2026-09-14 per the
 SHOWDOWN_RETROSPECTIVE_2026-09-13 recommendation: the policy schema was guessed
-wrong by hand on the prior slate and cost ~3 minutes under a lock clock.
+wrong by hand on the prior slate and cost ~3 minutes under a lock clock. v2
+(Session 23, P2): per-lineup structural hygiene bounds from the four-game-stable
+set in `docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md` §5.4, §7,
+§8.1 C and §8.2 H/I, plus a real default Captain cap (code review S7). v1 is
+never mutated; a hand-authored v1 policy still validates.
 
 Emits absolute paths, exact-decimal fractions in FRACTION_0_TO_1, the complete
 person identity map derived from the salary bytes, and every fillable Entry ID
@@ -13,12 +17,26 @@ fillable blank row. run-slate fills the rows the policy leaves unbound with
 sequential Showdown after the policy's joint solve, and every fraction's
 denominator is the bound rows.
 
-RUNGS (Session 10). `--rung 0` is the policy the flags describe. Rungs 1 to 3
-are `nfl_dfs.relaxation.SHOWDOWN_RUNGS` applied to it, each the loosest of the
-policy and the rung, never tighter: 1 widens every capped Captain fraction to
-at least 0.25 (zeroed Captains stay zero); 2 lets zeroed Captains captain and
-widens Captain caps to at least 0.5; 3 drops every exposure cap and raises the
-overlap cap to at least 5. Rung 4 writes nothing: run-slate without
+DEFAULTS (Session 23). One QB, one to two pass catchers with him, $1 to $500
+left, at most one kicker and one DST, no offense (any position, including the
+rostered QB) sharing a rostered DST's team. Kickers and DSTs stay in the
+combined pool (`--captain-zero-pos` only zeroes their Captain fraction, never
+excludes them): kickers were in 45%/68% and defenses 68%/82% of the top 1% in
+the graded games. `--combined-default` (this session's name for
+`max_person_share`) defaults to 0.80, the field median. `--captain-default`
+now defaults to 0.4 instead of requiring an explicit value every time (review
+S7: an unbounded default let the captain strata and the summed-points
+objective put every entry under one Captain).
+
+RUNGS (Session 10, extended Session 23). `--rung 0` is the policy the flags
+describe. Rungs 1 to 3 are `nfl_dfs.relaxation.SHOWDOWN_RUNGS` applied to it,
+each the loosest of the policy and the rung, never tighter: 1 widens every
+capped Captain fraction to at least 0.25 (zeroed Captains stay zero) and drops
+the salary band; 2 lets zeroed Captains captain, widens Captain caps to at
+least 0.5, and additionally drops the pass-catcher band, the kicker/DST caps
+and `offense_against_own_dst`; 3 drops every exposure cap (which drops
+`max_person_share` too), raises the overlap cap to at least 5, and
+additionally drops the QB-count band. Rung 4 writes nothing: run-slate without
 --portfolio-policy-json. `--exclude` and uniqueness are never relaxed (R29).
 `run-slate` walks these rungs itself when SD3 fails on a trigger, after trying
 a re-sized bank first; this flag writes one by hand.
@@ -97,11 +115,14 @@ def main(argv=None):
     ap.add_argument('--salaries', required=True)
     ap.add_argument('--entries', required=True)
     ap.add_argument('--out', required=True)
-    ap.add_argument('--combined-default', type=float, required=True)
-    ap.add_argument('--captain-default', type=float, required=True)
+    ap.add_argument('--combined-default', type=float, default=0.80,
+                    help='max_person_share default (Session 23); 0.80 is the field median')
+    ap.add_argument('--captain-default', type=float, default=0.4,
+                    help='default Captain fraction cap (review S7); was required with no default')
     ap.add_argument('--max-overlap', type=int, default=4)
     ap.add_argument('--captain-zero-pos', default='K,DST',
-                    help='comma-separated positions forced to captain fraction 0')
+                    help='comma-separated positions forced to captain fraction 0 (they stay in the'
+                         ' combined pool: never excluded, only barred from captaining by default)')
     ap.add_argument('--captain-zero-below-flex-salary', type=int, default=0,
                     help='force captain fraction 0 for anyone whose FLEX salary is <= this')
     ap.add_argument('--combined-override', action='append', default=[],
@@ -110,6 +131,19 @@ def main(argv=None):
                     help='UNDERLYING_ID=FRACTION (repeatable)')
     ap.add_argument('--exclude', action='append', default=[],
                     help='UNDERLYING_ID to exclude entirely (repeatable)')
+    ap.add_argument('--qb-count-min', type=int, default=1)
+    ap.add_argument('--qb-count-max', type=int, default=1)
+    ap.add_argument('--pass-catchers-min', type=int, default=1,
+                    help='minimum WR/TE on the rostered QB\'s team (0 QBs rostered is unaffected)')
+    ap.add_argument('--pass-catchers-max', type=int, default=2)
+    ap.add_argument('--salary-left-min', type=int, default=1)
+    ap.add_argument('--salary-left-max', type=int, default=500)
+    ap.add_argument('--kicker-count-max', type=int, default=1)
+    ap.add_argument('--dst-count-max', type=int, default=1)
+    ap.add_argument('--offense-against-own-dst', dest='offense_against_own_dst',
+                    action='store_true', default=True,
+                    help='forbid any position sharing a rostered DST\'s team (default on)')
+    ap.add_argument('--no-offense-against-own-dst', dest='offense_against_own_dst', action='store_false')
     ap.add_argument('--rung', type=int, default=0, choices=(0, 1, 2, 3, 4),
                     help='relax the policy the flags describe to this rung (nfl_dfs.relaxation)')
     ap.add_argument('--entry-id', action='append', default=[],
@@ -151,7 +185,7 @@ def main(argv=None):
         excl.append(ident(people[uid]))
 
     pol = {
-        'schema_version': 'nfl_showdown_portfolio_policy_v1',
+        'schema_version': 'nfl_showdown_portfolio_policy_v2',
         'bindings': {
             'salary_sha256': sha256(sal),
             'game_id': game_id(sal),
@@ -171,6 +205,16 @@ def main(argv=None):
             'excluded_people': excl,
             'max_pairwise_person_overlap': a.max_overlap,
             'require_unique_lineups': True,
+            'structural_bounds': {
+                'qb_count': {'minimum': a.qb_count_min, 'maximum': a.qb_count_max},
+                'pass_catchers_with_rostered_qb': {
+                    'minimum': a.pass_catchers_min, 'maximum': a.pass_catchers_max,
+                },
+                'salary_left': {'minimum': a.salary_left_min, 'maximum': a.salary_left_max},
+                'kicker_count': a.kicker_count_max,
+                'dst_count': a.dst_count_max,
+                'offense_against_own_dst': a.offense_against_own_dst,
+            },
         },
     }
     out = os.path.abspath(a.out)
@@ -197,6 +241,7 @@ def main(argv=None):
         'combined_overrides_integer': {u: imax(f) for u, f in sorted(comb_ovr.items())},
         'captain_overrides_nonzero_integer': {u: imax(f) for u, f in sorted(capt_ovr.items()) if f > 0},
         'max_pairwise_person_overlap': a.max_overlap,
+        'structural_bounds': pol['controls']['structural_bounds'] if not a.rung else None,
         'rung': a.rung,
         **({'note': 'the integer caps above are the flags (rung 0); written_controls is the relaxed policy'}
            if a.rung else {}),
@@ -217,6 +262,7 @@ def _written_controls(path):
         'captain_default_fraction': text(captain['default_fraction']),
         'captain_zeroed': sorted(o['underlying_id'] for o in captain['overrides'] if o['fraction'] == 0),
         'max_pairwise_person_overlap': controls['max_pairwise_person_overlap'],
+        'structural_bounds': controls.get('structural_bounds'),
     }
 
 
@@ -225,7 +271,8 @@ def relaxed_document(document, salary_path, entry_path, rung):
 
     from nfl_dfs.dk import parse_salaries
     from nfl_dfs.portfolio_policy import (
-        canonical_decimal_json_bytes, portfolio_policy_template, validate_portfolio_policy_bytes)
+        POLICY_SCHEMA_VERSION_V2, canonical_decimal_json_bytes, portfolio_policy_template,
+        validate_portfolio_policy_bytes)
     from nfl_dfs.relaxation import showdown_relaxed_controls
 
     slate = parse_salaries(salary_path)
@@ -235,7 +282,8 @@ def relaxed_document(document, salary_path, entry_path, rung):
     if validation.policy is None:
         sys.exit("RUNG_0_POLICY_INVALID: " + "; ".join(validation.blockers()))
     controls = showdown_relaxed_controls(validation.policy, rung)
-    relaxed = portfolio_policy_template(slate, validation.policy.entry_ids, controls=controls)
+    relaxed = portfolio_policy_template(
+        slate, validation.policy.entry_ids, controls=controls, schema_version=POLICY_SCHEMA_VERSION_V2)
     return canonical_decimal_json_bytes(relaxed) + b"\n"
 
 

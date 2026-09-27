@@ -1,5 +1,63 @@
 # Implementation Status
 
+## Capability added: 2026-09-27 (Session 23, Showdown half)
+
+Structural hygiene bounds and the portfolio-wide share cap for Showdown (P2),
+the one construction change with measured lift in every graded game
+(`docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md` §5.4, §7, §8.1 C,
+§8.2 H/I). Classic's half is Session 23e.
+
+- `portfolio_policy.py` adds `nfl_showdown_portfolio_policy_v2`: an optional
+  `controls.structural_bounds` object (`qb_count`, `pass_catchers_with_
+  rostered_qb`, `salary_left` inclusive ranges; `kicker_count`, `dst_count`
+  nullable maxima; `offense_against_own_dst` Boolean). `v1` is never mutated
+  and still validates unchanged, normalizing with every bound fully open.
+  `structural_bound_violations()` recomputes any of them from exact roster
+  DraftKings IDs.
+- Every bound binds `LineupOptimizer` as a real MILP row (`optimizer.py`:
+  `add_salary_band`, `add_no_offense_with_dst`, both new; `add_selected_
+  count_bounds`, existing, reused for `qb_count`/`kicker_count`/`dst_count`;
+  `add_classic_qb_correlation_bounds`, existing, its Classic-only restriction
+  dropped and now shared for `pass_catchers_with_rostered_qb`) — not a
+  post-solve filter. A first post-filter design (reject a violating roster,
+  no-good it, resolve) timed out at 30s with 0 candidates on a forced
+  DST-captain stratum under three combined bounds on the small synthetic test
+  pool; the MILP rows return the same scenario's full bank in 0.09s.
+- SD4's independent audit (`portfolio_enforcement.py`) recomputes every bound
+  from the exact assigned roster IDs, never from the selector's own claim
+  (`PORTFOLIO_AUDIT_STRUCTURAL_BOUND_VIOLATED`), and reports `max_person_share`
+  (the already-existing `max_combined_person_exposure.default_fraction`, not
+  a new field) with the person(s) named.
+- `readable_review.py` reports `exposure.captain_spread` and `exposure.
+  max_person_share` in both the JSON and the rendered HTML (review S7: a
+  default Captain cap alone doesn't show the resulting spread).
+- `relaxation.py`'s `ShowdownRung`/`SHOWDOWN_RUNGS` fold the brief's relaxable
+  order (salary band, pass-catcher band, K/DST caps, QB count,
+  `max_person_share`) into the existing 3-rung ladder: rung 1 adds the salary
+  band; rung 2 adds the pass-catcher band, the K/DST caps and
+  `offense_against_own_dst`; rung 3 adds the QB-count band (`max_person_share`
+  already dropped there via the pre-existing `uncapped` mechanism).
+- `scripts/make_showdown_policy.py` v2 defaults: one QB, one to two pass
+  catchers with him, $1 to $500 left, at most one kicker and one DST,
+  `offense_against_own_dst=true`; kickers and DSTs stay in the combined pool
+  (only their Captain fraction zeroes by default); `--captain-default` now
+  defaults to 0.4 instead of requiring an explicit value every call.
+- Five new gate codes (alphabetical, class `S`/`P` per the existing family
+  split between a runtime breach and a malformed-input shape), registry
+  re-pinned in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+
+Verified with new unit tests (`test_portfolio_policy.py`, `test_portfolio_
+enforcement.py`, `test_relaxation_controller.py`, `test_lineups_optimizer.py`)
+and a new acceptance test
+(`test_showdown_structural_hygiene_acceptance.py`) proven end to end on the
+two Showdown fixtures the repo has, NE@SEA and DET@BUF (the card's own
+DAL@NYG/DEN@KC bytes are not in the repo, `[BEN: ...]` flag in the Session 23
+card). The full suite green apart from the one expected
+`test_the_quick_start_names_the_first_startable_session` mismatch while this
+session's row was `In Progress`. Not yet: Classic's `salary_left`/
+`offense_against_own_dst`/`max_person_share` (Session 23e); grading the
+rerun against the archived fields (Session 18b).
+
 ## Capability added: 2026-09-26 (Session 38)
 
 Run-path integrity: six defects the 2026-09-25 code review found (V3 to V8)
