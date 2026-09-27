@@ -1085,6 +1085,17 @@ Three things that are not optional:
   leverage model, and mean-max in a large field is chalk. The gate prints this;
   repeat it in the handoff.
 
+The builder's `--scores` comes from a C1 run with `NFL_DFS_DUMP_SCORES=<path>`
+set; C1 takes about 20 seconds. Filter that file before building: measured on
+2026-09-27, it still scored all 65 people the current-role gate had left out
+as `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE`, and the builder keeps anyone
+scored above zero. Remove every person in the run's
+`prior_review_reports.selection.selection.offensive_roles.excluded_by_finding`
+and `material_role_change_exclusions`; the count removed should equal that
+report's `excluded_rows`. The builder's `--status` takes a header-only
+official-status file when no official observation exists, which is not an
+observation of anyone.
+
 Suggested limits, to argue about rather than adopt silently: max exposure ≤ 40%,
 top-3 union ≤ 75%, anti-correlation exactly 0, stacked 100%, bring-back ≥ 70%.
 

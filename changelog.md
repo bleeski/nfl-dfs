@@ -4,6 +4,92 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-27 (slate run): Week 3 main slate Classic, 25 entries, prior-only review
+
+Cloud session, branch `claude/week-three-classic-lineups-fzggt8`.
+`RELEASE_DECISION=DO_NOT_UPLOAD` and `MODEL_STATUS=PRIOR_ONLY` throughout; no
+evidence gate was relaxed and no observation was invented. 13 games, 671
+people, 25 blank reserved entries across 17 contests; lock 13:00 ET (earliest
+kickoff), delivery deadline 12:55 ET (R31).
+
+Inputs, committed under `data/inbox/slates/wk3-classic-2026-09-27/`:
+
+    salary  9085e030800d78f4d3588f71134e3990e7141b2ec59b1f772f5972c5503ad2e8
+    entries 582b502c9e4bdf25c53a50a22d0367e0c968bfd44bca1ae182313707192865f3
+
+Running order and what each step returned:
+
+- `session_probe.py` exit 2: `api.weather.gov`, `api.sleeper.app` and
+  `api.the-odds-api.com` are `EGRESS_BLOCKED` at the organization proxy. The
+  nine outdoor games ran `WEATHER_UNOBSERVED`; BAL@DAL and HOU@IND resolved
+  `ROOF_CLOSED` from venue history, LV@NO and NYJ@DET `INDOOR`.
+- QB depth package from nflverse `depth_charts_2026.csv` through
+  `sources.py` (`NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1`; the proxy CA fails
+  `VERIFY_X509_STRICT`), observed 2026-09-27T12:56:55Z, package
+  `b63dafc4...21d3`.
+- Run `20260927T145947Z-wk3-classic`: baseline published first
+  (`3dc1eb28...3d51`, 25 rows), then `PRIOR_REVIEW_IDENTITY_BLOCKED` on seven
+  available people. Six are spelling variants and one a stale team row, each a
+  unique name, team and position match in the captured
+  `roster_weekly_2026.csv`: Matt/Matthew Hibner `00-0040879`, Joshua/Josh
+  Palmer `00-0036988` (as on 2026-09-17), Mitch/Mitchell Tinsley
+  `00-0038839`, Drew/Andrew Ogletree `00-0037292`, Audric Estime/Estimé
+  `00-0039373`, Nick/Nicholas Singleton `00-0040886`, and Ihmir
+  Smith-Marsette `00-0036635` (ARI in week 2; `players.csv` still says CAR).
+  Resolved through the reviewed-crosswalk path, `DECISION=ACCEPT` with
+  `REVIEWED_PROVIDER_PLAYER_ID` (`identity_reviewed_wk3.csv`,
+  `85318fbd...0a9b`, committed with the inputs), then `priors-freeze`.
+- Run `20260927T150249Z-wk3-classic-r2`, frozen package plus the rung-0 C2
+  policy (bank 2000, QB pass-catcher HARD 25/25, bring-back HARD 18/25,
+  overlap 5, exposure 13). The ladder walked every rung: attempt 0
+  `CANDIDATE_BANK_TIMEOUT` at 254 of 2000 candidates in 1120 s, then
+  `INCOMPLETE_BANK_EXHAUSTION` on a 54-candidate bank at the supplied rung and
+  rungs 1 to 3 (49 at rung 3), then rung 4. Ten `RELAXATION_*` records. It
+  delivered C1's export, `cd2a6005...f17d`, 39 minutes into the run.
+- The C1 file is legal and was not good enough: QA Tier 1 PASS, Tier 2
+  De'Von Achane, Jaxon Smith-Njigba and Harold Fannin Jr. in 25 of 25, 27
+  distinct players, QB pass-catcher 0 of 25, bring-back 0 of 25, four
+  DST-against-own-skill lineups.
+- Fallback path (RUNBOOK § The Classic fallback path). A separate C1 run
+  (`20260927T152540Z-wk3-c1`, same frozen package, 19.5 s) dumped the pool
+  scores; 65 role-gated people were still scored above zero, so every person
+  in the run's exclusion report was removed (351, equal to `excluded_rows`),
+  leaving 317 positive. `make_slate_context.py` derived implied totals from
+  the frozen nfldata `games.csv`. `build_classic_portfolio.py` with
+  `--max-exposure 10 --max-overlap 5 --require-bringback --min-salary 48500`
+  built 25 of 25 with no ratchet step; `write_dk_entries.py` filled 25 rows,
+  0 bytes changed outside the roster cells, `ae7690b1...11cd`.
+- `qa_classic_portfolio.py --template --export --backup-pairs` (25 pairs from
+  the depth chart; WAS left out because Jayden Daniels is DraftKings `OUT`)
+  Tier 1 PASS with those limits enforced. Tier 2: max exposure 10 of 25
+  (Christian McCaffrey), top-3 union 17 of 25, 103 distinct players, overlap
+  max 4 and mean 0.83, anti-correlation 0, QB pass-catcher 25 of 25,
+  bring-back 25 of 25, mean implied total of skill slots 24.37, salary 48,500
+  to 50,000. Twelve QBs across nine games; Josh Allen 5, LAC@BUF 6.
+
+Named gaps in the delivered file, none cleared: no official activity file
+(`OFFICIAL_STATUS_REQUIRED`); four DraftKings `Q` players selected (Zay
+Flowers 4, Jaylen Warren 3, Keon Coleman 1, Michael Pittman Jr. 1); nine
+games `WEATHER_UNOBSERVED`; every selected skill player rests on a
+prior-season role; no ownership input, so no leverage model; no payout, prize
+value or field size, and contest names were not read for any of them.
+
+Found, not fixed (slate session, no code change):
+
+- The in-run session probe reports `github.com` and
+  `raw.githubusercontent.com` as `TLS_FAILED` in this container because it
+  does not honor `NFL_DFS_TLS_ALLOW_NONSTRICT_CA`; the same run's nflverse
+  fetches succeeded. A system `python3` probe run by hand reported both
+  reachable.
+- This host measured 4.41 s per Classic candidate against the 0.28 s default
+  that sized the rung-0 bank, so the bank reached 13% of its size and every
+  re-sized bank was too small for the policy.
+- The depth-chart rule gives the rank-1 QB only the attempt share his team's
+  current QBs already held, so a starter who arrived from another team stays
+  gated as a material role change: Malik Willis (MIA) and Geno Smith (NYJ)
+  were unselectable with the package supplied. Deshaun Watson (CLE) was
+  excluded as missing history.
+
 ### 2026-09-27: structural hygiene and the share cap, Showdown half (Session 23)
 
 Branch `claude/s23-structural-hygiene-izyvah`. Chunk P2; standings findings
