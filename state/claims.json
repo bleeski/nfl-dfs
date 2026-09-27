@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "0bb38f29-b999-54fc-867e-a30a0622777f",
+      "branch": "claude/s23-structural-hygiene-izyvah",
+      "chunk": "S23",
+      "claimed_at": "2026-09-27T02:59:28Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
