@@ -112,7 +112,18 @@ hygiene pass at rung 0, kickers and DSTs reach the candidate bank, more than
 one captain, and an infeasible bound (three rostered QBs on a two-team pool)
 fails closed rather than delivering an illegal portfolio.
 
-SUITE_LINE_PLACEHOLDER
+Focused command
+(`sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_classic_policy_
+generator.py tests/test_portfolio_enforcement.py tests/test_relaxation_
+controller.py -x --tb=short`) green, then the full suite:
+`1797 passed, 1 skipped in 374.79s (0:06:14)`. A first full run, before this
+close-out's own §1 rewrite, caught two bugs of its own: the card's insertion
+of Session 23e's card accidentally deleted the `#### Session 21` heading
+(`test_every_session_has_a_card`), and §1 still named Session 23
+(`test_the_quick_start_names_the_first_startable_session`, expected while the
+row was `In Progress`, but this session closed 23 out in the same commit as
+adding 23e, so it needed a real fix, not just the known mismatch); both fixed
+and reverified above.
 
 `sh ./nfl.sh doctor`, `git diff --check` and
 `python3 scripts/check_protected_paths.py` are clean; no protected path

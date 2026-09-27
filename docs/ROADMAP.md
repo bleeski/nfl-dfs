@@ -2040,3 +2040,4 @@ session, because a commit cannot contain its own merge.
 | 2026-09-27 | Session 38 | Merged | `c6c00f3` | PR #74 |
 | 2026-09-27 | Session 23 | Pending to In Progress | `581138d` | Claim pushed on `claude/s23-structural-hygiene-izyvah` |
 | 2026-09-27 | Session 23e | Added as Pending | recorded at Session 23's close-out | Classic structural bounds and the share cap, split from Session 23 at the card's own named seam (Showdown first, Classic second) |
+| 2026-09-27 | Session 23 | In Progress to Complete | `d58e478` | Showdown v2 structural bounds, `max_person_share` reporting, review S7's captain cap/spread, the ladder fold; suite `1797 passed, 1 skipped in 374.79s (0:06:14)` |
