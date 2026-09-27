@@ -85,8 +85,11 @@ from .hashing import sha256_bytes
 from .portfolio_enforcement import scaled_candidate_limit
 from .portfolio_policy import (
     FRACTION_UNIT,
+    POLICY_SCHEMA_VERSION_V2,
     ExposureRule,
     NormalizedPortfolioPolicy,
+    StructuralBoundRange,
+    StructuralBounds,
     canonical_decimal_json_bytes,
     portfolio_policy_template,
     validate_portfolio_policy_file,
@@ -375,8 +378,18 @@ def _merged_rule(rule: StackRule, table: Mapping[str, object] | None, relaxing: 
 class ShowdownRung:
     captain_floor: Decimal | None  # every capped Captain fraction at least this
     lift_zero_captains: bool       # zeroed Captains (K, DST by default) take the floor
-    uncapped: bool                 # no combined or Captain cap at all
+    uncapped: bool                 # no combined or Captain cap at all (drops max_person_share too)
     overlap_floor: int | None      # the pairwise overlap cap at least this
+    # Session 23 (P2): the brief's relaxable order for the new structural
+    # bounds (salary band, pass-catcher band, K/DST caps, QB count), folded
+    # into this same 3-rung ladder. `offense_against_own_dst` isn't named in
+    # the brief's 5-item order, so it drops alongside the K/DST caps it's
+    # adjacent to (recorded in the changelog as a judgment call).
+    drop_salary_band: bool = False
+    drop_pass_catcher_band: bool = False
+    drop_kicker_dst_caps: bool = False
+    drop_qb_count_band: bool = False
+    drop_offense_against_own_dst: bool = False
 
 
 # DAL@NYG retro §6: the bank and the Captain strata bind first (at Captain cap 2
@@ -384,9 +397,17 @@ class ShowdownRung:
 # caps widen first, then zeroed Captains become eligible, then every exposure
 # cap and the tight overlap go. Rung 4 is no policy.
 SHOWDOWN_RUNGS: Mapping[int, ShowdownRung] = {
-    1: ShowdownRung(Decimal("0.25"), False, False, None),
-    2: ShowdownRung(Decimal("0.5"), True, False, None),
-    3: ShowdownRung(None, True, True, 5),
+    1: ShowdownRung(Decimal("0.25"), False, False, None, drop_salary_band=True),
+    2: ShowdownRung(
+        Decimal("0.5"), True, False, None,
+        drop_salary_band=True, drop_pass_catcher_band=True, drop_kicker_dst_caps=True,
+        drop_offense_against_own_dst=True,
+    ),
+    3: ShowdownRung(
+        None, True, True, 5,
+        drop_salary_band=True, drop_pass_catcher_band=True, drop_kicker_dst_caps=True,
+        drop_offense_against_own_dst=True, drop_qb_count_band=True,
+    ),
 }
 SHOWDOWN_DEEP_BANK_PER_ENTRY = 6
 # The least window an SD3 bank and joint solve are given anything in
@@ -436,6 +457,30 @@ def showdown_relaxed_controls(policy: NormalizedPortfolioPolicy, rung: int | Non
         "excluded_people": [person.as_mapping() for person in policy.excluded_people],
         "max_pairwise_person_overlap": overlap,
         "require_unique_lineups": True,
+        "structural_bounds": _showdown_relaxed_structural_bounds(policy.structural_bounds, spec),
+    }
+
+
+def _showdown_relaxed_structural_bounds(
+    bounds: StructuralBounds, spec: ShowdownRung | None
+) -> dict[str, object]:
+    """`bounds` itself when `spec` is `None`; each side the rung drops opened fully."""
+
+    def open_range(range_: StructuralBoundRange, drop: bool) -> dict[str, object]:
+        return {"minimum": None, "maximum": None} if drop else range_.as_mapping()
+
+    drop_salary = spec is not None and spec.drop_salary_band
+    drop_catchers = spec is not None and spec.drop_pass_catcher_band
+    drop_kicker_dst = spec is not None and spec.drop_kicker_dst_caps
+    drop_qb = spec is not None and spec.drop_qb_count_band
+    drop_offense = spec is not None and spec.drop_offense_against_own_dst
+    return {
+        "qb_count": open_range(bounds.qb_count, drop_qb),
+        "pass_catchers_with_rostered_qb": open_range(bounds.pass_catchers_with_rostered_qb, drop_catchers),
+        "salary_left": open_range(bounds.salary_left, drop_salary),
+        "kicker_count": None if drop_kicker_dst else bounds.kicker_count_maximum,
+        "dst_count": None if drop_kicker_dst else bounds.dst_count_maximum,
+        "offense_against_own_dst": False if drop_offense else bounds.offense_against_own_dst,
     }
 
 
@@ -802,7 +847,9 @@ class Ladder:
                                            why=f"the window cannot hold rung {rung}'s bank and joint solve"
                                                f" ({max(0.0, window):.1f} s left, {SD3_MINIMUM_WINDOW_SECONDS:g} s"
                                                " the least)")
-                document = portfolio_policy_template(self.slate, self.entry_ids, controls=controls)
+                document = portfolio_policy_template(
+                    self.slate, self.entry_ids, controls=controls, schema_version=POLICY_SCHEMA_VERSION_V2
+                )
             made = self._materialize(document, rung, bank=False)
             if isinstance(made, _Refused):
                 if made.relaxable:
@@ -909,6 +956,8 @@ class Ladder:
             compare("max_captain_exposure", _rule_summary(before.captain_rule), _rule_summary(after.captain_rule))
             compare("max_pairwise_person_overlap", before.max_pairwise_person_overlap,
                     after.max_pairwise_person_overlap)
+            compare("structural_bounds", before.structural_bounds.as_mapping(),
+                    after.structural_bounds.as_mapping())
         count = len(self.entry_ids)
         compare("candidate_bank.candidate_limit", old.showdown_candidate_limit or scaled_candidate_limit(count),
                 new.showdown_candidate_limit or scaled_candidate_limit(count), "BANK")

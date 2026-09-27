@@ -21,8 +21,107 @@ from .lineups import validate_lineup
 
 
 POLICY_SCHEMA_VERSION = "nfl_showdown_portfolio_policy_v1"
-NORMALIZED_POLICY_SCHEMA_VERSION = "nfl_showdown_portfolio_policy_normalized_v1"
+POLICY_SCHEMA_VERSION_V2 = "nfl_showdown_portfolio_policy_v2"
+SUPPORTED_POLICY_SCHEMA_VERSIONS = (POLICY_SCHEMA_VERSION, POLICY_SCHEMA_VERSION_V2)
+NORMALIZED_POLICY_SCHEMA_VERSION = "nfl_showdown_portfolio_policy_normalized_v2"
 FRACTION_UNIT = "FRACTION_0_TO_1"
+# Session 23 (P2): per-lineup structural hygiene bounds, v2-only. Absent on a
+# v1 policy, which normalizes with every bound fully open (identical to v1
+# behaviour). `qb_count`/`pass_catchers_with_rostered_qb`/`salary_left` are
+# inclusive [minimum, maximum] integer ranges; `kicker_count`/`dst_count` are
+# maxima only; `offense_against_own_dst` is a hard Boolean. None means no
+# bound on that side. Recomputed independently by the audit from roster IDs,
+# never trusted from the generator's own claims.
+STRUCTURAL_BOUND_FIELDS = (
+    "qb_count",
+    "pass_catchers_with_rostered_qb",
+    "salary_left",
+    "kicker_count",
+    "dst_count",
+    "offense_against_own_dst",
+)
+
+
+@dataclass(frozen=True)
+class StructuralBoundRange:
+    minimum: int | None
+    maximum: int | None
+
+    def as_mapping(self) -> dict[str, object]:
+        return {"minimum": self.minimum, "maximum": self.maximum}
+
+    def satisfied_by(self, value: int) -> bool:
+        if self.minimum is not None and value < self.minimum:
+            return False
+        if self.maximum is not None and value > self.maximum:
+            return False
+        return True
+
+
+OPEN_RANGE = StructuralBoundRange(None, None)
+
+
+@dataclass(frozen=True)
+class StructuralBounds:
+    qb_count: StructuralBoundRange = OPEN_RANGE
+    pass_catchers_with_rostered_qb: StructuralBoundRange = OPEN_RANGE
+    salary_left: StructuralBoundRange = OPEN_RANGE
+    kicker_count_maximum: int | None = None
+    dst_count_maximum: int | None = None
+    offense_against_own_dst: bool = False
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "qb_count": self.qb_count.as_mapping(),
+            "pass_catchers_with_rostered_qb": self.pass_catchers_with_rostered_qb.as_mapping(),
+            "salary_left": self.salary_left.as_mapping(),
+            "kicker_count": self.kicker_count_maximum,
+            "dst_count": self.dst_count_maximum,
+            "offense_against_own_dst": self.offense_against_own_dst,
+        }
+
+
+OPEN_STRUCTURAL_BOUNDS = StructuralBounds()
+
+
+def structural_bound_violations(
+    slate: SlateContract, roster_ids: Sequence[str], bounds: StructuralBounds
+) -> tuple[str, ...]:
+    """Which of `bounds` a legal Showdown roster violates, recomputed from `slate.players`.
+
+    `pass_catchers_with_rostered_qb` is per rostered QB: the count of WR/TE on
+    his team. With zero QBs rostered it is vacuously satisfied.
+    `offense_against_own_dst` forbids any non-DST person, any position, sharing
+    a rostered DST's team (so it also covers a DST on the rostered QB's team).
+    """
+
+    by_id = {row.dk_id: row for row in slate.players}
+    rows = [by_id[str(dk_id).strip()] for dk_id in roster_ids]
+    violations: list[str] = []
+    qb_rows = [row for row in rows if row.position == "QB"]
+    if not bounds.qb_count.satisfied_by(len(qb_rows)):
+        violations.append("qb_count")
+    if qb_rows:
+        counts = [
+            sum(1 for row in rows if row.team == qb.team and row.position in {"WR", "TE"})
+            for qb in qb_rows
+        ]
+        if any(not bounds.pass_catchers_with_rostered_qb.satisfied_by(count) for count in counts):
+            violations.append("pass_catchers_with_rostered_qb")
+    salary_left = slate.salary_cap - sum(row.salary for row in rows)
+    if not bounds.salary_left.satisfied_by(salary_left):
+        violations.append("salary_left")
+    kicker_count = sum(1 for row in rows if row.position == "K")
+    if bounds.kicker_count_maximum is not None and kicker_count > bounds.kicker_count_maximum:
+        violations.append("kicker_count")
+    dst_count = sum(1 for row in rows if row.position == "DST")
+    if bounds.dst_count_maximum is not None and dst_count > bounds.dst_count_maximum:
+        violations.append("dst_count")
+    if bounds.offense_against_own_dst:
+        dst_teams = {row.team for row in rows if row.position == "DST"}
+        if any(row.team in dst_teams and row.position != "DST" for row in rows):
+            violations.append("offense_against_own_dst")
+    return tuple(violations)
 
 
 @dataclass(frozen=True, order=True)
@@ -116,6 +215,7 @@ class NormalizedPortfolioPolicy:
     max_pairwise_person_overlap: int | None
     require_unique_lineups: bool
     effective_limits: tuple[EffectivePersonLimit, ...]
+    structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS
 
     @property
     def entry_count(self) -> int:
@@ -142,6 +242,7 @@ class NormalizedPortfolioPolicy:
                 "max_pairwise_person_overlap": self.max_pairwise_person_overlap,
                 "effective_pairwise_person_overlap": self.effective_pairwise_person_overlap,
                 "require_unique_lineups": self.require_unique_lineups,
+                "structural_bounds": self.structural_bounds.as_mapping(),
             },
             "effective": {
                 "entry_count_denominator": self.entry_count,
@@ -179,6 +280,10 @@ class PortfolioPolicyValidation:
 
     def as_report(self) -> dict[str, object]:
         return {
+            # Accepted source schema versions: SUPPORTED_POLICY_SCHEMA_VERSIONS.
+            # This field names the contract family, not the exact supplied
+            # version; the normalized policy and its own schema_version carry
+            # the authoritative post-validation shape.
             "schema_version": POLICY_SCHEMA_VERSION,
             "valid": self.valid,
             "source_policy_sha256": self.source_sha256,
@@ -338,13 +443,19 @@ def portfolio_policy_template(
     entry_ids: Sequence[str],
     *,
     controls: Mapping[str, object] | None = None,
+    schema_version: str = POLICY_SCHEMA_VERSION,
 ) -> dict[str, object]:
-    """Build exact bindings for an operator-authored controls object."""
+    """Build exact bindings for an operator-authored controls object.
+
+    `schema_version=POLICY_SCHEMA_VERSION_V2` and a `structural_bounds` key in
+    `controls` together author a v2 policy (Session 23); v1 stays the default
+    and never carries `structural_bounds`.
+    """
 
     if len(slate.games) != 1:
         raise ValueError("PORTFOLIO_POLICY_GAME_BINDING_INVALID: exactly one game is required")
     return {
-        "schema_version": POLICY_SCHEMA_VERSION,
+        "schema_version": schema_version,
         "bindings": {
             "salary_sha256": slate.salary_hash,
             "game_id": slate.games[0].game_id,
@@ -632,6 +743,102 @@ def _integer_max(fraction: Decimal | None, entry_count: int) -> int:
     return int((fraction * Decimal(entry_count)).to_integral_value(rounding=ROUND_FLOOR))
 
 
+def _structural_bound_integer(
+    value: object, location: str, problems: list[PolicyIssue], *, maximum: int
+) -> int | None:
+    """A nullable non-negative integer bound; `None` (omitted or null) is no bound."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        problems.append(
+            _issue(
+                "PORTFOLIO_POLICY_STRUCTURAL_BOUND_INTEGER_REQUIRED",
+                f"{location} must be a JSON integer or null",
+                "supply a non-negative integer, or omit/null for no bound on this side",
+            )
+        )
+        return None
+    if value < 0 or value > maximum:
+        problems.append(
+            _issue(
+                "PORTFOLIO_POLICY_STRUCTURAL_BOUND_OUT_OF_RANGE",
+                f"{location}={value} is outside [0,{maximum}]",
+                "supply an integer inside the declared domain",
+            )
+        )
+        return None
+    return value
+
+
+def _structural_bound_range(
+    value: object, location: str, problems: list[PolicyIssue], *, maximum: int
+) -> StructuralBoundRange | None:
+    if value is None:
+        return OPEN_RANGE
+    item = _mapping(value, location, problems)
+    if item is None:
+        return None
+    _unknown_fields(item, {"minimum", "maximum"}, location, problems)
+    minimum_bound = _structural_bound_integer(item.get("minimum"), f"{location}.minimum", problems, maximum=maximum)
+    maximum_bound = _structural_bound_integer(item.get("maximum"), f"{location}.maximum", problems, maximum=maximum)
+    if minimum_bound is not None and maximum_bound is not None and minimum_bound > maximum_bound:
+        problems.append(
+            _issue(
+                "PORTFOLIO_POLICY_STRUCTURAL_BOUND_CONTRADICTORY",
+                f"{location} minimum exceeds maximum",
+                "make the inclusive integer bounds ordered",
+            )
+        )
+    return StructuralBoundRange(minimum_bound, maximum_bound)
+
+
+def _structural_bounds(
+    value: object, *, location: str, problems: list[PolicyIssue]
+) -> StructuralBounds | None:
+    """Parse `controls.structural_bounds` (Session 23, v2-only); omitted is fully open."""
+
+    if value is None:
+        return OPEN_STRUCTURAL_BOUNDS
+    item = _mapping(value, location, problems)
+    if item is None:
+        return None
+    _unknown_fields(item, set(STRUCTURAL_BOUND_FIELDS), location, problems)
+    qb_count = _structural_bound_range(item.get("qb_count"), f"{location}.qb_count", problems, maximum=6)
+    pass_catchers = _structural_bound_range(
+        item.get("pass_catchers_with_rostered_qb"),
+        f"{location}.pass_catchers_with_rostered_qb",
+        problems,
+        maximum=5,
+    )
+    salary_left = _structural_bound_range(
+        item.get("salary_left"), f"{location}.salary_left", problems, maximum=50_000
+    )
+    kicker_count = _structural_bound_integer(
+        item.get("kicker_count"), f"{location}.kicker_count", problems, maximum=6
+    )
+    dst_count = _structural_bound_integer(
+        item.get("dst_count"), f"{location}.dst_count", problems, maximum=6
+    )
+    offense_raw = item.get("offense_against_own_dst", False)
+    if not isinstance(offense_raw, bool):
+        problems.append(
+            _issue(
+                "PORTFOLIO_POLICY_STRUCTURAL_BOUND_TYPE_INVALID",
+                f"{location}.offense_against_own_dst must be Boolean",
+                "set true or false",
+            )
+        )
+        offense_against_own_dst = False
+    else:
+        offense_against_own_dst = offense_raw
+    if qb_count is None or pass_catchers is None or salary_left is None:
+        return None
+    return StructuralBounds(
+        qb_count, pass_catchers, salary_left, kicker_count, dst_count, offense_against_own_dst
+    )
+
+
 def _necessary_capacity_issues(
     policy: NormalizedPortfolioPolicy, slate: SlateContract
 ) -> tuple[PolicyIssue, ...]:
@@ -791,12 +998,14 @@ def validate_portfolio_policy_bytes(
     if root is None:
         return PortfolioPolicyValidation(source_sha256, None, tuple(problems), ())
     _unknown_fields(root, {"schema_version", "bindings", "controls"}, "policy", problems)
-    if root.get("schema_version") != POLICY_SCHEMA_VERSION:
+    declared_schema_version = root.get("schema_version")
+    is_v2 = declared_schema_version == POLICY_SCHEMA_VERSION_V2
+    if declared_schema_version not in SUPPORTED_POLICY_SCHEMA_VERSIONS:
         problems.append(
             _issue(
                 "PORTFOLIO_POLICY_SCHEMA_UNSUPPORTED",
-                f"schema_version must be {POLICY_SCHEMA_VERSION!r}",
-                "regenerate the policy with the current versioned contract",
+                f"schema_version must be one of {list(SUPPORTED_POLICY_SCHEMA_VERSIONS)!r}",
+                "regenerate the policy with a current versioned contract",
             )
         )
     if slate.mode is not EngineMode.SHOWDOWN or len(slate.games) != 1:
@@ -923,20 +1132,33 @@ def validate_portfolio_policy_bytes(
     excluded_people: tuple[PersonBinding, ...] | None = ()
     overlap_limit: int | None = None
     unique = True
+    structural_bounds: StructuralBounds | None = OPEN_STRUCTURAL_BOUNDS
+    allowed_control_fields = {
+        "fraction_unit",
+        "max_combined_person_exposure",
+        "max_captain_exposure",
+        "excluded_people",
+        "max_pairwise_person_overlap",
+        "require_unique_lineups",
+    }
+    if is_v2:
+        allowed_control_fields = allowed_control_fields | {"structural_bounds"}
     if controls is not None:
-        _unknown_fields(
-            controls,
-            {
-                "fraction_unit",
-                "max_combined_person_exposure",
-                "max_captain_exposure",
-                "excluded_people",
-                "max_pairwise_person_overlap",
-                "require_unique_lineups",
-            },
-            "controls",
-            problems,
-        )
+        _unknown_fields(controls, allowed_control_fields, "controls", problems)
+        if is_v2:
+            structural_bounds = _structural_bounds(
+                controls.get("structural_bounds"),
+                location="controls.structural_bounds",
+                problems=problems,
+            )
+        elif "structural_bounds" in controls:
+            problems.append(
+                _issue(
+                    "PORTFOLIO_POLICY_STRUCTURAL_BOUND_TYPE_INVALID",
+                    f"controls.structural_bounds requires schema_version {POLICY_SCHEMA_VERSION_V2!r}",
+                    "regenerate the policy as v2, or drop structural_bounds",
+                )
+            )
         if controls.get("fraction_unit") != FRACTION_UNIT:
             problems.append(
                 _issue(
@@ -1026,7 +1248,13 @@ def validate_portfolio_policy_bytes(
                 "reconcile exclusions to the exact current salary identity map",
             )
         )
-    if problems or combined_rule is None or captain_rule is None or excluded_people is None:
+    if (
+        problems
+        or combined_rule is None
+        or captain_rule is None
+        or excluded_people is None
+        or structural_bounds is None
+    ):
         return PortfolioPolicyValidation(source_sha256, None, tuple(problems), tuple(findings))
 
     count = len(requested_entry_ids)
@@ -1096,6 +1324,7 @@ def validate_portfolio_policy_bytes(
         max_pairwise_person_overlap=overlap_limit,
         require_unique_lineups=unique,
         effective_limits=tuple(effective_limits),
+        structural_bounds=structural_bounds,
     )
     capacity = _necessary_capacity_issues(policy, slate)
     if capacity:

@@ -34,6 +34,7 @@ from nfl_dfs.classic_portfolio_policy import (
 )
 from nfl_dfs.dk import parse_entries, parse_salaries
 from nfl_dfs.portfolio_policy import (
+    POLICY_SCHEMA_VERSION_V2,
     canonical_decimal_json_bytes,
     portfolio_policy_template,
     validate_portfolio_policy_bytes,
@@ -713,6 +714,63 @@ def test_the_showdown_ladder_widens_captains_first_and_never_touches_an_exclusio
         assert relaxed["excluded_people"] == [out.as_mapping()] and relaxed["require_unique_lineups"] is True
     assert set(own_exclusion_dk_ids(policy)) == {out.cpt_dk_id, out.flex_dk_id, benched.cpt_dk_id,
                                                  benched.flex_dk_id}
+
+
+def test_the_showdown_ladder_drops_structural_bounds_in_the_briefs_order():
+    """Session 23 (P2): salary band first, then pass-catcher/K/DST/offense, then QB count.
+
+    `max_person_share` (`max_combined_person_exposure.default_fraction`) is not
+    tested here: it already goes fully open at rung 3 through the pre-existing
+    `uncapped` mechanism, which is exercised by the test above.
+    """
+
+    slate = parse_salaries(SUPPLIED / "DKSalaries Salary CSV Showdown.csv")
+    entries = parse_entries(SUPPLIED / "DKEntries CSV 20 entries.csv")
+    entry_ids = [item.entry_id for item in entries.authorizations]
+    structural_bounds = {
+        "qb_count": {"minimum": 1, "maximum": 1},
+        "pass_catchers_with_rostered_qb": {"minimum": 1, "maximum": 2},
+        "salary_left": {"minimum": 1, "maximum": 500},
+        "kicker_count": 1,
+        "dst_count": 1,
+        "offense_against_own_dst": True,
+    }
+    controls = {
+        "fraction_unit": "FRACTION_0_TO_1",
+        "max_combined_person_exposure": {"default_fraction": Decimal("0.8"), "overrides": []},
+        "max_captain_exposure": {"default_fraction": Decimal("0.4"), "overrides": []},
+        "excluded_people": [],
+        "max_pairwise_person_overlap": 4,
+        "require_unique_lineups": True,
+        "structural_bounds": structural_bounds,
+    }
+    document = portfolio_policy_template(
+        slate, entry_ids, controls=controls, schema_version=POLICY_SCHEMA_VERSION_V2
+    )
+    validation = validate_portfolio_policy_bytes(
+        canonical_decimal_json_bytes(document), slate=slate, entry_ids=entry_ids
+    )
+    assert validation.valid, validation.blockers()
+    policy = validation.policy
+    supplied = showdown_relaxed_controls(policy, None)["structural_bounds"]
+    assert supplied == structural_bounds
+    one, two, three = (showdown_relaxed_controls(policy, rung)["structural_bounds"] for rung in (1, 2, 3))
+
+    # Rung 1: only the salary band opens.
+    assert one["salary_left"] == {"minimum": None, "maximum": None}
+    for field in ("pass_catchers_with_rostered_qb", "qb_count"):
+        assert one[field] == supplied[field]
+    assert (one["kicker_count"], one["dst_count"], one["offense_against_own_dst"]) == (1, 1, True)
+
+    # Rung 2: additionally the pass-catcher band, the K/DST caps and offense_against_own_dst.
+    assert two["salary_left"] == {"minimum": None, "maximum": None}
+    assert two["pass_catchers_with_rostered_qb"] == {"minimum": None, "maximum": None}
+    assert (two["kicker_count"], two["dst_count"], two["offense_against_own_dst"]) == (None, None, False)
+    assert two["qb_count"] == supplied["qb_count"]
+
+    # Rung 3: additionally the QB-count band.
+    assert three["qb_count"] == {"minimum": None, "maximum": None}
+    assert three["salary_left"] == {"minimum": None, "maximum": None}
 
 
 # ----------------------------------------------------------------- Session 11b: a subset policy's ladder

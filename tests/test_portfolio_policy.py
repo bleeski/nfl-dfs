@@ -14,10 +14,15 @@ from nfl_dfs.dk import parse_entries, parse_salaries
 from nfl_dfs.hashing import sha256_bytes
 from nfl_dfs.portfolio_policy import (
     FRACTION_UNIT,
+    OPEN_STRUCTURAL_BOUNDS,
     POLICY_SCHEMA_VERSION,
+    POLICY_SCHEMA_VERSION_V2,
+    StructuralBoundRange,
+    StructuralBounds,
     canonical_showdown_lineup_identity,
     portfolio_policy_template,
     salary_person_bindings,
+    structural_bound_violations,
     summarize_showdown_portfolio,
     validate_portfolio_policy_bytes,
     validate_portfolio_policy_file,
@@ -985,3 +990,116 @@ def test_each_fill_solve_gets_what_the_bank_and_joint_solve_leave_of_the_window(
     assert _fill_solve_seconds(Window(100.0), 4, declared_search_seconds=60.0) == pytest.approx(8.0)
     assert _fill_solve_seconds(Window(100.0), 4, declared_search_seconds=120.0) == 0.5
     assert _fill_solve_seconds(Window(1_000.0), 4, declared_search_seconds=60.0) == 10.0
+
+
+# ------------------------------------------------------- Session 23 (P2): v2 structural bounds
+
+
+def test_v2_structural_bounds_validate_and_normalize(tmp_path: Path) -> None:
+    slate = _slate(tmp_path)
+    entry_ids = ("900000001", "900000002")
+    document = portfolio_policy_template(
+        slate,
+        entry_ids,
+        controls={
+            "structural_bounds": {
+                "qb_count": {"minimum": 1, "maximum": 1},
+                "pass_catchers_with_rostered_qb": {"minimum": 1, "maximum": 2},
+                "salary_left": {"minimum": 0, "maximum": 500},
+                "kicker_count": 1,
+                "dst_count": 1,
+                "offense_against_own_dst": True,
+            },
+        },
+        schema_version=POLICY_SCHEMA_VERSION_V2,
+    )
+    validation = _validate(slate, document, entry_ids)
+
+    assert validation.valid, validation.blockers()
+    bounds = validation.policy.structural_bounds
+    assert bounds.qb_count == StructuralBoundRange(1, 1)
+    assert bounds.pass_catchers_with_rostered_qb == StructuralBoundRange(1, 2)
+    assert bounds.salary_left == StructuralBoundRange(0, 500)
+    assert (bounds.kicker_count_maximum, bounds.dst_count_maximum) == (1, 1)
+    assert bounds.offense_against_own_dst is True
+    normalized = validation.policy.as_mapping()
+    assert normalized["schema_version"] == "nfl_showdown_portfolio_policy_normalized_v2"
+    assert normalized["controls"]["structural_bounds"]["qb_count"] == {"minimum": 1, "maximum": 1}
+
+
+def test_v1_policy_normalizes_open_and_cannot_declare_structural_bounds(tmp_path: Path) -> None:
+    slate = _slate(tmp_path)
+    unbounded = _validate(slate, _document(slate))
+
+    assert unbounded.valid, unbounded.blockers()
+    assert unbounded.policy.structural_bounds == OPEN_STRUCTURAL_BOUNDS
+
+    refused = _validate(slate, _document(slate, structural_bounds={"qb_count": {"minimum": 1, "maximum": 1}}))
+    assert not refused.valid
+    assert "PORTFOLIO_POLICY_STRUCTURAL_BOUND_TYPE_INVALID" in _codes(refused)
+
+
+def test_a_contradictory_structural_bound_is_refused(tmp_path: Path) -> None:
+    slate = _slate(tmp_path)
+    entry_ids = ("900000001", "900000002")
+    document = portfolio_policy_template(
+        slate,
+        entry_ids,
+        controls={"structural_bounds": {"qb_count": {"minimum": 2, "maximum": 1}}},
+        schema_version=POLICY_SCHEMA_VERSION_V2,
+    )
+    validation = _validate(slate, document, entry_ids)
+
+    assert not validation.valid
+    assert "PORTFOLIO_POLICY_STRUCTURAL_BOUND_CONTRADICTORY" in _codes(validation)
+
+
+def test_structural_bound_violations_are_recomputed_from_roster_bytes(tmp_path: Path) -> None:
+    slate = _slate(tmp_path)
+
+    def dk_id(team: str, position: str, name: str, role: str) -> str:
+        return next(
+            row.dk_id
+            for row in slate.players
+            if row.team == team and row.position == position and row.name == name and row.role == role
+        )
+
+    # One QB (NE), one pass catcher (Alpha WR), a kicker, a bare Seahawks QB with no
+    # catchers of his own: total salary spends the cap exactly (salary_left 0).
+    roster = [
+        dk_id("NE", "QB", "Starter QB", "CPT"),
+        dk_id("NE", "RB", "Lead RB", "FLEX"),
+        dk_id("NE", "WR", "Alpha WR", "FLEX"),
+        dk_id("NE", "TE", "Starting TE", "FLEX"),
+        dk_id("NE", "K", "NE Kicker", "FLEX"),
+        dk_id("SEA", "QB", "Sea QB", "FLEX"),
+    ]
+    assert structural_bound_violations(slate, roster, OPEN_STRUCTURAL_BOUNDS) == ()
+
+    assert structural_bound_violations(
+        slate, roster, StructuralBounds(qb_count=StructuralBoundRange(None, 1))
+    ) == ("qb_count",)
+    # The Seahawks QB is rostered alone, no WR/TE of his own: violates a minimum of 1.
+    assert "pass_catchers_with_rostered_qb" in structural_bound_violations(
+        slate, roster, StructuralBounds(pass_catchers_with_rostered_qb=StructuralBoundRange(1, None))
+    )
+    assert structural_bound_violations(
+        slate, roster, StructuralBounds(salary_left=StructuralBoundRange(1, None))
+    ) == ("salary_left",)
+    assert structural_bound_violations(
+        slate, roster, StructuralBounds(kicker_count_maximum=0)
+    ) == ("kicker_count",)
+    # No DST rostered at all: the hygiene rule cannot be violated by this roster.
+    assert structural_bound_violations(slate, roster, StructuralBounds(offense_against_own_dst=True)) == ()
+
+    dst_roster = [
+        dk_id("NE", "QB", "Starter QB", "CPT"),
+        dk_id("NE", "DST", "Patriots", "FLEX"),
+        dk_id("NE", "WR", "Alpha WR", "FLEX"),
+        dk_id("NE", "TE", "Starting TE", "FLEX"),
+        dk_id("NE", "K", "NE Kicker", "FLEX"),
+        dk_id("SEA", "QB", "Sea QB", "FLEX"),
+    ]
+    assert "offense_against_own_dst" in structural_bound_violations(
+        slate, dst_roster, StructuralBounds(offense_against_own_dst=True)
+    )

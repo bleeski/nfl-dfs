@@ -1028,6 +1028,111 @@ remains `MODEL_STATUS=PRIOR_ONLY` / `RELEASE_DECISION=DO_NOT_UPLOAD`; an audited
 review file is not an upload package or an economics/model-quality claim.
 Requests without a policy retain their SD1/SD2 selection and assignment behavior.
 
+### SD3 v2: structural hygiene bounds and `max_person_share` (Session 23, P2)
+
+`nfl_showdown_portfolio_policy_v2` adds one optional `controls.structural_bounds`
+object; `nfl_showdown_portfolio_policy_v1` is never mutated and keeps validating
+exactly as before (a v1 document may not declare `structural_bounds` at all —
+`PORTFOLIO_POLICY_STRUCTURAL_BOUND_TYPE_INVALID` otherwise). Omitting the object
+on a v2 document, or omitting one of its sides, means that bound is fully open,
+identical to v1 behaviour. The complete shape:
+
+```json
+"structural_bounds": {
+  "qb_count": {"minimum": 1, "maximum": 1},
+  "pass_catchers_with_rostered_qb": {"minimum": 1, "maximum": 2},
+  "salary_left": {"minimum": 1, "maximum": 500},
+  "kicker_count": 1,
+  "dst_count": 1,
+  "offense_against_own_dst": true
+}
+```
+
+`qb_count`, `pass_catchers_with_rostered_qb` and `salary_left` are inclusive
+`{minimum, maximum}` integer ranges (either side may be `null`); `kicker_count`
+and `dst_count` are a bare nullable integer maximum (no minimum: DraftKings
+already allows zero of either). `pass_catchers_with_rostered_qb` counts WR/TE
+teammates of each rostered QB; with zero QBs rostered it is vacuously satisfied.
+`offense_against_own_dst` is a Boolean: `true` forbids any non-DST person
+(any position, so it also covers a DST sharing the rostered QB's team) from
+sharing a rostered DST's team — the "own" reading, not "the DST's opponent":
+it matches the pre-existing `qa_showdown_portfolio.py` observation
+`DST_WITH_OWN_OFFENSE`, which this bound promotes from a printed observation
+to an enforced construction preference, and is not a new interpretation this
+session introduced. In a two-team Showdown pool this forces every other
+rostered person onto the opposing team whenever a DST is rostered (a 5-1
+split by construction); flag any objection to Ben before relying on it as a
+default. `salary_left` is `slate.salary_cap` minus the
+roster's total salary. Every bound binds SD3's candidate generation as a real
+MILP row on `LineupOptimizer` (`qb_count`/`kicker_count`/`dst_count` via
+`add_selected_count_bounds`; `salary_left` via `add_salary_band`;
+`pass_catchers_with_rostered_qb` via `add_classic_qb_correlation_bounds
+(kind="PASS_CATCHER")`, generalized off Classic in Session 23; `offense_
+against_own_dst` via `add_no_offense_with_dst`, pairwise "not both" rows
+between every DST row and every other same-team row) — never a post-solve
+filter, so a violating roster is never even proposed by the solver, not
+rejected after the fact. The audit independently recomputes every bound from
+the exact roster DraftKings IDs, never from the generator's own claims
+(`PORTFOLIO_AUDIT_STRUCTURAL_BOUND_VIOLATED`). No static necessary-capacity
+check exists for these bounds beyond that (unlike the existing exposure/
+Captain/overlap/salary-cap checks): a genuinely infeasible band surfaces as
+the solver proving the model infeasible, which the relaxation ladder already
+treats as its `STRUCTURE` trigger.
+
+`max_person_share` is not a new field: it is exactly
+`max_combined_person_exposure.default_fraction`, the share of entries
+containing one underlying person (Captain or FLEX). Generators default it to
+0.80, the field median among multi-entry portfolios
+(`docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md` §8.1 C). It is
+audited exactly as every other combined-person cap
+(`PORTFOLIO_AUDIT_COMBINED_PERSON_CAP_EXCEEDED`) and reported in every review
+under `exposure.max_person_share` (`readable_review.py`) with the share and
+the person(s) named, alongside `exposure.captain_spread` (review S7: a default
+Captain cap alone does not show the resulting spread).
+
+**Relaxation ladder (`relaxation.py`, `SHOWDOWN_RUNGS`).** The brief's order
+for the new bounds — salary band, pass-catcher band, K/DST caps, QB count,
+`max_person_share` — is folded into the existing 3-rung Showdown ladder rather
+than adding rungs: rung 1 additionally drops the salary band; rung 2
+additionally drops the pass-catcher band, the K/DST caps and
+`offense_against_own_dst` (not named in the brief's 5-item order; grouped here
+with the K/DST caps it sits next to; a session judgment call, recorded in
+`changelog.md`); rung 3 additionally drops the QB-count band. `max_person_share`
+already drops at rung 3 through the existing "uncapped" combined-exposure
+relaxation, which matches its place last in the brief's order without a new
+mechanism. As always, a rung's policy is the loosest of the policy it replaces
+and the rung's table, dimension by dimension.
+
+The normalized schema bumps too, unconditionally:
+`nfl_showdown_portfolio_policy_normalized_v2` always carries
+`controls.structural_bounds` (open for a v1 source). This is safe because the
+normalized artifact is produced fresh within the run that reads it back
+(the audit, the readable review); no archived normalized artifact from an
+earlier run is ever reparsed by a later one.
+
+Generator defaults (`scripts/make_showdown_policy.py`): one QB, one to two
+pass catchers with him, $1 to $500 left, at most one kicker and one DST,
+`offense_against_own_dst=true`. Kickers and DSTs are never excluded from the
+combined pool by default; `--captain-zero-pos K,DST` only zeroes their Captain
+fraction (they were in 45%/68% and 68%/82% of the top 1% in the graded games).
+`--captain-default` now defaults to 0.4 instead of requiring an explicit value
+(review S7): an unbounded default let the Captain strata and the summed-points
+objective put every entry under one Captain.
+
+These defaults follow the Session 23 card's own line (`docs/ROADMAP.md`
+§2.3, "salary_left ($1 to $500)") over `docs/chunks/P2-contest-aware-policy.md`'s
+older text ("$0 to $1,500 left ... two-QB lineups capped at the entry count
+times 0.4"), per the card's own instruction that its line numbers, and by
+extension its restated figures, are authoritative where the brief has
+drifted. `qb_count` defaults to exactly one rather than allowing an
+uncapped-but-minority two-QB share: the brief's "capped at 0.4 of entries" is
+a portfolio-level quota across the built bank, a different mechanism than
+this session's per-lineup `structural_bounds`, and is not implemented here.
+A two-QB build is still reachable by an explicit `--qb-count-max 2` override;
+a proper portfolio-level two-QB quota is future work (a natural fit for
+Session 23b/23c's thesis machinery, which already allots rows across bounded
+sleeves).
+
 ## SD5 prior-only readable review
 
 A successful Showdown `prior_review` creates canonical
@@ -2180,7 +2285,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `6a528c7809145fe2b6d3fb556dfcbc38e2642920bd99aada9014ae5f8d5e2cad`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `e2645fd4629cc239011806de9de7e77cb424aacdd7bd838b83543e0ac67a425c`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

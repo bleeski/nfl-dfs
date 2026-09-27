@@ -28,7 +28,9 @@ from nfl_dfs.portfolio_enforcement import (
     solve_policy_portfolio,
 )
 from nfl_dfs.portfolio_policy import (
+    POLICY_SCHEMA_VERSION_V2,
     portfolio_policy_template,
+    structural_bound_violations,
     validate_portfolio_policy_bytes,
 )
 from nfl_dfs.selection import select_prior_lineups
@@ -43,6 +45,20 @@ def _policy(slate, entry_ids=("1", "2"), **controls):
     validation = validate_portfolio_policy_bytes(
         raw, slate=slate, entry_ids=entry_ids
     )
+    assert validation.valid, validation.blockers()
+    assert validation.policy is not None
+    return validation.policy, raw
+
+
+def _policy_v2(slate, entry_ids=("1", "2"), *, structural_bounds=None, **controls):
+    document = portfolio_policy_template(
+        slate,
+        entry_ids,
+        controls={**controls, "structural_bounds": structural_bounds or {}},
+        schema_version=POLICY_SCHEMA_VERSION_V2,
+    )
+    raw = json.dumps(document, ensure_ascii=False).encode("utf-8")
+    validation = validate_portfolio_policy_bytes(raw, slate=slate, entry_ids=entry_ids)
     assert validation.valid, validation.blockers()
     assert validation.policy is not None
     return validation.policy, raw
@@ -1130,3 +1146,82 @@ def test_explicit_policy_bounds_still_override_the_scaled_defaults(tmp_path) -> 
     # An unconstrained policy needs no feasible chain; the report says so.
     chain = next(item for item in bank_report["strata_detail"] if item["kind"] == "chain")
     assert chain["terminal"] == "NOT_REQUIRED_UNCONSTRAINED"
+
+
+# ------------------------------------------------------- Session 23 (P2): v2 structural bounds
+
+
+def test_bank_generation_filters_out_structural_bound_violations(tmp_path) -> None:
+    """A roster the DraftKings rules allow but the policy's own hygiene bounds
+
+    reject never becomes a candidate (it is no-good'd out during enumeration,
+    Session 23); it is never left for the joint solve or the audit to catch.
+    """
+
+    slate = _slate(tmp_path)
+    objective = {row.dk_id: float(index) for index, row in enumerate(slate.players)}
+    policy, _ = _policy_v2(
+        slate,
+        ("1", "2", "3"),
+        max_pairwise_person_overlap=6,
+        structural_bounds={
+            "qb_count": {"minimum": 1, "maximum": 1},
+            "kicker_count": 0,
+            "offense_against_own_dst": True,
+        },
+    )
+    bank = build_policy_candidate_bank(
+        slate, objective, policy=policy, candidate_limit=10,
+        total_time_limit_seconds=5, per_solve_time_limit_seconds=1,
+    )
+    assert bank.candidates
+    for candidate in bank.candidates:
+        assert structural_bound_violations(slate, candidate.roster, policy.structural_bounds) == ()
+
+
+def test_audit_recomputes_structural_bounds_independently(tmp_path) -> None:
+    """The independent audit catches a bound violation from the roster IDs
+
+    alone, with no selector claim to contradict: nothing else in this
+    assignment is illegal or over any exposure cap."""
+
+    slate = _slate(tmp_path)
+    entry_ids = ("1",)
+    policy, source_policy = _policy_v2(
+        slate, entry_ids, max_pairwise_person_overlap=6,
+        structural_bounds={"qb_count": {"minimum": None, "maximum": 1}},
+    )
+    by_key = {(row.team, row.position, row.name, row.role): row.dk_id for row in slate.players}
+    roster = (
+        by_key[("NE", "RB", "Lead RB", "CPT")],
+        by_key[("NE", "QB", "Starter QB", "FLEX")],
+        by_key[("SEA", "QB", "Sea QB", "FLEX")],
+        by_key[("NE", "WR", "Alpha WR", "FLEX")],
+        by_key[("NE", "TE", "Starting TE", "FLEX")],
+        by_key[("NE", "K", "NE Kicker", "FLEX")],
+    )
+    assert structural_bound_violations(slate, roster, policy.structural_bounds) == ("qb_count",)
+
+    pairs = [(entry_ids[0], roster)]
+    artifact = _assignment_csv_bytes(pairs)
+    salary_bytes = (tmp_path / "DKSalaries.csv").read_bytes()
+    entry_bytes = b"exact entry bytes"
+    normalized = policy.canonical_bytes()
+    audit = audit_policy_assignments(
+        slate=slate,
+        policy=policy,
+        assignments=pairs,
+        salary_bytes=salary_bytes,
+        entry_bytes=entry_bytes,
+        expected_entry_sha256=sha256_bytes(entry_bytes),
+        source_policy_bytes=source_policy,
+        expected_source_policy_sha256=sha256_bytes(source_policy),
+        normalized_policy_bytes=normalized,
+        expected_normalized_policy_sha256=sha256_bytes(normalized),
+        assignment_artifact_bytes=artifact,
+        expected_assignment_artifact_sha256=sha256_bytes(artifact),
+    )
+    codes = {problem.split(":", 1)[0] for problem in audit.problems}
+    assert "PORTFOLIO_AUDIT_STRUCTURAL_BOUND_VIOLATED" in codes
+    assert audit.max_person_share["entries"] == 1
+    assert audit.max_person_share["share_percentage"] == 100.0
