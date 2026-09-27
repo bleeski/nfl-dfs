@@ -786,3 +786,42 @@ def test_launchers_give_each_run_its_own_pytest_basetemp() -> None:
     # The cache is deliberately shared, so `--lf` and `--ff` still work.
     assert "nfl-dfs-pytest-cache" in posix
     assert "nfl-dfs-pytest-cache" in powershell
+
+
+def test_launcher_validateset_covers_every_cli_subcommand() -> None:
+    """`nfl.ps1`'s `ValidateSet` must accept every command the CLI supports.
+
+    `nfl.sh` passes any command straight through to `python -m nfl_dfs.cli`;
+    `nfl.ps1` gates the command through a `ValidateSet` first, so a name it
+    omits is refused by PowerShell before Python ever runs. It gained
+    `run-slate` this way once already (2026-09-14 changelog) and drifted
+    again: `baseline` (V4, Session 38) was refused, breaking the runbook's
+    documented hand-run fallback. This is a static, permanent check rather
+    than one more name to remember to add by hand; native Windows execution
+    is not observed in this container.
+    """
+    import argparse
+
+    from nfl_dfs.cli import build_parser
+
+    powershell = (PROJECT_ROOT / "nfl.ps1").read_text(encoding="utf-8")
+    match = re.search(r"ValidateSet\(([^)]*)\)", powershell)
+    assert match, "nfl.ps1 lost its ValidateSet"
+    accepted = {token.strip().strip("'") for token in match.group(1).split(",")}
+
+    parser = build_parser()
+    subparsers_action = next(
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    cli_subcommands = set(subparsers_action.choices)
+    # `test` never reaches `nfl_dfs.cli`; both launchers special-case it into pytest.
+    launcher_special_cased = {"test"}
+
+    assert accepted == cli_subcommands | launcher_special_cased, (
+        "nfl.ps1's ValidateSet and the CLI's real subcommands have drifted apart. "
+        f"missing from ValidateSet: {sorted(cli_subcommands - accepted)}; "
+        "stale in ValidateSet: "
+        f"{sorted(accepted - cli_subcommands - launcher_special_cased)}"
+    )

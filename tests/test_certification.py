@@ -11,13 +11,16 @@ import pytest
 
 import nfl_dfs.certification as certification_module
 from nfl_dfs.certification import CertificationError, certify_upload
-from nfl_dfs.cli import command_audit
+from nfl_dfs.cli import command_audit, command_status, command_validate
 from nfl_dfs.contracts import EvidenceRecord, EvidenceState
 from nfl_dfs.dk import parse_entries
 from nfl_dfs.hashing import sha256_file
 from nfl_dfs.optimizer import LineupOptimizer
 from nfl_dfs.payouts import parse_payout_csv
 from nfl_dfs.referee import ByteAudit, audit_output_bytes
+from nfl_dfs.review_export import write_assignments_csv
+
+from .conftest import FIXTURE_ROOT
 
 
 def _assignments(slate, entries):
@@ -49,6 +52,156 @@ def _evidence(tmp_path: Path, classic_slate, classic_entries, official_state=Evi
         EvidenceRecord(subject="slate", field="market_line", hard_gate=True, state=EvidenceState.NOT_APPLICABLE, reason="manual guardrail"),
     ]
     return payout, records
+
+
+def _one_prefilled_entries(tmp_path: Path, prefilled_roster: tuple[str, ...]):
+    """A copy of the shared classic entries fixture with its first row prefilled.
+
+    Never mutates the shared fixture file; writes a fresh copy so the row's
+    cells are real bytes on disk, not just an in-memory claim, the same way
+    an operator's own partial DK entry would look.
+    """
+
+    with (FIXTURE_ROOT / "DKEntries CSV.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.reader(handle))
+    header, first, second = rows[0], rows[1], rows[2]
+    first[4:13] = list(prefilled_roster)
+    entries_path = tmp_path / "entries-one-prefilled.csv"
+    with entries_path.open("w", encoding="utf-8", newline="") as handle:
+        csv.writer(handle, lineterminator="\r\n").writerows([header, first, second])
+    return parse_entries(entries_path), first[0], second[0]
+
+
+def test_certify_upload_accepts_a_partially_prefilled_template(
+    tmp_path: Path, classic_slate
+) -> None:
+    """V7, Session 38: before this, any prefilled row made `certify_upload`
+    fail closed but unusable: leaving it out of `assignments` failed here
+    (`ENTRY_AUTHORIZATION_MISMATCH`), and including it failed in
+    `write_upload_bytes` (`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`) instead. It
+    now takes only the plan's fillable blank rows, as `review_export.py`
+    already does, so a template an operator partly filled by hand can
+    certify the rows still blank.
+    """
+    optimizer = LineupOptimizer(classic_slate)
+    scores = {player.dk_id: 50_000 / max(player.salary, 1) for player in classic_slate.players}
+    prefilled_solved = optimizer.solve(scores)
+    assert prefilled_solved.roster is not None
+    optimizer.add_no_good(prefilled_solved.roster)
+    fillable_solved = optimizer.solve(scores)
+    assert fillable_solved.roster is not None
+
+    template, _prefilled_id, fillable_id = _one_prefilled_entries(
+        tmp_path, prefilled_solved.roster
+    )
+    _, evidence = _evidence(tmp_path, classic_slate, template)
+    output = tmp_path / "partial-upload.csv"
+    manifest = certify_upload(
+        run_id="partial-prefilled",
+        slate=classic_slate,
+        template=template,
+        assignments={fillable_id: fillable_solved.roster},
+        evidence=evidence,
+        output_path=output,
+        manifest_path=tmp_path / "partial-manifest.json",
+    )
+    assert manifest.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE", manifest.blockers
+    assert output.exists()
+    written = output.read_bytes()
+    for dk_id in prefilled_solved.roster:
+        assert dk_id.encode() in written  # the prefilled row survived byte for byte
+
+
+def test_certify_upload_refuses_a_fillable_row_that_repeats_a_prefilled_roster(
+    tmp_path: Path, classic_slate
+) -> None:
+    """R29: a fillable row may never repeat a prefilled row's already-locked
+    roster, the same rule `review_export.py` enforces (V7, Session 38).
+    """
+    optimizer = LineupOptimizer(classic_slate)
+    scores = {player.dk_id: 50_000 / max(player.salary, 1) for player in classic_slate.players}
+    prefilled_solved = optimizer.solve(scores)
+    assert prefilled_solved.roster is not None
+
+    template, _prefilled_id, fillable_id = _one_prefilled_entries(
+        tmp_path, prefilled_solved.roster
+    )
+    _, evidence = _evidence(tmp_path, classic_slate, template)
+    manifest = certify_upload(
+        run_id="repeated-prefilled",
+        slate=classic_slate,
+        template=template,
+        assignments={fillable_id: prefilled_solved.roster},
+        evidence=evidence,
+        output_path=tmp_path / "repeated-upload.csv",
+        manifest_path=tmp_path / "repeated-manifest.json",
+    )
+    assert manifest.release_decision.value == "DO_NOT_UPLOAD"
+    assert any(
+        blocker.startswith(f"ENTRY_PREFILLED_LINEUP_REPEATED:{fillable_id}")
+        for blocker in manifest.blockers
+    )
+    assert not (tmp_path / "repeated-upload.csv").exists()
+
+
+def test_command_validate_accepts_a_partially_prefilled_template(
+    tmp_path: Path, classic_slate, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V7, Session 38: `command_validate` compared assignments against every
+    reserved entry, so a template with a prefilled row could never pass.
+    """
+    optimizer = LineupOptimizer(classic_slate)
+    scores = {player.dk_id: 50_000 / max(player.salary, 1) for player in classic_slate.players}
+    prefilled_solved = optimizer.solve(scores)
+    assert prefilled_solved.roster is not None
+    optimizer.add_no_good(prefilled_solved.roster)
+    fillable_solved = optimizer.solve(scores)
+    assert fillable_solved.roster is not None
+
+    template, _prefilled_id, fillable_id = _one_prefilled_entries(
+        tmp_path, prefilled_solved.roster
+    )
+    assignments_path = tmp_path / "assignments.csv"
+    write_assignments_csv(
+        assignments_path, {fillable_id: fillable_solved.roster}, mode=classic_slate.mode
+    )
+
+    args = argparse.Namespace(
+        salaries=str(FIXTURE_ROOT / "DKSalaries Salary CSV Classic.csv"),
+        entries=str(template.path),
+        assignments=str(assignments_path),
+    )
+    assert command_validate(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "PASS"
+    assert result["problems"] == []
+
+
+def test_command_validate_refuses_a_fillable_row_that_repeats_a_prefilled_roster(
+    tmp_path: Path, classic_slate, capsys: pytest.CaptureFixture[str]
+) -> None:
+    optimizer = LineupOptimizer(classic_slate)
+    scores = {player.dk_id: 50_000 / max(player.salary, 1) for player in classic_slate.players}
+    prefilled_solved = optimizer.solve(scores)
+    assert prefilled_solved.roster is not None
+
+    template, _prefilled_id, fillable_id = _one_prefilled_entries(
+        tmp_path, prefilled_solved.roster
+    )
+    assignments_path = tmp_path / "assignments.csv"
+    write_assignments_csv(
+        assignments_path, {fillable_id: prefilled_solved.roster}, mode=classic_slate.mode
+    )
+
+    args = argparse.Namespace(
+        salaries=str(FIXTURE_ROOT / "DKSalaries Salary CSV Classic.csv"),
+        entries=str(template.path),
+        assignments=str(assignments_path),
+    )
+    assert command_validate(args) == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "FAIL"
+    assert any("ENTRY_PREFILLED_LINEUP_REPEATED" in problem for problem in result["problems"])
 
 
 def test_certification_is_fail_closed_then_exact_byte_certified(
@@ -253,3 +406,43 @@ def test_manifest_audit_rederives_do_not_upload_after_output_tamper(
     assert result["status"] == "FAIL"
     assert result["FILE_VALID"] is False
     assert result["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+
+
+def test_status_rederives_through_historical_integrity_and_never_exits_0_on_a_deleted_file(
+    tmp_path: Path, classic_slate, classic_entries, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """V6, Session 38: `status` used to print the manifest's stored truths as
+    current and exit 0 on a stored `CERTIFIED` with no file or hash check at
+    all; `audit` was fixed this way under R09 and `status` kept the old shape.
+    """
+
+    assignments = _assignments(classic_slate, classic_entries)
+    _, evidence = _evidence(tmp_path, classic_slate, classic_entries)
+    output = tmp_path / "status-upload.csv"
+    manifest_path = tmp_path / "status-manifest.json"
+    manifest = certify_upload(
+        run_id="status-deleted",
+        slate=classic_slate,
+        template=classic_entries,
+        assignments=assignments,
+        evidence=evidence,
+        output_path=output,
+        manifest_path=manifest_path,
+    )
+    assert manifest.release_decision.value == "CERTIFIED_UPLOAD_PACKAGE"
+
+    # Intact: the recorded bytes still match, and status is still never
+    # itself a current release decision (R09's fix, now shared with `audit`).
+    assert command_status(argparse.Namespace(manifest=str(manifest_path))) == 0
+    intact = json.loads(capsys.readouterr().out)
+    assert intact["ARTIFACT_INTEGRITY"] == "PASS"
+    assert intact["manifest_stored_RELEASE_DECISION"] == "CERTIFIED_UPLOAD_PACKAGE"
+    assert intact["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+
+    output.unlink()
+    assert command_status(argparse.Namespace(manifest=str(manifest_path))) == 2
+    deleted = json.loads(capsys.readouterr().out)
+    assert deleted["ARTIFACT_INTEGRITY"] == "FAIL"
+    assert deleted["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+    assert deleted["stored_status"] == "CERTIFIED"
+    assert any("OUTPUT_BINDING" in problem for problem in deleted["problems"])

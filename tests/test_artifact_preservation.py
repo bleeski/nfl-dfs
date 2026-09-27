@@ -567,6 +567,14 @@ def test_the_outer_handler_names_the_deliverable_and_never_deletes_it(
     diagnostic = json.loads((root / "cowork_diagnostic.json").read_text(encoding="utf-8"))
     assert diagnostic["removed_uploads"] == [str(root / "DK_UPLOAD_stray.csv")]
     assert diagnostic["latest_deliverable"]["path"] == str(kept)
+    # V8, Session 38: every normal `prior_review` exit pins
+    # MODEL_STATUS=PRIOR_ONLY; this exception exit used to fall back to the
+    # blanket UNVALIDATED every other profile's exception exit correctly
+    # reports, because the resolved profile lived on a local the outer
+    # handler could not see.
+    assert report["MODEL_STATUS"] == "PRIOR_ONLY"
+    assert report["release_truths"]["MODEL_STATUS"] == "PRIOR_ONLY"
+    assert diagnostic["MODEL_STATUS"] == "PRIOR_ONLY"
 
 
 def test_the_outer_handler_names_nothing_it_cannot_revalidate(

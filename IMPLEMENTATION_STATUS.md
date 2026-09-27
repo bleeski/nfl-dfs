@@ -1,5 +1,42 @@
 # Implementation Status
 
+## Capability added: 2026-09-26 (Session 38)
+
+Run-path integrity: six defects the 2026-09-25 code review found (V3 to V8)
+that could put a deleted or unbound file in front of Ben, or refuse a
+legitimate certification.
+
+- `certify` (`command_certify`, and the model-assisted certify profile inside
+  `run-slate`) no longer deletes a `DK_UPLOAD_*.csv` its own manifest still
+  binds when a later stage (the review workbook) raises after the CERTIFIED
+  write; it also no longer resolves a second, different `run_id` when
+  `--run-id` is omitted, which used to make that handler unlink the wrong
+  path. `nfl.ps1`'s `ValidateSet` accepts `baseline`, and a permanent test
+  keeps it synchronized with the CLI's real subcommands. A second `run-slate`
+  into an existing `outputs/<run_id>` is refused by name, the same as
+  `data/runs/<run_id>`. `status` re-derives through the same historical
+  artifact integrity check `audit` uses (R09): it pins
+  `RELEASE_DECISION=DO_NOT_UPLOAD` and never exits 0 on a stored `CERTIFIED`
+  manifest whose file has moved or been deleted. `prior_review`'s exception
+  exit reports `MODEL_STATUS=PRIOR_ONLY`, matching every one of its normal
+  exits.
+- `certify_upload` and `command_validate` take `plan_entries(...).fillable` as
+  their authorized set, as `review_export.py` already did: a template an
+  operator partly filled by hand (some rows prefilled through DK's own site)
+  can now certify or validate its remaining blank rows, instead of failing
+  closed either way (`ENTRY_AUTHORIZATION_MISMATCH` leaving a prefilled row
+  out of the assignment, `ENTRY_BLANK_CELL_AUTHORITY_REQUIRED` including it).
+  Both also refuse a fillable row that repeats a prefilled row's already-
+  resolved roster (R29, `ENTRY_PREFILLED_LINEUP_REPEATED`), matching
+  `review_export.py`.
+
+Verified with new unit tests per finding, each first shown to fail against the
+pre-fix code in a scratch worktree; the full suite green apart from the one
+expected `test_the_quick_start_names_the_first_startable_session` mismatch
+while this session's row is `In Progress`. Not yet: native Windows execution
+of `nfl.ps1 baseline` was not observed (no Windows in this container); the
+new test reads the script's text instead.
+
 ## Capability added: 2026-09-25 (Session 11c)
 
 A Classic policy may bind a subset of the fillable blank rows, as a Showdown

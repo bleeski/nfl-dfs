@@ -4,6 +4,92 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-27: run-path integrity (Session 38)
+
+Branch `claude/s38-run-path-integrity`. The 2026-09-25 code review's V3 to V8.
+No release truth moved: every path still ends `PRIOR_ONLY / DO_NOT_UPLOAD`.
+
+#### Changed
+
+- **A workbook lock after certification no longer deletes the certified file
+  (V3).** `command_certify` resolves `run_id` once and reuses it in its
+  except branch, instead of calling `_resolved_run_id` again with
+  `args.run_id` still `None` and getting a fresh timestamp. A new
+  `_certified_and_intact(manifest_path, output_path)` helper (reusing
+  `historical_artifact_integrity`, the same check `audit` and `status` run)
+  gates both that except branch's `upload_path.unlink` and
+  `command_cowork_run`'s except-handler sweep of `DK_UPLOAD_*.csv`: a file
+  whose manifest still says `CERTIFIED_UPLOAD_PACKAGE` with a matching hash
+  is left alone and named in the diagnostic (`certified_upload_preserved`,
+  `preserved_uploads`); anything else is still removed as before.
+- **`nfl.ps1` accepts `baseline` (V4).** Its `ValidateSet` omitted it, so
+  `.\nfl.ps1 baseline`, the runbook's documented hand-run fallback, was
+  refused by PowerShell before Python ran. `tests/test_repo_boundaries.py`
+  gained a permanent regression test that statically diffs the `ValidateSet`
+  against `build_parser()`'s real subcommands, so this cannot drift silently
+  again.
+- **A second `run-slate` into an existing `outputs/<run_id>` is refused (V5).**
+  `output_root.mkdir(parents=True, exist_ok=True)` let a retry after a
+  removed `data/runs/<run_id>` silently reuse an earlier run's output
+  folder, overwriting its `cowork_run.json`. The collision check now covers
+  both directories together, before `args._resolved_cowork_run_id` is
+  stashed (so the exception handler cannot still write into the folder the
+  check just refused to reuse), and the `mkdir` no longer takes
+  `exist_ok=True`.
+- **`status` re-derives through historical artifact integrity, like `audit`
+  (V6).** It used to print the manifest's stored truths as current with no
+  file or hash check at all, and exit 0 on a stored `CERTIFIED` regardless.
+  R09 fixed this pattern in `audit`; `status` kept the old shape. It now
+  routes through the same `historical_artifact_integrity` call, labels its
+  fields as stored, pins `RELEASE_DECISION=DO_NOT_UPLOAD`, and exits 0 only
+  when `ARTIFACT_INTEGRITY=PASS`.
+- **`prior_review`'s exception exit reports `MODEL_STATUS=PRIOR_ONLY` (V8).**
+  Every normal exit already pinned it; the exception exit fell back to the
+  blanket `UNVALIDATED` because the resolved profile lived on a local inside
+  `_command_cowork_run`, invisible to the outer handler. `snapshotted.profile`
+  is now stashed onto `args._cowork_resolved_profile`, mirroring
+  `_resolved_cowork_run_id`, and threaded through `_handler_release_truths`
+  and both `_blocked_truth_values()` calls in the exception handler.
+- **`certify_upload` and `command_validate` take the plan's fillable rows,
+  not every reserved entry (V7, the card's seam).** Before this, any
+  prefilled row made certification fail closed but unusable: leaving it out
+  of `assignments` failed here (`ENTRY_AUTHORIZATION_MISMATCH`), and
+  including it failed inside `write_upload_bytes`
+  (`ENTRY_BLANK_CELL_AUTHORITY_REQUIRED`) instead. Both now compute
+  `plan_entries(template, slate)` and use `set(plan.fillable)` as the
+  authorized set, as `review_export.py` already does, so a template an
+  operator partly filled by hand can certify or validate its remaining blank
+  rows. Both also refuse a fillable row that repeats a prefilled row's
+  already-resolved roster (R29, `ENTRY_PREFILLED_LINEUP_REPEATED`), checked
+  against `plan.forbidden_keys`. `certify_upload`'s reparse-consistency check
+  (`FINAL_REPARSE_ASSIGNMENT_MISMATCH`) is narrowed to compare only the
+  assigned rows, since a prefilled row is no longer in `assignments` at all
+  (`review_export.py`'s own reparse check already does this).
+- Total diff about 570 changed lines, comfortably under the card's
+  1,500-line split point; V7 shipped in this session rather than a 38b
+  split.
+
+#### Verification
+
+Per finding: wrote the test first, confirmed it fails against the pre-fix
+code in a scratch `git worktree` at the claim commit
+(`PYTHONPATH=<worktree>/src`, the working tree's own venv), then implemented
+the fix and confirmed the test passes. New or extended coverage:
+`tests/test_cowork.py`, `tests/test_certification.py`,
+`tests/test_artifact_preservation.py`, `tests/test_repo_boundaries.py`. Full
+suite (with the row still `In Progress`): `1783 passed, 1 skipped in 388.68s`,
+apart from the one expected `test_the_quick_start_names_the_first_startable_session`
+mismatch, which clears once the row and Quick-Start are rewritten below.
+Rerun clean after this close-out's own edits and the reviewer's fix (next
+paragraph): `1784 passed, 1 skipped in 394.54s (0:06:34)`. The
+`reviewer` subagent found no blocking gaps; it caught one real slip this
+session made on its own (an unrelated pre-existing assertion in
+`test_manifest_audit_rederives_do_not_upload_after_output_tamper` displaced
+and then dropped while inserting a new test nearby), restored before this
+close-out. `sh ./nfl.sh doctor`, `git diff --check` and
+`python3 scripts/check_protected_paths.py` are clean; no protected path
+touched.
+
 ### 2026-09-26: Showdown file integrity (Session 37)
 
 Branch `claude/eager-ramanujan-5ylyix`. The 2026-09-25 code review's V1, V2,

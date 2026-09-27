@@ -255,6 +255,29 @@ def _blocked_truth_values(
     return values
 
 
+def _certified_and_intact(manifest_path: Path, output_path: Path) -> bool:
+    """Never true unless the manifest still binds exactly this file's bytes.
+
+    V3, Session 38: a handler that unconditionally deletes whatever
+    `DK_UPLOAD_*.csv` it finds after a later stage raises can delete a file
+    `certify_upload` already wrote and bound in a `CERTIFIED` manifest.
+    `certify_upload` writes the CSV and its manifest together (or neither);
+    this is the same check `historical_artifact_integrity` runs for `audit`
+    and `status`, reused here to decide what a failure handler may remove.
+    """
+
+    if not manifest_path.is_file() or not output_path.is_file():
+        return False
+    try:
+        report = historical_artifact_integrity(manifest_path)
+    except Exception:  # noqa: BLE001 - never certified-and-intact if unreadable
+        return False
+    return (
+        report["ARTIFACT_INTEGRITY"] == "PASS"
+        and report["manifest_stored_RELEASE_DECISION"] == "CERTIFIED_UPLOAD_PACKAGE"
+    )
+
+
 def _load_config(name: str) -> dict[str, object]:
     path = PROJECT_ROOT / "config" / name
     value = json.loads(path.read_text(encoding="utf-8"))
@@ -868,19 +891,30 @@ def command_validate(args: argparse.Namespace) -> int:
     assignments = read_assignment_csv(args.assignments, slate.mode)
     if sha256_file(args.assignments) != assignment_digest:
         raise RuntimeError("assignment CSV changed while it was being validated")
-    authorized = {entry.entry_id for entry in template.authorizations}
+    # Per-row authority (Session 11): only the plan's fillable blank rows are
+    # this call's to assign, as `review_export.py` and `certify_upload`
+    # (V7, Session 38) both require; a prefilled or partly filled row is
+    # preserved and never assigned.
+    plan = plan_entries(template, slate)
+    fillable = set(plan.fillable)
     problems: list[str] = list(single_contest_problems(template))
-    if set(assignments) != authorized:
-        problems.append("assignment Entry IDs do not exactly match reserved entries")
+    if set(assignments) != fillable:
+        problems.append("assignment Entry IDs do not exactly match the template's fillable rows")
     for entry_id, roster in assignments.items():
         result = validate_lineup(slate, roster)
         problems.extend(f"{entry_id}: {problem}" for problem in result.errors)
+        if (
+            result.valid
+            and result.lineup is not None
+            and result.lineup.canonical_key in plan.forbidden_keys
+        ):
+            problems.append(f"{entry_id}: ENTRY_PREFILLED_LINEUP_REPEATED")
     _print_json(
         {
             "status": "PASS" if not problems else "FAIL",
             **_blocked_truth_values(file_valid=False),
             "mode": slate.mode.value,
-            "authorized_entries": len(authorized),
+            "authorized_entries": len(template.authorizations),
             "problems": problems,
         }
     )
@@ -1214,13 +1248,26 @@ def _certify(args: argparse.Namespace) -> tuple[int, object]:
 
 
 def command_certify(args: argparse.Namespace) -> int:
+    # Resolved once, here, and reused by both the try and the except branch
+    # (V3, Session 38): `_certify` used to resolve it again from `args.run_id`
+    # and `args.label`, and when `args.run_id` is None that is a fresh
+    # timestamp each call, so the except branch could unlink a path that was
+    # never the one `_certify` had just certified.
+    args.run_id = _resolved_run_id(args.run_id, args.label)
     try:
         code, result = _certify(args)
     except Exception as exc:
-        run_id = _resolved_run_id(args.run_id, args.label)
+        run_id = args.run_id
         output_root = Path(args.output_dir).resolve() / run_id
         upload_path = output_root / f"DK_UPLOAD_{run_id}.csv"
-        upload_path.unlink(missing_ok=True)
+        manifest_path = output_root / f"DK_UPLOAD_{run_id}.manifest.json"
+        # `certify_upload` writes the CSV and its manifest together, or
+        # neither; an exception reaching here can only follow a completed
+        # `certify_upload` call (e.g. the review workbook raised afterward).
+        # Never delete a file its own manifest still binds (V3, Session 38).
+        preserved = _certified_and_intact(manifest_path, upload_path)
+        if not preserved:
+            upload_path.unlink(missing_ok=True)
         diagnostic_path = output_root / "certification_diagnostic.json"
         try:
             _write_json(
@@ -1239,7 +1286,8 @@ def command_certify(args: argparse.Namespace) -> int:
                     "error": type(exc).__name__,
                     "message": str(exc),
                     "traceback": traceback.format_exc(),
-                    "upload_csv": None,
+                    "upload_csv": str(upload_path) if preserved else None,
+                    "certified_upload_preserved": preserved,
                 },
             )
         except OSError:
@@ -2214,30 +2262,42 @@ def command_learn(args: argparse.Namespace) -> int:
 
 
 def command_status(args: argparse.Namespace) -> int:
+    """Stored-manifest status, re-derived through historical artifact integrity.
+
+    R09 fixed this pattern in `audit` (below): a package whose evidence had
+    expired, or whose bytes had moved or changed, no longer reported
+    `CERTIFIED_UPLOAD_PACKAGE` on say-so alone. `status` kept the older shape
+    (V6, Session 38): it printed the manifest's stored truths as current with
+    no file or hash check at all, and exited 0 on a stored `CERTIFIED` even
+    for a manifest whose bytes had been deleted or tampered with. It now
+    routes through the same check `audit` uses: `RELEASE_DECISION` is always
+    `DO_NOT_UPLOAD` here (never a current release decision; use `preflight`
+    for one), and every field below is what the manifest stored, not a live
+    truth.
+    """
+
     data = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-    release_decision = data.get(
-        "RELEASE_DECISION",
-        "CERTIFIED_UPLOAD_PACKAGE" if data.get("status") == "CERTIFIED" else "DO_NOT_UPLOAD",
-    )
+    report = historical_artifact_integrity(args.manifest)
     _print_json(
         {
             "run_id": data.get("run_id"),
-            "status": data.get("status"),
-            "FILE_VALID": data.get("FILE_VALID", data.get("status") == "CERTIFIED"),
-            "EVIDENCE_STATE": data.get(
-                "EVIDENCE_STATE", "PASS" if data.get("status") == "CERTIFIED" else "UNKNOWN"
-            ),
+            "stored_status": data.get("status"),
+            "ARTIFACT_INTEGRITY": report["ARTIFACT_INTEGRITY"],
+            "manifest_stored_RELEASE_DECISION": report["manifest_stored_RELEASE_DECISION"],
+            "manifest_stored_EVIDENCE_STATE": report["manifest_stored_EVIDENCE_STATE"],
             "MODEL_STATUS": data.get("MODEL_STATUS", "UNVALIDATED"),
-            "RELEASE_DECISION": release_decision,
+            "RELEASE_DECISION": report["RELEASE_DECISION"],
             "certification_basis": data.get(
                 "certification_basis", "MANUAL_GUARDRAIL"
             ),
             "output_path": data.get("output_path"),
             "output_sha256": data.get("output_sha256"),
             "blockers": data.get("blockers", []),
+            "problems": report["problems"],
+            "meaning": report["meaning"],
         }
     )
-    return 0 if release_decision == "CERTIFIED_UPLOAD_PACKAGE" else 2
+    return 0 if report["ARTIFACT_INTEGRITY"] == "PASS" else 2
 
 
 def command_audit(args: argparse.Namespace) -> int:
@@ -3650,10 +3710,16 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             ),
         )
     run_id = _resolved_run_id(args.run_id, requested.label)
-    if (DEFAULT_RUNS_DIR / run_id).exists():
-        # Refuse before anything is written. The failure handler below only
-        # writes into a run folder this invocation created, so an earlier run's
-        # record is never rewritten by a later command that reused its id.
+    output_root = Path(args.output_dir).resolve() / run_id
+    if (DEFAULT_RUNS_DIR / run_id).exists() or output_root.exists():
+        # Refuse before anything is written, and before `_resolved_cowork_run_id`
+        # is stashed: the failure handler below writes its diagnostic into
+        # `output_root` whenever that attribute is set, so raising after the
+        # stash would let a collision on the output side alone reach the same
+        # silent-overwrite bug this refuses (V5, Session 38). A run folder
+        # removed out from under an unchanged output folder, or the reverse,
+        # both refuse here; an earlier run's record is never rewritten by a
+        # later command that reused its id.
         raise ValueError(
             "RUN_ID_COLLISION: run_id already exists and immutable run records are "
             f"never overwritten: {run_id}; choose a new --run-id or omit it"
@@ -3698,10 +3764,17 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     # Per-row authority (Session 11): the rows a policy binds and a review fills.
     entry_plan = plan_entries(entries, slate)
     snapshotted = _snapshot_cowork_request(request, run_id, intake["hashes"])
+    # V8 (Session 38): the outer exception handler cannot see this local, so it
+    # is stashed onto `args` the same way `_resolved_cowork_run_id` is, letting
+    # a `prior_review` run's exception exit report `MODEL_STATUS=PRIOR_ONLY`
+    # the same as every one of its normal exits, instead of the blanket
+    # `UNVALIDATED` every other profile's exception exit correctly reports.
+    args._cowork_resolved_profile = snapshotted.profile
     request_path = DEFAULT_RUNS_DIR / run_id / "run_request.json"
     _write_json(request_path, snapshotted.to_dict())
-    output_root = Path(args.output_dir).resolve() / run_id
-    output_root.mkdir(parents=True, exist_ok=True)
+    # `output_root` was already checked and resolved above, before anything
+    # was written or `_resolved_cowork_run_id` was stashed (V5, Session 38).
+    output_root.mkdir(parents=True)
     report_path = output_root / "cowork_run.json"
     # R31 (Session 07): one budget for the whole run, from the request's deadline
     # or the earliest lock minus 5 minutes; every stage below takes its allowance.
@@ -4224,7 +4297,11 @@ def _read_run_pointer(
 
 
 def _handler_release_truths(
-    latest: LatestDeliverable | None, failure: str, budget: Budget | None = None
+    latest: LatestDeliverable | None,
+    failure: str,
+    budget: Budget | None = None,
+    *,
+    model_status: ModelStatus = ModelStatus.UNVALIDATED,
 ) -> dict[str, object] | None:
     """v2 for a failed run: its own blocked v1 truths beside the pointer's delivery half.
 
@@ -4236,7 +4313,7 @@ def _handler_release_truths(
         return None
     registry = load_gate_registry()
     return _run_release_truths(
-        _blocked_truth_values(),
+        _blocked_truth_values(model_status=model_status),
         latest=latest,
         not_delivered=_not_delivered_detail(
             {"status": "NOT_PRODUCED", "stage": "BUILD_OR_CERTIFY_FAILED", "reasons": [failure]}
@@ -4288,15 +4365,38 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         failure = f"{type(exc).__name__}:{exc}"
         budget = getattr(args, "_run_slate_budget", None)
         budget = budget if isinstance(budget, Budget) else None
+        # V8 (Session 38): every normal `prior_review` exit pins
+        # `MODEL_STATUS=PRIOR_ONLY`; this exception exit fell back to the
+        # blanket `UNVALIDATED` because the resolved profile lives on a local
+        # inside `_command_cowork_run`, invisible here. `_cowork_resolved_profile`
+        # closes that gap the same way `_resolved_cowork_run_id` already does.
+        exit_model_status = (
+            ModelStatus.PRIOR_ONLY
+            if getattr(args, "_cowork_resolved_profile", None) == "prior_review"
+            else ModelStatus.UNVALIDATED
+        )
         try:
-            handler_truths = _handler_release_truths(latest, failure, budget)
+            handler_truths = _handler_release_truths(
+                latest, failure, budget, model_status=exit_model_status
+            )
         except Exception as truths_exc:  # noqa: BLE001 - the handler must finish
             latest_problems = (*latest_problems, f"DELIVERABLE_REVALIDATION_FAILED:{truths_exc}")
             latest, handler_truths = None, None
         baseline = getattr(args, "_run_slate_baseline", None)
         removed_uploads: list[str] = []
+        preserved_uploads: list[str] = []
         if output_root.is_dir():
             for upload_path in output_root.glob("DK_UPLOAD_*.csv"):
+                # V3, Session 38: this used to remove every `DK_UPLOAD_*.csv`
+                # unconditionally, which could delete a file a real `certify`
+                # call (the model-assisted certify profile, below) had already
+                # written and bound in a `CERTIFIED` manifest before something
+                # later in this run raised. Never delete a file its own
+                # manifest still binds.
+                manifest_path = upload_path.with_name(f"{upload_path.stem}.manifest.json")
+                if _certified_and_intact(manifest_path, upload_path):
+                    preserved_uploads.append(str(upload_path))
+                    continue
                 upload_path.unlink(missing_ok=True)
                 removed_uploads.append(str(upload_path))
         delivery_fields = {
@@ -4325,13 +4425,14 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         diagnostic = {
             "run_id": run_id,
             "status": "DO_NOT_UPLOAD",
-            **_blocked_truth_values(),
+            **_blocked_truth_values(model_status=exit_model_status),
             "stage": "BUILD_OR_CERTIFY_FAILED",
             "error": type(exc).__name__,
             "message": str(exc),
             "traceback": traceback.format_exc(),
             "input_hashes": intake.get("hashes", {}),
             "removed_uploads": removed_uploads,
+            "preserved_uploads": preserved_uploads,
             **delivery_fields,
         }
         diagnostic_path = output_root / "cowork_diagnostic.json"
@@ -4339,14 +4440,14 @@ def command_cowork_run(args: argparse.Namespace) -> int:
         result = {
             "run_id": run_id,
             "status": "DO_NOT_UPLOAD",
-            **_blocked_truth_values(),
+            **_blocked_truth_values(model_status=exit_model_status),
             "stage": "BUILD_OR_CERTIFY_FAILED",
             "error": type(exc).__name__,
             "message": str(exc),
             "diagnostic": str(diagnostic_path),
             "request": str(DEFAULT_RUNS_DIR / run_id / "run_request.json"),
             "input_hashes": intake.get("hashes", {}),
-            "upload_csv": None,
+            "upload_csv": preserved_uploads[0] if preserved_uploads else None,
             **delivery_fields,
             "next": _baseline_next(
                 latest,
