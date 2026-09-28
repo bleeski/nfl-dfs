@@ -1,5 +1,37 @@
 # Implementation Status
 
+## Capability added: 2026-09-28 (Session 23e, Classic half)
+
+Structural hygiene bounds and the share cap for Classic C2 (P2), the Classic half
+of Session 23's card.
+
+- `classic_portfolio_policy.py` adds `nfl_classic_portfolio_policy_c2_v2` (v1
+  unchanged) with `controls.structural_bounds` (`salary_left` inclusive range,
+  `offense_against_own_dst` Boolean, Session 23's "own" reading) and
+  `controls.max_person_share` (a fraction in (0, 1]; the integer is
+  floor(fraction x bound entries), the default maximum of every person without an
+  explicit exposure row). The normalized schema is
+  `nfl_classic_portfolio_policy_normalized_c2_v2`.
+- Both bounds bind `_Enumerator.enumerate` as MILP rows (`add_salary_band`,
+  `add_no_offense_with_dst`, reused from Session 23), are checked directly on
+  single-slot neighbours, and are recomputed from roster bytes by
+  `audit_classic_portfolio` and the C3 review (`CLASSIC_AUDIT_` and
+  `CLASSIC_C3_STRUCTURAL_BOUND_VIOLATED`). The share is reported with the
+  person(s) named in the audit and in `exposure.max_person_share`.
+- `relaxation.py`: rung 1 drops the salary band, rung 2 `offense_against_own_dst`,
+  and the 0.80 share stays through rung 3, dropped only by rung 4.
+  `make_classic_policy.py` writes v2 on every rung.
+- Seven gate codes registered; registry re-pinned.
+
+Verified: `tests/test_classic_structural_hygiene.py` (23 tests, including the
+supplied 719-person Classic pool at rung 0 and an impossible band failing closed),
+`test_relaxation_controller.py` (one test's supplied policy opens the structural
+bounds, named in the changelog), full suite
+`1862 passed, 1 skipped in 356.97s (0:05:56)`. Not yet: a full C2 bank on the
+supplied pool through `run-slate` (Session 47: 4 to 20 s a candidate on this
+host, so the bank, not the bounds, dominates); grading against standings
+(Session 18b); the DAL@NYG/DEN@KC fixtures (`[BEN: ...]` flag on Session 23's card).
+
 ## Capability added: 2026-09-28 (Week 3 slate follow-up)
 
 Three staged scratch scripts from the 2026-09-27 Week 3 slate promoted to

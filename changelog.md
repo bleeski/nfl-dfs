@@ -4,6 +4,98 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-28: Session 23e -- Classic structural bounds and the share cap (C2 v2)
+
+Cloud session, branch `claude/sleepy-hawking-fe4yk4`, task file
+`state/tasks/S23e.md`. Classic half of Session 23's card (chunk P2).
+
+#### Added
+
+- **`nfl_classic_portfolio_policy_c2_v2`** (v1 never mutated; still validates and
+  normalizes with both controls open). `controls.structural_bounds.salary_left`
+  (inclusive range on cap minus roster salary), `.offense_against_own_dst`
+  (Boolean, Session 23's "any non-DST person on a rostered DST's team" reading), and
+  `controls.max_person_share` (a fraction in (0, 1]; floor of fraction times bound
+  entries is the default maximum of every person without an explicit
+  `player_exposure_bounds` row, so `0.8` of 25 is 20 and it rides the existing
+  player-bound audit). Normalized schema bumps to
+  `nfl_classic_portfolio_policy_normalized_c2_v2`. Seven gate codes registered;
+  `REGISTRY_SHA256` re-pinned in `tests/test_gate_registry.py` and
+  `docs/DATA_CONTRACTS.md` (new § C2 v2).
+- **Enforcement as rows, not a filter.** `_Enumerator.enumerate` adds
+  `add_salary_band` and `add_no_offense_with_dst` to every stratum's optimizer;
+  `expand_validated_neighbors` (single-slot swaps, not solver output) checks the
+  bounds directly; a solver roster that breaks one blocks the bank as
+  `ILLEGAL_SOLVER_ROSTER`. Measured on the 719-person supplied pool: a solve with
+  both rows takes 0.26 s against 0.36 s open, so the bounds do not slow the bank.
+- **Audit and review.** `audit_classic_portfolio` and `classic_review` recompute
+  both bounds from roster bytes (`CLASSIC_AUDIT_STRUCTURAL_BOUND_VIOLATED`,
+  `CLASSIC_C3_STRUCTURAL_BOUND_VIOLATED`) and report `max_person_share`
+  (`share_percentage`, `entries`, `people`, `declared_fraction`,
+  `declared_maximum_entries`) beside each entry's `structural_bound_violations`;
+  the Classic HTML review prints the share line.
+- **Ladder** (`relaxation.py`). Rung 0: `salary_left` 0 to 1000,
+  `offense_against_own_dst`, share 0.80 (with the existing 0.50 per-person rows).
+  Rung 1 drops the salary band, rung 2 the own-DST rule, and the share stays
+  through rung 3 (no per-person row there, so it is the cap that binds) and goes
+  only with rung 4. `classic_relaxed_controls` keeps "loosest of policy and table"
+  per dimension: `salary_left` the wider range, own-DST only while both hold, the
+  share the higher fraction (0.50, 0.50, 0.65, 0.80 by rung), and a policy with no
+  share keeps none, so a supplied v1 policy gains no cap. A rung-k generator
+  policy still relaxes to exactly rung k+1 (the existing parametrized test).
+  `make_classic_policy.py` writes v2 on every rung and prints the new lines.
+- `tests/test_classic_structural_hygiene.py`, 23 tests: contract (v1 unchanged,
+  v2-only controls, eight refusals, round trip, share default with an explicit row
+  winning), rows-not-filter with a bounds-open control, fail-closed on an impossible
+  band, audit recomputation and share reporting, the rung table's monotone
+  loosening, the generator's output, the C3 review's fields, and the supplied
+  Classic pool at rung 0 (every proposed roster inside the bounds; a band no roster
+  can meet fails closed with `MODEL_INFEASIBLE`).
+
+#### Changed
+
+- `tests/test_relaxation_controller.py::test_a_structural_failure_at_selection_takes_the_next_rung_exactly`:
+  the supplied policy now opens `structural_bounds` (edited as its own visible
+  change). Its synthetic pool cannot meet rung 0's salary band (about $16,000 left
+  per roster), so the bank was `STRUCTURAL_INFEASIBILITY` before the test's
+  injected failure and the ladder stepped past rung 1. The test is about the
+  bring-back step and still asserts exactly that.
+- `docs/RUNBOOK.md` names v2 as an accepted policy schema.
+
+#### Judgment calls
+
+- `offense_against_own_dst` keeps Session 23's same-team reading for Classic
+  rather than the 2026-09-15 findings' possible "opposing offense" reading, so
+  the name means one thing in both modes. It also forces `RB_DST_PAIR` to zero
+  (advisory, harmless). If Ben wants the opposing-offense rule instead, it is a
+  new bound, not a change to this one.
+- The share stays through rung 3 rather than dropping there as Showdown's does,
+  because Classic rungs 0 to 2 carry tighter explicit fractions, so dropping it at
+  rung 3 would make the share cap inert at every rung. Table share per rung is
+  the explicit fraction where the rung has one, else 0.80.
+- `offense_against_own_dst` drops at rung 2 with the bring-back rule, the analogue
+  of Session 23 grouping it with the K/DST caps; the pass-catcher band is the
+  existing `QB_PASS_CATCHER` rule and Classic has no K or QB-count row.
+- Generated documents carry the share as a JSON number; `_materialize` turns it
+  into its exact decimal before hashing.
+
+#### Verification
+
+- Card command: `sh ./nfl.sh test tests/test_classic_policy_generator.py tests/test_relaxation_controller.py -x --tb=short` passed.
+- Full suite: `1862 passed, 1 skipped in 356.97s (0:05:56)` (the junction test).
+
+#### Found
+
+- A 20-entry rung-0 bank on the real 719-person pool did not finish in 240 s
+  (12 candidates), with or without these bounds (single solves are 0.3 to 1.4 s,
+  so the time is in the strata's search bound and no-good growth): Session 47's
+  finding, unfixed here.
+- A default 32-candidate bank cannot satisfy a share cap on even three entries
+  (`INCOMPLETE_BANK_EXHAUSTION`): the `player_cap_exclusion` strata need about two
+  candidates per capped person. Generated banks are sized in the hundreds; a
+  hand-written v2 policy with a share needs a bank to match.
+- The DAL@NYG and DEN@KC bytes are still not in the repo; acceptance was proven on the supplied Classic fixture.
+
 ### 2026-09-28: Week 3 slate follow-up -- staged scripts promoted, two engine fixes, a protected-path move
 
 Cloud session, branch `claude/advisor-usage-sohf7n`, working from the

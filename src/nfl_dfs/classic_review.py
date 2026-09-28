@@ -831,6 +831,7 @@ def create_classic_review_package(
         stack_counts: Counter[str] = Counter()
         stack_values_by_entry: dict[str, dict[str, int]] = {}
         group_matches_by_entry: dict[str, list[str]] = {}
+        structural_by_entry: dict[str, list[str]] = {}
         entries_payload: list[dict[str, object]] = []
 
         scores_raw = _mapping(score_snapshot.get("scores_by_dk_id"), label="SCORES_BY_DK_ID")
@@ -970,6 +971,12 @@ def create_classic_review_package(
                     group_matches.append(group.group_id)
             if bound:
                 group_counts.update(group_matches)
+            # Session 23e: the policy's structural bounds, recomputed from the roster bytes.
+            broken_bounds = policy.structural_bounds.violations(slate, roster) if bound else ()
+            structural_by_entry[authorization.entry_id] = list(broken_bounds)
+            problems.extend(
+                f"CLASSIC_C3_STRUCTURAL_BOUND_VIOLATED:{authorization.entry_id}:{name}" for name in broken_bounds
+            )
             group_matches_by_entry[authorization.entry_id] = group_matches
             stack_values: dict[str, int] = {}
             for rule in policy.stack_rules:
@@ -1036,6 +1043,7 @@ def create_classic_review_package(
                     "slots": slots,
                     "salary_total": valid.lineup.salary,
                     "salary_remaining": slate.salary_cap - valid.lineup.salary,
+                    "structural_bound_violations": structural_by_entry[authorization.entry_id],
                     "prior_only_central_estimate_points": round(lineup_score, 6),
                     "canonical_key": valid.lineup.canonical_key,
                     "teams": sorted(teams),
@@ -1444,6 +1452,18 @@ def create_classic_review_package(
                 "canonical_uniqueness": "PASS",
                 "unique_required": policy.require_unique_lineups,
                 "canonical_lineups": canonical_by_entry,
+                "structural_bounds": policy.structural_bounds.as_mapping(),
+                "max_person_share": {
+                    "share_percentage": round(100 * max(player_counts.values(), default=0) / denominator, 3)
+                    if denominator else 0.0,
+                    "entries": denominator,
+                    "people": sorted(
+                        person for person, count in player_counts.items()
+                        if count == max(player_counts.values(), default=0)
+                    ),
+                    "declared_fraction": None if policy.max_person_share is None else str(policy.max_person_share),
+                    "declared_maximum_entries": policy.max_person_share_entries,
+                },
                 "configured_pairwise_person_overlap": policy.max_pairwise_person_overlap,
                 "effective_pairwise_person_overlap": policy.max_pairwise_person_overlap,
                 "pairwise_overlap": pairwise,

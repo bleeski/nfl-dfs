@@ -15,6 +15,11 @@ relaxation never tightens anything: a generator's rung-k policy becomes rung
 k+1 exactly, and a hand-written one keeps whatever the rung leaves looser. A
 supplied policy starts at the first rung that changes it.
 
+Session 23e (P2) folds Classic's structural bounds into the same table: rung 1 drops
+the `salary_left` band, rung 2 `offense_against_own_dst`, and `max_person_share` (0.80)
+stays through rung 3, dropped only by rung 4. See `classic_structural_bounds` and
+`docs/DATA_CONTRACTS.md` § C2 v2.
+
 WHAT A FAILURE ASKS FOR. The selection's failure status, carried structured on
 `SelectionError` into `reports["selection_failure"]` (never parsed from text),
 picks the step:
@@ -69,9 +74,11 @@ from decimal import Decimal
 from pathlib import Path
 
 from .classic_portfolio_policy import (
+    ClassicStructuralBounds,
     NormalizedClassicPortfolioPolicy,
     StackRule,
     classic_portfolio_policy_template,
+    person_share_maximum,
     validate_classic_portfolio_policy_file,
     write_classic_portfolio_policy_validation,
     write_normalized_classic_portfolio_policy,
@@ -85,6 +92,7 @@ from .hashing import sha256_bytes
 from .portfolio_enforcement import scaled_candidate_limit
 from .portfolio_policy import (
     FRACTION_UNIT,
+    OPEN_RANGE,
     POLICY_SCHEMA_VERSION_V2,
     ExposureRule,
     NormalizedPortfolioPolicy,
@@ -191,6 +199,63 @@ def classic_exposure_cap(count: int, rung: int) -> int:
     return max(1, math.ceil(fraction * count))
 
 
+# Session 23e (P2): Classic structural hygiene and the share cap, folded into the
+# rung table in the brief's relaxable order (salary band, pass-catcher band, K/DST
+# caps, QB count, `max_person_share` last). The pass-catcher band is the existing
+# `QB_PASS_CATCHER` rule above, already on the table, and Classic has no kicker or
+# QB-count row, so what is new is the salary band (rung 1), `offense_against_own_dst`
+# (rung 2, grouped with the K/DST caps it sits beside in Showdown's ladder, the same
+# judgment call Session 23 recorded) and the share cap. The share cap stays through
+# rung 3, the last policy rung and the first where it is the only exposure cap left
+# (rungs 0 to 2 carry tighter explicit fractions); rung 4, no policy, drops it.
+CLASSIC_SALARY_LEFT_MAXIMUM = 1000
+CLASSIC_SHARE_CEILING = Decimal("0.80")
+
+
+def _json_number(fraction: Decimal | None) -> float | None:
+    """A share as the plain JSON number a policy document carries (`json.dumps` reads it;
+    `_materialize` turns it back into the exact decimal the validator parses)."""
+
+    return None if fraction is None else float(fraction)
+
+
+def _exact_decimals(value: object) -> object:
+    """`value` with every float replaced by its shortest-repr `Decimal`, for canonical bytes."""
+
+    if isinstance(value, float):
+        return Decimal(repr(value))
+    if isinstance(value, Mapping):
+        return {key: _exact_decimals(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_exact_decimals(item) for item in value]
+    return value
+
+
+def classic_structural_bounds(rung: int) -> ClassicStructuralBounds:
+    """The rung's structural bounds: salary left to $1,000 through rung 0, no offense against
+    an own DST through rung 1."""
+
+    return ClassicStructuralBounds(
+        StructuralBoundRange(0, CLASSIC_SALARY_LEFT_MAXIMUM) if rung <= 0 else OPEN_RANGE,
+        rung <= 1,
+    )
+
+
+def classic_table_share(rung: int) -> Decimal:
+    """The largest share of the entries one person holds at `rung`: its explicit exposure
+    fraction where the rung has one, else the 0.80 ceiling."""
+
+    fraction = classic_exposure_fraction(rung)
+    return CLASSIC_SHARE_CEILING if fraction is None else Decimal(str(fraction))
+
+
+def classic_generated_share(count: int) -> Decimal | None:
+    """The `max_person_share` a generated policy declares: the ceiling, on any portfolio
+    big enough to cap (the rung fractions skip two entries or fewer the same way)."""
+
+    return CLASSIC_SHARE_CEILING if count > 2 else None
+
+
 def classic_limits(
     count: int,
     pool_people: int,
@@ -274,6 +339,8 @@ def classic_rung_controls(slate, count: int, rung: int) -> dict[str, object]:
         "stack_rules": classic_stack_rules(count, rung),
         "max_pairwise_person_overlap": min(classic_overlap(rung), ROSTER_SIZE - 1),
         "require_unique_lineups": True,
+        "structural_bounds": classic_structural_bounds(rung).as_mapping(),
+        "max_person_share": _json_number(classic_generated_share(count)),
     }
     if classic_exposure_fraction(rung) is not None and count > 2:
         cap = classic_exposure_cap(count, rung)
@@ -300,7 +367,10 @@ def classic_relaxed_controls(policy: NormalizedClassicPortfolioPolicy, rung: int
     value range, and stays HARD only if the rung's rule is; a person's maximum is
     the higher of the two and a minimum drops to the table's zero; a team, game
     or HARD group bound the table does not carry is dropped (a group becomes
-    ADVISORY); the overlap cap is the higher. A policy's own exact exclusions,
+    ADVISORY); the overlap cap is the higher. Session 23e: `salary_left` is the
+    wider range and `offense_against_own_dst` holds only while the rung's does;
+    `max_person_share` is the higher of the two fractions, and a policy without
+    one keeps none. A policy's own exact exclusions,
     and any person it caps at zero, are carried unchanged, and uniqueness is
     always required (R29). An exclusion
     from outside the policy (official inactives, operator exclusions) is not
@@ -311,10 +381,20 @@ def classic_relaxed_controls(policy: NormalizedClassicPortfolioPolicy, rung: int
     people = policy.people_by_id
     table_rules: dict[str, dict[str, object]] = {}
     cap = overlap = None
+    share = policy.max_person_share
+    structural = policy.structural_bounds
     if rung is not None:
         table_rules = {str(item["rule_type"]): item for item in classic_stack_rules(count, rung)}
-        cap = classic_exposure_cap(count, rung)
+        # The most one person may hold at this rung, for a person the table bounds:
+        # its explicit fraction where it has one; else, on a policy that declares a
+        # share cap, the share ceiling (its own default loosens to it); else no cap.
+        cap = (classic_exposure_cap(count, rung) if classic_exposure_fraction(rung) is not None
+               else count if count <= 2 or share is None else person_share_maximum(CLASSIC_SHARE_CEILING, count))
         overlap = min(classic_overlap(rung), ROSTER_SIZE - 1)
+        share = None if share is None else max(share, classic_table_share(rung))
+        structural = _classic_relaxed_structural(structural, classic_structural_bounds(rung))
+    share_maximum = person_share_maximum(share, count)
+    default_maximum = count if share_maximum is None else share_maximum
     bounds = []
     for bound in policy.player_bounds:
         if bound.exclusion_source is not None:
@@ -322,7 +402,9 @@ def classic_relaxed_controls(policy: NormalizedClassicPortfolioPolicy, rung: int
         low, high = bound.minimum_entries, bound.maximum_entries
         if cap is not None:
             low, high = 0, (0 if high == 0 else max(high, cap))  # a zero cap is an exclusion
-        if (low, high) != (0, count):
+        # A person at the share's default maximum carries no explicit row: the
+        # relaxed policy derives the same bound from `max_person_share`.
+        if (low, high) != (0, default_maximum):
             bounds.append({**people[bound.entity_id].reference(), "minimum_entries": low,
                            "maximum_entries": high, "hard": True})
 
@@ -353,7 +435,26 @@ def classic_relaxed_controls(policy: NormalizedClassicPortfolioPolicy, rung: int
             policy.max_pairwise_person_overlap if overlap is None
             else max(policy.max_pairwise_person_overlap, overlap)),
         "require_unique_lineups": True,
+        "structural_bounds": structural.as_mapping(),
+        "max_person_share": _json_number(share),
     }
+
+
+def _classic_relaxed_structural(
+    bounds: ClassicStructuralBounds, table: ClassicStructuralBounds
+) -> ClassicStructuralBounds:
+    """The loosest of `bounds` and the rung's: a side either leaves open is open."""
+
+    def wider(left: int | None, right: int | None, pick) -> int | None:
+        return None if left is None or right is None else pick(left, right)
+
+    return ClassicStructuralBounds(
+        StructuralBoundRange(
+            wider(bounds.salary_left.minimum, table.salary_left.minimum, min),
+            wider(bounds.salary_left.maximum, table.salary_left.maximum, max),
+        ),
+        bounds.offense_against_own_dst and table.offense_against_own_dst,
+    )
 
 
 def _merged_rule(rule: StackRule, table: Mapping[str, object] | None, relaxing: bool) -> dict[str, object]:
@@ -884,7 +985,7 @@ class Ladder:
         name = f"attempt_{self._attempt + 1}_rung_{'SUPPLIED' if rung is None else rung}"
         folder = self.folder / (name + ("_bank" if bank else ""))
         folder.mkdir(parents=True, exist_ok=False)  # never over an earlier output
-        raw = canonical_decimal_json_bytes(document) + b"\n"
+        raw = canonical_decimal_json_bytes(_exact_decimals(document)) + b"\n"
         source = folder / "portfolio_policy.json"
         source.write_bytes(raw)
         digest = sha256_bytes(raw)
@@ -947,6 +1048,9 @@ class Ladder:
                     [(group.group_id, group.strength, group.minimum_entries) for group in after.groups])
             compare("max_pairwise_person_overlap", before.max_pairwise_person_overlap,
                     after.max_pairwise_person_overlap)
+            compare("structural_bounds", before.structural_bounds.as_mapping(),
+                    after.structural_bounds.as_mapping())
+            compare("max_person_share", before.max_person_share, after.max_person_share)
             compare("search_limits", before.search_limits.as_mapping(), after.search_limits.as_mapping(), "BANK")
             return changes
         before, after = old.policy, new.policy

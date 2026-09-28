@@ -391,7 +391,9 @@ independent export audit, and exact-template export.
 
 ## C2 Classic policy, candidate bank, assignment, and selection audit
 
-`nfl_classic_portfolio_policy_c2_v1` is the only Classic policy source schema.
+`nfl_classic_portfolio_policy_c2_v1` and (since Session 23e) `nfl_classic_portfolio_policy_c2_v2`
+are the Classic policy source schemas; v2 adds two controls, described in § C2 v2 below,
+and v1 is never mutated.
 It binds the exact untouched salary and entry SHA-256 values, draft group,
 complete ordered Entry IDs, complete games/teams/people/positions/roster slots,
 registered stack-rule set, `classic_prior_points_expected_stat_line_c2_v1`
@@ -402,7 +404,7 @@ unknown fields, duplicate JSON keys, nonfinite values, incomplete identity,
 source mutation, and unregistered objective or rule names fail validation.
 
 The validated source is normalized to canonical
-`nfl_classic_portfolio_policy_normalized_c2_v1` bytes. All exposure limits use
+`nfl_classic_portfolio_policy_normalized_c2_v2` bytes (v1 until Session 23e; see § C2 v2). All exposure limits use
 inclusive direct lineup counts with the exact requested Entry-ID count as the
 denominator (since Session 11b, the policy's own bound rows; below):
 
@@ -434,6 +436,82 @@ and `minimum_entries..maximum_entries` across qualifying lineups. Policy
 validation checks exact references, ordered integer domains, direct
 contradictions, position/skill/player capacity, team/game capacity, exclusions,
 and loose uniqueness/overlap capacity before candidate solving.
+
+### C2 v2: structural hygiene bounds and `max_person_share` (Session 23e, P2)
+
+`nfl_classic_portfolio_policy_c2_v2` adds two optional controls; a v1 document that
+declares either fails with `CLASSIC_POLICY_STRUCTURAL_BOUND_TYPE_INVALID`, and v1 keeps
+validating exactly as before. Omitting a control, or a side of it, leaves it open (v1
+behaviour). Both mirror Session 23's Showdown vocabulary (§ SD3 v2 below) so 23b and 23c
+read one shape.
+
+```json
+"structural_bounds": {
+  "salary_left": {"minimum": 0, "maximum": 1000},
+  "offense_against_own_dst": true
+},
+"max_person_share": 0.8
+```
+
+- `salary_left` is the inclusive range of `slate.salary_cap` minus the roster's total
+  salary; either side may be `null`.
+- `offense_against_own_dst` is a Boolean with Session 23's "own" reading: `true` forbids any
+  non-DST person, at any position, from sharing a rostered DST's team. It therefore also
+  covers a DST on the rostered QB's team, and makes the `RB_DST_PAIR` stack value
+  always zero (that rule is advisory, so nothing breaks). It is not "the DST's opponent";
+  the 2026-09-15 findings' wording ("no offense against own DST" beside "DST not on the
+  QB's team") could be read as the opposing offense, which this session did not implement.
+- `max_person_share` is a JSON number in (0, 1] or `null`. Its integer form is
+  floor(fraction x bound entries), with no rounding up (`0.8` of 25 entries is 20). It is the
+  default `maximum_entries` of every person the policy gives no `player_exposure_bounds`
+  row (an explicit row wins, as a Showdown override does), so it lives in the normalized
+  `player_bounds` and is audited and enforced by the joint solve like any player bound.
+  A fraction that floors to zero is `CLASSIC_POLICY_MAX_PERSON_SHARE_INVALID`.
+
+Both are enforced where a lineup is proposed, never after: `salary_left` as one salary row
+(`LineupOptimizer.add_salary_band`) and `offense_against_own_dst` as pairwise not-both rows
+(`add_no_offense_with_dst`), added to every candidate-bank stratum. A validated
+single-slot neighbour (the `policy_feasible_chain`) is not a solver output, so it is
+checked directly and skipped if it breaks a bound. A bound no roster can meet surfaces as
+the solver proving the model infeasible (`STRUCTURAL_INFEASIBILITY` on the bank), which
+the ladder treats as its `STRUCTURE` trigger; there is no static capacity check.
+
+The audit (`audit_classic_portfolio`) and the C3 review recompute both bounds from the
+exact roster IDs (`CLASSIC_AUDIT_STRUCTURAL_BOUND_VIOLATED`,
+`CLASSIC_C3_STRUCTURAL_BOUND_VIOLATED`), never from the generator's claims. The share is
+reported with the person(s) named in the audit's `max_person_share` and the review's
+`exposure.max_person_share` (`share_percentage`, `entries`, `people`, `declared_fraction`,
+`declared_maximum_entries`), beside `exposure.structural_bounds` and each entry's
+`structural_bound_violations`.
+
+The normalized schema bumps unconditionally to `nfl_classic_portfolio_policy_normalized_c2_v2`
+and always carries `controls.structural_bounds` and `controls.max_person_share`
+(`{"fraction", "maximum_entries"}`), open for a v1 source. This is safe because the
+normalized artifact is produced within the run that reads it back (the audit, the review).
+
+**Relaxation ladder (`relaxation.py`).** The brief's order (salary band, pass-catcher band,
+K/DST caps, QB count, `max_person_share` last) folds into the existing Classic rungs:
+
+| Rung | `salary_left` | `offense_against_own_dst` | `max_person_share` (generated) | Per-person fraction row |
+|---|---|---|---|---|
+| 0 | 0 to 1000 | on | 0.80 | 0.50 |
+| 1 | open | on | 0.80 | 0.50 |
+| 2 | open | off | 0.80 | 0.65 |
+| 3 | open | off | 0.80 | none, so 0.80 is the cap that binds |
+| 4 | no policy (C1) | | | |
+
+The pass-catcher band is the existing `QB_PASS_CATCHER` rule (relaxed at rung 3); Classic
+has no kicker or QB-count row. `offense_against_own_dst` drops with the rung that drops the
+bring-back rule, the analogue of Showdown grouping it with the K/DST caps (a judgment call,
+recorded in `changelog.md`). The share is the last cap to go: rung 3 has no per-person row,
+so it is the only exposure cap left there, and only rung 4 drops it. A rung's policy stays
+the loosest of the policy it replaces and the rung's table: `salary_left` is the wider
+range, `offense_against_own_dst` holds only while both do, and `max_person_share` is the
+higher of the policy's and the rung's (0.50, 0.50, 0.65, 0.80 by rung); a policy with none
+keeps none. The relaxation record names `structural_bounds` and `max_person_share` when
+either moves. `scripts/make_classic_policy.py` writes a v2 document on every rung, with
+`max_person_share` 0.80 for three or more entries and `null` for two or fewer, as the
+per-person rows already skip that case.
 
 `nfl_classic_candidate_bank_c2_v1` contains the normalized-policy hash,
 requested and produced counts, canonical-unique count, explicit bounded versus
@@ -2285,7 +2363,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `e2645fd4629cc239011806de9de7e77cb424aacdd7bd838b83543e0ac67a425c`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `87dfe9740f349869507d937be108574c5497e0537c004a773dbd683f8a926c49`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

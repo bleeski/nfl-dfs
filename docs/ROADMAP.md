@@ -17,22 +17,21 @@ full code review and a sweep of every plan, brief, archive and ledger.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 23e exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S23e`, on the branch your session was assigned or a new `claude/s23e-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 21 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S21`, on the branch your session was assigned or a new `claude/s21-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
 On 2026-09-25 a full code review (`docs/critiques/Code_Review_2026-09-25.md`)
 and a sweep of every plan, brief, retrospective, archive and ledger were
 consolidated into this board, and Ben re-prioritized it by expected winnings
 (§2.8). Session 23 closed on 2026-09-27 (the Showdown half of the hygiene
-bounds and the share cap); its Classic half split to Session 23e at the
-card's own named seam, and 23e is now first. Sessions 21, 17, 23b and 23d also
-became startable when 23 closed (each depended only on Session 23, not on its
-Classic half). Session 21 (the prior-model unit mismatch, now confirmed)
-shares no file with 23e, so a second instance may take it. Session 17 needs
-only a cloud session and O1 for its acceptance. Session 23b (Ben's game
-theses) needs only Showdown's half, already Complete, but shares
-`relaxation.py` and `docs/DATA_CONTRACTS.md` with 23e; run them one at a time,
-or in separate worktrees with 23e's Classic-only edits merged first. Session
-23c still waits on 23b.
+bounds and the share cap) and its Classic half, Session 23e, closed on
+2026-09-28, so Session 39 (Classic diversification, which needed the Classic
+ladder's ordering settled) is now startable. Session 21 (the prior-model unit
+mismatch, confirmed) is first by row order and shares no file with the
+Classic policy work; Sessions 17, 23b and 23d are startable too. Session 17
+needs only a cloud session and O1 for its acceptance. Session 23b (Ben's game
+theses) shares `relaxation.py` and `docs/DATA_CONTRACTS.md` with the sessions
+just closed; run it and Session 39 (which also touches `relaxation.py`) one at
+a time, or in separate worktrees. Session 23c still waits on 23b.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -127,7 +126,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 37 | Batched | Showdown file integrity: the Showdown policy validator refuses `require_unique_lineups: false` and the audit's duplicate check is unconditional (R29); `qa_showdown_portfolio.py` exempts only the template's blank rows, compares raw lines, exits 3 on a sanctioned unfilled row, keeps operator limits out of the validity exit and identifies people by ID; the Showdown no-policy entry re-parse goes and the entry-hash stop applies in every mode; C3 packaging catches every exception; `referee.py` names an empty physical line | Code review 2026-09-25 V1, V2, V9, V10, V11, E12; changelog 2026-09-23 (Session 02b) | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/portfolio_enforcement.py`, `scripts/qa_showdown_portfolio.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/referee.py`, `tests/test_portfolio_enforcement.py`, `tests/test_qa_showdown_portfolio.py` | V | none | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_portfolio_enforcement.py tests/test_qa_showdown_portfolio.py tests/test_prior_review_profile.py -x --tb=short`; seam: the policy flag and the QA script first | Complete |
 | Session 38 | Batched | Run-path integrity: the review workbook is built before `certify_upload` and no handler deletes a file whose manifest hash matches; `nfl.ps1` accepts `baseline`; an existing `outputs/<run_id>` is refused like `data/runs/<run_id>`; `status` re-derives or labels stored truths and never exits 0 on a stored `CERTIFIED`; the exception exit of a `prior_review` run reports `PRIOR_ONLY`; `certify` and `validate` take per-row authority from `plan_entries` | Code review V3 to V8 | `src/nfl_dfs/cli.py`, `nfl.ps1`, `src/nfl_dfs/certification.py`, `tests/test_certification.py`, `tests/test_cowork.py`, `tests/test_artifact_preservation.py` | V | none | `sh ./nfl.sh test tests/test_certification.py tests/test_cowork.py tests/test_artifact_preservation.py tests/test_run_slate_baseline_first.py -x --tb=short`; seam: per-row certify authority last | Complete |
 | Session 23 | Standalone | P2 part 1, structural hygiene (Showdown half): Showdown policy v2 (`qb_count`, `pass_catchers_with_rostered_qb`, `salary_left`, `kicker_count`, `dst_count`, `offense_against_own_dst`), each bound as a real MILP row on `LineupOptimizer` and independently recomputed in the SD4 audit from roster bytes; portfolio-wide `max_person_share` (default 0.80; the one share limit Sessions 23b and 23c reuse) audited and reported with the person named; generator defaults from the four-game-stable set, kickers and DSTs never excluded; a default captain cap and a captain-spread column; the new bounds on the relaxation ladder in the brief's order. Classic bounds split to Session 23e at the card's own named seam | Chunk P2; standings findings §8.1 C, §8.2 H and I; code review S7; R33, R34 | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/optimizer.py`, `scripts/make_showdown_policy.py`, `src/nfl_dfs/relaxation.py`, `src/nfl_dfs/readable_review.py`, `docs/DATA_CONTRACTS.md`, `config/gate_registry_v1.json` | S | Session 10 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_classic_policy_generator.py tests/test_portfolio_enforcement.py tests/test_relaxation_controller.py -x --tb=short`; acceptance proven on NE@SEA and DET@BUF (DAL@NYG/DEN@KC bytes not in the repo, `[BEN: ...]` flag); grading the rerun against standings is Session 18b | Complete |
-| Session 23e | Standalone | P2 part 1b, Classic structural bounds and the share cap: `salary_left` and `offense_against_own_dst` in a new `nfl_classic_portfolio_policy_c2_v2` (v1 unchanged); a new `max_person_share` default-fraction control for Classic (C2 has no existing default-fraction mechanism, unlike Showdown); generator defaults; the new bounds folded into the existing Classic rung table | Chunk P2; standings findings §5.4; Session 23 breakpoint | `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | S | Session 23 | `sh ./nfl.sh test tests/test_classic_policy_generator.py tests/test_relaxation_controller.py -x --tb=short`; acceptance on the supplied Classic fixture unless the DAL@NYG/DEN@KC bytes have arrived | Pending |
+| Session 23e | Standalone | P2 part 1b, Classic structural bounds and the share cap: `salary_left` and `offense_against_own_dst` in a new `nfl_classic_portfolio_policy_c2_v2` (v1 unchanged); a new `max_person_share` default-fraction control for Classic (C2 has no existing default-fraction mechanism, unlike Showdown); generator defaults; the new bounds folded into the existing Classic rung table | Chunk P2; standings findings §5.4; Session 23 breakpoint | `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | S | Session 23 | `sh ./nfl.sh test tests/test_classic_policy_generator.py tests/test_relaxation_controller.py -x --tb=short`; acceptance on the supplied Classic fixture unless the DAL@NYG/DEN@KC bytes have arrived | Complete |
 | Session 21 | Batched | Prior-model triage: the season-sum share against per-game capacity mismatch, confirmed by the 2026-09-25 review at `priors.py:1541-1565` and `:1661-1680`, becomes per-game rates under a new transformation version; the transfer pseudo-count scales by the team's expected pool, not the incumbents'; F8 alternate-name identity proposals for review with auto-accept unchanged; `tests/test_priors_adapter.py:44`'s hardcoded `AS_OF` pins `now` | Showdown retro §9 #2; archive § F8; code review S1, S2 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_score.py`, `src/nfl_dfs/opportunity.py`, `docs/DATA_CONTRACTS.md`, `tests/test_priors_adapter.py` | P | none | `sh ./nfl.sh test tests/test_priors_adapter.py tests/test_offensive_roles.py tests/test_prior_selection.py -x --tb=short`; a fixture player who missed games projects at his per-game rate | Pending |
 | Session 48 | Standalone | Depth-chart QB transfer bug: a starter who arrived at his current team from elsewhere this offseason or in-season (2026-09-27 examples: Malik Willis, Geno Smith) gets zero attempt share under the current-role depth-chart rule, because the rule reads only this team's own prior-season depth history and a transferred starter has none there; he should get his new team's starter share the same as any other named starter, not zero | changelog 2026-09-27 (Week 3 slate run) | `src/nfl_dfs/qb_depth_roles.py`, `docs/DATA_CONTRACTS.md` | P | none | `sh ./nfl.sh test tests/test_qb_depth_roles.py -x --tb=short`; a fixture starter with no prior-season history at his current team gets the starter's share, not zero | Pending |
 | Session 17 | Standalone | X2: the 26 standings exports become private GitHub release assets, fetched with authentication through `sources.py` and hash-bound on arrival | Chunk X2; archive § R27 | `src/nfl_dfs/sources.py`, a retrieval script, `docs/DATA_CONTRACTS.md` | P | Session 00 | `sh ./nfl.sh test tests/test_source_ledger.py tests/test_sources_tls.py tests/test_standings_transport.py -x --tb=short`; acceptance needs O1 | Pending |
@@ -1103,6 +1102,26 @@ Every session follows this protocol, and the cards only add to it:
   hygiene pass at rung 0, and infeasible bounds fail closed naming the rung;
   if those bytes are still not in the repo, prove it on the supplied Classic
   fixture instead and repeat the `[BEN: ...]` flag. Suite green.
+
+- **2026-09-28, Complete.** `nfl_classic_portfolio_policy_c2_v2` (v1 keeps
+  validating unchanged; the normalized schema bumps to
+  `nfl_classic_portfolio_policy_normalized_c2_v2`) adds
+  `controls.structural_bounds.{salary_left, offense_against_own_dst}` and
+  `controls.max_person_share`, reusing Session 23's `StructuralBoundRange`,
+  `structural_bound_violations`, `LineupOptimizer.add_salary_band` and
+  `add_no_offense_with_dst`. The bounds are MILP rows in every candidate-bank
+  stratum, checked directly on single-slot neighbours, and recomputed from roster
+  bytes by the audit and the C3 review; `max_person_share` (floor of the fraction
+  times the bound entries) is the default maximum of every person without an
+  explicit exposure row, reported with the person named in the audit and in
+  `exposure.max_person_share`. Ladder: rung 1 drops the salary band, rung 2
+  `offense_against_own_dst`, and the 0.80 share stays through rung 3 (the first
+  rung where it is the only per-person cap), dropped only by rung 4. Seven gate
+  codes registered (registry re-pinned). Acceptance proven on the supplied Classic
+  fixture (719 people): rung 0's candidates all pass the hygiene bounds and an
+  impossible band fails closed with `MODEL_INFEASIBLE`; the DAL@NYG/DEN@KC bytes
+  are still not in the repo (the `[BEN: ...]` flag on Session 23's card stands).
+  Suite line in `changelog.md`.
 
 #### Session 21: prior-model triage
 
@@ -2132,3 +2151,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-27 | Session 23e | Added as Pending | recorded at Session 23's close-out | Classic structural bounds and the share cap, split from Session 23 at the card's own named seam (Showdown first, Classic second) |
 | 2026-09-27 | Session 23 | In Progress to Complete | `a000f7f` | Showdown v2 structural bounds, `max_person_share` reporting, review S7's captain cap/spread, the ladder fold; reviewer's fix applied; suite `1798 passed, 1 skipped in 378.56s (0:06:18)` |
 | 2026-09-27 | Sessions 47 to 49 | Added as Pending | recorded by the next session | Week 3 slate follow-up (changelog 2026-09-27): C2 bank-rate calibration (47), a depth-chart QB transfer bug (48), the thesis builder as rung 4 (49); §2.8 |
+| 2026-09-28 | Session 23e | Pending to In Progress | `a9bae8f` | Claim pushed on `claude/sleepy-hawking-fe4yk4` |
+| 2026-09-28 | Session 23e | In Progress to Complete | recorded by the next session | Classic structural bounds and the share cap (C2 v2), the ladder fold; suite `1862 passed, 1 skipped in 356.97s (0:05:56)`; the pull request's merge SHA is recorded by the next session |

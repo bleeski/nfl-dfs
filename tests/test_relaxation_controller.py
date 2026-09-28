@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from nfl_dfs.classic_portfolio_policy import (
+    OPEN_CLASSIC_STRUCTURAL_BOUNDS,
     classic_portfolio_policy_template,
     validate_classic_portfolio_policy_bytes,
 )
@@ -372,7 +373,12 @@ def test_a_structural_failure_at_selection_takes_the_next_rung_exactly(tmp_path,
     def policy(attachments):
         slate = parse_salaries(attachments / "salary.csv")
         count = len(parse_entries(attachments / "entries.csv").authorizations)
-        return _policy_file(attachments, controls=classic_rung_controls(slate, count, 0),
+        # Session 23e: this synthetic pool cannot satisfy rung 0's salary band and
+        # own-DST rule (the bank is STRUCTURAL_INFEASIBILITY before the injected
+        # failure), so the supplied policy leaves the structural bounds open; the test
+        # is about the bring-back step.
+        controls = {**classic_rung_controls(slate, count, 0), "structural_bounds": OPEN_CLASSIC_STRUCTURAL_BOUNDS.as_mapping()}
+        return _policy_file(attachments, controls=controls,
                             limits=classic_limits(count, len(slate.players), 0, minutes=1.0, window_seconds=60.0))
 
     # Two entries: no rung caps exposure (a cap needs three), so rung 1 differs
