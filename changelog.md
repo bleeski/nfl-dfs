@@ -131,7 +131,7 @@ structural in a pool of about 11 viable players. Team splits PHI-CHI: 3-3 14,
 - `sh ./nfl.sh test tests/test_entry_groups.py -x --tb=short -k not_ascending`:
   2 passed; with the fix reverted, 1 failed
   (`READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH`), 1 passed.
-- Full suite: SUITE_LINE_PENDING
+- Full suite `sh ./nfl.sh test`: `1864 passed, 1 skipped in 373.24s (0:06:13)`.
 
 ### 2026-09-28: Session 23e -- Classic structural bounds and the share cap (C2 v2)
 
