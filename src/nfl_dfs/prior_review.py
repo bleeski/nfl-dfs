@@ -2554,10 +2554,16 @@ def run_prior_review(
     assignments_path = selection_dir / "assignments.csv"
     assignments_hash = ""
     if slate.mode is EngineMode.SHOWDOWN:
+        # Template order on both paths. The no-policy path once wrote this
+        # sorted by Entry ID, and the readable review (which checks template
+        # order) withheld the file on any template whose Entry IDs are not
+        # ascending, which a multi-contest DKEntries download usually is: the
+        # PHI@CHI slate of 2026-09-28 lost rung 4 to it. `assignments` is keyed
+        # in `entry_ids` order on both paths, so the writer's check holds.
         assignments_hash = write_assignments_csv(
             assignments_path,
             assignments,
-            entry_order=tuple(entry_ids) if portfolio_policy is not None else None,
+            entry_order=tuple(entry_ids),
         )
         artifacts["assignments"] = str(assignments_path)
         hashes["assignments"] = assignments_hash

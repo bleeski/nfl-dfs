@@ -4,6 +4,135 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-28 (slate run): PHI@CHI Showdown, 36 entries, six thesis sleeves, prior-only review
+
+Cloud session, branch `claude/mnf-showdown-lineups-t7zjls`, task file
+`state/tasks/phi-chi-sd-0928.md`. Every run ended `PRIOR_ONLY / DO_NOT_UPLOAD`;
+no evidence gate was relaxed and no observation was invented. 36 blank reserved
+entries across 12 contests; lock 20:15 ET, delivery deadline 20:10 ET (R31).
+Inputs, committed under `data/inbox/slates/phi-chi-sd-2026-09-28/`:
+
+    salary  322d7acf2266bb57c9d8aab419e542bf48cb6971dbadd49beb0591aa3973138a
+    entries 3d1f911a00968ee2413b8d988364e4b3fe3fb1e9341bde45327ac07b257ac5b4
+
+#### Running order
+
+- `session_probe.py` exit 0, every allowlisted host reachable, 218.6 minutes to
+  lock. The run's own probe then reported `github.com` blocked: the proxy CA
+  fails `VERIFY_X509_STRICT` and the first run lacked the approved opt-in.
+- Run `20260928T203657Z-phi-chi-sd-0928`: baseline published first
+  (`de6b29c5…656b`, 36 rows), then priors failed on that TLS check. Rerun with
+  `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1`.
+- Run `20260928T203727Z-phi-chi-sd-r2`: `PRIOR_REVIEW_IDENTITY_BLOCKED` on two
+  people, both exact name-and-team rows in that morning's nflverse depth chart
+  (snapshot 2026-09-28T15:17:44Z): Scotty Miller `00-0035298` (CHI) and
+  Hollywood Brown `00-0035662` (PHI, `OUT`). Resolved through the reviewed
+  crosswalk (`identity_reviewed_phi_chi.csv`, `0c05b722…4274`), then
+  `priors-freeze` (`data/runs/phi-chi-sd-0928-frozen`).
+- QB depth package from the same depth chart through `sources.py`
+  (`make_offensive_role_evidence.py --fetch`). It promotes Tyson Bagent, the
+  rank-2 quarterback, over DraftKings-`OUT` Caleb Williams.
+- NWS capture for Soldier Field (`generatedAt` 2026-09-28T20:39:57Z; tonight
+  58°F, wind 0 to 5 mph, 0% precipitation). The frozen package's
+  `UNOBSERVED` still won over the run-slate weather flags (Found, below).
+- Research, informing construction only: the Bears' site called the QB a
+  game-time decision between Bagent and Case Keenum; CBS Sports, NBC Sports
+  Philadelphia and ABC7 Chicago reported Keenum expected to start. The Eagles
+  elevated Zach Ertz (with Goedert `OUT`). No Bears elevation was found.
+  Excluded by exact ID as practice-squad or cut with no elevation: Zavier
+  Scott, Scotty Miller, Jaydon Blue, Dameon Pierce, Xavier Gipson, Josiah
+  Deguara; Tanner McKee as a backup quarterback (the ATL@GB precedent).
+- Run `20260928T204130Z-phi-chi-sd-r3` (no policy):
+  `READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH`, fixed below.
+- One joint policy over all 36 rows (A, then B with overlap 5): the bank's
+  chain stratum reached 30 of 38 and went `MODEL_INFEASIBLE`, twice, then the
+  ladder took rung 4. Measured against the bank directly, the binder was the
+  salary floor together with the exposure caps. Policy E1 (no floor) delivered
+  at the supplied rung (`b12d0873…ce86`) with an eight-row barbell tail
+  ($32,300 to $40,400) and no thesis structure; kept as the safety file and
+  not handed over.
+
+#### Delivered
+
+`DK_REVIEW_ENTRY_phi-chi-sd-v1.csv` `7ba0c88b…a668` (run
+`20260928T211255Z-sd-S3R2`), 36 rows. It was built in prefilled rounds: each
+round's policy binds one thesis's rows, and the earlier rounds' rows are
+prefilled in a byte-verified template copy (the procedure is now in
+`docs/RUNBOOK.md`, under the subset-policy paragraph).
+
+| Sleeve | Rows | Thesis | Rung |
+|---|---|---|---|
+| S1 | 11 | PHI wins big: CHI pass game out, Eagles DST allowed with PHI offense | supplied |
+| S2 | 10 | Close game, both passing games alive, Bagent at most 1 row | supplied |
+| S3 | 5 | Shootout: one QB or more, two or more pass catchers with him, no DST | supplied |
+| S4 | 5 | CHI upset: PHI pass game out, Bears DST allowed with CHI offense | 1 (Captain caps widened to 0.25, salary band dropped) |
+| S5 | 4 | Low-scoring: kicker or DST Captain only, Hurts and Swift out | supplied |
+| S6 | 1 | Eagles defense: DST Captain | supplied |
+
+One S3 row shared all six people with an S2 row (captain swap). It was blanked
+and refilled by a one-row policy excluding Swift (`sd-S3R2`).
+`qa_showdown_portfolio.py` against the original template: `VERDICT PASS`, 0
+defects, 0 limit breaches, max overlap 5, salary 40,500 to 50,000, 11 distinct
+captains (Hurts 8, Barkley 5, Smith 5, Loveland 4, Swift 4, Santos 2, Ertz 2,
+Elliott 2, Odunze 2, Bagent 1, Eagles DST 1). The template byte check: 36 of
+121 lines changed, six roster cells each, nothing else. Exposure: Hurts 24,
+Smith 22, Santos 21, Loveland 20, Barkley 20, Swift 19, Odunze 19, Monangai
+18, Ertz 16, Burden 12, Elliott 11. Seven people in more than half the rows,
+structural in a pool of about 11 viable players. Team splits PHI-CHI: 3-3 14,
+2-4 10, 4-2 6, 1-5 4, 5-1 2. Bagent is in 3 rows.
+
+#### Changed
+
+- **`prior_review.py`: the no-policy Showdown assignment is written in
+  template order.** It was sorted by Entry ID, and the readable review, which
+  checks template order, withheld the file whenever the template's Entry IDs
+  were not ascending, as a multi-contest DKEntries download usually is. That
+  made rung 4 undeliverable on this slate. `assignments` is already keyed in
+  `entry_ids` order on both paths. New test
+  `tests/test_entry_groups.py::test_a_showdown_template_whose_entry_ids_are_not_ascending_ships_in_template_order`
+  (sequential and SD3); the sequential case fails on the old code with the
+  exact slate error, and both pass on the fix.
+- `docs/RUNBOOK.md`: the prefilled-round sleeve method and its three measured
+  limits.
+
+#### Found, not fixed
+
+- **The ladder skipped rungs 1 to 3** on the 36-row joint policy: attempt 1
+  (bank resized to 216) hit `CANDIDATE_BANK_TIME_LIMIT` at the 72 s budget, and
+  the next step was rung 4, not a structural rung. On the small sleeves the
+  same failure class walked rung 1 and rung 2 as designed. Worth a look in
+  `relaxation._bank`: a time limit after a resize may deserve a structural
+  rung before no policy.
+- **Captain strata ignore the other caps.** Every K or DST Captain candidate
+  in the S5 bank carried Hurts and Swift, both capped at 2 of 5 rows, so the
+  sleeve was infeasible at every rung until they were excluded. This is Session
+  23b's "a thesis that requires a kicker captain builds one" acceptance.
+- **The overlap cap does not reach prefilled rows.** A one-row refill at
+  overlap 5 rebuilt the exact lineup it replaced. Cross-sleeve overlap is
+  unchecked until QA; Session 23c's joint assembly is the real fix.
+- **`--prior-package-dir` keeps the package's frozen weather.** The run-slate
+  weather flags were ignored and the game ran `WEATHER_UNOBSERVED` beside a
+  valid capture. It moves no number (R24); re-freeze with the weather flags to
+  clear it.
+- **Keenum, the likely starter, has no score.** He has no prior-season row,
+  and the depth chart ranks him third, so the engine can only model Bagent.
+  Research cannot write a number. Bagent was capped at 3 rows as the hedge;
+  Keenum is absent from the portfolio. Makai Lemon (rookie, PHI WR3 with
+  Hollywood Brown `OUT`) is excluded the same way.
+- **26 of 36 entries sit in contests whose names say satellite.** No payout
+  table was supplied and a contest name is never evidence, so they were not
+  built differently. Session 23d's `contest_facts_csv` is where that belongs.
+- The Chicago Bears' page for the QB decision said "game-time decision"; the
+  post-inactives check at 18:50 ET re-reads it and replaces Bagent rows if
+  Keenum is confirmed.
+
+#### Verification
+
+- `sh ./nfl.sh test tests/test_entry_groups.py -x --tb=short -k not_ascending`:
+  2 passed; with the fix reverted, 1 failed
+  (`READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH`), 1 passed.
+- Full suite: SUITE_LINE_PENDING
+
 ### 2026-09-28: Session 23e -- Classic structural bounds and the share cap (C2 v2)
 
 Cloud session, branch `claude/sleepy-hawking-fe4yk4`, task file
