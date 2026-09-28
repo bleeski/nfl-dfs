@@ -12,18 +12,30 @@ import json
 import math
 from collections import Counter
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 from typing import Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
 from .entry_groups import subset_binding_problems
 from .hashing import sha256_bytes
-from .portfolio_policy import canonical_decimal_json_bytes
+from .portfolio_policy import (
+    OPEN_RANGE,
+    StructuralBoundRange,
+    StructuralBounds,
+    canonical_decimal_json_bytes,
+    structural_bound_violations,
+)
 
 
 POLICY_SCHEMA_VERSION = "nfl_classic_portfolio_policy_c2_v1"
-NORMALIZED_POLICY_SCHEMA_VERSION = "nfl_classic_portfolio_policy_normalized_c2_v1"
+# Session 23e (P2): v2 adds `controls.structural_bounds` (`salary_left`,
+# `offense_against_own_dst`) and `controls.max_person_share`, both v2-only. v1
+# is never mutated: it keeps validating unchanged and normalizes with both open.
+POLICY_SCHEMA_VERSION_V2 = "nfl_classic_portfolio_policy_c2_v2"
+SUPPORTED_POLICY_SCHEMA_VERSIONS = (POLICY_SCHEMA_VERSION, POLICY_SCHEMA_VERSION_V2)
+NORMALIZED_POLICY_SCHEMA_VERSION = "nfl_classic_portfolio_policy_normalized_c2_v2"
+CLASSIC_STRUCTURAL_BOUND_FIELDS = ("salary_left", "offense_against_own_dst")
 OBJECTIVE_VERSION = "classic_prior_points_expected_stat_line_c2_v1"
 OBJECTIVE_NAME = "MAXIMIZE_PRIOR_POINTS_OF_THE_EXPECTED_STAT_LINE"
 SEED = 0
@@ -137,6 +149,58 @@ class StackRule:
 
 
 @dataclass(frozen=True)
+class ClassicStructuralBounds:
+    """Per-lineup hygiene bounds (Session 23e), the Classic half of Session 23's vocabulary.
+
+    `salary_left` is an inclusive `[minimum, maximum]` range on the salary cap
+    minus the roster's total; `offense_against_own_dst` forbids any non-DST
+    person sharing a rostered DST's team (the same "own" reading Showdown v2
+    uses). None on a side means no bound there. Recomputed from the roster bytes
+    by the audit and the C3 review, never trusted from the generator.
+    """
+
+    salary_left: StructuralBoundRange = OPEN_RANGE
+    offense_against_own_dst: bool = False
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "salary_left": self.salary_left.as_mapping(),
+            "offense_against_own_dst": self.offense_against_own_dst,
+        }
+
+    @property
+    def open(self) -> bool:
+        return self.salary_left == OPEN_RANGE and not self.offense_against_own_dst
+
+    def violations(self, slate: SlateContract, roster: Sequence[str]) -> tuple[str, ...]:
+        """Which bounds a legal Classic roster breaks, recomputed from `slate.players`."""
+
+        return structural_bound_violations(
+            slate,
+            roster,
+            StructuralBounds(
+                salary_left=self.salary_left,
+                offense_against_own_dst=self.offense_against_own_dst,
+            ),
+        )
+
+
+OPEN_CLASSIC_STRUCTURAL_BOUNDS = ClassicStructuralBounds()
+
+
+def person_share_maximum(fraction: Decimal | float | None, entry_count: int) -> int | None:
+    """`max_person_share` as a direct integer count: floor(fraction x entries); None is no cap.
+
+    A float (the plain JSON number a generated document carries) reads as its shortest
+    decimal, the value the validator parses from the same text.
+    """
+
+    if fraction is None:
+        return None
+    return int((Decimal(str(fraction)) * Decimal(entry_count)).to_integral_value(rounding=ROUND_FLOOR))
+
+
+@dataclass(frozen=True)
 class SearchLimits:
     candidate_limit: int
     candidate_total_milliseconds: int
@@ -173,10 +237,18 @@ class NormalizedClassicPortfolioPolicy:
     objective_version: str = OBJECTIVE_VERSION
     objective_name: str = OBJECTIVE_NAME
     seed: int = SEED
+    structural_bounds: ClassicStructuralBounds = OPEN_CLASSIC_STRUCTURAL_BOUNDS
+    max_person_share: Decimal | None = None
 
     @property
     def entry_count(self) -> int:
         return len(self.entry_ids)
+
+    @property
+    def max_person_share_entries(self) -> int | None:
+        """The integer maximum `max_person_share` gives a person with no explicit bound."""
+
+        return person_share_maximum(self.max_person_share, self.entry_count)
 
     @property
     def people_by_id(self) -> dict[str, ClassicPersonBinding]:
@@ -238,6 +310,11 @@ class NormalizedClassicPortfolioPolicy:
                 "stack_rules": [rule.as_mapping() for rule in self.stack_rules],
                 "max_pairwise_person_overlap": self.max_pairwise_person_overlap,
                 "require_unique_lineups": self.require_unique_lineups,
+                "structural_bounds": self.structural_bounds.as_mapping(),
+                "max_person_share": {
+                    "fraction": self.max_person_share,
+                    "maximum_entries": self.max_person_share_entries,
+                },
             },
             "effective": {
                 "entry_count_denominator": self.entry_count,
@@ -471,13 +548,24 @@ def classic_portfolio_policy_template(
     entry_sha256: str,
     controls: Mapping[str, object] | None = None,
     limits: Mapping[str, object] | None = None,
+    schema_version: str | None = None,
 ) -> dict[str, object]:
+    """The registered template; v2 when `controls` carry a v2-only control, else v1.
+
+    `schema_version` names the version outright; left out, a document that
+    declares `structural_bounds` or `max_person_share` is v2 (only v2 may) and any
+    other stays v1 (Session 23e).
+    """
+
     people = classic_people(slate)
     count = len(entry_ids)
     defaults = default_search_limits(count).as_mapping()
     defaults.update(dict(limits or {}))
+    if schema_version is None:
+        v2_only = {"structural_bounds", "max_person_share"}
+        schema_version = POLICY_SCHEMA_VERSION_V2 if v2_only & set(controls or {}) else POLICY_SCHEMA_VERSION
     return {
-        "schema_version": POLICY_SCHEMA_VERSION,
+        "schema_version": schema_version,
         "bindings": {
             "salary_sha256": slate.salary_hash,
             "entry_sha256": entry_sha256,
@@ -697,6 +785,77 @@ def _complete_identity_payload(slate: SlateContract) -> dict[str, object]:
     }
 
 
+def _structural_bound_integer(
+    value: object, location: str, problems: list[PolicyIssue], *, maximum: int
+) -> int | None:
+    """A nullable non-negative integer bound; `None` (omitted or null) is no bound."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        problems.append(_issue("CLASSIC_POLICY_STRUCTURAL_BOUND_INTEGER_REQUIRED", f"{location} must be a JSON integer or null", "supply a non-negative integer, or omit/null for no bound on this side"))
+        return None
+    if value < 0 or value > maximum:
+        problems.append(_issue("CLASSIC_POLICY_STRUCTURAL_BOUND_OUT_OF_RANGE", f"{location}={value} is outside [0,{maximum}]", "supply an integer inside the declared domain"))
+        return None
+    return value
+
+
+def _structural_bound_range(
+    value: object, location: str, problems: list[PolicyIssue], *, maximum: int
+) -> StructuralBoundRange | None:
+    if value is None:
+        return OPEN_RANGE
+    item = _mapping(value, location, problems)
+    if item is None:
+        return None
+    _unknown_fields(item, {"minimum", "maximum"}, location, problems)
+    low = _structural_bound_integer(item.get("minimum"), f"{location}.minimum", problems, maximum=maximum)
+    high = _structural_bound_integer(item.get("maximum"), f"{location}.maximum", problems, maximum=maximum)
+    if low is not None and high is not None and low > high:
+        problems.append(_issue("CLASSIC_POLICY_STRUCTURAL_BOUND_CONTRADICTORY", f"{location} minimum exceeds maximum", "make the inclusive integer bounds ordered"))
+    return StructuralBoundRange(low, high)
+
+
+def _structural_bounds(
+    value: object, *, location: str, problems: list[PolicyIssue]
+) -> ClassicStructuralBounds | None:
+    """Parse `controls.structural_bounds` (Session 23e, v2-only); omitted is fully open."""
+
+    if value is None:
+        return OPEN_CLASSIC_STRUCTURAL_BOUNDS
+    item = _mapping(value, location, problems)
+    if item is None:
+        return None
+    _unknown_fields(item, set(CLASSIC_STRUCTURAL_BOUND_FIELDS), location, problems)
+    salary_left = _structural_bound_range(item.get("salary_left"), f"{location}.salary_left", problems, maximum=50_000)
+    offense = item.get("offense_against_own_dst", False)
+    if not isinstance(offense, bool):
+        problems.append(_issue("CLASSIC_POLICY_STRUCTURAL_BOUND_TYPE_INVALID", f"{location}.offense_against_own_dst must be Boolean", "set true or false"))
+        offense = False
+    if salary_left is None:
+        return None
+    return ClassicStructuralBounds(salary_left, offense)
+
+
+def _max_person_share(value: object, *, location: str, count: int, problems: list[PolicyIssue]) -> tuple[Decimal | None, bool]:
+    """Parse `controls.max_person_share`: a fraction in (0, 1] or null. Returns (value, ok)."""
+
+    if value is None:
+        return None, True
+    if isinstance(value, bool) or not isinstance(value, (Decimal, int)):
+        problems.append(_issue("CLASSIC_POLICY_MAX_PERSON_SHARE_INVALID", f"{location} must be a JSON number or null", "supply an exact fraction such as 0.8, or null for no share cap"))
+        return None, False
+    fraction = Decimal(value)
+    if not Decimal(0) < fraction <= Decimal(1):
+        problems.append(_issue("CLASSIC_POLICY_MAX_PERSON_SHARE_INVALID", f"{location}={fraction} is outside (0, 1]", "supply a fraction above 0 and at most 1"))
+        return None, False
+    if person_share_maximum(fraction, count) < 1:
+        problems.append(_issue("CLASSIC_POLICY_MAX_PERSON_SHARE_INVALID", f"{location}={fraction} of {count} entries floors to no entry for any person", "raise the fraction or bind more entries"))
+        return None, False
+    return fraction, True
+
+
 def _capacity_issues(policy: NormalizedClassicPortfolioPolicy) -> tuple[PolicyIssue, ...]:
     issues: list[PolicyIssue] = []
     count = policy.entry_count
@@ -816,8 +975,9 @@ def validate_classic_portfolio_policy_bytes(
     if root is None:
         return ClassicPortfolioPolicyValidation(source_sha256, None, tuple(problems), ())
     _unknown_fields(root, {"schema_version", "bindings", "selection", "controls"}, "policy", problems)
-    if root.get("schema_version") != POLICY_SCHEMA_VERSION:
-        problems.append(_issue("CLASSIC_POLICY_SCHEMA_UNSUPPORTED", f"schema_version must be {POLICY_SCHEMA_VERSION!r}", "regenerate the C2 policy"))
+    if root.get("schema_version") not in SUPPORTED_POLICY_SCHEMA_VERSIONS:
+        problems.append(_issue("CLASSIC_POLICY_SCHEMA_UNSUPPORTED", f"schema_version must be one of {list(SUPPORTED_POLICY_SCHEMA_VERSIONS)!r}", "regenerate the C2 policy"))
+    is_v2 = root.get("schema_version") == POLICY_SCHEMA_VERSION_V2
     if slate.mode is not EngineMode.CLASSIC:
         problems.append(_issue("CLASSIC_POLICY_MODE_UNSUPPORTED", "the C2 policy requires a Classic salary contract", "use an exact Classic salary file"))
         return ClassicPortfolioPolicyValidation(source_sha256, None, tuple(problems), ())
@@ -893,10 +1053,22 @@ def validate_classic_portfolio_policy_bytes(
     stack_rules: tuple[StackRule, ...] = ()
     overlap = 8
     unique = True
+    structural_bounds: ClassicStructuralBounds | None = OPEN_CLASSIC_STRUCTURAL_BOUNDS
+    share: Decimal | None = None
     teams = {team for team, _opponent, _game in _team_bindings(slate)}
     games = {game_id for game_id, _away, _home, _lock in _game_bindings(slate)}
     if controls is not None:
-        _unknown_fields(controls, {"player_exposure_bounds", "team_exposure_bounds", "game_exposure_bounds", "exact_exclusions", "groups", "stack_rules", "max_pairwise_person_overlap", "require_unique_lineups"}, "controls", problems)
+        allowed_controls = {"player_exposure_bounds", "team_exposure_bounds", "game_exposure_bounds", "exact_exclusions", "groups", "stack_rules", "max_pairwise_person_overlap", "require_unique_lineups"}
+        if is_v2:
+            allowed_controls = allowed_controls | {"structural_bounds", "max_person_share"}
+        _unknown_fields(controls, allowed_controls, "controls", problems)
+        if is_v2:
+            structural_bounds = _structural_bounds(controls.get("structural_bounds"), location="controls.structural_bounds", problems=problems)
+            share, _share_ok = _max_person_share(controls.get("max_person_share"), location="controls.max_person_share", count=count, problems=problems)
+        else:
+            for name in ("structural_bounds", "max_person_share"):
+                if name in controls:
+                    problems.append(_issue("CLASSIC_POLICY_STRUCTURAL_BOUND_TYPE_INVALID", f"controls.{name} requires schema_version {POLICY_SCHEMA_VERSION_V2!r}", "regenerate the policy as v2, or drop the control"))
         raw_player = _parse_exposure_bounds(controls.get("player_exposure_bounds"), kind="player", valid_ids=set(expected_people), expected_people=expected_people, entry_count=count, problems=problems)
         raw_team = _parse_exposure_bounds(controls.get("team_exposure_bounds"), kind="team", valid_ids=teams, expected_people=expected_people, entry_count=count, problems=problems)
         raw_game = _parse_exposure_bounds(controls.get("game_exposure_bounds"), kind="game", valid_ids=games, expected_people=expected_people, entry_count=count, problems=problems)
@@ -926,13 +1098,17 @@ def validate_classic_portfolio_policy_bytes(
     unknown_external = sorted(set(external).difference(expected_people))
     if unknown_external:
         problems.append(_issue("CLASSIC_POLICY_EXTERNAL_EXCLUSION_UNKNOWN", f"external exclusions reference unknown people {unknown_external}", "reconcile exclusions to exact Classic identities"))
-    if problems or search_limits is None:
+    if problems or search_limits is None or structural_bounds is None:
         return ClassicPortfolioPolicyValidation(source_sha256, None, tuple(problems), tuple(findings))
 
     effective_exclusions = set(exclusions) | set(external)
     player_bounds: list[EntityExposureBound] = []
+    # `max_person_share` is the default maximum of every person the policy gives no
+    # explicit `player_exposure_bounds` row (an explicit row wins, as in Showdown).
+    share_maximum = person_share_maximum(share, count)
+    default_maximum = count if share_maximum is None else share_maximum
     for person in expected_people_tuple:
-        minimum, maximum = raw_player.get(person.underlying_id, (0, count))
+        minimum, maximum = raw_player.get(person.underlying_id, (0, default_maximum))
         source = None
         if person.underlying_id in effective_exclusions:
             source = "SOURCE_OR_PARTICIPATION_PRECEDENCE" if person.underlying_id in external else "POLICY_EXCLUSION"
@@ -957,6 +1133,8 @@ def validate_classic_portfolio_policy_bytes(
         max_pairwise_person_overlap=overlap,
         require_unique_lineups=unique,
         search_limits=search_limits,
+        structural_bounds=structural_bounds,
+        max_person_share=share,
     )
     problems.extend(_capacity_issues(policy))
     for rule in (*groups, *stack_rules):
@@ -1008,6 +1186,28 @@ def write_classic_portfolio_policy_validation(
     temporary.write_bytes(canonical_decimal_json_bytes(validation.as_report()) + b"\n")
     temporary.replace(target)
     return target
+
+
+def _normalized_structural_bounds(item: object) -> ClassicStructuralBounds:
+    if not isinstance(item, Mapping) or set(item) != set(CLASSIC_STRUCTURAL_BOUND_FIELDS):
+        raise ValueError("CLASSIC_POLICY_NORMALIZED_SECTION_INVALID")
+    salary = item["salary_left"]
+    if not isinstance(salary, Mapping) or set(salary) != {"minimum", "maximum"}:
+        raise ValueError("CLASSIC_POLICY_NORMALIZED_SECTION_INVALID")
+    offense = item["offense_against_own_dst"]
+    if not isinstance(offense, bool):
+        raise ValueError("CLASSIC_POLICY_NORMALIZED_SECTION_INVALID")
+    low, high = salary["minimum"], salary["maximum"]
+    return ClassicStructuralBounds(
+        StructuralBoundRange(None if low is None else int(low), None if high is None else int(high)), offense
+    )
+
+
+def _normalized_share(item: object) -> Decimal | None:
+    if not isinstance(item, Mapping) or set(item) != {"fraction", "maximum_entries"}:
+        raise ValueError("CLASSIC_POLICY_NORMALIZED_SECTION_INVALID")
+    fraction = item["fraction"]
+    return None if fraction is None else Decimal(fraction)
 
 
 def parse_normalized_classic_policy_bytes(raw: bytes) -> NormalizedClassicPortfolioPolicy:
@@ -1086,6 +1286,8 @@ def parse_normalized_classic_policy_bytes(raw: bytes) -> NormalizedClassicPortfo
         objective_version=str(selection["objective_version"]),
         objective_name=str(selection["objective"]),
         seed=int(selection["seed"]),
+        structural_bounds=_normalized_structural_bounds(controls["structural_bounds"]),
+        max_person_share=_normalized_share(controls["max_person_share"]),
     )
     if policy.canonical_bytes() != raw or len(people_by_id) != len(people):
         raise ValueError("CLASSIC_POLICY_NORMALIZED_SEMANTICS_INVALID")

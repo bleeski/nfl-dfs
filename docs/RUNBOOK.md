@@ -35,7 +35,7 @@ sh ./nfl.sh run-slate \
   --portfolio-policy-json '<full-path-to/classic_portfolio_policy.json>'
 ```
 
-The policy must use `nfl_classic_portfolio_policy_c2_v1` and bind the current
+The policy must use `nfl_classic_portfolio_policy_c2_v1` or `_v2` (v2 adds structural bounds and `max_person_share`; `make_classic_policy.py` writes it) and bind the current
 salary and entry hashes, complete identity, registered objective/seed, direct
 integer bounds, and exact ordered Entry IDs. C2 snapshots and canonically
 normalizes it, generates a deterministic bounded legal candidate bank, jointly

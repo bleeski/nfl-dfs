@@ -12,7 +12,7 @@ import math
 import time
 import tracemalloc
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Callable, Mapping, Sequence
 
@@ -30,7 +30,7 @@ from .contracts import EngineMode, SlateContract
 from .hashing import sha256_bytes
 from .lineups import roster_canonical_key, validate_lineup
 from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
-from .portfolio_policy import canonical_decimal_json_bytes
+from .portfolio_policy import OPEN_RANGE, canonical_decimal_json_bytes
 
 
 ENFORCEMENT_VERSION = "prior_only_classic_portfolio_enforcement_c2_v1"
@@ -253,6 +253,10 @@ class ClassicPortfolioAudit:
     stack_counts: tuple[tuple[str, int], ...]
     pairwise_overlap: tuple[tuple[str, str, int], ...]
     hashes: tuple[tuple[str, str], ...]
+    # Session 23e: the share of entries holding the most-rostered person, and who,
+    # recomputed from the roster bytes; and every structural-bound reading.
+    max_person_share: Mapping[str, object] = field(default_factory=dict)
+    structural_bound_readings: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def passed(self) -> bool:
@@ -276,12 +280,15 @@ class ClassicPortfolioAudit:
                 for left, right, overlap in self.pairwise_overlap
             ],
             "hashes": dict(self.hashes),
+            "max_person_share": dict(self.max_person_share),
+            "structural_bound_violations": {entry: list(names) for entry, names in self.structural_bound_readings},
             "checks_run": [
                 "CANONICAL_NORMALIZED_POLICY_REPARSE",
                 "EXACT_ENTRY_ID_SEQUENCE_AND_COVERAGE",
                 "INDEPENDENT_DRAFTKINGS_LINEUP_LEGALITY",
                 "COMPLETE_PERSON_TEAM_GAME_POSITION_AND_ROSTER_IDENTITY",
                 "PLAYER_TEAM_GAME_GROUP_AND_STACK_INTEGER_BOUNDS",
+                "STRUCTURAL_BOUNDS_RECOMPUTED_FROM_ROSTER_BYTES",
                 "EXACT_EXCLUSIONS",
                 "CANONICAL_UNIQUENESS",
                 "EVERY_PAIRWISE_PERSON_OVERLAP",
@@ -390,6 +397,26 @@ class _Enumerator:
     def elapsed(self) -> float:
         return time.perf_counter() - self.started
 
+    def _add_structural_rows(self, optimizer: LineupOptimizer) -> None:
+        """Bind the policy's structural bounds (Session 23e) as real MILP rows.
+
+        Not a post-solve filter (Session 23 measured a reject loop at 30 s and no
+        candidates on a stratum the rows return in a fraction of a second): a
+        roster that breaks a bound is never proposed. `salary_left` is the salary
+        cap minus the roster total, so its band is `[cap - maximum, cap - minimum]`.
+        """
+
+        bounds = self.policy.structural_bounds
+        if bounds.salary_left != OPEN_RANGE:
+            cap = self.slate.salary_cap
+            low, high = bounds.salary_left.minimum, bounds.salary_left.maximum
+            optimizer.add_salary_band(
+                minimum=None if high is None else max(0, cap - high),
+                maximum=None if low is None else max(0, cap - low),
+            )
+        if bounds.offense_against_own_dst:
+            optimizer.add_no_offense_with_dst()
+
     @property
     def remaining(self) -> int:
         return self.limit - len(self.candidates)
@@ -449,6 +476,12 @@ class _Enumerator:
                     roster = tuple(roster_list)
                     validation = validate_lineup(self.slate, roster)
                     if validation.lineup is None:
+                        continue
+                    # A neighbor is not a solver output, so the policy's structural
+                    # bounds are checked on it directly (Session 23e).
+                    if not self.policy.structural_bounds.open and self.policy.structural_bounds.violations(
+                        self.slate, roster
+                    ):
                         continue
                     canonical = validation.lineup.canonical_key
                     if canonical in self.seen:
@@ -536,6 +569,7 @@ class _Enumerator:
             time_limit_seconds=min(self.total_budget, self.per_solve_budget),
             mip_gap=0.0,
         )
+        self._add_structural_rows(optimizer)
         for dk_id in required_ids:
             optimizer.add_required_row(str(dk_id))
         if selected_count_bounds is not None:
@@ -615,7 +649,12 @@ class _Enumerator:
             roster = tuple(result.roster)
             optimizer.add_no_good(roster)
             validation = validate_lineup(self.slate, roster)
-            if validation.lineup is None:
+            if validation.lineup is None or (
+                not self.policy.structural_bounds.open
+                and self.policy.structural_bounds.violations(self.slate, roster)
+            ):
+                # The rows above make this unreachable; a roster that breaks a bound
+                # is a solver error, never a candidate (Session 23e).
                 termination = "ILLEGAL_SOLVER_ROSTER"
                 self.blocking_status = "CANDIDATE_BANK_SOLVER_ERROR"
                 break
@@ -1147,6 +1186,7 @@ def audit_classic_portfolio(
     game_counts: Counter[str] = Counter()
     group_counts: Counter[str] = Counter()
     stack_counts: Counter[str] = Counter()
+    structural_readings: list[tuple[str, tuple[str, ...]]] = []
     for entry, roster in pairs:
         if roster not in bank_rosters:
             problems.append(f"CLASSIC_AUDIT_ASSIGNMENT_OUTSIDE_CANDIDATE_BANK:{entry}")
@@ -1166,6 +1206,10 @@ def audit_classic_portfolio(
         if policy is not None:
             group_counts.update(_group_matches(people, policy.groups))
             stack_counts.update(_stack_matches(slate, roster, policy.stack_rules))
+            broken = policy.structural_bounds.violations(slate, roster)
+            if broken:
+                structural_readings.append((entry, broken))
+                problems.extend(f"CLASSIC_AUDIT_STRUCTURAL_BOUND_VIOLATED:{entry}:{name}" for name in broken)
     if len({key for _entry, key in canonical}) != len(canonical):
         problems.append("CLASSIC_AUDIT_CANONICAL_LINEUP_DUPLICATE")
     overlap = tuple(
@@ -1255,6 +1299,17 @@ def audit_classic_portfolio(
             or policy.entry_sha256 != actual_hashes["entry_sha256"]
         ):
             problems.append("CLASSIC_AUDIT_COMPLETE_IDENTITY_BINDING_MISMATCH")
+    # `max_person_share`: not a second gate. The default maximum it sets is already in
+    # every person's player bound above; this names the share and the person(s).
+    top_count = max(player_counts.values(), default=0)
+    audited_entries = len(people_by_entry)
+    max_person_share = {
+        "share_percentage": round(100 * top_count / audited_entries, 3) if audited_entries else 0.0,
+        "entries": audited_entries,
+        "people": sorted(person for person, count in player_counts.items() if count == top_count),
+        "declared_fraction": None if policy is None or policy.max_person_share is None else str(policy.max_person_share),
+        "declared_maximum_entries": None if policy is None else policy.max_person_share_entries,
+    }
     return ClassicPortfolioAudit(
         tuple(problems),
         actual_entries,
@@ -1266,4 +1321,6 @@ def audit_classic_portfolio(
         tuple(sorted((rule.rule_id, stack_counts[rule.rule_id]) for rule in (policy.stack_rules if policy else ()))),
         overlap,
         tuple(sorted(actual_hashes.items())),
+        max_person_share,
+        tuple(structural_readings),
     )

@@ -22,11 +22,18 @@ preference. The table lives in `src/nfl_dfs/relaxation.py` (Session 10), which
 `run-slate` walks itself; this script is a thin wrapper that writes one rung:
 
   0  every entry stacks QB + pass catcher; 70% carry a bring-back; overlap 5;
-     player exposure <= 50% of entries
-  1  bring-back drops to 34% of entries
-  2  bring-back drops to ADVISORY; overlap 6; player exposure <= 65%
-  3  QB pass-catcher holds on half the entries; overlap 7; no exposure caps
+     player exposure <= 50% of entries; at most $1,000 of salary left; no
+     offense on a rostered DST's team (Session 23e)
+  1  bring-back drops to 34% of entries; the salary-left band goes
+  2  bring-back drops to ADVISORY; overlap 6; player exposure <= 65%; the
+     own-DST offense rule goes
+  3  QB pass-catcher holds on half the entries; overlap 7; no per-person
+     exposure rows, so the 80% `max_person_share` is the cap that binds
   4  emit nothing; run C1 with no policy at all, which is the proven floor
+
+`max_person_share` (0.80, written on every rung of a portfolio of three or more
+entries) is the default maximum of any person without an explicit exposure row
+and the last cap the ladder drops: only rung 4 does.
 
 Rung 4 is the floor: C1 needs no policy, and when it runs out of distinct
 lineups the baseline stays the file with its unfilled Entry IDs named (R29).
@@ -74,7 +81,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from nfl_dfs.classic_portfolio_policy import classic_portfolio_policy_template
+from nfl_dfs.classic_portfolio_policy import classic_portfolio_policy_template, person_share_maximum
 from nfl_dfs.deadline import SOLVE_MINIMUM_SECONDS, Budget, read_candidate_rate, runtime_stop_minutes
 from nfl_dfs.dk import parse_entries, parse_salaries
 from nfl_dfs.entry_groups import plan_entries
@@ -258,6 +265,16 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
     print(f"bring-back:        {rules['qb-bringback']['strength']} on "
           f"{rules['qb-bringback']['minimum_entries']}/{count} entries")
     print(f"max person overlap:{controls['max_pairwise_person_overlap']} of {ROSTER_SIZE}")
+    bounds = controls["structural_bounds"]
+    salary_left = bounds["salary_left"]
+    print("salary left:       " + (
+        "unbounded at this rung" if salary_left["maximum"] is None
+        else f"${salary_left['minimum']} to ${salary_left['maximum']:,}"))
+    print(f"no offense with own DST: {'on' if bounds['offense_against_own_dst'] else 'off at this rung'}")
+    share = controls["max_person_share"]
+    print("max person share:  " + (
+        "none (two entries or fewer)" if share is None
+        else f"<= {share:.0%} of entries ({person_share_maximum(share, count)}/{count}); the last cap to go"))
     if fraction is not None and count > 2:
         print(f"player exposure:   <= {max(1, math.ceil(fraction * count))}/{count} entries")
     else:

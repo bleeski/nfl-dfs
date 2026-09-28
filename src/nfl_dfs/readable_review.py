@@ -745,6 +745,17 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
         f'<p>Canonical uniqueness: {_escape(exposure.get("canonical_uniqueness"))}. '
         f'Pairwise underlying-person overlap maximum: {_escape(exposure.get("effective_pairwise_person_overlap"))}.</p>'
     )
+    classic_share = _mapping(exposure.get("max_person_share"), "exposure.max_person_share", [])
+    classic_structural = _mapping(exposure.get("structural_bounds"), "exposure.structural_bounds", [])
+    if classic_share:
+        salary_left = _mapping(classic_structural.get("salary_left"), "exposure.structural_bounds.salary_left", [])
+        sections.append(
+            f'<p>max_person_share: {_escape(classic_share.get("share_percentage"))}% '
+            f'({_escape(", ".join(classic_share.get("people", []) or []))}); declared cap '
+            f'{_escape(classic_share.get("declared_fraction"))} ({_escape(classic_share.get("declared_maximum_entries"))} entries). '
+            f'Salary left bound: {_escape(salary_left.get("minimum"))} to {_escape(salary_left.get("maximum"))}. '
+            f'No offense with own DST: {_escape(classic_structural.get("offense_against_own_dst"))}.</p>'
+        )
     overlap_rows = [
         (row.get("entry_id_a"), row.get("entry_id_b"), row.get("actual_people"), row.get("maximum_people"))
         for row in _sequence(exposure.get("pairwise_overlap"), "exposure.pairwise_overlap", [])
