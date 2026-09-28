@@ -253,6 +253,28 @@ limits. So Keenum was worked in by FLEX swap, with no projection written
   score, so their prior totals understate them by his whole output. Nothing
   here is an estimate of what he scores.
 
+#### Addendum: inactives checked, v4 stands (19:26 ET)
+
+The 18:51 ET check-in found the official lists not yet indexed; the 19:25 ET
+pass found both.
+
+- Eagles inactive: Goedert, Hollywood Brown, Fred Johnson, Tanner McKee,
+  Cole Payton, A.J. Epenesa (search summary citing
+  [philadelphiaeagles.com](https://www.philadelphiaeagles.com/news/eagles-at-bears-inactives-week-3-2026-nfl-regular-season-monday-night-football-caleb-williams)
+  and [SI](https://www.si.com/nfl/eagles/onsi/complete-eagles-inactives-for-week-3-at-bears-training-camp-standout-to-make-season-debut-01m3n09ap15n)).
+- Bears inactive: Caleb Williams, Jamree Kromah, Jordan McFadden, Jayden
+  Loving, Ozzy Trapilo (the [SI Bears
+  page](https://www.si.com/nfl/bears/onsi/bears-eagles-week-3-inactives-monday-night-football)).
+  Keenum starts; Bagent is active as the backup.
+- None of the 16 people rostered in v4 is inactive (checked by name against
+  every row). The five inactive names on the salary file were already
+  excluded, so v4 (`967f0872…c4`) stands.
+
+This is research informing construction, not an `official_status_csv`. No
+exact-ID activity rows were captured, so `OFFICIAL_STATUS_REQUIRED` stays a
+named limitation on every file, and `RELEASE_DECISION` stays
+`DO_NOT_UPLOAD`.
+
 ### 2026-09-28: Session 23e -- Classic structural bounds and the share cap (C2 v2)
 
 Cloud session, branch `claude/sleepy-hawking-fe4yk4`, task file
