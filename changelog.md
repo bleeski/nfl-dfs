@@ -218,6 +218,41 @@ The same defect family as Session 48 (a starter the prior gives zero attempt
 share); a starter promoted by news with no prior-season row belongs on that
 card.
 
+#### Addendum: v4, Keenum rostered by operator direction (17:50 ET)
+
+Ben: "so do we not have Keenum in any lineup???" He had none. Rostering an
+unscored player is a construction choice research may inform (the Classic
+`swap_inactives.py value-add` mode is the same move); only his number is off
+limits. So Keenum was worked in by FLEX swap, with no projection written
+(he adds 0 prior points).
+
+- **The swap rule** (`keenum_swap.py`, committed with the slate). It runs
+  only on close-game, shootout and CHI-upset rows that hold a CHI pass
+  catcher. It removes the lowest-scored FLEX that keeps salary within 50,000,
+  and never the Captain, a CHI WR or TE, or Hurts outside the CHI-upset rows.
+  Each result must be distinct, share at most five people with every other
+  row, and include both teams.
+- **9 rows (25%)**, CHI-upset first, then shootout, then close game.
+- **The first build failed QA.** Two rows became single-team
+  (`SINGLE_TEAM_LINEUP`) when the swap removed the only Eagle from a CHI 5-1.
+  The both-teams check was added and the build rerun. The failed file was
+  never sent and is kept in the session scratchpad, not in the slate folder.
+- `diversify_showdown_contests.py` then re-spread the file (score 415 to
+  406, record `assignment_v4.json`).
+- **v4:** `DK_REVIEW_ENTRY_phi-chi-sd-v4.csv` `967f0872…c4`. QA
+  `VERDICT PASS`, 0 defects, 0 limit breaches, max overlap 5, salary 44,900 to
+  50,000; the template byte check shows 36 of 121 lines, roster cells only.
+  Every seven-entry contest: 7 distinct Captains of 7, worst pair 4 people.
+  Two-entry pairs share at most 3.
+- Keenum sits in 196040036 2/7, 196040050 2/7, 196172224 3/7, 196040020 1/2
+  and 196040037 1/2.
+- Exposure: Hurts 24, Santos 21, Smith 21, Loveland 20, Odunze 20, Monangai
+  18, Swift 17, Ertz 17, Barkley 17, Burden 12, Elliott 10, Keenum 9. The Bears
+  DST row gave up the DST, so no Bears DST remains.
+- **Named limitation:** nine rows carry a quarterback the model cannot
+  score, so their prior totals understate them by his whole output. Nothing
+  here is an estimate of what he scores.
+
 ### 2026-09-28: Session 23e -- Classic structural bounds and the share cap (C2 v2)
 
 Cloud session, branch `claude/sleepy-hawking-fe4yk4`, task file

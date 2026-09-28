@@ -1,0 +1,232 @@
+{
+ "contests_after": {
+  "196036243": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "CHI|Kyle Monangai"
+   ],
+   "max_shared_people": 1,
+   "mean_shared_people": 1.0
+  },
+  "196036244": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "CHI|Cairo Santos",
+    "PHI|Saquon Barkley"
+   ],
+   "max_shared_people": 2,
+   "mean_shared_people": 2.0
+  },
+  "196039118": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "PHI|Jalen Hurts",
+    "PHI|Zach Ertz"
+   ],
+   "max_shared_people": 2,
+   "mean_shared_people": 2.0
+  },
+  "196039211": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "CHI|D'Andre Swift",
+    "PHI|Jalen Hurts",
+    "PHI|Zach Ertz"
+   ],
+   "max_shared_people": 3,
+   "mean_shared_people": 3.0
+  },
+  "196040020": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "PHI|Jalen Hurts",
+    "PHI|Zach Ertz"
+   ],
+   "max_shared_people": 2,
+   "mean_shared_people": 2.0
+  },
+  "196040036": {
+   "distinct_captains": 7,
+   "distinct_theses": 6,
+   "entries": 7,
+   "in_every_lineup": [],
+   "max_shared_people": 4,
+   "mean_shared_people": 2.19
+  },
+  "196040037": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [],
+   "max_shared_people": 0,
+   "mean_shared_people": 0.0
+  },
+  "196040050": {
+   "distinct_captains": 7,
+   "distinct_theses": 5,
+   "entries": 7,
+   "in_every_lineup": [],
+   "max_shared_people": 4,
+   "mean_shared_people": 2.381
+  },
+  "196172224": {
+   "distinct_captains": 7,
+   "distinct_theses": 5,
+   "entries": 7,
+   "in_every_lineup": [],
+   "max_shared_people": 4,
+   "mean_shared_people": 2.238
+  }
+ },
+ "contests_before": {
+  "196036243": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "PHI|DeVonta Smith"
+   ],
+   "max_shared_people": 1,
+   "mean_shared_people": 1.0
+  },
+  "196036244": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "CHI|Colston Loveland",
+    "CHI|Rome Odunze"
+   ],
+   "max_shared_people": 2,
+   "mean_shared_people": 2.0
+  },
+  "196039118": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "CHI|Cairo Santos"
+   ],
+   "max_shared_people": 1,
+   "mean_shared_people": 1.0
+  },
+  "196039211": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "PHI|Jalen Hurts",
+    "PHI|Zach Ertz"
+   ],
+   "max_shared_people": 2,
+   "mean_shared_people": 2.0
+  },
+  "196040020": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "PHI|Jalen Hurts"
+   ],
+   "max_shared_people": 1,
+   "mean_shared_people": 1.0
+  },
+  "196040036": {
+   "distinct_captains": 7,
+   "distinct_theses": 5,
+   "entries": 7,
+   "in_every_lineup": [],
+   "max_shared_people": 5,
+   "mean_shared_people": 2.333
+  },
+  "196040037": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "CHI|Colston Loveland"
+   ],
+   "max_shared_people": 1,
+   "mean_shared_people": 1.0
+  },
+  "196040050": {
+   "distinct_captains": 7,
+   "distinct_theses": 6,
+   "entries": 7,
+   "in_every_lineup": [],
+   "max_shared_people": 4,
+   "mean_shared_people": 2.429
+  },
+  "196172224": {
+   "distinct_captains": 7,
+   "distinct_theses": 4,
+   "entries": 7,
+   "in_every_lineup": [],
+   "max_shared_people": 3,
+   "mean_shared_people": 2.238
+  }
+ },
+ "does_not_establish": [
+  "UPLOAD_CLEARANCE",
+  "EV",
+  "WIN_PROBABILITY",
+  "LINEUP_LEGALITY"
+ ],
+ "mapping_entry_to_source_entry": {
+  "5274834023": "5274843756",
+  "5274834121": "5274841509",
+  "5274834389": "5274844113",
+  "5274834525": "5274843532",
+  "5274835060": "5274841073",
+  "5274835845": "5274843144",
+  "5274840701": "5274840701",
+  "5274840934": "5274847646",
+  "5274841073": "5274834389",
+  "5274841509": "5274842412",
+  "5274842205": "5274835845",
+  "5274842407": "5274846774",
+  "5274842408": "5274843148",
+  "5274842409": "5274843147",
+  "5274842410": "5274843145",
+  "5274842411": "5274843146",
+  "5274842412": "5274846773",
+  "5274843144": "5274842411",
+  "5274843145": "5274847163",
+  "5274843146": "5274842205",
+  "5274843147": "5274846777",
+  "5274843148": "5274843149",
+  "5274843149": "5274842409",
+  "5274843532": "5274835060",
+  "5274843728": "5274846778",
+  "5274843756": "5274843893",
+  "5274843893": "5274834121",
+  "5274844113": "5274834023",
+  "5274846773": "5274842410",
+  "5274846774": "5274840934",
+  "5274846775": "5274846775",
+  "5274846776": "5274843728",
+  "5274846777": "5274842408",
+  "5274846778": "5274834525",
+  "5274847163": "5274846776",
+  "5274847646": "5274842407"
+ },
+ "schema_version": "nfl_showdown_contest_diversification_v1",
+ "score": {
+  "after": 406.0,
+  "before": 415.0,
+  "captain_penalty": 12.0,
+  "restarts": 300,
+  "seed": 20260928,
+  "thesis_penalty": 3.0
+ }
+}
