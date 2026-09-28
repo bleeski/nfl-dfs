@@ -176,6 +176,48 @@ The three Bagent lineups now sit one per seven-entry contest (5274842409,
 5274843147, 5274846776); the 18:50 ET check-in replaces them if Keenum is
 confirmed.
 
+#### Addendum: v3, Keenum assumed to start (Ben's call, 17:40 ET)
+
+Ben: "basically every media outlet is reporting Keenum is expected to start.
+Let's make this assumption and update the portfolio as needed." That makes
+Bagent a backup, so his three lineups were rebuilt without him. A re-fetch of
+the nflverse depth chart at 17:40 ET returned the same 15:17Z snapshot (same
+hash), which still ranks Keenum third. The source's own staleness basis says
+it is not republished between inactives and lock, and Sleeper is allowlisted
+for status only. So Keenum stays unscored and absent: no source can give him
+an attempt share before lock.
+
+- Each Bagent row was blanked byte-exactly and refilled by a one-row policy in
+  its own thesis, with Bagent excluded and the Captain limited to people not
+  already captaining that contest (`K1b` shootout, `K2` CHI upset without
+  Hurts, `K3` close game), all at the supplied rung. `K1`'s first result was
+  the six-person copy the S3 repair had removed (captain swap), so `K1b`
+  excluded Swift as that repair did.
+- Then `diversify_showdown_contests.py` ran on the whole file
+  (`theses_v2.json`, record `assignment_v3.json`, score 528 to 490).
+- **v3:** `DK_REVIEW_ENTRY_phi-chi-sd-v3.csv` `ed120be9…7c90`. QA
+  `VERDICT PASS`, 0 defects, 0 limit breaches, max overlap 5, salary 40,500
+  to 50,000; the template byte check shows 36 of 121 lines, roster cells only.
+  The three seven-entry contests have 7 distinct Captains of 7, worst pairs
+  5, 4 and 4. The two-entry pairs share at most 2 people. A 1,500-restart
+  search on three seeds reached 486, but each run repeated a Captain
+  somewhere and still left one five-person pair, so v3 stands.
+- Exposure: Hurts 24, Smith 23, Barkley 22, Santos 21, Loveland 20, Odunze
+  20, Monangai 18, Swift 18, Ertz 17, Burden 12, Elliott 10; Bagent 0.
+
+Ben then asked whether Keenum's historical stats could score him. Not on this
+engine, for three reasons:
+
+- The prior reads the prior season only, and Keenum has no 2025 row.
+- A quarterback's projection is an attempt share, and only the depth-chart
+  ordering can move one.
+- Writing one from older seasons or media reports would clear the
+  current-role gate with research, which `CLAUDE.md` forbids.
+
+The same defect family as Session 48 (a starter the prior gives zero attempt
+share); a starter promoted by news with no prior-season row belongs on that
+card.
+
 ### 2026-09-28: Session 23e -- Classic structural bounds and the share cap (C2 v2)
 
 Cloud session, branch `claude/sleepy-hawking-fe4yk4`, task file
