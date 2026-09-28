@@ -1,5 +1,38 @@
 # Implementation Status
 
+## Capability added: 2026-09-28 (Week 3 slate follow-up)
+
+Three staged scratch scripts from the 2026-09-27 Week 3 slate promoted to
+supported tools, two small engine fixes, and `.claude/rules/working.md`
+moved to `docs/claude/working.md`. No roadmap session number.
+
+- **`scripts/filter_pool_scores.py`** removes a run's own role-gated
+  exclusions from an `NFL_DFS_DUMP_SCORES` dump before construction sees it.
+  Prefers the dump's own `excluded_dk_ids` (below); falls back to the run's
+  selection report for an older dump. 11 tests.
+- **`scripts/swap_inactives.py`** replaces a newly inactive player (single
+  swap, then a two-player fallback), works a named value add into up to a
+  target count of lineups, redeploys freed salary as one upgrade per changed
+  lineup, or edits only cells whose game has not locked (`--mode late-swap`).
+  Every mode preserves an existing stack or bring-back and enforces the
+  portfolio's exposure and overlap caps and R29 uniqueness. 10 tests.
+- **`scripts/build_thesis_portfolio.py`** builds several named theses (a
+  market read, a flip, a bust, a flat-priced "priors wrong" fade) as
+  independent `build_classic_portfolio.py` calls, then selects across all of
+  them under one global cap. Every builder call gets a fresh `--out` path and
+  its exit code is checked before the file is read (the 2026-09-27 stale-read
+  slip, now a regression test). 16 tests, including one real subprocess call.
+- **`selection.write_pool_scores`** now writes after the run's own exclusion
+  set is computed and names it (`excluded_dk_ids`), instead of before. Two
+  regression tests, both confirmed to fail against the pre-fix ordering.
+- **`scripts/session_probe.py`** now honors `NFL_DFS_TLS_ALLOW_NONSTRICT_CA`,
+  matching `sources.py`'s own opt-in, instead of reporting a reachable host
+  `TLS_FAILED`.
+
+Verified: full suite `1839 passed, 1 skipped in 359.24s (0:05:59)`. Not yet:
+Sessions 47 to 49 (`docs/ROADMAP.md`) are proposals from this session's
+findings, not implemented.
+
 ## Capability added: 2026-09-27 (Session 23, Showdown half)
 
 Structural hygiene bounds and the portfolio-wide share cap for Showdown (P2),

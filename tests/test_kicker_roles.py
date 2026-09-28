@@ -570,6 +570,38 @@ def test_the_scored_pool_export_writes_a_versioned_document(tmp_path):
     assert payload["status"] == "DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION"
 
 
+def test_the_scored_pool_export_names_its_own_role_gated_exclusions(tmp_path):
+    """The dump now carries the run's own exclusion set (`excluded_dk_ids`),
+    computed the same way `select_prior_lineups` excludes from its own
+    objective, so a downstream filter never has to re-derive it from a
+    different report by hand. Session 2026-09-27b:
+    `test_r28_model_path.test_the_pool_scores_dump_names_a_material_role_change_exclusion`
+    covers the sharper case, a person excluded here who is scored above zero
+    on purpose.
+    """
+
+    slate, model, contract, splits, starter, backup = _two_kicker_setup(tmp_path)
+    evidence = _write_evidence(
+        tmp_path / "roles",
+        slate,
+        {"NE": [(starter, 1.0)], "SEA": [("SEA|K|Sea Kicker", 1.0)]},
+    )
+    target = tmp_path / "scores.json"
+    _lineups, _scores, report = select_prior_lineups(
+        slate, model, splits, contract, count=1,
+        role_evidence_json=evidence, as_of=AS_OF, pool_scores_path=target,
+    )
+
+    backup_dk_id = next(
+        player.dk_id
+        for player in slate.players
+        if player.underlying_id == backup and player.role == "FLEX"
+    )
+    assert backup in report["kicker_role_excluded_people"]
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    assert backup_dk_id in payload["excluded_dk_ids"]
+
+
 def test_the_scored_pool_export_is_off_unless_asked_for(tmp_path):
     slate, model, contract, splits, starter, _backup = _two_kicker_setup(tmp_path)
     evidence = _write_evidence(

@@ -136,6 +136,20 @@ Captain caps and exposure caps are construction preferences, yours to set
 under the lock clock ruling. Set them for these goals, not for the highest
 total of mean prior points.
 
+## A Tier 2 failure is a construction failure, not a stop
+
+Added 2026-09-27b. When `qa_classic_portfolio.py` Tier 2 fails its own
+suggested limits on the engine's own file -- a player in more than 40% of
+lineups, or stacked below 100% -- that is not a fact to report and wait on.
+It is the same kind of problem the Classic fallback path already exists for:
+a legal file that is not a good enough portfolio. Go straight to
+`scripts/build_thesis_portfolio.py` (`docs/RUNBOOK.md` § The Classic fallback
+path) and build a thesis portfolio from the same frozen scores; do not stop
+to ask first. Construction preferences are yours under the lock clock ruling,
+and a concentrated single-construction file is exactly the failure a
+multi-thesis build exists to fix. Report what you did and why in the handoff,
+the same as any other relaxation.
+
 ## Decide what is yours to decide
 
 Ben's standing preference is that a menu of approaches is work handed back to

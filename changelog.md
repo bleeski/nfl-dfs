@@ -4,6 +4,128 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-28: Week 3 slate follow-up -- staged scripts promoted, two engine fixes, a protected-path move
+
+Cloud session, branch `claude/advisor-usage-sohf7n`, working from the
+uploaded `NEXT_SESSION_PROMPT.md` (PRs #76 to #79 already on `main`). No
+roadmap session number; tracked in `state/tasks/advisor-usage.md`.
+
+#### Added
+
+- **`scripts/filter_pool_scores.py`.** Removes a run's own role-gated
+  exclusions from an `NFL_DFS_DUMP_SCORES` dump before it reaches
+  `build_classic_portfolio.py`'s pool filter, which keeps anyone scored above
+  zero. Prefers the dump's own `excluded_dk_ids` (below) when present; falls
+  back, for an older dump, to the run's selection report
+  (`offensive_roles.excluded_by_finding` plus `material_role_change_
+  exclusions`, mapped to dk_ids through the salary file's own
+  `{team}|{position}|{name}` formula), refusing unless the removed count
+  equals the report's `excluded_rows`. 11 tests
+  (`tests/test_filter_pool_scores.py`).
+- **`scripts/swap_inactives.py`.** Four modes on an already-built Classic
+  portfolio: `inactive` (single swap ranked by score, then a two-player
+  fallback when no single swap is both legal and cap-fitting), `value-add`
+  (work a named player into up to `--target-count` lineups), `redeploy`
+  (one upgrade per changed lineup, spending cap room a cheaper swap freed),
+  and `late-swap` (the `inactive` search, restricted to cells whose game has
+  not locked as of `--now`; a locked cell is never touched). Every mode
+  shares one legality gate mirroring `build_classic_portfolio.py`'s own
+  (shape, cap, games, DST/QB anti-correlation) plus a `preserves_shape` check
+  new to this tool: a stack or bring-back the roster already had must survive
+  the edit, in every mode, not only construction. 10 tests
+  (`tests/test_swap_inactives.py`), including the two-player fallback and the
+  late-swap lock boundary.
+- **`scripts/build_thesis_portfolio.py`.** Generalizes the staged
+  `build_theses.py`: a JSON thesis config (quotas, team-total variants --
+  market, a flip-pairs swap, a bust override, a flat number -- per-team score
+  multipliers passed through as `role_boosts`, a salary-ranked "priors wrong"
+  thesis that fades the `fade_count` most-rostered non-DST players), global
+  caps (exposure, overlap, a per-thesis QB cap), seeds. Every
+  `build_classic_portfolio.py` call gets a fresh, monotonically-numbered
+  `--out` path and its exit code is checked before the file is read -- the
+  2026-09-27 stale-read slip named in the staged copy's README, now a
+  regression test that fails without the fix
+  (`test_a_refused_builder_call_is_never_read_as_a_success`). 16 tests
+  (`tests/test_build_thesis_portfolio.py`), including one real subprocess
+  call into `build_classic_portfolio.py` and not only an injected fake.
+  `scripts/staging/slate_2026_09_27/` deleted; git keeps its history.
+
+#### Changed
+
+- **`selection.write_pool_scores`** (the 2026-09-27 defect: 65 role-gated
+  people were still scored above zero in the dump because it was written
+  before the run's own exclusion set was computed). The write now happens
+  after `excluded` is computed and carries it as a new `excluded_dk_ids`
+  field -- the same set `select_prior_lineups` passes to its own objective,
+  covering kicker zero-share, official status, offensive role and
+  material-role-change findings alike, not only the offensive-role gate.
+  Two regression tests, both confirmed to fail against the pre-fix code:
+  `tests/test_kicker_roles.py::test_the_scored_pool_export_names_its_own_
+  role_gated_exclusions` and
+  `tests/test_r28_model_path.py::test_the_pool_scores_dump_names_a_
+  material_role_change_exclusion` (the sharper case: a person scored above
+  zero on purpose, per the ruling in `prior_score.py`, whose exclusion the
+  dump must still name).
+- **`scripts/session_probe.py`** ignored `NFL_DFS_TLS_ALLOW_NONSTRICT_CA` and
+  reported `github.com`/`raw.githubusercontent.com` as `TLS_FAILED` in this
+  container on 2026-09-27 while the same run's `sources.py` fetches
+  succeeded on the same hosts. `probe()` now passes the same relaxed
+  `ssl.SSLContext` (`VERIFY_X509_STRICT` cleared, nothing else) `urlopen`
+  gets when the opt-in is set, mirroring `sources.build_verify_context`
+  without importing it (the probe stays standard-library only, so it still
+  runs before `setup`). 2 new tests in `tests/test_session_probe.py`.
+- **`docs/RUNBOOK.md` § The Classic fallback path** names the full chain in
+  order (score dump, filter, slate context, either single-construction or
+  thesis build, writer, QA, `swap_inactives.py`), and a fourth "not optional"
+  bullet: re-run QA after every `swap_inactives.py` edit.
+- **`.claude/rules/slate-operation.md`** adds a rule: a Tier 2 QA failure on
+  the engine's own file (a player over 40% of lineups, or stacks under 100%)
+  goes straight to `build_thesis_portfolio.py`, no stop to ask.
+- **`docs/ROADMAP.md`** adds Sessions 47 to 49 (§2.2, §2.3, §2.8): C2
+  bank-rate calibration (this host measured 4.41s per candidate against the
+  0.28s default, so a 2000-candidate bank reached 254 and every rung failed
+  to C1), a depth-chart QB transfer bug (a starter who arrived from another
+  team gets zero attempt share -- Malik Willis, Geno Smith), and the thesis
+  builder as rung 4's replacement (the 2026-09-27 fallback file concentrated
+  three players in 25 of 25 lineups with zero stacks).
+- **Protected-path move.** `.claude/rules/working.md` moved to
+  `docs/claude/working.md` (`git mv`, history preserved), loaded every
+  session by a new `@docs/claude/working.md` import in `CLAUDE.md`. Confirmed
+  first, against `code.claude.com/docs/en/memory.md`: an `@path` import in
+  `CLAUDE.md` is expanded and loaded into context at launch, alongside
+  `CLAUDE.md` itself, with no extra action needed (up to 4 hops, both
+  relative and absolute paths, skipped inside a fenced code block). This
+  touches `CLAUDE.md`, so the pull request carries `ben-review`; Ben
+  approved the move itself in the request that asked for it. Every
+  gate-registry and boundary-test citation of the old path checked and
+  resolving (`tests/test_repo_boundaries.py`, `tests/test_gate_registry.py`,
+  `tests/test_harness_orientation.py`, all green); `scripts/repo_state.py`'s
+  own docstring pointer updated.
+
+#### Verification
+
+`1839 passed, 1 skipped in 359.24s (0:05:59)` (full suite, Linux;
+`scripts/record_verify.py`). `sh ./nfl.sh doctor` `pass_status: true`;
+`git diff --check` clean; `python3 scripts/check_protected_paths.py` run
+again after commit, before push. Both `write_pool_scores` regression tests
+and the `build_thesis_portfolio.py` stale-read regression test independently
+confirmed to fail against the pre-fix code, not only pass against the fix.
+
+#### Found, not fixed
+
+- **[BEN: which file did you actually upload for the Week 3 slate, v6 (salary
+  redeploy) or v7 (the Flowers swap)?]** See the addendum to the 2026-09-27
+  slate entry above; neither hash was recorded at the time.
+- `filter_pool_scores.py`'s fallback-path invariant (removed count must equal
+  the report's `excluded_rows`) only holds when the run has no kicker,
+  official-status or portfolio-policy exclusion alongside the offensive-role
+  gate; it refuses rather than guess when it does not, which is correct but
+  means an operator on such a run needs a dump already carrying
+  `excluded_dk_ids` (every run since this session) rather than the fallback.
+- Sessions 47 to 49 are proposals with acceptance criteria, not implemented
+  fixes; C2 bank-rate calibration in particular is flagged in its own card as
+  probably under-ranked given its measured effect on this host.
+
 ### 2026-09-27: research allowed, procedure split out of CLAUDE.md (Ben's ruling)
 
 Ben, 2026-09-27, after a live slate where the retrieval boundary stopped an
@@ -165,6 +287,29 @@ never the final handoff):
   refuses an existing `--out`, and the selection script read the earlier file
   when it did, so two re-runs silently reused the first candidates. The final
   run used fresh paths and checks the builder's exit code.
+
+**Addendum, 2026-09-27b** (a later cloud session, no new engine run;
+construction-only edits to the v4 file above, applied with the staging
+scripts this session promoted to `scripts/filter_pool_scores.py`,
+`scripts/swap_inactives.py` and `scripts/build_thesis_portfolio.py`):
+
+- **v5: value adds.** Isaiah Williams, Hutchinson and Boutte worked into the
+  portfolio as named value adds, from an inactive report Ben pasted into the
+  session. Construction only; no engine score or exclusion changed.
+- **v6: salary redeploy.** One upgrade per lineup the inactive swaps had
+  already changed, spending the cap room a cheaper replacement freed.
+- **v7: the Flowers swap.** Zay Flowers was DraftKings-active but limited to
+  about 20 to 30 plays; swapped for Bateman plus Ferguson in Entry
+  `5268345867` and for Olave in Entry `5272530124`.
+- **Research rule in use.** Web search for inactives (CLAUDE.md's 2026-09-27
+  research clause, above), never `nfl.com` or DraftKings; findings informed
+  construction only, never a score or a gate.
+
+[BEN: which file did you actually upload for this slate, v6 (salary
+redeploy) or v7 (the Flowers swap)? The session that built v5 through v7 ran
+them as scratch edits under `/tmp`, never committed a hash for either, and
+nothing else in the repo's artifacts settles it. Flagged here rather than
+guessed.]
 
 ### 2026-09-27: structural hygiene and the share cap, Showdown half (Session 23)
 
