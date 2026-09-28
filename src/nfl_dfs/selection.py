@@ -22,7 +22,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
 from .classic_portfolio import (
@@ -133,7 +133,12 @@ def resolve_pool_scores_path(explicit: str | Path | None) -> Path | None:
     return path
 
 
-def write_pool_scores(scores: PriorScores, path: str | Path) -> Path:
+def write_pool_scores(
+    scores: PriorScores,
+    path: str | Path,
+    *,
+    excluded_dk_ids: Iterable[str] = (),
+) -> Path:
     """Write the gated per-player scores as a schema-versioned JSON document.
 
     This is a diagnostic export, not a release artifact: it binds no hashes and
@@ -142,6 +147,15 @@ def write_pool_scores(scores: PriorScores, path: str | Path) -> Path:
     were the one artifact that reached the shipped portfolio, and they left
     through an unnamed environment variable read in the middle of the scoring
     path.
+
+    `excluded_dk_ids` (2026-09-27) names every dk_id the run's own role gates
+    already excluded -- official status, kicker zero-share, offensive role and
+    material-role-change findings alike -- the same set `select_prior_lineups`
+    passes to its own objective. On 2026-09-27, 65 role-gated people were still
+    scored above zero in this dump because it was written before that set was
+    computed, and a downstream filter had to re-derive the same exclusions from
+    a different report by hand. Carrying the set here means a consumer of this
+    file never has to.
     """
 
     target = Path(path).expanduser()
@@ -153,6 +167,7 @@ def write_pool_scores(scores: PriorScores, path: str | Path) -> Path:
         "by_person": dict(sorted(scores.by_person.items())),
         "threshold_sensitive": sorted(scores.threshold_sensitive),
         "omissions": sorted(scores.omissions),
+        "excluded_dk_ids": sorted({str(dk_id) for dk_id in excluded_dk_ids}),
     }
     target.write_text(
         json.dumps(payload, indent=2, sort_keys=False, default=str), encoding="utf-8"
@@ -263,8 +278,6 @@ def select_prior_lineups(
     # the one every exclusion and report below reads.
     offense = scores.offensive_role_resolution
     pool_scores_target = resolve_pool_scores_path(pool_scores_path)
-    if pool_scores_target is not None:
-        write_pool_scores(scores, pool_scores_target)
     zero_share_people = set(kicker_roles.zero_share_people)
     excluded_set = (
             sorted(
@@ -289,6 +302,8 @@ def select_prior_lineups(
             if limit.maximum_entries == 0:
                 excluded_set.append(by_person[limit.entity_id].dk_id)
     excluded = tuple(sorted(set(excluded_set)))
+    if pool_scores_target is not None:
+        write_pool_scores(scores, pool_scores_target, excluded_dk_ids=excluded)
     objective = _objective(slate, scores, excluded)
 
     def fill(policy_lineups: list[SelectedLineup]) -> tuple[list[SelectedLineup], dict[str, object]]:

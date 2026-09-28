@@ -145,6 +145,49 @@ def test_an_unresolved_role_change_leaves_the_pool_and_the_file_ships(tmp_path, 
     assert not any(value.startswith("SELECTION_FAILED:") for value in report["blockers"])
 
 
+def test_the_pool_scores_dump_names_a_material_role_change_exclusion(tmp_path, monkeypatch):
+    """The 2026-09-27 defect: `selection.write_pool_scores` wrote this dump
+    before the run's own exclusion set was computed, so a person excluded here
+    -- scored above zero on purpose (his score stays as scored; only his
+    selectability changes, per the ruling in `prior_score.py`) -- looked
+    identical in the dump to one still eligible. 65 role-gated people shipped
+    that way on the Week 3 slate, and a downstream filter had to re-derive the
+    same set from a different report (`prior_review_reports.selection.selection
+    .offensive_roles`) by hand. The dump now names its own exclusions.
+    """
+
+    from nfl_dfs import offensive_roles
+
+    code, before, salary = _run_slate(tmp_path / "before", monkeypatch, run_id="before")
+    _the_models_file_is_delivered(code, before)
+    slate = parse_salaries(salary)
+    by_id = {player.dk_id: player for player in slate.players}
+    chosen = next(
+        by_id[dk_id]
+        for roster in _delivered_rosters(before)
+        for dk_id in roster
+        if by_id[dk_id].position in {"RB", "WR", "TE"}
+    )
+    code_text = (
+        f"OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE:{chosen.underlying_id}:salary={chosen.salary}"
+        ":prior_points=1.0:places=14:old_teams=SEA:the market prices this person far above a prior"
+        " carried from his previous team, so he was left out of the selectable pool and is never"
+        " selected on the old-team share."
+    )
+    monkeypatch.setattr(
+        offensive_roles, "_material_role_changes",
+        lambda report, divergence: [(chosen.underlying_id, code_text)])
+
+    dump = tmp_path / "pool_scores.json"
+    monkeypatch.setenv("NFL_DFS_DUMP_SCORES", str(dump))
+    code, report, _salary = _run_slate(tmp_path / "after", monkeypatch, run_id="after")
+    _the_models_file_is_delivered(code, report)
+
+    payload = json.loads(dump.read_text(encoding="utf-8"))
+    assert payload["by_dk_id"][chosen.dk_id] > 0  # scored as if selectable, on purpose
+    assert chosen.dk_id in payload["excluded_dk_ids"]
+
+
 def test_an_unobserved_game_ships_named_and_moves_no_number(tmp_path, monkeypatch):
     """Missing weather (R28, Session 09). A frozen package whose team prior
     records one game `UNOBSERVED` (team source v2) projects, selects and ships;

@@ -1050,18 +1050,47 @@ construction, which the lock-clock ruling below classes as preferences Claude
 may set. Output stays `PRIOR_ONLY / DO_NOT_UPLOAD`; nothing here certifies
 anything, and none of it is an upload package.
 
+The full chain, in running order (promoted to supported tools, tested on
+synthetic fixtures, 2026-09-27b; the staged scripts they replace are gone,
+kept only in git history):
+
 ```
+NFL_DFS_DUMP_SCORES=<path>       C1 run (~20s) dumps the engine's own gated
+  nfl run-slate ... (or select)  per-player scores; since 2026-09-27 the dump
+                                 also names its own excluded_dk_ids
+scripts/filter_pool_scores.py   removes the run's own role-gated exclusions
+                                 (excluded_dk_ids when present, else the
+                                 selection report's offensive_roles) so the
+                                 next step never keeps a gated person scored
+                                 above zero
 scripts/make_slate_context.py    implied team totals from the run's own frozen
                                  games.csv; never invents ownership or a boost
-scripts/build_classic_portfolio.py   stacks, bring-backs, exposure and overlap
-                                 caps, anti-correlation; drops DraftKings
-                                 OUT/IR/D rows; assigns the template's blank
-                                 Entry IDs in order; never repeats a lineup,
-                                 and exits 3 naming every one it could not fill
-scripts/qa_classic_portfolio.py  two-tier gate, REQUIRED before handoff
+scripts/build_classic_portfolio.py   ONE construction: stacks, bring-backs,
+                                 exposure and overlap caps, anti-correlation;
+                                 drops DraftKings OUT/IR/D rows; assigns the
+                                 template's blank Entry IDs in order; never
+                                 repeats a lineup, and exits 3 naming every one
+                                 it could not fill
+scripts/build_thesis_portfolio.py   MULTIPLE constructions (a JSON thesis
+                                 config: quotas, team-total variants, per-team
+                                 score multipliers, a salary-ranked
+                                 "priors wrong" fade), each thesis a market
+                                 tilt or a contrarian read of the same slate,
+                                 selected together under one global cap; use
+                                 this instead of build_classic_portfolio.py
+                                 when the portfolio should not be one bet
+                                 placed many times (see Build for both goals,
+                                 below)
 scripts/write_dk_entries.py      exact-template fill plus a byte audit; writes
                                  a new file only, and exits 3 naming every
                                  blank authorized row it did not fill
+scripts/qa_classic_portfolio.py  two-tier gate, REQUIRED before handoff
+scripts/swap_inactives.py       post-handoff edits to the written portfolio:
+                                 inactive replacement (single swap, then a
+                                 two-player fallback), a named value add, a
+                                 salary redeploy once a cheaper swap frees cap
+                                 room, or a late-swap mode that never touches
+                                 a cell whose game has already locked
 ```
 
 Three things that are not optional:
@@ -1084,17 +1113,25 @@ Three things that are not optional:
 - **Say what the portfolio does not have.** With no `--ownership` there is no
   leverage model, and mean-max in a large field is chalk. The gate prints this;
   repeat it in the handoff.
+- **Re-run `qa_classic_portfolio.py` after every `swap_inactives.py` edit.**
+  An inactive replacement, a value add, a redeploy or a late swap all write a
+  new portfolio file; none of them is the handoff until the gate has run on
+  it again.
 
 The builder's `--scores` comes from a C1 run with `NFL_DFS_DUMP_SCORES=<path>`
-set; C1 takes about 20 seconds. Filter that file before building: measured on
-2026-09-27, it still scored all 65 people the current-role gate had left out
-as `OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE`, and the builder keeps anyone
-scored above zero. Remove every person in the run's
-`prior_review_reports.selection.selection.offensive_roles.excluded_by_finding`
-and `material_role_change_exclusions`; the count removed should equal that
-report's `excluded_rows`. The builder's `--status` takes a header-only
-official-status file when no official observation exists, which is not an
-observation of anyone.
+set; C1 takes about 20 seconds. **Run `scripts/filter_pool_scores.py` on that
+file before building it into anything.** Measured on 2026-09-27, the dump
+still scored all 65 people the current-role gate had left out as
+`OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE` above zero, because it was written
+before the run's own exclusion set was computed; that session removed them by
+hand against the selection report. The dump has carried its own
+`excluded_dk_ids` since that fix, and the filter script uses it directly when
+present; for an older dump it falls back to the same by-hand method (the
+run's `prior_review_reports.selection.selection.offensive_roles`
+`.excluded_by_finding` plus `.material_role_change_exclusions`, refusing
+unless the removed count equals that report's `excluded_rows`). The builder's
+`--status` takes a header-only official-status file when no official
+observation exists, which is not an observation of anyone.
 
 Suggested limits, to argue about rather than adopt silently: max exposure ≤ 40%,
 top-3 union ≤ 75%, anti-correlation exactly 0, stacked 100%, bring-back ≥ 70%.

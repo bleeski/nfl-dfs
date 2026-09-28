@@ -268,7 +268,7 @@ def changelog_headings(limit: int = CHANGELOG_HEADINGS, path: Path | None = None
 
     Headings only. The file is streamed and abandoned at the first heading past
     the `Unreleased` block or at `limit`, so this never reads the whole
-    changelog into memory, per `.claude/rules/working.md` § Token discipline.
+    changelog into memory, per `docs/claude/working.md` § Token discipline.
     """
     path = path or CHANGELOG
     found: list[str] = []

@@ -91,6 +91,46 @@ def test_http_error_status_still_counts_as_reachable(monkeypatch):
     assert result["detail"] == "HTTP 400"
 
 
+def test_tls_nonstrict_ca_opt_in_is_off_by_default(monkeypatch):
+    """Default is strict: `urlopen` gets no relaxed context."""
+
+    monkeypatch.delenv("NFL_DFS_TLS_ALLOW_NONSTRICT_CA", raising=False)
+    assert probe_module.tls_nonstrict_ca_enabled() is False
+    assert probe_module.verify_context() is None
+
+
+def test_tls_nonstrict_ca_opt_in_is_honored(monkeypatch):
+    """The 2026-09-27 defect: this probe ignored the approved opt-in and
+    reported github.com and raw.githubusercontent.com as `TLS_FAILED` in a
+    container whose proxy CA needs it, while the same run's nflverse fetches
+    through `sources.py` succeeded on the same host seconds later. `probe`
+    must pass the same relaxed context `sources.build_verify_context` builds,
+    with `VERIFY_X509_STRICT` cleared and nothing else changed.
+    """
+
+    import ssl
+
+    monkeypatch.setenv("NFL_DFS_TLS_ALLOW_NONSTRICT_CA", "1")
+    context = probe_module.verify_context()
+    assert isinstance(context, ssl.SSLContext)
+    assert not (context.verify_flags & ssl.VERIFY_X509_STRICT)
+    assert context.verify_mode is ssl.CERT_REQUIRED
+    assert context.check_hostname is True
+
+    seen = {}
+
+    def capture(_request, timeout=None, context=None):
+        seen["context"] = context
+        raise urllib.error.HTTPError("https://github.com/", 200, "OK", {}, None)
+
+    monkeypatch.setattr(probe_module.urllib.request, "urlopen", capture)
+    probe_module.probe("github.com")
+    assert seen["context"] is context or (
+        isinstance(seen["context"], ssl.SSLContext)
+        and not (seen["context"].verify_flags & ssl.VERIFY_X509_STRICT)
+    )
+
+
 def _salary_csv(path: Path, rows: list[tuple[str, str]]) -> Path:
     header = "Position,Name + ID,Name,ID,Roster Position,Salary,Game Info,TeamAbbrev,AvgPointsPerGame,Status\n"
     body = "".join(

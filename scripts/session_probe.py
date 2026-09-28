@@ -72,6 +72,34 @@ HOST_ROLE = {
 UA = "nfl-dfs-session-probe/1.0"
 TIMEOUT = 8
 
+# Mirrors `nfl_dfs.sources.build_verify_context` (`TLS_NONSTRICT_CA_ENV`) without
+# importing it: this probe is deliberately standard-library only, so it can run
+# before `setup`. On 2026-09-27 the probe itself ignored this opt-in and
+# reported github.com and raw.githubusercontent.com as `TLS_FAILED` in a
+# container whose proxy CA needs it, while the same run's nflverse fetches
+# through `sources.py` succeeded seconds later on the same host.
+TLS_NONSTRICT_CA_ENV = "NFL_DFS_TLS_ALLOW_NONSTRICT_CA"
+
+
+def tls_nonstrict_ca_enabled() -> bool:
+    return os.environ.get(TLS_NONSTRICT_CA_ENV, "").strip() == "1"
+
+
+def verify_context() -> ssl.SSLContext | None:
+    """The `context=` argument for `urlopen`: `None` keeps urllib's own strict
+    default; the opt-in returns a context with only `VERIFY_X509_STRICT`
+    cleared, same as `sources.py`, so CERT_REQUIRED and hostname checking still
+    hold."""
+
+    if not tls_nonstrict_ca_enabled():
+        return None
+    context = ssl.create_default_context()
+    cafile = os.environ.get("SSL_CERT_FILE")
+    if cafile and Path(cafile).is_file():
+        context.load_verify_locations(cafile=cafile)
+    context.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    return context
+
 
 def allowed_hosts() -> list[str]:
     """Read ALLOWED_HOSTS from sources.py by parsing it, never by importing."""
@@ -98,7 +126,9 @@ def probe(host: str) -> dict[str, object]:
     url = f"https://{host}/"
     request = urllib.request.Request(url, headers={"User-Agent": UA}, method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        with urllib.request.urlopen(
+            request, timeout=TIMEOUT, context=verify_context()
+        ) as response:
             return {"host": host, "reachable": True, "detail": f"HTTP {response.status}"}
     except urllib.error.HTTPError as exc:
         # An HTTP status means the tunnel opened and the origin answered. 400 or
@@ -188,6 +218,7 @@ def main() -> int:
 
     report: dict[str, object] = {
         "proxy": os.environ.get("HTTPS_PROXY") or None,
+        "tls_nonstrict_ca_enabled": tls_nonstrict_ca_enabled(),
         "hosts": results,
         "hosts_without_a_declared_role": unknown,
         "slate": slate,
