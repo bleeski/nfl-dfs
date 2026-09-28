@@ -644,6 +644,32 @@ def test_a_showdown_review_with_a_prefilled_row_ships_and_never_repeats_it(
     assert not _keys(slate, filled) & _keys(slate, [first]) and len(_keys(slate, filled)) == 2
 
 
+@pytest.mark.parametrize("policy_controls", [None, {
+    "max_captain_exposure": {"default_fraction": 0.5, "overrides": []}, "max_pairwise_person_overlap": 4,
+}], ids=["sequential", "sd3"])
+def test_a_showdown_template_whose_entry_ids_are_not_ascending_ships_in_template_order(
+    tmp_path, monkeypatch, policy_controls
+):
+    """PHI@CHI 2026-09-28: a multi-contest DKEntries file lists Entry IDs out of order.
+
+    The no-policy path wrote `assignments.csv` sorted by Entry ID and the readable
+    review, which checks template order, withheld the file on
+    `READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH`: rung 4 could never ship.
+    """
+
+    template_order = ("900000003", "900000001", "900000002")
+    code, report, _entries, _slate = _run_showdown(
+        tmp_path, monkeypatch, run_id="sd-unsorted", entry_ids=template_order,
+        policy_controls=policy_controls)
+
+    assert code == 0, report["blockers"]
+    assert report["latest_deliverable"]["producer"] == "run-slate:prior_review:SHOWDOWN"
+    assert report["release_truths"]["delivered_entry_ids"] == list(template_order)
+    assert list(_cells(Path(report["latest_deliverable"]["path"]))) == list(template_order)
+    assignments = Path(report["prior_review_artifacts"]["assignments"]).read_text(encoding="utf-8")
+    assert [line.split(",")[0] for line in assignments.splitlines()[1:]] == list(template_order)
+
+
 def test_an_illegal_showdown_prefilled_roster_never_stops_the_baseline(tmp_path):
     """A FLEX-role ID in the Captain cell shares a legal lineup's person-level key.
 

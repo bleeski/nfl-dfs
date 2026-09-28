@@ -392,6 +392,37 @@ in the readable review say which filled each row. If the fill runs out of
 distinct lineups the review delivers nothing and the baseline stays the file,
 named. The request's `lineup_count` is still every fillable row.
 
+Until Sessions 23b and 23c land, a multi-thesis Showdown portfolio is built in
+prefilled rounds (PHI@CHI, 2026-09-28; `changelog.md` has the run). Allot the
+rows to theses, interleaved across contests. Round 1 binds thesis 1's rows with
+its own policy (exclusions and caps shape the thesis: fade a team's pass game,
+zero every Captain but K and DST). Copy only those rows' lines from the review
+CSV into a new copy of the template, verified to differ from the previous
+template in the six roster cells alone, and run round 2 on that copy: the
+earlier rows are now prefilled, preserved byte for byte and never repeated
+(R29). The last round binds every remaining row, so its review CSV is the whole
+portfolio. Before each run, check the policy against the bank's own chain
+stratum (`build_policy_candidate_bank`; its `chain` stratum must reach the
+bound row count), and after each, read `final_rung`: a sleeve that fell to
+rung 1 lost its salary band and usually carries a junk tail row. Three limits
+the method does not cover, all measured that night. The overlap cap binds only
+within one policy's rows, so run `qa_showdown_portfolio.py` against the
+original template and repair any cross-sleeve overlap-6 pair by blanking one
+row and refilling it with a one-row policy that excludes a shared person. The
+Captain strata take each Captain's top lineups regardless of other caps, so a
+K or DST Captain sleeve is infeasible while its only candidates all carry
+capped stars; exclude those stars from that sleeve. And a salary floor
+together with tight exposure caps across 30 or more rows makes the chain
+infeasible; bind fewer rows per policy instead.
+
+When several rows share a contest, run `scripts/diversify_showdown_contests.py`
+on the finished file before the handoff. It keeps every lineup and reassigns
+them to Entry IDs (never moving a row the template already filled). Within
+each contest it minimizes shared people squared, repeated Captains and
+repeated theses. Then run `qa_showdown_portfolio.py` on its output. On
+PHI@CHI it took the three seven-entry contests from 5 to 7 distinct captains
+out of 7 and their worst pair from five shared people to four.
+
 Kicker roles are resolved after those exclusions. When one eligible kicker is
 listed for a team and no role artifact is supplied, the review may continue only
 with a visible prior-only sole-listed assumption; it does not prove a confirmed

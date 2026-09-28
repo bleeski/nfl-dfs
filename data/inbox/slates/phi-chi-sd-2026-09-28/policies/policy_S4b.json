@@ -1,0 +1,462 @@
+{
+  "schema_version": "nfl_showdown_portfolio_policy_v2",
+  "bindings": {
+    "salary_sha256": "322d7acf2266bb57c9d8aab419e542bf48cb6971dbadd49beb0591aa3973138a",
+    "game_id": "PHI@CHI",
+    "entry_ids": [
+      "5274834121",
+      "5274843893",
+      "5274842408",
+      "5274843532",
+      "5274843149"
+    ],
+    "person_identities": [
+      {
+        "underlying_id": "CHI|DST|Bears",
+        "cpt_dk_id": "44282481",
+        "flex_dk_id": "44282425"
+      },
+      {
+        "underlying_id": "CHI|K|Cairo Santos",
+        "cpt_dk_id": "44282478",
+        "flex_dk_id": "44282422"
+      },
+      {
+        "underlying_id": "CHI|QB|Caleb Williams",
+        "cpt_dk_id": "44282461",
+        "flex_dk_id": "44282405"
+      },
+      {
+        "underlying_id": "CHI|QB|Case Keenum",
+        "cpt_dk_id": "44282465",
+        "flex_dk_id": "44282409"
+      },
+      {
+        "underlying_id": "CHI|QB|Miller Moss",
+        "cpt_dk_id": "44282470",
+        "flex_dk_id": "44282414"
+      },
+      {
+        "underlying_id": "CHI|QB|Tyson Bagent",
+        "cpt_dk_id": "44282464",
+        "flex_dk_id": "44282408"
+      },
+      {
+        "underlying_id": "CHI|RB|Brittain Brown",
+        "cpt_dk_id": "44282498",
+        "flex_dk_id": "44282442"
+      },
+      {
+        "underlying_id": "CHI|RB|D'Andre Swift",
+        "cpt_dk_id": "44282463",
+        "flex_dk_id": "44282407"
+      },
+      {
+        "underlying_id": "CHI|RB|Kyle Monangai",
+        "cpt_dk_id": "44282474",
+        "flex_dk_id": "44282418"
+      },
+      {
+        "underlying_id": "CHI|RB|Roschon Johnson",
+        "cpt_dk_id": "44282491",
+        "flex_dk_id": "44282435"
+      },
+      {
+        "underlying_id": "CHI|RB|Salvon Ahmed",
+        "cpt_dk_id": "44282499",
+        "flex_dk_id": "44282443"
+      },
+      {
+        "underlying_id": "CHI|RB|Zavier Scott",
+        "cpt_dk_id": "44282500",
+        "flex_dk_id": "44282444"
+      },
+      {
+        "underlying_id": "CHI|TE|Cole Kmet",
+        "cpt_dk_id": "44282484",
+        "flex_dk_id": "44282428"
+      },
+      {
+        "underlying_id": "CHI|TE|Colston Loveland",
+        "cpt_dk_id": "44282468",
+        "flex_dk_id": "44282412"
+      },
+      {
+        "underlying_id": "CHI|TE|Hayden Large",
+        "cpt_dk_id": "44282510",
+        "flex_dk_id": "44282454"
+      },
+      {
+        "underlying_id": "CHI|TE|Nikola Kalinic",
+        "cpt_dk_id": "44282511",
+        "flex_dk_id": "44282455"
+      },
+      {
+        "underlying_id": "CHI|TE|Qadir Ismail",
+        "cpt_dk_id": "44282509",
+        "flex_dk_id": "44282453"
+      },
+      {
+        "underlying_id": "CHI|TE|Sam Roush",
+        "cpt_dk_id": "44282495",
+        "flex_dk_id": "44282439"
+      },
+      {
+        "underlying_id": "CHI|TE|Stephen Carlson",
+        "cpt_dk_id": "44282512",
+        "flex_dk_id": "44282456"
+      },
+      {
+        "underlying_id": "CHI|WR|JP Richardson",
+        "cpt_dk_id": "44282505",
+        "flex_dk_id": "44282449"
+      },
+      {
+        "underlying_id": "CHI|WR|Jahdae Walker",
+        "cpt_dk_id": "44282487",
+        "flex_dk_id": "44282431"
+      },
+      {
+        "underlying_id": "CHI|WR|Kaden Davis",
+        "cpt_dk_id": "44282504",
+        "flex_dk_id": "44282448"
+      },
+      {
+        "underlying_id": "CHI|WR|Kalif Raymond",
+        "cpt_dk_id": "44282482",
+        "flex_dk_id": "44282426"
+      },
+      {
+        "underlying_id": "CHI|WR|Luther Burden III",
+        "cpt_dk_id": "44282466",
+        "flex_dk_id": "44282410"
+      },
+      {
+        "underlying_id": "CHI|WR|Rome Odunze",
+        "cpt_dk_id": "44282467",
+        "flex_dk_id": "44282411"
+      },
+      {
+        "underlying_id": "CHI|WR|Scotty Miller",
+        "cpt_dk_id": "44282506",
+        "flex_dk_id": "44282450"
+      },
+      {
+        "underlying_id": "CHI|WR|Zavion Thomas",
+        "cpt_dk_id": "44282492",
+        "flex_dk_id": "44282436"
+      },
+      {
+        "underlying_id": "PHI|DST|Eagles",
+        "cpt_dk_id": "44282475",
+        "flex_dk_id": "44282419"
+      },
+      {
+        "underlying_id": "PHI|K|Jake Elliott",
+        "cpt_dk_id": "44282477",
+        "flex_dk_id": "44282421"
+      },
+      {
+        "underlying_id": "PHI|QB|Andy Dalton",
+        "cpt_dk_id": "44282473",
+        "flex_dk_id": "44282417"
+      },
+      {
+        "underlying_id": "PHI|QB|Cole Payton",
+        "cpt_dk_id": "44282471",
+        "flex_dk_id": "44282415"
+      },
+      {
+        "underlying_id": "PHI|QB|Jalen Hurts",
+        "cpt_dk_id": "44282459",
+        "flex_dk_id": "44282403"
+      },
+      {
+        "underlying_id": "PHI|QB|Tanner McKee",
+        "cpt_dk_id": "44282472",
+        "flex_dk_id": "44282416"
+      },
+      {
+        "underlying_id": "PHI|RB|Carson Steele",
+        "cpt_dk_id": "44282497",
+        "flex_dk_id": "44282441"
+      },
+      {
+        "underlying_id": "PHI|RB|Dameon Pierce",
+        "cpt_dk_id": "44282501",
+        "flex_dk_id": "44282445"
+      },
+      {
+        "underlying_id": "PHI|RB|Jaydon Blue",
+        "cpt_dk_id": "44282496",
+        "flex_dk_id": "44282440"
+      },
+      {
+        "underlying_id": "PHI|RB|Saquon Barkley",
+        "cpt_dk_id": "44282462",
+        "flex_dk_id": "44282406"
+      },
+      {
+        "underlying_id": "PHI|RB|Tank Bigsby",
+        "cpt_dk_id": "44282476",
+        "flex_dk_id": "44282420"
+      },
+      {
+        "underlying_id": "PHI|RB|Will Shipley",
+        "cpt_dk_id": "44282483",
+        "flex_dk_id": "44282427"
+      },
+      {
+        "underlying_id": "PHI|TE|Dallas Goedert",
+        "cpt_dk_id": "44282469",
+        "flex_dk_id": "44282413"
+      },
+      {
+        "underlying_id": "PHI|TE|E.J. Jenkins",
+        "cpt_dk_id": "44282490",
+        "flex_dk_id": "44282434"
+      },
+      {
+        "underlying_id": "PHI|TE|Eli Stowers",
+        "cpt_dk_id": "44282507",
+        "flex_dk_id": "44282451"
+      },
+      {
+        "underlying_id": "PHI|TE|Grant Calcaterra",
+        "cpt_dk_id": "44282508",
+        "flex_dk_id": "44282452"
+      },
+      {
+        "underlying_id": "PHI|TE|Johnny Mundt",
+        "cpt_dk_id": "44282488",
+        "flex_dk_id": "44282432"
+      },
+      {
+        "underlying_id": "PHI|TE|Josiah Deguara",
+        "cpt_dk_id": "44282513",
+        "flex_dk_id": "44282457"
+      },
+      {
+        "underlying_id": "PHI|TE|Rocco Underwood",
+        "cpt_dk_id": "44282514",
+        "flex_dk_id": "44282458"
+      },
+      {
+        "underlying_id": "PHI|TE|Zach Ertz",
+        "cpt_dk_id": "44282486",
+        "flex_dk_id": "44282430"
+      },
+      {
+        "underlying_id": "PHI|WR|Britain Covey",
+        "cpt_dk_id": "44282494",
+        "flex_dk_id": "44282438"
+      },
+      {
+        "underlying_id": "PHI|WR|Darius Cooper",
+        "cpt_dk_id": "44282489",
+        "flex_dk_id": "44282433"
+      },
+      {
+        "underlying_id": "PHI|WR|DeVonta Smith",
+        "cpt_dk_id": "44282460",
+        "flex_dk_id": "44282404"
+      },
+      {
+        "underlying_id": "PHI|WR|Dontayvion Wicks",
+        "cpt_dk_id": "44282479",
+        "flex_dk_id": "44282423"
+      },
+      {
+        "underlying_id": "PHI|WR|Elijah Moore",
+        "cpt_dk_id": "44282493",
+        "flex_dk_id": "44282437"
+      },
+      {
+        "underlying_id": "PHI|WR|Hollywood Brown",
+        "cpt_dk_id": "44282485",
+        "flex_dk_id": "44282429"
+      },
+      {
+        "underlying_id": "PHI|WR|Johnny Wilson",
+        "cpt_dk_id": "44282502",
+        "flex_dk_id": "44282446"
+      },
+      {
+        "underlying_id": "PHI|WR|Makai Lemon",
+        "cpt_dk_id": "44282480",
+        "flex_dk_id": "44282424"
+      },
+      {
+        "underlying_id": "PHI|WR|Xavier Gipson",
+        "cpt_dk_id": "44282503",
+        "flex_dk_id": "44282447"
+      }
+    ]
+  },
+  "controls": {
+    "fraction_unit": "FRACTION_0_TO_1",
+    "max_combined_person_exposure": {
+      "default_fraction": 0.8,
+      "overrides": [
+        {
+          "underlying_id": "CHI|K|Cairo Santos",
+          "cpt_dk_id": "44282478",
+          "flex_dk_id": "44282422",
+          "fraction": 0.6
+        },
+        {
+          "underlying_id": "CHI|QB|Tyson Bagent",
+          "cpt_dk_id": "44282464",
+          "flex_dk_id": "44282408",
+          "fraction": 0.2
+        },
+        {
+          "underlying_id": "CHI|RB|D'Andre Swift",
+          "cpt_dk_id": "44282463",
+          "flex_dk_id": "44282407",
+          "fraction": 0.6
+        },
+        {
+          "underlying_id": "CHI|RB|Kyle Monangai",
+          "cpt_dk_id": "44282474",
+          "flex_dk_id": "44282418",
+          "fraction": 0.8
+        },
+        {
+          "underlying_id": "PHI|QB|Jalen Hurts",
+          "cpt_dk_id": "44282459",
+          "flex_dk_id": "44282403",
+          "fraction": 0.4
+        },
+        {
+          "underlying_id": "PHI|RB|Saquon Barkley",
+          "cpt_dk_id": "44282462",
+          "flex_dk_id": "44282406",
+          "fraction": 0.6
+        }
+      ]
+    },
+    "max_captain_exposure": {
+      "default_fraction": 0.2,
+      "overrides": [
+        {
+          "underlying_id": "CHI|DST|Bears",
+          "cpt_dk_id": "44282481",
+          "flex_dk_id": "44282425",
+          "fraction": 0.0
+        },
+        {
+          "underlying_id": "CHI|K|Cairo Santos",
+          "cpt_dk_id": "44282478",
+          "flex_dk_id": "44282422",
+          "fraction": 0.0
+        },
+        {
+          "underlying_id": "CHI|QB|Tyson Bagent",
+          "cpt_dk_id": "44282464",
+          "flex_dk_id": "44282408",
+          "fraction": 0.0
+        },
+        {
+          "underlying_id": "CHI|RB|D'Andre Swift",
+          "cpt_dk_id": "44282463",
+          "flex_dk_id": "44282407",
+          "fraction": 0.4
+        },
+        {
+          "underlying_id": "PHI|DST|Eagles",
+          "cpt_dk_id": "44282475",
+          "flex_dk_id": "44282419",
+          "fraction": 0.0
+        },
+        {
+          "underlying_id": "PHI|K|Jake Elliott",
+          "cpt_dk_id": "44282477",
+          "flex_dk_id": "44282421",
+          "fraction": 0.0
+        }
+      ]
+    },
+    "excluded_people": [
+      {
+        "underlying_id": "PHI|QB|Tanner McKee",
+        "cpt_dk_id": "44282472",
+        "flex_dk_id": "44282416"
+      },
+      {
+        "underlying_id": "CHI|RB|Zavier Scott",
+        "cpt_dk_id": "44282500",
+        "flex_dk_id": "44282444"
+      },
+      {
+        "underlying_id": "CHI|WR|Scotty Miller",
+        "cpt_dk_id": "44282506",
+        "flex_dk_id": "44282450"
+      },
+      {
+        "underlying_id": "PHI|RB|Jaydon Blue",
+        "cpt_dk_id": "44282496",
+        "flex_dk_id": "44282440"
+      },
+      {
+        "underlying_id": "PHI|RB|Dameon Pierce",
+        "cpt_dk_id": "44282501",
+        "flex_dk_id": "44282445"
+      },
+      {
+        "underlying_id": "PHI|WR|Xavier Gipson",
+        "cpt_dk_id": "44282503",
+        "flex_dk_id": "44282447"
+      },
+      {
+        "underlying_id": "PHI|TE|Josiah Deguara",
+        "cpt_dk_id": "44282513",
+        "flex_dk_id": "44282457"
+      },
+      {
+        "underlying_id": "PHI|WR|DeVonta Smith",
+        "cpt_dk_id": "44282460",
+        "flex_dk_id": "44282404"
+      },
+      {
+        "underlying_id": "PHI|WR|Dontayvion Wicks",
+        "cpt_dk_id": "44282479",
+        "flex_dk_id": "44282423"
+      },
+      {
+        "underlying_id": "PHI|TE|Zach Ertz",
+        "cpt_dk_id": "44282486",
+        "flex_dk_id": "44282430"
+      },
+      {
+        "underlying_id": "PHI|DST|Eagles",
+        "cpt_dk_id": "44282475",
+        "flex_dk_id": "44282419"
+      },
+      {
+        "underlying_id": "PHI|WR|Elijah Moore",
+        "cpt_dk_id": "44282493",
+        "flex_dk_id": "44282437"
+      }
+    ],
+    "max_pairwise_person_overlap": 5,
+    "require_unique_lineups": true,
+    "structural_bounds": {
+      "qb_count": {
+        "minimum": 0,
+        "maximum": 2
+      },
+      "pass_catchers_with_rostered_qb": {
+        "minimum": 0,
+        "maximum": 3
+      },
+      "salary_left": {
+        "minimum": 0,
+        "maximum": 5000
+      },
+      "kicker_count": 1,
+      "dst_count": 1,
+      "offense_against_own_dst": false
+    }
+  }
+}
