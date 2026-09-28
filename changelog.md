@@ -95,6 +95,20 @@ Cloud session, branch `claude/sleepy-hawking-fe4yk4`, task file
   candidates per capped person. Generated banks are sized in the hundreds; a
   hand-written v2 policy with a share needs a bank to match.
 - The DAL@NYG and DEN@KC bytes are still not in the repo; acceptance was proven on the supplied Classic fixture.
+- Reviewer pass (fresh context, no blocking items; its own sweep of rung k relaxed to
+  k+1 against the generator matched for k = 0..2 at 1 to 150 entries). Two open notes:
+  (1) rung 3 now runs a `player_cap_exclusion` stratum per pool person, because the
+  share default puts every person's maximum below the entry count; rungs 0 to 2 already
+  paid this through their 0.50 and 0.65 rows. The strata are what let a bank satisfy a
+  cap at all (a bank without them was `INCOMPLETE_BANK_EXHAUSTION` above), but on a
+  full pool at Session 47's measured rate rung 3 may hit its bank limit and fall to
+  rung 4, where the baseline still ships. Not timed on the full pool; Session 47's
+  calibration is the place to measure it. (2) The normalized schema bump means
+  `parse_normalized_classic_policy_bytes` refuses a `..._normalized_c2_v1` file, so
+  "v1 unchanged" holds for the source schema only; no committed v1 normalized artifact
+  exists and each run writes and reads its own. A hand-written `max_person_share` past
+  about 17 significant digits can gain one entry of cap through `float`; it loosens
+  only and no generator writes one.
 
 ### 2026-09-28: Week 3 slate follow-up -- staged scripts promoted, two engine fixes, a protected-path move
 
