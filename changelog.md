@@ -133,6 +133,49 @@ structural in a pool of about 11 viable players. Team splits PHI-CHI: 3-3 14,
   (`READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH`), 1 passed.
 - Full suite `sh ./nfl.sh test`: `1864 passed, 1 skipped in 373.24s (0:06:13)`.
 
+#### Addendum: v2, the same lineups diversified within each contest
+
+Ben asked for more diversification inside the contests holding several
+lineups (three satellites hold 7 each; six contests hold 2). In v1 one of
+those contests had DeVonta Smith as Captain in 3 of its 7 lineups, each
+seven-entry contest had pairs sharing five of six people, and three
+two-entry contests paired lineups sharing four.
+
+- **`scripts/diversify_showdown_contests.py`** (new, standard library).
+  It reassigns a filled file's lineups to Entry IDs, never moving a row the
+  template already filled. Per contest, summed over every lineup pair, it
+  minimizes `shared_people**2 + 12 * same_captain + 3 * same_thesis`, by
+  deterministic pairwise swaps from the input assignment and 300 seeded
+  restarts. Before writing, it verifies against the template: only blank
+  roster cells differ, the lineup multiset is unchanged, and a quoted field
+  is refused. 8 tests in `tests/test_diversify_showdown_contests.py`.
+  Captain penalty 12, not 6: at 6, one seven-entry contest still held a
+  repeated Captain; at 25, a two-entry contest paired two lineups from one
+  thesis.
+- **v2:** `DK_REVIEW_ENTRY_phi-chi-sd-v2.csv` `c14a2c38…4c04d`, written from
+  v1 with `theses_v1.json` (the sleeve plan, with the repair row labelled as
+  its sleeve). The committed script reproduces it byte for byte. Record:
+  `assignment_v2.json`, score 726 to 443, 35 rows moved. Same 36 lineups as
+  v1; the template byte check again shows 36 of 121 lines changed, roster
+  cells only. `qa_showdown_portfolio.py`: `VERDICT PASS`, 0 defects, 0 limit
+  breaches. Full suite `sh ./nfl.sh test`: `1872 passed, 1 skipped in 359.60s (0:05:59)`.
+
+| Contest | Rows | Worst pair (people), v1 to v2 | Mean shared | Distinct captains |
+|---|---|---|---|---|
+| 196040036 | 7 | 5 to 4 | 2.86 to 2.48 | 6 to 7 |
+| 196040050 | 7 | 5 to 4 | 2.62 to 2.43 | 5 to 7 |
+| 196172224 | 7 | 5 to 4 | 2.81 to 2.24 | 5 to 7 |
+| 196036243 | 2 | 3 to 3 | | 2 to 2 |
+| 196036244 | 2 | 3 to 2 | | 2 to 2 |
+| 196039118 | 2 | 4 to 1 | | 2 to 2 |
+| 196039211 | 2 | 4 to 1 | | 2 to 2 |
+| 196040020 | 2 | 4 to 1 | | 2 to 2 |
+| 196040037 | 2 | 2 to 2 | | 2 to 2 |
+
+The three Bagent lineups now sit one per seven-entry contest (5274842409,
+5274843147, 5274846776); the 18:50 ET check-in replaces them if Keenum is
+confirmed.
+
 ### 2026-09-28: Session 23e -- Classic structural bounds and the share cap (C2 v2)
 
 Cloud session, branch `claude/sleepy-hawking-fe4yk4`, task file

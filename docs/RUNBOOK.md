@@ -415,6 +415,14 @@ capped stars; exclude those stars from that sleeve. And a salary floor
 together with tight exposure caps across 30 or more rows makes the chain
 infeasible; bind fewer rows per policy instead.
 
+When several rows share a contest, run `scripts/diversify_showdown_contests.py`
+on the finished file before the handoff. It keeps every lineup and reassigns
+them to Entry IDs (never moving a row the template already filled). Within
+each contest it minimizes shared people squared, repeated Captains and
+repeated theses. Then run `qa_showdown_portfolio.py` on its output. On
+PHI@CHI it took the three seven-entry contests from 5 to 7 distinct captains
+out of 7 and their worst pair from five shared people to four.
+
 Kicker roles are resolved after those exclusions. When one eligible kicker is
 listed for a team and no role artifact is supplied, the review may continue only
 with a visible prior-only sole-listed assumption; it does not prove a confirmed
