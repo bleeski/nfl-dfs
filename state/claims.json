@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "da51cd28-d47e-51da-99ed-8e3527d3d8d4",
+      "branch": "claude/sleepy-hawking-fe4yk4",
+      "chunk": "S23e",
+      "claimed_at": "2026-09-28T19:20:04Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
