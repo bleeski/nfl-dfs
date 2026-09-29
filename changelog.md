@@ -109,7 +109,7 @@ merge `4adfd43`, recorded in the roadmap ledger) was on `main`. Every path still
 #### Verification
 
 - Baseline before any edit: `1934 passed, 1 skipped in 409.78s (0:06:49)`.
-- Final: SUITE_LINE_PLACEHOLDER
+- Final: `sh ./nfl.sh test`: `1967 passed, 1 skipped in 435.64s (0:07:15)` (1934 before, 33 added).
 - `git diff --check` clean; `python3 scripts/check_protected_paths.py`: no protected path touched.
 
 ### 2026-09-29: Session 50 -- intra-contest diversification, the shared module and the Showdown exits
