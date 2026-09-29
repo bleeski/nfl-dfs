@@ -1,5 +1,34 @@
 # Implementation Status
 
+## Capability added: 2026-09-29 (Session 50c, contest assignment, Classic exits and the baseline)
+
+Working and verified: the Session 50 step (`within_contest_diversity_v1`) now runs on
+every Classic exit and on the baseline, on by default. C1 (one `all` pool), C2 with
+its C3 package and export (a `bound` pool for the policy's rows, a `fill` pool for the
+rows C1 fills beside a subset policy) and `nfl baseline`/`run-slate`'s baseline
+(`nfl_baseline_report_v4`, no restarts, at most 0.4 s) decide which Entry ID holds
+which selected lineup contest by contest. It never changes which lineups exist (R29),
+never moves a filled row, and on any failure leaves the solver's order with the `P`
+limitation `CONTEST_ASSIGNMENT_STEP_FAILED`; a single-contest template is
+`NOT_APPLICABLE`. `audit_classic_portfolio` recomputes, from the exact
+`assignments.csv` bytes, the lineups each pool holds, the rows the template filled and
+each contest's readings, and holds the policy's rows in the CSV to
+`classic_assignment.json` row for row; C3 builds the per-contest block (JSON, HTML and
+the `Exposure` sheet) from the delivered rosters and a new hashed record,
+`selection/contest_assignment.json`; the C1 export and the baseline audit the same
+claim through `baseline.audit_baseline_bytes`. Week 3 Classic on its real bytes through
+the baseline: 25 entries, eight two-entry contests, three repeated a QB and the worst
+shared count was 3; after, none repeat and every contest is at 0 (score 104 to 0).
+
+Not yet: the model path on the real Week 3 bytes was not run (no frozen prior
+package, role evidence or official status for it is in the repository, and the run
+needs them), so the model path is shown on the synthetic Classic fixtures only. The
+objective still ignores prior points (Session 23d's contest facts would steer the
+strongest lineups). A baseline whose 0.4 s cap trips returns the best climb found,
+which depends on the machine's speed; the report says `timed_out`. It establishes
+nothing about expected value, win or cash likelihood, ownership or payouts, and every
+path still ends `PRIOR_ONLY / DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-29 (Session 50, contest assignment, Showdown exits)
 
 Working and verified: `src/nfl_dfs/contest_assignment.py`,
@@ -17,7 +46,7 @@ outside `run-slate` and now handles Classic. On PHI@CHI v1 it reaches 7 distinct
 Captains of 7 in each seven-entry contest, worst pairs 4, 3 and 4, every two-entry
 pair at 1.
 
-Not yet: Classic C1, C2, C3 and the baseline keep the solver's order (Session 50c).
+Not yet (closed by Session 50c, above): Classic C1, C2, C3 and the baseline kept the solver's order.
 The objective ignores prior points, so it does not steer the strongest lineups toward
 any contest (Session 23d's contest facts would). DET@BUF and Week 3 were checked on
 baseline portfolios only, not model portfolios. It establishes nothing about expected

@@ -2893,6 +2893,7 @@ def _export_classic_c1_csv(
     try:
         temporary.write_bytes(raw)
         on_disk = temporary.read_bytes()
+        contest_reading: dict[str, object] = {}
         audit_problems = audit_baseline_bytes(
             on_disk,
             salary_path=Path(request.salary_csv or ""),
@@ -2902,6 +2903,10 @@ def _export_classic_c1_csv(
             operator_excluded_dk_ids=request.exclude_dk_ids,
             extra_unavailable_statuses=request.unavailable_statuses,
             official_status_csv=request.official_status_csv,
+            # Session 50c: the step's claims, recomputed from these exact bytes. A
+            # changed multiset or a moved filled row refuses the export (`V`).
+            contest_assignment_claim=outcome.contest_claim,
+            contest_reading=contest_reading,
         )
         if audit_problems:
             return outcome, (f"CLASSIC_C1_EXPORT_AUDIT_FAILED:{' | '.join(audit_problems)}",)
@@ -2924,6 +2929,7 @@ def _export_classic_c1_csv(
             "assignments": str(source),
             "assignments_sha256": outcome.hashes.get("assignments"),
             "status": "PASS",
+            **({"contest_assignment": contest_reading} if contest_reading else {}),
         },
     }
     return replace(
@@ -3232,6 +3238,10 @@ def _run_prior_review_profile(
             outcome, request=request, output_root=output_root, run_id=run_id
         )
         blockers[0:0] = list(c1_export_problems)
+        # A statistic the CSV's bytes do not bear out is `P`: the file ships, the gap is named.
+        c1_contest = ((outcome.export or {}).get("c1_export") or {}).get("contest_assignment") or {}
+        if c1_contest.get("status") == "STATS_MISMATCH":
+            blockers.insert(0, "CONTEST_ASSIGNMENT_STATS_MISMATCH:the C1 export's bytes differ from the step's report")
 
     # R28 (Session 09): each game the model ran without a weather observation
     # travels with the file it shaped, by name.

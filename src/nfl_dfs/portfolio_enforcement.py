@@ -1193,7 +1193,7 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
     )
 
 
-def _contest_assignment_reading(
+def contest_assignment_reading(
     claim: ContestAssignmentClaim,
     artifact_pairs: Sequence[tuple[str, Sequence[str]]],
     problems: list[str],
@@ -1370,7 +1370,7 @@ def audit_policy_assignments(
         if contest_assignment is not None:
             # Session 50: every claim of the contest-assignment step is recomputed
             # from these exact bytes; the optimizer's own numbers are only compared.
-            contest_reading = _contest_assignment_reading(
+            contest_reading = contest_assignment_reading(
                 contest_assignment, artifact_pairs, problems, entry_bytes)
 
     by_id = {row.dk_id: row for row in slate.players}

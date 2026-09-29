@@ -2053,7 +2053,7 @@ into it. Inside:
 | `inputs/<sha256>.csv` | Byte copies of the two supplied files, hash-checked on arrival; everything after intake reads these |
 | `intake.json` | Each input's supplied flag, original path, SHA-256, snapshot path and schema |
 | `DK_BASELINE_ENTRY_V1_<run_id>.csv` | The delivered file, `nfl_baseline_entry_csv_v1`, only when the audit passes |
-| `baseline_report.json` | `nfl_baseline_report_v2` since Session 06b (`v1` before) |
+| `baseline_report.json` | `nfl_baseline_report_v4` since Session 50c (`v3` since Session 11, `v2` since Session 06b, `v1` before) |
 
 Inputs are bound by schema (`cowork.classify_csv`), not by flag or file name,
 so swapped flags still bind correctly and the report says which flag carried
@@ -2137,7 +2137,10 @@ Registered in `baseline.OBJECTIVE` and carried in every report. Each salary
 row scores its DraftKings salary, a captain row at its own 1.5x price, over the
 rows left after `contracts.unavailable_people` (DraftKings `OUT`, `IR`, `D`,
 derived from the salary bytes exactly as `freeze_prior_package` derives it).
-Lineups come in non-increasing total salary: each is a highest-salary legal
+Lineups are built in non-increasing total salary (the k-th built lineup went to the
+k-th blank row until Session 50c; a template of several Contest IDs now has the
+lineups reassigned across its entries, § Contest assignment, and the multiset built
+is unchanged): each is a highest-salary legal
 lineup not already chosen, with an exact no-good cut against every earlier one
 (R29: a different Showdown captain is a different lineup). One
 salary-maximizing solve finds a level; zero-objective solves with a salary floor
@@ -2239,6 +2242,34 @@ A several-contest or mixed-fee template no longer carries
 `MULTI_CONTEST_ENTRY_FILE_UNSUPPORTED` or `MIXED_ENTRY_FEES_UNSUPPORTED` in the
 baseline: its rows are groups now. Legacy `certify` keeps both
 (`certification.py`, ROADMAP §2.4 D7).
+
+### `nfl_baseline_report_v4`
+
+Registered 2026-09-29 by Session 50c. Every `v3` field, unchanged in meaning, plus
+the contest-assignment step (§ Contest assignment). `v3` is never mutated: a `v3`
+report reads as written and simply has no block.
+
+| Field | Added or changed |
+|---|---|
+| `contest_assignment` | The step's report (`within_contest_diversity_v1`), present whenever a lineup was built: `status` (`IMPROVED`, `UNCHANGED`, `NOT_APPLICABLE`, `FAILED`), `total_score_before` and `total_score_after`, `moved_rows`, `restarts_run` (always 0 here), `timed_out`, `pools` (`{"all": n}`), `fixed_entry_ids`, `contest_count`, `single_entry_contest_count`, and per contest (two or more entries) `contests_before` and `contests_after` |
+| `lineups` | Lists the rows as the delivered file holds them, in template order, after the step (it once listed the build order) |
+| `audit.contest_assignment` | The audit's own recomputation from the written bytes: `status` (`PASS`, `STATS_MISMATCH`), `findings`, `contests` |
+| `audit.checks_run` | Adds `CONTEST_ASSIGNMENT_MULTISET_FILLED_ROWS_AND_STATISTICS_FROM_THE_BYTES` when the step ran |
+
+The step runs on the baseline with no restarts (the single climb from the salary
+order) and at most `0.4` seconds, never past the run's own budget: measured on
+synthetic 150-entry portfolios it takes 0.06 s in contests of at most 5, 0.3 s at
+10 entries a contest and 4.3 s at 50. A timeout keeps the best found and says
+`timed_out`; the result then depends on the machine's speed, which the report
+records. It runs in `run_baseline` only (the C1 export reuses the baseline's writer
+and audit with an assignment already in place), it never raises, and a failure
+leaves the salary order and the `P` limitation `CONTEST_ASSIGNMENT_STEP_FAILED`.
+The baseline's audit refuses the file when a written row breaks the step's claim
+(the lineups a pool holds differ from those the build produced, or a row the
+template filled changed: `V`, as for any audited baseline); a reported statistic
+the bytes do not bear out is the `P` limitation `CONTEST_ASSIGNMENT_STATS_MISMATCH`
+and the file ships. Everything else in the baseline (R28's first-publication rule,
+`DELIVERY_STATE`, the truths) is unchanged, and the step never blocks delivery.
 
 ## Release truths
 
@@ -2363,7 +2394,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `4a40d3f245a7d0e8712d0218edb18f254ad6ec79adef64e788ecf2f3c0b9115d`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `9e7c13ed1f43fa5391fb26572a61e5f2c7dd2c04234fae251ce26c015524ae13`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2892,9 +2923,11 @@ lineup distinct, a different Captain a different lineup) is untouched. It adds n
 policy control, so no policy schema changes (`nfl_showdown_portfolio_policy_v2`
 and `nfl_classic_portfolio_policy_c2_v2` stand; a control would be a v3, never a
 mutation of v2). It is on by default; `run-slate` applies it on the Showdown
-exits (policy, sequential and subset-fill rows) since Session 50. The Classic
-exits (C1, C2, C3) follow in Session 50c, and until it lands they keep the
-solver's order.
+exits (policy, sequential and subset-fill rows) since Session 50, and on the Classic
+exits since Session 50c: C1 (one `all` pool), C2 with its C3 package and export (a
+`bound` pool for the policy's rows, a `fill` pool for the rows C1 fills beside a
+subset policy), and the baseline (`nfl_baseline_report_v4`). A run whose template
+holds one Contest ID reports `NOT_APPLICABLE`.
 
 **Objective.** Per contest, grouped by Contest ID only, over every pair of its
 lineups a pair costs `shared_people ** 2`, plus 12 when both have the same key
@@ -2943,6 +2976,36 @@ never blocks delivery and never moves a filled row.
 `distinct_stack_teams`, `distinct_theses`, `people_in_every_lineup`,
 `worst_pair_cost`, `score`. When the step moves anything, the selector's
 `pairwise_person_overlap` labels follow the lineups to their new entries.
+
+**Classic wiring** (Session 50c). `prior_review` applies the step right after selection
+and before any artifact, for `CLASSIC` as for `SHOWDOWN`, and the Classic primary
+stack team is the definition above. `assignments.csv` (every fillable row, the
+policy's and C1's), `classic_assignment.json` (the policy's rows), the selection
+record's `entry_assignments` and `assignments_by_entry_id`, the pre-lock manifest
+and the C3 export all read the permuted assignment; `keys` stay in template order.
+The step's own record is written beside the CSV as
+`selection/contest_assignment.json`, `nfl_contest_assignment_step_v1`: the step's
+report without its wall-clock `seconds`, canonical, hashed and bound, so C3 reconciles
+its block against an artifact (no existing schema gains a key). The selector's
+`pairwise_person_overlap` in the C2 summary is relabelled to the entries that now hold
+the lineups.
+
+**Classic audits.** `audit_classic_portfolio` takes the exact `assignments.csv` bytes,
+their hash and the step's claim. It recomputes, from those bytes, the lineups each pool
+(`bound`, `fill`) holds against the selection's, the rows the template filled (from the
+template's own bytes) and each contest's readings, and it holds the policy's rows in
+the CSV to `classic_assignment.json` row for row
+(`CLASSIC_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH`, `V`: a multiset check cannot see two
+artifacts disagree). A changed multiset or a moved filled row fails the audit (`V`);
+a statistic the bytes do not bear out is `CONTEST_ASSIGNMENT_STATS_MISMATCH` (`P`), the
+audit records `STATS_MISMATCH` in its `contest_assignment` block and still passes. C3
+holds `assignments.csv` to the selection record it exports from
+(`CLASSIC_C3_ASSIGNMENT_CSV_DISAGREEMENT`, `V`) and builds the block through
+`review_block` from the delivered rosters, the selection's lineup order and the
+step's record, in the readable JSON and HTML and on the `Exposure` sheet, under
+`DISPLAY_RECONCILIATION`. C1 has no readable review: its block is the step's report in
+the selection report and the run result, and its export is audited by
+`baseline.audit_baseline_bytes` with the same claim (`c1_export.contest_assignment`).
 
 **Independent audit.** `audit_policy_assignments` (Showdown policy) recomputes from
 the exact bytes of `assignments.csv`: the lineups held in each pool equal the

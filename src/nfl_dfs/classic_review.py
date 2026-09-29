@@ -21,7 +21,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Mapping, Sequence
 
+from . import contest_assignment
 from .byte_lines import csv_field_spans, split_byte_lines, split_line_ending
+from .classic_portfolio import _classic_assignment_pairs_from_csv_bytes
 from .classic_portfolio_policy import (
     NormalizedClassicPortfolioPolicy,
     parse_normalized_classic_policy_bytes,
@@ -102,8 +104,10 @@ _C2_AUDIT_HASH_ARTIFACTS = {
     "normalized_policy_sha256": "portfolio_policy_normalized",
     "candidate_bank_sha256": "classic_candidate_bank",
     "assignment_sha256": "classic_assignment",
+    "assignment_csv_sha256": "assignments",
 }
 _CANONICAL_NEWLINE_SCHEMAS = {
+    contest_assignment.CONTEST_ASSIGNMENT_ARTIFACT_VERSION,
     "prior_only_classic_portfolio_audit_c2_v1",
     "nfl_classic_prior_review_selection_c2_v1",
     "nfl_classic_slate_coverage_c2_v1",
@@ -553,6 +557,60 @@ def _verify_kept_export(
         raise ClassicReviewError("CLASSIC_C3_FINAL_OUTPUT_SHA256_MISMATCH")
     if list(export_file.parent.glob("DK_UPLOAD_*.csv")):
         raise ClassicReviewError("CLASSIC_C3_DK_UPLOAD_ARTIFACT_PROHIBITED")
+
+
+def _plain_numbers(value: object) -> object:
+    """Decimals (the strict reader's floats) back to floats, for the step's reconciliation."""
+
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, Mapping):
+        return {key: _plain_numbers(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain_numbers(item) for item in value]
+    return value
+
+
+def _contest_block(
+    *,
+    slate: SlateContract,
+    template,
+    entry_plan,
+    fillable: Sequence[str],
+    bound_set: set[str],
+    assignments: Mapping[str, tuple[str, ...]],
+    selection_order: Sequence[tuple[str, ...]],
+    reported: Mapping[str, object] | None,
+) -> tuple[dict[str, object] | None, list[str]]:
+    """Session 50c: the per-contest block, recomputed from the delivered rosters.
+
+    Every template row that resolves to a roster is read from what C3 exports (a
+    filled row from `assignments`, a row the template filled from its own bytes),
+    and the before-reading from the selection's lineup order. The step's report is
+    only reconciled with both. `(None, [])` for a run from before Session 50c.
+    """
+
+    by_id = {row.dk_id: row for row in slate.players}
+    fillable_set = set(fillable)
+    rows: list[tuple[str, str, tuple[str, ...], str | None]] = []
+    for authorization in template.authorizations:
+        entry_id = authorization.entry_id
+        if entry_id in fillable_set:
+            pool = contest_assignment.POOL_BOUND if entry_id in bound_set else contest_assignment.POOL_FILL
+            roster = tuple(assignments.get(entry_id, ()))
+        else:
+            prefilled = entry_plan.prefilled.get(entry_id)
+            pool = None
+            roster = tuple(prefilled.roster) if prefilled is not None and prefilled.resolved else ()
+        if roster and all(dk_id in by_id for dk_id in roster):
+            rows.append((entry_id, authorization.contest_id, roster, pool))
+    return contest_assignment.review_block(
+        mode=contest_assignment.MODE_CLASSIC,
+        people=contest_assignment.people_from_slate(slate.players),
+        rows=rows,
+        selected_in_solver_order=list(selection_order),
+        reported=reported,
+    )
 
 
 def create_classic_review_package(
@@ -1234,6 +1292,17 @@ def create_classic_review_package(
             entry_id: list(roster) for entry_id, roster in sorted(assignments.items())
         }:
             problems.append("CLASSIC_C3_SELECTION_ASSIGNMENT_MAP_DISAGREEMENT")
+        # Session 50c: `assignments.csv` is a third carrier of the final assignment (the
+        # C2 audit already holds it to the JSON); it must hold exactly these rows.
+        csv_path = tracked.get("assignments")
+        if csv_path is not None:
+            try:
+                csv_rows = dict(_classic_assignment_pairs_from_csv_bytes(csv_path.read_bytes()))
+            except (OSError, UnicodeDecodeError, ValueError) as exc:
+                csv_rows = {}
+                problems.append(f"CLASSIC_C3_ASSIGNMENT_CSV_DISAGREEMENT:unreadable:{type(exc).__name__}")
+            if csv_rows != {entry_id: tuple(roster) for entry_id, roster in assignments.items()}:
+                problems.append("CLASSIC_C3_ASSIGNMENT_CSV_DISAGREEMENT:rows")
 
         proposed = write_upload_bytes(template, assignments, unfilled=entry_plan.left_blank)
         problems.extend(
@@ -1394,6 +1463,20 @@ def create_classic_review_package(
         # presentation. A failure in it keeps the export and its audit, once
         # `_verify_kept_export` passes them again, and removes only the JSON and HTML.
         presenting = True
+        # Session 50c: which entry holds which lineup, contest by contest. A
+        # roster disagreement is `V` and withholds the CSV; a report the bytes do
+        # not bear out is `P` (the classification is `run-slate`'s, by code).
+        step_path = tracked.get("contest_assignment")
+        step_report = (
+            None if step_path is None else _plain_numbers(
+                dict(_strict_json(step_path.read_bytes(), label="CONTEST_ASSIGNMENT", canonical=True)))
+        )
+        contest_payload, contest_problems = _contest_block(
+            slate=slate, template=template, entry_plan=entry_plan, fillable=entry_ids,
+            bound_set=bound_set, assignments=assignments,
+            selection_order=list(selection_lineups), reported=step_report)
+        if contest_problems:
+            raise ClassicReviewError(";".join(contest_problems))
         # The policy's rows are its exposure denominator; every filled row is reconciled.
         denominator = len(bound_ids)
         display_by_person = {row.underlying_id: row for row in slate.players}
@@ -1442,6 +1525,7 @@ def create_classic_review_package(
             },
             "entries": entries_payload,
             "unbound_rows": unbound_payload,
+            "contest_assignment": contest_payload,
             "exposure": {
                 "entry_count_denominator": denominator,
                 "people": player_rows,
