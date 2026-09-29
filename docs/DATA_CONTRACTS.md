@@ -2482,7 +2482,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `1c64c07128398744123a9e2eb69eeb76adb33d220026a376f6fe0565b418d774`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `b532b806c52c1b47dbafb62bfea9aab0a9ce1aab6ec487284dc5052535efc56f`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

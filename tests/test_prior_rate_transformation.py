@@ -367,4 +367,3 @@ def test_freeze_is_deterministic_and_the_v1_read_path_still_projects(package, tm
         rows = Path(projected.player_opportunities).read_text(encoding="utf-8").splitlines()
         assert len(rows) > 1
         assert sha256_file(frozen["player_source"]) in projected.input_hashes.values()
-

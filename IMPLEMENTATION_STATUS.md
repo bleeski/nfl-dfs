@@ -1,5 +1,20 @@
 # Implementation Status
 
+## Capability added: 2026-09-29 (Session 21, per-game prior shares, transfer pool, alternate-name proposals)
+
+Working and verified: a new prior freeze writes player transformation v2 by default. Each
+person's prior-season counts on his current team become a per-game rate over the weeks he has
+a stats row (denominator floored at `MINIMUM_PRIOR_GAMES`, 4) before the pool is normalized, so a
+player who missed games projects at his per-game rate and his teammates' shares no longer absorb
+them (fixture: a receiver with 8 of 16 games and one with 16 both at ten targets a game get equal
+weights; v1 gave the first half). A transfer's pseudo-rate scales by the current team's per-game
+total, so a thin room no longer holds a transfer starter to `s / (1 + s)` of the group. v1 stays
+selectable (`--player-transformation`) and reproduces its bytes; frozen v1 packages are read as
+written. F8 proposes same-team matches from `first_name`/`last_name`/`football_name` and
+accent-folded forms for review; they are never resolved, never auto-accepted and never reach a
+runtime join. Not verified: any calibration of the rate or the floor (`does_not_establish`), and no
+live slate has run under v2. Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-29 (Session 50c, contest assignment, Classic exits and the baseline)
 
 Working and verified: the Session 50 step (`within_contest_diversity_v1`) now runs on
