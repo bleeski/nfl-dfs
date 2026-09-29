@@ -1011,6 +1011,7 @@
     "PLAYER_PRIOR_CHANGED_BEFORE_SELECTION": "prior_package",
     "PLAYER_SOURCE_INVALID": "projection_package",
     "PLAYER_TEAM_IDENTITY_CONFLICT": "provider_identity",
+    "PLAYER_TRANSFORMATION_UNKNOWN": "prior_package",
     "PLAYER_TEAM_NOT_IN_POOL": "provider_identity",
     "PLAYER_TEAM_PROVIDER_CONFLICT": "provider_identity",
     "PLAYER_UNDERLYING_IDENTITY_CONFLICT": "provider_identity",

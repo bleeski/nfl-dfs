@@ -47,7 +47,7 @@ def test_transfer_carries_his_own_old_team_share_as_an_unverified_prior(package,
     assert history["state"] == "CURRENT_ROLE_UNKNOWN" and history["incompatible_transfer"] is True
     prior = history["transfer_prior"]
     assert prior["basis"] == "OWN_OLD_TEAM_SHARE" and prior["old_teams"] == ["DEN"]
-    assert prior["basis_version"] == priors.TRANSFER_PRIOR_VERSION
+    assert prior["basis_version"] == priors.TRANSFER_PRIOR_VERSION_V2
     assert Decimal(prior["own_old_share"]["targets"]) > 0
     assert set(prior["pseudo_counts"]) == set(priors._RAW_COLUMNS)
     assert Decimal("0") < record["target_weight"] < before["target_weight"]

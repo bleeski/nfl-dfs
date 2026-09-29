@@ -125,7 +125,12 @@ from .readable_review import (
     create_readable_review,
     verify_readable_review_artifacts,
 )
-from .priors import freeze_prior_package, propose_prior_package
+from .priors import (
+    DEFAULT_PLAYER_TRANSFORMATION,
+    PLAYER_TRANSFORMATIONS,
+    freeze_prior_package,
+    propose_prior_package,
+)
 from .participation import (
     ParticipationError,
     build_participation_contract,
@@ -2056,6 +2061,7 @@ def command_priors_freeze(args: argparse.Namespace) -> int:
         salary_observed_at=args.salary_observed_at,
         weather_source_uri=args.weather_source_uri,
         weather_observed_at=args.weather_observed_at,
+        player_transformation=args.player_transformation,
     )
     _print_json(result)
     return 0
@@ -4806,6 +4812,15 @@ def build_parser() -> argparse.ArgumentParser:
     priors_freeze.add_argument("--salary-observed-at")
     priors_freeze.add_argument("--weather-source-uri")
     priors_freeze.add_argument("--weather-observed-at")
+    priors_freeze.add_argument(
+        "--player-transformation",
+        choices=PLAYER_TRANSFORMATIONS,
+        default=DEFAULT_PLAYER_TRANSFORMATION,
+        help=(
+            "how the prior season becomes opportunity shares: per-game rates (v2, the"
+            " default) or the season-count shares v1 wrote"
+        ),
+    )
     priors_freeze.set_defaults(func=command_priors_freeze)
     project = subparsers.add_parser(
         "project",

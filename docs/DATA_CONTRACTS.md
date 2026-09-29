@@ -141,6 +141,60 @@ An entirely missing group may survive projection as unknown for role resolution;
 an observed all-zero group still fails with `PRIOR_SUPPORT_MISSING`. No uniform
 filling occurs. Adapter version: `nflverse_prior_adapter_v2`.
 
+### Player transformation v2: per-game rates (Session 21, 2026-09-29)
+
+`metadata.coverage.transformation` names how the prior season became opportunity
+shares. v1, `NFLVERSE_PRIOR_SEASON_POOL_NORMALIZED_OPPORTUNITY_SHARES_V1`, is the
+text above and is never mutated: a person's counts on his current team are summed
+over the season and divided by the pool's summed counts. That mixes units. A
+player who missed eight of seventeen games carries about half his per-game share
+and his teammates absorb the rest, while `role_capacity` averages snap share per
+game played.
+
+v2, `NFLVERSE_PRIOR_SEASON_PER_GAME_RATE_OPPORTUNITY_SHARES_V2`, is selected by
+the `player_transformation` argument of `freeze_prior_package` (CLI
+`priors-freeze --player-transformation`). A new freeze defaults to v2. For each
+person, per share column:
+
+```text
+games                 distinct weeks with a regular-season row on the current team
+effective_denominator max(games, MINIMUM_PRIOR_GAMES)     (MINIMUM_PRIOR_GAMES = 4)
+rate                  counts on the current team / effective_denominator
+share                 rate / sum of the pool's rates in the eligible group
+```
+
+The share is still that person's fraction of his DraftKings pool team's eligible
+group, so `projection.py` renormalizes it as an identity. `catch_rate` and
+`yards_per_target` are unchanged (ratios of counts). A person with four or more
+rows projects at exactly his per-game rate; below four the floor divides by
+four, which is a judgment, not a calibration: it stops one hot game from
+outranking a starter and it is the same constant the team-rate stage already
+requires. A row that records only a partial game counts as a full game, and a
+game with no stats row is not a game, because `player_stats` is the only input.
+
+v2 writes these additions and no others:
+
+- `coverage.transformation_does_not_establish`: `CURRENT_TEAM_ROLE`,
+  `OFFICIAL_ACTIVE_STATUS`, `GAMES_PLAYED_BEYOND_WEEKS_WITH_A_STATS_ROW`,
+  `SAMPLE_FLOOR_IS_A_CALIBRATED_SHRINKAGE`, `MODEL_VALIDATION`;
+  `coverage.rate_games_floor` (4) and `coverage.rate_games_floor_basis`.
+- Per offensive person in `offensive_history_by_person`: `basis_version` is
+  `offensive_current_team_history_v2`, `denominator_basis` is
+  `CURRENT_TEAM_ROWS_ONLY_CURRENT_SALARY_POOL_PER_GAME_RATE`, plus `rate_basis`,
+  `games`, `effective_denominator`, `games_floor` and `thin_sample` (true when
+  `0 < games < 4`).
+- A transfer prior under `transfer_prior_own_old_team_share_v2` (below).
+
+A v1 package is never rewritten. Its artifacts carry the records already
+computed, `projection.py` reads only those records (it never recomputes counts),
+and nothing reads the `transformation` string, so v1 and v2 packages are read by
+one path, unchanged. `player_transformation=PLAYER_TRANSFORMATION_V1` reproduces
+a v1 build byte for byte (pinned in `tests/test_prior_rate_transformation.py`).
+Adapter version stays `nflverse_prior_adapter_v2`: the bytes-to-records adapter
+is the same, and `projection.py` gates its unknown-basis tolerance on it. An
+unregistered value stops with `PLAYER_TRANSFORMATION_UNKNOWN`. Every path still
+ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ### The `roof` column is retrospective (R26, 2026-09-21)
 
 nflverse writes `games.csv` `roof` only after the game is played, so an unplayed
@@ -175,6 +229,17 @@ the nflverse code through the DST row's nickname against `teams.csv`, which is
 how `LAR` resolves to `LA` without a hand-written mapping. A Showdown pool lists
 each person twice; one person gets one mapping and one record, keyed to the FLEX
 row, and both roles are reconciled in `coverage`.
+
+F8 (Session 21) adds two proposal-only methods, `ALTERNATE_NAME_TEAM_POSITION`
+and `ALTERNATE_NAME_TEAM`. When every earlier tier has failed to name one person,
+the proposal also tries the same-team roster and `players` rows by the forms
+nflverse ships beyond the display name (`first_name last_name`, `football_name
+last_name`) and by each form accent-folded, and reports the hit for a reviewer.
+They sit after every existing tier, so only an outcome that was `AMBIGUOUS` or
+`UNMATCHED` can change. Neither method is in `IdentityProposal.resolved`, the
+review file leaves `DECISION` blank for it, `apply_identity_gate` blocks it, and
+`AUTO_ACCEPT_MATCH_METHOD` (`NAME_POSITION_OTHER_TEAM`) is untouched. A missing
+name column contributes nothing.
 
 A `role_capacity` of zero does not remove a person from scoring. That is R03 and
 tranche W3 owns it; the adapter reports every zero-capacity person in
@@ -877,6 +942,25 @@ role, not qualitative evidence turned into a number, and it does not change
 `PRIOR_ONLY` / `DO_NOT_UPLOAD`. A qualitative fact naming the person still
 blocks. Rookies have no such number; a registered rookie prior from approved
 draft or combine artifacts is open work.
+
+Transfer prior v2 (`transfer_prior_own_old_team_share_v2`, Session 21). Under
+player transformation v2 the share is unchanged in kind but carries the same
+games floor an incumbent's rate gets (share times `weeks / max(weeks, 4)` over
+his old-team weeks), and it enters the pool as a pseudo-*rate* equal to the
+share times the **current team's per-game total for the column over every one of
+that team's regular-season rows** (`_team_week_totals`, summed and divided by the
+team's weeks; the same frozen `player_stats` bytes, no new input), instead of the
+incumbents' season total. The incumbents' total is small exactly when the room is
+thin, and v1 then handed a transfer starter `s / (1 + s)` of the group however
+much volume had left. A group whose incumbents carry none (the Miami quarterback
+room) used to get a pseudo-count of zero and the group survived as unknown; under
+v2 the transfer has positive numbers and takes the group. When the incumbents
+carry the team's whole volume the two versions agree. The entry adds
+`old_team_games_floor`, `effective_old_team_weeks`, `thin_sample`,
+`current_team_per_game_total` and `injection` is
+`PSEUDO_RATE_EQUALS_OWN_OLD_SHARE_TIMES_CURRENT_TEAM_PER_GAME_TOTAL`. It does not
+establish a current role, an official status, or that the vacated volume goes to
+him; it is the same cold-start prior, `EVIDENCE_STATE=UNKNOWN`.
 
 Each finding retains `history_state`, `history_basis`, `declared_fact`, before/
 after shares, exact IDs, selection action and smallest next evidence action.
@@ -2398,7 +2482,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `9e7c13ed1f43fa5391fb26572a61e5f2c7dd2c04234fae251ce26c015524ae13`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `1c64c07128398744123a9e2eb69eeb76adb33d220026a376f6fe0565b418d774`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

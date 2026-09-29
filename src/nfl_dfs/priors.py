@@ -24,6 +24,7 @@ import csv
 import io
 import json
 import statistics
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_EVEN
@@ -538,6 +539,53 @@ def normalize_person_name(value: str) -> str:
     return " ".join(tokens)
 
 
+def _fold_accents(value: str) -> str:
+    """Strip combining marks, so `Jose` and `José` share a proposal key."""
+
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", value)
+        if not unicodedata.combining(character)
+    )
+
+
+def alternate_name_keys(*names: str) -> frozenset[str]:
+    """Candidate keys for the F8 proposal tier: each name normalized, and folded.
+
+    A key here only nominates a row for a human to read. It is never an identity,
+    and no code path treats a hit as one (`IdentityProposal.resolved` does not
+    list the methods this feeds).
+    """
+
+    keys: set[str] = set()
+    for name in names:
+        normalized = normalize_person_name(name or "")
+        if normalized:
+            keys.add(normalized)
+            keys.add(normalize_person_name(_fold_accents(normalized)))
+    return frozenset(keys)
+
+
+def _row_alternate_keys(row: Mapping[str, str]) -> frozenset[str]:
+    """Keys from the name fields nflverse ships beyond the display name.
+
+    `first_name`/`last_name` cover a legal first name against a nickname on the
+    DraftKings file, and `football_name` the reverse. A missing column simply
+    contributes nothing, so a frozen artifact from before these were read
+    behaves exactly as it did.
+    """
+
+    first = (row.get("first_name") or "").strip()
+    last = (row.get("last_name") or "").strip()
+    football = (row.get("football_name") or "").strip()
+    forms = [row.get("full_name") or ""]
+    if first and last:
+        forms.append(f"{first} {last}")
+    if football and last:
+        forms.append(f"{football} {last}")
+    return alternate_name_keys(*forms)
+
+
 # --------------------------------------------------------------------------- #
 # Fetch and freeze the raw artifacts
 # --------------------------------------------------------------------------- #
@@ -944,6 +992,9 @@ def _roster_candidates(
                 "full_name": (row.get("full_name") or "").strip(),
                 "pfr_id": (row.get("pfr_id") or "").strip(),
                 "status": (row.get("status") or "").strip(),
+                "first_name": (row.get("first_name") or "").strip(),
+                "last_name": (row.get("last_name") or "").strip(),
+                "football_name": (row.get("football_name") or "").strip(),
             }
     return latest
 
@@ -971,6 +1022,9 @@ def _players_index(player_rows: Sequence[Mapping[str, str]]) -> dict[str, dict[s
             "full_name": (row.get("display_name") or "").strip(),
             "pfr_id": (row.get("pfr_id") or "").strip(),
             "status": (row.get("status") or "").strip(),
+            "first_name": (row.get("first_name") or "").strip(),
+            "last_name": (row.get("last_name") or "").strip(),
+            "football_name": (row.get("football_name") or "").strip(),
         }
     return index
 
@@ -1072,6 +1126,17 @@ def propose_identities(
         ).append(row)
         index_name_position.setdefault((key_name, row["position"]), []).append(row)
 
+    # F8 (Session 21): the same-team rows a person's alternate name forms reach,
+    # roster first and the canonical index for anyone the roster lacks. It is
+    # consulted only after every earlier tier has failed to name one person.
+    alternate_rows: dict[str, list[tuple[frozenset[str], dict[str, str]]]] = {}
+    seen_alternate: set[str] = set()
+    for row in (*candidates.values(), *_players_index(player_index_rows).values()):
+        if row["gsis_id"] in seen_alternate:
+            continue
+        seen_alternate.add(row["gsis_id"])
+        alternate_rows.setdefault(row["team"], []).append((_row_alternate_keys(row), row))
+
     proposals: list[IdentityProposal] = []
     for underlying_id in sorted(people):
         roles = people[underlying_id]
@@ -1112,6 +1177,8 @@ def propose_identities(
             (nflverse_team, normalized, flex.position), []
         )
         index_league = index_name_position.get((normalized, flex.position), [])
+        alternate_name: list[dict[str, str]] = []
+        alternate_position: list[dict[str, str]] = []
         if len(exact_position) == 1:
             chosen, method = exact_position[0], "NORMALIZED_NAME_TEAM_POSITION"
         elif len(exact_position) > 1:
@@ -1133,10 +1200,28 @@ def propose_identities(
             chosen, method = league_only[0], "NAME_OTHER_TEAM"
         elif len(index_league) == 1:
             chosen, method = index_league[0], "PLAYERS_INDEX_OTHER_TEAM"
-        elif league_only or index_league:
-            chosen, method = None, "AMBIGUOUS"
         else:
-            chosen, method = None, "UNMATCHED"
+            wanted_keys = alternate_name_keys(flex.name)
+            alternate_name = [
+                row
+                for keys, row in alternate_rows.get(nflverse_team, [])
+                if keys & wanted_keys
+            ]
+            alternate_position = [
+                row for row in alternate_name if row["position"] == flex.position
+            ]
+            if len(alternate_position) == 1:
+                chosen, method = alternate_position[0], "ALTERNATE_NAME_TEAM_POSITION"
+            elif len(alternate_position) > 1:
+                chosen, method = None, "AMBIGUOUS"
+            elif len(alternate_name) == 1:
+                chosen, method = alternate_name[0], "ALTERNATE_NAME_TEAM"
+            elif len(alternate_name) > 1:
+                chosen, method = None, "AMBIGUOUS"
+            elif league_only or index_league:
+                chosen, method = None, "AMBIGUOUS"
+            else:
+                chosen, method = None, "UNMATCHED"
 
         pool = (
             exact_position
@@ -1146,6 +1231,11 @@ def propose_identities(
             or league_only
             or index_league
         )
+        if alternate_name and (method.startswith("ALTERNATE") or not pool):
+            pool = alternate_position or alternate_name
+        elif alternate_name and not chosen:
+            pool = [*pool, *(row for row in (alternate_position or alternate_name) if row not in pool)]
+
         proposals.append(
             IdentityProposal(
                 dk_id=flex.dk_id,
@@ -1567,6 +1657,34 @@ _SHARE_COLUMNS: dict[str, frozenset[str]] = {
     column: eligible for _field, column, eligible in _WEIGHT_GROUPS
 }
 TRANSFER_PRIOR_VERSION = "transfer_prior_own_old_team_share_v1"
+TRANSFER_PRIOR_VERSION_V2 = "transfer_prior_own_old_team_share_v2"
+
+# Session 21. v1 sums a person's prior season and divides by the pool's season
+# sum, so a player who missed games carries a smaller share and his teammates
+# absorb the difference. v2 turns each person's counts into a per-game rate over
+# the weeks he has a current-team row before the same pool normalization. A new
+# freeze defaults to v2; v1 stays selectable and reproduces its bytes exactly,
+# and a package frozen under either is read as written (projection reads only
+# the records, never the counts).
+PLAYER_TRANSFORMATION_V1 = "NFLVERSE_PRIOR_SEASON_POOL_NORMALIZED_OPPORTUNITY_SHARES_V1"
+PLAYER_TRANSFORMATION_V2 = "NFLVERSE_PRIOR_SEASON_PER_GAME_RATE_OPPORTUNITY_SHARES_V2"
+PLAYER_TRANSFORMATIONS = (PLAYER_TRANSFORMATION_V1, PLAYER_TRANSFORMATION_V2)
+DEFAULT_PLAYER_TRANSFORMATION = PLAYER_TRANSFORMATION_V2
+PLAYER_TRANSFORMATION_V2_DOES_NOT_ESTABLISH = (
+    "CURRENT_TEAM_ROLE",
+    "OFFICIAL_ACTIVE_STATUS",
+    "GAMES_PLAYED_BEYOND_WEEKS_WITH_A_STATS_ROW",
+    "SAMPLE_FLOOR_IS_A_CALIBRATED_SHRINKAGE",
+    "MODEL_VALIDATION",
+)
+
+
+def _require_player_transformation(value: str) -> str:
+    if value not in PLAYER_TRANSFORMATIONS:
+        raise PriorsBuildError(
+            f"PLAYER_TRANSFORMATION_UNKNOWN:{value}:expected {list(PLAYER_TRANSFORMATIONS)}"
+        )
+    return value
 
 
 def _team_week_totals(
@@ -1592,6 +1710,28 @@ def _team_week_totals(
     return totals
 
 
+def _team_per_game_totals(
+    team_week_totals: Mapping[tuple[str, str], Mapping[str, Decimal]]
+) -> dict[str, dict[str, Decimal]]:
+    """Each team's prior-season per-game total per column, over all its rows.
+
+    This is the team's expected pool: everything the team's players recorded in
+    the weeks the team has a row, whoever they were and wherever they are now.
+    """
+
+    weeks: dict[str, int] = {}
+    sums: dict[str, dict[str, Decimal]] = {}
+    for (team, _week), columns in team_week_totals.items():
+        weeks[team] = weeks.get(team, 0) + 1
+        bucket = sums.setdefault(team, {name: Decimal("0") for name in _RAW_COLUMNS})
+        for name in _RAW_COLUMNS:
+            bucket[name] += columns.get(name, Decimal("0"))
+    return {
+        team: {name: bucket[name] / Decimal(weeks[team]) for name in _RAW_COLUMNS}
+        for team, bucket in sums.items()
+    }
+
+
 def transfer_prior_from_old_team(
     person_rows: Sequence[Mapping[str, str]],
     *,
@@ -1599,6 +1739,8 @@ def transfer_prior_from_old_team(
     position: str,
     team_week_totals: Mapping[tuple[str, str], Mapping[str, Decimal]],
     prior_season: int,
+    player_transformation: str = PLAYER_TRANSFORMATION_V1,
+    current_team_per_game: Mapping[str, Decimal] | None = None,
 ) -> dict[str, object]:
     """A transfer's own prior-season share of his old team's volume.
 
@@ -1621,14 +1763,22 @@ def transfer_prior_from_old_team(
     for pair in pairs:
         for name in _RAW_COLUMNS:
             denominators[name] += team_week_totals.get(pair, {}).get(name, Decimal("0"))
+    rate_mode = player_transformation == PLAYER_TRANSFORMATION_V2
+    # v2 puts a transfer's old-team weeks under the same floor an incumbent's
+    # games get: his rate is own / max(weeks, floor) against the old team's rate
+    # over the same weeks, which is the v1 share times weeks / max(weeks, floor).
+    effective_weeks = max(len(pairs), MINIMUM_PRIOR_GAMES) if rate_mode else len(pairs)
+    floor_scale = Decimal(len(pairs)) / Decimal(effective_weeks) if pairs else Decimal("1")
     own_share: dict[str, Decimal] = {}
     for column, eligible in _SHARE_COLUMNS.items():
         if position not in eligible or denominators[column] <= 0:
             own_share[column] = Decimal("0")
         else:
+            share = _ratio(own[column], denominators[column], label=f"transfer:{provider_id}:{column}")
+            if rate_mode:
+                share = share * floor_scale
             own_share[column] = _bounded(
-                _ratio(own[column], denominators[column], label=f"transfer:{provider_id}:{column}"),
-                "0", "1", label=f"transfer:{provider_id}:{column}",
+                share, "0", "1", label=f"transfer:{provider_id}:{column}",
             )
     receiving = position in RECEIVING_POSITIONS and own["targets"] > 0
     catch_rate = (
@@ -1642,8 +1792,25 @@ def transfer_prior_from_old_team(
         if receiving else Decimal("0")
     )
     nonzero = any(value > 0 for value in own_share.values())
+    if rate_mode:
+        version = TRANSFER_PRIOR_VERSION_V2
+        injection = "PSEUDO_RATE_EQUALS_OWN_OLD_SHARE_TIMES_CURRENT_TEAM_PER_GAME_TOTAL"
+    else:
+        version = TRANSFER_PRIOR_VERSION
+        injection = "PSEUDO_COUNT_EQUALS_OWN_OLD_SHARE_TIMES_CURRENT_TEAM_POOL_INCUMBENT_TOTAL"
+    extra: dict[str, object] = {}
+    if rate_mode:
+        extra = {
+            "old_team_games_floor": MINIMUM_PRIOR_GAMES,
+            "effective_old_team_weeks": effective_weeks,
+            "thin_sample": len(pairs) < MINIMUM_PRIOR_GAMES,
+            "current_team_per_game_total": {
+                name: decimal_text((current_team_per_game or {}).get(name, Decimal("0")))
+                for name in _RAW_COLUMNS
+            },
+        }
     return {
-        "basis_version": TRANSFER_PRIOR_VERSION,
+        "basis_version": version,
         "basis": "OWN_OLD_TEAM_SHARE" if nonzero else "OWN_OLD_TEAM_SHARE_ZERO",
         "old_teams": sorted({team for team, _week in pairs}),
         "old_team_weeks": len(pairs),
@@ -1653,8 +1820,9 @@ def transfer_prior_from_old_team(
         "own_catch_rate": decimal_text(catch_rate),
         "own_yards_per_target": decimal_text(yards_per_target),
         "denominator_basis": "OLD_TEAM_ALL_PLAYERS_IN_WEEKS_WITH_A_ROW",
-        "injection": "PSEUDO_COUNT_EQUALS_OWN_OLD_SHARE_TIMES_CURRENT_TEAM_POOL_INCUMBENT_TOTAL",
+        "injection": injection,
         "does_not_establish": ["CURRENT_TEAM_ROLE", "OFFICIAL_ACTIVE_STATUS", "MODEL_VALIDATION"],
+        **extra,
     }
 
 
@@ -1690,15 +1858,27 @@ def build_player_records(
     snap_rows: Sequence[Mapping[str, str]],
     prior_season: int,
     season: int,
+    player_transformation: str = DEFAULT_PLAYER_TRANSFORMATION,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, object]]:
-    """Derive one player-prior record and one identity mapping per person."""
+    """Derive one player-prior record and one identity mapping per person.
 
+    `raw` holds each person's prior-season counts on his current team and feeds
+    the efficiencies, which are ratios. `weight_basis` is what the opportunity
+    shares are normalized over: the same counts under v1, per-game rates under
+    v2 (counts over the weeks he has a current-team row, floored at
+    `MINIMUM_PRIOR_GAMES`). See `PLAYER_TRANSFORMATION_V2`.
+    """
+
+    _require_player_transformation(player_transformation)
+    rate_mode = player_transformation == PLAYER_TRANSFORMATION_V2
     people = slate_people(slate)
     totals = _player_totals(player_stat_rows, prior_season=prior_season)
     capacities = _role_capacities(snap_rows, prior_season=prior_season)
     team_week_totals = _team_week_totals(player_stat_rows, prior_season=prior_season)
+    team_per_game = _team_per_game_totals(team_week_totals) if rate_mode else {}
 
     raw: dict[str, dict[str, Decimal]] = {}
+    weight_basis: dict[str, dict[str, Decimal]] = {}
     history: dict[str, dict[str, object]] = {}
     transfer_priors: dict[str, dict[str, object]] = {}
     for underlying_id, (proposal, provider_id) in resolved.items():
@@ -1721,6 +1901,8 @@ def build_player_records(
                      "OBSERVED_HISTORY")
             if incomplete:
                 raw[underlying_id] = {name: Decimal("0") for name in _RAW_COLUMNS}
+            games = len({(row.get("week") or "").strip() for row in current_rows})
+            effective_games = max(games, MINIMUM_PRIOR_GAMES)
             history[underlying_id] = {
                 "state": state, "historical_teams": historical_teams,
                 "current_team": flex.team, "provider_current_team": crosswalk[flex.team],
@@ -1730,6 +1912,24 @@ def build_player_records(
                 "basis_version": "offensive_current_team_history_v1",
                 "denominator_basis": "CURRENT_TEAM_ROWS_ONLY_CURRENT_SALARY_POOL",
             }
+            if rate_mode:
+                history[underlying_id].update(
+                    {
+                        "basis_version": "offensive_current_team_history_v2",
+                        "denominator_basis": (
+                            "CURRENT_TEAM_ROWS_ONLY_CURRENT_SALARY_POOL_PER_GAME_RATE"
+                        ),
+                        "rate_basis": "PER_GAME_RATE_OVER_WEEKS_WITH_A_CURRENT_TEAM_ROW",
+                        "games": games,
+                        "effective_denominator": effective_games,
+                        "games_floor": MINIMUM_PRIOR_GAMES,
+                        "thin_sample": 0 < games < MINIMUM_PRIOR_GAMES,
+                    }
+                )
+                weight_basis[underlying_id] = {
+                    name: raw[underlying_id][name] / Decimal(effective_games)
+                    for name in _RAW_COLUMNS
+                }
             if transfer and not incomplete:
                 prior = transfer_prior_from_old_team(
                     person_rows,
@@ -1737,6 +1937,8 @@ def build_player_records(
                     position=flex.position,
                     team_week_totals=team_week_totals,
                     prior_season=prior_season,
+                    player_transformation=player_transformation,
+                    current_team_per_game=team_per_game.get(crosswalk[flex.team]),
                 )
                 history[underlying_id]["transfer_prior"] = prior
                 if prior["basis"] == "OWN_OLD_TEAM_SHARE":
@@ -1744,6 +1946,14 @@ def build_player_records(
                     history[underlying_id]["receiving_efficiency_observed"] = (
                         Decimal(str(prior["own_catch_rate"])) > 0
                     )
+
+    if not rate_mode:
+        weight_basis = raw
+    else:
+        for underlying_id in resolved:
+            weight_basis.setdefault(
+                underlying_id, {name: Decimal("0") for name in _RAW_COLUMNS}
+            )
 
     # Denominators are the DraftKings pool members for each team, which is the
     # same set projection.py normalizes over, so its renormalization is an
@@ -1758,6 +1968,14 @@ def build_player_records(
     # 1/(1+sum of transfer shares); the transfer gets s/(1+sum). Receptions and
     # receiving yards are scaled from the pseudo-targets by the person's own
     # catch rate and yards per target, so the efficiency stays his own.
+    #
+    # v2 (Session 21) scales the same share by the current team's per-game total
+    # for the column over all of that team's rows, in place of the incumbents'
+    # season total. The incumbents' total is small exactly when the room is thin,
+    # which is when a transfer starter is most likely to inherit the volume that
+    # left, so it made his weight near zero (or exactly zero for an empty group).
+    # The pseudo-count is a rate here, and the shares below are rate over the
+    # pool's summed rates.
     for dk_team, members in sorted(by_team.items()):
         incoming = [member for member in members if member in transfer_priors]
         if not incoming:
@@ -1770,11 +1988,16 @@ def build_player_records(
             for column, eligible in _SHARE_COLUMNS.items():
                 if position not in eligible:
                     continue
-                pool_total = sum(
-                    (raw[other][column] for other in incumbents
-                     if people[other]["FLEX"].position in eligible),
-                    Decimal("0"),
-                )
+                if rate_mode:
+                    pool_total = team_per_game.get(crosswalk[dk_team], {}).get(
+                        column, Decimal("0")
+                    )
+                else:
+                    pool_total = sum(
+                        (raw[other][column] for other in incumbents
+                         if people[other]["FLEX"].position in eligible),
+                        Decimal("0"),
+                    )
                 pseudo[column] = (
                     Decimal(str(prior["own_old_share"][column])) * pool_total
                 ).quantize(QUANTUM, rounding=ROUND_HALF_EVEN)
@@ -1785,6 +2008,8 @@ def build_player_records(
                 pseudo["targets"] * Decimal(str(prior["own_yards_per_target"]))
             ).quantize(QUANTUM, rounding=ROUND_HALF_EVEN)
             raw[member] = pseudo
+            if rate_mode:
+                weight_basis[member] = pseudo
             history[member]["transfer_prior"]["pseudo_counts"] = {
                 name: decimal_text(value) for name, value in pseudo.items()
             }
@@ -1798,7 +2023,7 @@ def build_player_records(
                 for member in members
                 if people[member]["FLEX"].position in eligible_positions
             ]
-            total = sum((raw[member][column] for member in eligible), Decimal("0"))
+            total = sum((weight_basis[member][column] for member in eligible), Decimal("0"))
             if not eligible or total <= 0:
                 if eligible and any(history.get(member, {}).get("state") in {"MISSING_HISTORY", "CURRENT_ROLE_UNKNOWN"} for member in eligible):
                     for member in members:
@@ -1809,7 +2034,7 @@ def build_player_records(
             for member in members:
                 position = people[member]["FLEX"].position
                 shares[(member, field)] = (
-                    _ratio(raw[member][column], total, label=f"{dk_team}:{field}")
+                    _ratio(weight_basis[member][column], total, label=f"{dk_team}:{field}")
                     if position in eligible_positions
                     else Decimal("0")
                 )
@@ -2224,9 +2449,16 @@ def freeze_prior_package(
     weather_source_uri: str | None = None,
     weather_observed_at: str | datetime | None = None,
     weather_evidence_by_game: Mapping[str, Mapping[str, object]] | None = None,
+    player_transformation: str = DEFAULT_PLAYER_TRANSFORMATION,
 ) -> dict[str, object]:
-    """Publish the three artifacts `project` consumes, from a reviewed crosswalk."""
+    """Publish the three artifacts `project` consumes, from a reviewed crosswalk.
 
+    `player_transformation` selects how the prior season becomes opportunity
+    shares (`PLAYER_TRANSFORMATION_V2` per-game rates by default, v1 season
+    counts on request) and is written into the player artifact's coverage.
+    """
+
+    _require_player_transformation(player_transformation)
     when = _parse_timestamp(as_of, label="AS_OF")
     package_root = Path(package_dir).resolve()
     final_dir = _require_absent(Path(output_dir))
@@ -2421,6 +2653,7 @@ def freeze_prior_package(
         snap_rows=rows("snap_counts"),
         prior_season=prior_season,
         season=season,
+        player_transformation=player_transformation,
     )
 
     team_payload = {
@@ -2483,7 +2716,20 @@ def freeze_prior_package(
             coverage={
                 "people": len(player_records),
                 "prior_season": prior_season,
-                "transformation": "NFLVERSE_PRIOR_SEASON_POOL_NORMALIZED_OPPORTUNITY_SHARES_V1",
+                "transformation": player_transformation,
+                **(
+                    {
+                        "transformation_does_not_establish": list(
+                            PLAYER_TRANSFORMATION_V2_DOES_NOT_ESTABLISH
+                        ),
+                        "rate_games_floor": MINIMUM_PRIOR_GAMES,
+                        "rate_games_floor_basis": (
+                            "REUSES_MINIMUM_PRIOR_GAMES_AS_A_DENOMINATOR_FLOOR_A_JUDGMENT_NOT_A_CALIBRATION"
+                        ),
+                    }
+                    if player_transformation == PLAYER_TRANSFORMATION_V2
+                    else {}
+                ),
                 "role_capacity_definition": "MEAN_REGULAR_SEASON_OFFENSE_SNAP_SHARE",
                 **player_diagnostics,
             },

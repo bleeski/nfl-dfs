@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from nfl_dfs import priors
-from nfl_dfs.dk import parse_salaries
+from nfl_dfs.dk import _parse_game_info, parse_salaries
 from nfl_dfs.hashing import sha256_file
 from nfl_dfs.priors import (
     PriorsBuildError,
@@ -38,12 +38,16 @@ from nfl_dfs.sources import (
 )
 
 
-# AS_OF is slate time, not wall-clock time: it is a fixed point inside this
-# module's own synthetic LAR@SEA slate, and it has to stay before that slate's
-# lock for the expiry assertions below to mean anything.
-AS_OF = "2026-09-13T14:00:00+00:00"
-CAPTURED = datetime(2026, 9, 13, 13, 0, tzinfo=timezone.utc)
+# AS_OF is slate time, not wall-clock time. It is derived from this module's own
+# synthetic LAR@SEA slate (its Game Info lock, read by the same parser the
+# engine uses) rather than written as a literal, so it cannot drift from the
+# fixture it describes and it stays before that slate's lock, which the expiry
+# assertions below need. The lead is the module's convention, not a model input.
 GAME_INFO = "LAR@SEA 09/13/2026 04:25PM ET"
+SLATE_LOCK_AT = _parse_game_info(GAME_INFO)[3]
+AS_OF_LEAD_BEFORE_LOCK = timedelta(hours=6, minutes=25)
+AS_OF = (SLATE_LOCK_AT - AS_OF_LEAD_BEFORE_LOCK).astimezone(timezone.utc).isoformat()
+CAPTURED = datetime.fromisoformat(AS_OF) - timedelta(hours=1)
 
 # P3-17. A salary file written into `tmp_path` carries an mtime of "now", and
 # `_salary_timestamp` reads that mtime as the operator's observation whenever no
