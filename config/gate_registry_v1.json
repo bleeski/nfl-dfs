@@ -1013,6 +1013,7 @@
     "PLAYER_TEAM_IDENTITY_CONFLICT": "provider_identity",
     "PLAYER_TEAM_NOT_IN_POOL": "provider_identity",
     "PLAYER_TEAM_PROVIDER_CONFLICT": "provider_identity",
+    "PLAYER_TRANSFORMATION_UNKNOWN": "prior_package",
     "PLAYER_UNDERLYING_IDENTITY_CONFLICT": "provider_identity",
     "POOL_SCORES_PARENT_MISSING": "presentation",
     "POOL_SCORES_PATH_IS_A_DIRECTORY": "presentation",

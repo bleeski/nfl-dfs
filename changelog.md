@@ -4,6 +4,102 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-29: Session 21 -- prior-model triage: per-game rate shares, the transfer pool, alternate-name proposals
+
+Branch `claude/s21-prior-model-triage` (no branch was assigned; restarted from `origin/main` at
+`ce7eeaf`), task file `state/tasks/S21.md`, pull request recorded in the ledger. Started after PR #86
+(Session 50c, merge `ce7eeaf`, now recorded on its ledger row) was on `main`. Every path still ends
+`MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`; no protected path touched. The
+`/dev-session` and `/advisor` skills were not invoked as skills: this session followed
+`dev-session/SKILL.md` and `advisor/SKILL.md` directly (the advisor as an `Agent` call with
+`model: "fable"`), per the session prompt's note on the harness hook.
+
+#### The default flipped
+
+New prior freezes (`freeze_prior_package`, `priors-freeze`, and so every `--build-priors` run) now
+write player transformation v2 by default. This changes model values for every new package: a
+player who missed games no longer carries a smaller share, and a transfer into a thin room no longer
+gets `s / (1 + s)` of the group. `--player-transformation NFLVERSE_PRIOR_SEASON_POOL_NORMALIZED_OPPORTUNITY_SHARES_V1`
+(or `player_transformation=PLAYER_TRANSFORMATION_V1`) reproduces v1 byte for byte. Frozen v1 packages
+are read as written and need no rebuild (see Verification). RUNBOOK and `docs/DATA_CONTRACTS.md`
+say so. Why default rather than opt-in: the card mandates the fix, priors are `PRIOR_ONLY`
+diagnostics, and a known-biased default kept for safety is the defect the card names (advisor
+agreed after arguing the opt-in side).
+
+#### Added
+
+- `PLAYER_TRANSFORMATION_V2` (`NFLVERSE_PRIOR_SEASON_PER_GAME_RATE_OPPORTUNITY_SHARES_V2`): each
+  person's current-team counts divided by `max(games, MINIMUM_PRIOR_GAMES)` (`games` = distinct
+  weeks with a row, floor 4), share = rate over the pool's summed rates. A person with four or more
+  rows projects at exactly his per-game rate. The floor is a judgment, not a calibration: it
+  reuses the existing team-rate constant so no new number appears, and it stops a one-game player
+  from outranking a starter (pure rates would give him a larger share than v1 did). Recorded per
+  person (`games`, `effective_denominator`, `thin_sample`, `rate_basis`) and in
+  `coverage.transformation_does_not_establish`.
+- Transfer prior v2 (`transfer_prior_own_old_team_share_v2`): the pseudo-rate is the transfer's old
+  share (floored by the same rule over his old-team weeks) times the current team's per-game total
+  over all of that team's rows, from the same frozen `player_stats` bytes. Full room: identical to
+  v1. Thin room: fixture SEA receiving room, v1 0.333333, v2 0.888889. Empty group (the Miami
+  quarterback shape): v1 weight 0, v2 weight 1.
+- F8: `ALTERNATE_NAME_TEAM_POSITION` and `ALTERNATE_NAME_TEAM` proposal methods (nflverse
+  `first_name`/`last_name`/`football_name`, accent-folded), placed after every existing tier so only
+  an `AMBIGUOUS` or `UNMATCHED` outcome can change. Never in `IdentityProposal.resolved`; the review
+  file leaves `DECISION` blank; `apply_identity_gate` blocks them; `AUTO_ACCEPT_MATCH_METHOD` is
+  untouched (the `resolved` source is hash-pinned in a test).
+- `priors-freeze --player-transformation`. Blocker `PLAYER_TRANSFORMATION_UNKNOWN` in
+  `config/gate_registry_v1.json` (family `prior_package`); `REGISTRY_SHA256` re-pinned in
+  `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md` to
+  `b532b806c52c1b47dbafb62bfea9aab0a9ce1aab6ec487284dc5052535efc56f`.
+- `tests/test_prior_rate_transformation.py` (16 tests) and `tests/test_identity_alternate_names.py`
+  (9 tests).
+
+#### Changed
+
+- `tests/test_priors_adapter.py`: `AS_OF` is derived from the fixture's Game Info lock (lock minus
+  6h25m, evaluates to the same `2026-09-13T14:00:00+00:00`), and `CAPTURED` from `AS_OF`; the
+  hardcoded literals are gone (C4 retro #17).
+- `tests/test_offensive_history.py:50`: the one existing test edited. It asserted the transfer
+  prior's `basis_version` equals `TRANSFER_PRIOR_VERSION` (v1) under the default; the default is now
+  v2, so it expects `TRANSFER_PRIOR_VERSION_V2`. The v1 string is still asserted, under an explicit
+  v1 selection, in the new module. No assertion was loosened.
+- `docs/DATA_CONTRACTS.md`: a v2 subsection, a transfer-prior v2 paragraph and the F8 methods;
+  `docs/RUNBOOK.md`: the default flip. Adapter version stays `nflverse_prior_adapter_v2`.
+
+#### Verification
+
+- Baseline before any edit: `1967 passed, 1 skipped in 682.24s (0:11:22)`.
+- Reproduced first: the new tests failed on the old code (no `PLAYER_TRANSFORMATION_*`, no
+  `alternate_name_keys`). The v1 goldens `0f05ee0d...d77e` (base) and `6ce291b8...61b6` (a receiver
+  moved to another team) were computed on the unedited `priors.py`, before the first source edit.
+- First full run with the change: `1 failed, 1991 passed, 1 skipped in 668.71s (0:11:08)`; the
+  failure was `test_the_quick_start_names_the_first_startable_session`, expected while §1 still
+  named S21, cleared by this close-out.
+- Final full run: `1992 passed, 1 skipped in 662.45s (0:11:02)`.
+- Size and split: `src` +279/-18 and `tests` +538/-8 (843 changed lines, under the 900 line the brief set for
+  a split); docs, config and state +213/-6. Not split into a Session 21b: F8 is independent of the rate
+  work but the total stayed under the bound.
+- Reviewer agent on the diff: no correctness gap. It found the new registry key out of sort order
+  (fixed, hash re-pinned) and a blank line at EOF (fixed).
+- No pinned hash moves: nothing in `src`, `scripts`, `tests` or `data` pins a prior-package or
+  player-artifact hash or reads the `transformation` string or `basis_version`
+  (`prior_score.py` never reads the player artifact); `projection.py` reads only the frozen
+  records, so a v1 and a v2 package go through one path.
+
+#### Left open
+
+- Advisor (Fable) rounds: versioning, the team pool, the sample floor. It moved two things:
+  every basis string follows the selector, and the transfer's old-team weeks get the same floor.
+- A game counts as a full game if it has any stats row; a partial game counts whole, and a game
+  with no row is not a game (snap data joins on the PFR id, not `player_id`; noted, not built).
+  `games` is distinct weeks while counts sum every row: nflverse ships one row per player-week, so
+  a duplicate is theoretical. A blank `week` cell counts as one week.
+- The rate-scale pseudo is quantized to 1e-6; below about 1e-4 relative loss in realistic cases.
+- No gate-level test runs a transfer-only room through `offensive_roles`. V2 turns such a group
+  from `TRANSFER_PRIOR_ZERO` (excluded) into `TRANSFER_PRIOR_UNVERIFIED` (diagnostic, `UNKNOWN`);
+  the record-level change is pinned, and the reviewer found no route to a new
+  `ZERO_OR_MISSING_SHARE_GROUP` or `PRIOR_SUPPORT_MISSING`.
+- The `[BEN: ...]` flags are unchanged (four, none new).
+
 ### 2026-09-29: Session 50c -- intra-contest diversification, the Classic exits and the baseline
 
 Branch `claude/s50c-classic-contest-diversity` (no branch was assigned), task file

@@ -336,6 +336,17 @@ exclude INACTIVE people across both Captain and Flex before selection; missing
 status rows do not imply ACTIVE. Refresh near kickoff. Never set `--as-of` to
 an earlier time for a live run: that flag is historical replay only.
 
+Player prior shares are per-game rates since Session 21: a new `priors-freeze`
+(and so every `--build-priors` run) writes transformation v2, which divides a
+person's prior-season counts by the games he has a stats row for (floored at four)
+before the pool is normalized, so a player who missed games is no longer charged
+for them and a transfer into a thin room is no longer near zero. This changed
+the default. `priors-freeze --player-transformation
+NFLVERSE_PRIOR_SEASON_POOL_NORMALIZED_OPPORTUNITY_SHARES_V1` reproduces the old
+shares. Frozen v1 packages are read as written and need no rebuild. Every
+`thin_sample` person is named in `offensive_history_by_person`; it is still a
+prior, never a role.
+
 Offensive history is now explicit. Rebuild older frozen prior packages that
 lack SD2 coverage (a package frozen before 2026-09-10 has no `transfer_prior`
 and its transfers still block; rebuild with `--build-priors`). A transfer
