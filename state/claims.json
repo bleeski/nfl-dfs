@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "fe4a466a-09de-559d-aa3a-ece3c028861c",
+      "branch": "claude/youthful-mccarthy-df7yml",
+      "chunk": "S50",
+      "claimed_at": "2026-09-29T02:23:10Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
