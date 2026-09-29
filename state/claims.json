@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "c8a33350-44df-53c9-b8df-1209813ca3ef",
+      "branch": "claude/s50c-classic-contest-diversity",
+      "chunk": "S50c",
+      "claimed_at": "2026-09-29T03:29:07Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
