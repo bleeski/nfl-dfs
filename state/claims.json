@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "8050b790-d0f2-528c-82f8-b7adcc7eba89",
+      "branch": "claude/inspiring-dijkstra-cqlnzr",
+      "chunk": "S17",
+      "claimed_at": "2026-09-29T15:18:33Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
