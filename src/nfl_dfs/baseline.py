@@ -447,11 +447,15 @@ def audit_baseline_bytes(
         if inactive & people:
             problems.append(f"BASELINE_AUDIT_OFFICIAL_INACTIVE_PERSON:{entry_id}")
     if contest_assignment_claim is not None:
-        reading = contest_assignment_reading(
-            contest_assignment_claim, tuple((entry_id, tuple(roster)) for entry_id, roster in filled.items()),
-            problems, Path(entries_path).read_bytes())
-        if contest_reading is not None:
-            contest_reading.update(reading)
+        try:
+            reading = contest_assignment_reading(
+                contest_assignment_claim, tuple((entry_id, tuple(roster)) for entry_id, roster in filled.items()),
+                problems, Path(entries_path).read_bytes())
+        except Exception as exc:  # noqa: BLE001 - named, so the baseline can fall back to its own order
+            problems.append(f"CONTEST_ASSIGNMENT_STEP_FAILED:{type(exc).__name__}: {exc}")
+        else:
+            if contest_reading is not None:
+                contest_reading.update(reading)
     return problems
 
 
@@ -719,6 +723,7 @@ def run_baseline(
     # writer with an assignment already in place), it never raises, and a failure
     # leaves the salary order and a `P` limitation: the baseline is never blocked.
     contest_claim = None
+    salary_order = dict(assignments)
     if assignments:
         step = contest_assignment.apply_step(
             mode=(contest_assignment.MODE_SHOWDOWN if slate.mode is EngineMode.SHOWDOWN
@@ -742,14 +747,17 @@ def run_baseline(
         "most_used_person_lineups": max(uses.values(), default=0),
         "elapsed_seconds": round(time.perf_counter() - wall_start, 3),
     }
-    report["lineups"] = [
-        {"entry_id": entry_id, "roster": list(roster),
-         "salary": getattr(built_by_roster.get(roster), "salary", None),
-         "found_by": getattr(built_by_roster.get(roster), "found_by", None),
-         "time_limited": getattr(built_by_roster.get(roster), "time_limited", None),
-         "solve_seconds": getattr(built_by_roster.get(roster), "solve_seconds", None)}
-        for entry_id, roster in assignments.items()
-    ]
+    def lineup_rows(held: Mapping[str, tuple[str, ...]]) -> list[dict[str, object]]:
+        return [
+            {"entry_id": entry_id, "roster": list(roster),
+             "salary": getattr(built_by_roster.get(roster), "salary", None),
+             "found_by": getattr(built_by_roster.get(roster), "found_by", None),
+             "time_limited": getattr(built_by_roster.get(roster), "time_limited", None),
+             "solve_seconds": getattr(built_by_roster.get(roster), "solve_seconds", None)}
+            for entry_id, roster in held.items()
+        ]
+
+    report["lineups"] = lineup_rows(assignments)
     detail = f"{len(built.lineups)} distinct lineups built for {len(authorized)} blank rows"
     if built.stop_reason == "DISTINCT_LINEUPS_EXHAUSTED" and unfilled:
         limitations.append(registry.limitation(
@@ -778,15 +786,33 @@ def run_baseline(
 
     output = run_dir / f"{OUTPUT_PREFIX}{run_id}.csv"
     left_blank = tuple(eid for eid in plan.order if eid in set(unfilled) | set(plan.left_blank))
-    written = _write_audited(
-        output, template=template, salary_path=salary_path, entries_path=entries_path,
-        salary_hash=salary_hash, assignments=assignments, unfilled=left_blank, registry=registry,
-        limitations=limitations, report=report,
+    write_args = dict(
+        template=template, salary_path=salary_path, entries_path=entries_path, salary_hash=salary_hash,
+        unfilled=left_blank, registry=registry, report=report,
         exclusions={"operator_excluded_dk_ids": exclusion_ids,
                     "extra_unavailable_statuses": exclusion_statuses,
                     "official_status_csv": status_snapshot[0] if status_snapshot else None},
-        status_hash=status_snapshot[1] if status_snapshot else None,
-        contest_claim=contest_claim)
+        status_hash=status_snapshot[1] if status_snapshot else None)
+    mark = len(limitations)
+    written = _write_audited(output, assignments=assignments, limitations=limitations,
+                             contest_claim=contest_claim, **write_args)
+    audit_problems = [str(item) for item in (report.get("audit") or {}).get("problems", ())]
+    if (not written and contest_claim is not None and audit_problems
+            and all(item.startswith("CONTEST_ASSIGNMENT_") for item in audit_problems)):
+        # R28: the step only reorders lineups, so a finding against its claim must
+        # never cost the run its file. Fall back to the salary order, audited without
+        # the claim, and name the step's failure (`P`); every other refusal stands.
+        del limitations[mark:]
+        assignments, contest_claim = salary_order, None
+        error = "CONTEST_ASSIGNMENT_STEP_FAILED:the audit refused the step's assignment: " + " | ".join(audit_problems)
+        report["contest_assignment"] = {
+            **{key: value for key, value in dict(report["contest_assignment"]).items() if key in (
+                "contest_assignment_version", "does_not_establish")},
+            "status": contest_assignment.STATUS_FAILED, "error": error}
+        limitations.append(registry.limitation("CONTEST_ASSIGNMENT_STEP_FAILED", detail=error))
+        report["lineups"] = lineup_rows(assignments)
+        written = _write_audited(output, assignments=assignments, limitations=limitations,
+                                 contest_claim=None, **write_args)
     return _finish(report, registry, limitations, run_dir=run_dir, authorized=authorized,
                    plan=plan, assignments=assignments if written else {},
                    output=output if written else None, wall_start=wall_start)

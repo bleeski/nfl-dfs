@@ -2266,9 +2266,13 @@ and audit with an assignment already in place), it never raises, and a failure
 leaves the salary order and the `P` limitation `CONTEST_ASSIGNMENT_STEP_FAILED`.
 The baseline's audit refuses the file when a written row breaks the step's claim
 (the lineups a pool holds differ from those the build produced, or a row the
-template filled changed: `V`, as for any audited baseline); a reported statistic
+template filled changed: `V` against that assignment); a reported statistic
 the bytes do not bear out is the `P` limitation `CONTEST_ASSIGNMENT_STATS_MISMATCH`
-and the file ships. Everything else in the baseline (R28's first-publication rule,
+and the file ships. When the audit refuses only because of the step's claim (every
+problem is a `CONTEST_ASSIGNMENT_*` code, or the reading itself raised), the baseline
+falls back to the salary order, audits it without the claim and names
+`CONTEST_ASSIGNMENT_STEP_FAILED` (`P`): the step reorders lineups, so it never costs the
+run its file (R28). Everything else in the baseline (R28's first-publication rule,
 `DELIVERY_STATE`, the truths) is unchanged, and the step never blocks delivery.
 
 ## Release truths
@@ -2989,6 +2993,15 @@ report without its wall-clock `seconds`, canonical, hashed and bound, so C3 reco
 its block against an artifact (no existing schema gains a key). The selector's
 `pairwise_person_overlap` in the C2 summary is relabelled to the entries that now hold
 the lineups.
+
+`nfl_contest_assignment_step_v1` fields: `schema_version`, then the step's report
+exactly as § Report lists it (`contest_assignment_version`, `does_not_establish`,
+`score_definition`, `weights`, `status`, `total_score_before`, `total_score_after`,
+`moved_rows`, `restarts_run`, `timed_out`, `seed`, `fixed_entry_ids`,
+`unscored_entry_ids`, `pools`, `contest_count`, `single_entry_contest_count`,
+`contests_before`, `contests_after`; on a failed step `status: FAILED` and `error`)
+without `seconds`. Canonical JSON (sorted keys, compact separators, one trailing
+newline), written beside `assignments.csv`, hashed, and read by C3 only.
 
 **Classic audits.** `audit_classic_portfolio` takes the exact `assignments.csv` bytes,
 their hash and the step's claim. It recomputes, from those bytes, the lineups each pool

@@ -197,17 +197,21 @@ def test_a_lying_step_report_is_p_and_the_file_still_ships(tmp_path, monkeypatch
     assert outcome.report["audit"]["contest_assignment"]["status"] == "STATS_MISMATCH"
 
 
-def test_a_changed_multiset_withholds_the_baseline_file_v(tmp_path, monkeypatch):
-    """The audit holds the written rows to the lineups the build produced (`V`): nothing is kept."""
+def test_a_finding_against_the_steps_claim_falls_back_to_the_salary_order_r28(tmp_path, monkeypatch):
+    """The step only reorders lineups: a `V` against its claim costs the assignment, never the file."""
 
     real_step = ca.apply_step
     slate = parse_salaries(CLASSIC_SALARY)
+    seen: dict[str, object] = {}
 
     def swapping(**kwargs):
         step = real_step(**kwargs)
+        seen["order"] = dict(kwargs["assignments"])
         held = set(step.assignments.values())
+        unavailable, _operator, _unknown = baseline.pool_exclusions(slate.players)
+        excluded = tuple(p.dk_id for p in slate.players if p.underlying_id in unavailable)
         built = baseline.build_distinct_lineups(
-            slate, count=40, excluded_ids=(), per_solve_seconds=5.0, deadline=1e12, clock=lambda: 0.0)
+            slate, count=40, excluded_ids=excluded, per_solve_seconds=5.0, deadline=1e12, clock=lambda: 0.0)
         outsider = next(tuple(lineup.roster) for lineup in built.lineups if tuple(lineup.roster) not in held)
         first = next(iter(step.assignments))
         return ca.StepOutcome({**step.assignments, first: outsider}, step.report, step.claim, step.failure)
@@ -215,10 +219,27 @@ def test_a_changed_multiset_withholds_the_baseline_file_v(tmp_path, monkeypatch)
     monkeypatch.setattr(ca, "apply_step", swapping)
     entries = with_contests(classic_template(tmp_path, 20), 2, tmp_path, "contests")
     outcome = run(tmp_path, CLASSIC_SALARY, entries)
-    assert outcome.output_path is None
-    assert outcome.truths.delivery_state is not DeliveryState.DELIVERABLE
-    assert any("CONTEST_ASSIGNMENT_MULTISET_CHANGED" in item.detail for item in outcome.truths.delivery_limitations)
-    assert not list(outcome.run_dir.glob("DK_BASELINE_ENTRY_V1_*.csv"))
+    assert outcome.output_path is not None and outcome.truths.delivery_state is DeliveryState.DELIVERABLE
+    assert delivered_rosters(outcome) == seen["order"]  # the salary order, entry for entry
+    step = outcome.report["contest_assignment"]
+    assert step["status"] == "FAILED" and "CONTEST_ASSIGNMENT_MULTISET_CHANGED" in step["error"]
+    assert outcome.report["audit"]["status"] == "PASS"
+    limitations = {item.code: item for item in outcome.truths.delivery_limitations}
+    assert limitations["CONTEST_ASSIGNMENT_STEP_FAILED"].gate_class.value == "P"
+    assert not any(code.startswith("CONTEST_ASSIGNMENT_MULTISET") for code in limitations)
+    assert {row["entry_id"]: tuple(row["roster"]) for row in outcome.report["lineups"]} == seen["order"]
+
+
+def test_a_reading_that_raises_falls_back_the_same_way(tmp_path, monkeypatch):
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("reading failed")
+
+    monkeypatch.setattr(baseline, "contest_assignment_reading", boom)
+    entries = with_contests(classic_template(tmp_path, 20), 2, tmp_path, "contests")
+    outcome = run(tmp_path, CLASSIC_SALARY, entries)
+    assert outcome.output_path is not None
+    assert outcome.report["contest_assignment"]["status"] == "FAILED"
+    assert "CONTEST_ASSIGNMENT_STEP_FAILED" in codes(outcome)
 
 
 def test_the_audit_refuses_a_moved_filled_row_and_a_changed_multiset(tmp_path, monkeypatch):

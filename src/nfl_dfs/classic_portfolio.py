@@ -1127,6 +1127,8 @@ def _classic_assignment_pairs_from_csv_bytes(raw: bytes) -> tuple[tuple[str, tup
         if len(row) != len(expected):
             raise ValueError(f"the Classic assignments.csv row {row_number} has width {len(row)}")
         pairs.append((row[0].strip(), tuple(cell.strip() for cell in row[1:])))
+    if len({entry_id for entry_id, _roster in pairs}) != len(pairs):
+        raise ValueError("the Classic assignments.csv repeats an Entry ID")
     return tuple(pairs)
 
 
