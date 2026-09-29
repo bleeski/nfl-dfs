@@ -2515,7 +2515,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `10de0c0bee07fb6a683d2a3cfa2709e66aa8b8fd3928fbce88e7c505cc1690e8`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `d10ad5bf6edd221543b70a6ae66ee2073bb8a9e60d23955750bee7c3c6b2c52e`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -3166,3 +3166,93 @@ override the weights for an offline experiment and the record says so
 Does not establish: expected points or value, win or cash likelihood, ownership or
 duplication, a payout or contest worth, upload clearance, or that a different
 assignment would score better than the search found.
+
+## Standings corpus transport (Session 17, X2)
+
+**Decision, so it is not relitigated.** Ben ruled option (A) on 2026-09-21 (R27): the 26 DraftKings
+standings exports are kept as release assets of a private repository he owns and are fetched back with
+authentication. Built 2026-09-29 as `src/nfl_dfs/standings_transport.py`, the authenticated client in
+`src/nfl_dfs/sources.py` and `scripts/fetch_standings_corpus.py`. Committing the corpus and leaving `P0`
+Windows-only stay rejected. Two design decisions made in the build, each with its reason:
+
+- **The committed manifest is the authority, not the release.** A manifest published beside the assets
+  would prove only that the bytes match what the release says today. The expected sha256 and byte count
+  therefore live in git (`config/standings_corpus_manifest_v1.json`, reviewed through a pull request), and
+  the release is storage. GitHub's own asset `size` and `digest` are cross-checks made before a byte is
+  downloaded; a disagreement refuses that file.
+- **Files land in the inbox by exclusive create.** A verified file is linked into
+  `data/standings/inbox/` with `os.link`, which fails if the name exists. An existing file with the same
+  bytes is `ALREADY_PRESENT` and costs no request; an existing file with different bytes is
+  `STANDINGS_TRANSPORT_NAME_COLLISION` and is never touched. No content-addressed second copy exists.
+
+**Finding, 2026-09-29.** The GitHub API reports `bleeski/nfl-dfs` as public (`private: false`, authenticated
+and not). Release assets of a public repository are readable by anyone, and the exports hold other
+DraftKings users' names and lineups. The transport therefore refuses a repository that is not private
+(`STANDINGS_TRANSPORT_REPOSITORY_NOT_PRIVATE`) unless the caller passes `allow_public_repository`, which the
+record stores. The corpus repository must be a private one; its owner must be in
+`sources.AUTHENTICATED_GITHUB_OWNERS` (`bleeski`). Open `[BEN: ...]` flag on Session 17b.
+
+### `nfl_standings_corpus_manifest_v1`
+
+Committed, canonical JSON (sorted keys, two-space indent, trailing newline), at most 1 MiB, written by
+`scripts/fetch_standings_corpus.py manifest` from the inbox (`standings_transport.build_manifest`), which
+never writes to the inbox and never overwrites an existing manifest.
+
+| Field | Rule |
+|---|---|
+| `schema_version` | Exactly `nfl_standings_corpus_manifest_v1`; nothing else is read |
+| `repository` | `owner/name`, owner in `sources.AUTHENTICATED_GITHUB_OWNERS` |
+| `release_tag` | A plain tag name |
+| `files` | 1 to 500 entries sorted by `name`; each holds exactly `name`, `sha256`, `byte_count` |
+| `name` | A basename matching `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(csv\|zip)$`, unique ignoring case, not a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) |
+| `sha256` | 64 lowercase hex characters |
+| `byte_count` | Integer, 1 to 1 GiB |
+
+Any other key, a duplicate JSON key, an unsorted list, a duplicate or hostile name (patterns are matched whole, so a trailing newline fails) is `STANDINGS_TRANSPORT_MANIFEST_INVALID` for the
+whole manifest; a missing file is `STANDINGS_TRANSPORT_MANIFEST_MISSING`.
+
+### `nfl_standings_transport_v1`
+
+One record per fetch, `data/standings/transport/standings_transport_<observed>_<manifest sha12>.json`
+(gitignored, written by exclusive create; a second write is `STANDINGS_TRANSPORT_RECORD_EXISTS`). Canonical
+JSON, byte-identical for the same manifest, bytes and pinned `now`.
+
+| Field | Meaning |
+|---|---|
+| `schema_version`, `parser_version` | `nfl_standings_transport_v1`, `standings_transport_v1` |
+| `license_decision` | `OPERATOR_SUPPLIED`: the bytes are Ben's own DraftKings downloads. `validate_source_reference_policy` accepts it for `api.github.com` only with this parser version and a release-asset path of an allowlisted owner; every other `api.github.com` fetch keeps `PERMITTED_REPOSITORY_LICENSE` |
+| `repository`, `release_tag`, `repository_private`, `allow_public_repository` | What was fetched, the visibility observed (`null` when nothing needed fetching) and the override, if used |
+| `token_source_env_name` | The variable that held the credential (`NFL_DFS_GITHUB_TOKEN`, then `GH_TOKEN`, then `GITHUB_TOKEN`); its name only, never a value |
+| `tls_verify_x509_strict` | As on every captured artifact. The cloud egress proxy terminates TLS, so it can see the credential by the platform's design |
+| `manifest` | `name` and `sha256` of the manifest bytes used |
+| `observed_at` | Timezone-aware observation time; also each file's `captured_at` |
+| `all_files_bound`, `counts` | Every file `FETCHED` or `ALREADY_PRESENT`; the three counts |
+| `files[]` | `name`, `expected_sha256`, `expected_byte_count`, `disposition` (`FETCHED`, `ALREADY_PRESENT`, `REFUSED`), `code`, `actual_sha256`, and `artifact`: a `SourceArtifact` (raw-bytes `sha256` and `artifact_id`, `byte_count`, `source`, canonical `source_uri` of the API asset URL with no signed query, `license_decision`, `captured_at`, `parser_version`, `coverage`) |
+
+`does_not_establish`: `THAT_A_FILE_IS_A_GENUINE_DRAFTKINGS_EXPORT`,
+`THAT_A_FILE_IS_CURRENT_OR_COMPLETE_FOR_ITS_CONTEST`, `THAT_A_FILE_CAN_BE_GRADED`,
+`THAT_THE_MANIFEST_IS_CORRECT_ONLY_THAT_THE_BYTES_MATCH_IT`,
+`THAT_THE_TRANSPORT_RECORD_IS_THE_BINDING_A_CONSUMER_CHECKS_AGAINST`, `UPLOAD_CLEARANCE_OR_CERTIFICATION`.
+A consumer (Session 18) checks a file against the committed manifest; the record is provenance of one arrival.
+
+**Refusal codes** (registered, family `source_policy` unless noted): `STANDINGS_TRANSPORT_` plus
+`CREDENTIAL_MISSING`, `CREDENTIAL_INVALID`, `URL_REFUSED`, `REDIRECT_REFUSED`, `HTTP_STATUS`,
+`NETWORK_ERROR`, `RESPONSE_INVALID`, `ASSET_NOT_BINARY`, `ASSET_TOO_LARGE`, `MANIFEST_MISSING`,
+`MANIFEST_INVALID`, `REPOSITORY_NOT_PRIVATE`, `RELEASE_INVALID`, `ASSET_MISSING`, `PUBLISHER_SIZE_DISAGREES`,
+`PUBLISHER_DIGEST_DISAGREES`, `HASH_MISMATCH`, `LINK_UNSUPPORTED`, `WRITE_FAILED`; family `no_overwrite`: `NAME_COLLISION`,
+`RECORD_EXISTS`. A symlink at an inbox name is never `ALREADY_PRESENT` (it points at bytes that can change): it is a `NAME_COLLISION`. A disk or permission failure on one file is a `WRITE_FAILED` row, so files linked earlier in the run always have a record. A run-level refusal (credential, manifest, repository visibility, listing) raises and the
+script exits 2; a per-file refusal is a `REFUSED` row, the other files still arrive, and the script exits 1.
+
+**Credential handling, as tested.** The token is read from the environment only. It is sent as a
+per-request `Authorization` header to `api.github.com`, only for `/repos/<allowed owner>/<repo>` and its
+`releases/tags/<tag>` and `releases/assets/<integer id>` paths, never as a client default. The asset URL is
+built from the integer id, never taken from the release JSON. The API's 302 to the signed asset CDN is
+validated by `resolve_github_release_redirect` and fetched with no `Authorization`; every other redirect
+target, a second hop, a `Location` with user information, and a JSON or HTML answer on the asset endpoint are
+refused. httpx's request log line for the signed URL is filtered, a refusal names a code, a status and a host
+and never a header, body, signed URL or token, and it is raised outside the `except` that saw the httpx
+error (at connect time and while reading a body) so no request object rides on `__context__`.
+
+**Nothing here** fetches, simulates or contacts DraftKings; grades a file; changes the standings contract
+(`nfl_standings_csv_v2`); or adds a source beyond this transport. Every path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.

@@ -24,6 +24,10 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 ## Session protocol: `docs/ROADMAP.md` §2.1, plus these
 
 - Never reset, clean, stash or reformat a dirty tree; it is often user-owned work.
+- The claim commit (row `In Progress`) turns `tests/test_roadmap_queue.py::test_the_quick_start_names_the_first_startable_session`
+  red, because §1 still names the row just claimed and an `In Progress` row is not startable (Session 17's claim
+  commit, 2026-09-29: `suite` red on that one test). Either rewrite §1 to the next startable row in the claim
+  commit, or accept that one red and let the close-out push, which rewrites it, clear it. Never merge on the claim commit.
 - Multi-file session: the plan, with assumptions and tradeoffs, goes in the task
   file and work starts; no plan-approval wait (Ben, 2026-09-23). Ask Ben only for
   facts he alone has (a ruling, a file, an unset threshold), or leave a

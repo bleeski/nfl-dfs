@@ -4,6 +4,127 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-29: Session 17 -- X2 standings corpus transport (authenticated release-asset fetch, hash-bound)
+
+Branch `claude/inspiring-dijkstra-cqlnzr` (assigned, at `751942a`, Session 48's merge, now recorded on its ledger
+row), pull request https://github.com/bleeski/nfl-dfs/pull/89, task file `state/tasks/S17.md`. No protected path
+touched. Every path still ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`. The `/dev-session` and
+`/advisor` Skill calls failed on the PreToolUse skill-check hook (`set: Illegal option -o pipefail` under
+`/bin/sh`), as the session prompt warned; both were followed from their `SKILL.md` files, the advisor as an
+`Agent` call with `model: "fable"`. Not fixed.
+
+#### What is true, and what is not
+
+**The transport is built and tested against a fixture transport. The real corpus has not been fetched, and `P0`
+(Session 18) cannot yet run in a cloud session.** Evidence, 2026-09-29: `list_releases` for `bleeski/nfl-dfs`
+returned no releases, and a read of `GET /repos/bleeski/nfl-dfs/releases` with and without the container's token
+returned `[]` (200). No manifest is committed. O1 (publishing the corpus) is still Open, so the real-corpus
+acceptance is Session 17b, registered below. Nothing was created, uploaded or faked.
+
+**Finding that changes O1.** `GET /repos/bleeski/nfl-dfs` says `private: false, visibility: public`, with and
+without the token (the token holds admin). `.claude/rules/git-authority.md` and `docs/CLAUDE_CODE_SETUP.md` both say
+the repository is private. R27's "private release assets" therefore cannot be private on this repository, and the
+exports carry other DraftKings users' names and lineups (`docs/RUNBOOK.md`). The transport refuses a repository that
+is not private (`STANDINGS_TRANSPORT_REPOSITORY_NOT_PRIVATE`) unless `--allow-public-repository` is passed and recorded.
+`[BEN: ...]` on Session 17b and in O1: name a private repository under `bleeski` for the release.
+
+#### Added
+
+- `src/nfl_dfs/sources.py`: `AuthenticatedGithubClient`, `parse_authenticated_github_url`,
+  `resolve_transport_token`, `AuthenticatedFetchError`. The token (`NFL_DFS_GITHUB_TOKEN`, then `GH_TOKEN`, then
+  `GITHUB_TOKEN`) is sent per request, never as a client default, only to `api.github.com` and only for
+  `/repos/<allowed owner>/<repo>` with `releases/tags/<tag>` and `releases/assets/<integer id>`. The asset URL is built
+  from the integer id, never from the release JSON. The API's 302 is validated by the existing
+  `resolve_github_release_redirect` and the CDN hop is fetched with no `Authorization`; every other redirect, a second
+  hop, userinfo in `Location`, and a JSON or HTML answer on the asset endpoint are refused. Bodies are streamed, hashed
+  as they arrive and cut off past the manifest's byte count. httpx's log line for the signed URL is filtered, refusals
+  name a code, status and host only, and are raised outside the `except` (and in the caller's own frame for a body
+  read) so no request object is chained. `fetch_public_artifact` is unchanged and a test proves it sends no
+  `Authorization` even with all three token variables set. `validate_source_reference_policy` gains one branch:
+  `OPERATOR_SUPPLIED` on `api.github.com` only for parser version `standings_transport_v1` and a release-asset path of an
+  allowlisted owner; every other `api.github.com` fetch keeps `PERMITTED_REPOSITORY_LICENSE`.
+- `src/nfl_dfs/standings_transport.py`: manifest contract `nfl_standings_corpus_manifest_v1` (committed, hostile-input
+  validated), `build_manifest`/`write_manifest`, `fetch_corpus` (existing same-bytes file is `ALREADY_PRESENT` with no
+  request and no credential; different bytes or a symlink is `NAME_COLLISION`, untouched; otherwise staging in
+  `data/standings/inbox/.transport-staging/`, sha256 and size checked, `os.link` exclusive create, re-hash after link),
+  record `nfl_standings_transport_v1` with `does_not_establish`.
+- `scripts/fetch_standings_corpus.py`: `manifest` (on the machine holding the exports; reads the inbox, changes nothing
+  there) and `fetch`. Exit 0 all bound, 1 a file refused, 2 the run refused. Documented in `docs/RUNBOOK.md`.
+- 21 `STANDINGS_TRANSPORT_*` codes in `config/gate_registry_v1.json` (sorted, one per line); `REGISTRY_SHA256` re-pinned
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md` from `10de0c0b...` to
+  `d10ad5bf6edd221543b70a6ae66ee2073bb8a9e60d23955750bee7c3c6b2c52e`. The registry test caught the new literals; the
+  per-file codes were reordered to be the first argument of `_refused(...)` so the scanner sees them and no
+  `UNSCANNED_CODES` entry was added.
+- `.gitignore`: `data/standings/transport/*`. `docs/DATA_CONTRACTS.md` § Standings corpus transport (decision and date so
+  it is not relitigated, both contracts, refusal codes, credential handling). `docs/claude/working.md`: one rule about
+  the claim commit's known red (below). `IMPLEMENTATION_STATUS.md`, `docs/ROADMAP.md` (§1, rows, cards, O1 steps, §4).
+- `tests/test_standings_transport.py`: 77 tests, all through `httpx.MockTransport` (no network): arrival and every
+  capture invariant, the header present on each `api.github.com` request and absent on every CDN request, direct-200,
+  byte-mismatch (same length), truncation, overlong body, publisher size and digest disagreement, missing asset, JSON
+  answer, five redirect shapes, a sentinel token absent from stdout, stderr, logs, the record, every file written and
+  every raised message and traceback (connect failure, wrong token with the server echoing the header), a mid-body
+  read failure with `__context__ is None`, missing and malformed credentials, public repository, inbox hashes before and
+  after for same-bytes, different-bytes, racing-create and rerun, symlink, disk-full, 26 hostile manifest shapes, hostile
+  JSON, record and manifest determinism, a one-byte mutation withholding the file, exclusive-create refusals, the
+  manifest builder against an untouched inbox, the license scoping, URL policy, and the script. Mutation-checked by hand:
+  Authorization on the CDN hop, both hash checks removed, the token in the refusal text, and `os.replace` instead of
+  `os.link` each fail tests. (One mutation, removing only the first hash check, did not fail any test because the
+  post-link re-hash also refuses; removing both did.)
+
+#### Decisions (advisor consulted once, Fable, asked to argue against first)
+
+- Expected hashes come from a **committed manifest**, not one published beside the assets. My draft published it in
+  the release; the advisor's point was that an asset and its manifest can be replaced together, so that binding
+  proves only what the release says today. Adopted. GitHub's asset `size` and `digest` are cross-checks.
+- Files land in the inbox by exclusive create; no content-addressed second copy. Staging is inside the inbox
+  (already gitignored, Read-denied, skipped by `file_standings.py:872` and `standings_checklist.py:287`), and the
+  existing-file check runs before any request. I kept a local copy of `late_swap._atomic_write_new`'s pattern
+  rather than editing `late_swap.py`, which the card does not name.
+- License `OPERATOR_SUPPLIED`, scoped as above; `PERMITTED_REPOSITORY_LICENSE` would be untrue for DraftKings rows.
+- Advisor point not taken: refusing a public repository is a default with an explicit override, not a hard stop,
+  so the transport is still testable and usable if Ben decides otherwise.
+- Reviewer (fresh context) found no blocker and five hardening items, all fixed with tests that failed first:
+  a mid-body httpx error chained onto the refusal (reproduced), `$` accepting a trailing newline in names, sha256,
+  tag and repository (reproduced), deeply nested or duplicate-key manifest JSON (`RecursionError` reproduced), a symlink
+  at an inbox name bound as present, and an unexpected write error leaving files with no record.
+- Row status: the card's breakpoint says leave 17 `Pending`. I marked it `Complete` for the transport and registered
+  **Session 17b** (Pending, depends on Session 17 and O1) for the real-corpus acceptance, and pointed Session 18 at 17b.
+  Reason: with 17 `Pending`, §1 would name a row nobody can finish; with 17 `Complete` and 17b behind O1, §1 names
+  Session 39. Ben can overturn it.
+- Size: 1,881 insertions across 11 files; about 1,370 of them source, script and tests, the rest docs. Over the 900
+  guideline. Not split: the client and the transport share every test, and neither is useful without the other.
+
+#### Live probe (read-only, scratch directory, 2026-09-29)
+
+`scripts/fetch_standings_corpus.py fetch` against the real API with a one-file scratch manifest naming
+`bleeski/nfl-dfs`: without `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1` the container's TLS-terminating proxy gave
+`STANDINGS_TRANSPORT_NETWORK_ERROR: ConnectError` (exit 2); with the approved opt-in the client authenticated,
+refused the repository as public (`REPOSITORY_NOT_PRIVATE`, exit 2), and with `--allow-public-repository` got
+`HTTP 404 from api.github.com` for the missing release (exit 2). No file and no token in the scratch directory. The
+proxy sees the credential by the platform's design. No release was created and nothing was uploaded.
+
+#### Verification
+
+- Baseline before any edit: `2011 passed, 1 skipped in 495.45s (0:08:15)`.
+- Focused: `tests/test_standings_transport.py`, `tests/test_gate_registry.py`, `tests/test_source_ledger.py`,
+  `tests/test_sources_tls.py`, `tests/test_roadmap_queue.py` pass.
+- Full suite after the last code change: `2088 passed, 1 skipped in 479.09s (0:07:59)` (+77). The one skip is the
+  known Windows-junction skip. `sh ./nfl.sh doctor`: `pass_status: true`, `sqlite_probe_error` empty. `git diff --check`
+  and `scripts/check_protected_paths.py` clean.
+- The claim commit `ca18da7` was red on `suite` (`1 failed, 2010 passed`): only
+  `test_the_quick_start_names_the_first_startable_session`, because §1 named the row just claimed. This close-out
+  rewrites §1. The `windows` check on that commit also failed; I did not read its log (same head, same expected cause).
+
+#### Left open, named
+
+- Session 17b and O1 (`docs/ROADMAP.md` §2.6 has the exact steps). When the manifest is committed, `src/nfl_dfs/cli.py`
+  hashes every `config/*.json` into a certify manifest's `config_hashes`; check any test pinning that set.
+- `LINK_UNSUPPORTED` covers any `OSError` from `os.link` (a filesystem without hard links, or a permission error); there
+  is no copy fallback on purpose.
+- `late_swap._atomic_write_new` and the transport's `_create_new` are the same pattern twice; a shared helper is
+  adjacent cleanup, not done.
+- The Windows path (`.venv\Scripts`) of the `manifest` command was not run; only the Linux venv was.
+
 ### 2026-09-29: Session 48 -- depth-chart quarterback transfer starter (`qb_depth_chart_order_v2`)
 
 Branch `claude/admiring-albattani-trgyuq` (assigned, at `17235c1`, Session 21's merge, now recorded on

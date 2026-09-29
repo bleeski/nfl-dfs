@@ -27,6 +27,8 @@ data/standings/inbox/*
 !data/standings/inbox/.gitkeep
 data/standings/normalized/*
 !data/standings/normalized/.gitkeep
+# Transport records (Session 17): one per fetch, local provenance, not source.
+data/standings/transport/*
 outputs/*
 !outputs/.gitkeep
 operator_input.xlsx

@@ -231,6 +231,23 @@ produced. Three consequences worth knowing before you plan work in one:
 - `late-swap --prior-manifest` and `settle --replay` need artifacts from an
   earlier run. Neither is possible in a fresh clone.
 
+**Getting the standings corpus into a clone (Session 17, transport built 2026-09-29).** Once the
+corpus is published (`docs/ROADMAP.md` §2.6 O1) and its manifest is committed, a session with a token
+that can read the corpus repository runs:
+
+    NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1 .venv-linux/bin/python scripts/fetch_standings_corpus.py fetch
+
+(`NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1` is the approved opt-in for a cloud container's egress proxy.) It reads
+`NFL_DFS_GITHUB_TOKEN`, `GH_TOKEN`, then `GITHUB_TOKEN`; never prints one; skips every file already in
+`data/standings/inbox/` with the same bytes; refuses a name collision with different bytes; and refuses any
+file whose sha256 or size differs from `config/standings_corpus_manifest_v1.json`, leaving no partial file.
+Exit 0 means every file is bound, 1 means a file was refused (named per line), 2 means the run was refused
+(no credential, no manifest, a public repository, no network). `--repo` overrides the manifest's repository.
+The transport record lands in `data/standings/transport/`. On the machine that holds the exports,
+`scripts/fetch_standings_corpus.py manifest --repo <owner/name>` writes the manifest and prints the upload
+steps. Until O1 is done, `fetch` stops at `STANDINGS_TRANSPORT_MANIFEST_MISSING`, and `P0` cannot run in a
+cloud session. Contract and refusal codes: `docs/DATA_CONTRACTS.md` § Standings corpus transport.
+
 Derived records under `records/` are tracked on purpose, so grading and
 calibration do work from a clone. Raw standings exports never are: one is 167 MB
 and they carry other DraftKings users' names and lineups.

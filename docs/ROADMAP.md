@@ -17,7 +17,7 @@ full code review and a sweep of every plan, brief, archive and ledger.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 17 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S17`, on the branch your session was assigned or a new `claude/s17-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 39 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S39`, on the branch your session was assigned or a new `claude/s39-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
 On 2026-09-25 a full code review (`docs/critiques/Code_Review_2026-09-25.md`)
 and a sweep of every plan, brief, retrospective, archive and ledger were
@@ -27,9 +27,10 @@ bounds and the share cap) and its Classic half, Session 23e, closed on
 2026-09-28, so Session 39 (Classic diversification, which needed the Classic
 ladder's ordering settled) is now startable. Session 21 (the prior-model unit
 mismatch) and Session 48 (the depth-chart quarterback transfer bug) closed on
-2026-09-29, so Session 17 is first by row order and shares no file with the
-Classic policy work; Sessions 39, 23b and 23d are startable too. Session 17
-needs only a cloud session and O1 for its acceptance. Session 23b (Ben's game
+2026-09-29. Session 17 (the standings transport) closed on 2026-09-29 against a
+fixture transport; its real-corpus acceptance is Session 17b, which waits on O1 (§2.6),
+so Session 39 is first by row order among the startable rows; Sessions 23b and 23d
+are startable too. Session 23b (Ben's game
 theses) shares `relaxation.py` and `docs/DATA_CONTRACTS.md` with the sessions
 just closed; run it and Session 39 (which also touches `relaxation.py`) one at
 a time, or in separate worktrees. Session 23c still waits on 23b.
@@ -130,7 +131,8 @@ Every session follows this protocol, and the cards only add to it:
 | Session 23e | Standalone | P2 part 1b, Classic structural bounds and the share cap: `salary_left` and `offense_against_own_dst` in a new `nfl_classic_portfolio_policy_c2_v2` (v1 unchanged); a new `max_person_share` default-fraction control for Classic (C2 has no existing default-fraction mechanism, unlike Showdown); generator defaults; the new bounds folded into the existing Classic rung table | Chunk P2; standings findings §5.4; Session 23 breakpoint | `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | S | Session 23 | `sh ./nfl.sh test tests/test_classic_policy_generator.py tests/test_relaxation_controller.py -x --tb=short`; acceptance on the supplied Classic fixture unless the DAL@NYG/DEN@KC bytes have arrived | Complete |
 | Session 21 | Batched | Prior-model triage: the season-sum share against per-game capacity mismatch, confirmed by the 2026-09-25 review at `priors.py:1541-1565` and `:1661-1680`, becomes per-game rates under a new transformation version; the transfer pseudo-count scales by the team's expected pool, not the incumbents'; F8 alternate-name identity proposals for review with auto-accept unchanged; `tests/test_priors_adapter.py:44`'s hardcoded `AS_OF` pins `now` | Showdown retro §9 #2; archive § F8; code review S1, S2 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_score.py`, `src/nfl_dfs/opportunity.py`, `docs/DATA_CONTRACTS.md`, `tests/test_priors_adapter.py` | P | none | `sh ./nfl.sh test tests/test_priors_adapter.py tests/test_offensive_roles.py tests/test_prior_selection.py -x --tb=short`; a fixture player who missed games projects at his per-game rate | Complete |
 | Session 48 | Standalone | Depth-chart QB transfer bug: a starter who arrived at his current team from elsewhere this offseason or in-season (2026-09-27 examples: Malik Willis, Geno Smith) gets zero attempt share under the current-role depth-chart rule, because the rule reads only this team's own prior-season depth history and a transferred starter has none there; he should get his new team's starter share the same as any other named starter, not zero | changelog 2026-09-27 (Week 3 slate run) | `src/nfl_dfs/qb_depth_roles.py`, `docs/DATA_CONTRACTS.md` | P | none | `sh ./nfl.sh test tests/test_qb_depth_roles.py -x --tb=short`; a fixture starter with no prior-season history at his current team gets the starter's share, not zero | Complete |
-| Session 17 | Standalone | X2: the 26 standings exports become private GitHub release assets, fetched with authentication through `sources.py` and hash-bound on arrival | Chunk X2; archive § R27 | `src/nfl_dfs/sources.py`, a retrieval script, `docs/DATA_CONTRACTS.md` | P | Session 00 | `sh ./nfl.sh test tests/test_source_ledger.py tests/test_sources_tls.py tests/test_standings_transport.py -x --tb=short`; acceptance needs O1 | In Progress |
+| Session 17 | Standalone | X2: the 26 standings exports become private GitHub release assets, fetched with authentication through `sources.py` and hash-bound on arrival | Chunk X2; archive § R27 | `src/nfl_dfs/sources.py`, a retrieval script, `docs/DATA_CONTRACTS.md` | P | Session 00 | `sh ./nfl.sh test tests/test_source_ledger.py tests/test_sources_tls.py tests/test_standings_transport.py -x --tb=short`; transport landed 2026-09-29 against a fixture transport; the real-corpus acceptance is Session 17b | Complete |
+| Session 17b | Standalone | X2 acceptance, split from Session 17 at its breakpoint: with the corpus published to a private repository (O1) and its manifest committed, a cloud session runs the documented fetch, every file hash-binds against the manifest, the inbox is untouched, and the changelog states whether `P0` can run in a cloud session | Chunk X2 acceptance; Session 17 | `config/standings_corpus_manifest_v1.json`, `docs/RUNBOOK.md`, `changelog.md` | P | Session 17, O1 | `python3 scripts/fetch_standings_corpus.py fetch` in a fresh cloud clone: exit 0, 26 files bound, hashes before and after on any pre-existing inbox file | Pending |
 | Session 50 | Standalone | Intra-contest diversification, Part A: a pure `contest_assignment.py` permutes the selected lineups over the movable Entry IDs so each Contest ID's entries differ (`within_contest_diversity_v1`: `shared_people**2`, plus 12 for the same Captain or QB, 6 for the same Classic primary stack team, 3 for the same thesis; per-contest worst pair plus mean pair, every contest weighted equally); deterministic swaps and seeded restarts inside the `Budget`; it reaches the Showdown policy, sequential and subset-fill rows in `prior_review` before `assignments.csv` is written (Classic C1, C2, C3 and the baseline split to Session 50c at the mode seam); the SD4 audit recomputes the multiset, the filled rows and each contest's statistics from the assignment bytes; a per-contest review block; `scripts/diversify_showdown_contests.py` becomes a wrapper and gains Classic. Supersedes Session 23d's `round_robin_by_contest` default order | PHI@CHI 2026-09-28 (changelog addendum v2 to v4); `scripts/diversify_showdown_contests.py`; `docs/chunks/P2-contest-aware-policy.md` | new `src/nfl_dfs/contest_assignment.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/readable_review.py`, `scripts/diversify_showdown_contests.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md`, new `tests/test_contest_assignment.py` | S | Session 23, Session 23e | `sh ./nfl.sh test tests/test_contest_assignment.py tests/test_diversify_showdown_contests.py tests/test_gate_registry.py tests/test_entry_groups.py tests/test_readable_review.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py -x --tb=short`, then the full suite; PHI@CHI v1 rosters reach 7 distinct Captains of 7 per seven-entry contest with worst pair 4 or fewer and no two-entry pair over 2; seam: the module and Showdown first, Classic as Session 50c (taken: Part A passed 900 lines) | Complete |
 | Session 50c | Standalone | Intra-contest diversification, the Classic exits and the baseline, split from Session 50 at the mode seam: `contest_assignment.apply_step` on C1, C2 (bound and fill rows as separate pools) and C3 in `prior_review`; `audit_classic_portfolio` and C3 recompute the multiset, the filled rows and each contest's statistics from the assignment bytes; the per-contest block in the Classic review, HTML and workbook; the baseline takes the step (no restarts, 0.4 s cap) under `nfl_baseline_report_v4` | Session 50 card and changelog 2026-09-29; Week 3 Classic 2026-09-27 (25 entries, eight two-entry contests) | `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/workbook.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | S | Session 50 | `sh ./nfl.sh test tests/test_contest_assignment_run_slate.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py tests/test_classic_prior_review.py tests/test_baseline.py tests/test_gate_registry.py -x --tb=short`, then the full suite; no Week 3 two-entry contest holds two lineups with the same QB when the portfolio allows it | Complete |
 | Session 50b | Standalone | Intra-contest diversification, Part B, only if Part A's acceptance shows a permutation cannot reach it: per-contest constraints inside the SD4 and C2 joint MILPs (distinct Captains or QBs per contest; a per-contest overlap cap that also counts fixed rows), on the relaxation ladder ahead of rung 4, in new policy schema versions `nfl_showdown_portfolio_policy_v3` and `nfl_classic_portfolio_policy_c2_v3` | Session 50 card; PHI@CHI 2026-09-28 (the portfolio-wide overlap cap did not reach prefilled rows) | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_showdown_policy.py`, `scripts/make_classic_policy.py`, `docs/DATA_CONTRACTS.md`, `config/gate_registry_v1.json` | S | Session 50 | Reactivate only when Session 50's acceptance names a contest a permutation cannot fix; `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_portfolio_enforcement.py tests/test_classic_portfolio_c2.py tests/test_relaxation_controller.py -x --tb=short` | Deferred |
@@ -149,7 +151,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 25 | Standalone | P3b part 1: `TAIL_QUANTILE_OF_DESIGN_BANK` registered as an objective version; tail-family strata (5-1, DST-inclusive, single-QB single-stack, QB+2, QB+3, RB bring-back, secondary-game stack); the expectation-only control portfolio written as `control_assignment.json`, never exported | Chunk P3b; C4 retro #6, #9, #16 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/candidate_families.py`, both policy contracts, `docs/DATA_CONTRACTS.md` | S | Session 23d, Session 24b | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_candidate_sources_store.py -x --tb=short`; a synthetic contest with a known tail optimum is recovered | Pending |
 | Session 25b | Standalone | P3b part 2: `tail_sleeve_entries = k` in the joint assignment under the Session 23 controls; captain strata on a ceiling statistic; the dart rules (short one named prior, a defined role, 2 to 12% ownership when an estimate exists); the REFEREE bank re-scores the assignment with a registered tolerance | Chunk P3b; Showdown retro §7b, §7e; C4 retro §16 to §20 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/prior_review.py`, `docs/DATA_CONTRACTS.md` | S | Session 25 | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_portfolio_enforcement.py -x --tb=short`; a k=6 sleeve on the DEN@KC fixture holds a DST lineup and a 5-1 on each side | Pending |
 | Session 28 | Standalone | P6: scenario-cluster coverage, bank-estimated P(zero paid), sleeve-size frontier | Chunk P6; R34 | `src/nfl_dfs/portfolio.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/readable_review.py` | S | Session 25b | `sh ./nfl.sh test tests/test_readable_review.py -x --tb=short` | Pending |
-| Session 18 | Standalone | P0 part 1: `nfl grade-standings` normalises the corpus, classifies mode from roster geometry, joins names to the same-slate salary file with zero tolerance, writes per-contest thresholds, our entries' rank, percentile and copy count, and tie-pooled prizes when a ladder exists; metric definitions in one registered module; the DAL@NYG and DEN@KC snapshots filed | Chunk P0 | new `src/nfl_dfs/standings_grade.py`, new `src/nfl_dfs/standings_metrics.py`, `src/nfl_dfs/cli.py`, new `scripts/grade_standings.py`, new `tests/test_standings_grade.py` | P | Session 17, O2 | `sh ./nfl.sh test tests/test_standings_grade.py -x --tb=short`; 71 entries with Rank equal to Place, the 206-way DEN@KC tie, $54,065.22 on NE@SEA | Pending |
+| Session 18 | Standalone | P0 part 1: `nfl grade-standings` normalises the corpus, classifies mode from roster geometry, joins names to the same-slate salary file with zero tolerance, writes per-contest thresholds, our entries' rank, percentile and copy count, and tie-pooled prizes when a ladder exists; metric definitions in one registered module; the DAL@NYG and DEN@KC snapshots filed | Chunk P0 | new `src/nfl_dfs/standings_grade.py`, new `src/nfl_dfs/standings_metrics.py`, `src/nfl_dfs/cli.py`, new `scripts/grade_standings.py`, new `tests/test_standings_grade.py` | P | Session 17b, O2 | `sh ./nfl.sh test tests/test_standings_grade.py -x --tb=short`; 71 entries with Rank equal to Place, the 206-way DEN@KC tie, $54,065.22 on NE@SEA | Pending |
 | Session 18b | Standalone | P0 part 2: field feature lifts, duplication share of the top 1%, the concentration table, the seeded hygiene bootstrap, our exposure against the field; grades the Session 23 rerun and Session 24b's bank on the archived fields and replaces the proxy constant | Chunk P0; chunks P2 and P3a acceptance | `src/nfl_dfs/standings_grade.py`, `src/nfl_dfs/standings_metrics.py`, `tests/test_standings_grade.py` | P | Session 18, Session 23, Session 24b | `sh ./nfl.sh test tests/test_standings_grade.py -x --tb=short`; the pass-catcher lifts 1.60/1.53/2.08/1.39, the Classic sub-5% rate 2.08%, 8,007 portfolios, under 3 minutes on 26 files | Pending |
 | Session 26 | Standalone | P4a: mass-conserving ownership challenger graded by slate, with projected against realized ownership logged | Chunk P4a; C4 retro #11, #12, #15 | `src/nfl_dfs/ownership.py`, `src/nfl_dfs/prior_review.py` | P | Session 18b | `sh ./nfl.sh test tests/test_ownership_field.py -x --tb=short` | Pending |
 | Session 27 | Standalone | P4b: exact-lineup copy-count predictor | Chunk P4b | `src/nfl_dfs/field.py`, `src/nfl_dfs/prior_review.py` | P | Session 26 | `sh ./nfl.sh test tests/test_ownership_field.py -x --tb=short` | Pending |
@@ -1166,6 +1168,30 @@ Every session follows this protocol, and the cards only add to it:
 - **Breakpoint.** If O1 is still open, stop after the authenticated fetch and
   its byte-mismatch refusal test. Leave the row `Pending` and name the
   unfinished acceptance step.
+- **Landed 2026-09-29 (changelog).** O1 was open, so the breakpoint applied. The row is `Complete` for the
+  transport and the real-corpus acceptance moved to Session 17b, so that §1 does not keep pointing the next
+  instance at a row it cannot finish. (Decided at close-out: the alternative, leaving 17 `Pending`, would have
+  made `tests/test_roadmap_queue.py::test_the_quick_start_names_the_first_startable_session` name a row nobody
+  can start.)
+
+#### Session 17b: X2 real-corpus acceptance
+
+- **Depends on.** Session 17 and O1.
+- **Spec.** `docs/chunks/X2-standings-corpus-transport.md` § Acceptance; `docs/DATA_CONTRACTS.md` § Standings
+  corpus transport.
+- **Scope.** Not engineering unless the fetch fails on the real bytes. With the release published and
+  `config/standings_corpus_manifest_v1.json` committed (O1), run the documented command in a fresh cloud
+  container: every one of the 26 files hash-binds, a pre-existing inbox file keeps its hash, and the
+  transport record is kept. Then state in `changelog.md`, with the evidence, whether `P0` (Session 18) can run
+  in a cloud session, and update Session 18's runtime notes.
+- **`[BEN: ...]`** The GitHub API reports `bleeski/nfl-dfs` as public (checked 2026-09-29, authenticated and
+  not). Release assets of a public repository are public, and the exports hold other DraftKings users' names
+  and lineups (`docs/RUNBOOK.md`). Name the private repository the release lives in (a separate private
+  repository is the cheaper route; making `nfl-dfs` private costs GitHub Actions minutes), and confirm its
+  owner is `bleeski`. The transport refuses a public repository by default.
+- **Check when committing the manifest.** `src/nfl_dfs/cli.py` hashes every `config/*.json` into a certify
+  manifest's `config_hashes`; a new file there adds an entry, so run the suite and read any test that pins that set.
+- **Size.** One small pull request (the manifest), no source change expected.
 
 #### Session 39: Classic diversification
 
@@ -1455,7 +1481,8 @@ Every session follows this protocol, and the cards only add to it:
 
 #### Session 18: P0 part 1, the grading command
 
-- **Depends on.** Session 17 and O2 (O3 completes the NE@SEA era).
+- **Depends on.** Session 17b and O2 (O3 completes the NE@SEA era). Session 17b, not Session 17, because
+  the transport is built but the corpus is not yet published (O1).
 - **Spec.** `docs/chunks/P0-standings-grading-harness.md`, the first half.
   `nfl grade-standings` reads zips and loose CSVs, classifies mode from roster
   geometry, joins names to the same-slate salary file with zero tolerance for
@@ -2108,7 +2135,7 @@ Things only Ben can do. A session that depends on one checks its status here.
 <!-- operator-table:start -->
 | ID | Item | Unblocks | Status |
 |---|---|---|---|
-| O1 | Publish the 26 standings exports as private GitHub release assets (R27) | Session 17 acceptance | Open |
+| O1 | Publish the 26 standings exports as release assets of a PRIVATE repository (R27; steps below) | Session 17b | Open |
 | O2 | Copy the DAL@NYG and DEN@KC salary and entry CSVs from Downloads into their `data/runs/` snapshot folders (exact names in archive § operator item 2) | Session 18 | Open |
 | O3 | Pull standings for NE@SEA contests 193391019 and 193391038 | Session 18 completeness | Open |
 | O4 | Paste each payout ladder at intake into `contest/payouts_<id>.csv` on the 193391013 schema | Session 29 | Open |
@@ -2119,6 +2146,23 @@ Things only Ben can do. A session that depends on one checks its status here.
 | O9 | From Session 12 on, save the post-upload DKEntries download into the run folder | Session 12 on real data | Open |
 | O10 | About 20 more Showdown games of standings in the inbox | Session 33 | Open |
 <!-- operator-table:end -->
+
+**O1, exact steps (Session 17 built the tooling; nothing is published yet).** On the Windows checkout that holds
+`data/standings/inbox/`:
+
+1. Decide the private repository. `bleeski/nfl-dfs` is public (API, 2026-09-29), so the exports (which carry other
+   users' DraftKings names and lineups) must not go there. Create a new private repository under `bleeski` on
+   github.com (the name is yours). For cloud sessions, add a read-only token for it in the cloud environment's
+   settings (the environment menu in the session's title bar, then Edit, under API credentials or as an
+   environment variable named `NFL_DFS_GITHUB_TOKEN`; a fine-grained token with `Contents: read` on that one
+   repository is enough) and start the session with that repository selected. Never paste a token into a chat.
+2. In a Claude Code session on that checkout run
+   `.venv\Scripts\python.exe scripts\fetch_standings_corpus.py manifest --repo bleeski/<name>`. It hashes the
+   inbox, writes `config/standings_corpus_manifest_v1.json` and prints the upload commands. It reads the inbox and
+   changes nothing there.
+3. Create the private repository's release `standings-corpus-v1` and attach exactly the files the manifest lists
+   (drag them onto the release page, or use the printed `gh release upload` lines).
+4. Have the session commit the manifest through a pull request (it merges on green). Then start Session 17b.
 
 ### 2.7 Carried-in completed work
 
@@ -2377,3 +2421,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-29 | Session 48 | Pending to In Progress | `f9414f4` | Claimed on `claude/admiring-albattani-trgyuq` (assigned; at `17235c1`, Session 21's merge, recorded on its row above); baseline suite `1992 passed, 1 skipped in 473.61s (0:07:53)` |
 | 2026-09-29 | Session 48 | In Progress to Complete | `751942a` | `qb_depth_chart_order_v2` / allocation v2: a declared starter whose team had no allocated quarterback pool receives the whole pool (1.0), never a carried prior-team share; selected by the manifest's version pair, frozen v1 read as written, producer writes v2; `QB_DEPTH_POOL_NOT_UNIT` registered, `REGISTRY_SHA256` re-pinned; suite `2011 passed, 1 skipped in 464.95s (0:07:44)`; merged as PR #88 (`751942a`, recorded by Session 17); not split into 48b (changelog) |
 | 2026-09-29 | Session 17 | Pending to In Progress | claim commit | Claimed on `claude/inspiring-dijkstra-cqlnzr` (assigned; at `751942a`, Session 48's merge, recorded on its row above); baseline suite `2011 passed, 1 skipped in 495.45s (0:08:15)` |
+| 2026-09-29 | Session 17 | In Progress to Complete | recorded by the next session | Authenticated release-asset transport (`AuthenticatedGithubClient`, committed-manifest hash binding, exclusive-create landing in the inbox, `nfl_standings_transport_v1`, `scripts/fetch_standings_corpus.py`) built and tested against a fixture transport only; 21 `STANDINGS_TRANSPORT_*` codes registered, `REGISTRY_SHA256` re-pinned; suite `2088 passed, 1 skipped in 479.09s (0:07:59)`; PR #89; real-corpus acceptance moved to Session 17b; the repository is public, so the release needs a private one (changelog) |
+| 2026-09-29 | Session 17b | Registered as Pending | recorded by the next session | Split from Session 17 at its breakpoint; depends on Session 17 and O1; Session 18 now depends on 17b (changelog) |
