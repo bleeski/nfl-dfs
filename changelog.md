@@ -75,6 +75,9 @@ agreed after arguing the opt-in side).
   failure was `test_the_quick_start_names_the_first_startable_session`, expected while §1 still
   named S21, cleared by this close-out.
 - Final full run: `1992 passed, 1 skipped in 662.45s (0:11:02)`.
+- Size and split: `src` +279/-18 and `tests` +538/-8 (843 changed lines, under the 900 line the brief set for
+  a split); docs, config and state +213/-6. Not split into a Session 21b: F8 is independent of the rate
+  work but the total stayed under the bound.
 - Reviewer agent on the diff: no correctness gap. It found the new registry key out of sort order
   (fixed, hash re-pinned) and a blank line at EOF (fixed).
 - No pinned hash moves: nothing in `src`, `scripts`, `tests` or `data` pins a prior-package or
