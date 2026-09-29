@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import os
+import re
 import ssl
-from contextlib import nullcontext
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, BinaryIO
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -133,6 +139,24 @@ def validate_source_reference_policy(
         if license_decision != "OPERATOR_SUPPLIED" or parser_version != "dk_csv_v1":
             raise SourcePolicyError(
                 "DraftKings references are permitted only for operator-supplied CSV bytes"
+            )
+        return
+    if host == "api.github.com" and license_decision == "OPERATOR_SUPPLIED":
+        # Session 17 (X2): Ben's own DraftKings downloads, moved through his own release
+        # assets. The label is scoped like the DraftKings branch above: this transport's
+        # parser version, and one release-asset path of an allowlisted owner. No other
+        # api.github.com fetch can call itself operator-supplied.
+        if parser_version != STANDINGS_TRANSPORT_PARSER_VERSION:
+            raise SourcePolicyError(
+                "OPERATOR_SUPPLIED on api.github.com is permitted only for the standings transport"
+            )
+        try:
+            target = parse_authenticated_github_url(url)
+        except AuthenticatedFetchError as exc:
+            raise SourcePolicyError(str(exc)) from None
+        if target.kind != "asset":
+            raise SourcePolicyError(
+                "OPERATOR_SUPPLIED on api.github.com is permitted only for a release asset"
             )
         return
     validate_url_policy(
@@ -305,3 +329,289 @@ def sleeper_daily_player_snapshot(destination_dir: str | Path, as_of_date: str) 
         parser_version="sleeper_players_v1",
         coverage={"players": len(payload), "at_most_once_daily": True},
     )
+
+
+# --- Authenticated release-asset retrieval (Session 17, X2, R27) -----------------------------------
+#
+# The standings corpus is Ben's own DraftKings downloads, kept as release assets of a private
+# repository he owns. A private asset needs a credential, so this is the one place in the engine that
+# sends one. The rules that keep it from leaking, each pinned by tests/test_standings_transport.py:
+#
+# - the credential comes from the environment only and is sent per request, never as a client-level
+#   default, only to api.github.com, and only to that repository's release endpoints;
+# - the API answers an asset request with a 302 to a signed URL on the asset CDN. That hop is validated
+#   by `resolve_github_release_redirect` and fetched with no credential at all;
+# - the asset URL is built from the integer asset id, never taken from the release JSON;
+# - a refusal names a code, a status and a host, never a header, a body, a signed URL or the token, and
+#   is raised outside the `except` that saw the httpx error so no request object rides along on
+#   `__context__`.
+#
+# The egress proxy in a cloud container terminates TLS (see TLS_NONSTRICT_CA_ENV above), so the
+# credential is visible to that proxy by the platform's design. This module cannot change that.
+
+STANDINGS_TRANSPORT_PARSER_VERSION = "standings_transport_v1"
+AUTHENTICATED_GITHUB_OWNERS = frozenset({"bleeski"})
+TRANSPORT_TOKEN_ENV_NAMES = ("NFL_DFS_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN")
+GITHUB_API_HOST = "api.github.com"
+MAX_API_JSON_BYTES = 8 * 1024 * 1024
+
+_GITHUB_API_PATH = re.compile(
+    r"^/repos/(?P<owner>[A-Za-z0-9][A-Za-z0-9-]{0,38})/(?P<repo>[A-Za-z0-9][A-Za-z0-9._-]{0,99})"
+    r"(?:/releases/(?:tags/(?P<tag>[A-Za-z0-9][A-Za-z0-9._-]{0,127})|assets/(?P<asset>[0-9]{1,15})))?$"
+)
+_TOKEN_SHAPE = re.compile(r"^[!-~]{8,255}$")
+
+
+class AuthenticatedFetchError(SourcePolicyError):
+    """A refusal by the authenticated transport, named by `code`; never carries a secret."""
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        self.code = code
+        super().__init__(f"{code}: {detail}" if detail else code)
+
+
+@dataclass(frozen=True)
+class GithubTarget:
+    owner: str
+    repo: str
+    kind: str  # "repository", "release" or "asset"
+    ref: str | None = None  # the release tag or the asset id
+
+
+def parse_authenticated_github_url(url: str) -> GithubTarget:
+    """Accept only https://api.github.com/repos/<allowed owner>/<repo>[/releases/...], nothing else."""
+
+    parsed = urlparse(url)
+    try:
+        port = parsed.port
+    except ValueError:
+        port = -1
+    matched = _GITHUB_API_PATH.fullmatch(parsed.path)
+    if (
+        parsed.scheme != "https"
+        or (parsed.hostname or "").lower() != GITHUB_API_HOST
+        or port is not None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or matched is None
+        or matched["owner"].lower() not in AUTHENTICATED_GITHUB_OWNERS
+    ):
+        raise AuthenticatedFetchError(
+            "STANDINGS_TRANSPORT_URL_REFUSED",
+            "the credential reaches only a release endpoint of an approved repository on api.github.com",
+        )
+    if matched["asset"] is not None:
+        return GithubTarget(matched["owner"], matched["repo"], "asset", matched["asset"])
+    if matched["tag"] is not None:
+        return GithubTarget(matched["owner"], matched["repo"], "release", matched["tag"])
+    return GithubTarget(matched["owner"], matched["repo"], "repository")
+
+
+validate_authenticated_github_url = parse_authenticated_github_url
+
+
+def resolve_transport_token(env: Mapping[str, str] | None = None) -> tuple[str, str]:
+    """The credential and the name of the variable that held it (the name is recorded, never the value)."""
+
+    source = os.environ if env is None else env
+    for name in TRANSPORT_TOKEN_ENV_NAMES:
+        token = (source.get(name) or "").strip()
+        if not token:
+            continue
+        if not _TOKEN_SHAPE.fullmatch(token):
+            raise AuthenticatedFetchError(
+                "STANDINGS_TRANSPORT_CREDENTIAL_INVALID",
+                f"{name} must be one printable-ASCII token with no whitespace",
+            )
+        return token, name
+    raise AuthenticatedFetchError(
+        "STANDINGS_TRANSPORT_CREDENTIAL_MISSING",
+        "set one of " + ", ".join(TRANSPORT_TOKEN_ENV_NAMES) + " to a token that can read the repository",
+    )
+
+
+class _SuppressSignedUrlLogs(logging.Filter):
+    """httpx logs every request URL at INFO; the CDN URL carries a signature that is a bearer for the bytes."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "githubusercontent.com" not in record.getMessage()
+
+
+@dataclass(frozen=True)
+class AssetDownload:
+    sha256: str
+    byte_count: int
+    http_status: int
+    content_type: str | None
+    resolved_uri_host: str
+    redirect_followed: bool
+
+
+class AuthenticatedGithubClient:
+    """GET-only client for one repository's release endpoints. Use as a context manager."""
+
+    def __init__(
+        self,
+        *,
+        token: str,
+        token_env_name: str,
+        transport: Any = None,
+        timeout_seconds: float = 60.0,
+    ) -> None:
+        if not _TOKEN_SHAPE.fullmatch(token):
+            raise AuthenticatedFetchError(
+                "STANDINGS_TRANSPORT_CREDENTIAL_INVALID", "the token must be printable ASCII with no whitespace"
+            )
+        self._token = token
+        self.token_env_name = token_env_name
+        self._transport = transport
+        self._timeout = timeout_seconds
+        self._client: httpx.Client | None = None
+        self._log_filter = _SuppressSignedUrlLogs()
+        self.tls_verify_x509_strict = not tls_nonstrict_ca_enabled()
+
+    def __enter__(self) -> "AuthenticatedGithubClient":
+        logging.getLogger("httpx").addFilter(self._log_filter)
+        self._client = httpx.Client(
+            timeout=self._timeout,
+            follow_redirects=False,
+            headers={"User-Agent": "nfl-dfs-local-evidence-engine/0.1 (operator-controlled)"},
+            verify=build_verify_context(),
+            transport=self._transport,
+        )
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+        logging.getLogger("httpx").removeFilter(self._log_filter)
+        return False
+
+    def _refusal(self, code: str, detail: str) -> AuthenticatedFetchError:
+        return AuthenticatedFetchError(code, detail.replace(self._token, "[redacted]"))
+
+    @contextmanager
+    def _stream(self, url: str, *, authenticated: bool, accept: str) -> Iterator[httpx.Response]:
+        if self._client is None:
+            raise RuntimeError("AuthenticatedGithubClient must be used as a context manager")
+        headers = {"Accept": accept}
+        if authenticated:
+            headers["Authorization"] = f"Bearer {self._token}"
+        host = (urlparse(url).hostname or "").lower()
+        failure = None
+        try:
+            with self._client.stream("GET", url, headers=headers) as response:
+                yield response
+        except (httpx.HTTPError, httpx.InvalidURL, httpx.StreamError) as exc:
+            failure = type(exc).__name__
+            if "CERTIFICATE_VERIFY_FAILED" in str(exc) or "key usage" in str(exc):
+                failure += f" (TLS trust; a TLS-terminating egress proxy needs {TLS_NONSTRICT_CA_ENV}=1)"
+        if failure is not None:
+            # Raised here, outside the handler, so the httpx error and its request are not chained.
+            raise self._refusal("STANDINGS_TRANSPORT_NETWORK_ERROR", f"{failure} contacting {host}")
+
+    def _chunks(self, response: httpx.Response) -> Iterator[bytes]:
+        """The body in chunks; a read failure becomes a refusal raised outside the handler.
+
+        Converted here, in the caller's own frame, rather than left to `_stream`: an error thrown into
+        that generator while the caller's `with` body runs would chain the httpx error, and its request,
+        onto the refusal.
+        """
+
+        host = (response.url.host or "").lower()
+        failure = None
+        try:
+            yield from response.iter_bytes(65536)
+        except (httpx.HTTPError, httpx.StreamError) as exc:
+            failure = type(exc).__name__
+        if failure is not None:
+            raise self._refusal("STANDINGS_TRANSPORT_NETWORK_ERROR", f"{failure} reading from {host}")
+
+    def _require_ok(self, response: httpx.Response) -> None:
+        if response.status_code != 200:
+            host = (response.url.host or "").lower()
+            hint = {
+                401: " (the token is not accepted)",
+                403: " (the token may lack read access to the repository)",
+                404: " (no such repository, release or asset, or the token cannot see it)",
+            }.get(response.status_code, "")
+            raise self._refusal(
+                "STANDINGS_TRANSPORT_HTTP_STATUS", f"HTTP {response.status_code} from {host}{hint}"
+            )
+
+    def get_json(self, url: str) -> Any:
+        """One JSON document from an approved repository endpoint (repository or release)."""
+
+        target = parse_authenticated_github_url(url)
+        if target.kind == "asset":
+            raise self._refusal("STANDINGS_TRANSPORT_URL_REFUSED", "an asset is downloaded, not read as JSON")
+        body = bytearray()
+        with self._stream(url, authenticated=True, accept="application/vnd.github+json") as response:
+            self._require_ok(response)
+            for chunk in self._chunks(response):
+                body.extend(chunk)
+                if len(body) > MAX_API_JSON_BYTES:
+                    raise self._refusal("STANDINGS_TRANSPORT_RESPONSE_INVALID", "API answer exceeds its size cap")
+        try:
+            return json.loads(bytes(body).decode("utf-8"))
+        except ValueError:
+            pass
+        raise self._refusal("STANDINGS_TRANSPORT_RESPONSE_INVALID", "API answer is not JSON")
+
+    def download_asset(self, url: str, sink: BinaryIO, *, max_bytes: int) -> AssetDownload:
+        """Stream one release asset into `sink`, hashing as it arrives, cut off past `max_bytes`."""
+
+        if parse_authenticated_github_url(url).kind != "asset":
+            raise self._refusal("STANDINGS_TRANSPORT_URL_REFUSED", "not a release-asset URL")
+        octet = "application/octet-stream"
+        location = None
+        with self._stream(url, authenticated=True, accept=octet) as response:
+            if not response.is_redirect:
+                return self._consume(response, sink, max_bytes, redirected=False)
+            location = response.headers.get("location", "")
+        refused = False
+        try:
+            resolved = resolve_github_release_redirect(url, location)
+        except SourcePolicyError:
+            refused = True
+        if refused:
+            raise self._refusal(
+                "STANDINGS_TRANSPORT_REDIRECT_REFUSED", "redirect target is not the approved release-asset host"
+            )
+        with self._stream(resolved, authenticated=False, accept=octet) as response:
+            if response.is_redirect:
+                raise self._refusal(
+                    "STANDINGS_TRANSPORT_REDIRECT_REFUSED", "the release-asset host answered with a further redirect"
+                )
+            return self._consume(response, sink, max_bytes, redirected=True)
+
+    def _consume(
+        self, response: httpx.Response, sink: BinaryIO, max_bytes: int, *, redirected: bool
+    ) -> AssetDownload:
+        self._require_ok(response)
+        media = response.headers.get("content-type", "").split(";")[0].strip().lower()
+        if media == "application/json" or media.endswith("+json") or media == "text/html":
+            raise self._refusal(
+                "STANDINGS_TRANSPORT_ASSET_NOT_BINARY", f"the asset endpoint answered {media}, not file bytes"
+            )
+        digest = hashlib.sha256()
+        count = 0
+        for chunk in self._chunks(response):
+            count += len(chunk)
+            if count > max_bytes:
+                raise self._refusal(
+                    "STANDINGS_TRANSPORT_ASSET_TOO_LARGE", f"more than the {max_bytes} bytes the manifest states"
+                )
+            digest.update(chunk)
+            sink.write(chunk)
+        return AssetDownload(
+            sha256=digest.hexdigest(),
+            byte_count=count,
+            http_status=response.status_code,
+            content_type=media or None,
+            resolved_uri_host=(response.url.host or "").lower(),
+            redirect_followed=redirected,
+        )

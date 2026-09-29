@@ -1,5 +1,20 @@
 # Implementation Status
 
+## Capability added: 2026-09-29 (Session 17, standings corpus transport)
+
+Working and verified against a fixture transport only: `scripts/fetch_standings_corpus.py fetch` brings
+the standings exports from a private repository's release into `data/standings/inbox/` through
+authenticated GitHub API retrieval, binds each to a committed manifest's sha256 and byte count, refuses a
+mismatch (no partial file remains), never replaces an existing inbox file, and writes an
+`nfl_standings_transport_v1` record. The token is never printed, recorded or raised, and
+`Authorization` reaches only `api.github.com`, never the signed CDN hop. Also verified live on
+2026-09-29 (read-only, scratch directory): the new client authenticates through the cloud proxy, refuses
+`bleeski/nfl-dfs` because it is public, and gets a 404 for a release that does not exist.
+**Not done, named:** no release exists (`list_releases` returned `[]` on 2026-09-29) and no manifest is
+committed, so the real corpus has not been fetched, and `P0` cannot yet run in a cloud session (Session 17b,
+O1). The repository is public, so the release must live in a private repository (`[BEN: ...]`). Still
+`MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-29 (Session 48, depth-chart QB transfer starter)
 
 Working and verified: a declared rank-1 quarterback whose team had no allocated quarterback
