@@ -64,6 +64,7 @@ from .dk import (
     parse_salaries,
     reconcile_template,
 )
+from . import contest_assignment
 from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_bytes, sha256_file
@@ -830,6 +831,19 @@ SEQUENTIAL_PER_SOLVE_SECONDS = 10.0
 # Where each filled row's lineup came from (Session 11b): the policy's joint
 # solve, or the sequential fill of the rows it leaves unbound (or of every row,
 # with no policy).
+def _contest_assignment_allowance(budget: Budget | None) -> float:
+    """Seconds the assignment step may use: a fifth of the improvement window, at most 20.
+
+    With no budget (a test, a pinned clock) it is the module's default. Past the
+    improvement stop it is zero, and the solver's order stands with the step
+    reporting `timed_out`; the search itself is sized by entry count, not by this.
+    """
+
+    if budget is None:
+        return contest_assignment.DEFAULT_TIME_LIMIT_SECONDS
+    return max(0.0, min(contest_assignment.DEFAULT_TIME_LIMIT_SECONDS, 0.2 * budget.improvement_remaining()))
+
+
 ROW_SOURCE_POLICY = "POLICY"
 ROW_SOURCE_C1 = "C1"
 ROW_SOURCE_SHOWDOWN_SEQUENTIAL = "SHOWDOWN_SEQUENTIAL"
@@ -2348,6 +2362,39 @@ def run_prior_review(
             error=error,
         )
 
+    # Session 50: which entry holds which lineup, contest by contest. The joint
+    # solvers sort by prior points and the sort was zipped onto template order, so
+    # a contest of seven entries got whatever fell in its rows. Only the values of
+    # `assignments` move (the keys stay in template order), before any artifact is
+    # written, so every hash, audit and review below sees this assignment. It
+    # never raises: a failure leaves the solver's order and names it (R28).
+    contest_claim = None
+    if slate.mode is EngineMode.SHOWDOWN:
+        contest_step = contest_assignment.apply_step(
+            mode=contest_assignment.MODE_SHOWDOWN,
+            players=slate.players,
+            entry_plan=entry_plan,
+            assignments=assignments,
+            bound_ids=bound_ids,
+            time_limit_seconds=_contest_assignment_allowance(budget),
+        )
+        assignments = contest_step.assignments
+        contest_claim = contest_step.claim
+        reports["contest_assignment"] = contest_step.report
+        if (
+            contest_step.claim is not None
+            and portfolio_policy is not None
+            and isinstance(selection.get("pairwise_person_overlap"), list)
+        ):
+            # The selector labelled each overlap pair by the entries the lineups
+            # were in when it sorted them; the audit compares these to the final
+            # assignment, so they follow the lineups.
+            selection = {
+                **selection,
+                "pairwise_person_overlap": contest_assignment.relabel_overlaps(
+                    list(portfolio_policy.entry_ids), assignments, contest_step.claim.people),
+            }
+
     names = {
         player.dk_id: f"{player.name} ({player.position}, {player.team})"
         for player in slate.players
@@ -2672,6 +2719,8 @@ def run_prior_review(
             " ownership aware, and not EV, ROI, win probability or edge."
         ),
     }
+    if "contest_assignment" in reports:
+        selection_report["contest_assignment"] = reports["contest_assignment"]
     if slate.mode is EngineMode.CLASSIC:
         # Publish only after re-reading every immutable input and current-evidence
         # artifact.  The JSON is deliberately not a DraftKings-shaped template;
@@ -3404,6 +3453,7 @@ def run_prior_review(
                 assignment_artifact_bytes=assignments_path.read_bytes(),
                 expected_assignment_artifact_sha256=assignments_hash,
                 selector_summary=selection,
+                contest_assignment=contest_claim,
             )
             audit_report = audit.as_report()
             reports["portfolio_policy_audit"] = audit_report

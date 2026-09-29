@@ -207,6 +207,11 @@
       "provenance": {"kind": "RULING", "ref": "R28"},
       "covers": "A template row the engine keeps byte for byte but cannot resolve: a partly filled row, or a prefilled roster that is not a distinct legal lineup of exact current-slate DraftKings IDs. The row is named unresolved and every other row ships (Session 11)."
     },
+    "contest_assignment": {
+      "class": "P", "stops": "CERTIFICATION",
+      "provenance": {"kind": "CONTRACT", "ref": "Contest assignment, within_contest_diversity_v1 (Session 50)"},
+      "covers": "The step that assigns the selected lineups to Entry IDs contest by contest could not run or refused its inputs; the solver's order stands and the file ships with the gap named."
+    },
     "presentation": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "SD5 prior-only readable review"},
@@ -615,6 +620,15 @@
     "CLASSIC_STACK_RULE_UNREGISTERED": "classic_policy_input",
     "CLASSIC_WEATHER_SCOPE_AMBIGUOUS": "weather",
     "CONFLICTED_EVIDENCE": "projection_package",
+    "CONTEST_ASSIGNMENT_DUPLICATE_ENTRY_ID": "contest_assignment",
+    "CONTEST_ASSIGNMENT_FIXED_ROW_MOVED": "entry_authority",
+    "CONTEST_ASSIGNMENT_MOVABLE_ROW_HAS_NO_ROSTER": "contest_assignment",
+    "CONTEST_ASSIGNMENT_MULTISET_CHANGED": "audited_selection",
+    "CONTEST_ASSIGNMENT_SLOT_AND_LINEUP_COUNTS_DIFFER": "contest_assignment",
+    "CONTEST_ASSIGNMENT_STATS_MISMATCH": "presentation",
+    "CONTEST_ASSIGNMENT_STEP_FAILED": "contest_assignment",
+    "CONTEST_ASSIGNMENT_UNKNOWN_DK_ID": "contest_assignment",
+    "CONTEST_ASSIGNMENT_UNKNOWN_MODE": "contest_assignment",
     "CONTEST_ID_MISMATCH": "settlement",
     "CONTEST_PAYOUT_REQUIRED": "contest_economics",
     "CURRENT_CONTEST_ID_DIFFERS_FROM_CERTIFIED_PRIOR": "late_swap_state",

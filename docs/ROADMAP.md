@@ -130,7 +130,8 @@ Every session follows this protocol, and the cards only add to it:
 | Session 21 | Batched | Prior-model triage: the season-sum share against per-game capacity mismatch, confirmed by the 2026-09-25 review at `priors.py:1541-1565` and `:1661-1680`, becomes per-game rates under a new transformation version; the transfer pseudo-count scales by the team's expected pool, not the incumbents'; F8 alternate-name identity proposals for review with auto-accept unchanged; `tests/test_priors_adapter.py:44`'s hardcoded `AS_OF` pins `now` | Showdown retro §9 #2; archive § F8; code review S1, S2 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_score.py`, `src/nfl_dfs/opportunity.py`, `docs/DATA_CONTRACTS.md`, `tests/test_priors_adapter.py` | P | none | `sh ./nfl.sh test tests/test_priors_adapter.py tests/test_offensive_roles.py tests/test_prior_selection.py -x --tb=short`; a fixture player who missed games projects at his per-game rate | Pending |
 | Session 48 | Standalone | Depth-chart QB transfer bug: a starter who arrived at his current team from elsewhere this offseason or in-season (2026-09-27 examples: Malik Willis, Geno Smith) gets zero attempt share under the current-role depth-chart rule, because the rule reads only this team's own prior-season depth history and a transferred starter has none there; he should get his new team's starter share the same as any other named starter, not zero | changelog 2026-09-27 (Week 3 slate run) | `src/nfl_dfs/qb_depth_roles.py`, `docs/DATA_CONTRACTS.md` | P | none | `sh ./nfl.sh test tests/test_qb_depth_roles.py -x --tb=short`; a fixture starter with no prior-season history at his current team gets the starter's share, not zero | Pending |
 | Session 17 | Standalone | X2: the 26 standings exports become private GitHub release assets, fetched with authentication through `sources.py` and hash-bound on arrival | Chunk X2; archive § R27 | `src/nfl_dfs/sources.py`, a retrieval script, `docs/DATA_CONTRACTS.md` | P | Session 00 | `sh ./nfl.sh test tests/test_source_ledger.py tests/test_sources_tls.py tests/test_standings_transport.py -x --tb=short`; acceptance needs O1 | Pending |
-| Session 50 | Standalone | Intra-contest diversification, Part A: a pure `contest_assignment.py` permutes the selected lineups over the movable Entry IDs so each Contest ID's entries differ (`within_contest_diversity_v1`: `shared_people**2`, plus 12 for the same Captain or QB, 6 for the same Classic primary stack team, 3 for the same thesis; per-contest worst pair plus mean pair, every contest weighted equally); deterministic swaps and seeded restarts inside the `Budget`; it reaches the Showdown policy, sequential and subset-fill rows, C1, C2 and C3 in `prior_review` before `assignments.csv` and the C2 artifact are written; the SD4, C2 and C3 audits recompute the multiset, the fixed rows and each contest's statistics from the assignment bytes; a per-contest review block; `scripts/diversify_showdown_contests.py` becomes a wrapper and gains Classic. Supersedes Session 23d's `round_robin_by_contest` default order | PHI@CHI 2026-09-28 (changelog addendum v2 to v4); `scripts/diversify_showdown_contests.py`; `docs/chunks/P2-contest-aware-policy.md` | new `src/nfl_dfs/contest_assignment.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/readable_review.py`, `scripts/diversify_showdown_contests.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md`, new `tests/test_contest_assignment.py` | S | Session 23, Session 23e | `sh ./nfl.sh test tests/test_contest_assignment.py tests/test_diversify_showdown_contests.py tests/test_gate_registry.py tests/test_entry_groups.py tests/test_readable_review.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py -x --tb=short`, then the full suite; PHI@CHI v1 rosters reach 7 distinct Captains of 7 per seven-entry contest with worst pair 4 or fewer and no two-entry pair over 2; seam: the module and Showdown first, Classic as Session 50c if Part A passes about 900 lines | In Progress |
+| Session 50 | Standalone | Intra-contest diversification, Part A: a pure `contest_assignment.py` permutes the selected lineups over the movable Entry IDs so each Contest ID's entries differ (`within_contest_diversity_v1`: `shared_people**2`, plus 12 for the same Captain or QB, 6 for the same Classic primary stack team, 3 for the same thesis; per-contest worst pair plus mean pair, every contest weighted equally); deterministic swaps and seeded restarts inside the `Budget`; it reaches the Showdown policy, sequential and subset-fill rows in `prior_review` before `assignments.csv` is written (Classic C1, C2, C3 and the baseline split to Session 50c at the mode seam); the SD4 audit recomputes the multiset, the filled rows and each contest's statistics from the assignment bytes; a per-contest review block; `scripts/diversify_showdown_contests.py` becomes a wrapper and gains Classic. Supersedes Session 23d's `round_robin_by_contest` default order | PHI@CHI 2026-09-28 (changelog addendum v2 to v4); `scripts/diversify_showdown_contests.py`; `docs/chunks/P2-contest-aware-policy.md` | new `src/nfl_dfs/contest_assignment.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/readable_review.py`, `scripts/diversify_showdown_contests.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md`, new `tests/test_contest_assignment.py` | S | Session 23, Session 23e | `sh ./nfl.sh test tests/test_contest_assignment.py tests/test_diversify_showdown_contests.py tests/test_gate_registry.py tests/test_entry_groups.py tests/test_readable_review.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py -x --tb=short`, then the full suite; PHI@CHI v1 rosters reach 7 distinct Captains of 7 per seven-entry contest with worst pair 4 or fewer and no two-entry pair over 2; seam: the module and Showdown first, Classic as Session 50c (taken: Part A passed 900 lines) | Complete |
+| Session 50c | Standalone | Intra-contest diversification, the Classic exits and the baseline, split from Session 50 at the mode seam: `contest_assignment.apply_step` on C1, C2 (bound and fill rows as separate pools) and C3 in `prior_review`; `audit_classic_portfolio` and C3 recompute the multiset, the filled rows and each contest's statistics from the assignment bytes; the per-contest block in the Classic review, HTML and workbook; the baseline takes the step (no restarts, 0.4 s cap) under `nfl_baseline_report_v4` | Session 50 card and changelog 2026-09-29; Week 3 Classic 2026-09-27 (25 entries, eight two-entry contests) | `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/workbook.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | S | Session 50 | `sh ./nfl.sh test tests/test_contest_assignment_run_slate.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py tests/test_classic_prior_review.py tests/test_baseline.py tests/test_gate_registry.py -x --tb=short`, then the full suite; no Week 3 two-entry contest holds two lineups with the same QB when the portfolio allows it | Pending |
 | Session 50b | Standalone | Intra-contest diversification, Part B, only if Part A's acceptance shows a permutation cannot reach it: per-contest constraints inside the SD4 and C2 joint MILPs (distinct Captains or QBs per contest; a per-contest overlap cap that also counts fixed rows), on the relaxation ladder ahead of rung 4, in new policy schema versions `nfl_showdown_portfolio_policy_v3` and `nfl_classic_portfolio_policy_c2_v3` | Session 50 card; PHI@CHI 2026-09-28 (the portfolio-wide overlap cap did not reach prefilled rows) | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_showdown_policy.py`, `scripts/make_classic_policy.py`, `docs/DATA_CONTRACTS.md`, `config/gate_registry_v1.json` | S | Session 50 | Reactivate only when Session 50's acceptance names a contest a permutation cannot fix; `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_portfolio_enforcement.py tests/test_classic_portfolio_c2.py tests/test_relaxation_controller.py -x --tb=short` | Deferred |
 | Session 39 | Batched | Classic diversification: a Classic person-overlap cap on C1 and every unbound fill row (a construction preference on the ladder, default 6); the C2 witness chain honours the policy overlap and round-robins seeds and slots; policy exclusions bind fill rows; a fill that runs out of distinct lineups delivers the bound rows and names the unfilled Entry IDs (R29) | Code review S3 to S6; standings findings §5.1, §5.5; `IMPLEMENTATION_STATUS.md` Session 11c "not yet" | `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py` | S | Session 23e | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_classic_portfolio_c2.py tests/test_entry_groups.py tests/test_relaxation_controller.py -x --tb=short`; seam: the overlap cap and exclusions first, the partial fill second | Pending |
 | Session 49 | Standalone | Thesis builder as the rung-4 path: rung 4 (no policy, C1 sequential selection) concentrates badly under real conditions -- the 2026-09-27 Week 3 fallback file had three players in 25 of 25 lineups and zero stacks -- because sequential selection is one construction repeated with no diversification pressure across separate game scripts; port `scripts/build_thesis_portfolio.py`'s multi-thesis approach (or call it directly) as rung 4's replacement inside `run-slate`, so a fully relaxed run still diversifies across market reads instead of maximizing one central estimate 25 times | changelog 2026-09-27 (Week 3 slate run); `scripts/build_thesis_portfolio.py` | `src/nfl_dfs/relaxation.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/cli.py`, `scripts/build_thesis_portfolio.py` | S | Session 39 | `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_prior_review_profile.py -x --tb=short`; a rung-4 fixture run has no player over 40% exposure and every lineup stacked | Pending |
@@ -1898,9 +1899,54 @@ contract is the part that survives. Session 35 (C3X) stays parked by R30.
 - **Bounds.** Every path still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; no EV, ROI or
   probability language. Part A changes which entry holds which lineup, never which
   lineups exist. No protected path should need touching.
+- **Split (2026-09-29).** Part A passed 900 lines with the module, its tests, the
+  wrapper and the Showdown wiring. Session 50 holds those; Classic C1, C2, C3 and the
+  baseline are Session 50c. The baseline decision (include, with a cap, in 50c) and the
+  contest-size weighting are recorded in the changelog entry of 2026-09-29.
 - **Size and breakpoint.** Likely 700 to 1,000 changed lines. If Part A passes about
   900, split at the mode seam (the shared module and Showdown first, Classic as
   `Session 50c`), as Session 23 did, and say so in the changelog.
+
+#### Session 50c: intra-contest diversification, the Classic exits
+
+- **Depends on.** Session 50 (the shared module, the Showdown exits, the wrapper,
+  the gate codes and the `DATA_CONTRACTS.md` section all landed there). Split from
+  Session 50 at the mode seam the card named: Part A passed about 900 changed lines
+  with the module, its tests, the wrapper and the Showdown wiring alone.
+- **Scope.** `contest_assignment.apply_step` on the three Classic exits in
+  `prior_review.py`, each after selection and before its assignment artifacts:
+  C1 (rung 4, sequential), C2 (the joint solve, bound rows plus C1 fill rows as
+  separate pools) and C3 (C2's package and export). Pre-wiring facts from Session
+  50's sweep: no audit or test asserts prior-descending or solver order (they check
+  Entry-ID sequence and coverage only), C1's `assignments.csv` is written sorted by
+  Entry ID and keyed, so a permutation survives it, and `selection.py:382-390`
+  labels `pairwise_person_overlap` by entry in solver order, so the C2 selector
+  summary follows the lineups (`relabel_overlaps`). `audit_classic_portfolio`
+  (`classic_portfolio.py:1103`) recomputes the multiset, the filled rows and each
+  contest's readings from the exact `assignments.csv` bytes (the C2 assignment JSON
+  holds only the policy's rows); C3 (`classic_review.py`) and the readable
+  review's Classic block (`unbound_payload` at `classic_review.py:1444`) get the
+  per-contest block through `review_block`, in JSON, HTML and the `Exposure`
+  workbook sheet (`_add_contest_assignment_rows` is already generic and sits on the `Exposure` sheet).
+  `cli._export_classic_c1_csv` carries the step's report. The Classic primary
+  stack team is Session 50's definition.
+- **Baseline.** Decided in Session 50 from a measurement: 150 entries in contests of
+  at most 5 take 0.06 s for the single climb from the baseline's order, 0.3 s at 10
+  entries a contest and 4.3 s at 50; so the baseline takes the step with no
+  restarts under a 0.4 s cap. It needs `nfl_baseline_report_v4` (the step's block)
+  and the same audit; it ships here with C1, which shares its writer.
+- **Tests.** One `run-slate` test per Classic exit (C1, C2, C3) showing the
+  diversified assignment reaches `assignments.csv`, the audit and the review; the C2
+  and C3 audits refuse a lineup swapped for one outside the selection and a moved
+  filled row; readable-review reconciliation covers the Classic block.
+- **Acceptance.** Week 3 Classic (`data/inbox/slates/wk3-classic-2026-09-27/`, 25
+  entries, eight two-entry contests): no two-entry contest holds two lineups with
+  the same QB when the portfolio allows it, and the worst shared count per contest is
+  reported (Session 50 measured the baseline portfolio: every contest 0 after, four
+  contests repeated a QB before). An end-to-end Classic `run-slate` on a supplied
+  fixture shows the per-contest block, audit `PASS`, every release truth unchanged.
+  Full suite green.
+- **Size.** About 400 changed lines. One session.
 
 #### Session 50b: intra-contest diversification, Part B
 
@@ -2199,9 +2245,12 @@ count). It is placed directly ahead of Session 39, behind the two startable
 projection and transport rows (21, 48, 17), because it is smaller than 39, changes
 only which entry holds which lineup, and every later Showdown or Classic file
 ships with it. It supersedes Session 23d's `round_robin_by_contest` default order,
-so 23d keeps only the contest facts and the screening checklist. Session 50b
-(per-contest constraints inside the joint solves) is `Deferred` behind Session
-50's acceptance and does not move anything else.
+so 23d keeps only the contest facts and the screening checklist. Session 50
+completed the module and the Showdown exits on 2026-09-29 and split the Classic
+exits and the baseline to Session 50c (directly below it, ahead of 39 for the same
+reason). Session 50b (per-contest constraints inside the joint solves) is
+`Deferred` behind Session 50's acceptance and does not move anything else: on
+PHI@CHI the permutation alone reached the target, so 50b stays parked.
 
 **Questions for Ben that block nothing.** Sleeve size and risk tolerance
 (findings §7); a paid ownership-capture source (Showdown retro §7d, a
@@ -2311,3 +2360,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-28 | Session 23e | In Progress to Complete | recorded by the next session | Classic structural bounds and the share cap (C2 v2), the ladder fold; suite `1862 passed, 1 skipped in 356.97s (0:05:56)`; the pull request's merge SHA is recorded by the next session |
 | 2026-09-29 | Sessions 50, 50b | Added as Pending and Deferred | recorded at registration | Intra-contest diversification (PHI@CHI 2026-09-28), placed ahead of Session 39 (§2.8); Session 23d narrowed to contest facts and the screening checklist |
 | 2026-09-29 | Session 50 | Pending to In Progress | recorded at the claim push | Claim pushed on `claude/youthful-mccarthy-df7yml` (the branch this session was assigned, in place of the prompt's `claude/s50-contest-diversity`); baseline suite recorded in the changelog |
+| 2026-09-29 | Session 50c | Added as Pending | recorded at Session 50's close-out | Classic exits and the baseline, split from Session 50 at the mode seam (Part A passed 900 lines) |
+| 2026-09-29 | Session 50 | In Progress to Complete | recorded by the next session | Module, wrapper and Showdown exits; PHI@CHI acceptance met; [bleeski/nfl-dfs#85](https://github.com/bleeski/nfl-dfs/pull/85); suite line in the changelog |

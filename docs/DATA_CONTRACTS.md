@@ -2363,7 +2363,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `87dfe9740f349869507d937be108574c5497e0537c004a773dbd683f8a926c49`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `4a40d3f245a7d0e8712d0218edb18f254ad6ec79adef64e788ecf2f3c0b9115d`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -2881,3 +2881,95 @@ only when the last attempt's review completed.
 
 Does not establish: upload clearance, certification, lineup quality, or that a
 tighter policy was infeasible outside the reported bank.
+
+## Contest assignment, within_contest_diversity_v1 (Session 50)
+
+Registered 2026-09-29. `src/nfl_dfs/contest_assignment.py`. `contest_assignment_version
+= within_contest_diversity_v1`. It decides which Entry ID holds which of the
+selected lineups. It never decides which lineups exist: the multiset of lineups,
+their exposures and their captain counts are the selection's, and R29 (every
+lineup distinct, a different Captain a different lineup) is untouched. It adds no
+policy control, so no policy schema changes (`nfl_showdown_portfolio_policy_v2`
+and `nfl_classic_portfolio_policy_c2_v2` stand; a control would be a v3, never a
+mutation of v2). It is on by default; `run-slate` applies it on the Showdown
+exits (policy, sequential and subset-fill rows) since Session 50. The Classic
+exits (C1, C2, C3) follow in Session 50c, and until it lands they keep the
+solver's order.
+
+**Objective.** Per contest, grouped by Contest ID only, over every pair of its
+lineups a pair costs `shared_people ** 2`, plus 12 when both have the same key
+person (the Showdown Captain, the Classic QB), plus 6 when both have the same
+Classic primary stack team, plus 3 when both carry the same thesis label
+(Showdown sleeves; no label exists inside `run-slate` yet, so the term is zero
+there). A person is the underlying person, so a Captain and a FLEX ID of one
+person are one person. The Classic primary stack team is the team with the most
+rostered QB, RB, WR and TE players (a DST or kicker never counts), ties to the
+QB's team and then the lower team abbreviation, and is undefined below two
+players. The weights came from PHI@CHI (2026-09-28): 6 left a repeated Captain in
+a seven-entry contest, and 25 put two same-thesis lineups in a two-entry contest.
+
+**Contest size.** A contest scores its worst pair cost plus its mean pair cost, and
+every contest counts once: a raw sum let three seven-entry contests (21 pairs
+each) outweigh the two-entry ones, where one pair still shared 3 on PHI@CHI v4.
+A contest of fewer than two entries scores 0. Nothing reads a contest's name,
+fee or field size, and no payout is inferred; Session 23d's `contest_facts_csv`
+may weight contests later.
+
+**Movement.** A row the template filled never moves, and its lineup counts in its
+contest's score. A movable row belongs to a pool, and lineups only permute inside
+their pool: `bound` (a policy's rows), `fill` (the rows a subset policy leaves to
+C1 or sequential Showdown) or `all` (no policy). Rows of a one-entry contest stay
+where the solver put them. A filled row that does not resolve to a roster is not
+scored.
+
+**Search.** Deterministic: cross-contest pairwise swaps in a fixed order from the
+solver's order, then seeded restarts (seed 20260929; a count fixed by the entries,
+300 at 36 rows in contests of at most 7, fewer as rows and contest size grow),
+inside a time allowance taken from the run's `Budget` (a fifth of the improvement
+window, at most 20 seconds). A timeout keeps the best found and says
+`timed_out`. The solver's order is always a candidate, so the total never rises,
+and with the default `no_regression` no contest scores worse than it did in the
+solver's order. Any failure leaves the solver's order and is a `P` limitation
+(`CONTEST_ASSIGNMENT_STEP_FAILED`, registry family `contest_assignment`); it
+never blocks delivery and never moves a filled row.
+
+**Report** (`contest_assignment` in the selection report and the run's reports):
+`status` (`IMPROVED`, `UNCHANGED`, `NOT_APPLICABLE`, `FAILED`), `weights`,
+`score_definition`, `total_score_before`, `total_score_after`, `moved_rows`,
+`restarts_run`, `timed_out`, `seed`, `seconds`, `fixed_entry_ids`,
+`unscored_entry_ids`, `pools`, `single_entry_contest_count`, and per contest
+(two or more entries) `contests_before` and `contests_after`: `entries`, `pairs`,
+`worst_pair_shared_people`, `mean_shared_people`, `distinct_key_people`,
+`distinct_stack_teams`, `distinct_theses`, `people_in_every_lineup`,
+`worst_pair_cost`, `score`. When the step moves anything, the selector's
+`pairwise_person_overlap` labels follow the lineups to their new entries.
+
+**Independent audit.** `audit_policy_assignments` (Showdown policy) recomputes from
+the exact bytes of `assignments.csv`: the lineups held in each pool equal the
+selected ones as a multiset (`CONTEST_ASSIGNMENT_MULTISET_CHANGED`, `V`), a filled
+row is unchanged (`CONTEST_ASSIGNMENT_FIXED_ROW_MOVED`, `V`), and each contest's
+readings are as reported (`CONTEST_ASSIGNMENT_STATS_MISMATCH`, `P`: the audit keeps
+its own recomputed numbers, records `STATS_MISMATCH` and still passes). Its report
+gains `contest_assignment` with `status`, `findings` and the recomputed
+`contests`. The optimizer's numbers are compared and never trusted.
+
+**Review block** (`contest_assignment` in the readable review JSON and HTML, and the
+`Exposure` workbook sheet). Recomputed from the delivered rosters and the
+selection's own lineup order, then reconciled with the step's report (a
+disagreement is `CONTEST_ASSIGNMENT_STATS_MISMATCH`, a presentation limitation; a
+changed multiset is `V` and withholds the CSV). Per contest: entries, worst pair
+and mean shared people before and after, distinct Captains (Classic: QBs) before
+and after, distinct theses, people in every lineup, and the score before and
+after, with the total before and after.
+
+**Offline wrapper.** `scripts/diversify_showdown_contests.py` applies the same
+module to a filled file built outside `run-slate`, Showdown or Classic (mode read
+from the template header), and writes `nfl_contest_diversification_v2` (the
+first record, `nfl_showdown_contest_diversification_v1`, scored a raw sum and is
+never mutated). `--captain-penalty`, `--stack-penalty` and `--thesis-penalty`
+override the weights for an offline experiment and the record says so
+(`contest_assignment.weights.registered`).
+
+Does not establish: expected points or value, win or cash likelihood, ownership or
+duplication, a payout or contest worth, upload clearance, or that a different
+assignment would score better than the search found.
