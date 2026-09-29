@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "1b9ac2a3-22f7-5507-8c4f-eb0bbaac0c4f",
+      "branch": "claude/s21-prior-model-triage",
+      "chunk": "S21",
+      "claimed_at": "2026-09-29T07:14:52Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
