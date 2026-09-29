@@ -1234,6 +1234,7 @@
     "QB_DEPTH_NOT_CONSERVED": "qb_depth_roles",
     "QB_DEPTH_ORDER_NOT_SUPPORTED_BY_CAPTURE": "qb_depth_roles",
     "QB_DEPTH_POOLED_SHARE_INVALID": "qb_depth_roles",
+    "QB_DEPTH_POOL_NOT_UNIT": "qb_depth_roles",
     "QB_DEPTH_PRIOR_ROW_MISSING": "qb_depth_roles",
     "QB_DEPTH_PROVIDER_NAME_MISMATCH": "qb_depth_roles",
     "QB_DEPTH_SALARY_HASH_MISMATCH": "qb_depth_roles",

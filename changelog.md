@@ -4,6 +4,91 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-29: Session 48 -- depth-chart quarterback transfer starter (`qb_depth_chart_order_v2`)
+
+Branch `claude/admiring-albattani-trgyuq` (assigned, at `17235c1`, Session 21's merge, now recorded on
+its ledger row), task file `state/tasks/S48.md`. No protected path touched. Every path still ends
+`MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`. The `/dev-session` and `/advisor` skills were
+not invoked as skills: this session followed `dev-session/SKILL.md` and `advisor/SKILL.md` directly (the
+advisor as an `Agent` call with `model: "fable"`), per the session prompt's note on the harness hook.
+
+#### What was wrong, and how far the fix reaches
+
+`resolve_qb_depth_roles` gave the declared rank-1 quarterback "the sum the team's quarterbacks already
+hold". `conserve_team_shares` makes that sum 1.0 for every team the model has any support for and exactly
+0.0 when no quarterback of the team has current-team history, so a declared starter of such a team received
+nothing. Reproduced first, on the unedited code: a KC fixture with an empty pool gave the declared starter
+`0.0` against `1.0` for DEN's starter. Session 21's v2 priors already give a transfer with a nonzero
+old-team share a weight in an empty room, so what remains empty is: a frozen v1-transformation prior in a
+thin room (the 2026-09-27 Willis and Geno Smith packages), a transfer whose own old-team share was zero,
+a person with no prior rows, incomplete rows.
+
+**This session does not make everyone selectable.** `resolve_offensive_roles` still excludes a person whose
+history state is `MISSING_HISTORY` (`OFFENSIVE_MISSING_HISTORY`) or whose own old-team share was zero
+(`OFFENSIVE_TRANSFER_PRIOR_ZERO`), whatever the depth chart says; Deshaun Watson (CLE, excluded as missing
+history on 2026-09-27) is that case and is unchanged. What v2 does clear is the material-role-change
+exclusion of an unverified transfer starter that v1 had scored at zero attempts (test below). Flagged as
+`[BEN: ...]` on the card.
+
+#### Changed
+
+- `src/nfl_dfs/qb_depth_roles.py`: `qb_depth_chart_order_v2` and
+  `qb_depth_chart_attempt_share_allocation_v2`. Under v2 the declared starter receives
+  `TEAM_QB_POOL_UNIT = 1.0`, the value `conserve_team_shares` enforces, always: he holds the whole team pool
+  whatever prior-team share he carried (0.0, 0.3, 0.9 and 1.0 all give 1.0), so history from a team he left
+  cannot substitute for or shape his share. A team pool that is neither empty nor 1.0 within `1e-9` is
+  refused as `QB_DEPTH_POOL_NOT_UNIT`. Backups and unlisted stay at zero. Only `qb_attempt_share` moves.
+- Versioning (advisor's point 3, adopted): the manifest's own `transformation_version` and
+  `allocation_version` select the rule, must be one registered pair, and every source's version must equal
+  the manifest's (`QB_DEPTH_EVIDENCE_INVALID` otherwise). The v1 constants are unchanged and a frozen v1
+  manifest runs the old path exactly as written; it needs no rebuild. The producer
+  (`scripts/make_offensive_role_evidence.py`) now writes v2 (`CURRENT_*_VERSION`): that is the one default
+  that flipped, stated in `docs/RUNBOOK.md` and `docs/DATA_CONTRACTS.md`. The report echoes the manifest's own
+  pair (it hardcoded the v1 constants before) and adds, under both versions,
+  `declared_starters_without_allocated_pool` and `starter_share_basis` on the starter's `changed_people` row.
+  Under v1 that key names the gap as a limitation instead of staying silent. The v1 conservation message now
+  says `expected=` where it said `pooled=` (no test or registry entry pinned the text).
+- `config/gate_registry_v1.json`: `QB_DEPTH_POOL_NOT_UNIT` (family `qb_depth_roles`), sorted; `REGISTRY_SHA256`
+  re-pinned in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md` to
+  `10de0c0bee07fb6a683d2a3cfa2709e66aa8b8fd3928fbce88e7c505cc1690e8`. The advisor had said no registry entry
+  was needed; the registry test proved otherwise and the reviewer confirmed it.
+- `does_not_establish` under v2 adds `DECLARED_STARTER_HAS_NO_CURRENT_TEAM_ROLE_EVIDENCE_BEYOND_THE_DEPTH_CHART`
+  and `CARRY_SHARE_OF_A_TRANSFER_STARTER_IS_STILL_HIS_OLD_TEAM_HISTORY`. `docs/DATA_CONTRACTS.md`,
+  `docs/RUNBOOK.md`, `IMPLEMENTATION_STATUS.md` carry the contract paragraph, the default flip and the status.
+- `tests/test_qb_depth_roles.py`: additive only. The `_package` helper gained two defaulted keyword arguments
+  (`transformation`, `allocation`); no existing assertion changed. 19 tests added (registered versions, v1 pinned
+  at zero and named, v2 unit, four carried-prior sizes, only the attempt share moves, supported team identical under
+  v1 and v2, pool-not-unit refusal with v1 read as written, mixed pair and mixed source refusals, byte-identical
+  replay, mutated manifest and capture, the end-to-end material-role-change gate, R25 promotion with an empty
+  pool, an unlisted quarterback with an empty pool, and the producer writing v2).
+
+#### Decisions and judgment (advisor consulted once, Fable, asked to argue the other side first)
+
+- The starter's share is the model's own conserved unit, not a role-derived or freehand number. My first draft
+  was "the pool, else 1.0"; the advisor argued that hid a tolerance trap and accepted any pool such as 0.3, so
+  v2 always assigns the unit and refuses a pool that is not empty or 1.0. Adopted.
+- Prior-team history and the starter's share: the depth chart supersedes `qb_attempt_share` outright, so the
+  size of a carried Session 21 prior cannot be seen in his share. The prior is unchanged in his other fields and
+  in the offensive finding (`TRANSFER_PRIOR_UNVERIFIED`), and his carry share is still old-team history:
+  named in `does_not_establish`, not fixed.
+- Version selected by artifact, not by flipping a default, because the manifest is hash-bound and a rerun of a
+  frozen package must reproduce.
+- The card's edge cases already fail closed and needed no new rule: two declared starters
+  (`QB_DEPTH_EXCERPT_STARTER_NOT_UNIQUE`), a starter also listed as a backup (a person may appear once in the
+  order), a chart that disagrees with the declaration (`QB_DEPTH_ORDER_NOT_SUPPORTED_BY_CAPTURE`).
+
+#### Verification
+
+- Baseline before any edit: `1992 passed, 1 skipped in 473.61s (0:07:53)`.
+- Reproduced first: the new tests failed on the unedited code (14 failed, the v2 literals rejected by the
+  manifest schema and no report keys), and a direct run gave the declared KC starter `0.0` against `1.0` for
+  DEN. `git diff --check` clean; `scripts/check_protected_paths.py` clean.
+- `reviewer` on the diff: one blocking finding (the unregistered code, fixed above), no consumer or pinned hash
+  that moves, no leak of prior-team history into the attempt share, v1 read path unchanged; it asked for the two
+  extra edge tests (R25 promotion, unlisted), added.
+- Final full run: `2011 passed, 1 skipped in 464.95s (0:07:44)` (baseline plus the 19 tests added).
+- Size: `src`, `scripts` and `config` +131/-17, `tests` +371/-5 (519 changed lines, under the 900 the brief set for a split), docs and ledgers +159/-7. Not split into a Session 48b.
+
 ### 2026-09-29: Session 21 -- prior-model triage: per-game rate shares, the transfer pool, alternate-name proposals
 
 Branch `claude/s21-prior-model-triage` (no branch was assigned; restarted from `origin/main` at

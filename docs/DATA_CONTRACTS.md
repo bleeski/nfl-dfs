@@ -1555,6 +1555,39 @@ never increases team passing volume, never reaches a non-quarterback, and never
 invents a fractional split. A real committee needs measured numbers, which is
 the complete contract's job.
 
+**Session 48: `qb_depth_chart_order_v2` and `qb_depth_chart_attempt_share_allocation_v2`.**
+Under v1 "the sum the team's quarterbacks already hold" is 0.0 when no quarterback of the team
+has current-team history (a transfer starter with no prior-season rows at his new team, a frozen
+v1-transformation prior in a thin room, a transfer whose own old-team share was zero), so a
+declared starter received nothing. v2 gives the declared rank-1 quarterback the team's whole
+quarterback attempt pool, `TEAM_QB_POOL_UNIT = 1.0`: the value `conserve_team_shares` enforces on
+every team quarterback group the model has any support for, so it is the share any other named
+starter gets, not a number this contract chose. A team whose pool is anything other than empty
+or 1.0 (within `1e-9`) is `QB_DEPTH_POOL_NOT_UNIT`, refused rather than handed to the starter.
+His carried prior-team share never enters the number: he holds the whole pool whether it was
+0.0 or 0.9, and backups and unlisted stay at zero. A supported team receives the same share under
+v1 and v2 within `1e-9`; the output changes only where v1 produced zero or a non-unit pool.
+
+The manifest's own pair selects the rule. `transformation_version` and `allocation_version` must
+be one registered pair (`v1`/`v1` or `v2`/`v2`) and every source's `transformation_version` must
+equal the manifest's; anything else fails `QB_DEPTH_EVIDENCE_INVALID`. A frozen v1 manifest is read
+by the v1 rule exactly as written, so nothing already frozen changes and no rebuild is needed. The
+producer writes v2 by default (`CURRENT_*_VERSION`), which is the only default that flipped;
+`nfl_qb_depth_role_evidence_v1` (the schema) is unchanged and never mutated. The report echoes the
+manifest's own pair and adds, under both versions, `declared_starters_without_allocated_pool` (team,
+person, share before and after, and basis; empty on an ordinary slate, and under v1 a named
+limitation) and `starter_share_basis` on the starter's `changed_people` row
+(`TEAM_QB_POOL_CONSERVED`, `TEAM_QB_POOL_UNIT_NO_ALLOCATED_POOL`,
+`TEAM_QB_POOL_EMPTY_STARTER_LEFT_AT_ZERO_V1`).
+
+`does_not_establish` under v2 adds `DECLARED_STARTER_HAS_NO_CURRENT_TEAM_ROLE_EVIDENCE_BEYOND_THE_DEPTH_CHART`
+and `CARRY_SHARE_OF_A_TRANSFER_STARTER_IS_STILL_HIS_OLD_TEAM_HISTORY`. v2 moves `qb_attempt_share`
+only. It does not make anyone selectable: `resolve_offensive_roles` still excludes a person whose
+history state is `MISSING_HISTORY` or whose own old-team share was zero
+(`OFFENSIVE_MISSING_HISTORY`, `OFFENSIVE_TRANSFER_PRIOR_ZERO`), independently of the depth chart.
+It does clear the material-role-change exclusion for an unverified transfer starter that v1 had
+left at zero attempts, because his prior points are no longer scored at zero.
+
 **Identity.** The two sides share no identifier, so each entry carries the
 provider's `gsis_id` and the exact DraftKings binding, and the names must match
 under `normalize_person_name` within the one team
@@ -2482,7 +2515,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `b532b806c52c1b47dbafb62bfea9aab0a9ce1aab6ec487284dc5052535efc56f`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `10de0c0bee07fb6a683d2a3cfa2709e66aa8b8fd3928fbce88e7c505cc1690e8`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

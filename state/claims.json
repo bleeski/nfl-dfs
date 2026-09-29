@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "f2f76d08-416b-5755-a773-07de340616d0",
-      "branch": "claude/admiring-albattani-trgyuq",
-      "chunk": "S48",
-      "claimed_at": "2026-09-29T12:49:11Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

@@ -246,7 +246,8 @@ def _excerpt(team, ordering, observed=OBSERVED):
 
 
 def _package(root, slate, orders, *, as_of=AS_OF, observed=OBSERVED,
-             expiry_hours=36, unlisted=None):
+             expiry_hours=36, unlisted=None,
+             transformation=TRANSFORMATION_VERSION, allocation=ALLOCATION_VERSION):
     root.mkdir(parents=True, exist_ok=True)
     (root / "sources").mkdir(exist_ok=True)
     sources, declarations = [], []
@@ -270,7 +271,7 @@ def _package(root, slate, orders, *, as_of=AS_OF, observed=OBSERVED,
                 "expires_at": (observed + timedelta(hours=expiry_hours)).isoformat(),
                 "license_decision": "PERMITTED_REPOSITORY_LICENSE",
                 "parser_version": "nflverse_depth_charts_csv_v1",
-                "transformation_version": TRANSFORMATION_VERSION,
+                "transformation_version": transformation,
                 "support_kind": "DEPTH_CHART_ORDER",
                 "supporting_excerpt": excerpt,
                 "synthetic": True,
@@ -313,8 +314,8 @@ def _package(root, slate, orders, *, as_of=AS_OF, observed=OBSERVED,
         json.dumps(
             {
                 "schema_version": SCHEMA_VERSION,
-                "allocation_version": ALLOCATION_VERSION,
-                "transformation_version": TRANSFORMATION_VERSION,
+                "allocation_version": allocation,
+                "transformation_version": transformation,
                 "salary_sha256": slate.salary_hash,
                 "game_ids": [slate.games[0].game_id],
                 "sources": sources,
@@ -1112,3 +1113,368 @@ def test_a_team_with_no_selectable_quarterback_is_still_refused(tmp_path):
         resolve_qb_depth_roles(
             slate, model, contract, evidence_path=package, as_of=AS_OF
         )
+
+
+# --- Session 48: a declared starter with no current-team pool -------------
+#
+# `resolve_qb_depth_roles` gives the rank-1 quarterback the team's whole
+# attempt pool. That pool is 1.0 for every team the model has any support for
+# (`conserve_team_shares`) and exactly 0.0 when no quarterback of the team has
+# current-team history: a frozen v1-transformation prior in a thin room, a
+# transfer whose own old-team share is zero, a person with no prior rows. Under
+# `qb_depth_chart_order_v1` the starter then received 0.0. Under v2 he receives
+# the pool unit, whatever his carried prior-team share was.
+
+V2_TRANSFORMATION = "qb_depth_chart_order_v2"
+V2_ALLOCATION = "qb_depth_chart_attempt_share_allocation_v2"
+
+
+def _with_qb_shares(model, shares_by_name, slate):
+    """The model with named quarterbacks' `qb_attempt_share` set outright."""
+
+    by_person = {_person(slate, name): value for name, value in shares_by_name.items()}
+    return replace(
+        model,
+        players=tuple(
+            replace(player, qb_attempt_share=by_person[player.underlying_id])
+            if player.underlying_id in by_person
+            else player
+            for player in model.players
+        ),
+    )
+
+
+def _v2_package(tmp_path, slate, **kwargs):
+    return _package(
+        tmp_path / "qb", slate, _orders(),
+        transformation=V2_TRANSFORMATION, allocation=V2_ALLOCATION, **kwargs,
+    )
+
+
+def _shares(resolution):
+    return {p.underlying_id: p.qb_attempt_share for p in resolution.model.players}
+
+
+def _empty_kc_pool(tmp_path):
+    slate, model, contract, splits = _setup(tmp_path)
+    model = _with_qb_shares(model, {"KC Starter QB": 0.0, "KC Backup QB": 0.0}, slate)
+    return slate, model, contract, splits
+
+
+def test_the_registered_v2_versions_are_the_ones_the_contract_names():
+    from nfl_dfs import qb_depth_roles
+
+    assert qb_depth_roles.TRANSFORMATION_VERSION_V2 == V2_TRANSFORMATION
+    assert qb_depth_roles.ALLOCATION_VERSION_V2 == V2_ALLOCATION
+    # v1 is never mutated.
+    assert TRANSFORMATION_VERSION == "qb_depth_chart_order_v1"
+    assert ALLOCATION_VERSION == "qb_depth_chart_attempt_share_allocation_v1"
+
+
+def test_a_v1_package_still_gives_a_starter_with_no_pool_zero_and_says_so(tmp_path):
+    # The old behaviour, pinned on the old path: v1 conserves a pool of zero.
+    slate, model, contract, _unused = _empty_kc_pool(tmp_path)
+    package = _package(tmp_path / "qb", slate, _orders())
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=package, as_of=AS_OF
+    )
+    starter = _person(slate, "KC Starter QB")
+    assert _shares(resolution)[starter] == 0.0
+    report = resolution.report
+    assert report["transformation_version"] == TRANSFORMATION_VERSION
+    assert report["allocation_version"] == ALLOCATION_VERSION
+    [gap] = report["declared_starters_without_allocated_pool"]
+    assert (gap["team"], gap["person"]) == ("KC", starter)
+    assert gap["qb_attempt_share_after"] == 0.0
+    assert gap["basis"] == "TEAM_QB_POOL_EMPTY_STARTER_LEFT_AT_ZERO_V1"
+
+
+def test_a_declared_starter_with_no_current_team_pool_receives_the_pool_unit(tmp_path):
+    slate, model, contract, _unused = _empty_kc_pool(tmp_path)
+    package = _v2_package(tmp_path, slate)
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=package, as_of=AS_OF
+    )
+    starter = _person(slate, "KC Starter QB")
+    backup = _person(slate, "KC Backup QB")
+    shares = _shares(resolution)
+    assert shares[starter] == 1.0
+    assert shares[backup] == 0.0
+    # The same number a starter of a fully supported team gets (DEN's).
+    assert shares[_person(slate, "DEN Starter QB")] == 1.0
+    report = resolution.report
+    assert report["transformation_version"] == V2_TRANSFORMATION
+    assert report["allocation_version"] == V2_ALLOCATION
+    [gap] = report["declared_starters_without_allocated_pool"]
+    assert gap["basis"] == "TEAM_QB_POOL_UNIT_NO_ALLOCATED_POOL"
+    assert gap["qb_attempt_share_before"] == 0.0 and gap["qb_attempt_share_after"] == 1.0
+    starter_row = next(r for r in report["changed_people"] if r["person"] == starter)
+    assert starter_row["starter_share_basis"] == "TEAM_QB_POOL_UNIT_NO_ALLOCATED_POOL"
+    assert "DECLARED_STARTER_HAS_NO_CURRENT_TEAM_ROLE_EVIDENCE_BEYOND_THE_DEPTH_CHART" in (
+        report["does_not_establish"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("starter_before", "backup_before"),
+    [(0.0, 1.0), (0.3, 0.7), (0.9, 0.1), (1.0, 0.0)],
+)
+def test_the_carried_prior_share_never_sets_the_starters_share(
+    tmp_path, starter_before, backup_before
+):
+    # The starter is a transfer whose carried old-team prior normalized to
+    # `starter_before`. After the depth chart he holds the whole pool, so the
+    # size of what he carried from another team cannot be seen in his share.
+    slate, model, contract, _unused = _setup(tmp_path)
+    model = _with_qb_shares(
+        model,
+        {"KC Starter QB": starter_before, "KC Backup QB": backup_before},
+        slate,
+    )
+    starter = _person(slate, "KC Starter QB")
+    model = replace(
+        model,
+        offensive_history_by_person={
+            starter: {
+                "state": "CURRENT_ROLE_UNKNOWN",
+                "incompatible_transfer": True,
+                "current_team": "KC",
+                "transfer_prior": {
+                    "basis": "OWN_OLD_TEAM_SHARE",
+                    "old_teams": ["SEA"],
+                    "own_old_share": {"qb_attempt_weight": str(starter_before)},
+                },
+            }
+        },
+    )
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=_v2_package(tmp_path, slate), as_of=AS_OF
+    )
+    shares = _shares(resolution)
+    assert shares[starter] == 1.0
+    assert shares[_person(slate, "KC Backup QB")] == 0.0
+    assert resolution.report["declared_starters_without_allocated_pool"] == []
+
+
+def test_only_the_attempt_share_moves_when_the_pool_was_empty(tmp_path):
+    slate, model, contract, _unused = _empty_kc_pool(tmp_path)
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=_v2_package(tmp_path, slate), as_of=AS_OF
+    )
+    before = {p.underlying_id: p for p in model.players}
+    for player in resolution.model.players:
+        original = before[player.underlying_id]
+        assert player.carry_share == original.carry_share
+        assert player.target_share == original.target_share
+        assert player.rushing_td_share == original.rushing_td_share
+        assert player.receiving_td_share == original.receiving_td_share
+        if player.position != "QB":
+            assert player.qb_attempt_share == original.qb_attempt_share
+    # No other team's quarterback moved either.
+    den = _person(slate, "DEN Starter QB")
+    assert before[den].qb_attempt_share == _shares(resolution)[den]
+
+
+def test_a_supported_team_gets_the_same_share_under_v1_and_v2(tmp_path):
+    slate, model, contract, _unused = _setup(tmp_path)
+    v1 = resolve_qb_depth_roles(
+        slate, model, contract,
+        evidence_path=_package(tmp_path / "v1", slate, _orders()), as_of=AS_OF,
+    )
+    v2 = resolve_qb_depth_roles(
+        slate, model, contract,
+        evidence_path=_package(
+            tmp_path / "v2", slate, _orders(),
+            transformation=V2_TRANSFORMATION, allocation=V2_ALLOCATION,
+        ),
+        as_of=AS_OF,
+    )
+    for person, share in _shares(v1).items():
+        assert _shares(v2)[person] == pytest.approx(share, abs=1e-9)
+    assert v2.report["declared_starters_without_allocated_pool"] == []
+
+
+def test_a_pool_that_is_neither_empty_nor_the_unit_is_refused_under_v2(tmp_path):
+    slate, model, contract, _unused = _setup(tmp_path)
+    model = _with_qb_shares(model, {"KC Starter QB": 0.3, "KC Backup QB": 0.2}, slate)
+    with pytest.raises(QbDepthRoleError, match="QB_DEPTH_POOL_NOT_UNIT:team=KC"):
+        resolve_qb_depth_roles(
+            slate, model, contract,
+            evidence_path=_v2_package(tmp_path, slate), as_of=AS_OF,
+        )
+    # v1 is read as written: it conserves whatever the pool was.
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract,
+        evidence_path=_package(tmp_path / "v1", slate, _orders()), as_of=AS_OF,
+    )
+    assert _shares(resolution)[_person(slate, "KC Starter QB")] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize(
+    ("transformation", "allocation"),
+    [
+        (V2_TRANSFORMATION, ALLOCATION_VERSION),
+        (TRANSFORMATION_VERSION, V2_ALLOCATION),
+    ],
+)
+def test_a_manifest_mixing_v1_and_v2_versions_is_refused(tmp_path, transformation, allocation):
+    slate, model, contract, _unused = _setup(tmp_path)
+    package = _package(
+        tmp_path / "qb", slate, _orders(),
+        transformation=transformation, allocation=allocation,
+    )
+    with pytest.raises(QbDepthRoleError, match="QB_DEPTH_EVIDENCE_INVALID"):
+        resolve_qb_depth_roles(slate, model, contract, evidence_path=package, as_of=AS_OF)
+
+
+def test_a_source_whose_version_differs_from_the_manifest_is_refused(tmp_path):
+    slate, model, contract, _unused = _setup(tmp_path)
+    package = _v2_package(tmp_path, slate)
+    payload = json.loads(package.read_text(encoding="utf-8"))
+    payload["sources"][0]["transformation_version"] = TRANSFORMATION_VERSION
+    package.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    with pytest.raises(QbDepthRoleError, match="QB_DEPTH_EVIDENCE_INVALID"):
+        resolve_qb_depth_roles(slate, model, contract, evidence_path=package, as_of=AS_OF)
+
+
+def test_a_v2_replay_is_byte_identical(tmp_path):
+    slate, model, contract, _unused = _empty_kc_pool(tmp_path)
+    package = _v2_package(tmp_path, slate)
+    payloads = []
+    for _ in range(2):
+        resolution = resolve_qb_depth_roles(
+            slate, model, contract, evidence_path=package, as_of=AS_OF
+        )
+        payloads.append(json.dumps(resolution.report, sort_keys=True, default=str))
+    assert payloads[0] == payloads[1]
+
+
+def test_a_mutated_v2_capture_or_manifest_withholds_the_allocation(tmp_path):
+    slate, model, contract, _unused = _empty_kc_pool(tmp_path)
+    package = _v2_package(tmp_path, slate)
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=package, as_of=AS_OF
+    )
+    verify_qb_depth_resolution(resolution, at=AS_OF)
+    package.write_text(package.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    with pytest.raises(QbDepthRoleError, match="QB_DEPTH_EVIDENCE_CHANGED_DURING_SELECTION"):
+        verify_qb_depth_resolution(resolution, at=AS_OF)
+    capture = next((package.parent / "sources").glob("*.csv"))
+    capture.write_text(
+        capture.read_text(encoding="utf-8").replace("Quarterback", "Quarterbacks"),
+        encoding="utf-8",
+    )
+    with pytest.raises(QbDepthRoleError, match="QB_DEPTH_SOURCE_HASH_MISMATCH"):
+        resolve_qb_depth_roles(slate, model, contract, evidence_path=package, as_of=AS_OF)
+
+
+def _unresolved_qb_transfer_setup(tmp_path):
+    """Willis and Geno Smith in miniature: the slate's priciest quarterback is a
+    transfer whose team has no current-team pool, so v1 left his share at zero
+    and the market disagreed with the prior it scored him on."""
+
+    slate, model, contract, splits = _empty_kc_pool(tmp_path)
+    starter = _person(slate, "KC Starter QB")
+    model = replace(
+        model,
+        offensive_history_by_person={
+            starter: {
+                "state": "CURRENT_ROLE_UNKNOWN",
+                "incompatible_transfer": True,
+                "current_team": "KC",
+                "transfer_prior": {
+                    "basis": "OWN_OLD_TEAM_SHARE",
+                    "old_teams": ["SEA"],
+                    "own_old_share": 0.4,
+                },
+            }
+        },
+    )
+    return slate, model, contract, splits, starter
+
+
+def test_the_transfer_starter_the_market_prices_is_no_longer_gated_on_a_zero_share(tmp_path):
+    slate, model, contract, splits, starter = _unresolved_qb_transfer_setup(tmp_path)
+    _l, v1_scores, v1_report = select_prior_lineups(
+        slate, model, splits, contract, count=1,
+        qb_depth_role_evidence_json=_package(tmp_path / "v1", slate, _orders()),
+        as_of=AS_OF,
+    )
+    _l, v2_scores, v2_report = select_prior_lineups(
+        slate, model, splits, contract, count=1,
+        qb_depth_role_evidence_json=_v2_package(tmp_path, slate), as_of=AS_OF,
+    )
+    # v1: zero share, zero prior points, priced far above it, so he leaves the pool.
+    assert v1_scores.by_person[starter] < v2_scores.by_person[starter]
+    assert starter in v1_scores.offensive_role_resolution.excluded_people
+    assert v1_report["offensive_roles"]["material_role_change_exclusions"]
+    # v2: the starter's share, scored like any starter; the transfer stays a
+    # diagnostic and is not excluded.
+    assert starter not in v2_scores.offensive_role_resolution.excluded_people
+    assert not v2_report["offensive_roles"].get("material_role_change_exclusions")
+    finding = next(
+        item for item in v2_report["offensive_roles"]["findings"] if item["person"] == starter
+    )
+    assert (finding["state"], finding["selection_action"]) == (
+        "TRANSFER_PRIOR_UNVERIFIED", "DIAGNOSTIC",
+    )
+    assert v2_report["offensive_roles"]["evidence_state"] != "PASS"
+
+
+def test_the_producer_writes_v2_and_the_engine_reads_it(tmp_path):
+    slate, model, contract, _unused = _setup(tmp_path)
+    model = _with_qb_shares(model, {"KC Starter QB": 0.0, "KC Backup QB": 0.0}, slate)
+    chart = _depth_chart_file(tmp_path, _CHART_ROWS)
+    out = tmp_path / "produced"
+    assert _run_producer([
+        "--salaries", str(tmp_path / "DKSalaries.csv"),
+        "--capture", str(chart), "--source-uri", "https://github.com/x/y",
+        "--as-of", AS_OF.isoformat(), "--out-dir", str(out),
+    ]) == 0
+    payload = json.loads((out / "qb_depth_roles.json").read_text(encoding="utf-8"))
+    assert payload["transformation_version"] == V2_TRANSFORMATION
+    assert payload["allocation_version"] == V2_ALLOCATION
+    assert {s["transformation_version"] for s in payload["sources"]} == {V2_TRANSFORMATION}
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=out / "qb_depth_roles.json", as_of=AS_OF
+    )
+    assert _shares(resolution)[_person(slate, "KC Starter QB")] == 1.0
+
+
+def test_a_promoted_effective_starter_with_no_pool_receives_the_unit(tmp_path):
+    # R25 and Session 48 together: the published starter is flagged OUT, his
+    # team has no allocated pool, and the backup who inherits the job holds the
+    # whole pool, not zero.
+    slate, model, contract, _unused = _setup(tmp_path, pool=_STARTER_OUT_POOL)
+    model = _with_qb_shares(model, {"KC Starter QB": 0.0, "KC Backup QB": 0.0}, slate)
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=_v2_package(tmp_path, slate), as_of=AS_OF
+    )
+    backup = _person(slate, "KC Backup QB")
+    starter = _person(slate, "KC Starter QB")
+    shares = _shares(resolution)
+    assert (shares[backup], shares[starter]) == (1.0, 0.0)
+    assert resolution.report["starters_by_team"]["KC"] == backup
+    assert [row["effective_starter"] for row in resolution.report["effective_starter_promotions"]] == [backup]
+    [gap] = resolution.report["declared_starters_without_allocated_pool"]
+    assert gap["person"] == backup
+
+
+def test_an_unlisted_quarterback_stays_at_zero_when_the_starter_takes_an_empty_pool(tmp_path):
+    pool = _POOL + (("KC", "QB", "KC Third QB", "", 4000),)
+    slate, model, contract, _unused = _setup(tmp_path, pool=pool)
+    model = _with_qb_shares(
+        model,
+        {"KC Starter QB": 0.0, "KC Backup QB": 0.0, "KC Third QB": 0.0},
+        slate,
+    )
+    package = _v2_package(tmp_path, slate, unlisted={"KC": ("KC Third QB",)})
+    resolution = resolve_qb_depth_roles(
+        slate, model, contract, evidence_path=package, as_of=AS_OF
+    )
+    third = _person(slate, "KC Third QB")
+    shares = _shares(resolution)
+    assert shares[_person(slate, "KC Starter QB")] == 1.0
+    assert (shares[third], shares[_person(slate, "KC Backup QB")]) == (0.0, 0.0)
+    assert resolution.report["unlisted_on_depth_chart"] == [third]
+    assert sum(shares[p] for p in shares if p.startswith("KC|QB|")) == pytest.approx(1.0)
