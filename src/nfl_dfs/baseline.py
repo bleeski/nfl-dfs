@@ -54,11 +54,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import contest_assignment
 from .contracts import (
     UNAVAILABLE_DK_STATUSES,
     CertificationBasis,
     DeliveryLimitation,
     DeliveryState,
+    EngineMode,
     GateClass,
     ModelStatus,
     ReleaseEvidenceState,
@@ -84,6 +86,7 @@ from .gate_registry import GateRegistry, load_gate_registry
 from .hashing import sha256_bytes, sha256_file
 from .lineups import roster_canonical_key, validate_lineup, write_upload_bytes
 from .optimizer import LineupOptimizer
+from .portfolio_enforcement import contest_assignment_reading
 from .referee import audit_output_bytes
 from .release import derive_delivery_state, derive_release_policy, release_truths_v3
 
@@ -91,7 +94,13 @@ from .release import derive_delivery_state, derive_release_policy, release_truth
 # the official status file in `inputs`; v1 reports stay readable as written.
 # v3 (Session 11): `slate` names every row by kind and outcome, `entry_groups`
 # reports each Contest ID, and `release_truths` is `nfl_release_truths_v3`.
-REPORT_VERSION = "nfl_baseline_report_v3"
+# v4 (Session 50c): `contest_assignment`, the per-contest step's report, when any
+# lineup was built; a v3 report is read as written and never mutated.
+REPORT_VERSION = "nfl_baseline_report_v4"
+# The step's cap: 150 entries in contests of at most 5 take 0.06 s for the single
+# climb from the baseline's order (0.3 s at 10 a contest, 4.3 s at 50), so no
+# restarts and at most 0.4 s, never past the run's own budget (Session 50).
+CONTEST_ASSIGNMENT_SECONDS = 0.4
 OUTPUT_CONTRACT = "nfl_baseline_entry_csv_v1"
 OUTPUT_PREFIX = "DK_BASELINE_ENTRY_V1_"
 OBJECTIVE_VERSION = "BASELINE_SALARY_RANK_V1"
@@ -364,6 +373,8 @@ def audit_baseline_bytes(
     operator_excluded_dk_ids: Iterable[str] = (),
     extra_unavailable_statuses: Iterable[str] = (),
     official_status_csv: str | Path | None = None,
+    contest_assignment_claim: contest_assignment.Claim | None = None,
+    contest_reading: dict[str, object] | None = None,
 ) -> list[str]:
     """Every reason the bytes are not the template with exactly `assignments` filled.
 
@@ -374,6 +385,12 @@ def audit_baseline_bytes(
     reparsed rows are validated again. Only rows the template's own plan calls
     fillable may be filled, and no filled roster may repeat a prefilled one
     (`ENTRY_PREFILLED_LINEUP_REPEATED`, on the generated row).
+
+    With a `contest_assignment_claim` (Session 50c) the reparsed rows are also held to
+    the contest-assignment step: the lineups each pool holds, the rows the template
+    filled and each contest's readings are recomputed from these bytes. A changed
+    multiset or a moved filled row is a returned problem (`V`); a statistic the bytes
+    do not bear out is not (`P`), and lands in `contest_reading` for the caller.
     """
 
     problems: list[str] = []
@@ -429,6 +446,16 @@ def audit_baseline_bytes(
             problems.append(f"BASELINE_AUDIT_OPERATOR_EXCLUDED_PERSON:{entry_id}")
         if inactive & people:
             problems.append(f"BASELINE_AUDIT_OFFICIAL_INACTIVE_PERSON:{entry_id}")
+    if contest_assignment_claim is not None:
+        try:
+            reading = contest_assignment_reading(
+                contest_assignment_claim, tuple((entry_id, tuple(roster)) for entry_id, roster in filled.items()),
+                problems, Path(entries_path).read_bytes())
+        except Exception as exc:  # noqa: BLE001 - named, so the baseline can fall back to its own order
+            problems.append(f"CONTEST_ASSIGNMENT_STEP_FAILED:{type(exc).__name__}: {exc}")
+        else:
+            if contest_reading is not None:
+                contest_reading.update(reading)
     return problems
 
 
@@ -690,6 +717,25 @@ def run_baseline(
     )
     assignments = {entry_id: lineup.roster for entry_id, lineup in zip(authorized, built.lineups)}
     unfilled = authorized[len(assignments):]
+    built_by_roster = {lineup.roster: lineup for lineup in built.lineups}
+    # Session 50c: which entry holds which lineup, contest by contest, under a cap
+    # and with no restarts. It runs here and nowhere else (the C1 export reuses this
+    # writer with an assignment already in place), it never raises, and a failure
+    # leaves the salary order and a `P` limitation: the baseline is never blocked.
+    contest_claim = None
+    salary_order = dict(assignments)
+    if assignments:
+        step = contest_assignment.apply_step(
+            mode=(contest_assignment.MODE_SHOWDOWN if slate.mode is EngineMode.SHOWDOWN
+                  else contest_assignment.MODE_CLASSIC),
+            players=slate.players, entry_plan=plan, assignments=assignments, bound_ids=(),
+            time_limit_seconds=max(0.0, min(CONTEST_ASSIGNMENT_SECONDS, started + budget_seconds - clock())),
+            restarts=0, clock=clock)
+        assignments = step.assignments
+        contest_claim = step.claim
+        report["contest_assignment"] = step.report
+        if step.failure:
+            limitations.append(registry.limitation("CONTEST_ASSIGNMENT_STEP_FAILED", detail=step.failure))
     person = {player.dk_id: player.underlying_id for player in slate.players}
     uses = Counter(person[dk_id] for lineup in built.lineups for dk_id in lineup.roster)
     report["construction"] = {
@@ -701,12 +747,17 @@ def run_baseline(
         "most_used_person_lineups": max(uses.values(), default=0),
         "elapsed_seconds": round(time.perf_counter() - wall_start, 3),
     }
-    report["lineups"] = [
-        {"entry_id": entry_id, "roster": list(lineup.roster), "salary": lineup.salary,
-         "found_by": lineup.found_by, "time_limited": lineup.time_limited,
-         "solve_seconds": lineup.solve_seconds}
-        for entry_id, lineup in zip(authorized, built.lineups)
-    ]
+    def lineup_rows(held: Mapping[str, tuple[str, ...]]) -> list[dict[str, object]]:
+        return [
+            {"entry_id": entry_id, "roster": list(roster),
+             "salary": getattr(built_by_roster.get(roster), "salary", None),
+             "found_by": getattr(built_by_roster.get(roster), "found_by", None),
+             "time_limited": getattr(built_by_roster.get(roster), "time_limited", None),
+             "solve_seconds": getattr(built_by_roster.get(roster), "solve_seconds", None)}
+            for entry_id, roster in held.items()
+        ]
+
+    report["lineups"] = lineup_rows(assignments)
     detail = f"{len(built.lineups)} distinct lineups built for {len(authorized)} blank rows"
     if built.stop_reason == "DISTINCT_LINEUPS_EXHAUSTED" and unfilled:
         limitations.append(registry.limitation(
@@ -735,14 +786,33 @@ def run_baseline(
 
     output = run_dir / f"{OUTPUT_PREFIX}{run_id}.csv"
     left_blank = tuple(eid for eid in plan.order if eid in set(unfilled) | set(plan.left_blank))
-    written = _write_audited(
-        output, template=template, salary_path=salary_path, entries_path=entries_path,
-        salary_hash=salary_hash, assignments=assignments, unfilled=left_blank, registry=registry,
-        limitations=limitations, report=report,
+    write_args = dict(
+        template=template, salary_path=salary_path, entries_path=entries_path, salary_hash=salary_hash,
+        unfilled=left_blank, registry=registry, report=report,
         exclusions={"operator_excluded_dk_ids": exclusion_ids,
                     "extra_unavailable_statuses": exclusion_statuses,
                     "official_status_csv": status_snapshot[0] if status_snapshot else None},
         status_hash=status_snapshot[1] if status_snapshot else None)
+    mark = len(limitations)
+    written = _write_audited(output, assignments=assignments, limitations=limitations,
+                             contest_claim=contest_claim, **write_args)
+    audit_problems = [str(item) for item in (report.get("audit") or {}).get("problems", ())]
+    if (not written and contest_claim is not None and audit_problems
+            and all(item.startswith("CONTEST_ASSIGNMENT_") for item in audit_problems)):
+        # R28: the step only reorders lineups, so a finding against its claim must
+        # never cost the run its file. Fall back to the salary order, audited without
+        # the claim, and name the step's failure (`P`); every other refusal stands.
+        del limitations[mark:]
+        assignments, contest_claim = salary_order, None
+        error = "CONTEST_ASSIGNMENT_STEP_FAILED:the audit refused the step's assignment: " + " | ".join(audit_problems)
+        report["contest_assignment"] = {
+            **{key: value for key, value in dict(report["contest_assignment"]).items() if key in (
+                "contest_assignment_version", "does_not_establish")},
+            "status": contest_assignment.STATUS_FAILED, "error": error}
+        limitations.append(registry.limitation("CONTEST_ASSIGNMENT_STEP_FAILED", detail=error))
+        report["lineups"] = lineup_rows(assignments)
+        written = _write_audited(output, assignments=assignments, limitations=limitations,
+                                 contest_claim=None, **write_args)
     return _finish(report, registry, limitations, run_dir=run_dir, authorized=authorized,
                    plan=plan, assignments=assignments if written else {},
                    output=output if written else None, wall_start=wall_start)
@@ -762,6 +832,7 @@ def _write_audited(
     report: dict[str, object],
     exclusions: Mapping[str, object],
     status_hash: str | None = None,
+    contest_claim: contest_assignment.Claim | None = None,
 ) -> bool:
     """Write the bytes only once the independent audit passes the copy on disk."""
 
@@ -791,7 +862,8 @@ def _write_audited(
         return _audit_and_keep(temporary, output, raw, salary_path=salary_path,
                                entries_path=entries_path, assignments=assignments,
                                unfilled=unfilled, registry=registry,
-                               limitations=limitations, report=report, exclusions=exclusions)
+                               limitations=limitations, report=report, exclusions=exclusions,
+                               contest_claim=contest_claim)
     finally:
         temporary.unlink(missing_ok=True)  # an unaudited copy never outlives the run
 
@@ -809,15 +881,24 @@ def _audit_and_keep(
     limitations: list[DeliveryLimitation],
     report: dict[str, object],
     exclusions: Mapping[str, object],
+    contest_claim: contest_assignment.Claim | None = None,
 ) -> bool:
     temporary.write_bytes(raw)
     on_disk = temporary.read_bytes()
     problems: list[str] = []
+    contest_reading: dict[str, object] = {}
     try:
         problems.extend(audit_baseline_bytes(on_disk, salary_path=salary_path, entries_path=entries_path,
-                                             assignments=assignments, unfilled=unfilled, **exclusions))
+                                             assignments=assignments, unfilled=unfilled,
+                                             contest_assignment_claim=contest_claim,
+                                             contest_reading=contest_reading, **exclusions))
     except Exception as exc:  # noqa: BLE001 - an audit that cannot finish proves nothing
         problems.append(f"BASELINE_AUDIT_FAILED:{type(exc).__name__}: {exc}")
+    if contest_reading.get("status") == "STATS_MISMATCH":
+        # `P`: the lineups and their rows are intact, only a reported reading is not.
+        limitations.append(registry.limitation(
+            "CONTEST_ASSIGNMENT_STATS_MISMATCH",
+            detail="the step's reported statistics differ from the ones recomputed from the written bytes"))
     report["audit"] = {
         "status": "FAIL" if problems else "PASS",
         "problems": problems,
@@ -832,7 +913,9 @@ def _audit_and_keep(
             "NO_OPERATOR_EXCLUDED_PERSON",
             "NO_OFFICIAL_INACTIVE_PERSON",
             "POST_WRITE_SHA256",
+            *(["CONTEST_ASSIGNMENT_MULTISET_FILLED_ROWS_AND_STATISTICS_FROM_THE_BYTES"] if contest_claim else []),
         ],
+        **({"contest_assignment": contest_reading} if contest_reading else {}),
     }
     if problems:
         for problem in problems:
@@ -943,6 +1026,16 @@ def _finish(
     )
 
 
+def _contest_assignment_summary(step: object) -> dict[str, object] | None:
+    """What `nfl baseline` prints of the contest-assignment step (Session 50c)."""
+
+    if not isinstance(step, Mapping):
+        return None
+    return {key: step.get(key) for key in (
+        "contest_assignment_version", "status", "total_score_before", "total_score_after",
+        "moved_rows", "timed_out", "single_entry_contest_count", "error")}
+
+
 def summary(outcome: BaselineOutcome) -> dict[str, object]:
     """What `nfl baseline` prints: the truths, the file, the unfilled rows, the gaps."""
 
@@ -962,6 +1055,7 @@ def summary(outcome: BaselineOutcome) -> dict[str, object]:
         "preserved_entry_ids": list(truths.preserved_entry_ids),
         "unresolved_entry_ids": list(truths.unresolved_entry_ids),
         "entry_groups": list(outcome.report.get("entry_groups") or []),
+        "contest_assignment": _contest_assignment_summary(outcome.report.get("contest_assignment")),
         "limitations": [
             {"code": item.code, "class": item.gate_class.value, "stops": item.stops.value,
              "entry_ids": list(item.entry_ids), "detail": item.detail}

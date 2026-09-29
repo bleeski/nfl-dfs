@@ -815,6 +815,9 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
         sections.append(_html_table(
             ("Person ID", "Unbound rows holding them"),
             list(_mapping(unbound.get("person_exposure"), "unbound.person_exposure", []).items())))
+    contest_block = data.get("contest_assignment")
+    if isinstance(contest_block, Mapping):
+        sections.extend(_contest_assignment_html(contest_block))
 
     coverage = data.get("pool_coverage")
     if isinstance(coverage, Mapping):

@@ -62,6 +62,8 @@ from fractions import Fraction
 from typing import Callable, Mapping, Sequence
 
 CONTEST_ASSIGNMENT_VERSION = "within_contest_diversity_v1"
+# The step's own record beside the Classic `assignments.csv` (Session 50c), without `seconds`.
+CONTEST_ASSIGNMENT_ARTIFACT_VERSION = "nfl_contest_assignment_step_v1"
 DOES_NOT_ESTABLISH = (
     "EXPECTED_POINTS_OR_VALUE",
     "WIN_OR_CASH_LIKELIHOOD",
@@ -660,9 +662,13 @@ def apply_step(
     bound_ids: Sequence[str] = (),
     time_limit_seconds: float | None = DEFAULT_TIME_LIMIT_SECONDS,
     seed: int = DEFAULT_SEED,
+    restarts: int | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> StepOutcome:
     """Diversify `assignments` (fillable entry -> roster, solver order), never raising.
+
+    `restarts` None sizes the restarts from the entries (`restarts_for`); the
+    baseline passes 0, the single climb from its own order.
 
     Any failure leaves the solver's order standing and names it, so the file still
     ships (R28): the caller carries `failure` as a P-class limitation.
@@ -677,7 +683,7 @@ def apply_step(
         for entry_id, roster in original.items():
             selected.setdefault(pool_of[entry_id], []).append(roster)
         outcome = diversify(rows, mode=mode, people=people, time_limit_seconds=time_limit_seconds,
-                            seed=seed, clock=clock)
+                            seed=seed, restarts=restarts, clock=clock)
         # Key order is the template's, exactly as it came in: only the values move.
         permuted = {entry_id: outcome.assignments[entry_id] for entry_id in original}
         claim = Claim(

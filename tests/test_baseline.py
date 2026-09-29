@@ -232,8 +232,10 @@ def test_the_supplied_fixtures_deliver_at_1_20_and_150_entries(tmp_path, mode, c
 
     report = json.loads(outcome.report_path.read_text(encoding="utf-8"))
     # v2 since Session 06b: v1 plus the exclusion fields; v3 since Session 11: row
-    # kinds and outcomes, `entry_groups`, and v3 truths (`docs/DATA_CONTRACTS.md`).
-    assert report["schema_version"] == "nfl_baseline_report_v3"
+    # kinds and outcomes, `entry_groups`, and v3 truths; v4 since Session 50c: the
+    # contest-assignment step's block (`docs/DATA_CONTRACTS.md`).
+    assert report["schema_version"] == "nfl_baseline_report_v4"
+    assert report["contest_assignment"]["contest_assignment_version"] == "within_contest_diversity_v1"
     assert report["objective"]["version"] == "BASELINE_SALARY_RANK_V1"
     assert report["output"]["contract_version"] == "nfl_baseline_entry_csv_v1"
     assert report["release_truths"]["schema_version"] == "nfl_release_truths_v3"

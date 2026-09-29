@@ -4,6 +4,114 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-29: Session 50c -- intra-contest diversification, the Classic exits and the baseline
+
+Branch `claude/s50c-classic-contest-diversity` (no branch was assigned), task file
+`state/tasks/S50c.md`, pull request recorded in the ledger. Started after PR #85 (Session 50,
+merge `4adfd43`, recorded in the roadmap ledger) was on `main`. Every path still ends
+`PRIOR_ONLY / DO_NOT_UPLOAD`; no protected path touched.
+
+#### Added
+
+- `contest_assignment.apply_step` runs on all three Classic exits in `prior_review`: C1
+  (one `all` pool), C2 with its C3 package and export (`bound` pool for the policy's
+  rows, `fill` pool for the rows C1 fills beside a subset policy), each right after
+  selection and before any artifact. The C2 selector's `pairwise_person_overlap` is
+  relabelled. `restarts` is a new optional argument (the baseline passes 0).
+- New hashed record `selection/contest_assignment.json` (`nfl_contest_assignment_step_v1`,
+  the step's report without wall-clock `seconds`), so C3 reconciles its block against an
+  artifact. Chosen over adding a key to `nfl_classic_prior_review_selection_c2_v1`, which
+  a versioned contract forbids.
+- `audit_classic_portfolio` takes the exact `assignments.csv` bytes, their hash and the
+  claim: per-pool multiset (`MULTISET_CHANGED`, `V`), filled rows from the template bytes
+  (`FIXED_ROW_MOVED`, `V`), contest readings (`STATS_MISMATCH`, `P`, audit still passes),
+  and the policy's CSV rows equal to `classic_assignment.json` row for row
+  (`CLASSIC_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH`, `V`; the advisor's point: a multiset check
+  cannot see two artifacts disagree). C3 holds `assignments.csv` to the selection record
+  (`CLASSIC_C3_ASSIGNMENT_CSV_DISAGREEMENT`) and builds the block through `review_block`,
+  in the readable JSON, the HTML (`_render_classic_html`) and the workbook's `Exposure`
+  sheet. `portfolio_enforcement.contest_assignment_reading` is now public and shared.
+- C1's export (`cli._export_classic_c1_csv`) audits with the claim, carried in memory on
+  `PriorReviewOutcome.contest_claim` (never serialized). C1 has no readable review: its
+  block is the step's report in the selection report, the run result and
+  `export.c1_export.contest_assignment`.
+- The baseline (`run_baseline`, both modes): no restarts, at most 0.4 s and never past the
+  run's budget, `nfl_baseline_report_v4` (`contest_assignment`, `report["lineups"]` now in
+  file order, `audit.contest_assignment`); `audit_baseline_bytes` takes the claim. R28: if
+  the audit refuses only because of the step's claim (every problem a `CONTEST_ASSIGNMENT_*`
+  code, or the reading raised), the baseline falls back to the salary order, re-audits
+  without the claim and names `CONTEST_ASSIGNMENT_STEP_FAILED` (`P`). The reviewer found
+  the first version withheld the whole baseline in that case; fixed with two tests.
+- Registry: seven codes (`CLASSIC_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH`, `..._CSV_INVALID`,
+  `..._CSV_SHA256_MISMATCH`, `CLASSIC_C3_ASSIGNMENT_CSV_DISAGREEMENT`,
+  `CLASSIC_C3_CONTEST_ASSIGNMENT_{BYTES_NOT_CANONICAL,JSON_INVALID,OBJECT_REQUIRED}`);
+  `REGISTRY_SHA256` re-pinned to `9e7c13ed...ae13` in `tests/test_gate_registry.py` and
+  `docs/DATA_CONTRACTS.md`. A dict splat in the audit's hash table hid a template from the
+  registry scan; the CSV hash is checked outside it.
+- `docs/DATA_CONTRACTS.md`: Classic wiring and audits, the step record's fields,
+  `nfl_baseline_report_v4` (v3 untouched), the baseline objective's order note (a
+  multi-contest baseline is in salary order as a set, no longer row by row); RUNBOOK
+  paragraph updated.
+
+#### Changed tests (their own visible change)
+
+- `tests/test_baseline.py`: the schema assertion moves from `nfl_baseline_report_v3` to
+  `v4` and asserts the block. `tests/test_gate_registry.py`: the registry hash pin.
+  Nothing else edited; no test deleted, skipped or loosened.
+
+#### Acceptance evidence
+
+- **Week 3 Classic, real bytes, through the baseline** (25 entries, eight two-entry
+  contests and nine one-entry, `data/inbox/slates/wk3-classic-2026-09-27/`, offline):
+  three contests repeated a QB before (`195922612`, `195922629`, `195922640`), none after;
+  worst shared count 3 to 0 (contest `196104830`), every contest at 0; total score 104 to
+  0; recomputed from the delivered bytes and equal to the step's report; audit `PASS`; step
+  0.001 s, run 0.54 s; `DELIVERABLE`, `PRIOR_ONLY / DO_NOT_UPLOAD`. Same numbers Session 50
+  measured.
+- **Model path on the real Week 3 bytes was not run**: no frozen prior package, role
+  evidence or official status for it is in the repository (`data/runs/` and `data/models/`
+  are empty). The model path is shown on the synthetic Classic fixtures: C1 total score
+  278 to 126 (three contests, QB-repeat template), C2/C3 242 to 194, no contest repeating a
+  QB after, audit `PASS`, block reconciled, recomputed from the delivered bytes in the
+  tests.
+- Tests added: `tests/test_contest_assignment_classic.py` (22: one `run-slate` test per
+  exit, the subset pools, determinism, a failed step on each exit, a single-contest run,
+  the audit refusing an outsider, a row exchange in the CSV alone, a wrong hash, a moved
+  filled row and a lying report, C1 and C3 lying-report `P`, an outsider through C1 and
+  C2, C3 replays including the mutation test of the new artifact) and
+  `tests/test_contest_assignment_baseline.py` (11: both modes, v4, determinism, single
+  contest, the cap, failed step, lying report, the R28 fallback, a raising reading, a moved
+  filled row).
+
+#### Decisions
+
+- **Size.** About 1,320 changed lines with tests (354 non-test source), past the 900-line
+  breakpoint that says to split the baseline into Session 50d. Not split: the baseline
+  slice is about 85 source lines, already verified on the real Week 3 bytes, and C1's export
+  audit shares `audit_baseline_bytes` with it, so a seam would leave C1 half-wired. Ben can
+  overturn this.
+- **Baseline timeout keeps the best climb** (the card's rule). It is machine-dependent when
+  it trips; `timed_out` is recorded. A `max_evaluations` counter in `assign_contests` would
+  make it reproducible; not done.
+- **Advisor** (a Fable subagent; the `/advisor` and `/dev-session` skill calls fail on the
+  harness's skill hook, `set: Illegal option -o pipefail`, so both SKILL.md files were
+  followed directly): agreed with reading `assignments.csv` in the C2 audit and with the
+  step inside `run_baseline`; added the row-for-row CSV/JSON check and the
+  `report["lineups"]` rebuild, both taken.
+
+#### Left open
+
+- A `P` `STATS_MISMATCH` seen only by the C2 audit surfaces as a named limitation through
+  C3's reconciliation; C3 removes its JSON and HTML for it, not just the block.
+- `cli.py` `selection` command (outside `run-slate`) still maps lineups in solver order.
+- `assign_contests` builds its cost matrix before checking the deadline (O(n squared)).
+
+#### Verification
+
+- Baseline before any edit: `1934 passed, 1 skipped in 409.78s (0:06:49)`.
+- Final: `sh ./nfl.sh test`: `1967 passed, 1 skipped in 435.64s (0:07:15)` (1934 before, 33 added).
+- `git diff --check` clean; `python3 scripts/check_protected_paths.py`: no protected path touched.
+
 ### 2026-09-29: Session 50 -- intra-contest diversification, the shared module and the Showdown exits
 
 Branch `claude/youthful-mccarthy-df7yml` (the assigned branch, in place of the

@@ -295,6 +295,8 @@ def _populate_classic_readable_review(workbook, review: Mapping[str, object]) ->
             start=1,
         ):
             _set_display(exposure.cell(row_number, column), value)
+    # Session 50c: the per-contest block, on the sheet Showdown carries it on.
+    row_number = _add_contest_assignment_rows(exposure, review, row_number + 3)
     _finish_generated_sheet(
         exposure,
         print_area=f"A1:L{exposure.max_row}",

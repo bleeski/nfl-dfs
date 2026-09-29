@@ -416,10 +416,13 @@ together with tight exposure caps across 30 or more rows makes the chain
 infeasible; bind fewer rows per policy instead.
 
 When several rows share a contest, `run-slate` now diversifies inside each
-contest itself (Session 50, `within_contest_diversity_v1`, Showdown exits): it
+contest itself (Sessions 50 and 50c, `within_contest_diversity_v1`, every exit:
+Showdown, Classic C1, C2 and C3, and the baseline): it
 keeps every lineup, reassigns them to Entry IDs (never moving a row the
 template already filled) and reports the per-contest block in the readable
-review. A file built outside `run-slate`, or one whose sleeves you assembled
+review (C1 has none: its block is in the selection report and the run result).
+A multi-contest baseline is therefore no longer in salary order row by row, only
+as a set. A file built outside `run-slate`, or one whose sleeves you assembled
 in prefilled rounds, still needs `scripts/diversify_showdown_contests.py` on
 the finished file before the handoff (Showdown or Classic; it is a thin
 wrapper over the same module). Within each contest a pair costs shared people

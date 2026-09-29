@@ -7,6 +7,8 @@ export code.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import math
 import time
@@ -26,10 +28,13 @@ from .classic_portfolio_policy import (
     StackRule,
     parse_normalized_classic_policy_bytes,
 )
+from .contest_assignment import Claim as ContestAssignmentClaim
 from .contracts import EngineMode, SlateContract
+from .dk import CLASSIC_COLUMNS
 from .hashing import sha256_bytes
 from .lineups import roster_canonical_key, validate_lineup
 from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
+from .portfolio_enforcement import contest_assignment_reading
 from .portfolio_policy import OPEN_RANGE, canonical_decimal_json_bytes
 
 
@@ -257,6 +262,9 @@ class ClassicPortfolioAudit:
     # recomputed from the roster bytes; and every structural-bound reading.
     max_person_share: Mapping[str, object] = field(default_factory=dict)
     structural_bound_readings: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    # Session 50c: the contest-assignment step's claims, recomputed from the exact
+    # `assignments.csv` bytes; empty when the audit was given no claim.
+    contest_assignment: Mapping[str, object] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -281,6 +289,7 @@ class ClassicPortfolioAudit:
             ],
             "hashes": dict(self.hashes),
             "max_person_share": dict(self.max_person_share),
+            **({"contest_assignment": dict(self.contest_assignment)} if self.contest_assignment else {}),
             "structural_bound_violations": {entry: list(names) for entry, names in self.structural_bound_readings},
             "checks_run": [
                 "CANONICAL_NORMALIZED_POLICY_REPARSE",
@@ -1100,6 +1109,29 @@ def _strict_json(raw: bytes, label: str) -> Mapping[str, object]:
     return payload
 
 
+def _classic_assignment_pairs_from_csv_bytes(raw: bytes) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Every `(Entry ID, roster)` row of the Classic `assignments.csv` bytes, in file order."""
+
+    reader = csv.reader(io.StringIO(raw.decode("utf-8-sig"), newline=""))
+    try:
+        header = tuple(next(reader))
+    except StopIteration as exc:
+        raise ValueError("the Classic assignments.csv is empty") from exc
+    expected = ("Entry ID", *CLASSIC_COLUMNS)
+    if header != expected:
+        raise ValueError(f"the Classic assignments.csv header is {header}")
+    pairs: list[tuple[str, tuple[str, ...]]] = []
+    for row_number, row in enumerate(reader, start=2):
+        if not row or not any(cell.strip() for cell in row):
+            continue
+        if len(row) != len(expected):
+            raise ValueError(f"the Classic assignments.csv row {row_number} has width {len(row)}")
+        pairs.append((row[0].strip(), tuple(cell.strip() for cell in row[1:])))
+    if len({entry_id for entry_id, _roster in pairs}) != len(pairs):
+        raise ValueError("the Classic assignments.csv repeats an Entry ID")
+    return tuple(pairs)
+
+
 def audit_classic_portfolio(
     *,
     slate: SlateContract,
@@ -1116,7 +1148,19 @@ def audit_classic_portfolio(
     expected_candidate_sha256: str,
     assignment_bytes: bytes,
     expected_assignment_sha256: str,
+    assignment_csv_bytes: bytes | None = None,
+    expected_assignment_csv_sha256: str | None = None,
+    contest_assignment: ContestAssignmentClaim | None = None,
 ) -> ClassicPortfolioAudit:
+    """Recompute every C2 control from exact final roster IDs and artifacts.
+
+    `assignment_csv_bytes` (Session 50c) are the run's exact `assignments.csv`, which
+    holds every fillable row: the policy's `bound` rows and the rows C1 fills beside
+    it. With a `contest_assignment` claim, the lineups each pool holds, the rows the
+    template filled and each contest's readings are recomputed from those bytes, and
+    the policy's rows in the CSV must equal the assignment JSON's row for row.
+    """
+
     problems: list[str] = []
     actual_hashes = {
         "salary_sha256": sha256_bytes(salary_bytes),
@@ -1140,6 +1184,13 @@ def audit_classic_portfolio(
     for name, expected in expected_hashes.items():
         if actual_hashes[name] != expected:
             problems.append(f"CLASSIC_AUDIT_{name.upper()}_MISMATCH:actual={actual_hashes[name]}:expected={expected}")
+    if assignment_csv_bytes is not None:
+        # Session 50c: the run's exact `assignments.csv`, hashed beside the rest.
+        actual_hashes["assignment_csv_sha256"] = sha256_bytes(assignment_csv_bytes)
+        if actual_hashes["assignment_csv_sha256"] != expected_assignment_csv_sha256:
+            problems.append(
+                "CLASSIC_AUDIT_ASSIGNMENT_CSV_SHA256_MISMATCH:"
+                f"actual={actual_hashes['assignment_csv_sha256']}:expected={expected_assignment_csv_sha256}")
     try:
         policy = parse_normalized_classic_policy_bytes(normalized_policy_bytes)
     except Exception as exc:  # noqa: BLE001 - every parser failure becomes a blocker
@@ -1178,6 +1229,25 @@ def audit_classic_portfolio(
     actual_entries = tuple(entry for entry, _roster in pairs)
     if actual_entries != expected_entries:
         problems.append(f"CLASSIC_AUDIT_ENTRY_ID_ORDER_OR_COVERAGE_MISMATCH:actual={actual_entries}:expected={expected_entries}")
+    contest_reading: dict[str, object] = {}
+    if assignment_csv_bytes is not None:
+        try:
+            csv_pairs = _classic_assignment_pairs_from_csv_bytes(assignment_csv_bytes)
+        except (UnicodeDecodeError, csv.Error, ValueError) as exc:
+            csv_pairs = ()
+            problems.append(f"CLASSIC_AUDIT_ASSIGNMENT_CSV_INVALID:{type(exc).__name__}:{exc}")
+        else:
+            # Three carriers hold the final assignment (the JSON, the selection record
+            # C3 reads, and this CSV); a multiset check cannot see two of them
+            # disagree, so the policy's rows must match row for row.
+            bound_entries = set(expected_entries)
+            if tuple(pair for pair in csv_pairs if pair[0] in bound_entries) != tuple(pairs):
+                problems.append("CLASSIC_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH:the policy rows of assignments.csv differ from the assignment JSON")
+            if contest_assignment is not None:
+                # Session 50c: every claim of the contest-assignment step is recomputed
+                # from these exact bytes; the optimizer's own numbers are only compared.
+                contest_reading = contest_assignment_reading(
+                    contest_assignment, csv_pairs, problems, entry_bytes)
     by_id = {row.dk_id: row for row in slate.players}
     canonical: list[tuple[str, str]] = []
     people_by_entry: dict[str, frozenset[str]] = {}
@@ -1323,4 +1393,5 @@ def audit_classic_portfolio(
         tuple(sorted(actual_hashes.items())),
         max_person_share,
         tuple(structural_readings),
+        contest_reading,
     )

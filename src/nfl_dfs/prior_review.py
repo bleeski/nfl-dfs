@@ -796,6 +796,10 @@ class PriorReviewOutcome:
     reports: dict[str, object] = field(default_factory=dict)
     export: dict[str, object] | None = None
     error: str | None = None
+    # Session 50c: the contest-assignment step's claim, in memory only. The C1
+    # export's audit recomputes the step's statistics from the CSV bytes against
+    # it; it is never serialized (`as_report` does not carry it).
+    contest_claim: object | None = field(default=None, repr=False, compare=False)
 
     @property
     def file_valid(self) -> bool:
@@ -844,6 +848,7 @@ def _contest_assignment_allowance(budget: Budget | None) -> float:
     return max(0.0, min(contest_assignment.DEFAULT_TIME_LIMIT_SECONDS, 0.2 * budget.improvement_remaining()))
 
 
+CONTEST_ASSIGNMENT_ARTIFACT = "contest_assignment.json"
 ROW_SOURCE_POLICY = "POLICY"
 ROW_SOURCE_C1 = "C1"
 ROW_SOURCE_SHOWDOWN_SEQUENTIAL = "SHOWDOWN_SEQUENTIAL"
@@ -2362,38 +2367,42 @@ def run_prior_review(
             error=error,
         )
 
-    # Session 50: which entry holds which lineup, contest by contest. The joint
-    # solvers sort by prior points and the sort was zipped onto template order, so
-    # a contest of seven entries got whatever fell in its rows. Only the values of
-    # `assignments` move (the keys stay in template order), before any artifact is
-    # written, so every hash, audit and review below sees this assignment. It
-    # never raises: a failure leaves the solver's order and names it (R28).
-    contest_claim = None
-    if slate.mode is EngineMode.SHOWDOWN:
-        contest_step = contest_assignment.apply_step(
-            mode=contest_assignment.MODE_SHOWDOWN,
-            players=slate.players,
-            entry_plan=entry_plan,
-            assignments=assignments,
-            bound_ids=bound_ids,
-            time_limit_seconds=_contest_assignment_allowance(budget),
-        )
-        assignments = contest_step.assignments
-        contest_claim = contest_step.claim
-        reports["contest_assignment"] = contest_step.report
-        if (
-            contest_step.claim is not None
-            and portfolio_policy is not None
-            and isinstance(selection.get("pairwise_person_overlap"), list)
-        ):
-            # The selector labelled each overlap pair by the entries the lineups
-            # were in when it sorted them; the audit compares these to the final
-            # assignment, so they follow the lineups.
-            selection = {
-                **selection,
-                "pairwise_person_overlap": contest_assignment.relabel_overlaps(
-                    list(portfolio_policy.entry_ids), assignments, contest_step.claim.people),
-            }
+    # Session 50 (Showdown) and 50c (Classic C1, C2, C3): which entry holds which
+    # lineup, contest by contest. The joint solvers sort by prior points and the
+    # sort was zipped onto template order, so a contest of seven entries got
+    # whatever fell in its rows. Only the values of `assignments` move (the keys
+    # stay in template order), before any artifact is written, so every hash,
+    # audit and review below sees this assignment. Classic pools are the policy's
+    # rows (`bound`), the rows C1 fills beside it (`fill`), or every row (`all`).
+    # It never raises: a failure leaves the solver's order and names it (R28).
+    contest_step = contest_assignment.apply_step(
+        mode=(
+            contest_assignment.MODE_SHOWDOWN
+            if slate.mode is EngineMode.SHOWDOWN
+            else contest_assignment.MODE_CLASSIC
+        ),
+        players=slate.players,
+        entry_plan=entry_plan,
+        assignments=assignments,
+        bound_ids=bound_ids,
+        time_limit_seconds=_contest_assignment_allowance(budget),
+    )
+    assignments = contest_step.assignments
+    contest_claim = contest_step.claim
+    reports["contest_assignment"] = contest_step.report
+    if (
+        contest_step.claim is not None
+        and portfolio_policy is not None
+        and isinstance(selection.get("pairwise_person_overlap"), list)
+    ):
+        # The selector labelled each overlap pair by the entries the lineups
+        # were in when it sorted them; the audit compares these to the final
+        # assignment, so they follow the lineups.
+        selection = {
+            **selection,
+            "pairwise_person_overlap": contest_assignment.relabel_overlaps(
+                list(portfolio_policy.entry_ids), assignments, contest_step.claim.people),
+        }
 
     names = {
         player.dk_id: f"{player.name} ({player.position}, {player.team})"
@@ -2633,6 +2642,15 @@ def run_prior_review(
         )
         artifacts["assignments"] = str(assignments_path)
         hashes["assignments"] = assignments_hash
+        # Session 50c: the step's own record beside the CSV, so C3 reconciles its
+        # review block against a hashed artifact (the Classic selection JSON keeps
+        # its version, and `seconds` is wall-clock, so it stays out of the bytes).
+        step_path = selection_dir / CONTEST_ASSIGNMENT_ARTIFACT
+        hashes["contest_assignment"] = _write_canonical_json(step_path, {
+            "schema_version": contest_assignment.CONTEST_ASSIGNMENT_ARTIFACT_VERSION,
+            **{key: value for key, value in contest_step.report.items() if key != "seconds"},
+        })
+        artifacts["contest_assignment"] = str(step_path)
 
     def freeze_prelock(export_report: Mapping[str, object]) -> dict[str, object]:
         """Freeze this run's prediction, whichever success path it exits by.
@@ -2963,6 +2981,11 @@ def run_prior_review(
                 expected_candidate_sha256=expected_candidate_hash,
                 assignment_bytes=assignment_json_path.read_bytes(),
                 expected_assignment_sha256=assignment_hash,
+                # Session 50c: the rows C1 fills beside the policy's are in the CSV
+                # only, and the step's claims are recomputed from its exact bytes.
+                assignment_csv_bytes=assignments_path.read_bytes(),
+                expected_assignment_csv_sha256=assignments_hash,
+                contest_assignment=contest_claim,
             )
             classic_audit_report = audit.as_report()
             reports["classic_portfolio_audit"] = classic_audit_report
@@ -3352,6 +3375,7 @@ def run_prior_review(
                 hashes=hashes,
                 reports=reports,
                 export=export_report,
+                contest_claim=contest_claim,
             )
             write_run_record(run_dir / "prior_review.json", outcome.as_report())
             return outcome
@@ -3410,6 +3434,7 @@ def run_prior_review(
             hashes=hashes,
             reports=reports,
             export=export_report,
+            contest_claim=contest_claim,
         )
         write_run_record(run_dir / "prior_review.json", outcome.as_report())
         return outcome
@@ -3535,6 +3560,7 @@ def run_prior_review(
         hashes=hashes,
         reports=reports,
         export=export_report,
+        contest_claim=contest_claim,
     )
     write_run_record(run_dir / "prior_review.json", outcome.as_report())
     return outcome
