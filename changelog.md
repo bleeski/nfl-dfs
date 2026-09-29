@@ -74,7 +74,7 @@ agreed after arguing the opt-in side).
 - First full run with the change: `1 failed, 1991 passed, 1 skipped in 668.71s (0:11:08)`; the
   failure was `test_the_quick_start_names_the_first_startable_session`, expected while §1 still
   named S21, cleared by this close-out.
-- Final full run: SUITE_LINE_TBD.
+- Final full run: `1992 passed, 1 skipped in 662.45s (0:11:02)`.
 - Reviewer agent on the diff: no correctness gap. It found the new registry key out of sort order
   (fixed, hash re-pinned) and a blank line at EOF (fixed).
 - No pinned hash moves: nothing in `src`, `scripts`, `tests` or `data` pins a prior-package or
