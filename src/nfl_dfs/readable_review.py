@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from . import contest_assignment
 from .contracts import EngineMode, SlateContract
 from .dk import EntryTemplate, parse_entries, parse_entry_bytes, parse_salaries
 from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
@@ -234,6 +235,44 @@ def _parse_normalized_policy(
         "effective_pairwise_person_overlap": controls.get("effective_pairwise_person_overlap"),
         "require_unique_lineups": controls.get("require_unique_lineups"),
     }
+
+
+def _contest_assignment_html(block: Mapping[str, object]) -> list[str]:
+    key = "Captains" if block.get("key_person") == "CAPTAIN" else "QBs"
+    sections = [
+        "<h2>Within each contest: which entry holds which lineup</h2>",
+        (
+            f'<p>{_escape(block.get("contest_assignment_version"))}: status {_escape(block.get("status"))}, '
+            f'{_escape(block.get("moved_rows"))} rows moved from the solver order, total score '
+            f'{_escape(block.get("total_score_before"))} before and {_escape(block.get("total_score_after"))} '
+            "after. Only which entry holds which lineup changed; the lineups, their exposures and their "
+            "captain counts are the selection's. A contest scores its worst pair plus its mean pair "
+            "(shared people squared, plus a penalty for the same Captain or QB, stack team or thesis). "
+            f'It does not establish {_escape(", ".join(str(x) for x in _sequence(block.get("does_not_establish"), "does_not_establish", [])))}.'
+            "</p>"
+        ),
+        _html_table(
+            ("Contest ID", "Entries", "Worst pair (before, after)", "Mean shared (before, after)",
+             f"Distinct {key} (before, after)", "Distinct theses", "People in every lineup",
+             "Score (before, after)"),
+            [
+                (
+                    row.get("contest_id"), row.get("entries"),
+                    f'{row.get("worst_pair_shared_people_before")}, {row.get("worst_pair_shared_people")}',
+                    f'{row.get("mean_shared_people_before")}, {row.get("mean_shared_people")}',
+                    f'{row.get("distinct_key_people_before")}, {row.get("distinct_key_people")}',
+                    row.get("distinct_theses"),
+                    ", ".join(str(p) for p in _sequence(row.get("people_in_every_lineup"), "in_every", [])) or "none",
+                    f'{row.get("score_before")}, {row.get("score_after")}',
+                )
+                for row in _sequence(block.get("contests"), "contest_assignment.contests", [])
+                if isinstance(row, Mapping)
+            ],
+        ),
+    ]
+    if block.get("single_entry_contest_count"):
+        sections.append(f'<p>{_escape(block.get("single_entry_contest_count"))} contests hold one entry and are left as they were.</p>')
+    return sections
 
 
 def _unbound_rows_section(
@@ -937,6 +976,9 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
             [(row.get("entry_id_a"), row.get("entry_id_b"), row.get("actual_people"), row.get("maximum_people"))
              for row in _sequence(unbound.get("pairwise_overlap"), "unbound.pairwise_overlap", [])
              if isinstance(row, Mapping)]))
+    contest_block = data.get("contest_assignment")
+    if isinstance(contest_block, Mapping):
+        sections.extend(_contest_assignment_html(contest_block))
     coverage = data.get("pool_coverage")
     if isinstance(coverage, Mapping):
         sections.append("<h2>Pool coverage: who could not be selected, and why</h2>")
@@ -1087,6 +1129,7 @@ def create_readable_review(
     # `expected_entries` means the portfolio's rows (selection, policy,
     # denominators, overlap, audit), and the output keeps the template's order.
     forbidden_keys: frozenset[str] = frozenset()
+    entry_plan = None
     try:
         entry_plan = plan_entries(reparsed_template, reparsed_slate)
         fillable = entry_plan.fillable
@@ -1443,6 +1486,29 @@ def create_readable_review(
         problems=problems,
     )
 
+    # Session 50: the per-contest block, recomputed from the delivered rosters and
+    # the selection's own lineup order, then reconciled with the step's report.
+    contest_rows: list[tuple[str, str, tuple[str, ...], str | None]] = []
+    for authorization in reparsed_template.authorizations:
+        entry_id = authorization.entry_id
+        if entry_id in filled_rows:
+            pool = (contest_assignment.POOL_BOUND if entry_id in bound_set else contest_assignment.POOL_FILL) \
+                if policy_view is not None else contest_assignment.POOL_ALL
+            roster = tuple(output_rosters.get(entry_id, ()))
+        else:
+            prefilled = entry_plan.prefilled.get(entry_id) if entry_plan is not None else None
+            pool, roster = None, (tuple(prefilled.roster) if prefilled is not None and prefilled.resolved else ())
+        if roster and all(dk_id in by_id for dk_id in roster):
+            contest_rows.append((entry_id, authorization.contest_id, roster, pool))
+    contest_payload, contest_problems = contest_assignment.review_block(
+        mode=contest_assignment.MODE_SHOWDOWN,
+        people=contest_assignment.people_from_slate(reparsed_slate.players),
+        rows=contest_rows,
+        selected_in_solver_order=list(selection_lineups),
+        reported=selection_record.get("contest_assignment"),
+    )
+    problems.extend(contest_problems)
+
     if policy_view is not None:
         audit_path_raw = artifacts.get("portfolio_policy_audit")
         audit_record = (
@@ -1558,6 +1624,7 @@ def create_readable_review(
             "max_person_share": _spread_summary(combined_counts, denominator),
         },
         "unbound_rows": unbound_payload,
+        "contest_assignment": contest_payload,
         "pool_coverage": (
             {key: value for key, value in pool_coverage.items() if key != "reason_by_person"}
             if pool_coverage is not None

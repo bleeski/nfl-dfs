@@ -1,5 +1,29 @@
 # Implementation Status
 
+## Capability added: 2026-09-29 (Session 50, contest assignment, Showdown exits)
+
+Working and verified: `src/nfl_dfs/contest_assignment.py`,
+`contest_assignment_version = within_contest_diversity_v1` (`docs/DATA_CONTRACTS.md`).
+`run-slate` now decides which Entry ID holds which selected lineup contest by contest
+on every Showdown exit (policy, sequential, subset policy with a fill), on by
+default: it never changes which lineups exist, never moves a filled row, permutes
+bound and fill rows only within their own pool, and on any failure leaves the solver's
+order with a named `P` limitation. `audit_policy_assignments` recomputes the multiset,
+the filled rows (from the template's bytes) and each contest's readings from the
+assignment bytes; the readable review JSON and HTML and the workbook's `Exposure`
+sheet carry a per-contest block recomputed from the delivered rosters.
+`scripts/diversify_showdown_contests.py` wraps the same module for files built
+outside `run-slate` and now handles Classic. On PHI@CHI v1 it reaches 7 distinct
+Captains of 7 in each seven-entry contest, worst pairs 4, 3 and 4, every two-entry
+pair at 1.
+
+Not yet: Classic C1, C2, C3 and the baseline keep the solver's order (Session 50c).
+The objective ignores prior points, so it does not steer the strongest lineups toward
+any contest (Session 23d's contest facts would). DET@BUF and Week 3 were checked on
+baseline portfolios only, not model portfolios. It establishes nothing about expected
+value, win or cash likelihood, ownership or payouts, and every path still ends
+`PRIOR_ONLY / DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-28 (Session 23e, Classic half)
 
 Structural hygiene bounds and the share cap for Classic C2 (P2), the Classic half

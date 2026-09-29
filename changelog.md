@@ -4,6 +4,145 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-29: Session 50 -- intra-contest diversification, the shared module and the Showdown exits
+
+Branch `claude/youthful-mccarthy-df7yml` (the assigned branch, in place of the
+prompt's `claude/s50-contest-diversity`), pull request
+[bleeski/nfl-dfs#85](https://github.com/bleeski/nfl-dfs/pull/85), task file
+`state/tasks/S50.md`. Started after PR #83 was on `main` (merge `4530733`).
+Every path still ends `PRIOR_ONLY / DO_NOT_UPLOAD`; no protected path touched.
+
+**Split at the mode seam, as the card ordered.** The module, its tests, the
+wrapper and the Showdown wiring passed the card's 900-line breakpoint, so this
+session lands the shared module and the Showdown exits (policy, sequential,
+subset-fill) and Session 50c takes Classic C1, C2, C3 and the baseline.
+
+#### Added
+
+- `src/nfl_dfs/contest_assignment.py` (standard library only), registered
+  `contest_assignment_version = within_contest_diversity_v1` with
+  `does_not_establish` text; documented in `docs/DATA_CONTRACTS.md`. Per contest,
+  over every lineup pair: `shared_people**2` + 12 same Captain (Classic: QB) + 6
+  same Classic primary stack team + 3 same thesis.
+- **Contest-size weighting, decided:** a contest scores its worst pair cost plus
+  its mean pair cost, every contest weighted equally, a one-entry contest 0. The
+  raw sum let 21-pair contests crowd out the two-entry ones (PHI@CHI v4 left a
+  two-entry pair at 3 shared). Worst-plus-mean keeps one bad pair in a small
+  contest fully counted and stops the search ignoring the other pairs. On PHI@CHI
+  v1 it left two seven-entry means higher than v2's raw-sum result (2.76 and 3.05
+  against 2.48 and 2.24; the third is level at 2.43) in exchange for every two-entry
+  pair at 1 and one worst pair at 3: a stated tradeoff, inside the acceptance.
+- **Classic primary stack team, defined:** the team with the most rostered QB, RB,
+  WR and TE (never DST or kicker), ties to the QB's team then the lower
+  abbreviation, undefined below two players. It names the game script a lineup
+  bets on, which the QB term alone misses (two QBs, one team's stack).
+- **Search:** cross-contest pairwise swaps from the solver's order (a swap inside a
+  contest cannot change a score), seeded restarts (seed 20260929) with a count fixed
+  by the entries (`restarts_for`: 300 at 36 rows, 44 at 150 rows in contests of 5,
+  none at 150 rows in contests of 50), all inside a time allowance of a fifth of the
+  `Budget` improvement window (at most 20 s). A timeout keeps the best found. The
+  solver's order is always a candidate; by default no contest scores worse than in
+  the solver's order (a Pareto climb, and restarts filtered for dominance).
+- **Pools and fixed rows:** filled rows never move but count in their contest;
+  a policy's bound rows and the fill rows are separate pools (C3 and the policy
+  caps are defined per set); rows of a one-entry contest stay where the solver put
+  them.
+- **Wiring** (`prior_review.py`, Showdown only): after selection and before any
+  artifact, only the values of `assignments` move, so `assignments.csv`, the
+  pre-lock manifest, the audit and the review all see the diversified assignment.
+  Failure leaves the solver's order and names `CONTEST_ASSIGNMENT_STEP_FAILED` (`P`,
+  registry family `contest_assignment`); `cli.py` carries it as a delivery
+  limitation. The selector's `pairwise_person_overlap` labels follow the lineups.
+- **Audit:** `audit_policy_assignments` recomputes, from the exact bytes of
+  `assignments.csv` (filled rows from the template's bytes), the per-pool lineup
+  multiset (`CONTEST_ASSIGNMENT_MULTISET_CHANGED`, `V`), filled rows
+  (`CONTEST_ASSIGNMENT_FIXED_ROW_MOVED`, `V`) and each contest's readings
+  (`CONTEST_ASSIGNMENT_STATS_MISMATCH`, `P`: recomputed numbers kept, audit passes).
+- **Review:** a `contest_assignment` block in the readable review JSON and HTML and
+  on the workbook's `Exposure` sheet (per contest: entries, worst pair and mean
+  shared before and after, distinct Captains before and after, distinct theses,
+  people in every lineup, score before and after). Both readings are recomputed from
+  the delivered rosters and the selection order, then reconciled with the step's
+  report under `DISPLAY_RECONCILIATION`.
+- Registry: one family and nine codes; `REGISTRY_SHA256` re-pinned to
+  `4a40d3f2...115d` in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+- `scripts/diversify_showdown_contests.py` is a thin wrapper over the module, gains
+  Classic (mode read from the template header), keeps its flags (the penalty flags
+  override the weights and the record says so) and writes
+  `nfl_contest_diversification_v2`; v1 (the committed `assignment_v*.json`) is never
+  mutated. It loads the stdlib-only module by path, so it runs under any Python 3.
+  Its `assignment_v2.json` bytes are no longer reproduced: the objective changed.
+
+#### Checks before wiring, answered
+
+- No audit or test asserts prior-descending or solver order of assignments; they
+  check Entry-ID sequence and coverage. `tests/test_classic_review_c3.py:613` and
+  `tests/test_classic_portfolio_c2.py:170` do not (the second is policy
+  canonicalisation). No rule changed.
+- C1 and sequential Showdown take solver order from `_sequential_lineups`
+  (`selection.py:690`, called at `:595`); the joint solvers sort at
+  `portfolio_enforcement.py:953-968` and `classic_portfolio.py:862`.
+
+#### Acceptance (evidence)
+
+- **PHI@CHI** (`DK_REVIEW_ENTRY_phi-chi-sd-v1.csv`, `theses_v1.json`, the script, 300
+  restarts, 3.9 s wall): 7 distinct Captains of 7 in each seven-entry contest,
+  worst pairs 4, 3, 4 (v2: 4, 4, 4), every two-entry pair at 1 (v2 left one at 3);
+  score 255.24 to 81.57. The reviewer reran it twice: byte-identical files.
+- **DET@BUF** and **Week 3 Classic** have no committed portfolio, so the module ran
+  on `nfl baseline` portfolios built from their DraftKings bytes (not the model's
+  lineups, no network): DET@BUF's seven-entry contest went from 6 to 7 distinct
+  Captains; Week 3's eight two-entry contests went from three repeating a QB and a
+  worst shared count of 3 to no repeated QB and 0 in every contest (score 104 to 0).
+  Classic `run-slate` acceptance is Session 50c's.
+- Run-slate tests through `run-cowork`: sequential, policy and subset policy each
+  diversify (`IMPROVED`), the file, `assignments.csv`, the audit and the review agree
+  and the bytes recompute the reported total; a prefilled row stays byte-identical;
+  a failed step ships the solver order with the `P` limitation; a tampered
+  assignment (a legal lineup the selection never held) is refused by the policy
+  audit (`MULTISET_CHANGED`) and, on the sequential exit, by the readable review;
+  a moved filled row is refused; a lying report is `P`; `lineup_count` above the
+  entries still ships.
+
+#### Baseline decision
+
+Included in 50c, not here. Measured on synthetic 150-entry portfolios: 0.06 s for
+the single climb from the baseline's order in contests of at most 5, 0.3 s at 10
+entries a contest, 4.3 s at 50, so it needs a cap (0.4 s, no restarts) to stay well
+under a second, and it needs `nfl_baseline_report_v4` and the baseline audit to carry
+the block. It shares its writer with C1, so it lands with C1.
+
+#### Fixed in review
+
+The reviewer found `review_block` compared the delivered row count with every
+selected lineup, so sequential Showdown with `lineup_count` above the entry count
+would have withheld a valid CSV as a false `V`; it now compares with the first N (test
+added). It also found the filled-row check could not bite on the production audit
+path (`assignments.csv` holds fillable rows only); the audit now reads filled rows
+from the template bytes. The first full run failed two tests that pin the workbook's
+sheet list, so the block sits on the existing `Exposure` sheet and no test changed. The
+baseline run at the start of the session caught one failure of my own making:
+`tests/test_repo_boundaries.py::test_no_module_names_a_value_ev_roi_or_edge`
+flagged `WIN_PROBABILITY`/`CASH_PROBABILITY` literals in the new module's
+`does_not_establish`, which now reads `WIN_OR_CASH_LIKELIHOOD`.
+
+#### Verification
+
+- Baseline before the change: `1871 passed, 1 failed, 1 skipped in 441.46s (0:07:21)`;
+  the failure is the boundary test above, caused by the new module created while the
+  run was in progress. The last recorded clean suite was `1872 passed, 1 skipped`.
+- Final: `sh ./nfl.sh test`: `1934 passed, 1 skipped in 442.05s (0:07:22)`; `git diff --check` clean; `python3 scripts/check_protected_paths.py`: no protected path touched.
+
+#### Left open
+
+- Session 50c: Classic C1, C2, C3 and the baseline.
+- Prior points are not in the objective, so the step does not keep the strongest
+  lineups out of the weakest contests; Session 23d's `contest_facts_csv` is where
+  per-contest value would enter.
+- DET@BUF and Week 3 acceptance ran on baseline portfolios, not model portfolios.
+- Under `no_regression` most restarts are rejected; a wider search is possible if a
+  slate shows a contest the climb left worse than a random assignment would.
+
 ### 2026-09-28 (slate run): PHI@CHI Showdown, 36 entries, six thesis sleeves, prior-only review
 
 Cloud session, branch `claude/mnf-showdown-lineups-t7zjls`, task file

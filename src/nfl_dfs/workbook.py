@@ -102,6 +102,63 @@ def _finish_generated_sheet(
         ws.column_dimensions[get_column_letter(column)].width = width
 
 
+def _add_contest_assignment_rows(sheet, review: Mapping[str, object], start_row: int) -> int:
+    """The per-contest block (Session 50) on the Exposure sheet, from the review's recomputed readings.
+
+    Written from `start_row`; returns the last row it wrote (`start_row` when the
+    review has no block, so an older record changes nothing).
+    """
+
+    block = review.get("contest_assignment")
+    if not isinstance(block, Mapping):
+        return start_row
+    key = "Captains" if block.get("key_person") == "CAPTAIN" else "QBs"
+    _section_header(
+        sheet, start_row, 1, 12,
+        f"Contest assignment ({block.get('contest_assignment_version')}): which entry holds which lineup. "
+        "Recomputed from the delivered rosters and the selection order; the lineups never changed. "
+        "Not EV, win likelihood or a payout claim.",
+    )
+    summary = (
+        ("Status", block.get("status")),
+        ("Rows moved from the solver order", block.get("moved_rows")),
+        ("Total score before, after", f"{block.get('total_score_before')}, {block.get('total_score_after')}"),
+        ("Reported statistics match the recomputation", block.get("reported_statistics_match")),
+        ("Contests holding one entry (left as they were)", block.get("single_entry_contest_count")),
+    )
+    row = start_row
+    for label, value in summary:
+        row += 1
+        _set_display(sheet.cell(row, 1), label)
+        _set_display(sheet.cell(row, 2), value)
+        sheet.cell(row, 1).font = Font(bold=True)
+    row += 1
+    headers = (
+        "Contest ID", "Entries", "Worst pair before", "Worst pair after", "Mean shared before",
+        "Mean shared after", f"Distinct {key} before", f"Distinct {key} after", "Distinct theses",
+        "People in every lineup", "Score before", "Score after",
+    )
+    for column, value in enumerate(headers, start=1):
+        _set_display(sheet.cell(row, column), value)
+        sheet.cell(row, column).font = Font(bold=True)
+    for raw in block.get("contests", []):
+        if not isinstance(raw, Mapping):
+            continue
+        row += 1
+        values = (
+            raw.get("contest_id"), raw.get("entries"),
+            raw.get("worst_pair_shared_people_before"), raw.get("worst_pair_shared_people"),
+            raw.get("mean_shared_people_before"), raw.get("mean_shared_people"),
+            raw.get("distinct_key_people_before"), raw.get("distinct_key_people"),
+            raw.get("distinct_theses"),
+            ", ".join(str(item) for item in raw.get("people_in_every_lineup", [])) or "none",
+            raw.get("score_before"), raw.get("score_after"),
+        )
+        for column, value in enumerate(values, start=1):
+            _set_display(sheet.cell(row, column), value)
+    return row
+
+
 def _populate_classic_readable_review(workbook, review: Mapping[str, object]) -> None:
     """Populate the C3 Classic review copy; the five-sheet input stays unchanged."""
 
@@ -492,6 +549,7 @@ def _populate_readable_review(workbook, review: Mapping[str, object]) -> None:
         values = (raw.get("entry_id_a"), raw.get("entry_id_b"), raw.get("actual_people"), raw.get("maximum_people"))
         for column, value in enumerate(values, start=1):
             _set_display(exposure.cell(overlap_row + 1, column), value)
+    overlap_row = _add_contest_assignment_rows(exposure, review, overlap_row + 3)
     coverage = review.get("pool_coverage")
     if isinstance(coverage, Mapping):
         coverage_row = overlap_row + 3

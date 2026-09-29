@@ -20,7 +20,10 @@ from typing import Callable, Mapping, Sequence
 import highspy
 import numpy as np
 
+from .contest_assignment import CONTEST_ASSIGNMENT_VERSION, Claim as ContestAssignmentClaim
 from .contracts import EngineMode, SlateContract
+from .dk import parse_entry_bytes
+from .entry_groups import prefilled_cell_id
 from .hashing import sha256_bytes
 from .lineups import roster_canonical_key, validate_lineup
 from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
@@ -240,6 +243,7 @@ class PortfolioAudit:
     pairwise_person_overlap: tuple[tuple[str, str, int], ...]
     hashes: tuple[tuple[str, str], ...]
     max_person_share: Mapping[str, object] = field(default_factory=dict)
+    contest_assignment: Mapping[str, object] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -260,6 +264,7 @@ class PortfolioAudit:
                 for left, right, overlap in self.pairwise_person_overlap
             ],
             "max_person_share": dict(self.max_person_share),
+            **({"contest_assignment": dict(self.contest_assignment)} if self.contest_assignment else {}),
             "hashes": dict(self.hashes),
             "checks_run": [
                 "EXACT_ENTRY_ID_SEQUENCE_AND_COVERAGE",
@@ -1188,6 +1193,45 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
     )
 
 
+def _contest_assignment_reading(
+    claim: ContestAssignmentClaim,
+    artifact_pairs: Sequence[tuple[str, Sequence[str]]],
+    problems: list[str],
+    entry_bytes: bytes,
+) -> dict[str, object]:
+    """Recompute the assignment step's claims from the assignment file's rosters.
+
+    A changed multiset or a moved filled row is a `V` problem and fails the audit.
+    A reported statistic the bytes do not bear out is a `P` finding: the recomputed
+    numbers replace the reported ones and the audit still passes, because the
+    lineups and their rows are intact.
+    """
+
+    final = {str(entry).strip(): tuple(str(dk_id).strip() for dk_id in roster) for entry, roster in artifact_pairs}
+    # A filled row's roster is read from the template's own bytes, never from the claim.
+    fixed_ids = {row.entry_id for row in claim.rows if row.pool is None and row.roster is not None}
+    for authorization in parse_entry_bytes(entry_bytes, source_name="audited_entry_csv").authorizations:
+        if authorization.entry_id in fixed_ids and authorization.entry_id not in final:
+            cells = tuple(prefilled_cell_id(cell) for cell in authorization.existing_cells)
+            if all(cells):
+                final[authorization.entry_id] = tuple(str(cell) for cell in cells)
+    found, recomputed = claim.audit(final)
+    blocking = [item for item in found if not item.startswith("CONTEST_ASSIGNMENT_STATS_MISMATCH")]
+    problems.extend(_audit_problem(item.split(":", 1)[0], item.split(":", 1)[1] if ":" in item else "")
+                    for item in blocking)
+    return {
+        "contest_assignment_version": CONTEST_ASSIGNMENT_VERSION,
+        "status": "FAIL" if blocking else ("STATS_MISMATCH" if found else "PASS"),
+        "findings": list(found),
+        "contests": recomputed,
+        "checks_run": [
+            "ASSIGNED_LINEUP_MULTISET_EQUALS_THE_SELECTED_ONE_PER_POOL",
+            "FILLED_ROWS_UNCHANGED",
+            "PER_CONTEST_STATISTICS_RECOMPUTED_FROM_THE_ASSIGNMENT_BYTES",
+        ],
+    }
+
+
 def audit_policy_assignments(
     *,
     slate: SlateContract,
@@ -1204,6 +1248,7 @@ def audit_policy_assignments(
     expected_assignment_artifact_sha256: str,
     selector_summary: Mapping[str, object] | None = None,
     unbound_entry_ids: Sequence[str] = (),
+    contest_assignment: ContestAssignmentClaim | None = None,
 ) -> PortfolioAudit:
     """Recompute every SD4 control from exact final roster IDs and artifacts.
 
@@ -1292,6 +1337,7 @@ def audit_policy_assignments(
             )
         )
 
+    contest_reading: dict[str, object] = {}
     try:
         artifact_pairs = _assignment_pairs_from_csv_bytes(assignment_artifact_bytes)
     except (UnicodeDecodeError, csv.Error, ValueError) as exc:
@@ -1321,6 +1367,11 @@ def audit_policy_assignments(
                     f" {list(unbound_entry_ids)}",
                 )
             )
+        if contest_assignment is not None:
+            # Session 50: every claim of the contest-assignment step is recomputed
+            # from these exact bytes; the optimizer's own numbers are only compared.
+            contest_reading = _contest_assignment_reading(
+                contest_assignment, artifact_pairs, problems, entry_bytes)
 
     by_id = {row.dk_id: row for row in slate.players}
     canonical: list[tuple[str, str]] = []
@@ -1463,4 +1514,5 @@ def audit_policy_assignments(
         pairwise_person_overlap=tuple(overlaps),
         hashes=tuple(sorted(actual_hashes.items())),
         max_person_share=max_person_share,
+        contest_assignment=contest_reading,
     )

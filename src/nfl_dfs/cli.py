@@ -3238,6 +3238,15 @@ def _run_prior_review_profile(
     if outcome.file_valid:
         for weather_code in reversed(list(outcome.reports.get("weather_unobserved") or ())):
             blockers.insert(0, str(weather_code))
+    # Session 50: a failed contest-assignment step left the solver's order in the
+    # file; it ships with the gap named (`P`, never a stop).
+    contest_step_report = outcome.reports.get("contest_assignment")
+    if (
+        outcome.file_valid
+        and isinstance(contest_step_report, Mapping)
+        and contest_step_report.get("status") == "FAILED"
+    ):
+        blockers.insert(0, str(contest_step_report.get("error")))
     selection_report = outcome.reports.get("selection")
     if isinstance(selection_report, Mapping):
         coverage = selection_report.get("official_status_coverage")
