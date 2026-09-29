@@ -1,5 +1,19 @@
 # Implementation Status
 
+## Capability added: 2026-09-29 (Session 48, depth-chart QB transfer starter)
+
+Working and verified: a declared rank-1 quarterback whose team had no allocated quarterback
+pool now receives the whole pool (1.0) under `qb_depth_chart_order_v2`, where v1 left him at zero
+(fixture: KC starter 0.0 on the unfixed code, 1.0 with v2, the same as DEN's starter). His carried
+prior-team share never changes the number (0.0, 0.3, 0.9 and 1.0 all give 1.0). The manifest's
+version pair selects the rule; frozen v1 manifests are read as written and name the gap under
+`declared_starters_without_allocated_pool`; the producer writes v2 by default. A model whose team
+pool is neither empty nor 1.0 is refused (`QB_DEPTH_POOL_NOT_UNIT`). Not fixed, named: a
+declared starter with no history is still excluded by the offensive role gate
+(`MISSING_HISTORY`, `OWN_OLD_TEAM_SHARE_ZERO`), and a transfer starter's carry share is still his
+old-team history. No live slate has run under v2. Still `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-29 (Session 21, per-game prior shares, transfer pool, alternate-name proposals)
 
 Working and verified: a new prior freeze writes player transformation v2 by default. Each

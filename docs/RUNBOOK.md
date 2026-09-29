@@ -347,6 +347,17 @@ shares. Frozen v1 packages are read as written and need no rebuild. Every
 `thin_sample` person is named in `offensive_history_by_person`; it is still a
 prior, never a role.
 
+A quarterback depth-chart package (`make_offensive_role_evidence.py`) now writes
+`qb_depth_chart_order_v2` since Session 48. This changed the producer's default. A declared
+starter whose team had no allocated quarterback pool (a transfer with no current-team history,
+or a frozen v1-transformation prior in a thin room) receives the whole team pool, 1.0, instead
+of zero; a package that already holds a pool gives the same number as before. A package written
+before Session 48 says `qb_depth_chart_order_v1` and is read as written, so it still leaves such
+a starter at zero and names him under `declared_starters_without_allocated_pool` in the
+`qb_depth_roles` report: regenerate the package to clear it. A declared starter with no history
+is still excluded by the offensive role gate (`OFFENSIVE_MISSING_HISTORY`,
+`OFFENSIVE_TRANSFER_PRIOR_ZERO`); the depth chart gives him attempts, not a role fact.
+
 Offensive history is now explicit. Rebuild older frozen prior packages that
 lack SD2 coverage (a package frozen before 2026-09-10 has no `transfer_prior`
 and its transfers still block; rebuild with `--build-priors`). A transfer

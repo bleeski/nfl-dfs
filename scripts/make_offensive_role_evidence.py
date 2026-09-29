@@ -59,12 +59,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from nfl_dfs.contracts import EngineMode  # noqa: E402
 from nfl_dfs.dk import parse_salaries  # noqa: E402
 from nfl_dfs.qb_depth_roles import (  # noqa: E402
-    ALLOCATION_VERSION,
+    CURRENT_ALLOCATION_VERSION,
+    CURRENT_TRANSFORMATION_VERSION,
     DEPTH_CHART_COLUMNS,
     PARSER_VERSION,
     QUARTERBACK_ABBREVIATION,
     SCHEMA_VERSION,
-    TRANSFORMATION_VERSION,
 )
 
 NFLVERSE_RELEASE = "https://github.com/nflverse/nflverse-data/releases/download"
@@ -258,7 +258,7 @@ def build_package(
                 "expires_at": (observed_at + expires_after).isoformat(),
                 "license_decision": LICENSE_DECISION,
                 "parser_version": PARSER_VERSION,
-                "transformation_version": TRANSFORMATION_VERSION,
+                "transformation_version": CURRENT_TRANSFORMATION_VERSION,
                 "support_kind": "DEPTH_CHART_ORDER",
                 "supporting_excerpt": excerpt,
                 "synthetic": False,
@@ -314,8 +314,8 @@ def build_package(
 
     package = {
         "schema_version": SCHEMA_VERSION,
-        "allocation_version": ALLOCATION_VERSION,
-        "transformation_version": TRANSFORMATION_VERSION,
+        "allocation_version": CURRENT_ALLOCATION_VERSION,
+        "transformation_version": CURRENT_TRANSFORMATION_VERSION,
         "salary_sha256": slate.salary_hash,
         "game_ids": sorted(game.game_id for game in slate.games),
         "sources": sources,

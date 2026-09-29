@@ -24,6 +24,16 @@ increases a team's passing volume, never reaches a non-quarterback, and never
 invents a fractional split — a depth chart is an ordering, so the only
 allocation it supports is all-to-the-starter. A genuine committee needs measured
 numbers, which is the complete contract's job.
+
+Session 48 (`qb_depth_chart_order_v2`). "The sum the team's quarterbacks already
+hold" is 0.0 when no quarterback of the team has current-team history, so under
+v1 a declared starter who arrived from another team received nothing. v2 gives
+the declared starter the whole pool unit, 1.0, which is the value
+`conserve_team_shares` assigns every team quarterback group the model has any
+support for, so it is the same share any other named starter gets. His carried
+prior-team share never enters it: the starter holds the whole pool whether that
+prior was 0.0 or 0.9. The manifest's own version pair selects the rule, so a
+frozen v1 package is read as written.
 """
 
 from __future__ import annotations
@@ -50,6 +60,22 @@ from .priors import normalize_person_name
 SCHEMA_VERSION = "nfl_qb_depth_role_evidence_v1"
 ALLOCATION_VERSION = "qb_depth_chart_attempt_share_allocation_v1"
 TRANSFORMATION_VERSION = "qb_depth_chart_order_v1"
+ALLOCATION_VERSION_V2 = "qb_depth_chart_attempt_share_allocation_v2"
+TRANSFORMATION_VERSION_V2 = "qb_depth_chart_order_v2"
+# What the producer writes. v1 stays readable and is never mutated.
+CURRENT_ALLOCATION_VERSION = ALLOCATION_VERSION_V2
+CURRENT_TRANSFORMATION_VERSION = TRANSFORMATION_VERSION_V2
+VERSION_PAIRS = {
+    TRANSFORMATION_VERSION: ALLOCATION_VERSION,
+    TRANSFORMATION_VERSION_V2: ALLOCATION_VERSION_V2,
+}
+# The unit `conserve_team_shares` enforces on every team quarterback group the
+# model has any support for. It is the model's own conserved quantity, not a
+# number this module chose.
+TEAM_QB_POOL_UNIT = 1.0
+BASIS_POOL_CONSERVED = "TEAM_QB_POOL_CONSERVED"
+BASIS_POOL_UNIT_NO_ALLOCATED_POOL = "TEAM_QB_POOL_UNIT_NO_ALLOCATED_POOL"
+BASIS_POOL_EMPTY_LEFT_AT_ZERO_V1 = "TEAM_QB_POOL_EMPTY_STARTER_LEFT_AT_ZERO_V1"
 PARSER_VERSION = "nflverse_depth_charts_csv_v1"
 SHARE_TOLERANCE = 1e-9
 
@@ -94,7 +120,7 @@ class QbDepthSource(KickerRoleSource):
     # than asserted.
     supporting_excerpt: str = Field(min_length=1, max_length=100000)
     support_kind: Literal["DEPTH_CHART_ORDER"]
-    transformation_version: Literal["qb_depth_chart_order_v1"]
+    transformation_version: Literal["qb_depth_chart_order_v1", "qb_depth_chart_order_v2"]
     parser_version: Literal["nflverse_depth_charts_csv_v1"]
     upstream_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
@@ -154,12 +180,32 @@ class QbDepthDeclaration(FrozenModel):
 
 class QbDepthEvidence(FrozenModel):
     schema_version: Literal["nfl_qb_depth_role_evidence_v1"]
-    allocation_version: Literal["qb_depth_chart_attempt_share_allocation_v1"]
-    transformation_version: Literal["qb_depth_chart_order_v1"]
+    allocation_version: Literal[
+        "qb_depth_chart_attempt_share_allocation_v1",
+        "qb_depth_chart_attempt_share_allocation_v2",
+    ]
+    transformation_version: Literal["qb_depth_chart_order_v1", "qb_depth_chart_order_v2"]
     salary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     game_ids: tuple[str, ...] = Field(min_length=1)
     sources: tuple[QbDepthSource, ...] = Field(min_length=1)
     declarations: tuple[QbDepthDeclaration, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def versions_are_one_registered_pair(self) -> "QbDepthEvidence":
+        # The manifest's pair selects the rule, so a mixed manifest would be
+        # ambiguous about which allocation it asks for.
+        if VERSION_PAIRS[self.transformation_version] != self.allocation_version:
+            raise ValueError(
+                "allocation_version does not belong to this transformation_version"
+            )
+        if any(
+            source.transformation_version != self.transformation_version
+            for source in self.sources
+        ):
+            raise ValueError(
+                "every source's transformation_version must equal the manifest's"
+            )
+        return self
 
 
 @dataclass(frozen=True)
@@ -465,8 +511,10 @@ def resolve_qb_depth_roles(
         )
 
     players = {player.underlying_id: player for player in model.players}
+    v2 = evidence.transformation_version == TRANSFORMATION_VERSION_V2
     shares: dict[str, float] = {}
     moved: list[dict[str, object]] = []
+    empty_pool_starters: list[dict[str, object]] = []
     updated = dict(players)
     for team, starter in sorted(starters.items()):
         # Every quarterback the declaration placed must exist in the prior
@@ -486,9 +534,42 @@ def resolve_qb_depth_roles(
         pooled = sum(players[person].qb_attempt_share for person in team_people)
         if not math.isfinite(pooled) or pooled < 0:
             raise QbDepthRoleError(f"QB_DEPTH_POOLED_SHARE_INVALID:{team}")
+        pool_empty = pooled <= SHARE_TOLERANCE
+        if v2:
+            # The model conserves a team's quarterback group at the unit or
+            # leaves it empty. Anything between is a model that skipped the
+            # conservation this rule relies on, so it is refused rather than
+            # handed to the starter as if it were a measurement.
+            if not pool_empty and not math.isclose(
+                pooled, TEAM_QB_POOL_UNIT, rel_tol=0, abs_tol=SHARE_TOLERANCE
+            ):
+                raise QbDepthRoleError(
+                    f"QB_DEPTH_POOL_NOT_UNIT:team={team}:pooled={pooled:.12g}:"
+                    "the model's quarterback attempt shares for this team are"
+                    " neither empty nor conserved at 1.0"
+                )
+            starter_share = TEAM_QB_POOL_UNIT
+            basis = (
+                BASIS_POOL_UNIT_NO_ALLOCATED_POOL if pool_empty else BASIS_POOL_CONSERVED
+            )
+        else:
+            starter_share = pooled
+            basis = (
+                BASIS_POOL_EMPTY_LEFT_AT_ZERO_V1 if pool_empty else BASIS_POOL_CONSERVED
+            )
+        if pool_empty:
+            empty_pool_starters.append(
+                {
+                    "team": team,
+                    "person": starter,
+                    "qb_attempt_share_before": round(players[starter].qb_attempt_share, 9),
+                    "qb_attempt_share_after": round(starter_share, 9),
+                    "basis": basis,
+                }
+            )
         for person in sorted(team_people):
             before = players[person].qb_attempt_share
-            after = pooled if person == starter else 0.0
+            after = starter_share if person == starter else 0.0
             shares[person] = after
             updated[person] = replace(players[person], qb_attempt_share=after)
             # An unlisted quarterback is always reported, even when his
@@ -510,13 +591,14 @@ def resolve_qb_depth_roles(
                         ),
                         "qb_attempt_share_before": round(before, 9),
                         "qb_attempt_share_after": round(after, 9),
+                        **({"starter_share_basis": basis} if person == starter else {}),
                     }
                 )
         allocated = sum(shares[person] for person in team_people)
-        if not math.isclose(allocated, pooled, rel_tol=0, abs_tol=SHARE_TOLERANCE):
+        if not math.isclose(allocated, starter_share, rel_tol=0, abs_tol=SHARE_TOLERANCE):
             raise QbDepthRoleError(
                 f"QB_DEPTH_NOT_CONSERVED:team={team}:"
-                f"allocated={allocated:.12g}:pooled={pooled:.12g}"
+                f"allocated={allocated:.12g}:expected={starter_share:.12g}"
             )
 
     expiry = min(source.expires_at for source in sources.values())
@@ -539,6 +621,9 @@ def resolve_qb_depth_roles(
                 sorted(s.sha256 for s in sources.values() if s.synthetic)
             ),
             upstream=tuple(sorted({s.upstream_sha256 for s in sources.values()})),
+            allocation_version=evidence.allocation_version,
+            transformation_version=evidence.transformation_version,
+            empty_pool_starters=tuple(empty_pool_starters),
         ),
         evidence_path=str(manifest),
         evidence_sha256=digest,
@@ -561,11 +646,15 @@ def _report(
     expires_at: datetime | None = None,
     synthetic: tuple[str, ...] = (),
     upstream: tuple[str, ...] = (),
+    allocation_version: str = ALLOCATION_VERSION,
+    transformation_version: str = TRANSFORMATION_VERSION,
+    empty_pool_starters: tuple[dict[str, object], ...] = (),
 ) -> dict[str, object]:
+    v2 = transformation_version == TRANSFORMATION_VERSION_V2
     return {
         "schema_version": SCHEMA_VERSION if supplied else None,
-        "allocation_version": ALLOCATION_VERSION,
-        "transformation_version": TRANSFORMATION_VERSION,
+        "allocation_version": allocation_version,
+        "transformation_version": transformation_version,
         "allocation_basis": (
             "SOURCE_BOUND_DEPTH_CHART_ORDER"
             if supplied
@@ -580,13 +669,37 @@ def _report(
             "OFFICIAL_ACTIVE_STATUS",
             "MODEL_VALIDATION",
             "HOW_MANY_ATTEMPTS_THE_TEAM_WILL_THROW",
+            *(
+                [
+                    "DECLARED_STARTER_HAS_NO_CURRENT_TEAM_ROLE_EVIDENCE_BEYOND_THE_DEPTH_CHART",
+                    "CARRY_SHARE_OF_A_TRANSFER_STARTER_IS_STILL_HIS_OLD_TEAM_HISTORY",
+                ]
+                if v2
+                else []
+            ),
         ],
         "allocation_rule": (
-            "A depth chart is an ordering, not a measurement. The rank-1"
-            " quarterback receives exactly the attempt share his team's"
-            " quarterbacks already held; listed backups receive zero. Team"
-            " passing volume is unchanged and no other share is touched."
+            (
+                "A depth chart is an ordering, not a measurement. The rank-1"
+                " quarterback receives his team's whole quarterback attempt pool,"
+                " the unit the model conserves for every supported team, whether"
+                " or not any quarterback of the team had current-team history and"
+                " whatever prior-team share he carried; listed backups receive"
+                " zero. Team passing volume is unchanged and no other share is"
+                " touched."
+            )
+            if v2
+            else (
+                "A depth chart is an ordering, not a measurement. The rank-1"
+                " quarterback receives exactly the attempt share his team's"
+                " quarterbacks already held; listed backups receive zero. Team"
+                " passing volume is unchanged and no other share is touched."
+            )
         ),
+        # Declared starters whose team had no allocated quarterback pool. Under
+        # v1 each is left at zero and named here as a limitation; under v2 each
+        # receives the unit. Empty on an ordinary slate.
+        "declared_starters_without_allocated_pool": [dict(row) for row in empty_pool_starters],
         "starters_by_team": dict(sorted((starters or {}).items())),
         # R25 promotions. Empty on a slate where every published rank-1
         # quarterback is available, which is the ordinary case; a portfolio
