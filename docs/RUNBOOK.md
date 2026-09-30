@@ -178,8 +178,15 @@ steps up one person at a time (to 7, then 8, the exact-roster cut alone) and sta
 there for the rows after it, each step named as a `RELAXATION_STRUCTURE_RELAXED`
 limitation; a lineup is never repeated.
 `row_sources` in the result and each entry's `source` in C3's readable review
-say which filled each row. If C1 runs out of distinct lineups the review
-delivers nothing and the baseline stays the file, named. The request's
+say which filled each row. If the fill runs out of distinct lineups at row k
+(Session 39b, R29) the review keeps the bound rows and the k rows it built,
+leaves the other unbound rows blank in the file and names them in
+`release_truths.unfilled_entry_ids` (`DELIVERY_STATE=DELIVERABLE_PARTIAL`, a
+`SOLVER_RETURNED_NO_LINEUP` limitation naming those Entry IDs, and whether the
+solver proved none was left); no lineup is repeated to fill them. A file that
+delivers fewer rows than the baseline does not replace it
+(`DELIVERY_POINTER_COVERAGE_REGRESSION`): the baseline stays the deliverable and the
+partial review is kept beside it in the run's `review` folder. The request's
 `lineup_count` is still every fillable row.
 
 C2 reports the bank as exhaustive or bounded and names timeout, search-limit,
@@ -433,8 +440,11 @@ allows 2), its exclusions bind only its rows, and after its joint solve
 sequential Showdown fills the other fillable rows, never repeating a policy,
 fill or prefilled lineup. `row_sources` in the result and each entry's `source`
 in the readable review say which filled each row. If the fill runs out of
-distinct lineups the review delivers nothing and the baseline stays the file,
-named. The request's `lineup_count` is still every fillable row.
+distinct lineups at row k (Session 39b, R29) the review keeps the bound rows and
+the k rows it built, leaves the other unbound rows blank and names them in
+`release_truths.unfilled_entry_ids`, as for Classic above; a blank row the
+selection record does not name still fails the readable review. The request's
+`lineup_count` is still every fillable row.
 
 Until Sessions 23b and 23c land, a multi-thesis Showdown portfolio is built in
 prefilled rounds (PHI@CHI, 2026-09-28; `changelog.md` has the run). Allot the

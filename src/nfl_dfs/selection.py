@@ -230,8 +230,11 @@ def select_prior_lineups(
     (SD3) or C1 (C2) fills them: every policy lineup and every forbidden roster is a no-good, and only
     the run's own exclusions apply (request, status, official, role), never the
     policy's. The fill's lineups follow the policy's in the returned tuple and
-    its report is the policy report's `unbound_fill`; a fill that runs out of
-    distinct lineups raises, and nothing is returned (all or nothing).
+    its report is the policy report's `unbound_fill`. A fill that runs out of
+    distinct lineups at row k (Session 39b, R29) returns the k rows it built and
+    reports `unfilled_rows` and `stopped` beside them, so the caller names the
+    Entry IDs left blank; the bound rows are never discarded and no lineup is
+    repeated. C1 and sequential Showdown with no policy still raise.
 
     `classic_person_overlap` (Session 39) is the most people a Classic C1 or
     fill row may share with an earlier row (default 6; `None` is no cap). It
@@ -672,6 +675,10 @@ class _Sequential:
     effective_overlap: int | None
     requested_overlap: int | None = None
     overlap_relaxations: list[dict[str, object]] = field(default_factory=list)
+    # Session 39b: the row an unbound fill stopped at (`index`, solver `status`), or None
+    # when every requested row was built. Only the fill stops short; C1 and sequential
+    # Showdown still raise.
+    stopped: dict[str, object] | None = None
 
     def differentiation(self, slate: SlateContract) -> dict[str, object]:
         by_id = {player.dk_id: player for player in slate.players}
@@ -742,6 +749,10 @@ def _sequential_lineups(
 ) -> _Sequential:
     """`count` distinct lineups, one solve each, none equal to a forbidden roster.
 
+    C1 and sequential Showdown raise `SOLVER_RETURNED_NO_LINEUP` when a row has no
+    lineup. The unbound fill (`stage="UNBOUND_FILL"`, Session 39b) stops there
+    instead and returns the rows before it with `stopped` set.
+
     C1 (Classic) and sequential Showdown, and since Session 11b the fill of the
     rows a subset policy leaves unbound. Lineups are numbered from `first_index`.
 
@@ -783,6 +794,7 @@ def _sequential_lineups(
     overlap_relaxations: list[dict[str, object]] = []
     forbidden_captains: list[str] = []
     captain_repeats_from: int | None = None  # position in this run, 1-based
+    stopped: dict[str, object] | None = None
     for position in range(1, count + 1):
         index = first_index + position - 1
         result = optimizer.solve(objective)
@@ -846,13 +858,17 @@ def _sequential_lineups(
             differentiate_captain = False
             captain_repeats_from = position
             result = optimizer.solve(objective)
+        if result.roster is None and stage == "UNBOUND_FILL":
+            # Session 39b (R29): no distinct lineup is left for this row, or the solve
+            # ended without one. The rows already built are delivered and the rest are
+            # named by the caller; a lineup is never repeated to fill the gap.
+            stopped = {"index": index, "status": result.status,
+                       "proved_exhausted": result.status == "INFEASIBLE"}
+            break
         if result.roster is None:
-            where = ("" if stage == "SEQUENTIAL" else
-                     ":stage=UNBOUND_FILL:no distinct lineup is left for a row the policy leaves"
-                     " unbound, so this review delivers nothing")
             raise SelectionError(
                 f"SOLVER_RETURNED_NO_LINEUP:index={index}:status={result.status}"
-                f":selectable_people={len(contract.selectable_people)}{where}",
+                f":selectable_people={len(contract.selectable_people)}",
                 status="SOLVER_RETURNED_NO_LINEUP",
                 facts={"stage": stage, "index": index, "selected": len(selected),
                        "requested": count, "selectable_people": len(contract.selectable_people)},
@@ -937,6 +953,7 @@ def _sequential_lineups(
         effective_overlap=(max(used) if used else None) if requested_overlap is not None else None,
         requested_overlap=requested_overlap,
         overlap_relaxations=overlap_relaxations,
+        stopped=stopped,
     )
 
 
@@ -987,8 +1004,15 @@ def _fill_unbound(
 ) -> tuple[list[SelectedLineup], dict[str, object]]:
     """The rows a subset policy leaves unbound, filled after its joint solve (Session 11b).
 
-    C1 (Classic) or sequential Showdown, under the run's own exclusions only,
-    with every policy lineup and every prefilled roster as a no-good (R29).
+    C1 (Classic) or sequential Showdown, under the run's own exclusions and the
+    policy's exact ones (Session 39), with every policy lineup and every prefilled
+    roster as a no-good (R29).
+
+    A fill that runs out of distinct lineups at row k (Session 39b) returns the k
+    rows it built, none repeated, and says so in its report: `requested`,
+    `lineups` (k), `unfilled_rows` and `stopped` (the row, the solver's status and
+    whether it was proven that none was left). The caller names the unfilled Entry
+    IDs; nothing here cycles a lineup into them.
     """
 
     run = _sequential_lineups(
@@ -1013,7 +1037,10 @@ def _fill_unbound(
     report = {
         "source": "C1" if classic else "SHOWDOWN_SEQUENTIAL",
         "profile_version": CLASSIC_PROFILE_VERSION if classic else PROFILE_VERSION,
+        "requested": count,
         "lineups": len(run.selected),
+        "unfilled_rows": count - len(run.selected),
+        "stopped": run.stopped,
         "lineup_indexes": [lineup.index for lineup in run.selected],
         "no_good_rosters": {"policy_lineups": len(policy_lineups),
                             "prefilled_rosters": len(forbidden_rosters)},

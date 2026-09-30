@@ -911,13 +911,40 @@ def test_sd3_fills_the_unbound_rows_after_its_joint_solve_under_the_runs_and_the
     assert report["selected_lineup_count"] == 2 and len(report["pairwise_person_overlap"]) == 1
 
 
-def test_an_unbound_fill_that_runs_out_of_distinct_lineups_delivers_nothing(tmp_path: Path) -> None:
-    from nfl_dfs.selection import SelectionError
+def test_an_unbound_fill_that_runs_out_of_distinct_lineups_delivers_the_rows_it_built(tmp_path: Path) -> None:
+    # Session 39b (R29) rewrites the Session 11b test that pinned the raise: with no person
+    # shared between rows the pool holds two distinct fill lineups after the two bound ones,
+    # so the fill returns those two, names the two it could not build, and repeats nothing.
+    from nfl_dfs.lineups import roster_canonical_key
 
-    with pytest.raises(SelectionError, match="SOLVER_RETURNED_NO_LINEUP:.*stage=UNBOUND_FILL") as caught:
-        _fill(tmp_path, fill_count=4, max_person_overlap=0)
-    assert caught.value.status == "SOLVER_RETURNED_NO_LINEUP"
-    assert caught.value.facts["stage"] == "UNBOUND_FILL"
+    slate, (lineups, _scores, report) = _fill(tmp_path, fill_count=4, max_person_overlap=0)
+
+    assert [lineup.index for lineup in lineups] == [1, 2, 3, 4]
+    keys = [roster_canonical_key(slate, lineup.roster) for lineup in lineups]
+    assert len(set(keys)) == 4
+    fill = report["unbound_fill"]
+    assert (fill["requested"], fill["lineups"], fill["unfilled_rows"]) == (4, 2, 2)
+    assert fill["lineup_indexes"] == [3, 4]
+    assert fill["stopped"] == {"index": 5, "status": "INFEASIBLE", "proved_exhausted": True}
+    assert report["selected_lineup_count"] == 2
+
+
+def test_an_unbound_fill_that_finds_no_lineup_at_all_returns_no_rows_and_names_the_stop(tmp_path: Path) -> None:
+    # Zero fill rows is a report, not an error: the caller keeps the bound rows and names every fill row.
+    from nfl_dfs.selection import _fill_unbound
+
+    from .test_prior_selection import _prepared
+
+    tmp_path.mkdir(exist_ok=True)
+    slate, _model, contract, _splits = _prepared(tmp_path)
+    everyone = tuple(player.dk_id for player in slate.players)
+    rows, report = _fill_unbound(
+        slate, {dk_id: 0.0 for dk_id in everyone}, everyone, contract, policy_lineups=[],
+        forbidden_rosters=(), count=2, differentiate_captain=True, max_person_overlap=4,
+        time_limit_seconds=5.0)
+
+    assert rows == [] and report["lineups"] == 0 and report["unfilled_rows"] == 2
+    assert report["stopped"]["index"] == 1 and report["stopped"]["status"] == "INFEASIBLE"
 
 
 def test_the_sd3_audit_checks_the_bound_rows_and_holds_the_artifact_to_the_unbound_ones(tmp_path: Path) -> None:
@@ -951,6 +978,67 @@ def test_the_sd3_audit_checks_the_bound_rows_and_holds_the_artifact_to_the_unbou
         failed = audit(artifact_rows, unbound)
         assert any(problem.startswith("PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH")
                    for problem in failed.problems), (artifact_rows, unbound)
+
+
+def test_the_audit_takes_a_named_unfilled_row_and_still_refuses_an_unnamed_one(tmp_path: Path) -> None:
+    # Session 39b: the artifact must hold every unbound row the fill built and none it named as
+    # unfilled. A missing row nobody named, a named row that is present and a bound row named as
+    # unfilled all fail the same check the unbound set always had.
+    from nfl_dfs.portfolio_enforcement import audit_policy_assignments, build_policy_candidate_bank
+
+    slate = _slate(tmp_path)
+    fillable = ("1", "2", "3", "4")
+    raw = json.dumps(portfolio_policy_template(slate, ("1", "3"), controls={})).encode("utf-8")
+    policy = validate_portfolio_policy_bytes(raw, slate=slate, entry_ids=fillable).policy
+    objective = {row.dk_id: float(index) for index, row in enumerate(slate.players)}
+    bank = build_policy_candidate_bank(slate, objective, candidate_limit=4, total_time_limit_seconds=5,
+                                       per_solve_time_limit_seconds=1)
+    rosters = {entry: bank.candidates[index].roster for index, entry in enumerate(fillable)}
+
+    def audit(artifact_rows, unfilled=()):
+        artifact = ("\n".join(["Entry ID,CPT,FLEX,FLEX,FLEX,FLEX,FLEX",
+                               *(",".join((entry, *rosters[entry])) for entry in artifact_rows)]) + "\n").encode()
+        normalized = policy.canonical_bytes()
+        return audit_policy_assignments(
+            slate=slate, policy=policy, assignments=[(entry, rosters[entry]) for entry in ("1", "3")],
+            salary_bytes=(tmp_path / "DKSalaries.csv").read_bytes(), entry_bytes=b"entries",
+            expected_entry_sha256=sha256_bytes(b"entries"), source_policy_bytes=raw,
+            expected_source_policy_sha256=sha256_bytes(raw), normalized_policy_bytes=normalized,
+            expected_normalized_policy_sha256=sha256_bytes(normalized), assignment_artifact_bytes=artifact,
+            expected_assignment_artifact_sha256=sha256_bytes(artifact), unbound_entry_ids=("2", "4"),
+            unfilled_entry_ids=unfilled)
+
+    passed = audit(("1", "2", "3"), unfilled=("4",))
+    assert passed.passed, passed.problems
+    both_unfilled = audit(("1", "3"), unfilled=("2", "4"))
+    assert both_unfilled.passed, both_unfilled.problems
+    cases = {
+        "an unbound row that is neither present nor named": audit(("1", "2", "3")),
+        "a named row that is in the artifact": audit(("1", "2", "3", "4"), unfilled=("4",)),
+        "a bound row named as unfilled": audit(("1", "2", "3"), unfilled=("1", "4")),
+        "a name that is not a row": audit(("1", "2", "3"), unfilled=("4", "9")),
+        "a name repeated": audit(("1", "2", "3"), unfilled=("4", "4")),
+    }
+    for label, failed in cases.items():
+        assert any(problem.startswith("PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH")
+                   for problem in failed.problems), label
+
+
+def test_exact_assignments_take_only_a_named_tail_and_never_cycle() -> None:
+    from nfl_dfs.portfolio_enforcement import exact_assignments_for_entries
+
+    rosters = [("a",), ("b",)]
+    assert exact_assignments_for_entries(("1", "2", "3", "4"), rosters, unfilled_entry_ids=("3", "4")) == {
+        "1": ("a",), "2": ("b",)}
+    assert exact_assignments_for_entries(("1", "2"), rosters) == {"1": ("a",), "2": ("b",)}
+    for entries, named in ((("1", "2", "3", "4"), ("3",)),   # a shortfall nobody named
+                           (("1", "2", "3", "4"), ("2", "3", "4")),  # names more than were short
+                           (("1", "2", "3", "4"), ("1", "2")),  # not the tail
+                           (("1", "2", "3"), ("3", "3"))):
+        with pytest.raises(ValueError, match="PORTFOLIO_ASSIGNMENT_COVERAGE_MISMATCH|DUPLICATE"):
+            exact_assignments_for_entries(entries, rosters, unfilled_entry_ids=named)
+    with pytest.raises(ValueError, match="PORTFOLIO_ASSIGNMENT_COVERAGE_MISMATCH"):
+        exact_assignments_for_entries(("1", "2", "3"), rosters)  # short with no name: still refused
 
 
 def test_the_runs_own_exclusions_bind_the_unbound_fill_too(tmp_path: Path) -> None:

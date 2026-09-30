@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "54783167-269b-5574-a3d8-f37a75a0994f",
-      "branch": "claude/s39b-partial-fill-egog94",
-      "chunk": "S39b",
-      "claimed_at": "2026-09-30T09:16:43Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

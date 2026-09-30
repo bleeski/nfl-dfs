@@ -36,6 +36,7 @@ from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup, write_upload_bytes
 from .portfolio_policy import canonical_decimal_json_bytes
+from .relaxation import own_exclusion_dk_ids
 from .readable_review import _render_html
 
 
@@ -708,7 +709,7 @@ def create_classic_review_package(
         row_sources = {
             entry_id: ROW_SOURCE_POLICY if entry_id in bound_set else ROW_SOURCE_C1
             for entry_id in entry_ids
-        }
+        }  # Session 39b: unfilled rows are dropped from it below, once the record has named them
 
         bank = _strict_json(
             tracked["classic_candidate_bank"].read_bytes(), label="CANDIDATE_BANK", canonical=True
@@ -860,13 +861,38 @@ def create_classic_review_package(
         selection_assignment_map = _mapping(
             selection.get("assignments_by_entry_id"), label="SELECTION_ASSIGNMENT_MAP"
         )
+        # Session 39b (R29): a fill that ran out of distinct lineups names the unbound
+        # rows it left blank in the selection record. A blank row is unfilled only when
+        # named there, and only an unbound row can be; a bound row, a repeated name or
+        # an unbound row that is neither in the map nor named is a mismatch below.
+        raw_unfilled = selection.get("unfilled_entry_ids")
+        named_unfilled = tuple(str(entry) for entry in raw_unfilled) if isinstance(raw_unfilled, list) else ()
+        unfilled_set = set(named_unfilled)
+        if (
+            (raw_unfilled is not None and not isinstance(raw_unfilled, list))
+            or not unfilled_set <= set(unbound_ids)
+            or len(unfilled_set) != len(named_unfilled)
+        ):
+            problems.append(
+                f"CLASSIC_C3_UNBOUND_ROWS_MISMATCH:unfilled_rows={list(named_unfilled)}"
+                f":unbound_rows={list(unbound_ids)}"
+            )
+            # A name that is not an unbound row (or repeats) excuses nothing: every row is held
+            # to a lineup below, and the bad names travel in the problem above.
+            named_unfilled, unfilled_set = (), set()
+        row_sources = {entry_id: source for entry_id, source in row_sources.items() if entry_id not in unfilled_set}
+        filled_unbound_ids = tuple(entry for entry in unbound_ids if entry not in unfilled_set)
+        filled_ids = tuple(entry for entry in entry_ids if entry not in unfilled_set)
         others = sorted(str(entry) for entry in selection_assignment_map if entry not in bound_set)
-        if others != sorted(unbound_ids):
+        if others != sorted(filled_unbound_ids):
             problems.append(
                 f"CLASSIC_C3_UNBOUND_ROWS_MISMATCH:selection_rows={others}:unbound_rows={list(unbound_ids)}"
+                f":unfilled_rows={list(named_unfilled)}"
             )
         assignments: dict[str, tuple[str, ...]] = {}
         for entry_id in entry_ids:
+            if entry_id in unfilled_set:
+                continue  # named, so it stays blank; no empty roster stands in for it
             if entry_id in bound_set:
                 assignments[entry_id] = policy_assignments.get(entry_id, ())
             elif selection_assignment_map.get(entry_id) is not None:
@@ -996,7 +1022,7 @@ def create_classic_review_package(
             roster = tuple(str(value) for value in _sequence(item.get("roster"), label="SELECTION_ROSTER"))
             selection_lineups[roster] = item
 
-        fillable = set(entry_ids)
+        fillable = set(filled_ids)
         for authorization in template.authorizations:
             if authorization.entry_id not in fillable:
                 continue  # a preserved or unresolved row: the byte audit holds it (Session 11)
@@ -1114,7 +1140,7 @@ def create_classic_review_package(
         # R29: distinct across every filled row, policy and C1 alike.
         if (policy.require_unique_lineups or unbound_ids) and len(
             set(canonical_by_entry.values())
-        ) != len(entry_ids):
+        ) != len(filled_ids):
             problems.append("CLASSIC_C3_CANONICAL_LINEUP_DUPLICATE")
         problems.extend(
             f"ENTRY_PREFILLED_LINEUP_REPEATED:{entry_id}"
@@ -1206,7 +1232,7 @@ def create_classic_review_package(
             )
             if isinstance(item, Mapping) and item.get("reason") != "SELECTABLE"
         }
-        for entry_id in entry_ids:
+        for entry_id in filled_ids:
             for person in sorted(people_by_entry.get(entry_id, frozenset()).intersection(run_excluded)):
                 problems.append(
                     f"CLASSIC_C3_SELECTED_PERSON_EXCLUDED_BY_RUN:entry={entry_id}:person={person}"
@@ -1215,23 +1241,57 @@ def create_classic_review_package(
         unbound_payload: dict[str, object] | None = None
         if unbound_ids:
             unbound_exposure: Counter[str] = Counter()
-            for entry_id in unbound_ids:
+            for entry_id in filled_unbound_ids:
                 unbound_exposure.update(people_by_entry.get(entry_id, frozenset()))
+            # Session 39b (review S6): a fill row holds no person the policy itself removes
+            # (an exact exclusion, a person or a team or game it caps at zero). The selector
+            # enforces it; this recomputes it from the policy and the delivered rosters.
+            policy_removed = set(own_exclusion_dk_ids(policy))
+            for entry_id in filled_unbound_ids:
+                for dk_id in sorted(policy_removed.intersection(assignments.get(entry_id, ()))):
+                    problems.append(
+                        f"CLASSIC_C3_EXACT_EXCLUSION_SELECTED:{by_id[dk_id].underlying_id}"
+                        f":unbound_entry={entry_id}"
+                    )
+            # ... and shares no more people than the cap the selection names with any policy
+            # lineup or any other fill row. The cap is the loosest one any fill row was solved
+            # under (a ratchet, reported step by step), so it bounds every pair.
+            fill_named = selection.get("unbound_fill")
+            if filled_unbound_ids and not isinstance(fill_named, Mapping):
+                # The record that binds the fill rows names the cap they were solved under; without
+                # it nothing holds them to one, so the package is refused (fail closed).
+                problems.append("CLASSIC_C3_UNBOUND_ROWS_MISMATCH:the selection record names no unbound_fill")
+            fill_cap = fill_named.get("max_person_overlap") if isinstance(fill_named, Mapping) else None
+            if filled_unbound_ids and isinstance(fill_cap, int) and not isinstance(fill_cap, bool):
+                for position, left in enumerate(filled_unbound_ids):
+                    for right in (*bound_ids, *filled_unbound_ids[position + 1:]):
+                        shared = len(people_by_entry.get(left, frozenset()) & people_by_entry.get(right, frozenset()))
+                        if shared > fill_cap:
+                            problems.append(
+                                f"CLASSIC_C3_PAIRWISE_OVERLAP_EXCEEDED:{left}:{right}:{shared}:fill_cap={fill_cap}"
+                            )
             unbound_payload = {
                 "source": ROW_SOURCE_C1,
                 "entry_ids": list(unbound_ids),
-                "basis": "THE_RUN_S_OWN_EXCLUSIONS_NOT_THE_POLICY_S_BOUNDS_C1_CUTS_EXACT_ROSTERS_ONLY",
+                **({"unfilled_entry_ids": list(named_unfilled)} if named_unfilled else {}),
+                "basis": (
+                    "THE_RUN_S_OWN_AND_THE_POLICY_S_EXACT_EXCLUSIONS_AND_THE_FILL_S_PERSON_OVERLAP_CAP"
+                    "_NOT_THE_POLICY_S_BOUNDS_C1_CUTS_EXACT_ROSTERS_AND_THE_CAP"
+                ),
                 "checks": [
                     "LEGALITY_ACTIVITY_AND_BYTES_WITH_EVERY_ROW",
                     "DISTINCT_FROM_EVERY_POLICY_C1_AND_PREFILLED_LINEUP",
                     "SELECTION_RECORD_ROSTER_SALARY_AND_SCORE",
                     "NO_PERSON_THE_RUN_EXCLUDES",
+                    "NO_PERSON_THE_POLICY_EXCLUDES",
+                    "FILL_PERSON_OVERLAP_WITH_EVERY_POLICY_AND_FILL_ROW",
                 ],
+                "fill_person_overlap_cap": fill_cap if isinstance(fill_cap, int) else None,
                 "maximum_person_overlap_with_any_filled_row": max(
                     (
                         len(people_by_entry.get(left, frozenset()) & people_by_entry.get(right, frozenset()))
-                        for left in unbound_ids
-                        for right in entry_ids
+                        for left in filled_unbound_ids
+                        for right in filled_ids
                         if right != left
                     ),
                     default=0,
@@ -1304,7 +1364,8 @@ def create_classic_review_package(
             if csv_rows != {entry_id: tuple(roster) for entry_id, roster in assignments.items()}:
                 problems.append("CLASSIC_C3_ASSIGNMENT_CSV_DISAGREEMENT:rows")
 
-        proposed = write_upload_bytes(template, assignments, unfilled=entry_plan.left_blank)
+        proposed = write_upload_bytes(
+            template, assignments, unfilled=(*entry_plan.left_blank, *named_unfilled))
         problems.extend(
             _audit_template_bytes(
                 source_bytes=entry_file.read_bytes(),
@@ -1328,9 +1389,14 @@ def create_classic_review_package(
                 problems.append("CLASSIC_C3_PROPOSED_OUTPUT_ENTRY_ORDER_MISMATCH")
             if {
                 item.entry_id: item.existing_cells for item in reparsed_output.authorizations
-                if item.entry_id in entry_ids
+                if item.entry_id in filled_ids
             } != assignments:
                 problems.append("CLASSIC_C3_PROPOSED_OUTPUT_ASSIGNMENT_MISMATCH")
+            if any(
+                any(item.existing_cells) for item in reparsed_output.authorizations
+                if item.entry_id in unfilled_set
+            ):
+                problems.append("CLASSIC_C3_PROPOSED_OUTPUT_ASSIGNMENT_MISMATCH:a named unfilled row is not blank")
         if problems:
             raise ClassicReviewError(";".join(problems))
         # What a limit left unproven travels with the file (Session 08). The
@@ -1377,6 +1443,7 @@ def create_classic_review_package(
             "entry_ids": list(entry_ids),
             "bound_entry_ids": list(bound_ids),
             "unbound_entry_ids": list(unbound_ids),
+            **({"unfilled_entry_ids": list(named_unfilled)} if named_unfilled else {}),
             "row_sources": row_sources,
             "truths": {
                 "FILE_VALID": True,

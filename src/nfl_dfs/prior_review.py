@@ -802,6 +802,12 @@ class PriorReviewOutcome:
     contest_claim: object | None = field(default=None, repr=False, compare=False)
 
     @property
+    def unfilled_entry_ids(self) -> tuple[str, ...]:
+        """Reserved rows the fill named as left blank (Session 39b); `()` unless it ran out."""
+
+        return tuple(str(entry) for entry in (self.reports.get("unfilled_entry_ids") or ()))
+
+    @property
     def file_valid(self) -> bool:
         return bool(self.export and self.export.get("FILE_VALID"))
 
@@ -2179,6 +2185,9 @@ def run_prior_review(
     # a no-good.
     bound_ids = list(portfolio_policy.entry_ids) if portfolio_policy is not None else []
     unbound_ids = list(unbound_rows(bound_ids, entry_ids)) if portfolio_policy is not None else []
+    # Session 39b (R29): the unbound rows the fill could not build a distinct lineup
+    # for, named in template order after selection. Never a repeated roster.
+    unfilled_ids: list[str] = []
     if portfolio_policy is None and requested_count < len(entry_ids):
         # Fewer lineups than reserved entries can only be filled by repeating a
         # roster across entries. The export would then carry duplicate lineups
@@ -2336,15 +2345,31 @@ def run_prior_review(
         if portfolio_policy is not None:
             # Every fillable row once, in template order: the policy's rows from
             # its joint solve, the rest from the fill, never cycled.
+            # A fill that ran out of distinct lineups at row k built k rows (Session
+            # 39b): the first k unbound entries in template order hold them and the
+            # rest are named, not repeated. The selector's own report must agree
+            # with that count, so an unbound row can only be short by being named.
             filled = [lineup.roster for lineup in lineups[len(bound_ids):]]
+            unfilled_ids = unbound_ids[len(filled):] if len(filled) <= len(unbound_ids) else []
+            fill_report = selection.get("unbound_fill") or {}
+            if len(filled) > len(unbound_ids) or (unbound_ids and (
+                fill_report.get("unfilled_rows") != len(unfilled_ids)
+                or fill_report.get("lineups") != len(filled)
+            )):
+                raise PriorReviewError(
+                    "PORTFOLIO_ASSIGNMENT_COVERAGE_MISMATCH:the unbound fill's report disagrees with the rows it left:"
+                    f"unbound={len(unbound_ids)}:filled={len(filled)}:report={dict(fill_report)}")
             unbound_assignments = (
-                exact_assignments_for_entries(unbound_ids, filled) if unbound_ids or filled else {}
+                exact_assignments_for_entries(unbound_ids, filled, unfilled_entry_ids=unfilled_ids)
+                if unbound_ids else {}
             )
             assignments = {
                 entry_id: (bound_assignments[entry_id] if entry_id in bound_assignments
                            else unbound_assignments[entry_id])
                 for entry_id in entry_ids
+                if entry_id not in unfilled_ids
             }
+            reports["unfilled_entry_ids"] = list(unfilled_ids)
         else:
             assignments = assignments_for_entries(entry_ids, lineups)
     except Exception as exc:  # noqa: BLE001 - named, never swallowed
@@ -2619,7 +2644,7 @@ def run_prior_review(
         assignments_hash = write_assignments_csv(
             assignments_path,
             assignments,
-            entry_order=tuple(entry_ids),
+            entry_order=tuple(entry_id for entry_id in entry_ids if entry_id in assignments),
         )
         artifacts["assignments"] = str(assignments_path)
         hashes["assignments"] = assignments_hash
@@ -2634,7 +2659,7 @@ def run_prior_review(
             assignments_path,
             assignments,
             entry_order=(
-                tuple(entry_ids)
+                tuple(entry_id for entry_id in entry_ids if entry_id in assignments)
                 if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy)
                 else None
             ),
@@ -2682,6 +2707,8 @@ def run_prior_review(
         "assignments": str(assignments_path) if slate.mode is EngineMode.SHOWDOWN else None,
         "assignments_sha256": assignments_hash or None,
         "reserved_entries": entry_ids,
+        # Session 39b: reserved entries the fill named as left without a lineup (R29).
+        "unfilled_entry_ids": list(unfilled_ids),
         # Session 11b: which source filled each row (the policy, or the fill).
         "row_sources": row_sources(
             list(assignments), bound_ids if portfolio_policy is not None else (), slate.mode),
@@ -2723,11 +2750,22 @@ def run_prior_review(
             "lineups_generated": len(lineups),
             "reserved_entries": len(entry_ids),
             "unassigned_lineups": max(0, len(lineups) - len(entry_ids)),
+            **({"unfilled_entries": len(unfilled_ids)} if unfilled_ids else {}),
             "note": (
-                "Lineups beyond the reserved-entry count are retained in this report"
-                " for review and are not written to any entry."
-                if len(lineups) > len(entry_ids)
-                else "Every reserved entry received its own lineup."
+                f"{len(unfilled_ids)} reserved entries have no lineup because the fill "
+                + (
+                    "proved no distinct lineup was left"
+                    if ((selection.get("unbound_fill") or {}).get("stopped") or {}).get("proved_exhausted")
+                    else "returned no lineup and did not prove that none was left"
+                )
+                + " (R29); they are named in unfilled_entry_ids and stay blank."
+                if unfilled_ids
+                else (
+                    "Lineups beyond the reserved-entry count are retained in this report"
+                    " for review and are not written to any entry."
+                    if len(lineups) > len(entry_ids)
+                    else "Every reserved entry received its own lineup."
+                )
             ),
         },
         "selection": selection,
@@ -3120,6 +3158,23 @@ def run_prior_review(
                 "NOT_UPLOAD_READY",
             ],
         }
+        if unbound_ids:
+            # Session 39b: the cap the fill rows were solved under, named where C3 reads it, so
+            # the independent review holds every fill row to it against each policy lineup and
+            # each other fill row (the loosest cap any row used bounds every pair).
+            fill_view = selection.get("unbound_fill") or {}
+            fill_steps = fill_view.get("differentiation") or {}
+            stable_selection["unbound_fill"] = {
+                "lineups": fill_view.get("lineups"),
+                "unfilled_rows": fill_view.get("unfilled_rows"),
+                "requested_person_overlap": fill_steps.get("requested_person_overlap"),
+                "max_person_overlap": fill_steps.get("max_person_overlap"),
+            }
+        if unfilled_ids:
+            # Session 39b: present only when the fill ran out of distinct lineups (R29).
+            # Without the key the record means every unbound row is in
+            # `assignments_by_entry_id`; C3 refuses a row that is neither there nor named.
+            stable_selection["unfilled_entry_ids"] = list(unfilled_ids)
         stable_coverage = {
             "schema_version": (
                 CLASSIC_COVERAGE_SCHEMA_C2
@@ -3342,6 +3397,7 @@ def run_prior_review(
                     classic_review.html_sha256 if classic_review else None
                 ),
                 "certification_basis": "NOT_CERTIFIED_CLASSIC_C3_REVIEW_ONLY",
+                **({"unfilled_entry_ids": list(unfilled_ids)} if unfilled_ids else {}),
                 "warning": (
                     "Exact-template and independently audited review bytes only. "
                     "This remains PRIOR_ONLY / DO_NOT_UPLOAD."
@@ -3391,6 +3447,7 @@ def run_prior_review(
             "selection_sha256": hashes["selection_report"],
             "coverage_artifact": artifacts["complete_slate_coverage"],
             "coverage_sha256": hashes["complete_slate_coverage"],
+            **({"unfilled_entry_ids": list(unfilled_ids)} if unfilled_ids else {}),
             "note": (
                 "Classic C2 emits no DraftKings-shaped CSV. FILE_VALID describes the "
                 "bound machine-readable JSON artifacts only; C3 owns readable review, "
@@ -3468,6 +3525,7 @@ def run_prior_review(
                 # checks the rows the fill wrote.
                 assignments=[(entry_id, assignments[entry_id]) for entry_id in portfolio_policy.entry_ids],
                 unbound_entry_ids=unbound_ids,
+                unfilled_entry_ids=unfilled_ids,
                 salary_bytes=salary_path.read_bytes(),
                 entry_bytes=entry_path.read_bytes(),
                 expected_entry_sha256=hashes["entry_csv"],
@@ -3507,6 +3565,7 @@ def run_prior_review(
             template=template,
             assignments=assignments,
             output_path=review_dir / f"DK_REVIEW_ENTRY_{_safe_label(label)}.csv",
+            unfilled_entry_ids=unfilled_ids,
         )
     except Exception as exc:  # noqa: BLE001 - named, never swallowed
         error = f"{type(exc).__name__}:{exc}"

@@ -2619,10 +2619,27 @@ def _review_release_truths(
             detail="the run's own review wrote no entry file to hand over; the baseline, when "
                    "it was published, stays the deliverable"))
     authorized = plan.fillable if plan is not None else ()
+    # Session 39b (R29): rows the unbound fill named as left without a lineup because no
+    # distinct one was left. They are authorized and blank, so they are unfilled, and
+    # the limitation names them; the bound and filled rows still ship.
+    left_over = tuple(eid for eid in outcome.unfilled_entry_ids if eid in set(authorized))
+    if left_over:
+        reports = getattr(outcome, "reports", None) or {}
+        fill = ((reports.get("selection") or {}).get("selection") or {}).get("unbound_fill") or {}
+        stop = fill.get("stopped") or {}
+        why = (
+            "the unbound fill proved no distinct lineup is left"
+            if stop.get("proved_exhausted") else
+            f"the unbound fill's solve ended ({stop.get('status') or 'no status recorded'}) with no lineup"
+            " and no proof that none is left"
+        )
+        limitations.append(registry.limitation(
+            "SOLVER_RETURNED_NO_LINEUP", entry_ids=left_over,
+            detail=f"{why} (R29): these rows stay blank in the file and no lineup was repeated to fill them"))
     delivery = derive_delivery_state(
         file_valid=has_csv,
         authorized_entry_ids=authorized,
-        delivered_entry_ids=authorized if has_csv else (),
+        delivered_entry_ids=tuple(eid for eid in authorized if eid not in left_over) if has_csv else (),
         limitations=limitations,
         preserved_entry_ids=plan.preserved if plan is not None else (),
         unresolved_entry_ids=plan.unresolved if plan is not None else (),

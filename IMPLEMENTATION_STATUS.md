@@ -1,5 +1,24 @@
 # Implementation Status
 
+## Capability added: 2026-09-30 (Session 39b, partial fill)
+
+Working and verified through the Showdown and Classic fixtures (`tests/test_partial_fill.py`, a real infeasible-pool stop
+in `tests/test_portfolio_policy.py` and `tests/test_classic_diversification.py`) and the full suite: a subset policy's
+unbound fill that runs out of distinct lineups at row k returns the k rows it built instead of raising
+`SOLVER_RETURNED_NO_LINEUP`; `prior_review` names the unbound Entry IDs left (template order, the last ones), builds
+`assignments` for the bound rows and the k filled rows only (`assignments_for_entries`, which cycles, stays on the
+no-policy path), and every layer takes the named gap: `exact_assignments_for_entries`, the SD3 and C2 audits, the
+Showdown export writer, C3, the readable review and the review's release truths (`unfilled_entry_ids`,
+`DELIVERY_STATE=DELIVERABLE_PARTIAL`, a `SOLVER_RETURNED_NO_LINEUP` limitation scoped to those rows). A blank row nobody
+named still fails each layer. C3 and the readable review now also re-check that a fill row holds no person the policy
+excludes, and C3 that it shares no more people than the cap the record names with each policy lineup and each other
+fill row. **Not done, named:** the run-level pointer never regresses coverage, so a partial review does not replace a
+baseline that fills more rows (`DELIVERY_POINTER_COVERAGE_REGRESSION`); it is kept in the run's `review` folder. Showdown
+fill rows are capped only among themselves (the selector anchors only Classic fill rows to the policy's lineups). A fill
+solve that ended without a roster and without proof (a time limit) is delivered as a partial fill and says so.
+Sequential selection with no policy (C1 with no fill, rung 4) still raises when it runs out. Still
+`MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-30 (Session 39, Classic diversification)
 
 Working and verified through the Classic fixture, unit tests on the C2 fixture, and the full suite: Classic C1 and
@@ -302,8 +321,9 @@ non-empty ordered subset of them and refuse anything else (`V`), and the bound
 list is the denominator for every integer cap (0.5 over 4 bound rows of 10
 allows 2). After the SD3 joint solve, sequential Showdown fills the unbound
 rows with every policy lineup and prefilled roster as a no-good, under the
-run's own exclusions only; a fill that runs out of distinct lineups delivers
-nothing and the baseline stays the file, named. The SD3 audit covers the
+run's own exclusions only (since Session 39 also the policy's exact ones); a fill
+that runs out of distinct lineups at row k delivered nothing until Session 39b, which
+delivers the bound rows and the k it built and names the rest. The SD3 audit covers the
 policy's rows, the readable review (`prior_only_readable_review_sd5_v2`) checks
 the fill's rows (exclusions, inactives, overlap, distinctness against every row
 and every prefilled roster) and names each row's `source`, and the result
