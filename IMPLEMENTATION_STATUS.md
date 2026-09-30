@@ -1,5 +1,19 @@
 # Implementation Status
 
+## Capability added: 2026-09-30 (Session 39, Classic diversification)
+
+Working and verified through the Classic fixture, unit tests on the C2 fixture, and the full suite: Classic C1 and
+the rows a subset policy leaves unbound share at most 6 people with each earlier row (and a fill row with each policy
+lineup), the cap stepping up one person at a time, on a proven infeasible model only, to 8 and staying there, each step
+reported (selection report, the ladder record as `OVERLAP_CAP`, or a limitation for a run with no ladder); the C2
+witness chain round-robins the MILP seeds and slots and holds the policy's pairwise overlap (20 of 20 at overlaps 4
+to 9, 150 of 150 at 3 to 9 on the fixture), where the old chain never gave a feasible witness at 7 or below; the fill
+applies the policy's own exact exclusions and zero caps. C1's selection profile is
+`prior_only_classic_selection_c1_v2`; `C2_FULL_FILLABLE_SHA256` moved on purpose. **Not done, named:** the partial
+fill (a fill that runs out at row k delivering k rows and naming the rest) is Session 39b; until then it still
+raises `SOLVER_RETURNED_NO_LINEUP` and the baseline is the file. No review layer re-checks the policy's exclusions on
+fill rows (39b). Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-29 (Session 17, standings corpus transport)
 
 Working and verified against a fixture transport only: `scripts/fetch_standings_corpus.py fetch` brings

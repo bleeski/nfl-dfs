@@ -105,10 +105,25 @@ def _assert_truths_unchanged(report):
     assert report["DELIVERY_STATE"] == "DELIVERABLE"
 
 
-def _no_contest_repeats_a_qb(stats):
+def _no_contest_repeats_a_qb(stats, quarterbacks=None):
+    """No contest holds two entries with the same quarterback, unless the portfolio forces one.
+
+    `quarterbacks` (Session 39) is the delivered rows' quarterback by row. The six lineups
+    tie on prior points in this fixture, so which six the joint solve returns is a
+    tie-break: when one quarterback leads more lineups than there are contests, pigeonhole
+    forces `lead - contests` repeats and the step must leave exactly that many, no more.
+    """
+
     assert stats, "the fixture holds contests of two or more entries"
-    for contest, reading in stats.items():
-        assert reading["distinct_key_people"] == reading["entries"], (contest, reading)
+    forced = 0
+    if quarterbacks:
+        lead = max(quarterbacks.count(person) for person in set(quarterbacks))
+        forced = max(0, lead - len(stats))
+    repeats = sum(reading["entries"] - reading["distinct_key_people"] for reading in stats.values())
+    assert repeats == forced, (forced, stats)
+    if not forced:
+        for contest, reading in stats.items():
+            assert reading["distinct_key_people"] == reading["entries"], (contest, reading)
 
 
 # ---------------------------------------------------------------- the three exits
@@ -171,7 +186,9 @@ def test_c2_policy_and_c3_diversify_and_the_review_reconciles(tmp_path, monkeypa
     after = _recompute(entries, delivered)
     assert _total(after) < _solver_order_total(entries, report, ENTRIES)
     assert f"{_total(after):.6f}" == step["total_score_after"]
-    _no_contest_repeats_a_qb(after)
+    slate = _slate(entries)
+    by_id = {player.dk_id: player for player in slate.players}
+    _no_contest_repeats_a_qb(after, [by_id[roster[0]].underlying_id for roster in assignment.values()])
 
     # the C2 audit recomputed the step's claims from the exact assignments.csv bytes
     audit = report["prior_review_reports"]["classic_portfolio_audit"]

@@ -179,7 +179,7 @@ def test_a_run_with_no_policy_still_names_a_cap_step_its_c1_took(tmp_path, monke
     assert code == 0, report["blockers"]
     assert "relaxation" not in report
     texts = [text for text in report["blockers"] if text.startswith("RELAXATION_STRUCTURE_RELAXED:")]
-    assert texts and all("classic_person_overlap 2 to" in text and "C1 row" in text for text in texts)
+    assert texts and "classic_person_overlap 2 to" in texts[0] and all("C1 row" in text for text in texts)
     from .test_deadline_controller import _truth_codes
 
     assert _truth_codes(report)["RELAXATION_STRUCTURE_RELAXED"] == "S"
@@ -217,22 +217,47 @@ def test_a_cap_no_lineup_fits_under_is_stepped_up_reported_and_never_repeats_a_l
     rosters = [lineup.roster for lineup in run.selected]
     assert len({lineup.canonical_key for lineup in run.selected}) == 20  # R29
     steps = run.overlap_relaxations
-    assert steps and all(step["requested"] == 0 and 0 < step["used"] <= 8 for step in steps)
+    assert steps and all(step["requested"] == 0 and step["from"] < step["used"] <= 8 for step in steps)
     assert all(step["reason"] == "NO_DISTINCT_LINEUP_UNDER_THE_REQUESTED_OVERLAP_CAP" for step in steps)
+    assert all(step["trigger_status"] == "INFEASIBLE" for step in steps)
+    # A ratchet: each step starts where the last ended, and there are at most 8 of them,
+    # however many rows there are, which is what the deadline's per-solve sizing can afford.
+    assert steps[0]["from"] == 0 and len(steps) <= 8
+    assert all(later["from"] == earlier["used"] for earlier, later in zip(steps, steps[1:]))
     assert [step["index"] for step in steps] == sorted({step["index"] for step in steps})
-    assert run.effective_overlap == max(step["used"] for step in steps)
+    assert run.effective_overlap == steps[-1]["used"]
     assert _max_shared(slate, rosters) <= run.effective_overlap
     differentiation = run.differentiation(slate)
     assert differentiation["requested_person_overlap"] == 0
     assert differentiation["max_person_overlap"] == run.effective_overlap
-    # A row that fit under the requested cap shares nobody with any earlier row, relaxed or not:
-    # the next row starts from the request again, so one hard row does not loosen the rest.
-    relaxed = {step["index"] for step in steps}
-    fitting = [lineup for lineup in run.selected if lineup.index not in relaxed]
-    assert len(fitting) >= 3
-    for lineup in fitting:
+    # Every row shares at most the cap in force when it was built with every earlier row.
+    cap = 0
+    for lineup in run.selected:
+        cap = next((step["used"] for step in steps if step["index"] == lineup.index), cap)
         for earlier in run.selected[: lineup.index - 1]:
-            assert not _people(slate, lineup.roster) & _people(slate, earlier.roster)
+            assert len(_people(slate, lineup.roster) & _people(slate, earlier.roster)) <= cap
+
+
+def test_a_solve_that_ends_on_a_time_limit_is_not_read_as_an_infeasible_cap(monkeypatch):
+    """Only a proven infeasible model steps the cap: a timeout falls to the R29 refusal, as before."""
+
+    from dataclasses import replace
+
+    from nfl_dfs import selection
+
+    class TimesOut(selection.LineupOptimizer):
+        calls = 0
+
+        def solve(self, objective):
+            result = super().solve(objective)
+            TimesOut.calls += 1
+            return replace(result, roster=None, status="NO_SOLUTION") if TimesOut.calls == 2 else result
+
+    monkeypatch.setattr(selection, "LineupOptimizer", TimesOut)
+    with pytest.raises(SelectionError) as caught:
+        _c1(3, classic_person_overlap=6)
+    assert caught.value.status == "SOLVER_RETURNED_NO_LINEUP" and "status=NO_SOLUTION" in str(caught.value)
+    assert TimesOut.calls == 2  # no loosened model was built and solved
 
 
 def test_a_pool_that_runs_out_of_distinct_lineups_still_raises_and_never_repeats():
@@ -250,3 +275,23 @@ def test_a_pool_that_runs_out_of_distinct_lineups_still_raises_and_never_repeats
             slate, objective, excluded, _contract(slate), count=2, first_index=1, forbidden_rosters=(),
             differentiate_captain=False, max_person_overlap=4, time_limit_seconds=20.0)
     assert caught.value.status == "SOLVER_RETURNED_NO_LINEUP" and caught.value.facts["selected"] == 1
+
+
+def test_a_fill_row_cap_step_reaches_the_ladder_record_with_its_scope(tmp_path, monkeypatch):
+    """The subset policy's C1 fill takes the same walk, and its steps say `UNBOUND_FILL`."""
+
+    from functools import partial
+
+    from nfl_dfs import prior_review
+
+    from .test_entry_groups import _classic_subset_run
+
+    monkeypatch.setattr(prior_review, "select_prior_lineups",
+                        partial(prior_review.select_prior_lineups, classic_person_overlap=0))
+    code, report, _entries, _root, _slate_used, _prefilled = _classic_subset_run(
+        tmp_path, monkeypatch, run_id="fill-cap-step")
+    assert code == 0, report["blockers"]
+    steps = [item for item in report["relaxation"]["relaxations"] if item["step"] == "OVERLAP_CAP"]
+    assert steps and all(item["trigger_detail"].startswith("UNBOUND_FILL row ") for item in steps)
+    assert steps[0]["original"] == 0 and steps[0]["limitation_code"] == "RELAXATION_STRUCTURE_RELAXED"
+    assert any("UNBOUND_FILL row" in text for text in report["blockers"])

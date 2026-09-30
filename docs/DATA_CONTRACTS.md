@@ -1118,13 +1118,14 @@ previous lineup minus one person. `select_prior_lineups(classic_person_overlap=6
 (`selection.CLASSIC_PERSON_OVERLAP`; `None` restores the old behaviour for
 diagnostics; `max_person_overlap` stays Showdown's and Classic never reads it) caps
 the people a C1 or fill row shares with every earlier row, and a fill row also with
-every policy lineup. It is a construction preference: when no distinct lineup fits
-under it, that row is solved again one person looser (7, then 8, which is the
-exact-roster cut alone), and the next row starts from the requested cap again.
-Distinct lineups (R29) are never on that walk. Each step is in the selection report's
-`differentiation` (`requested_person_overlap`, `max_person_overlap` as the loosest cap
-any row used, `overlap_relaxations`: `index`, `requested`, `used`, `trigger_status`,
-`reason`), in the ladder record as a relaxation (below), and, for a run with no
+every policy lineup. It is a construction preference: when the model is proven
+infeasible under it (a solve that ends on a time limit is not read that way), the model
+is rebuilt one person looser (7, then 8, which is the exact-roster cut alone) and the
+looser cap holds for the rows after it, so a run pays at most 8 minus the requested cap
+rebuilds. Distinct lineups (R29) are never on that walk. Each step is in the selection
+report's `differentiation` (`requested_person_overlap`, `max_person_overlap` as the
+loosest cap any row used, `overlap_relaxations`: `index`, `requested`, `from`, `used`,
+`trigger_status`, `reason`), in the ladder record as a relaxation (below), and, for a run with no
 ladder, as a `RELAXATION_STRUCTURE_RELAXED` limitation. The C1 selection profile is
 `prior_only_classic_selection_c1_v2` (v1 named earlier runs' exact-roster-only C1).
 The fill's report `exclusions` is now `THE_RUN_S_OWN_AND_THE_POLICY_S_EXACT_EXCLUSIONS`:
@@ -3056,7 +3057,8 @@ its window check counts every fillable row), `policy`
 An `OVERLAP_CAP` record is a step the selection took inside one attempt, not a rung
 move: `rung_from` and `rung_to` are the rung that attempt ran, `attempt` is that
 attempt's own number (as in `attempts`), `original` is the requested cap, `final` the
-cap the row was built under, `trigger` the solver status that made the requested cap
+cap the row was built under (`original` is the cap in force before the step, which is the
+requested cap only for the first), `trigger` the solver status that made the requested cap
 infeasible, `trigger_origin` `SELECTION`, and `limitation_code`
 `RELAXATION_STRUCTURE_RELAXED`. The value is additive: no earlier field changed
 meaning, and no consumer reads `step` as a closed set.

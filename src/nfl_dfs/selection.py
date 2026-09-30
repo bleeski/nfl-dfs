@@ -748,9 +748,10 @@ def _sequential_lineups(
     Classic rows (Session 39) are also capped at `classic_person_overlap` shared
     people with every earlier row and with every `overlap_anchors` roster (the
     policy's own lineups, for a fill). A row no distinct lineup fits under that
-    cap is solved again one person looser, up to `CLASSIC_MAX_USEFUL_OVERLAP`,
-    and the step is recorded; the next row starts from the requested cap again,
-    so one hard row does not loosen the rest. Distinctness is never on that walk.
+    cap, proven infeasible, is solved again one person looser, up to
+    `CLASSIC_MAX_USEFUL_OVERLAP`, and the step is recorded; the looser cap then
+    holds for the rows that follow, so the walk costs at most a handful of model
+    rebuilds however many rows there are. Distinctness is never on that walk.
     """
 
     by_id = {player.dk_id: player for player in slate.players}
@@ -776,6 +777,7 @@ def _sequential_lineups(
     if binds(requested_overlap):
         for roster in anchors:
             optimizer.add_person_overlap_limit(roster, requested_overlap)
+    current_overlap = requested_overlap  # the cap the model in `optimizer` holds
     selected: list[SelectedLineup] = []
     row_caps: list[int | None] = []
     overlap_relaxations: list[dict[str, object]] = []
@@ -784,38 +786,43 @@ def _sequential_lineups(
     for position in range(1, count + 1):
         index = first_index + position - 1
         result = optimizer.solve(objective)
-        row_cap = requested_overlap
         if (
             result.roster is None
+            and result.status == "INFEASIBLE"
             and classic
-            and binds(requested_overlap)
+            and binds(current_overlap)
             and (selected or anchors)
         ):
-            # No distinct lineup fits under the cap. It is a construction
-            # preference, so loosen it one person at a time on a model that
-            # holds every earlier row and anchor under the looser cap; the strict
-            # model above keeps serving the rows that follow.
-            first_status = result.status
-            row_cap = requested_overlap
-            while result.roster is None and binds(row_cap):
-                row_cap += 1
-                loosened = LineupOptimizer(
+            # The cap is what makes the next lineup impossible: the model is proven
+            # infeasible, so this is not a time limit and not a pool with no
+            # distinct lineup left. The cap is a construction preference, so it
+            # steps up one person at a time on a model rebuilt with every earlier
+            # row and anchor under the looser cap, and stays there for the rows
+            # that follow (a ratchet: at most `CLASSIC_MAX_USEFUL_OVERLAP` minus
+            # the requested cap rebuilds in a run, whatever the count, which the
+            # deadline's per-solve sizing can afford). A solve that ended on a
+            # time limit without a roster is not relaxed; it falls to the raise.
+            first_status, before = result.status, current_overlap
+            while result.roster is None and binds(current_overlap):
+                current_overlap += 1
+                optimizer = LineupOptimizer(
                     slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
                 )
                 for roster in forbidden_rosters:
-                    loosened.add_no_good(roster)
+                    optimizer.add_no_good(roster)
                 for roster in anchors:
-                    if binds(row_cap):
-                        loosened.add_person_overlap_limit(roster, row_cap)
+                    if binds(current_overlap):
+                        optimizer.add_person_overlap_limit(roster, current_overlap)
                 for earlier in selected:
-                    cut(loosened, earlier.roster, row_cap)
-                result = loosened.solve(objective)
+                    cut(optimizer, earlier.roster, current_overlap)
+                result = optimizer.solve(objective)
             if result.roster is not None:
                 overlap_relaxations.append({
-                    "index": index, "requested": requested_overlap, "used": row_cap,
-                    "trigger_status": first_status,
+                    "index": index, "requested": requested_overlap, "from": before,
+                    "used": current_overlap, "trigger_status": first_status,
                     "reason": "NO_DISTINCT_LINEUP_UNDER_THE_REQUESTED_OVERLAP_CAP",
                 })
+        row_cap = current_overlap
         if (
             result.roster is None
             and slate.mode is EngineMode.SHOWDOWN
@@ -835,7 +842,7 @@ def _sequential_lineups(
             for roster in forbidden_rosters:
                 optimizer.add_no_good(roster)
             for earlier in selected:
-                cut(optimizer, earlier.roster, requested_overlap)
+                cut(optimizer, earlier.roster, current_overlap)
             differentiate_captain = False
             captain_repeats_from = position
             result = optimizer.solve(objective)
@@ -880,7 +887,7 @@ def _sequential_lineups(
         # Forbid this exact roster, cap how much personnel may carry over, and
         # optionally forbid a repeat captain. Without the overlap cap the next
         # solve returns the same six people with a rotated captain.
-        cut(optimizer, roster, requested_overlap)
+        cut(optimizer, roster, current_overlap)
         if differentiate_captain and slate.mode is EngineMode.SHOWDOWN:
             optimizer.add_no_good([captain])
             forbidden_captains.append(captain)

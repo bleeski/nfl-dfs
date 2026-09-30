@@ -173,10 +173,10 @@ own rows, its other bounds bind only its rows, and after its joint solve C1 fill
 the other fillable rows, never repeating a C2, C1 or prefilled lineup (Session
 11c). Since Session 39 the policy's exact exclusions and zero caps bind those
 rows too, and a person-overlap cap of 6 covers them (against the other fill rows
-and the policy's lineups): when no distinct lineup fits under it that row's cap
-steps up one person at a time (to 7, then 8, the exact-roster cut alone), each
-step named as a `RELAXATION_STRUCTURE_RELAXED` limitation; a lineup is never
-repeated.
+and the policy's lineups): when no distinct lineup fits under it (the model is proven infeasible) the cap
+steps up one person at a time (to 7, then 8, the exact-roster cut alone) and stays
+there for the rows after it, each step named as a `RELAXATION_STRUCTURE_RELAXED`
+limitation; a lineup is never repeated.
 `row_sources` in the result and each entry's `source` in C3's readable review
 say which filled each row. If C1 runs out of distinct lineups the review
 delivers nothing and the baseline stays the file, named. The request's
@@ -1277,8 +1277,8 @@ replaces the baseline as the deliverable; if that export is refused, or C1
 raises `SOLVER_RETURNED_NO_LINEUP` when distinct lineups run out
 (`selection.py`, `_sequential_lineups`), the baseline stays the deliverable with its
 unfilled Entry IDs named. Since Session 39 rung 4's C1 rows share at most 6 people
-with each earlier row, the cap stepping up one person at a time when no distinct
-lineup fits and each step reported in the result's `relaxation` (step
+with each earlier row, the cap stepping up one person at a time when the model is
+proven infeasible and each step reported in the result's `relaxation` (step
 `OVERLAP_CAP`); it is a construction preference, never uniqueness. Neither
 uniqueness nor any exact exclusion (a policy's own, or
 a person it caps at zero) is ever on the ladder; rung 4 carries the dropped

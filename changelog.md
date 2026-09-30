@@ -4,6 +4,148 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-30: Session 39 -- Classic diversification (person-overlap cap on C1 and the fill, a witness chain that holds the policy overlap, the fill's policy exclusions)
+
+Branch `claude/stoic-bardeen-bifjsp` (assigned, at `c5b9468`, Session 17's merge, now recorded on its ledger row),
+pull request https://github.com/bleeski/nfl-dfs/pull/90, task file `state/tasks/S39.md`. No protected path touched.
+Every path still ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`; no evidence gate was touched. The
+`/dev-session` and `/advisor` Skill calls fail in the cloud container on a harness hook (`set: Illegal option -o
+pipefail`), as the session prompt warned; both were followed from their `SKILL.md` files, the advisor as an `Agent`
+call with `model: "fable"`. Not fixed.
+
+#### What changed, and what did not
+
+Review S3, S4 and S6 are done. **S5 (the partial fill) is not: it is Session 39b**, registered `Pending` directly
+below this row. Reason, from reading the code before writing any: a fill that returns k rows and names the rest has
+to reach `exact_assignments_for_entries` (`portfolio_enforcement.py:987`, coverage), C3's unbound-row check
+(`classic_review.py:864-866`), the SD3 and C2 byte audits' exact unbound set (`portfolio_enforcement.py:1360`),
+`readable_review.py:299-301` (`lineups == len(unbound)`) and the contest-assignment step, each an integrity gate, and
+the diff was at about 750 lines before it. A selection-layer-only partial fill that `prior_review` still failed
+closed on would have been a second vocabulary beside `release_truths.unfilled_entry_ids` and a seam that passes
+because two unrelated checks happen to raise; the advisor said the same. Nothing in S5 was started.
+
+- **S3, the Classic cap.** `select_prior_lineups(classic_person_overlap=6)` (`selection.CLASSIC_PERSON_OVERLAP`;
+  `None` restores the old exact-roster-only C1 for diagnostics) caps the people a C1 or fill row shares with every
+  earlier row, and a fill row also with every policy lineup (`overlap_anchors`). `max_person_overlap` (default 4,
+  Showdown's six-slot scale) is not read by Classic, which is why the cap is a separate parameter. When no distinct
+  lineup fits under the cap, and only when the model is proven `INFEASIBLE` (a solve that ends on a time limit with no
+  roster is not read as an infeasible cap; it falls to the R29 refusal as before), the model is rebuilt one person
+  looser, 7 then 8 (eight is the exact-roster cut alone: distinct nine-person rosters never share nine), and the looser
+  cap holds for the rows after it: a ratchet, so a run pays at most 8 minus the requested cap rebuilds however many
+  rows it has. (First cut restarted every row at the requested cap; the reviewer measured 150 C1 rows on the fixture
+  at 155 s with cap 0, and 72 s with the ratchet, final cap 2 after two steps. The default cap costs 13.2 s for 150
+  rows against 1.3 s uncapped; cap 4, 54.5 s.) **Where the cap sits.** It is a construction preference inside the sequential
+  solve, not a ladder rung: the ladder's policy rungs already carry 5, 5, 6, 7 for the joint solve
+  (`classic_overlap`), and rung 4 is no policy. A default of 6 makes C1 tighter than rung 3's 7, which I accepted:
+  C1 is greedy per row rather than a joint solve, the card and `readable_review.py`'s own `effective = 6 if
+  configured is None` both say 6, and the stepwise walk to 7 and 8 on infeasibility is reported. Every step is in the
+  selection report (`differentiation.requested_person_overlap`, `max_person_overlap` as the loosest cap any row used,
+  `overlap_relaxations`: `index`, `requested`, `from`, `used`, `trigger_status`, `reason`), in the ladder's record (`Ladder.observe` records each as step `OVERLAP_CAP`, constraint
+  `classic_person_overlap`, code `RELAXATION_STRUCTURE_RELAXED`, class `S`; contract note in `docs/DATA_CONTRACTS.md`)
+  and, for a run with no supplied policy and so no ladder, as a `RELAXATION_STRUCTURE_RELAXED` limitation
+  (`cli.py`). No new blocker code, so the gate registry and its pin (`d10ad5bf...2c52e`) are unchanged. C1's
+  selection profile is `prior_only_classic_selection_c1_v2` (v1 named the exact-roster-only C1; nothing reads the
+  string). Showdown's `_sequential_lineups` behaviour is unchanged (its captain fallback and
+  `OVERLAP_LIMIT_BREACHED` backstop keep their text; the report gained two additive keys).
+- **S4, the witness chain.** `_Enumerator.expand_validated_neighbors` was N copies of the best lineup with the
+  quarterback swapped: seed, then slot, then replacement, stopping at the target, so the first seed's slot 0 took all
+  of them. It now walks round-robin over the MILP seeds, starts each call at a different slot, and keeps every
+  accepted neighbour within the policy's `max_pairwise_person_overlap` of every neighbour already accepted
+  (`_diverging_neighbor`: replace the slot whose person the most violating neighbours hold with the legal person the
+  fewest hold, highest prior first, at most nine steps). **A fact the card did not state:** on the 20-entry
+  fixture the old chain never gave a feasible witness at policy overlap 7 or below (`INCOMPLETE_BANK_EXHAUSTION`
+  at 5, 6 and 7; `POLICY_FEASIBLE` only at 8 and 9), and the ladder's generated policies carry 5, 5, 6 and 7 at
+  rungs 0 to 3, so the witness that keeps a limit-stopped bank alive (`enough` in
+  `build_classic_candidate_bank`) could not exist at any generated rung. Now 20 of 20 at overlaps 4 to 9, and 150 of
+  150 at overlaps 3 to 9 (0.2 s at 9, 1.4 s at 3, `validate_lineup` calls 1,923 to 15,860); at 2 and below it ends
+  `VALIDATED_NEIGHBORS_EXHAUSTED` with 35, 14 and 9 members that do hold the cap, never a chain that breaks it. The
+  advisor recommended topping up with MILP solves (`enumerate(enforce_pairwise_overlap=True)`); I did not, because a
+  solve costs 0.28 to 4.4 s per candidate on this host (Session 47) and the chain exists to be the cheap witness;
+  that is the fallback if a real slate shows the walk short. The MILP strata are untouched, so which lineups the
+  solves return is unchanged; the bank's candidates and so its hash change with the chain (the bank schema does not).
+- **S6, the fill's exclusions.** `fill()` used the run's exclusions only, so a person a policy excluded could fill a
+  row (Session 11b's rule). `selection._fill_exclusions` adds `relaxation.own_exclusion_dk_ids(policy)`: an exact
+  exclusion, a person capped at zero, and in Classic a team or game capped at zero, the same set rung 4 carries. The
+  policy's other bounds still cover only its own rows. The fill report's `exclusions` is now
+  `THE_RUN_S_OWN_AND_THE_POLICY_S_EXACT_EXCLUSIONS`.
+
+#### Tests
+
+New `tests/test_classic_diversification.py` (17 test cases) on the C2 fixture (`_slate`, six teams, 102 rows). Each
+of these failed on the old code before the change and passed after: default cap 6 respected by 20 C1 rows (old: 8
+shared) and caps 4, 5, 7; witness chain at overlaps 5, 6 and 7 (old: 8 shared, `INCOMPLETE_BANK_EXHAUSTION`); chain
+from at least three seeds and three slots at overlap 9 (old: one); fill rows capped against policy lineups (old: 8
+shared); the fill's exclusions. Also there: a cap of 0 forces the ratchet (steps reported, at most 8, each starting
+where the last ended, every row within the cap in force, no roster repeats), a solve that times out is not relaxed,
+R29 still refuses the second lineup of a one-lineup pool, determinism at overlap 6, the ladder-less limitation and a
+fill-scope `OVERLAP_CAP` record. In `tests/test_relaxation_controller.py`: the step reaches the ladder's record, the
+result's blockers and limitations. Mutation checks by hand, each reverted after: the cap made a no-op (4 fail), the
+policy overlap ignored (3 fail), one seed and one slot order (3 fail), the fill's exclusions dropped (3 fail), fill
+anchors dropped (1 fails), the relaxed model not kept (1 failed under the first, per-row design), the `INFEASIBLE`
+guard dropped (1 fails).
+
+**Tests edited because S6 reverses Session 11b's rule (their expectation changed, not their strength):**
+`tests/test_portfolio_policy.py::test_sd3_fills_the_unbound_rows_after_its_joint_solve_under_the_runs_and_the_policys_exclusions`
+(renamed from `..._under_the_runs_exclusions_only`; the excluded captain is now absent from the fill's rows and the
+fill's first lineup is no longer the run's best),
+`tests/test_entry_groups.py::test_a_policys_exclusion_binds_its_rows_and_the_c1_rows_too` (renamed from
+`..._and_never_the_c1_rows`; the excluded person is in no row) and the `exclusions` string in
+`test_a_classic_subset_is_filled_by_prior_review_called_directly`.
+
+**Pinned hash moved on purpose: `C2_FULL_FILLABLE_SHA256` in `tests/test_entry_groups.py`**, from `48027a40...28f8ce`
+to `128a0fac...bfd0e34`. Reason, checked by running the same scenario on the committed tree and on this one: the old
+delivered file's three rows were one lineup with the quarterback swapped and one other slot varying (cells 81000001,
+81000006 and 81000016 in the first roster slot, the rest identical), the exact shape review S4 named; the new rows
+differ in three or four slots. The `SD3_FULL_FILLABLE_SHA256` did not move.
+
+**A test edited after CI caught it (the first push, `b5a7a21`, ran red on exactly one test):**
+`tests/test_contest_assignment_classic.py::test_c2_policy_and_c3_diversify_and_the_review_reconciles` asserted that no
+contest holds two entries with the same quarterback. The six lineups tie at 228.3 prior points in that fixture, so which
+six the joint solve returns is a tie-break: the old chain made three NE lineups and the new one four DAL lineups, and
+four lineups with one quarterback cannot be spread over three contests (pigeonhole). The assertion held by tie-break
+luck. It now asserts the step leaves exactly the forced minimum of repeats (`max(0, lead - contests)`, and none when
+nothing forces one), which fails if the step stops separating what it can. Confirmed against the committed tree
+(three NE) and this one (four DAL) with a script. I had run focused files locally but not the whole suite before that
+push (the stop hook asked for a commit); CI was the full run.
+
+#### Review (advisor before, `reviewer` agent after), and what is left open
+
+The advisor (fable) agreed on the cap, its place and the stepwise walk, and argued for a MILP top-up on the chain,
+which I did not take (above). The reviewer found no blocker and two should-fix items, both fixed here: the cap was
+loosened on any solve without a roster, so a time limit was misreported as an infeasible cap (now `INFEASIBLE`
+only), and the per-row restart made C1's cost unbounded in the worst case (now the ratchet). Its notes, all
+recorded in Session 39b's card or here: `Ladder.observe` records steps from every attempt including one abandoned
+after selection succeeded (conservative, not silent); the `select_prior_lineups` docstring still says an unbound
+fill "raises, and nothing is returned" (true until 39b); Showdown's selection report is not byte-identical (two
+additive `differentiation` keys, CSVs unaffected); and the Showdown subset fill also gets S6, since
+`own_exclusion_dk_ids` reads both policy types.
+
+- **The policy's exclusions now bind the fill, and no independent layer re-checks that.** `readable_review.py`
+  (`_unbound_rows_section`) and C3 (`classic_review.py:1216-1245`) compare fill rows with the run's exclusions only,
+  and the mutation that dropped S6 failed my tests but not the run's own review. The selector enforces it
+  (`blocked = set(excluded) & set(roster)`, now `fill_excluded`); a regression in `_fill_exclusions` would pass every
+  review layer. It, the stale `basis` strings (`classic_review.py:1223`, `readable_review.py:331`) and a check of
+  fill rows against the policy lineups as well as each other are Session 39b's card. None of those files is in this
+  card's list.
+- The fill's cap-walk rebuilds are not in the fill's window accounting (`_fill_solve_seconds`); the ratchet bounds
+  them (at most two rebuilds at the default cap) and an infeasibility proof is quick, but I did not time a 150-entry
+  fill. A time-limit no-roster still ends `SOLVER_RETURNED_NO_LINEUP`.
+- Fill rows are capped against the policy's lineups but not against prefilled template rosters (the operator's, not
+  this engine's rows; they stay exact-roster no-goods). A choice, not a finding.
+- `scripts/make_classic_policy.py`, named in the card's file list, needed no change; no operator flag was added for the
+  Classic cap (`classic_person_overlap` is a function parameter; `--max-person-overlap` stays Showdown's).
+- The ladder's policy rungs still carry 5, 5, 6 and 7 for the joint solve, and rung 4's C1 default of 6 is tighter
+  than rung 3's 7 (a note in the S3 paragraph above, not a defect).
+
+#### Verification
+
+`sh ./nfl.sh test` on Linux: **`2106 passed, 1 skipped in 501.77s (0:08:21)`** (baseline before any edit, on
+`c5b9468`: `2088 passed, 1 skipped in 483.49s (0:08:03)`; the skip is the junction test). The card's verification
+command passed. `python3 scripts/record_verify.py --from-log` recorded it. `git diff --check` clean;
+`python3 scripts/check_protected_paths.py` clean; `sh ./nfl.sh doctor`: `pass_status: true`. Every release truth is
+unchanged: `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`; no wording of EV, ROI, win probability or
+calibration was added, and the cap's `does_not_establish` text is in `docs/DATA_CONTRACTS.md`.
+
 ### 2026-09-29: Session 17 -- X2 standings corpus transport (authenticated release-asset fetch, hash-bound)
 
 Branch `claude/inspiring-dijkstra-cqlnzr` (assigned, at `751942a`, Session 48's merge, now recorded on its ledger

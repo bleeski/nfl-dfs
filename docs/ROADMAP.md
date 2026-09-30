@@ -1253,6 +1253,11 @@ Every session follows this protocol, and the cards only add to it:
   they check the fill rows among themselves), and their `basis` strings
   (`classic_review.py:1223`, `readable_review.py:331`) say what now constrains a
   fill row.
+- **Also from Session 39's review.** `Ladder.observe` records overlap-cap steps
+  from every attempt, including one abandoned after its selection succeeded (it
+  over-reports, never under-reports); update the `select_prior_lineups` docstring
+  (it still says an unbound fill "raises, and nothing is returned"); and time a
+  150-entry fill, whose cap-walk rebuilds are not in `_fill_solve_seconds`.
 - **Size.** Six files, about 500 changed lines with tests. One session; if the
   audit changes pass about 900 lines, land the selection and `prior_review` seam
   with the audits and split the review-layer re-checks.
@@ -2466,5 +2471,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-29 | Session 17 | In Progress to Complete | `c5b9468` | Authenticated release-asset transport (`AuthenticatedGithubClient`, committed-manifest hash binding, exclusive-create landing in the inbox, `nfl_standings_transport_v1`, `scripts/fetch_standings_corpus.py`) built and tested against a fixture transport only; 21 `STANDINGS_TRANSPORT_*` codes registered, `REGISTRY_SHA256` re-pinned; suite `2088 passed, 1 skipped in 479.09s (0:07:59)`; merged as PR #89 (`c5b9468`, recorded by Session 39); real-corpus acceptance moved to Session 17b; the repository is public, so the release needs a private one (changelog) |
 | 2026-09-29 | Session 17b | Registered as Pending | recorded by the next session | Split from Session 17 at its breakpoint; depends on Session 17 and O1; Session 18 now depends on 17b (changelog) |
 | 2026-09-30 | Session 39 | Pending to In Progress | claim commit | Claimed on `claude/stoic-bardeen-bifjsp` (assigned; at `c5b9468`, Session 17's merge, recorded on its row above); baseline suite `2088 passed, 1 skipped in 483.49s (0:08:03)`; §1 rewritten to Session 23b in this commit |
-| 2026-09-30 | Session 39 | In Progress to Complete | recorded by the next session | Classic person-overlap cap 6 on C1 and the unbound fill (stepping up one person at a time when no distinct lineup fits, each step reported in the selection report, the ladder record as `OVERLAP_CAP` and the ladder-less run's limitations), the witness chain round-robins seeds and slots and holds the policy overlap, the fill applies the policy's own exclusions and zero caps; suite result recorded in the changelog; the partial fill (S5) moved to Session 39b (changelog) |
+| 2026-09-30 | Session 39 | In Progress to Complete | recorded by the next session | Classic person-overlap cap 6 on C1 and the unbound fill (stepping up one person at a time when no distinct lineup fits, each step reported in the selection report, the ladder record as `OVERLAP_CAP` and the ladder-less run's limitations), the witness chain round-robins seeds and slots and holds the policy overlap, the fill applies the policy's own exclusions and zero caps; suite `2106 passed, 1 skipped in 501.77s (0:08:21)`; the partial fill (S5) moved to Session 39b (changelog) |
 | 2026-09-30 | Session 39b | Registered as Pending | recorded by the next session | Split from Session 39 at the card's seam: the partial fill and its review-layer cascade (changelog) |

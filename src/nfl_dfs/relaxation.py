@@ -783,7 +783,7 @@ def selection_overlap_steps(reports: Mapping[str, object] | None) -> list[dict[s
 def overlap_step_text(step: Mapping[str, object]) -> str:
     return _limitation_text(
         "RELAXATION_STRUCTURE_RELAXED",
-        f"classic_person_overlap {step['requested']} to {step['used']} for {step['scope']} row"
+        f"classic_person_overlap {step['from']} to {step['used']} for {step['scope']} row"
         f" {step['index']} after solver status {step['trigger_status']}: no distinct lineup fit under"
         " the cap; lineups stay distinct (R29)")
 
@@ -1161,7 +1161,7 @@ class Ladder:
             "class": family.gate_class.value,
             "family": family.name,
             "provenance": family.provenance.model_dump(mode="json"),
-            "original": step["requested"],
+            "original": step["from"],
             "final": step["used"],
             "trigger": step["trigger_status"],
             "trigger_kind": STRUCTURE,
