@@ -756,6 +756,38 @@ def _limitation_text(code: str, detail: str) -> str:
     return f"{code}:{detail}"
 
 
+def selection_overlap_steps(reports: Mapping[str, object] | None) -> list[dict[str, object]]:
+    """Every Classic overlap-cap step a review's selection report names (Session 39).
+
+    C1's own rows and the rows a subset policy leaves unbound each report the
+    rows whose cap `_sequential_lineups` stepped up. The cap is a construction
+    preference, so a step is a relaxation like a rung's; it is read from the
+    structured report, never from text.
+    """
+
+    payload = (reports or {}).get("selection")
+    payload = payload.get("selection") if isinstance(payload, Mapping) else None
+    if not isinstance(payload, Mapping):
+        return []
+    fill = payload.get("unbound_fill")
+    found: list[dict[str, object]] = []
+    for scope, block in (("C1", payload), ("UNBOUND_FILL", fill if isinstance(fill, Mapping) else None)):
+        differentiation = block.get("differentiation") if isinstance(block, Mapping) else None
+        steps = differentiation.get("overlap_relaxations") if isinstance(differentiation, Mapping) else None
+        for step in steps or ():
+            if isinstance(step, Mapping):
+                found.append({**step, "scope": scope})
+    return found
+
+
+def overlap_step_text(step: Mapping[str, object]) -> str:
+    return _limitation_text(
+        "RELAXATION_STRUCTURE_RELAXED",
+        f"classic_person_overlap {step['from']} to {step['used']} for {step['scope']} row"
+        f" {step['index']} after solver status {step['trigger_status']}: no distinct lineup fit under"
+        " the cap; lineups stay distinct (R29)")
+
+
 def _plain(value: object) -> object:
     """JSON-safe: exact decimals as text."""
 
@@ -823,6 +855,8 @@ class Ladder:
             "elapsed_seconds": round(elapsed_seconds, 3),
             "pre_selection_seconds": round(pre_selection_seconds, 3),
         })
+        for step in selection_overlap_steps(getattr(outcome, "reports", None)):
+            self._record_overlap_step(attempt, step)
 
     # -- the next rung ------------------------------------------------------
 
@@ -1104,6 +1138,43 @@ class Ladder:
             "entry_ids": list(self.entry_ids),
             "policy": new.binding(),
             "limitation_code": code,
+            "limitation_text": text,
+        })
+
+    def _record_overlap_step(self, attempt: int, step: Mapping[str, object]) -> None:
+        """A Classic overlap-cap step the selection took inside one attempt (Session 39).
+
+        Not a rung move: `rung_from` and `rung_to` are the rung the attempt ran, and
+        `attempt` is that attempt's own number (as in `attempts`), because the step
+        happened inside it rather than feeding the next.
+        """
+
+        text = overlap_step_text(step)
+        family = self.registry.family_of("RELAXATION_STRUCTURE_RELAXED")
+        binding = self.current.binding()
+        self.records.append({
+            "schema_version": CONTRACT_VERSION,
+            "sequence": len(self.records) + 1,
+            "attempt": attempt,
+            "step": "OVERLAP_CAP",
+            "constraint": "classic_person_overlap",
+            "class": family.gate_class.value,
+            "family": family.name,
+            "provenance": family.provenance.model_dump(mode="json"),
+            "original": step["from"],
+            "final": step["used"],
+            "trigger": step["trigger_status"],
+            "trigger_kind": STRUCTURE,
+            "trigger_origin": "SELECTION",
+            "trigger_detail": (f"{step['scope']} row {step['index']}: {step['reason']}")[:600],
+            "rung_from": self.current.label,
+            "rung_to": self.current.label,
+            "why": "the cap is a construction preference; distinct lineups (R29) are never relaxed",
+            "at_utc": self._now(),
+            "elapsed_seconds": round(self.budget.elapsed(), 3) if self.budget is not None else None,
+            "entry_ids": list(self.entry_ids),
+            "policy": binding,
+            "limitation_code": "RELAXATION_STRUCTURE_RELAXED",
             "limitation_text": text,
         })
 

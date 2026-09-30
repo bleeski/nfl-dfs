@@ -141,7 +141,15 @@ from .review_export import export_review_entries, write_assignments_csv, write_r
 from .selection import assignments_for_entries, select_prior_lineups
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .gate_registry import GateRegistry, load_gate_registry
-from .relaxation import DEFAULT_SECONDS_PER_CANDIDATE, Ladder, failure_of, intake_failure, supplied_rung
+from .relaxation import (
+    DEFAULT_SECONDS_PER_CANDIDATE,
+    Ladder,
+    failure_of,
+    intake_failure,
+    overlap_step_text,
+    selection_overlap_steps,
+    supplied_rung,
+)
 from .release import derive_delivery_state, derive_release_policy, release_truths_v3
 from .scenario_store import save_scenario_bank
 from .settlement import (
@@ -3069,10 +3077,15 @@ def _run_prior_review_profile(
 
     blockers = list(reported_blockers)
     blockers[0:0] = list(outcome.blockers)
-    if ladder is not None:
-        # Every relaxation, and a stop the window forced, travels with the file
-        # (or with the baseline) by name, each an `S` limitation.
-        blockers[0:0] = [text for text in ladder.texts() if text not in blockers]
+    # Every relaxation, and a stop the window forced, travels with the file
+    # (or with the baseline) by name, each an `S` limitation. A run with no
+    # ladder (no supplied policy) still names a Classic overlap-cap step its
+    # selection took (Session 39); a ladder has recorded the same steps itself.
+    relaxation_texts = (
+        ladder.texts() if ladder is not None
+        else [overlap_step_text(step) for step in selection_overlap_steps(outcome.reports)]
+    )
+    blockers[0:0] = [text for text in relaxation_texts if text not in blockers]
     if budget is not None:
         blockers.extend(
             deadline_text for deadline_text in budget.blocker_texts() if deadline_text not in blockers
@@ -3428,7 +3441,7 @@ def _run_prior_review_profile(
             truths, latest=latest, not_delivered=_not_delivered_detail(improvement),
             plan=entry_plan, blockers=blockers, registry=registry,
             extra=(*(budget.limitations(registry) if budget is not None else ()),
-                   *(blocker_limitations(ladder.texts(), registry) if ladder is not None else ())),
+                   *blocker_limitations(relaxation_texts, registry)),
         )
     elif latest is None:
         # Nothing to hand over: the review's own record, plus why no baseline backs it.

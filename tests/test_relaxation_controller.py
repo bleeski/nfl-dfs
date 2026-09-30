@@ -920,3 +920,43 @@ def test_rung_4_drops_a_subset_policy_and_fills_every_fillable_row(tmp_path, mon
     assert report["release_truths"]["delivered_entry_ids"] == list(rows)
     rosters = _exported_rosters_showdown(report)
     assert len(rosters) == 3 and len(set(rosters)) == 3
+
+
+def test_a_classic_overlap_cap_step_at_rung_4_is_reported_in_the_relaxation_record(tmp_path, monkeypatch):
+    """Session 39: C1's person-overlap cap is a construction preference, so a row no distinct
+    lineup fits under it steps the cap up, and the step is in the result's `relaxation`.
+
+    The joint solve is made infeasible so the ladder reaches rung 4, and the cap is
+    pinned at 2 (three rows of nine people from a pool of twenty cannot share so
+    little), so C1 has to loosen it. Lineups stay distinct (R29) and the file ships.
+    """
+
+    from functools import partial
+
+    from nfl_dfs import prior_review, selection
+
+    real_solve = selection.solve_classic_portfolio
+
+    def infeasible(policy, bank, **kwargs):
+        return replace(real_solve(policy, bank, **kwargs), status="MODELED_BANK_INFEASIBILITY",
+                       selected_candidate_indexes=())
+
+    monkeypatch.setattr(selection, "solve_classic_portfolio", infeasible)
+    monkeypatch.setattr(prior_review, "select_prior_lineups",
+                        partial(prior_review.select_prior_lineups, classic_person_overlap=2))
+    code, report, _root = _classic(tmp_path, monkeypatch, run_id="c1-cap-step",
+                                   policy=lambda attachments: _policy_file(attachments))
+    assert code == 0 and report["improvement"]["status"] == "DELIVERED", report["blockers"]
+    relaxation = report["relaxation"]
+    assert relaxation["final_rung"] == "4"
+    steps = [item for item in relaxation["relaxations"] if item["step"] == "OVERLAP_CAP"]
+    assert steps, [item["step"] for item in relaxation["relaxations"]]
+    first = steps[0]
+    assert first["constraint"] == "classic_person_overlap" and first["original"] == 2 and first["final"] > 2
+    assert first["limitation_code"] == "RELAXATION_STRUCTURE_RELAXED" and first["class"] == "S"
+    assert first["trigger_origin"] == "SELECTION" and first["rung_from"] == first["rung_to"] == "4"
+    assert any(text.startswith("RELAXATION_STRUCTURE_RELAXED:") and "classic_person_overlap" in text
+               for text in report["blockers"])
+    assert _truth_codes(report)["RELAXATION_STRUCTURE_RELAXED"] == "S"
+    rosters = _exported_rosters(report)
+    assert len(rosters) == 3 and len(set(rosters)) == 3

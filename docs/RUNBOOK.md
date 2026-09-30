@@ -169,9 +169,14 @@ file is good enough, the Classic fallback path below still exists.
 A C2 policy binds every fillable row, or a subset of them in template order:
 `scripts/make_classic_policy.py --entry-id <id>`, once per row (Session 11b); a
 prefilled or unknown row is refused. Its bounds, stack rules and bank count its
-own rows, its exclusions bind only its rows, and after its joint solve C1 fills
+own rows, its other bounds bind only its rows, and after its joint solve C1 fills
 the other fillable rows, never repeating a C2, C1 or prefilled lineup (Session
-11c). C1 cuts only exact rosters, so no overlap cap covers those rows.
+11c). Since Session 39 the policy's exact exclusions and zero caps bind those
+rows too, and a person-overlap cap of 6 covers them (against the other fill rows
+and the policy's lineups): when no distinct lineup fits under it (the model is proven infeasible) the cap
+steps up one person at a time (to 7, then 8, the exact-roster cut alone) and stays
+there for the rows after it, each step named as a `RELAXATION_STRUCTURE_RELAXED`
+limitation; a lineup is never repeated.
 `row_sources` in the result and each entry's `source` in C3's readable review
 say which filled each row. If C1 runs out of distinct lineups the review
 delivers nothing and the baseline stays the file, named. The request's
@@ -1270,8 +1275,12 @@ Session 06 it ends with a CSV. `run-slate` exports C1's own lineups through the
 baseline's writer and audit as `review/DK_REVIEW_ENTRY_C1_<run_id>.csv`, which
 replaces the baseline as the deliverable; if that export is refused, or C1
 raises `SOLVER_RETURNED_NO_LINEUP` when distinct lineups run out
-(`selection.py:577-584`), the baseline stays the deliverable with its unfilled
-Entry IDs named. Neither uniqueness nor any exact exclusion (a policy's own, or
+(`selection.py`, `_sequential_lineups`), the baseline stays the deliverable with its
+unfilled Entry IDs named. Since Session 39 rung 4's C1 rows share at most 6 people
+with each earlier row, the cap stepping up one person at a time when the model is
+proven infeasible and each step reported in the result's `relaxation` (step
+`OVERLAP_CAP`); it is a construction preference, never uniqueness. Neither
+uniqueness nor any exact exclusion (a policy's own, or
 a person it caps at zero) is ever on the ladder; rung 4 carries the dropped
 policy's exclusions as operator exclusions. Since Session 08 the bank keeps
 the rosters a limit-stopped solve returns: a bank with the entry count and a

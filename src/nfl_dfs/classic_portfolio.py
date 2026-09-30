@@ -29,7 +29,7 @@ from .classic_portfolio_policy import (
     parse_normalized_classic_policy_bytes,
 )
 from .contest_assignment import Claim as ContestAssignmentClaim
-from .contracts import EngineMode, SlateContract
+from .contracts import EngineMode, SalaryPlayer, SlateContract
 from .dk import CLASSIC_COLUMNS
 from .hashing import sha256_bytes
 from .lineups import roster_canonical_key, validate_lineup
@@ -367,6 +367,9 @@ def _stack_matches(
     )
 
 
+_NO_HOLDERS: frozenset[int] = frozenset()
+
+
 class _Enumerator:
     def __init__(
         self,
@@ -430,15 +433,137 @@ class _Enumerator:
     def remaining(self) -> int:
         return self.limit - len(self.candidates)
 
+    def _neighbor_candidate(
+        self, roster: tuple[str, ...], canonical: str, kind: str, subject: str | None
+    ) -> ClassicCandidate:
+        rows = [self.by_id[dk_id] for dk_id in roster]
+        people = frozenset(row.underlying_id for row in rows)
+        features = classify_candidate(self.slate, roster)
+        return ClassicCandidate(
+            roster=roster,
+            canonical_key=canonical,
+            people=people,
+            teams=frozenset(row.team for row in rows),
+            games=frozenset(row.game_id for row in rows),
+            prior_points=sum(float(self.objective.get(dk_id, 0.0)) for dk_id in roster),
+            families=features.family_labels,
+            group_matches=_group_matches(people, self.policy.groups),
+            stack_matches=_stack_matches(self.slate, roster, self.policy.stack_rules),
+            source_stratum=kind if subject is None else f"{kind}:{subject}",
+            source_solver_status="INDEPENDENTLY_VALIDATED_NEIGHBOR",
+            source_model_status="SEE_MILP_SEED",
+            source_mip_gap=None,
+            source_node_count=None,
+        )
+
+    def _legal_neighbor(self, roster: tuple[str, ...]) -> str | None:
+        """The canonical key of a roster that is legal, inside the structural bounds and unseen."""
+
+        validation = validate_lineup(self.slate, roster)
+        if validation.lineup is None:
+            return None
+        # A neighbor is not a solver output, so the policy's structural
+        # bounds are checked on it directly (Session 23e).
+        if not self.policy.structural_bounds.open and self.policy.structural_bounds.violations(
+            self.slate, roster
+        ):
+            return None
+        canonical = validation.lineup.canonical_key
+        return None if canonical in self.seen else canonical
+
+    def _diverging_neighbor(
+        self,
+        seed: ClassicCandidate,
+        accepted: Sequence[frozenset[str]],
+        holders: Mapping[str, set[int]],
+        alternatives: Sequence[SalaryPlayer],
+        *,
+        rotation: int,
+        cap: int,
+        probes: list[int],
+    ) -> tuple[tuple[str, ...], str] | None:
+        """One legal, unseen lineup near `seed` that shares at most `cap` people with each accepted one.
+
+        Session 39 (review S4). It starts from the seed and replaces one slot at a
+        time, each step keeping the roster legal. While the roster shares too many
+        people with some accepted neighbors (the violators), it replaces the slot
+        whose person the most violators hold with the legal person the fewest
+        violators (then the fewest neighbors, then the highest prior) hold; once
+        it is inside the cap it must still differ from the seed and from every
+        seen lineup. `holders` maps a person to the accepted neighbors holding
+        him. `rotation` starts the slot scan at a different slot each call, so
+        successive neighbors change different slots. Deterministic: the scan and
+        tie-breaks are functions of the seed, the rotation and the sorted
+        alternatives.
+        """
+
+        roster = list(seed.roster)
+        size = len(roster)
+        for _step in range(size + 1):
+            people = frozenset(self.by_id[dk_id].underlying_id for dk_id in roster)
+            violators = {j for j, held in enumerate(accepted) if len(held & people) > cap}
+            if not violators and tuple(roster) != seed.roster:
+                canonical = self._legal_neighbor(tuple(roster))
+                if canonical is not None:
+                    return tuple(roster), canonical
+            slots = [(rotation + offset) % size for offset in range(size)]
+            if violators:
+                weight = {
+                    slot: len(holders.get(self.by_id[roster[slot]].underlying_id, _NO_HOLDERS) & violators)
+                    for slot in slots
+                }
+                slots = sorted((slot for slot in slots if weight[slot]), key=lambda slot: -weight[slot])
+                order = sorted(
+                    (
+                        (len(holders.get(row.underlying_id, _NO_HOLDERS) & violators),
+                         len(holders.get(row.underlying_id, _NO_HOLDERS)), position, row)
+                        for position, row in enumerate(alternatives)
+                        if row.dk_id not in roster and row.underlying_id not in people
+                    ),
+                    key=lambda item: item[:3],
+                )
+                pool = [item[3] for item in order]
+            else:
+                pool = [
+                    row for row in alternatives
+                    if row.dk_id not in roster and row.underlying_id not in people
+                ]
+            replaced = False
+            for slot in slots:
+                for replacement in pool:
+                    if probes[0] <= 0:
+                        return None
+                    trial = list(roster)
+                    trial[slot] = replacement.dk_id
+                    probes[0] -= 1
+                    if validate_lineup(self.slate, tuple(trial)).lineup is None:
+                        continue
+                    roster, replaced = trial, True
+                    break
+                if replaced:
+                    break
+            if not replaced:
+                return None
+        return None
+
     def expand_validated_neighbors(
         self, *, kind: str, target: int, subject: str | None = None
     ) -> ClassicCandidateStratum:
-        """Expand MILP seeds with deterministic, independently legal swaps.
+        """Expand MILP seeds with deterministic, independently legal neighbors.
 
-        The seeds came from the exact Classic MILP.  Every neighbor changes one
-        exact roster ID, is reparsed by ``validate_lineup``, is scored only with
-        the same prior objective, and is deduplicated canonically.  This avoids
-        making 150-entry scale depend on hundreds of accumulating no-good rows.
+        The seeds came from the exact Classic MILP.  Every neighbor is reparsed by
+        ``validate_lineup``, is scored only with the same prior objective, and is
+        deduplicated canonically.  This avoids making 150-entry scale depend on
+        hundreds of accumulating no-good rows.
+
+        Since Session 39 (review S4) the chain is not N copies of the best lineup
+        with the quarterback swapped: passes go round-robin over the seeds and
+        each call starts at a different slot, and a neighbor shares at most the
+        policy's pairwise person overlap with every neighbor already accepted, so
+        the joint solve can find a feasible portfolio inside the chain when the
+        policy caps overlap. A cap that no legal lineup near the seeds can meet
+        ends the stratum as `VALIDATED_NEIGHBORS_EXHAUSTED`, never as a chain that
+        breaks the cap.
         """
 
         requested = max(0, int(target))
@@ -471,71 +596,45 @@ class _Enumerator:
                 ),
             )
         )
+        cap = min(self.policy.max_pairwise_person_overlap, len(seeds[0].roster) - 1)
+        # One probe is one `validate_lineup` call; the bound keeps a cap that no
+        # neighbor can meet from scanning the whole pool for every seed and pass.
+        probes = [max(2_000, 60 * target * len(seeds[0].roster))]
+        accepted: list[frozenset[str]] = []
+        holders: dict[str, set[int]] = {}
         qualifying = 0
         added = 0
-        for seed in seeds:
-            for slot, current in enumerate(seed.roster):
-                for replacement in alternatives:
-                    if qualifying >= target or self.remaining <= 0:
-                        break
-                    if replacement.dk_id == current:
-                        continue
-                    roster_list = list(seed.roster)
-                    roster_list[slot] = replacement.dk_id
-                    roster = tuple(roster_list)
-                    validation = validate_lineup(self.slate, roster)
-                    if validation.lineup is None:
-                        continue
-                    # A neighbor is not a solver output, so the policy's structural
-                    # bounds are checked on it directly (Session 23e).
-                    if not self.policy.structural_bounds.open and self.policy.structural_bounds.violations(
-                        self.slate, roster
-                    ):
-                        continue
-                    canonical = validation.lineup.canonical_key
-                    if canonical in self.seen:
-                        continue
-                    rows = [self.by_id[dk_id] for dk_id in roster]
-                    people = frozenset(row.underlying_id for row in rows)
-                    features = classify_candidate(self.slate, roster)
-                    self.candidates.append(
-                        ClassicCandidate(
-                            roster=roster,
-                            canonical_key=canonical,
-                            people=people,
-                            teams=frozenset(row.team for row in rows),
-                            games=frozenset(row.game_id for row in rows),
-                            prior_points=sum(
-                                float(self.objective.get(dk_id, 0.0))
-                                for dk_id in roster
-                            ),
-                            families=features.family_labels,
-                            group_matches=_group_matches(people, self.policy.groups),
-                            stack_matches=_stack_matches(
-                                self.slate, roster, self.policy.stack_rules
-                            ),
-                            source_stratum=(
-                                kind if subject is None else f"{kind}:{subject}"
-                            ),
-                            source_solver_status="INDEPENDENTLY_VALIDATED_NEIGHBOR",
-                            source_model_status="SEE_MILP_SEED",
-                            source_mip_gap=None,
-                            source_node_count=None,
-                        )
-                    )
-                    self.seen.add(canonical)
-                    self.rosters.append(roster)
-                    qualifying += 1
-                    added += 1
-                if qualifying >= target or self.remaining <= 0:
-                    break
-            if qualifying >= target or self.remaining <= 0:
-                break
+        stalled = 0
+        rotation = 0
+        while qualifying < target and self.remaining > 0 and probes[0] > 0 and stalled < len(seeds):
+            seed = seeds[rotation % len(seeds)]
+            found = self._diverging_neighbor(
+                seed, accepted, holders, alternatives,
+                rotation=rotation // len(seeds) + rotation % len(seeds),
+                cap=cap, probes=probes,
+            )
+            rotation += 1
+            if found is None:
+                stalled += 1
+                continue
+            stalled = 0
+            roster, canonical = found
+            candidate = self._neighbor_candidate(roster, canonical, kind, subject)
+            self.candidates.append(candidate)
+            self.seen.add(canonical)
+            self.rosters.append(roster)
+            for person in candidate.people:
+                holders.setdefault(person, set()).add(len(accepted))
+            accepted.append(candidate.people)
+            qualifying += 1
+            added += 1
         termination = (
             "TARGET_REACHED"
             if qualifying >= target
             else "CANDIDATE_LIMIT"
             if self.remaining <= 0
+            else "NEIGHBOR_SEARCH_BOUND"
+            if probes[0] <= 0
             else "VALIDATED_NEIGHBORS_EXHAUSTED"
         )
         record = ClassicCandidateStratum(
