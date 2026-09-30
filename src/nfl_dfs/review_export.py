@@ -25,7 +25,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from .contracts import EngineMode, SlateContract
 from .dk import (
@@ -58,9 +58,12 @@ class ReviewExport:
     file_valid: bool
     problems: tuple[str, ...]
     contest_scope_observations: tuple[str, ...] = ()
+    unfilled_entry_ids: tuple[str, ...] = ()
 
     def as_report(self, extra: Mapping[str, object] | None = None) -> dict[str, object]:
+        gap = {"unfilled_entry_ids": list(self.unfilled_entry_ids)} if self.unfilled_entry_ids else {}
         return {
+            **gap,
             "status": "DO_NOT_UPLOAD",
             "export_version": self.export_version,
             "FILE_VALID": self.file_valid,
@@ -106,8 +109,15 @@ def export_review_entries(
     template: EntryTemplate,
     assignments: Mapping[str, tuple[str, ...]],
     output_path: str | Path,
+    unfilled_entry_ids: Sequence[str] = (),
 ) -> ReviewExport:
-    """Write the bulk-entry CSV only after legality and the byte audit pass."""
+    """Write the bulk-entry CSV only after legality and the byte audit pass.
+
+    `unfilled_entry_ids` (Session 39b) are fillable rows the fill named as left
+    without a lineup because no distinct one was left (R29). Each stays blank in
+    the file, and the audit reparses the output to prove it: a fillable row must
+    be assigned or named, never both and never neither.
+    """
 
     output = Path(output_path).resolve()
     if output.exists():
@@ -130,10 +140,14 @@ def export_review_entries(
     # assigned; every other row passes through byte for byte.
     authorized = set(plan.fillable) if plan is not None else {
         entry.entry_id for entry in template.authorizations}
-    if set(assignments) != authorized:
-        missing = sorted(authorized.difference(assignments))
-        extra = sorted(set(assignments).difference(authorized))
-        problems.append(f"ENTRY_AUTHORIZATION_MISMATCH:missing={missing}:extra={extra}")
+    unfilled = tuple(str(entry) for entry in unfilled_entry_ids)
+    covered = set(assignments) | set(unfilled)
+    if covered != authorized or set(assignments) & set(unfilled):
+        missing = sorted(authorized.difference(covered))
+        extra = sorted(covered.difference(authorized))
+        both = sorted(set(assignments) & set(unfilled))
+        problems.append(
+            f"ENTRY_AUTHORIZATION_MISMATCH:missing={missing}:extra={extra}:assigned_and_unfilled={both}")
 
     validated = {}
     for entry_id, roster in sorted(assignments.items()):
@@ -150,7 +164,8 @@ def export_review_entries(
     if not problems:
         try:
             output_bytes = write_upload_bytes(
-                template, assignments, unfilled=plan.left_blank if plan is not None else ())
+                template, assignments,
+                unfilled=(*(plan.left_blank if plan is not None else ()), *unfilled))
             audit = audit_output_bytes(
                 template.path, output_bytes, template, assignments
             )
@@ -164,8 +179,14 @@ def export_review_entries(
                     for entry in reparsed.authorizations
                     if entry.entry_id in assignments
                 }
+                still_blank = {
+                    entry.entry_id for entry in reparsed.authorizations
+                    if entry.entry_id in set(unfilled) and not any(entry.existing_cells)
+                }
                 if reparsed_assignments != dict(assignments):
                     problems.append("REPARSE_ASSIGNMENT_MISMATCH")
+                elif still_blank != set(unfilled):
+                    problems.append("REPARSE_ASSIGNMENT_MISMATCH:a named unfilled row is not blank in the output")
                 else:
                     digest = sha256_bytes(output_bytes)
         except Exception as exc:  # noqa: BLE001 - reported, never swallowed
@@ -189,6 +210,7 @@ def export_review_entries(
         file_valid=file_valid,
         problems=tuple(problems),
         contest_scope_observations=tuple(contest_scope),
+        unfilled_entry_ids=unfilled,
     )
 
 

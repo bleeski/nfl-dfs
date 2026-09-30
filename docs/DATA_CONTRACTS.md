@@ -661,11 +661,24 @@ Classic subset (the `CLASSIC_POLICY_SUBSET_UNSUPPORTED` refusal and its
 registry entry are gone). C2's joint solve fills the bound rows; then C1 fills
 the fillable rows the policy leaves unbound, every C2 lineup and prefilled
 roster a no-good, under the run's own exclusions (since Session 39 also the
-policy's own exact exclusions and zero caps, see below). The fill is all or
-nothing, as SD3's is: one that
-runs out of distinct lineups raises `SOLVER_RETURNED_NO_LINEUP` with
-`stage=UNBOUND_FILL` and the baseline stays the file (Session 39b changes this). The selection report's
-`unbound_fill` records it, with `source: "C1"`. Each fill solve
+policy's own exact exclusions and zero caps, see below). Since Session 39b a
+fill that runs out of distinct lineups at row k delivers the bound rows and the
+k rows it built, and names the unbound Entry IDs it could not fill (R29): the
+selection report's `unbound_fill` gains `requested`, `unfilled_rows` and
+`stopped` (`index`, solver `status`, `proved_exhausted`), the report's
+top-level `unfilled_entry_ids` names the rows, `classic_selection.json` gains
+`unfilled_entry_ids` (only when non-empty) and `unbound_fill` (the requested and
+loosest person-overlap cap, the record C3 holds every fill row to), the C3 export
+audit gains `unfilled_entry_ids` (only when non-empty), and the review's
+release truths list the rows as `unfilled_entry_ids` under a
+`SOLVER_RETURNED_NO_LINEUP` limitation (`V`, `distinct_lineups`, scoped to those
+rows). The rows stay blank in `DK_REVIEW_ENTRY_*.csv`; a blank row the
+selection record does not name is `CLASSIC_C3_UNBOUND_ROWS_MISMATCH`. These are
+additive keys, not a new version (as in Session 08): a reader that predates
+them fails closed on the unbound-rows check. The selection report's
+`unbound_fill` records the fill, with `source: "C1"`. It does not establish that
+the rows named are unfillable by any lineup (only the bank's search limits and the
+run's exclusions bound the pool), or that the k rows are good. Each fill solve
 gets what the policy's declared bank and joint-solve limits leave of the
 window, split across its solves, from 0.5 s to 10 s. `classic_assignment.json`
 and the C2 audit keep their versions and cover the policy's rows only; the C1
@@ -746,8 +759,14 @@ closed. The C3 audit independently recomputes:
 Since Session 11c the policy may bind a subset of the fillable rows, and C1
 filled the rest (§ C2). C3 takes the policy's rows from `classic_assignment.json`
 and the C1 rows from `classic_selection.json`'s `assignments_by_entry_id`, whose
-rows outside the policy must be exactly the unbound rows
-(`CLASSIC_C3_UNBOUND_ROWS_MISMATCH`, `V`, `audited_selection`). Candidate-bank
+rows outside the policy must be exactly the unbound rows less the rows the
+record names in `unfilled_entry_ids` (Session 39b; a bound row, an unknown row, a
+repeated name or a blank row nobody named is `CLASSIC_C3_UNBOUND_ROWS_MISMATCH`,
+`V`, `audited_selection`). C3 also holds every fill row to the policy's own
+exact exclusions (`CLASSIC_C3_EXACT_EXCLUSION_SELECTED` with `unbound_entry=`) and
+to the person-overlap cap the record's `unbound_fill` names, against each policy
+lineup and each other fill row (`CLASSIC_C3_PAIRWISE_OVERLAP_EXCEEDED` with
+`fill_cap=`). Candidate-bank
 membership and identity, every count and bound, the policy's exact exclusions,
 the pairwise overlap cap, the comparison with the C2 audit and the exposure
 denominator cover the policy's rows. Roster legality, the selection record's
@@ -1145,10 +1164,16 @@ the request's `max_person_overlap`). The run's own exclusions bind every row
 Session 39 the policy's own exact exclusions and zero caps bind the fill's rows too,
 and its other caps only its own rows. Each fill solve's limit is what
 the bank and joint solve leave of the window, split across its solves, at most
-10 s and at least 0.5 s. A fill that runs out of distinct lineups raises
-`SOLVER_RETURNED_NO_LINEUP` (`stage=UNBOUND_FILL`, `V`, `distinct_lineups`) and
-the review delivers nothing: all or nothing, as before, with the baseline the
-file and the reason named. The selection report's policy section (counts,
+10 s and at least 0.5 s. A fill that runs out of distinct lineups at row k
+(Session 39b, R29) returns the k rows it built and names the rest: the report's
+`unbound_fill` gains `requested`, `unfilled_rows` and `stopped`, its top-level
+`unfilled_entry_ids` and the review export report's `unfilled_entry_ids` name
+the Entry IDs left blank, the SD3 audit takes them as `unfilled_entry_ids`
+(`PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH` for any other shortfall), and the
+release truths carry them as `unfilled_entry_ids` under a
+`SOLVER_RETURNED_NO_LINEUP` limitation (`V`, `distinct_lineups`, scoped to those
+rows) with `DELIVERY_STATE=DELIVERABLE_PARTIAL`. No lineup is repeated or
+cycled. The selection report's policy section (counts,
 exposure, overlap, `selected_lineup_count`) covers the policy's rows; its
 `unbound_fill` section records the fill (`source`, `lineups`, `lineup_indexes`,
 `no_good_rosters`, `exclusions`, `differentiation`, `person_exposure`), and the
@@ -1380,7 +1405,11 @@ unbound rows also for the run's own exclusions
 (`READABLE_REVIEW_PAIRWISE_OVERLAP_EXCEEDED`, `S`). The selection report's
 `row_sources` must agree (`READABLE_REVIEW_ROW_SOURCE_MISMATCH`, `V`; a record
 from before Session 11b names none and the review derives them), and so must its
-`unbound_fill` (`READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH`, `V`). A reader of
+`unbound_fill` (`READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH`, `V`); since
+Session 39b it also holds a fill row to the policy's own exclusions
+(`READABLE_REVIEW_UNBOUND_ROW_EXCLUDED_PERSON`, `excluded_by=the_policy`), skips
+only the rows the selection record names in `unfilled_entry_ids` and refuses any
+other blank one (`READABLE_REVIEW_LINEUP_INVALID`). A reader of
 v1 sees no `source` and no `unbound_rows`; for a run without a subset every
 other field means what it meant, and v1 files stay readable as written. v1 was
 never produced for a subset policy.

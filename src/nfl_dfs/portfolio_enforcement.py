@@ -985,16 +985,34 @@ def solve_policy_portfolio(
 
 
 def exact_assignments_for_entries(
-    entry_ids: Sequence[str], rosters: Sequence[Sequence[str]]
+    entry_ids: Sequence[str],
+    rosters: Sequence[Sequence[str]],
+    *,
+    unfilled_entry_ids: Sequence[str] = (),
 ) -> dict[str, tuple[str, ...]]:
-    """Assign exactly one roster to every Entry ID without cycling."""
+    """Assign exactly one roster to every Entry ID without cycling.
+
+    `unfilled_entry_ids` (Session 39b) are the Entry IDs the caller names as
+    left without a lineup because the fill ran out of distinct ones (R29). They
+    must be the tail of `entry_ids`, in order, and the rosters must cover every
+    other Entry ID exactly: a shortfall nobody named is still a coverage
+    mismatch, and the gap is never filled by repeating a roster.
+    """
 
     entries = tuple(str(entry).strip() for entry in entry_ids)
-    if not entries:
+    named = tuple(str(entry).strip() for entry in unfilled_entry_ids)
+    if named:
+        if len(named) > len(entries) or entries[len(entries) - len(named):] != named:
+            raise ValueError(
+                "PORTFOLIO_ASSIGNMENT_COVERAGE_MISMATCH:"
+                f"the unfilled rows {list(named)} are not the tail of {list(entries)}:cycling=disabled"
+            )
+        entries = entries[: len(entries) - len(named)]
+    if not entries and not named:
         raise ValueError("PORTFOLIO_ASSIGNMENT_ENTRY_SET_EMPTY")
-    if any(not entry for entry in entries):
+    if any(not entry for entry in (*entries, *named)):
         raise ValueError("PORTFOLIO_ASSIGNMENT_ENTRY_ID_BLANK")
-    duplicates = sorted(entry for entry, total in Counter(entries).items() if total > 1)
+    duplicates = sorted(entry for entry, total in Counter((*entries, *named)).items() if total > 1)
     if duplicates:
         raise ValueError(f"PORTFOLIO_ASSIGNMENT_DUPLICATE_ENTRY_ID:{duplicates}")
     if len(rosters) != len(entries):
@@ -1248,6 +1266,7 @@ def audit_policy_assignments(
     expected_assignment_artifact_sha256: str,
     selector_summary: Mapping[str, object] | None = None,
     unbound_entry_ids: Sequence[str] = (),
+    unfilled_entry_ids: Sequence[str] = (),
     contest_assignment: ContestAssignmentClaim | None = None,
 ) -> PortfolioAudit:
     """Recompute every SD4 control from exact final roster IDs and artifacts.
@@ -1256,6 +1275,10 @@ def audit_policy_assignments(
     subset of the fillable rows; the assignment artifact then also holds
     `unbound_entry_ids`, the rows the fill wrote, and must hold exactly those
     beside the policy's. Their rosters are the readable review's to check.
+
+    `unfilled_entry_ids` (Session 39b) are unbound rows the fill named as left
+    without a lineup: the artifact must hold every other unbound row and none of
+    these, and a row that is neither present nor named still fails.
     """
 
     problems: list[str] = []
@@ -1357,14 +1380,20 @@ def audit_policy_assignments(
                     "assignment rows, order, or roster IDs differ from the final in-memory assignment",
                 )
             )
-        if sorted(others) != sorted(str(entry).strip() for entry in unbound_entry_ids) or len(
-            set(others)
-        ) != len(others):
+        unbound = [str(entry).strip() for entry in unbound_entry_ids]
+        named_unfilled = [str(entry).strip() for entry in unfilled_entry_ids]
+        delivered_unbound = [entry for entry in unbound if entry not in set(named_unfilled)]
+        if (
+            not set(named_unfilled) <= set(unbound)
+            or len(set(named_unfilled)) != len(named_unfilled)
+            or sorted(others) != sorted(delivered_unbound)
+            or len(set(others)) != len(others)
+        ):
             problems.append(
                 _audit_problem(
                     "PORTFOLIO_AUDIT_ASSIGNMENT_ARTIFACT_MISMATCH",
                     f"rows outside the policy {others} are not exactly the unbound rows"
-                    f" {list(unbound_entry_ids)}",
+                    f" {unbound} less the named unfilled rows {named_unfilled}",
                 )
             )
         if contest_assignment is not None:

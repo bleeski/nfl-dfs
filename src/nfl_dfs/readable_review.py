@@ -15,6 +15,7 @@ import json
 import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
@@ -228,8 +229,26 @@ def _parse_normalized_policy(
         limit_rows[person] = row
     if set(limit_rows) != set(person_bindings):
         problems.append("READABLE_REVIEW_POLICY_EFFECTIVE_PEOPLE_MISMATCH")
+    # Session 39b: every DraftKings ID of a person the policy itself removes (an exact exclusion,
+    # or a cap of zero on the person), which the fill's rows may not hold either.
+    def zero_fraction(row: Mapping[str, object]) -> bool:
+        # A fraction of zero, not a maximum of zero rows: 0.3 of 3 bound rows floors to 0 and
+        # still lets the fill use the person (the selector's own rule, `own_exclusion_dk_ids`).
+        value = row.get("combined_fraction")
+        try:
+            return value is not None and Decimal(str(value)) == 0
+        except (ArithmeticError, ValueError):
+            return False
+
+    removed = sorted(
+        str(dk_id)
+        for row in limit_rows.values()
+        if row.get("excluded") or (row.get("exclusion_source") is None and zero_fraction(row))
+        for dk_id in (row.get("cpt_dk_id"), row.get("flex_dk_id")) if dk_id
+    )
     return {
         "entry_ids": policy_entries,
+        "own_excluded_dk_ids": removed,
         "limits": limit_rows,
         "max_pairwise_person_overlap": controls.get("max_pairwise_person_overlap"),
         "effective_pairwise_person_overlap": controls.get("effective_pairwise_person_overlap"),
@@ -285,6 +304,8 @@ def _unbound_rows_section(
     excluded_people: set[str],
     official_statuses: Mapping[str, object],
     problems: list[str],
+    unfilled: set[str] | frozenset[str] = frozenset(),
+    policy_excluded_dk_ids: set[str] | frozenset[str] = frozenset(),
 ) -> dict[str, object] | None:
     """The second section (Session 11b): the rows a subset policy leaves to the fill.
 
@@ -296,15 +317,26 @@ def _unbound_rows_section(
 
     if not unbound_entries:
         return None
+    # Session 39b: an unbound row the fill named as unfilled stays blank and is skipped; every
+    # other unbound row must hold a roster, so a blank one nobody named still fails.
+    named = tuple(entry for entry in unbound_entries if entry in unfilled)
+    delivered = tuple(entry for entry in unbound_entries if entry not in unfilled)
     fill = selection_payload.get("unbound_fill")
-    if not isinstance(fill, Mapping) or fill.get("lineups") != len(unbound_entries):
+    if (
+        not isinstance(fill, Mapping)
+        or fill.get("lineups") != len(delivered)
+        or fill.get("unfilled_rows", 0) != len(named)
+    ):
         problems.append(_problem("READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH", list(unbound_entries)))
         fill = {}
     differentiation = fill.get("differentiation") if isinstance(fill.get("differentiation"), Mapping) else {}
     configured = differentiation.get("max_person_overlap")
     effective = 6 if configured is None else configured
     exposure: Counter[str] = Counter()
-    for entry_id in unbound_entries:
+    for entry_id in delivered:
+        if not output_rosters.get(entry_id):
+            problems.append(_problem("READABLE_REVIEW_LINEUP_INVALID",
+                                     f"entry={entry_id}:errors=an unbound row with no lineup that no fill row names"))
         for dk_id in output_rosters.get(entry_id, ()):
             player = by_id.get(dk_id)
             if player is None:
@@ -313,13 +345,16 @@ def _unbound_rows_section(
             if person in excluded_people:
                 problems.append(_problem("READABLE_REVIEW_UNBOUND_ROW_EXCLUDED_PERSON",
                                          f"entry={entry_id}:person={person}"))
+            if dk_id in policy_excluded_dk_ids:
+                problems.append(_problem("READABLE_REVIEW_UNBOUND_ROW_EXCLUDED_PERSON",
+                                         f"entry={entry_id}:person={person}:excluded_by=the_policy"))
             if official_statuses.get(dk_id) == "INACTIVE":
                 problems.append(_problem("READABLE_REVIEW_UNBOUND_ROW_NOT_ACTIVE",
                                          f"entry={entry_id}:id={dk_id}"))
         exposure.update(people_by_entry.get(entry_id, frozenset()))
     pairwise: list[dict[str, object]] = []
-    for left_index, left in enumerate(unbound_entries):
-        for right in unbound_entries[left_index + 1:]:
+    for left_index, left in enumerate(delivered):
+        for right in delivered[left_index + 1:]:
             shared = len(people_by_entry.get(left, frozenset()) & people_by_entry.get(right, frozenset()))
             pairwise.append({"entry_id_a": left, "entry_id_b": right, "actual_people": shared,
                              "maximum_people": effective})
@@ -328,11 +363,13 @@ def _unbound_rows_section(
     return {
         "source": ROW_SOURCE_FILL,
         "entry_ids": list(unbound_entries),
-        "basis": "THE_RUN_S_OWN_EXCLUSIONS_AND_THE_FILL_S_OVERLAP_NOT_THE_POLICY_S_CAPS",
+        **({"unfilled_entry_ids": list(named)} if named else {}),
+        "basis": "THE_RUN_S_OWN_AND_THE_POLICY_S_EXACT_EXCLUSIONS_AND_THE_FILL_S_OVERLAP_AMONG_FILL_ROWS_NOT_THE_POLICY_S_CAPS",
         "checks": [
             "LEGALITY_AND_BYTES_WITH_EVERY_ROW",
             "DISTINCT_FROM_EVERY_POLICY_FILL_AND_PREFILLED_LINEUP",
             "NO_PERSON_THE_RUN_EXCLUDES",
+            "NO_PERSON_THE_POLICY_EXCLUDES",
             "NO_OFFICIAL_INACTIVE_ROW",
             "FILL_PAIRWISE_OVERLAP",
         ],
@@ -1143,8 +1180,6 @@ def create_readable_review(
     expected_entries = fillable
     if output_entries != template_entries:
         problems.append(_problem("READABLE_REVIEW_OUTPUT_ENTRY_ORDER_MISMATCH", output_entries))
-    if assignment_entries != fillable:
-        problems.append(_problem("READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH", assignment_entries))
     source_metadata = {
         entry.entry_id: (entry.contest_id, entry.contest_name, entry.entry_fee)
         for entry in reparsed_template.authorizations
@@ -1177,6 +1212,18 @@ def create_readable_review(
         problems.append("READABLE_REVIEW_SELECTION_REPORT_MISSING")
     if tuple(str(value) for value in selection_record.get("reserved_entries", [])) != expected_entries:
         problems.append("READABLE_REVIEW_SELECTION_ENTRY_ORDER_MISMATCH")
+    # Session 39b (R29): the selection record names the fillable rows a fill that ran out of
+    # distinct lineups left blank. A row is unfilled only when it is named there, only a
+    # fillable row can be, and the assignment artifact holds every other fillable row: an
+    # unnamed blank row is a lineup that is not there, and it fails below.
+    named_unfilled = tuple(str(value) for value in (selection_record.get("unfilled_entry_ids") or ()))
+    unfilled_set = set(named_unfilled)
+    if not unfilled_set <= set(expected_entries) or len(unfilled_set) != len(named_unfilled):
+        problems.append(_problem("READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH", list(named_unfilled)))
+        unfilled_set = set()
+    delivered_rows = tuple(entry for entry in fillable if entry not in unfilled_set)
+    if assignment_entries != delivered_rows:
+        problems.append(_problem("READABLE_REVIEW_ASSIGNMENT_ENTRY_ORDER_MISMATCH", assignment_entries))
     if selection_record.get("assignments_sha256") != expected_hashes.get("assignments"):
         problems.append("READABLE_REVIEW_SELECTION_ASSIGNMENT_HASH_MISMATCH")
     score_map_raw = _mapping(
@@ -1240,9 +1287,13 @@ def create_readable_review(
     )
     bound_set = set(bound_entries)
     unbound_entries = unbound_rows(bound_entries, expected_entries)
+    if not unfilled_set <= set(unbound_entries):
+        # Only an unbound row can be left unfilled; a bound row named here excuses nothing.
+        problems.append(_problem("READABLE_REVIEW_UNBOUND_FILL_REPORT_MISMATCH", list(named_unfilled)))
     sources = {
         entry_id: (ROW_SOURCE_POLICY if policy_view is not None and entry_id in bound_set else ROW_SOURCE_FILL)
         for entry_id in expected_entries
+        if entry_id not in unfilled_set
     }
     # A selection record from before Session 11b names no sources; the review
     # derives them. One that names them must agree.
@@ -1282,7 +1333,7 @@ def create_readable_review(
     captain_counts: Counter[str] = Counter()
     people_by_entry: dict[str, frozenset[str]] = {}
     canonical_by_entry: dict[str, str] = {}
-    filled_rows = set(fillable)
+    filled_rows = set(fillable) - unfilled_set
     for authorization in reparsed_template.authorizations:
         if authorization.entry_id not in filled_rows:
             continue  # a preserved or unresolved row: the byte audit holds it
@@ -1486,6 +1537,8 @@ def create_readable_review(
             *(person for person, reason in coverage_reasons.items() if reason != "SELECTABLE"),
         },
         official_statuses=official_statuses,
+        unfilled=unfilled_set,
+        policy_excluded_dk_ids=set(policy_view.get("own_excluded_dk_ids") or ()) if policy_view else set(),
         problems=problems,
     )
 

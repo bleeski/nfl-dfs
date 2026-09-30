@@ -277,6 +277,38 @@ def test_a_pool_that_runs_out_of_distinct_lineups_still_raises_and_never_repeats
     assert caught.value.status == "SOLVER_RETURNED_NO_LINEUP" and caught.value.facts["selected"] == 1
 
 
+def test_a_classic_fill_that_runs_out_of_distinct_lineups_returns_its_rows_and_never_repeats():
+    """Session 39b (R29): a pool holding one distinct lineup gives one fill row, and the rest are named.
+
+    The sequential run (C1 with no policy) still raises on the same pool
+    (`test_a_pool_that_runs_out_of_distinct_lineups_still_raises_and_never_repeats`).
+    """
+
+    from nfl_dfs.selection import _fill_unbound
+
+    slate = _slate()
+    objective = _objective(slate)
+    (only,) = _sequential_lineups(
+        slate, objective, (), _contract(slate), count=1, first_index=1, forbidden_rosters=(),
+        differentiate_captain=False, max_person_overlap=4, time_limit_seconds=20.0).selected[:1]
+    excluded = tuple(row.dk_id for row in slate.players if row.dk_id not in set(only.roster))
+
+    rows, report = _fill_unbound(
+        slate, objective, excluded, _contract(slate), policy_lineups=[], forbidden_rosters=(), count=3,
+        differentiate_captain=False, max_person_overlap=4, time_limit_seconds=20.0)
+    assert [row.roster for row in rows] == [only.roster]
+    assert (report["requested"], report["lineups"], report["unfilled_rows"]) == (3, 1, 2)
+    assert report["stopped"] == {"index": 2, "status": "INFEASIBLE", "proved_exhausted": True}
+
+    # The one lineup the pool holds is already a bound row: the fill builds none, and says so.
+    rows, report = _fill_unbound(
+        slate, objective, excluded, _contract(slate), policy_lineups=[only], forbidden_rosters=(), count=2,
+        differentiate_captain=False, max_person_overlap=4, time_limit_seconds=20.0)
+    assert [row.roster for row in rows] == [only.roster]  # the bound row, once, never cycled
+    assert (report["lineups"], report["unfilled_rows"]) == (0, 2)
+    assert report["stopped"]["index"] == 2 and report["stopped"]["proved_exhausted"] is True
+
+
 def test_a_fill_row_cap_step_reaches_the_ladder_record_with_its_scope(tmp_path, monkeypatch):
     """The subset policy's C1 fill takes the same walk, and its steps say `UNBOUND_FILL`."""
 

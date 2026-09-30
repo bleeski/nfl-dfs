@@ -855,6 +855,10 @@ class Ladder:
             "elapsed_seconds": round(elapsed_seconds, 3),
             "pre_selection_seconds": round(pre_selection_seconds, 3),
         })
+        # Session 39b: steps are read from every attempt's selection report, including one
+        # whose selection succeeded and was then abandoned (a later stage failed and the ladder
+        # went on). That over-reports a cap step that the delivered file did not use; it can
+        # never under-report one, which is the side a relaxation record must err on.
         for step in selection_overlap_steps(getattr(outcome, "reports", None)):
             self._record_overlap_step(attempt, step)
 
