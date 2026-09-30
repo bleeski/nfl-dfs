@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "c1267d89-42dd-58f7-8219-dabb86958d2c",
-      "branch": "claude/stoic-bardeen-bifjsp",
-      "chunk": "S39",
-      "claimed_at": "2026-09-30T03:19:18Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
