@@ -1154,6 +1154,52 @@ bounds still cover only its own rows. Does not establish: lineup quality, that t
 portfolio is diversified in any sense a payout rewards, or that a lower overlap was
 infeasible outside the rows reported.
 
+**Classic rung 4 as several stack theses (Session 49).** `classic_thesis_sequential_v1`
+(`src/nfl_dfs/classic_theses.py`) is additive: the C1 selection profile, `run_prior_review` called directly
+(`classic_construction` defaults to `None`) and the unbound fill are unchanged, and a schema-less report block, `selection.construction`,
+appears only on the rows it builds. `select_prior_lineups(classic_construction="THESES")` is
+Classic with no policy in force; `run-slate` passes it for rung 4 and for a run that
+supplied no policy; Showdown and any policy are refused with `MODE_NOT_SUPPORTED`. The
+theses are one per primary stack team (the best team of each game first, then second
+teams; `max(4, rows // 15 + 3)` of them), ranked by a stack value read from the run's own
+prior objective over the rows the run has not excluded (best QB, two best WR/TE, best
+opponent RB/WR/TE; ties on the team code). Each thesis is a lineup model with its QB from
+that team, a teammate WR/TE and a bring-back; rows go round robin over the live theses,
+every earlier row and every prefilled roster is an exact no-good, and a row shares at most
+`classic_person_overlap` people with an earlier one (Session 39). No person is in more
+than `floor(0.40 x rows)` rows (at least 1) while the preferences hold. `construction`
+carries: `version`, `basis`, `does_not_establish`, `requested` (`max_person_share`,
+`person_cap`, `classic_person_overlap`, `rows`, `theses`), `effective` (`person_share`,
+`person_cap`, `person_overlap`, `stack_required`, `max_person_rows`, `max_person`,
+`max_person_share_of_delivered_rows`, `stacked_lineups`, `bringback_lineups`, `lineups`,
+`distinct_qb_teams`), `theses` (name,
+team, rank, `stack_value`, `person_share`, `rows`, `bringback_required`, `drops`),
+`lineup_theses` (row index to thesis), `relaxations`, `unfilled_rows` and `stopped`.
+The selector recomputes distinctness, the overlap cap, the person cap and the stack count
+from the rosters and raises `THESIS_CONSTRUCTION_BREACHED` (`portfolio_bounds`) on a
+disagreement. Relaxations are construction preferences. Four are steps in `construction.relaxations`
+(`constraint`, `from`, `used`, `index`, `thesis`, `trigger_status`, `reason`): `classic_bringback` (a
+proved-infeasible thesis loses its bring-back), `classic_thesis` (a thesis dropped: no distinct lineup
+left, its solve ended without a proof, or every quarterback it may use is at the person cap,
+`PERSON_CAP_REACHED`, which relaxes nothing else; the record is the thesis's first drop, every drop stays
+in `theses[].drops`), `classic_person_share` (ten points at a time, to 60%
+while stacked, then to 100%) and `classic_qb_stack` (every stack thesis exhausted at 60%: a free
+thesis takes the rest). The overlap cap steps (a person at a time to 8, one cap for every thesis) are
+reported where C1's are, in `differentiation.overlap_relaxations`, with `scope` `THESES` and the
+`thesis` that hit the wall. One reader serves both: each is a `RELAXATION_STRUCTURE_RELAXED` record in
+the ladder (step `THESIS_PREFERENCE`, or `OVERLAP_CAP`) or, with no ladder, a limitation. Distinct lineups (R29) are never relaxed. The 40% cap is of the rows
+requested (`max_person_share_of_delivered_rows` reports a short file's own top share) and prefilled
+template rows are not counted; the producer label of the delivered file stays `CLASSIC_C1`, rung 4's slot. A run that cannot build row k (proved
+infeasible, or its window of `time_limit x (rows + 1)` spent) returns the k rows with
+`unfilled_rows` and `stopped` (`index`, `status`, `proved_exhausted`); `prior_review` names the tail
+Entry IDs `unfilled_entry_ids` with a `SOLVER_RETURNED_NO_LINEUP` limitation exactly as the
+unbound fill does, and with no row built it raises `SOLVER_RETURNED_NO_LINEUP`. The delivery
+pointer's coverage rule still applies: a short file does not replace a fuller baseline. The
+rung-4 relaxation record's `final` gains `construction` for Classic. Does not establish: that a
+thesis is a better bet than another, that a stacked lineup is worth more, any expected value,
+payout or win probability, or that the person cap improves an outcome; the ranking is the
+prior's central estimate and every bound is a construction preference.
+
 **The unbound rows (Session 11b).** When the policy binds a subset, its joint
 solve fills its own rows first; then sequential Showdown (the no-policy
 selector) fills the fillable rows it leaves unbound, in template order, with
@@ -2578,7 +2624,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `d10ad5bf6edd221543b70a6ae66ee2073bb8a9e60d23955750bee7c3c6b2c52e`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `1eecc5a370481dc232be71b1cfda107e386a8e228d631e1fab023d155fa7dc7a`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -3018,7 +3064,9 @@ carries `status` and `facts`), never from text.
 Never a trigger: `BOUNDED_TIME_LIMIT_STOP`, `BOUNDED_SEARCH_LIMIT_STOP`,
 `FEASIBLE_LIMIT_ACTUAL_CANDIDATE_BANK` (Session 08 delivers and names them), and
 `SOLVER_RETURNED_NO_LINEUP` (C1 or Showdown out of distinct lineups: rung 4 is
-the floor, and the baseline stays the file with its unfilled Entry IDs).
+the floor, and the baseline stays the file with its unfilled Entry IDs; since Session 49
+Classic rung 4 delivers the rows it built and names the rest, and the baseline stays the
+file only when that is fewer rows than the baseline holds).
 
 **Never relaxed.** `require_unique_lineups` (R29) is true in every rung's
 policy; a Classic policy's `exact_exclusions`, a Showdown policy's
@@ -3068,8 +3116,10 @@ supplied one. Attempt 0's review root is `prior_review/`; attempt n's is
 | `never_relaxed`, `does_not_establish` | As named |
 
 Each relaxation: `sequence`, `attempt` (the one it fed), `step` (`BANK`,
-`STRUCTURE`, `NO_POLICY`, and since Session 39 `OVERLAP_CAP`), `constraint`
-(`classic_person_overlap` for an `OVERLAP_CAP` step, `stack_rules.<rule_id>`,
+`STRUCTURE`, `NO_POLICY`, since Session 39 `OVERLAP_CAP` and since Session 49
+`THESIS_PREFERENCE`), `constraint`
+(`classic_person_overlap` for an `OVERLAP_CAP` step, `classic_bringback`, `classic_person_share`
+or `classic_qb_stack` for a `THESIS_PREFERENCE` step, `stack_rules.<rule_id>`,
 `player_exposure_bounds`, `team_exposure_bounds`, `game_exposure_bounds`,
 `groups`, `max_pairwise_person_overlap`, `search_limits`,
 `max_combined_person_exposure`, `max_captain_exposure`,

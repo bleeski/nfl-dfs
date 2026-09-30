@@ -1450,6 +1450,7 @@ def run_prior_review(
     project: Callable[..., object] = build_projection_package,
     budget: Budget | None = None,
     showdown_candidate_limit: int | None = None,
+    classic_construction: str | None = None,
 ) -> PriorReviewOutcome:
     """Drive priors, identity, projection, selection and export as one gate.
 
@@ -1459,6 +1460,10 @@ def run_prior_review(
     stops the review before selection when the window cannot hold it.
     `showdown_candidate_limit` (Session 10) is the relaxation controller's SD3
     bank size, in place of `max(32, 4 x entries)`.
+    `classic_construction` (Session 49) is `"THESES"` for a Classic run with no
+    policy in force (rung 4, or a run that supplied none): C1's rows are built
+    as several stack theses under one person share cap, and a run that cannot
+    build every row delivers the ones it built and names the rest (R29).
     """
 
     run_dir = Path(run_root).resolve()
@@ -2318,6 +2323,7 @@ def run_prior_review(
                 contract,
                 count=(portfolio_policy.entry_count if portfolio_policy is not None else requested_count),
                 fill_count=len(unbound_ids),
+                classic_construction=classic_construction,
                 fill_time_limit_seconds=_fill_solve_seconds(
                     budget, len(unbound_ids),
                     declared_search_seconds=(
@@ -2369,6 +2375,18 @@ def run_prior_review(
                 for entry_id in entry_ids
                 if entry_id not in unfilled_ids
             }
+            reports["unfilled_entry_ids"] = list(unfilled_ids)
+        elif selection.get("construction") is not None:
+            # Session 49 (R29): the thesis construction built `len(lineups)` rows and named
+            # the rest as unfilled; the tail of the template is left blank, never cycled.
+            unfilled_ids = entry_ids[len(lineups):] if len(lineups) <= len(entry_ids) else []
+            if len(lineups) > len(entry_ids) or selection.get("unfilled_rows") != len(unfilled_ids):
+                raise PriorReviewError(
+                    "PORTFOLIO_ASSIGNMENT_COVERAGE_MISMATCH:the thesis construction's report disagrees"
+                    f" with the rows it built:entries={len(entry_ids)}:lineups={len(lineups)}"
+                    f":report={selection.get('unfilled_rows')}")
+            assignments = exact_assignments_for_entries(
+                entry_ids, [lineup.roster for lineup in lineups], unfilled_entry_ids=unfilled_ids)
             reports["unfilled_entry_ids"] = list(unfilled_ids)
         else:
             assignments = assignments_for_entries(entry_ids, lineups)
@@ -2752,10 +2770,11 @@ def run_prior_review(
             "unassigned_lineups": max(0, len(lineups) - len(entry_ids)),
             **({"unfilled_entries": len(unfilled_ids)} if unfilled_ids else {}),
             "note": (
-                f"{len(unfilled_ids)} reserved entries have no lineup because the fill "
+                f"{len(unfilled_ids)} reserved entries have no lineup because the "
+                + ("fill " if selection.get("construction") is None else "thesis construction ")
                 + (
                     "proved no distinct lineup was left"
-                    if ((selection.get("unbound_fill") or {}).get("stopped") or {}).get("proved_exhausted")
+                    if (((selection.get("unbound_fill") or selection).get("stopped")) or {}).get("proved_exhausted")
                     else "returned no lineup and did not prove that none was left"
                 )
                 + " (R29); they are named in unfilled_entry_ids and stay blank."

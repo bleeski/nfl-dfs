@@ -59,13 +59,18 @@ SUPPLIED = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "supplie
 # ----------------------------------------------------------------- helpers
 
 
-def _classic(tmp_path, monkeypatch, *, run_id, policy, entries=3, window=60.0, review=None, clock=None):
-    """`run-slate` on the Classic fixture with `window` seconds before the improvement stops."""
+def _classic(tmp_path, monkeypatch, *, run_id, policy, entries=3, window=60.0, review=None, clock=None,
+             depth=None):
+    """`run-slate` on the Classic fixture with `window` seconds before the improvement stops.
+
+    `policy` is a callable that writes the supplied policy, or None for a run that supplies none.
+    `depth` (Session 49) is players per position per team, for a pool wide enough to hold a cap.
+    """
 
     from nfl_dfs import cli
 
     _clocked(monkeypatch, clock or FakeClock())
-    salary, entry, package, role, status, _ = classic_fixture(tmp_path / "fixture", entries=entries)
+    salary, entry, package, role, status, _ = classic_fixture(tmp_path / "fixture", entries=entries, depth=depth)
     attachments = _attachments(tmp_path, salary, entry)
     monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
     if review is not None:
@@ -74,7 +79,8 @@ def _classic(tmp_path, monkeypatch, *, run_id, policy, entries=3, window=60.0, r
     values = dict(
         label=run_id, run_id=run_id, prior_package_dir=str(package), official_status_csv=str(status),
         offensive_role_evidence_json=str(role), as_of=AS_OF.isoformat(),
-        delivery_deadline_utc=deadline.isoformat(), portfolio_policy_json=str(policy(attachments)))
+        delivery_deadline_utc=deadline.isoformat(),
+        **({"portfolio_policy_json": str(policy(attachments))} if policy is not None else {}))
     code = cli.command_cowork_run(_cowork_args(tmp_path, attachments, **values))
     root = tmp_path / "outputs" / run_id
     return code, json.loads((root / "cowork_run.json").read_text(encoding="utf-8")), root
@@ -244,30 +250,33 @@ def test_a_pool_too_small_for_distinct_lineups_never_repeats_one_and_names_the_u
 
     The C2 bank is exhaustive with one candidate, `MODELED_BANK_INFEASIBILITY`;
     the template policy has no structure a rung can loosen, so the ladder takes
-    rung 4, and C1 runs out of distinct lineups after the first. The baseline,
-    with its one lineup and two unfilled Entry IDs, is the file.
+    rung 4. Until Session 49 C1 raised after its first lineup and the baseline, with its
+    one lineup and two unfilled Entry IDs, was the file. Rung 4 is now the thesis
+    construction, which takes the named-gap seam (Session 39b): it delivers the one lineup
+    it built, names the two Entry IDs it could not fill, and the review file (the same one
+    row as the baseline's, so the pointer's coverage rule passes it) replaces the baseline.
     """
 
     _one_lineup_salaries(monkeypatch)
     code, report, root = _classic(tmp_path, monkeypatch, run_id="too-few",
                                   policy=lambda attachments: _policy_file(attachments))
-    assert code == 2  # the run's own review did not complete; the baseline is the file
-    assert report["latest_deliverable"]["producer"] == "run-slate:baseline"
+    assert code == 0 and report["improvement"]["status"] == "DELIVERED", report["blockers"]
+    assert report["latest_deliverable"]["producer"] == "run-slate:prior_review:CLASSIC_C1"
     assert report["DELIVERY_STATE"] == "DELIVERABLE_PARTIAL" and report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
     entry_ids = [item.entry_id for item in parse_entries(tmp_path / "attachments" / "entries.csv").authorizations]
     assert report["release_truths"]["unfilled_entry_ids"] == entry_ids[1:]
+    assert "SOLVER_RETURNED_NO_LINEUP" in {item["code"] for item in report["release_truths"]["delivery_limitations"]}
     rosters = _exported_rosters(report)
     assert len(rosters) == 1 and len(set(rosters)) == len(rosters)  # never a repeat
     relaxation = report["relaxation"]
     assert [(item["rung"], item["failure"]) for item in relaxation["attempts"]] == [
         ("SUPPLIED", "MODELED_BANK_INFEASIBILITY"), ("4", None)]
     assert relaxation["final_rung"] == "4" and relaxation["stop"] is None
-    (dropped,) = relaxation["relaxations"]
-    assert (dropped["step"], dropped["trigger"]) == ("NO_POLICY", "MODELED_BANK_INFEASIBILITY")
+    (dropped,) = [item for item in relaxation["relaxations"] if item["step"] == "NO_POLICY"]
+    assert dropped["trigger"] == "MODELED_BANK_INFEASIBILITY"
     assert dropped["why"] == "no structural rung is left"
-    assert any(text.startswith("SELECTION_FAILED:SelectionError:SOLVER_RETURNED_NO_LINEUP:index=2")
-               for text in report["blockers"])
-    assert report["prior_review_reports"]["selection_failure"]["status"] == "SOLVER_RETURNED_NO_LINEUP"
+    assert {item["constraint"] for item in relaxation["relaxations"]} >= {
+        "classic_bringback", "classic_person_share", "classic_qb_stack"}
     assert all("unique" not in item["constraint"] for item in relaxation["relaxations"])
 
 

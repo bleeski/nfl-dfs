@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "b813bbe7-c02a-5bfe-b934-2265dd56ac37",
-      "branch": "claude/sleepy-maxwell-iv3mnp",
-      "chunk": "S49",
-      "claimed_at": "2026-09-30T20:28:15Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

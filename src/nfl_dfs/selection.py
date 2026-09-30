@@ -51,6 +51,7 @@ from .portfolio_enforcement import (
 )
 from .portfolio_policy import NormalizedPortfolioPolicy
 from .prior_score import PriorScores, TeamSplits, score_pool
+from .classic_theses import select_thesis_lineups
 from .relaxation import own_exclusion_dk_ids
 
 
@@ -70,6 +71,9 @@ CLASSIC_PROFILE_VERSION = "prior_only_classic_selection_c1_v2"
 # Showdown's six-slot scale.
 CLASSIC_PERSON_OVERLAP = 6
 CLASSIC_MAX_USEFUL_OVERLAP = 8
+
+# Session 49: Classic rung 4 built as several stack theses under one person share cap.
+THESIS_CONSTRUCTION = "THESES"
 
 
 class SelectionError(ValueError):
@@ -214,6 +218,7 @@ def select_prior_lineups(
     forbidden_rosters: Sequence[tuple[str, ...]] = (),
     fill_count: int = 0,
     fill_time_limit_seconds: float | None = None,
+    classic_construction: str | None = None,
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
     """Solve for `count` distinct legal lineups over the permitted pool.
 
@@ -236,6 +241,14 @@ def select_prior_lineups(
     Entry IDs left blank; the bound rows are never discarded and no lineup is
     repeated. C1 and sequential Showdown with no policy still raise.
 
+    `classic_construction="THESES"` (Session 49) replaces C1's single repeated
+    construction with `classic_theses.select_thesis_lineups`: several stack
+    theses under one person share cap. It is Classic with no policy only (rung 4
+    of the ladder, or a run that supplied none); it reports `construction`,
+    and a run that runs out of distinct lineups or time at row k returns the k
+    rows with `unfilled_rows` and `stopped`, like the fill, and raises only when
+    it built none. `None` is C1 as it was.
+
     `classic_person_overlap` (Session 39) is the most people a Classic C1 or
     fill row may share with an earlier row (default 6; `None` is no cap). It
     steps up one person at a time when no distinct lineup fits and each step is
@@ -244,6 +257,11 @@ def select_prior_lineups(
 
     if slate.mode not in {EngineMode.SHOWDOWN, EngineMode.CLASSIC}:
         raise SelectionError(f"MODE_NOT_SUPPORTED:{slate.mode.value}")
+    if classic_construction not in {None, THESIS_CONSTRUCTION}:
+        raise SelectionError(f"MODE_NOT_SUPPORTED:classic_construction={classic_construction!r}")
+    if classic_construction is not None and (slate.mode is not EngineMode.CLASSIC or portfolio_policy is not None):
+        raise SelectionError(
+            f"MODE_NOT_SUPPORTED:{slate.mode.value}:the thesis construction is Classic rung 4 (no policy) only")
     forbidden_rosters = tuple(tuple(map(str, roster)) for roster in forbidden_rosters)
     forbidden_keys = {roster_canonical_key(slate, roster) for roster in forbidden_rosters}
     if count < 1:
@@ -623,12 +641,18 @@ def select_prior_lineups(
         if slate.mode is EngineMode.SHOWDOWN
         else CLASSIC_PROFILE_VERSION
     )
-    run = _sequential_lineups(
-        slate, objective, excluded, contract, count=count, first_index=1,
-        forbidden_rosters=forbidden_rosters, differentiate_captain=differentiate_captain,
-        max_person_overlap=max_person_overlap, classic_person_overlap=classic_person_overlap,
-        time_limit_seconds=time_limit_seconds,
-    )
+    if classic_construction == THESIS_CONSTRUCTION:
+        run = select_thesis_lineups(
+            slate, objective, excluded, contract, count=count, forbidden_rosters=forbidden_rosters,
+            time_limit_seconds=time_limit_seconds, classic_person_overlap=classic_person_overlap,
+        )
+    else:
+        run = _sequential_lineups(
+            slate, objective, excluded, contract, count=count, first_index=1,
+            forbidden_rosters=forbidden_rosters, differentiate_captain=differentiate_captain,
+            max_person_overlap=max_person_overlap, classic_person_overlap=classic_person_overlap,
+            time_limit_seconds=time_limit_seconds,
+        )
     selected = run.selected
     report = {
         "profile_version": selection_profile_version,
@@ -658,6 +682,10 @@ def select_prior_lineups(
         "score_omissions": list(scores.omissions),
         "never_calls": ["field.py", "economics.py", "portfolio economics"],
     }
+    if run.construction is not None:
+        report["construction"] = run.construction
+        report["unfilled_rows"] = count - len(selected)
+        report["stopped"] = run.stopped
     verify_offensive_resolution(offense, at=as_of or datetime.now(timezone.utc))
     verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
     _refuse_prefilled_repeats(selected, forbidden_keys)
@@ -679,6 +707,8 @@ class _Sequential:
     # when every requested row was built. Only the fill stops short; C1 and sequential
     # Showdown still raise.
     stopped: dict[str, object] | None = None
+    # Session 49: the thesis construction's report block when rung 4 built the rows.
+    construction: dict[str, object] | None = None
 
     def differentiation(self, slate: SlateContract) -> dict[str, object]:
         by_id = {player.dk_id: player for player in slate.players}
@@ -712,7 +742,9 @@ class _Sequential:
             "overlap_relaxations": list(self.overlap_relaxations),
             "basis": (
                 (
-                    "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_ONLY_C1_NOT_A_PORTFOLIO_POLICY"
+                    "THESIS_SEQUENTIAL_EXACT_LINEUP_NO_GOODS_AND_PERSON_OVERLAP_CAP_NOT_A_PORTFOLIO_POLICY"
+                    if self.construction is not None
+                    else "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_ONLY_C1_NOT_A_PORTFOLIO_POLICY"
                     if self.requested_overlap is None
                     else "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_AND_PERSON_OVERLAP_CAP_C1_NOT_A_PORTFOLIO_POLICY"
                 )

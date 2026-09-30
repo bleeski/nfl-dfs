@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
 import hashlib
 import io
 import json
@@ -49,7 +50,14 @@ def _csv(header, rows) -> bytes:
     return output.getvalue().encode("utf-8")
 
 
-def _salary_bytes(*, draft_groups: tuple[str, ...] | None = None, appg: float = 99.0) -> bytes:
+DEPTH_ORDINALS = ("One", "Two", "Three", "Four", "Five")
+DEPTH_AT_DEPTH_ONE = {"QB": 1, "RB": 1, "WR": 1, "TE": 1, "DST": 1}
+
+
+def _salary_bytes(
+    *, draft_groups: tuple[str, ...] | None = None, appg: float = 99.0,
+    depth: dict[str, int] | None = None,
+) -> bytes:
     output = io.StringIO(newline="")
     writer = csv.writer(output, lineterminator="\n")
     writer.writerow(
@@ -59,11 +67,17 @@ def _salary_bytes(*, draft_groups: tuple[str, ...] | None = None, appg: float = 
         )
     )
     identifier = 81000000
+    depths = depth or DEPTH_AT_DEPTH_ONE
+    slots = [
+        (position_index, position, ordinal)
+        for position_index, position in enumerate(("QB", "RB", "WR", "TE", "DST"))
+        for ordinal in range(depths[position])
+    ]
     for team_index, team in enumerate(TEAMS):
-        for position_index, position in enumerate(("QB", "RB", "WR", "TE", "DST")):
+        for position_index, position, ordinal in slots:
             identifier += 1
-            name = f"{team} {position} One"
-            salary = 4700 + (team_index * 50) + (position_index * 25)
+            name = f"{team} {position} {DEPTH_ORDINALS[ordinal]}"
+            salary = 4700 + (team_index * 50) + (position_index * 25) + ordinal * 10
             group = (draft_groups or ("DG-C1",))[team_index % len(draft_groups or ("DG-C1",))]
             writer.writerow(
                 (
@@ -273,8 +287,10 @@ def _role_evidence(root: Path, slate, salary_hash: str) -> Path:
             "TE": (0.0, 0.0, 0.3, 0.0, 0.3),
         }
         recipients = []
+        held = Counter(p.position for p in players)
         for player in players:
-            qb, carry, target, rush_td, receive_td = shares[player.position]
+            qb, carry, target, rush_td, receive_td = (
+                value / held[player.position] for value in shares[player.position])
             recipients.append(
                 {
                     "underlying_id": player.underlying_id,
@@ -339,10 +355,11 @@ def _role_evidence(root: Path, slate, salary_hash: str) -> Path:
     )
 
 
-def _fixture(root: Path, *, entries: int = 2, inactive_dst: bool = False):
+def _fixture(root: Path, *, entries: int = 2, inactive_dst: bool = False,
+             depth: dict[str, int] | None = None):
     root.mkdir(parents=True, exist_ok=True)
     salary = root / "DKSalaries.csv"
-    salary.write_bytes(_salary_bytes())
+    salary.write_bytes(_salary_bytes(depth=depth))
     entry = root / "DKEntries.csv"
     entry.write_bytes(_entry_bytes(entries))
     package = root / "priors"

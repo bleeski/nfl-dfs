@@ -1479,6 +1479,7 @@
     "TEAM_SPLIT_VALUE_NOT_NUMERIC": "prior_package",
     "TEAM_VOLUME_COVERAGE_MISMATCH": "projection_package",
     "TEMPLATE_MISMATCH": "delivered_bytes",
+    "THESIS_CONSTRUCTION_BREACHED": "portfolio_bounds",
     "TICKET_FACE_VALUE_REQUIRED": "contest_economics",
     "UNFILLED_AUTHORIZED_ROWS": "delivery_coverage",
     "UNKNOWN_DK_STATUS": "participation_evidence",

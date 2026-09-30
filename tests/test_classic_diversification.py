@@ -165,7 +165,11 @@ def test_the_fill_exclusions_are_the_runs_and_the_policys_exact_ones():
 # -- the run-level reports ---------------------------------------------------
 
 def test_a_run_with_no_policy_still_names_a_cap_step_its_c1_took(tmp_path, monkeypatch):
-    """No ladder, so no `relaxation` record: the step is still a named limitation."""
+    """No ladder, so no `relaxation` record: the step is still a named limitation.
+
+    Session 49: a run with no policy builds its rows as the thesis construction (`THESES`
+    scope), so the step reads `THESES row`, not `C1 row`; the cap walk is the same.
+    """
 
     from functools import partial
 
@@ -179,7 +183,7 @@ def test_a_run_with_no_policy_still_names_a_cap_step_its_c1_took(tmp_path, monke
     assert code == 0, report["blockers"]
     assert "relaxation" not in report
     texts = [text for text in report["blockers"] if text.startswith("RELAXATION_STRUCTURE_RELAXED:")]
-    assert texts and "classic_person_overlap 2 to" in texts[0] and all("C1 row" in text for text in texts)
+    assert texts and "classic_person_overlap 2 to" in texts[0] and all("THESES row" in text for text in texts)
     from .test_deadline_controller import _truth_codes
 
     assert _truth_codes(report)["RELAXATION_STRUCTURE_RELAXED"] == "S"
