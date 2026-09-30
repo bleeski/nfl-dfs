@@ -24,8 +24,9 @@ complete game/team/opponent/lock set, contest and Entry IDs, and blank-cell
 authority. It builds or reuses the shared frozen prior package, produces the
 shared deterministic projection package, applies full-slate participation,
 current role and expiry gates, and names missing official activity and weather
-as limitations rather than stopping (R28, Session 09). With no policy, the
-byte-compatible C1 sequential selection remains in place. To invoke governed
+as limitations rather than stopping (R28, Session 09). With no policy, `run-slate`
+builds Classic rows as the rung-4 thesis construction (Session 49, below); `run_prior_review`
+called directly keeps the byte-compatible C1 sequential selection (its default). To invoke governed
 C2 joint selection, supply the exact-input C2 policy on the command line or in
 the generated request:
 
@@ -161,10 +162,12 @@ record). Do not regenerate and rerun by hand. A bank that stopped at a limit
 with the entry count and a policy-feasible witness reports
 `BOUNDED_TIME_LIMIT_STOP` or `BOUNDED_SEARCH_LIMIT_STOP`, delivers, and names
 `CANDIDATE_BANK_STOPPED_AT_LIMIT`, which is not a trigger. Rung 4 emits no policy
-and runs C1 sequential selection, which exports its own CSV; it is the last
-structural rung, not a guaranteed file: C1 raises when distinct lineups run
-out (`selection.py:577-584`) and the baseline stays the file. When no engine
-file is good enough, the Classic fallback path below still exists.
+and, in Classic, builds several stack theses under one person cap (Session 49,
+`classic_thesis_sequential_v1`, § Rung 4 below), which exports its own CSV; it is the last
+structural rung, not a guaranteed file: it raises only when it built no row at all, and a
+file with fewer rows than the baseline cannot replace it (the pointer's coverage rule), so
+the baseline stays the file. When no engine file is good enough, the Classic fallback path
+below still exists. Showdown rung 4 is unchanged: sequential Showdown selection.
 
 A C2 policy binds every fillable row, or a subset of them in template order:
 `scripts/make_classic_policy.py --entry-id <id>`, once per row (Session 11b); a
@@ -1261,7 +1264,8 @@ captain makes a different lineup.
 The ladder lives in `src/nfl_dfs/relaxation.py` (Session 10), and `run-slate`
 walks it inside one run, inside the run's deadline budget. Classic rung 0 is
 every entry stacked with a bring-back on most of them; each rung relaxes one
-class; rung 4 emits no policy at all and runs C1 sequential selection.
+class; rung 4 emits no policy at all: Classic builds several stack theses under one
+person cap (Session 49), Showdown runs sequential selection.
 Showdown's rungs widen the Captain caps first, then let zeroed Captains
 captain, then drop every exposure cap and the tight overlap (the DAL@NYG retro:
 the bank and the Captain strata bind first); its rung 4 is sequential Showdown
@@ -1286,10 +1290,39 @@ baseline's writer and audit as `review/DK_REVIEW_ENTRY_C1_<run_id>.csv`, which
 replaces the baseline as the deliverable; if that export is refused, or C1
 raises `SOLVER_RETURNED_NO_LINEUP` when distinct lineups run out
 (`selection.py`, `_sequential_lineups`), the baseline stays the deliverable with its
-unfilled Entry IDs named. Since Session 39 rung 4's C1 rows share at most 6 people
+unfilled Entry IDs named. Since Session 39 rung 4's rows share at most 6 people
 with each earlier row, the cap stepping up one person at a time when the model is
 proven infeasible and each step reported in the result's `relaxation` (step
-`OVERLAP_CAP`); it is a construction preference, never uniqueness. Neither
+`OVERLAP_CAP`); it is a construction preference, never uniqueness.
+
+**Rung 4 in Classic is several constructions, not one (Session 49).** C1 repeated one
+construction; on the 2026-09-27 Week 3 slate that gave three players in 25 of 25
+lineups and no stack. With no policy in force (rung 4, or a `run-slate` that supplied
+none) Classic rows come from `src/nfl_dfs/classic_theses.py`,
+`classic_thesis_sequential_v1`: one thesis per primary stack team (the best team of each
+game first, `max(4, rows // 15 + 3)` of them, ranked by a stack value read from the
+run's own prior objective), each a model with its QB from that team, a teammate WR/TE and
+a bring-back; rows go round robin across the live theses; nobody is in more than 40% of
+the rows; every prefilled roster and earlier row is cut exactly (R29). The operator script
+`scripts/build_thesis_portfolio.py` stays the tool for a hand-written thesis portfolio
+(market totals, flips, a salary-ranked fade); the engine does not call it, because it
+needs the operator's config and slate-context totals and shells out to another builder.
+The construction preferences relax in this order, each step a `RELAXATION_STRUCTURE_RELAXED`
+record (`constraint` `classic_bringback`, `classic_person_overlap`, `classic_person_share`,
+`classic_qb_stack`): a thesis proved infeasible drops its bring-back; then the one overlap
+cap steps up a person; then the thesis is dropped (a `classic_thesis` record; a thesis whose quarterbacks are all at the
+person cap is dropped for that reason without touching the bring-back or the overlap); when every thesis
+is gone the person share steps up ten points at a time to 60%; then the stack requirement goes (a free thesis
+takes the rest) and the share keeps stepping to 100%. A run that cannot build row k (proved
+infeasible, or the per-solve window spent) delivers the k rows it built and names the rest as
+`unfilled_entry_ids` with `SOLVER_RETURNED_NO_LINEUP`; with none built it raises as C1 does.
+The delivered file and its limitations still name the producer `CLASSIC_C1` (rung 4's slot); the report's
+`construction` block and its `THESIS_SEQUENTIAL...` basis say how the rows were built. The 40% cap is of the
+rows requested: a short file reports `max_person_share_of_delivered_rows`, and prefilled template rows are not
+counted. A file with fewer rows than the baseline cannot replace it (`DELIVERY_POINTER_COVERAGE_REGRESSION`),
+so a short thesis file leaves the baseline in place and the gap named. The unbound fill of a
+subset policy stays plain C1. This is a prior-only construction preference, not a bet that a
+stacked lineup or a thesis is worth more. Neither
 uniqueness nor any exact exclusion (a policy's own, or
 a person it caps at zero) is ever on the ladder; rung 4 carries the dropped
 policy's exclusions as operator exclusions. Since Session 08 the bank keeps

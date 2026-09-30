@@ -4,6 +4,116 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-09-30: Session 49 -- thesis builder as the rung-4 path (Classic rung 4 is several stack theses under one person cap)
+
+Branch `claude/sleepy-maxwell-iv3mnp` (assigned, at `0a95408`, Session 39b's merge), task file `state/tasks/S49.md`. No protected
+path touched. Every path still ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`; no evidence or integrity gate was
+touched. Baseline before any edit: `2125 passed, 1 skipped in 474.29s (0:07:54)` (Linux). Final: `2146 passed, 1 skipped in 460.45s
+(0:07:40)` (2125 plus the 21 tests of the new `tests/test_classic_theses.py`). The `/dev-session` and `/advisor` Skill calls fail in the
+cloud container on a harness hook (`set: Illegal option -o pipefail`), as the session prompt warned; both `SKILL.md` files were followed
+directly (the advisor as an `Agent` call with `model: "fable"`). Not fixed.
+
+#### The defect and the decision
+
+Rung 4 of the Classic ladder (no policy) was C1: `_sequential_lineups`, one construction repeated, each row the best legal lineup the
+earlier rows left. On the 2026-09-27 Week 3 slate that gave three players in 25 of 25 lineups and no stack. Measured again this session on a
+266-player synthetic pool (14 teams, salary-cap binding, a seeded salary-shaped objective; this host, 5 s per solve, overlap cap 6): plain C1
+at 25 rows took 22.6 s with one person in 100% of the rows and 13 of 25 stacked; at 150 rows 508.1 s, 88% and 61 of 150. The thesis
+construction at 25 rows took 5.6 s, nobody over 40%, 25 of 25 stacked; at 150 rows 62.6 s (64.1 s on the first run), nobody over 40%, 150
+of 150 stacked. A synthetic pool, not a slate: the real objective differs, so these are the shape of the gain, not a number for Ben.
+
+**Port, not call (decided, advisor agreed).** `scripts/build_thesis_portfolio.py` shells out to `build_classic_portfolio.py` once per thesis and
+seed, needs a hand-written thesis config and operator slate-context totals the run does not have, writes scratch directories, and has no
+deadline budget. The engine needs determinism, hashing and the window, so `src/nfl_dfs/classic_theses.py` ports its shape onto the engine's own
+`LineupOptimizer`: several named theses, one global exposure cap, one global overlap cap, round-robin quota, R29. The operator script stays the
+tool for a hand-written thesis portfolio (market totals, flips, a salary-ranked fade).
+
+**The thesis axis.** One thesis per primary stack team, best team of each game first, `max(4, rows // 15 + 3)` of them, ranked by a stack value
+read from the run's own prior objective (best QB, two best WR/TE, best opponent RB/WR/TE; ties on the team code; excluded rows never count).
+Each thesis is a model with its QB from that team, a teammate WR/TE (`PASS_CATCHER >= 1`) and a bring-back (`BRINGBACK >= 1`). No number is
+written by hand. The script's other axes (market-total flips, bust overrides, the salary-ranked fade) need inputs the run lacks or swap the
+objective for salary, which I judged a model-value substitute; the advisor suggested the fade as one more axis and I did not take it. It is a
+follow-up candidate, not registered.
+
+**The cap and the stack, and how they relax.** No person in more than `floor(0.40 x rows)` (at least 1) of the rows: a zero bound on a person
+the moment they reach it, in every thesis model. Both are construction preferences and relax in this order, each step reported: a thesis proved
+infeasible drops its bring-back; then the one overlap cap (Session 39's 6, shared by every thesis) steps up a person; then the thesis is dropped;
+when every thesis is gone the person share steps up ten points at a time to 60%; then the stack requirement goes (a free thesis takes the rest)
+and the share keeps stepping to 100%. The advisor's correction, adopted: hold the stack to a 60% share before dropping it, because a stacked file
+at 100% exposure is the 2026-09-27 file with stacks. Distinct lineups (R29) are never relaxed.
+
+**Scope.** Classic with no policy in force: rung 4 of a ladder, and a `run-slate` that supplied no policy at all (the same code path and the same
+concentration; the advisor agreed). `select_prior_lineups(classic_construction="THESES")` is opt-in and `run_prior_review` called directly keeps
+C1 (there is no `nfl prior-review` subcommand; the advisor and I both assumed one, the reviewer caught it). Showdown rung 4 (sequential Showdown)
+is unchanged and the selector refuses the flag on Showdown or with a policy (`MODE_NOT_SUPPORTED`). The subset-policy unbound fill
+(`_fill_unbound`) stays plain C1.
+
+**The named-gap seam: taken, with a limit found.** A thesis run that cannot build row k (proved infeasible, or its window of
+`time_limit x (rows + 1)` spent, checked before each solve) returns the k rows and `prior_review` names the tail Entry IDs
+(`exact_assignments_for_entries(..., unfilled_entry_ids=)`, never `assignments_for_entries`, which cycles); with no row it raises
+`SOLVER_RETURNED_NO_LINEUP` as C1 does. Observed: the delivery pointer's coverage rule (`DELIVERY_POINTER_COVERAGE_REGRESSION`) still refuses
+a file with fewer rows than the baseline, so a rung 4 that stops short of the baseline's row count leaves the baseline the file and the gap
+named (tested). It replaces a baseline that holds no more rows, which changed one pinned test (below). A composite of thesis rows and baseline
+rows for the tail is not built.
+
+#### What changed, by layer
+
+- **New `src/nfl_dfs/classic_theses.py`** (`classic_thesis_sequential_v1`, `does_not_establish` text in the module and the report): ranking, the
+  per-thesis models, the round robin, the relaxation order, the independent backstop (distinctness, overlap cap, person cap, stack count
+  recomputed from the rosters; `THESIS_CONSTRUCTION_BREACHED` on a disagreement) and the `construction` report block.
+- **`selection.py`**: `classic_construction` parameter, `_Sequential.construction`, the report gains `construction`, `unfilled_rows`, `stopped`.
+- **`prior_review.py`**: passes it through; the no-policy assignment names a short tail; the assignment note says "thesis construction".
+- **`cli.py`**: passes `THESIS_CONSTRUCTION` for Classic with no policy in force; the `SOLVER_RETURNED_NO_LINEUP` limitation reads the thesis run's stop.
+- **`relaxation.py`**: `selection_overlap_steps` also reads `construction.relaxations` (scope `THESES`, a step's own scope kept); the record
+  step is `THESIS_PREFERENCE` for bring-back, share, stack and thesis drops and `OVERLAP_CAP` for the cap; the rung-4 drop record's `final`
+  names the construction for Classic.
+- **Registry**: one new code, `THESIS_CONSTRUCTION_BREACHED` (`portfolio_bounds`). `REGISTRY_SHA256` moved from
+  `d10ad5bf6edd221543b70a6ae66ee2073bb8a9e60d23955750bee7c3c6b2c52e` to `1eecc5a370481dc232be71b1cfda107e386a8e228d631e1fab023d155fa7dc7a`
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`; the only change to the file is that one line.
+- **Docs**: `docs/DATA_CONTRACTS.md` (the construction contract, the `THESIS_PREFERENCE` step, the floor sentence), `docs/RUNBOOK.md` (the four
+  sentences that called rung 4 "no policy" or "C1 sequential", and a rung-4 paragraph), `IMPLEMENTATION_STATUS.md`.
+
+#### Tests
+
+- New `tests/test_classic_theses.py`, 21 tests: the 40% and stack bounds, several theses each with its own QB team, round-robin quotas, bring-back
+  kept, determinism, a prefilled roster never repeated, an excluded row never in any thesis, a cap the pool cannot hold stepping ten points and
+  each step reported, the stack held to 60%, a pool with exactly one legal lineup (k of 3, proved exhausted, bring-back relaxed), no row raises,
+  the time budget, a thesis whose quarterbacks are at the cap dropped by name without a wrong relaxation, the backstop raising on a model that
+  ignores the cap or the stack, the selector's switch refusing Showdown and a policy, the default staying C1, the two `run-slate` acceptance
+  runs, the short run's `unfilled_entry_ids` and the pointer keeping a fuller baseline.
+- **Fails on the old tree** (`git archive HEAD` copy with the new fixtures, the two acceptance tests only): both fail on the tree before this session
+  on `assert 0.5 <= 0.4` (the most-used person in half the rows), the rung-4 run and the no-policy run.
+- **Mutation-checked by hand** (restored from a copy): the cap disabled, the stack constraint removed, the prefilled no-goods removed and the
+  earlier-row no-goods removed each fail (the first, second and fourth through the backstop, the third through the R29 test); the capped-quarterback
+  check removed fails the scenario test with the misattributed `classic_bringback`.
+- **Existing tests edited (their expectation is the behaviour change, each its own visible change):**
+  `tests/test_relaxation_controller.py::test_a_pool_too_small_for_distinct_lineups_never_repeats_one_and_names_the_unfilled_entries` (rung 4 now
+  delivers its one lineup and names two Entry IDs, code 0 and producer `CLASSIC_C1`, where C1 raised and the baseline was the file; it still asserts
+  no repeated roster and the named unfilled IDs), `tests/test_classic_diversification.py::test_a_run_with_no_policy_still_names_a_cap_step_its_c1_took`
+  (`THESES row`, not `C1 row`). `tests/test_classic_prior_review.py` and `_classic` in `test_relaxation_controller.py` gained a pool `depth`
+  parameter and an optional policy; `depth=None` is byte-identical to before (the file's 19 tests pass unchanged).
+
+#### Reviewer and advisor
+
+The advisor (Fable) agreed with porting and the scope, and corrected: build on `ClassicCandidateBank`'s row-adding pieces (done, the optimizer's
+own methods), the cycling trap in `assignments_for_entries` (avoided), keep `differentiation` intact for the readable review (done) and add
+sibling step lists (done), bound the share raise at 60% before dropping the stack (adopted). The reviewer found no blocking defect and six
+lower ones, all handled: a thesis whose quarterbacks were capped was blamed on the bring-back and the overlap (now dropped by name as
+`PERSON_CAP_REACHED`, and the share-step reasons no longer claim the cap was the cause); a dropped thesis was not in the relaxation record (now
+its first drop is, later ones stay in `theses[].drops`; repeating it at every share level had duplicated limitation texts and failed two tests,
+found by the second full run); the time guard ran only between rows (now also before each solve); the share is of the rows requested, so a short file
+reports `max_person_share_of_delivered_rows`; the docs named a `prior-review` command that does not exist; and no test drove the backstop
+(now two do).
+
+#### Left open
+
+- Prefilled template rows are not counted in the 40% (the cap is of the rows this run builds).
+- A short thesis file does not replace a fuller baseline; a composite file is the fix if a real slate ever needs it. Plain C1's 508 s at 150 rows
+  also shows why a budgeted floor matters: the thesis construction is faster than what it replaces on the synthetic pool.
+- The delivered file's producer label stays `CLASSIC_C1` (rung 4's slot); `construction` says how the rows were built.
+- Real-slate timing is not measured. The 150-row run was on a synthetic pool; the first real Week 4 run is the check.
+- Session 23b shares `relaxation.py` and `docs/DATA_CONTRACTS.md` with this session and is next; it merges `origin/main` first.
+
 ### 2026-09-30: Session 39b -- partial fill (a fill that runs out of distinct lineups at row k delivers k rows and names the rest)
 
 Branch `claude/s39b-partial-fill-egog94` (assigned, at `a1b3afb`, Session 39's claim release), task file `state/tasks/S39b.md`.

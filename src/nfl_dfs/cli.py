@@ -138,7 +138,7 @@ from .participation import (
 )
 from .prior_score import read_team_splits
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
-from .selection import assignments_for_entries, select_prior_lineups
+from .selection import THESIS_CONSTRUCTION, assignments_for_entries, select_prior_lineups
 from .qa import QAFinding, audit_selected_portfolio, referee_blocks, run_three_pass_audit
 from .gate_registry import GateRegistry, load_gate_registry
 from .relaxation import (
@@ -2625,12 +2625,15 @@ def _review_release_truths(
     left_over = tuple(eid for eid in outcome.unfilled_entry_ids if eid in set(authorized))
     if left_over:
         reports = getattr(outcome, "reports", None) or {}
-        fill = ((reports.get("selection") or {}).get("selection") or {}).get("unbound_fill") or {}
+        chosen = (reports.get("selection") or {}).get("selection") or {}
+        # Session 49: the thesis construction reports its stop beside the rows, not in a fill block.
+        built_by = "the thesis construction" if chosen.get("construction") is not None else "the unbound fill"
+        fill = chosen.get("unbound_fill") or (chosen if chosen.get("construction") is not None else {})
         stop = fill.get("stopped") or {}
         why = (
-            "the unbound fill proved no distinct lineup is left"
+            f"{built_by} proved no distinct lineup is left"
             if stop.get("proved_exhausted") else
-            f"the unbound fill's solve ended ({stop.get('status') or 'no status recorded'}) with no lineup"
+            f"{built_by}'s solve ended ({stop.get('status') or 'no status recorded'}) with no lineup"
             " and no proof that none is left"
         )
         limitations.append(registry.limitation(
@@ -3068,6 +3071,11 @@ def _run_prior_review_profile(
                 portfolio_policy_normalized_sha256=portfolio_policy_normalized_sha256,
                 budget=budget,
                 showdown_candidate_limit=rung.showdown_candidate_limit if rung is not None else None,
+                # Session 49: Classic with no policy in force (rung 4, or none supplied) builds
+                # several stack theses under one person cap instead of repeating one construction.
+                classic_construction=(
+                    THESIS_CONSTRUCTION
+                    if slate.mode is EngineMode.CLASSIC and portfolio_policy is None else None),
             )
         elapsed = budget.elapsed() - review_started if budget is not None else 0.0
         if budget is not None:

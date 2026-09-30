@@ -1,5 +1,23 @@
 # Implementation Status
 
+## Capability added: 2026-09-30 (Session 49, thesis builder as the rung-4 path)
+
+Working and verified through the Classic fixtures (`tests/test_classic_theses.py`, the rung-4 and no-policy `run-slate`
+runs on a four-team pool wide enough to hold the cap, and `tests/test_relaxation_controller.py`) and the full suite:
+Classic rung 4 (no policy in force: the ladder's floor, or a `run-slate` that supplied none) no longer repeats one
+construction. `src/nfl_dfs/classic_theses.py` (`classic_thesis_sequential_v1`) builds rows as several stack theses, one per
+primary stack team ranked from the run's own prior objective, each with its QB from that team, a teammate WR/TE and a
+bring-back, round robin under one person cap (40% of the rows) and the Session 39 overlap cap, every earlier row and
+prefilled roster cut exactly (R29). On a 266-player synthetic pool the 150-row build took 64 s with nobody over 40% and
+150 of 150 stacked; plain C1 took 508 s with a person in 88% of the rows and 61 of 150 stacked. Preferences relax in a
+reported order (bring-back, the shared overlap cap, the person share, then the stack) and a run that cannot build row k
+delivers the k rows and names the rest as `unfilled_entry_ids`. **Not done, named:** a short thesis file cannot replace a
+fuller baseline (`DELIVERY_POINTER_COVERAGE_REGRESSION`), so a rung 4 that stops short still leaves the baseline the
+file, with the gap named; a composite of thesis rows and baseline rows is not built. The theses are team stacks only: the
+operator script's market-total flips, bust overrides and salary-ranked fade need inputs the run does not have. The
+subset-policy unbound fill, `run_prior_review` called directly (its default stays C1) and Showdown rung 4 are unchanged. Still
+`MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-30 (Session 39b, partial fill)
 
 Working and verified through the Showdown and Classic fixtures (`tests/test_partial_fill.py`, a real infeasible-pool stop

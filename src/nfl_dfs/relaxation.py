@@ -9,7 +9,11 @@ one run, inside the run's deadline budget (Session 07), and records each step.
 
 THE LADDER. Classic rungs 0 to 3 are the generator's table below and Showdown
 rungs 1 to 3 its own (`SHOWDOWN_RUNGS`); rung 4 in both is no policy: C1, or
-sequential Showdown selection, the floor. A rung's policy is the loosest of the
+sequential Showdown selection, the floor. Since Session 49 Classic rung 4 is not C1's
+one repeated construction: it builds several stack theses under one person share cap
+(`classic_theses.py`, `classic_thesis_sequential_v1`), and the preferences that build
+relaxes (bring-back, overlap, the share cap, the stack) travel in the same `relaxation`
+record as a rung's; Showdown rung 4 is unchanged. A rung's policy is the loosest of the
 policy it replaces and the rung's table, dimension by dimension, so a
 relaxation never tightens anything: a generator's rung-k policy becomes rung
 k+1 exactly, and a hand-written one keeps whatever the rung leaves looser. A
@@ -40,8 +44,9 @@ picks the step:
 
 Never a trigger: a bank or joint solve a limit stopped with what it needed
 (Session 08 delivers and names it), and running out of distinct lineups: rung 4
-is the floor, R29 keeps every lineup distinct, and the baseline stays the file
-with its unfilled Entry IDs named.
+is the floor and R29 keeps every lineup distinct. Classic rung 4 (Session 49)
+that builds k of n rows delivers the k and names the rest; with no row built, and
+on Showdown, the baseline stays the file.
 
 NEVER ON EITHER LADDER. `require_unique_lineups` (R29) and every exact exclusion
 (a Classic policy's `exact_exclusions`, a Showdown policy's `excluded_people`),
@@ -73,6 +78,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
+from .classic_theses import THESIS_CONSTRUCTION_VERSION
 from .classic_portfolio_policy import (
     ClassicStructuralBounds,
     NormalizedClassicPortfolioPolicy,
@@ -776,16 +782,25 @@ def selection_overlap_steps(reports: Mapping[str, object] | None) -> list[dict[s
         steps = differentiation.get("overlap_relaxations") if isinstance(differentiation, Mapping) else None
         for step in steps or ():
             if isinstance(step, Mapping):
-                found.append({**step, "scope": scope})
+                found.append({"scope": scope, **step})
+    # Session 49: the preferences the thesis construction relaxed (bring-back, the person share
+    # cap, the stack requirement), which the overlap steps above do not include.
+    construction = payload.get("construction")
+    for step in (construction.get("relaxations") if isinstance(construction, Mapping) else None) or ():
+        if isinstance(step, Mapping):
+            found.append({**step, "scope": "THESES"})
     return found
 
 
 def overlap_step_text(step: Mapping[str, object]) -> str:
+    constraint = step.get("constraint", "classic_person_overlap")
     return _limitation_text(
         "RELAXATION_STRUCTURE_RELAXED",
-        f"classic_person_overlap {step['from']} to {step['used']} for {step['scope']} row"
-        f" {step['index']} after solver status {step['trigger_status']}: no distinct lineup fit under"
-        " the cap; lineups stay distinct (R29)")
+        f"{constraint} {step['from']} to {step['used']} for {step['scope']} row"
+        f" {step['index']} after solver status {step['trigger_status']}: "
+        + ("no distinct lineup fit under the cap" if constraint == "classic_person_overlap"
+           else f"{str(step.get('reason', '')).lower().replace('_', ' ')} ({step.get('thesis', 'ALL')})")
+        + "; lineups stay distinct (R29)")
 
 
 def _plain(value: object) -> object:
@@ -1066,7 +1081,9 @@ class Ladder:
             return [("portfolio_policy",
                      {"rung": old.label, "normalized_sha256": old.normalized_sha256},
                      {"rung": new.label, "policy": None,
-                      "carried_exclusion_dk_ids": list(new.excluded_dk_ids)}, "DROP")]
+                      "carried_exclusion_dk_ids": list(new.excluded_dk_ids),
+                      **({"construction": THESIS_CONSTRUCTION_VERSION}
+                         if self.mode is EngineMode.CLASSIC else {})}, "DROP")]
         changes: list[tuple[str, object, object, str]] = []
 
         def compare(constraint: str, before: object, after: object, kind: str = "STRUCTURE") -> None:
@@ -1160,8 +1177,9 @@ class Ladder:
             "schema_version": CONTRACT_VERSION,
             "sequence": len(self.records) + 1,
             "attempt": attempt,
-            "step": "OVERLAP_CAP",
-            "constraint": "classic_person_overlap",
+            "step": "OVERLAP_CAP" if step.get("constraint", "classic_person_overlap") == "classic_person_overlap"
+                    else "THESIS_PREFERENCE",
+            "constraint": step.get("constraint", "classic_person_overlap"),
             "class": family.gate_class.value,
             "family": family.name,
             "provenance": family.provenance.model_dump(mode="json"),
@@ -1173,7 +1191,7 @@ class Ladder:
             "trigger_detail": (f"{step['scope']} row {step['index']}: {step['reason']}")[:600],
             "rung_from": self.current.label,
             "rung_to": self.current.label,
-            "why": "the cap is a construction preference; distinct lineups (R29) are never relaxed",
+            "why": "a construction preference; distinct lineups (R29) are never relaxed",
             "at_utc": self._now(),
             "elapsed_seconds": round(self.budget.elapsed(), 3) if self.budget is not None else None,
             "entry_ids": list(self.entry_ids),
