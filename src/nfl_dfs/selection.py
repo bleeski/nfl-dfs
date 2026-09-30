@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import os
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
@@ -51,10 +51,25 @@ from .portfolio_enforcement import (
 )
 from .portfolio_policy import NormalizedPortfolioPolicy
 from .prior_score import PriorScores, TeamSplits, score_pool
+from .relaxation import own_exclusion_dk_ids
 
 
 PROFILE_VERSION = "prior_only_showdown_selection_v1"
-CLASSIC_PROFILE_VERSION = "prior_only_classic_selection_c1_v1"
+# v2 (Session 39): C1 and the unbound fill carry the Classic person-overlap cap. v1 (exact
+# roster cuts only) is what earlier runs' selection reports name; nothing reads the string.
+CLASSIC_PROFILE_VERSION = "prior_only_classic_selection_c1_v2"
+
+# Session 39 (review S3): the Classic person-overlap cap on C1 and on the rows a
+# subset policy leaves unbound. A nine-player lineup that shares at most six
+# people with every earlier one is a construction preference, not a gate: when
+# no distinct lineup fits under it the cap steps up one person at a time to
+# `CLASSIC_MAX_USEFUL_OVERLAP` (distinct rosters never share nine people, so
+# eight is the exact-roster cut alone), each step reported. Distinctness (R29)
+# is never on that walk. `None` keeps the earlier exact-roster-only behaviour
+# for diagnostics. It is separate from `max_person_overlap`, whose default is
+# Showdown's six-slot scale.
+CLASSIC_PERSON_OVERLAP = 6
+CLASSIC_MAX_USEFUL_OVERLAP = 8
 
 
 class SelectionError(ValueError):
@@ -184,6 +199,7 @@ def select_prior_lineups(
     count: int,
     differentiate_captain: bool = True,
     max_person_overlap: int | None = 4,
+    classic_person_overlap: int | None = CLASSIC_PERSON_OVERLAP,
     time_limit_seconds: float = 10.0,
     role_evidence_json: str | Path | None = None,
     offensive_role_evidence_json: str | Path | None = None,
@@ -216,6 +232,11 @@ def select_prior_lineups(
     policy's. The fill's lineups follow the policy's in the returned tuple and
     its report is the policy report's `unbound_fill`; a fill that runs out of
     distinct lineups raises, and nothing is returned (all or nothing).
+
+    `classic_person_overlap` (Session 39) is the most people a Classic C1 or
+    fill row may share with an earlier row (default 6; `None` is no cap). It
+    steps up one person at a time when no distinct lineup fits and each step is
+    reported; `max_person_overlap` is Showdown's and Classic never reads it.
     """
 
     if slate.mode not in {EngineMode.SHOWDOWN, EngineMode.CLASSIC}:
@@ -306,11 +327,18 @@ def select_prior_lineups(
         write_pool_scores(scores, pool_scores_target, excluded_dk_ids=excluded)
     objective = _objective(slate, scores, excluded)
 
+    # The fill's rows are bound by the run's own exclusions and, since Session 39
+    # (review S6), by the policy's own exact exclusions and zero caps: an
+    # exclusion is a fact about a person, not about the rows a policy binds.
+    # The policy's other bounds still never cover them.
+    fill_excluded = _fill_exclusions(run_excluded, portfolio_policy)
+
     def fill(policy_lineups: list[SelectedLineup]) -> tuple[list[SelectedLineup], dict[str, object]]:
         return _fill_unbound(
-            slate, _objective(slate, scores, run_excluded), run_excluded, contract,
+            slate, _objective(slate, scores, fill_excluded), fill_excluded, contract,
             policy_lineups=policy_lineups, forbidden_rosters=forbidden_rosters, count=fill_count,
             differentiate_captain=differentiate_captain, max_person_overlap=max_person_overlap,
+            classic_person_overlap=classic_person_overlap,
             time_limit_seconds=(time_limit_seconds if fill_time_limit_seconds is None
                                 else fill_time_limit_seconds),
         )
@@ -595,7 +623,8 @@ def select_prior_lineups(
     run = _sequential_lineups(
         slate, objective, excluded, contract, count=count, first_index=1,
         forbidden_rosters=forbidden_rosters, differentiate_captain=differentiate_captain,
-        max_person_overlap=max_person_overlap, time_limit_seconds=time_limit_seconds,
+        max_person_overlap=max_person_overlap, classic_person_overlap=classic_person_overlap,
+        time_limit_seconds=time_limit_seconds,
     )
     selected = run.selected
     report = {
@@ -641,6 +670,8 @@ class _Sequential:
     captain_repeats_from_index: int | None
     differentiate_captain: bool
     effective_overlap: int | None
+    requested_overlap: int | None = None
+    overlap_relaxations: list[dict[str, object]] = field(default_factory=list)
 
     def differentiation(self, slate: SlateContract) -> dict[str, object]:
         by_id = {player.dk_id: player for player in slate.players}
@@ -670,8 +701,14 @@ class _Sequential:
                 )
             ),
             "max_person_overlap": self.effective_overlap,
+            "requested_person_overlap": self.requested_overlap,
+            "overlap_relaxations": list(self.overlap_relaxations),
             "basis": (
-                "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_ONLY_C1_NOT_A_PORTFOLIO_POLICY"
+                (
+                    "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_ONLY_C1_NOT_A_PORTFOLIO_POLICY"
+                    if self.requested_overlap is None
+                    else "SEQUENTIAL_EXACT_LINEUP_NO_GOODS_AND_PERSON_OVERLAP_CAP_C1_NOT_A_PORTFOLIO_POLICY"
+                )
                 if slate.mode is EngineMode.CLASSIC
                 else "STRUCTURAL_UNIQUENESS_NOT_A_CORRELATED_EQUITY_CLAIM"
             ),
@@ -699,29 +736,86 @@ def _sequential_lineups(
     differentiate_captain: bool,
     max_person_overlap: int | None,
     time_limit_seconds: float,
+    classic_person_overlap: int | None = CLASSIC_PERSON_OVERLAP,
+    overlap_anchors: Sequence[tuple[str, ...]] = (),
     stage: str = "SEQUENTIAL",
 ) -> _Sequential:
     """`count` distinct lineups, one solve each, none equal to a forbidden roster.
 
     C1 (Classic) and sequential Showdown, and since Session 11b the fill of the
     rows a subset policy leaves unbound. Lineups are numbered from `first_index`.
+
+    Classic rows (Session 39) are also capped at `classic_person_overlap` shared
+    people with every earlier row and with every `overlap_anchors` roster (the
+    policy's own lineups, for a fill). A row no distinct lineup fits under that
+    cap is solved again one person looser, up to `CLASSIC_MAX_USEFUL_OVERLAP`,
+    and the step is recorded; the next row starts from the requested cap again,
+    so one hard row does not loosen the rest. Distinctness is never on that walk.
     """
 
     by_id = {player.dk_id: player for player in slate.players}
+    classic = slate.mode is EngineMode.CLASSIC
+    requested_overlap = classic_person_overlap if classic else max_person_overlap
+    anchors = tuple(tuple(map(str, roster)) for roster in overlap_anchors)
+
+    def binds(cap: int | None) -> bool:
+        # Classic rosters are distinct people, so a cap at the roster size less
+        # one is the exact-roster cut alone and adds no row.
+        return cap is not None and (not classic or cap < CLASSIC_MAX_USEFUL_OVERLAP)
+
+    def cut(model: LineupOptimizer, roster: Sequence[str], cap: int | None) -> None:
+        model.add_no_good(roster)
+        if binds(cap):
+            model.add_person_overlap_limit(roster, cap)
+
     optimizer = LineupOptimizer(
         slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
     )
     for roster in forbidden_rosters:
         optimizer.add_no_good(roster)
-    effective_overlap = (
-        max_person_overlap if slate.mode is EngineMode.SHOWDOWN else None
-    )
+    if binds(requested_overlap):
+        for roster in anchors:
+            optimizer.add_person_overlap_limit(roster, requested_overlap)
     selected: list[SelectedLineup] = []
+    row_caps: list[int | None] = []
+    overlap_relaxations: list[dict[str, object]] = []
     forbidden_captains: list[str] = []
     captain_repeats_from: int | None = None  # position in this run, 1-based
     for position in range(1, count + 1):
         index = first_index + position - 1
         result = optimizer.solve(objective)
+        row_cap = requested_overlap
+        if (
+            result.roster is None
+            and classic
+            and binds(requested_overlap)
+            and (selected or anchors)
+        ):
+            # No distinct lineup fits under the cap. It is a construction
+            # preference, so loosen it one person at a time on a model that
+            # holds every earlier row and anchor under the looser cap; the strict
+            # model above keeps serving the rows that follow.
+            first_status = result.status
+            row_cap = requested_overlap
+            while result.roster is None and binds(row_cap):
+                row_cap += 1
+                loosened = LineupOptimizer(
+                    slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds
+                )
+                for roster in forbidden_rosters:
+                    loosened.add_no_good(roster)
+                for roster in anchors:
+                    if binds(row_cap):
+                        loosened.add_person_overlap_limit(roster, row_cap)
+                for earlier in selected:
+                    cut(loosened, earlier.roster, row_cap)
+                result = loosened.solve(objective)
+            if result.roster is not None:
+                overlap_relaxations.append({
+                    "index": index, "requested": requested_overlap, "used": row_cap,
+                    "trigger_status": first_status,
+                    "reason": "NO_DISTINCT_LINEUP_UNDER_THE_REQUESTED_OVERLAP_CAP",
+                })
         if (
             result.roster is None
             and slate.mode is EngineMode.SHOWDOWN
@@ -741,9 +835,7 @@ def _sequential_lineups(
             for roster in forbidden_rosters:
                 optimizer.add_no_good(roster)
             for earlier in selected:
-                optimizer.add_no_good(earlier.roster)
-                if effective_overlap is not None:
-                    optimizer.add_person_overlap_limit(earlier.roster, effective_overlap)
+                cut(optimizer, earlier.roster, requested_overlap)
             differentiate_captain = False
             captain_repeats_from = position
             result = optimizer.solve(objective)
@@ -782,14 +874,13 @@ def _sequential_lineups(
                 solver_seconds=result.elapsed_seconds,
             )
         )
+        row_caps.append(row_cap)
         if position == count:
             break
         # Forbid this exact roster, cap how much personnel may carry over, and
         # optionally forbid a repeat captain. Without the overlap cap the next
         # solve returns the same six people with a rotated captain.
-        optimizer.add_no_good(roster)
-        if effective_overlap is not None:
-            optimizer.add_person_overlap_limit(roster, effective_overlap)
+        cut(optimizer, roster, requested_overlap)
         if differentiate_captain and slate.mode is EngineMode.SHOWDOWN:
             optimizer.add_no_good([captain])
             forbidden_captains.append(captain)
@@ -809,17 +900,26 @@ def _sequential_lineups(
         if len(set(captains)) != len(captains):
             raise SelectionError("DUPLICATE_CAPTAIN_SELECTED")
 
-    if effective_overlap is not None and len(selected) > 1:
-        for earlier in range(len(selected)):
-            for later in range(earlier + 1, len(selected)):
-                first = {by_id[dk].underlying_id for dk in selected[earlier].roster}
-                second = {by_id[dk].underlying_id for dk in selected[later].roster}
-                shared = len(first & second)
-                if shared > effective_overlap:
-                    raise SelectionError(
-                        f"OVERLAP_LIMIT_BREACHED:{earlier + 1}v{later + 1}:{shared}"
-                        f">{effective_overlap}"
-                    )
+    # The backstop: every row shares at most the cap it was solved under with
+    # every earlier row (and, for a fill, with every anchor).
+    people = [{by_id[dk].underlying_id for dk in lineup.roster} for lineup in selected]
+    anchor_people = [{by_id[dk].underlying_id for dk in roster} for roster in anchors]
+    for later, cap in enumerate(row_caps):
+        if not binds(cap):
+            continue
+        for earlier in range(later):
+            shared = len(people[earlier] & people[later])
+            if shared > cap:
+                raise SelectionError(
+                    f"OVERLAP_LIMIT_BREACHED:{earlier + 1}v{later + 1}:{shared}>{cap}"
+                )
+        for position, held in enumerate(anchor_people, start=1):
+            shared = len(held & people[later])
+            if shared > cap:
+                raise SelectionError(
+                    f"OVERLAP_LIMIT_BREACHED:anchor{position}v{later + 1}:{shared}>{cap}"
+                )
+    used = [cap for cap in row_caps if cap is not None]
     return _Sequential(
         selected=selected,
         forbidden_captains=forbidden_captains,
@@ -827,8 +927,24 @@ def _sequential_lineups(
             None if captain_repeats_from is None else first_index + captain_repeats_from - 1
         ),
         differentiate_captain=differentiate_captain,
-        effective_overlap=effective_overlap,
+        effective_overlap=(max(used) if used else None) if requested_overlap is not None else None,
+        requested_overlap=requested_overlap,
+        overlap_relaxations=overlap_relaxations,
     )
+
+
+def _fill_exclusions(
+    run_excluded: Sequence[str],
+    portfolio_policy: NormalizedPortfolioPolicy | NormalizedClassicPortfolioPolicy | None,
+) -> tuple[str, ...]:
+    """The rows an unbound fill may never use (Session 39, review S6).
+
+    The run's own exclusions, plus every exact DraftKings ID the policy itself
+    removes (an exact exclusion, a person it caps at zero, and in Classic a team
+    or game it caps at zero): the same set rung 4 carries as operator exclusions.
+    """
+
+    return tuple(sorted(set(map(str, run_excluded)) | set(own_exclusion_dk_ids(portfolio_policy))))
 
 
 def _objective(slate: SlateContract, scores: PriorScores, excluded: Sequence[str]) -> dict[str, float]:
@@ -860,6 +976,7 @@ def _fill_unbound(
     differentiate_captain: bool,
     max_person_overlap: int | None,
     time_limit_seconds: float,
+    classic_person_overlap: int | None = CLASSIC_PERSON_OVERLAP,
 ) -> tuple[list[SelectedLineup], dict[str, object]]:
     """The rows a subset policy leaves unbound, filled after its joint solve (Session 11b).
 
@@ -871,6 +988,13 @@ def _fill_unbound(
         slate, objective, excluded, contract, count=count, first_index=len(policy_lineups) + 1,
         forbidden_rosters=(*forbidden_rosters, *(lineup.roster for lineup in policy_lineups)),
         differentiate_captain=differentiate_captain, max_person_overlap=max_person_overlap,
+        classic_person_overlap=classic_person_overlap,
+        # The fill's rows are also capped against the policy's own lineups, so they are
+        # not near copies of a bound row (Session 39); the exact-roster cut above stays.
+        overlap_anchors=(
+            tuple(lineup.roster for lineup in policy_lineups)
+            if slate.mode is EngineMode.CLASSIC else ()
+        ),
         time_limit_seconds=time_limit_seconds, stage="UNBOUND_FILL",
     )
     policy_keys = {lineup.canonical_key for lineup in policy_lineups}
@@ -886,7 +1010,7 @@ def _fill_unbound(
         "lineup_indexes": [lineup.index for lineup in run.selected],
         "no_good_rosters": {"policy_lineups": len(policy_lineups),
                             "prefilled_rosters": len(forbidden_rosters)},
-        "exclusions": "THE_RUN_S_OWN_NOT_THE_POLICY_S",
+        "exclusions": "THE_RUN_S_OWN_AND_THE_POLICY_S_EXACT_EXCLUSIONS",
         "excluded_rows": len(excluded),
         "differentiation": run.differentiation(slate),
         "person_exposure": run.person_exposure(slate),

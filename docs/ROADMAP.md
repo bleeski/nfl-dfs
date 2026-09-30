@@ -17,19 +17,21 @@ full code review and a sweep of every plan, brief, archive and ledger.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 23b exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S23b`, on the branch your session was assigned or a new `claude/s23b-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 39b exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S39b`, on the branch your session was assigned or a new `claude/s39b-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
 On 2026-09-25 a full code review (`docs/critiques/Code_Review_2026-09-25.md`)
 and a sweep of every plan, brief, retrospective, archive and ledger were
 consolidated into this board, and Ben re-prioritized it by expected winnings
-(§2.8). Sessions 23 and 23e closed on 2026-09-27 and 2026-09-28, and Sessions
-17, 21 and 48 closed on 2026-09-29 (Session 17 against a fixture transport; its
-real-corpus acceptance is Session 17b, which waits on O1, §2.6). Session 39
-(Classic diversification) was claimed on 2026-09-30 and is `In Progress`, so the
-first startable row is Session 23b; Session 23d is startable too. Session 23b
-(Ben's game theses) shares `relaxation.py` and `docs/DATA_CONTRACTS.md` with
-Session 39; run them one at a time, or in separate worktrees, and merge
-`origin/main` before the final suite. Session 23c waits on 23b.
+(§2.8). Sessions 23 and 23e closed on 2026-09-27 and 2026-09-28, Sessions 17, 21
+and 48 on 2026-09-29 (Session 17 against a fixture transport; its real-corpus
+acceptance is Session 17b, which waits on O1, §2.6), and Session 39 (Classic
+diversification) on 2026-09-30. Session 39 split at its own seam: the overlap
+cap, the witness chain and the fill's exclusions landed, and the partial fill
+(S5) is Session 39b, directly below it, so 39b is first by row order among the
+startable rows; Sessions 23b and 23d are startable too. Session 23b (Ben's game
+theses) shares `relaxation.py` and `docs/DATA_CONTRACTS.md` with Sessions 39 and
+39b; run them one at a time, or in separate worktrees, and merge `origin/main`
+before the final suite. Session 23c waits on 23b.
 
 Every close-out rewrites the session number in this block to the next
 startable row. `python3 scripts/repo_state.py --stdout` derives the same answer
@@ -132,7 +134,8 @@ Every session follows this protocol, and the cards only add to it:
 | Session 50 | Standalone | Intra-contest diversification, Part A: a pure `contest_assignment.py` permutes the selected lineups over the movable Entry IDs so each Contest ID's entries differ (`within_contest_diversity_v1`: `shared_people**2`, plus 12 for the same Captain or QB, 6 for the same Classic primary stack team, 3 for the same thesis; per-contest worst pair plus mean pair, every contest weighted equally); deterministic swaps and seeded restarts inside the `Budget`; it reaches the Showdown policy, sequential and subset-fill rows in `prior_review` before `assignments.csv` is written (Classic C1, C2, C3 and the baseline split to Session 50c at the mode seam); the SD4 audit recomputes the multiset, the filled rows and each contest's statistics from the assignment bytes; a per-contest review block; `scripts/diversify_showdown_contests.py` becomes a wrapper and gains Classic. Supersedes Session 23d's `round_robin_by_contest` default order | PHI@CHI 2026-09-28 (changelog addendum v2 to v4); `scripts/diversify_showdown_contests.py`; `docs/chunks/P2-contest-aware-policy.md` | new `src/nfl_dfs/contest_assignment.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/readable_review.py`, `scripts/diversify_showdown_contests.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md`, new `tests/test_contest_assignment.py` | S | Session 23, Session 23e | `sh ./nfl.sh test tests/test_contest_assignment.py tests/test_diversify_showdown_contests.py tests/test_gate_registry.py tests/test_entry_groups.py tests/test_readable_review.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py -x --tb=short`, then the full suite; PHI@CHI v1 rosters reach 7 distinct Captains of 7 per seven-entry contest with worst pair 4 or fewer and no two-entry pair over 2; seam: the module and Showdown first, Classic as Session 50c (taken: Part A passed 900 lines) | Complete |
 | Session 50c | Standalone | Intra-contest diversification, the Classic exits and the baseline, split from Session 50 at the mode seam: `contest_assignment.apply_step` on C1, C2 (bound and fill rows as separate pools) and C3 in `prior_review`; `audit_classic_portfolio` and C3 recompute the multiset, the filled rows and each contest's statistics from the assignment bytes; the per-contest block in the Classic review, HTML and workbook; the baseline takes the step (no restarts, 0.4 s cap) under `nfl_baseline_report_v4` | Session 50 card and changelog 2026-09-29; Week 3 Classic 2026-09-27 (25 entries, eight two-entry contests) | `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/baseline.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/workbook.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | S | Session 50 | `sh ./nfl.sh test tests/test_contest_assignment_run_slate.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py tests/test_classic_prior_review.py tests/test_baseline.py tests/test_gate_registry.py -x --tb=short`, then the full suite; no Week 3 two-entry contest holds two lineups with the same QB when the portfolio allows it | Complete |
 | Session 50b | Standalone | Intra-contest diversification, Part B, only if Part A's acceptance shows a permutation cannot reach it: per-contest constraints inside the SD4 and C2 joint MILPs (distinct Captains or QBs per contest; a per-contest overlap cap that also counts fixed rows), on the relaxation ladder ahead of rung 4, in new policy schema versions `nfl_showdown_portfolio_policy_v3` and `nfl_classic_portfolio_policy_c2_v3` | Session 50 card; PHI@CHI 2026-09-28 (the portfolio-wide overlap cap did not reach prefilled rows) | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_showdown_policy.py`, `scripts/make_classic_policy.py`, `docs/DATA_CONTRACTS.md`, `config/gate_registry_v1.json` | S | Session 50 | Reactivate only when Session 50's acceptance names a contest a permutation cannot fix; `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_portfolio_enforcement.py tests/test_classic_portfolio_c2.py tests/test_relaxation_controller.py -x --tb=short` | Deferred |
-| Session 39 | Batched | Classic diversification: a Classic person-overlap cap on C1 and every unbound fill row (a construction preference on the ladder, default 6); the C2 witness chain honours the policy overlap and round-robins seeds and slots; policy exclusions bind fill rows; a fill that runs out of distinct lineups delivers the bound rows and names the unfilled Entry IDs (R29) | Code review S3 to S6; standings findings §5.1, §5.5; `IMPLEMENTATION_STATUS.md` Session 11c "not yet" | `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py` | S | Session 23e | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_classic_portfolio_c2.py tests/test_entry_groups.py tests/test_relaxation_controller.py -x --tb=short`; seam: the overlap cap and exclusions first, the partial fill second | In Progress |
+| Session 39 | Batched | Classic diversification: a Classic person-overlap cap on C1 and every unbound fill row (a construction preference on the ladder, default 6); the C2 witness chain honours the policy overlap and round-robins seeds and slots; policy exclusions bind fill rows; (a fill that runs out of distinct lineups delivers the bound rows and names the unfilled Entry IDs, R29, moved to Session 39b at the card's seam) | Code review S3 to S6; standings findings §5.1, §5.5; `IMPLEMENTATION_STATUS.md` Session 11c "not yet" | `src/nfl_dfs/selection.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py` | S | Session 23e | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_classic_portfolio_c2.py tests/test_entry_groups.py tests/test_relaxation_controller.py -x --tb=short`; seam: the overlap cap and exclusions first, the partial fill second; the first half landed 2026-09-30, the second is Session 39b | Complete |
+| Session 39b | Standalone | Partial fill, split from Session 39 at its seam (review S5, R29's own words "within a given portfolio keep all submitted lineups distinct and unique"): a fill that runs out of distinct lineups at row k returns the k rows it built and names the unfilled unbound Entry IDs instead of raising and discarding the bound portfolio; the review, the C3 review, the byte audit, the readable review and the contest-assignment step carry a bound-plus-partial-fill portfolio to a review file whose unfilled Entry IDs stay blank and are named in `release_truths.unfilled_entry_ids`; the independent reviews also re-check that a fill row holds no person the policy excludes and none above the cap it reports | Session 39 card (S5); Session 39's advisor and reviewer notes (changelog 2026-09-30) | `src/nfl_dfs/selection.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/readable_review.py`, `src/nfl_dfs/contest_assignment.py`, `docs/DATA_CONTRACTS.md` | V | Session 39 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_entry_groups.py tests/test_classic_review_c3.py tests/test_relaxation_controller.py -x --tb=short`; a fill that runs out at row k delivers k rows and names the rest, on Showdown and on every Classic exit | Pending |
 | Session 49 | Standalone | Thesis builder as the rung-4 path: rung 4 (no policy, C1 sequential selection) concentrates badly under real conditions -- the 2026-09-27 Week 3 fallback file had three players in 25 of 25 lineups and zero stacks -- because sequential selection is one construction repeated with no diversification pressure across separate game scripts; port `scripts/build_thesis_portfolio.py`'s multi-thesis approach (or call it directly) as rung 4's replacement inside `run-slate`, so a fully relaxed run still diversifies across market reads instead of maximizing one central estimate 25 times | changelog 2026-09-27 (Week 3 slate run); `scripts/build_thesis_portfolio.py` | `src/nfl_dfs/relaxation.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/cli.py`, `scripts/build_thesis_portfolio.py` | S | Session 39 | `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_prior_review_profile.py -x --tb=short`; a rung-4 fixture run has no player over 40% exposure and every lineup stacked | Pending |
 | Session 23b | Standalone | P8 part 1, thesis structures: a Showdown thesis contract (name, teams, a required captain set with kickers and DSTs allowed, per-team and per-position bounds, exclusions) validated as a policy sleeve; a single-thesis build whose captain comes from the thesis's set and whose structure the ladder never relaxes (a thesis that cannot be built is dropped and named); backup quarterbacks out of the pool by default from depth evidence; each lineup names its thesis | Chunk P8; R33, R34; ATL@GB 2026-09-24; Showdown retro §7c | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_showdown_policy.py`, `docs/DATA_CONTRACTS.md` | S | Session 23 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_portfolio_enforcement.py tests/test_relaxation_controller.py -x --tb=short`, plus the tests it adds; a fixture thesis that requires a kicker captain builds one | Pending |
 | Session 23c | Standalone | P8 part 2, the thesis portfolio: rows allotted across Ben's theses; one joint assembly with every lineup distinct across theses and prefilled rows (R29), the one share limit from Session 23, captains spread across theses; the review reports per Entry ID the thesis, captain counts per thesis, every person in more than half the rows and the most rows one player's bad night sinks; ATL@GB and NE@SEA replays | Chunk P8 "Done looks like"; R34 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/readable_review.py`, `docs/DATA_CONTRACTS.md` | S | Session 23b | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_entry_groups.py tests/test_readable_review.py -x --tb=short`, plus the tests it adds; the 20-row fixture spreads across six theses with no repeat and no player over the share limit | Pending |
@@ -1213,6 +1216,49 @@ Every session follows this protocol, and the cards only add to it:
 - **Acceptance.** On the 20-entry Classic fixture no two C1 rows share more
   than the cap; the witness chain's rows respect the policy overlap; a fill
   that runs out at row k delivers k rows and names the rest; suite green.
+
+#### Session 39b: partial fill
+
+- **Depends on.** Session 39. Split from it on 2026-09-30 at the card's own seam:
+  Session 39 landed the overlap cap, the witness chain and the fill's exclusions;
+  this is S5.
+- **Why here.** Today `_sequential_lineups` raises `SOLVER_RETURNED_NO_LINEUP`
+  with `stage=UNBOUND_FILL` when a subset policy's fill runs out of distinct
+  lineups, `prior_review` turns that into a blocked SELECT, and the bound
+  portfolio the joint solve already built is discarded
+  (`tests/test_portfolio_policy.py::test_an_unbound_fill_that_runs_out_of_distinct_lineups_delivers_nothing`
+  pins it). R29 says distinct lineups are never relaxed and the unfilled Entry IDs
+  are named; it does not say the bound rows are thrown away.
+- **Scope.** `_fill_unbound` returns the rows it built and the unfilled Entry IDs
+  (a run out at row k is k rows plus names, zero rows included); `prior_review`
+  builds `assignments` for the bound rows and the k filled rows only, never
+  cycling (`assignments_for_entries` cycles and stays on the no-policy path), and
+  carries `unfilled_entry_ids` into `release_truths.unfilled_entry_ids` (the
+  vocabulary the baseline already uses; do not add a second one). Every layer
+  that today demands a row per unbound Entry ID takes the named gap instead:
+  `exact_assignments_for_entries` (`portfolio_enforcement.py:987`, coverage),
+  `classic_review.py` C3 (`CLASSIC_C3_UNBOUND_ROWS_MISMATCH`, `:864-866`), the SD3
+  and C2 byte audits (`portfolio_enforcement.py:1360`, the exact unbound set),
+  `readable_review.py:299-301` (`lineups == len(unbound)`), and the contest
+  assignment step's fill pool. A blank cell is an unfilled Entry ID only when it
+  is named; an unnamed blank row still fails (Session 39's advisor flagged that
+  `readable_review.py:305-323` reads `output_rosters.get(entry, ())`
+  and passes an empty roster, so those loops must skip named-unfilled entries and
+  refuse any unnamed empty one). Rewrite the pinned test above as its own visible
+  change. Also here, because they are the independent half of Session 39: the C3
+  and readable reviews re-check that a fill row holds no person the policy
+  excludes (the selector enforces it since Session 39, the reviews check the run's
+  exclusions only), that a fill row shares no more people than the cap the
+  report names with each policy lineup as well as with the other fill rows (today
+  they check the fill rows among themselves), and their `basis` strings
+  (`classic_review.py:1223`, `readable_review.py:331`) say what now constrains a
+  fill row.
+- **Size.** Six files, about 500 changed lines with tests. One session; if the
+  audit changes pass about 900 lines, land the selection and `prior_review` seam
+  with the audits and split the review-layer re-checks.
+- **Acceptance.** A fill that runs out at row k delivers k rows and names the
+  rest, in Showdown and on the C1, C2 and C3 exits; no lineup repeats; the bound
+  rows survive; a review with an unnamed blank row still fails; suite green.
 
 #### Session 23b: P8 part 1, thesis structures
 
@@ -2420,3 +2466,5 @@ session, because a commit cannot contain its own merge.
 | 2026-09-29 | Session 17 | In Progress to Complete | `c5b9468` | Authenticated release-asset transport (`AuthenticatedGithubClient`, committed-manifest hash binding, exclusive-create landing in the inbox, `nfl_standings_transport_v1`, `scripts/fetch_standings_corpus.py`) built and tested against a fixture transport only; 21 `STANDINGS_TRANSPORT_*` codes registered, `REGISTRY_SHA256` re-pinned; suite `2088 passed, 1 skipped in 479.09s (0:07:59)`; merged as PR #89 (`c5b9468`, recorded by Session 39); real-corpus acceptance moved to Session 17b; the repository is public, so the release needs a private one (changelog) |
 | 2026-09-29 | Session 17b | Registered as Pending | recorded by the next session | Split from Session 17 at its breakpoint; depends on Session 17 and O1; Session 18 now depends on 17b (changelog) |
 | 2026-09-30 | Session 39 | Pending to In Progress | claim commit | Claimed on `claude/stoic-bardeen-bifjsp` (assigned; at `c5b9468`, Session 17's merge, recorded on its row above); baseline suite `2088 passed, 1 skipped in 483.49s (0:08:03)`; §1 rewritten to Session 23b in this commit |
+| 2026-09-30 | Session 39 | In Progress to Complete | recorded by the next session | Classic person-overlap cap 6 on C1 and the unbound fill (stepping up one person at a time when no distinct lineup fits, each step reported in the selection report, the ladder record as `OVERLAP_CAP` and the ladder-less run's limitations), the witness chain round-robins seeds and slots and holds the policy overlap, the fill applies the policy's own exclusions and zero caps; suite result recorded in the changelog; the partial fill (S5) moved to Session 39b (changelog) |
+| 2026-09-30 | Session 39b | Registered as Pending | recorded by the next session | Split from Session 39 at the card's seam: the partial fill and its review-layer cascade (changelog) |

@@ -536,8 +536,17 @@ read one shape.
 Both are enforced where a lineup is proposed, never after: `salary_left` as one salary row
 (`LineupOptimizer.add_salary_band`) and `offense_against_own_dst` as pairwise not-both rows
 (`add_no_offense_with_dst`), added to every candidate-bank stratum. A validated
-single-slot neighbour (the `policy_feasible_chain`) is not a solver output, so it is
-checked directly and skipped if it breaks a bound. A bound no roster can meet surfaces as
+neighbour (the `policy_feasible_chain`) is not a solver output, so it is checked
+directly and skipped if it breaks a bound. Since Session 39 the chain is not N copies of
+the best lineup with the quarterback swapped: passes go round-robin over the MILP seeds,
+each call starts at a different slot, and a neighbour is one to nine slots from its seed,
+walked (highest prior first, then the person the fewest violating neighbours hold) until
+it shares at most the policy's `max_pairwise_person_overlap` people with every neighbour
+already accepted. A cap no legal lineup can meet ends the stratum as
+`VALIDATED_NEIGHBORS_EXHAUSTED` (or `NEIGHBOR_SEARCH_BOUND` when its probe bound of
+`max(2000, 60 x target x 9)` legality checks ends it), never as a chain that breaks the
+cap. The bank schema (`nfl_classic_candidate_bank_c2_v1`) is unchanged; its candidates
+are different, so a bank hash changes with the chain. A bound no roster can meet surfaces as
 the solver proving the model infeasible (`STRUCTURAL_INFEASIBILITY` on the bank), which
 the ladder treats as its `STRUCTURE` trigger; there is no static capacity check.
 
@@ -651,10 +660,11 @@ Rule change (Session 11c, 2026-09-25): `run-slate` and `prior_review` run a
 Classic subset (the `CLASSIC_POLICY_SUBSET_UNSUPPORTED` refusal and its
 registry entry are gone). C2's joint solve fills the bound rows; then C1 fills
 the fillable rows the policy leaves unbound, every C2 lineup and prefilled
-roster a no-good, under the run's own exclusions only (a policy's exclusions
-and zero caps bind its rows). The fill is all or nothing, as SD3's is: one that
+roster a no-good, under the run's own exclusions (since Session 39 also the
+policy's own exact exclusions and zero caps, see below). The fill is all or
+nothing, as SD3's is: one that
 runs out of distinct lineups raises `SOLVER_RETURNED_NO_LINEUP` with
-`stage=UNBOUND_FILL` and the baseline stays the file. The selection report's
+`stage=UNBOUND_FILL` and the baseline stays the file (Session 39b changes this). The selection report's
 `unbound_fill` records it, with `source: "C1"`. Each fill solve
 gets what the policy's declared bank and joint-solve limits leave of the
 window, split across its solves, from 0.5 s to 10 s. `classic_assignment.json`
@@ -1102,14 +1112,37 @@ Entry-ID count. The MILP enforces combined-person and Captain maxima, policy
 exclusions, configured pairwise overlap and canonical uniqueness. Repeated
 Captains are legal only when their explicit effective maximum permits them.
 
+**The Classic person-overlap cap (Session 39, review S3).** C1 (rung 4) and the
+Classic unbound fill were cut by exact rosters only, so each next optimum was the
+previous lineup minus one person. `select_prior_lineups(classic_person_overlap=6)`
+(`selection.CLASSIC_PERSON_OVERLAP`; `None` restores the old behaviour for
+diagnostics; `max_person_overlap` stays Showdown's and Classic never reads it) caps
+the people a C1 or fill row shares with every earlier row, and a fill row also with
+every policy lineup. It is a construction preference: when no distinct lineup fits
+under it, that row is solved again one person looser (7, then 8, which is the
+exact-roster cut alone), and the next row starts from the requested cap again.
+Distinct lineups (R29) are never on that walk. Each step is in the selection report's
+`differentiation` (`requested_person_overlap`, `max_person_overlap` as the loosest cap
+any row used, `overlap_relaxations`: `index`, `requested`, `used`, `trigger_status`,
+`reason`), in the ladder record as a relaxation (below), and, for a run with no
+ladder, as a `RELAXATION_STRUCTURE_RELAXED` limitation. The C1 selection profile is
+`prior_only_classic_selection_c1_v2` (v1 named earlier runs' exact-roster-only C1).
+The fill's report `exclusions` is now `THE_RUN_S_OWN_AND_THE_POLICY_S_EXACT_EXCLUSIONS`:
+an exact exclusion, a person the policy caps at zero, and a team or game it caps at
+zero bind the fill's rows too (Session 11b let them fill a row); the policy's other
+bounds still cover only its own rows. Does not establish: lineup quality, that the
+portfolio is diversified in any sense a payout rewards, or that a lower overlap was
+infeasible outside the rows reported.
+
 **The unbound rows (Session 11b).** When the policy binds a subset, its joint
 solve fills its own rows first; then sequential Showdown (the no-policy
 selector) fills the fillable rows it leaves unbound, in template order, with
 every policy lineup and every preserved prefilled roster as a no-good and its
 own rules among the fill (a distinct Captain per lineup until the pool runs out,
 the request's `max_person_overlap`). The run's own exclusions bind every row
-(request, DraftKings status, official inactive, kicker and offensive role); the
-policy's exclusions and caps bind only its rows. Each fill solve's limit is what
+(request, DraftKings status, official inactive, kicker and offensive role); since
+Session 39 the policy's own exact exclusions and zero caps bind the fill's rows too,
+and its other caps only its own rows. Each fill solve's limit is what
 the bank and joint solve leave of the window, split across its solves, at most
 10 s and at least 0.5 s. A fill that runs out of distinct lineups raises
 `SOLVER_RETURNED_NO_LINEUP` (`stage=UNBOUND_FILL`, `V`, `distinct_lineups`) and
@@ -2962,10 +2995,10 @@ policy; a Classic policy's `exact_exclusions`, a Showdown policy's
 `excluded_people`, and any person a policy caps at zero entries (a Classic
 `maximum_entries` of 0, a team or game capped at 0, a Showdown combined fraction
 of 0) stay excluded at every rung, and rung 4 passes their exact DraftKings IDs
-to the review as operator exclusions. A subset policy's exclusions bind only its
-rows at every policy rung; rung 4 cannot tell rows apart, so it carries them to
-every row (Session 11b: widening a fade only tightens, and an exclusion is never
-relaxed). A fraction that only floors to zero
+to the review as operator exclusions. A subset policy's exclusions bound only its
+rows at every policy rung until Session 39; since then its exact exclusions and zero
+caps bind the fill's rows at every rung too, as rung 4 carries them to every row
+(widening a fade only tightens, and an exclusion is never relaxed). A fraction that only floors to zero
 entries is a cap, not an exclusion, and is relaxed. A supplied Showdown policy
 with `require_unique_lineups: false` is refused by the validator since Session
 37 (`PORTFOLIO_POLICY_UNIQUENESS_REQUIRED`); every rung requires distinct lineups
@@ -3005,7 +3038,8 @@ supplied one. Attempt 0's review root is `prior_review/`; attempt n's is
 | `never_relaxed`, `does_not_establish` | As named |
 
 Each relaxation: `sequence`, `attempt` (the one it fed), `step` (`BANK`,
-`STRUCTURE`, `NO_POLICY`), `constraint` (`stack_rules.<rule_id>`,
+`STRUCTURE`, `NO_POLICY`, and since Session 39 `OVERLAP_CAP`), `constraint`
+(`classic_person_overlap` for an `OVERLAP_CAP` step, `stack_rules.<rule_id>`,
 `player_exposure_bounds`, `team_exposure_bounds`, `game_exposure_bounds`,
 `groups`, `max_pairwise_person_overlap`, `search_limits`,
 `max_combined_person_exposure`, `max_captain_exposure`,
@@ -3018,6 +3052,14 @@ binds too: the plan's fillable blank rows, or since Session 11b the subset the
 supplied policy names; rung 4 has no policy and fills every fillable row, and
 its window check counts every fillable row), `policy`
 (the new rung's binding), `limitation_code` and `limitation_text`.
+
+An `OVERLAP_CAP` record is a step the selection took inside one attempt, not a rung
+move: `rung_from` and `rung_to` are the rung that attempt ran, `attempt` is that
+attempt's own number (as in `attempts`), `original` is the requested cap, `final` the
+cap the row was built under, `trigger` the solver status that made the requested cap
+infeasible, `trigger_origin` `SELECTION`, and `limitation_code`
+`RELAXATION_STRUCTURE_RELAXED`. The value is additive: no earlier field changed
+meaning, and no consumer reads `step` as a closed set.
 
 Codes, on every exit that reports the record, the delivered file's or the
 baseline's, the pre-review exit included: `RELAXATION_STRUCTURE_RELAXED` and

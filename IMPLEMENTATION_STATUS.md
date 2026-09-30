@@ -111,7 +111,7 @@ of Session 23's card.
   `nfl_classic_portfolio_policy_normalized_c2_v2`.
 - Both bounds bind `_Enumerator.enumerate` as MILP rows (`add_salary_band`,
   `add_no_offense_with_dst`, reused from Session 23), are checked directly on
-  single-slot neighbours, and are recomputed from roster bytes by
+  validated neighbours, and are recomputed from roster bytes by
   `audit_classic_portfolio` and the C3 review (`CLASSIC_AUDIT_` and
   `CLASSIC_C3_STRUCTURAL_BOUND_VIOLATED`). The share is reported with the
   person(s) named in the audit and in `exposure.max_person_share`.
@@ -278,7 +278,7 @@ reaches C3; before, every such run ended
 Verified through `run-slate` on the Classic fixture with a prefilled row and
 with an official inactive, by replaying C3 with each bound artifact mutated,
 and at unit level. Not yet: C1 cuts only exact rosters, so no overlap cap
-covers the C1 rows.
+covers the C1 rows (done in Session 39, below).
 
 ## Capability added: 2026-09-24 (Session 11b)
 

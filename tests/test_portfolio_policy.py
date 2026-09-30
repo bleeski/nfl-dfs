@@ -876,7 +876,8 @@ def _fill(tmp_path, *, fill_count, policy_controls=None, max_person_overlap=4, f
         max_person_overlap=max_person_overlap, forbidden_rosters=forbidden_rosters)
 
 
-def test_sd3_fills_the_unbound_rows_after_its_joint_solve_under_the_runs_exclusions_only(tmp_path: Path) -> None:
+def test_sd3_fills_the_unbound_rows_after_its_joint_solve_under_the_runs_and_the_policys_exclusions(
+        tmp_path: Path) -> None:
     from nfl_dfs.lineups import roster_canonical_key
     from nfl_dfs.selection import select_prior_lineups
 
@@ -897,8 +898,10 @@ def test_sd3_fills_the_unbound_rows_after_its_joint_solve_under_the_runs_exclusi
 
     assert len(lineups) == 4 and [lineup.index for lineup in lineups] == [1, 2, 3, 4]
     people = [{by_id[dk_id].underlying_id for dk_id in lineup.roster} for lineup in lineups]
-    assert all(faded not in group for group in people[:2])  # the policy's exclusion binds its rows
-    assert lineups[2].roster == best.roster  # and not the fill's: its first lineup is the run's best
+    # Session 39 (review S6): the policy's exclusion binds the fill's rows too. Session 11b
+    # let the fill's first lineup be the run's best, which holds the excluded captain.
+    assert all(faded not in group for group in people)
+    assert lineups[2].roster != best.roster
     keys = [roster_canonical_key(slate, lineup.roster) for lineup in lineups]
     assert len(set(keys)) == 4 and roster_canonical_key(slate, second.roster) not in keys
     fill = report["unbound_fill"]

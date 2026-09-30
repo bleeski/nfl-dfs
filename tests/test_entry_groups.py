@@ -842,10 +842,12 @@ def test_c3s_export_audit_still_refuses_a_written_prefilled_row(tmp_path):
 # the rest with every policy lineup and every prefilled roster as a no-good
 # (R29). A policy binding every fillable row gives the file it gave before: the
 # hashes below were captured on main at bd5a97f, before any Session 11b change,
-# with these fixtures and their pinned clock.
+# with these fixtures and their pinned clock. Session 39 moved the C2 one on
+# purpose (`C2_FULL_FILLABLE_SHA256`, below): the old file's three rows were one
+# lineup with the quarterback swapped, the witness chain review S4 named.
 
 SD3_FULL_FILLABLE_SHA256 = "1918820d809eea637425f1970b5bae65c406efca7b35fa3264b867863e43eed1"
-C2_FULL_FILLABLE_SHA256 = "48027a40a9fd9de47138ca1c619e72d78cd3a7cf76c6017f6ea1627aba28f8ce"
+C2_FULL_FILLABLE_SHA256 = "128a0fac2530eda8e7091efb84c94e44d356f2e7deffc78de1e5bf1a2bfd0e34"
 SD3_CONTROLS = {"max_captain_exposure": {"default_fraction": 0.5, "overrides": []},
                 "max_pairwise_person_overlap": 4}
 
@@ -1062,12 +1064,14 @@ def test_a_classic_subset_policy_fills_its_rows_by_c2_and_the_rest_by_c1(tmp_pat
     assert selection["unbound_fill"]["no_good_rosters"] == {"policy_lineups": 2, "prefilled_rosters": 1}
 
 
-def test_a_policys_exclusion_binds_its_rows_and_never_the_c1_rows(tmp_path, monkeypatch):
-    """The policy's exact exclusion keeps a person out of its rows; C1 may still select him (11b's rule).
+def test_a_policys_exclusion_binds_its_rows_and_the_c1_rows_too(tmp_path, monkeypatch):
+    """The policy's exact exclusion keeps a person out of every row, the C1 fill's included.
 
-    The person is one C1 chose for both of its rows in a run without the
-    exclusion; with it, he stays in a C1 row and C3 still passes, because the
-    policy's exclusions and counts cover only the policy's rows.
+    Session 11b let C1 select him (a policy's exclusions covered only its own
+    rows); Session 39 (review S6) reverses that, because an exclusion is a fact
+    about a person, not about the rows a policy binds. The person is one C1
+    chose for both of its rows in a run without the exclusion; with it, he is in
+    no row, and C3 still passes. The policy's counts still cover only its rows.
     """
 
     _code, plain, _entries, _root, slate, _prefilled = _classic_subset_run(
@@ -1087,8 +1091,8 @@ def test_a_policys_exclusion_binds_its_rows_and_never_the_c1_rows(tmp_path, monk
     cells = _cells(Path(report["latest_deliverable"]["path"]))
     people = {eid: {by_id[prefilled_cell_id(cell)].underlying_id for cell in roster}
               for eid, roster in cells.items()}
-    assert all(person.underlying_id not in people[eid] for eid in ("910000003", "910000005"))
-    assert any(person.underlying_id in people[eid] for eid in ("910000001", "910000004"))
+    assert set(people) >= {"910000001", "910000003", "910000004", "910000005"}
+    assert all(person.underlying_id not in held for held in people.values())
     audit = report["prior_review_reports"]["classic_export_audit"]
     assert audit["status"] == "PASS" and audit["recomputed"]["player_counts"].get(person.underlying_id, 0) == 0
 
@@ -1455,7 +1459,7 @@ def test_a_classic_subset_is_filled_by_prior_review_called_directly(tmp_path):
     fill = selection["selection"]["unbound_fill"]
     assert fill["source"] == "C1" and fill["lineups"] == 1 and fill["lineup_indexes"] == [3]
     assert fill["no_good_rosters"] == {"policy_lineups": 2, "prefilled_rosters": 0}
-    assert fill["exclusions"] == "THE_RUN_S_OWN_NOT_THE_POLICY_S"
+    assert fill["exclusions"] == "THE_RUN_S_OWN_AND_THE_POLICY_S_EXACT_EXCLUSIONS"
     (export,) = list((tmp_path / "out").rglob("DK_REVIEW_ENTRY_*.csv"))
     cells = _cells(export)
     rosters = [cells[eid] for eid in fillable]
