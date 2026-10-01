@@ -2,6 +2,10 @@
 
 SD3 owns this contract. SD4 consumes its exact integer maxima and canonical
 bytes in a separate bounded selector and independent final-assignment audit.
+
+v3 (Session 23b, chunk P8) adds `controls.theses`: one named game thesis every
+bound lineup follows (`showdown_theses.py`). Without a thesis the normalized
+bytes are exactly v2's; with one they are `normalized_v3`.
 """
 
 from __future__ import annotations
@@ -9,7 +13,7 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, ROUND_FLOOR
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -18,12 +22,23 @@ from .contracts import EngineMode, SlateContract
 from .entry_groups import subset_binding_problems
 from .hashing import sha256_bytes
 from .lineups import validate_lineup
+from .showdown_theses import (
+    DROPPED,
+    POSITIONS,
+    ROSTER_PEOPLE,
+    THESIS_FIELDS,
+    CountBound,
+    ShowdownThesis,
+)
 
 
 POLICY_SCHEMA_VERSION = "nfl_showdown_portfolio_policy_v1"
 POLICY_SCHEMA_VERSION_V2 = "nfl_showdown_portfolio_policy_v2"
-SUPPORTED_POLICY_SCHEMA_VERSIONS = (POLICY_SCHEMA_VERSION, POLICY_SCHEMA_VERSION_V2)
+POLICY_SCHEMA_VERSION_V3 = "nfl_showdown_portfolio_policy_v3"
+SUPPORTED_POLICY_SCHEMA_VERSIONS = (POLICY_SCHEMA_VERSION, POLICY_SCHEMA_VERSION_V2, POLICY_SCHEMA_VERSION_V3)
 NORMALIZED_POLICY_SCHEMA_VERSION = "nfl_showdown_portfolio_policy_normalized_v2"
+NORMALIZED_POLICY_SCHEMA_VERSION_V3 = "nfl_showdown_portfolio_policy_normalized_v3"
+NORMALIZED_POLICY_SCHEMA_VERSIONS = (NORMALIZED_POLICY_SCHEMA_VERSION, NORMALIZED_POLICY_SCHEMA_VERSION_V3)
 FRACTION_UNIT = "FRACTION_0_TO_1"
 # Session 23 (P2): per-lineup structural hygiene bounds, v2-only. Absent on a
 # v1 policy, which normalizes with every bound fully open (identical to v1
@@ -216,10 +231,19 @@ class NormalizedPortfolioPolicy:
     require_unique_lineups: bool
     effective_limits: tuple[EffectivePersonLimit, ...]
     structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS
+    # Session 23b: the declared theses, each ACTIVE or DROPPED (v3 only; empty otherwise),
+    # and, when an active thesis widened a count bound, the bounds as declared and what moved.
+    theses: tuple[ShowdownThesis, ...] = ()
+    declared_structural_bounds: StructuralBounds | None = None
+    thesis_bound_overrides: tuple[str, ...] = ()
 
     @property
     def entry_count(self) -> int:
         return len(self.entry_ids)
+
+    @property
+    def active_thesis(self) -> ShowdownThesis | None:
+        return next((thesis for thesis in self.theses if thesis.active), None)
 
     @property
     def effective_pairwise_person_overlap(self) -> int:
@@ -227,7 +251,8 @@ class NormalizedPortfolioPolicy:
 
     def as_mapping(self) -> dict[str, object]:
         return {
-            "schema_version": NORMALIZED_POLICY_SCHEMA_VERSION,
+            "schema_version": (NORMALIZED_POLICY_SCHEMA_VERSION_V3 if self.theses
+                               else NORMALIZED_POLICY_SCHEMA_VERSION),
             "bindings": {
                 "salary_sha256": self.salary_sha256,
                 "game_id": self.game_id,
@@ -243,6 +268,11 @@ class NormalizedPortfolioPolicy:
                 "effective_pairwise_person_overlap": self.effective_pairwise_person_overlap,
                 "require_unique_lineups": self.require_unique_lineups,
                 "structural_bounds": self.structural_bounds.as_mapping(),
+                **({"theses": [thesis.as_mapping() for thesis in self.theses]} if self.theses else {}),
+                **({"thesis_bound_overrides": {
+                    "declared_structural_bounds": self.declared_structural_bounds.as_mapping(),
+                    "widened": list(self.thesis_bound_overrides)}}
+                   if self.thesis_bound_overrides and self.declared_structural_bounds is not None else {}),
             },
             "effective": {
                 "entry_count_denominator": self.entry_count,
@@ -839,6 +869,211 @@ def _structural_bounds(
     )
 
 
+def _thesis_issue(location: str, message: str) -> PolicyIssue:
+    return _issue(
+        "PORTFOLIO_POLICY_THESIS_INVALID",
+        f"{location} {message}",
+        "repair the thesis to the documented nfl_showdown_portfolio_policy_v3 shape; a thesis is never loosened",
+    )
+
+
+def _thesis_count_bounds(
+    value: object, *, location: str, label: str, allowed: Sequence[str], problems: list[PolicyIssue]
+) -> tuple[CountBound, ...] | None:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        problems.append(_thesis_issue(location, "must be a JSON array"))
+        return None
+    bounds: list[CountBound] = []
+    for index, raw in enumerate(value):
+        where = f"{location}[{index}]"
+        item = _mapping(raw, where, problems)
+        if item is None:
+            return None
+        _unknown_fields(item, {label, "minimum", "maximum"}, where, problems)
+        key = item.get(label)
+        if not isinstance(key, str) or key not in allowed:
+            problems.append(_thesis_issue(f"{where}.{label}", f"must be one of {list(allowed)}"))
+            return None
+        numbers = []
+        for side, default in (("minimum", 0), ("maximum", ROSTER_PEOPLE)):
+            number = item.get(side, default)
+            if isinstance(number, bool) or not isinstance(number, int) or not 0 <= number <= ROSTER_PEOPLE:
+                problems.append(_thesis_issue(f"{where}.{side}", f"must be an integer from 0 through {ROSTER_PEOPLE}"))
+                return None
+            numbers.append(number)
+        if numbers[0] > numbers[1]:
+            problems.append(_thesis_issue(where, "minimum exceeds maximum"))
+            return None
+        bounds.append(CountBound(key, numbers[0], numbers[1]))
+    keys = [bound.key for bound in bounds]
+    if len(set(keys)) != len(keys):
+        problems.append(_thesis_issue(location, f"repeats a {label}"))
+        return None
+    if sum(bound.minimum for bound in bounds) > ROSTER_PEOPLE:
+        problems.append(_thesis_issue(location, f"minima total more than the {ROSTER_PEOPLE} people of a lineup"))
+        return None
+    return tuple(sorted(bounds, key=lambda bound: bound.key))
+
+
+def _theses(
+    value: object,
+    *,
+    slate: SlateContract,
+    expected: Mapping[str, PersonBinding],
+    dk_roles: Mapping[str, tuple[str, str]],
+    problems: list[PolicyIssue],
+) -> tuple[ShowdownThesis, ...] | None:
+    """Parse `controls.theses` (v3, Session 23b): exactly one thesis until Session 23c."""
+
+    location = "controls.theses"
+    if not isinstance(value, list) or len(value) != 1:
+        problems.append(_thesis_issue(
+            location, "must be a JSON array holding exactly one thesis (a portfolio of theses is Session 23c)"))
+        return None
+    teams_on_slate = sorted({row.team for row in slate.players})
+    positions = {row.underlying_id: row.position for row in slate.players}
+    theses: list[ShowdownThesis] = []
+    for index, raw in enumerate(value):
+        where = f"{location}[{index}]"
+        item = _mapping(raw, where, problems)
+        if item is None:
+            return None
+        _unknown_fields(item, set(THESIS_FIELDS), where, problems)
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip() or len(name) > 80 or not name.isprintable():
+            problems.append(_thesis_issue(f"{where}.name", "must be a printable label of 1 to 80 characters"))
+            return None
+        teams = item.get("teams")
+        if (not isinstance(teams, list) or not teams or any(team not in teams_on_slate for team in teams)
+                or len(set(teams)) != len(teams)):
+            problems.append(_thesis_issue(f"{where}.teams", f"must name one or both of {teams_on_slate}, once each"))
+            return None
+        people: dict[str, tuple[PersonBinding, ...]] = {}
+        for field_name, required in (("captain_set", True), ("excluded_people", False),
+                                     ("named_backup_quarterbacks", False)):
+            found = _identity_list(item.get(field_name), location=f"{where}.{field_name}", required=required,
+                                   problems=problems)
+            if found is None:
+                return None
+            for position, reference in enumerate(found):
+                if not _validate_identity_reference(reference, expected=expected, dk_roles=dk_roles,
+                                                    location=f"{where}.{field_name}[{position}]", problems=problems):
+                    return None
+            people[field_name] = found
+        if not people["captain_set"]:
+            problems.append(_thesis_issue(f"{where}.captain_set", "must name at least one Captain"))
+            return None
+        excluded = {person.underlying_id for person in people["excluded_people"]}
+        clash = sorted(excluded & {person.underlying_id for person in
+                                   (*people["captain_set"], *people["named_backup_quarterbacks"])})
+        if clash:
+            problems.append(_thesis_issue(where, f"both requires and excludes {clash}"))
+            return None
+        not_quarterbacks = sorted(person.underlying_id for person in people["named_backup_quarterbacks"]
+                                  if positions.get(person.underlying_id) != "QB")
+        if not_quarterbacks:
+            problems.append(_thesis_issue(f"{where}.named_backup_quarterbacks", f"names non-quarterbacks {not_quarterbacks}"))
+            return None
+        team_bounds = _thesis_count_bounds(item.get("team_bounds"), location=f"{where}.team_bounds", label="team",
+                                           allowed=teams_on_slate, problems=problems)
+        position_bounds = _thesis_count_bounds(item.get("position_bounds"), location=f"{where}.position_bounds",
+                                               label="position", allowed=POSITIONS, problems=problems)
+        if team_bounds is None or position_bounds is None:
+            return None
+        theses.append(ShowdownThesis(
+            name=name, teams=tuple(teams), captain_set=people["captain_set"], team_bounds=team_bounds,
+            position_bounds=position_bounds, excluded_people=people["excluded_people"],
+            named_backup_quarterbacks=people["named_backup_quarterbacks"]))
+    return tuple(theses)
+
+
+def _resolved_thesis(
+    thesis: ShowdownThesis, slate: SlateContract, limits: Sequence[EffectivePersonLimit]
+) -> ShowdownThesis:
+    """`thesis`, or the same thesis DROPPED when no lineup could follow it.
+
+    Dropped when every Captain it requires is unavailable (an exclusion from the
+    run, the policy's own, or a declared combined fraction of exactly 0, which the
+    selector treats as an exclusion), or when fewer people are available than a
+    team or position minimum asks for. A positive cap that floors to zero rows is a
+    cap, not an exclusion: it stays a capacity issue the ladder loosens. Never
+    loosened: the exclusions decide, and the thesis is named rather than bent.
+    """
+
+    by_person = {limit.person.underlying_id: limit for limit in limits}
+    available = {person for person, limit in by_person.items()
+                 if limit.exclusion_source is None and limit.combined_fraction != 0
+                 and person not in thesis.excluded_ids}
+    unavailable = tuple(sorted(
+        (person, by_person[person].exclusion_source or "COMBINED_FRACTION_ZERO")
+        for person in thesis.captain_people if person not in available))
+    reasons: list[str] = []
+    if len(unavailable) == len(thesis.captain_set):
+        reasons.append("every required Captain is unavailable: "
+                       + ", ".join(f"{person} ({source})" for person, source in unavailable))
+    rows = {row.underlying_id: row for row in slate.players}
+    for label, bounds, attribute in (("team", thesis.team_bounds, "team"),
+                                     ("position", thesis.position_bounds, "position")):
+        for bound in bounds:
+            count = sum(1 for person in available if getattr(rows[person], attribute) == bound.key)
+            if count < bound.minimum:
+                reasons.append(f"{label} {bound.key} needs {bound.minimum} and {count} are available")
+    if not reasons:
+        return thesis
+    return replace(thesis, status=DROPPED, dropped_reason="; ".join(reasons), unavailable_captains=unavailable)
+
+
+def _thesis_widened_bounds(
+    bounds: StructuralBounds, thesis: ShowdownThesis
+) -> tuple[StructuralBounds, list[str]]:
+    """`bounds` widened just enough for the thesis's QB, K and DST counts, and what moved.
+
+    The thesis is Ben's more specific statement for its own rows, so a policy count
+    bound that forbids what it asks for gives way, by the least step, rather than
+    sending the run down rungs that loosen unrelated bounds first.
+    """
+
+    needs = {bound.key: bound for bound in thesis.position_bounds}
+    moved: list[str] = []
+    qb_count = bounds.qb_count
+    if "QB" in needs:
+        low, high = qb_count.minimum, qb_count.maximum
+        new_low = low if low is None or needs["QB"].maximum >= low else needs["QB"].maximum
+        new_high = high if high is None or needs["QB"].minimum <= high else needs["QB"].minimum
+        if (new_low, new_high) != (low, high):
+            moved.append(f"qb_count {low}..{high} to {new_low}..{new_high}")
+            qb_count = StructuralBoundRange(new_low, new_high)
+    maxima = {"K": bounds.kicker_count_maximum, "DST": bounds.dst_count_maximum}
+    for position, maximum in list(maxima.items()):
+        if position in needs and maximum is not None and needs[position].minimum > maximum:
+            maxima[position] = needs[position].minimum
+            moved.append(f"{'kicker' if position == 'K' else 'dst'}_count {maximum} to {maxima[position]}")
+    return replace(bounds, qb_count=qb_count, kicker_count_maximum=maxima["K"],
+                   dst_count_maximum=maxima["DST"]), moved
+
+
+def _thesis_capacity_issues(policy: NormalizedPortfolioPolicy) -> list[PolicyIssue]:
+    """Captain caps that leave an active thesis's Captains too few rows: an `S` issue.
+
+    The ladder loosens the caps (rungs 1 to 3), never the thesis.
+    """
+
+    thesis = policy.active_thesis
+    if thesis is None:
+        return []
+    room = sum(limit.captain_max_entries for limit in policy.effective_limits
+               if limit.person.underlying_id in thesis.captain_people)
+    if room >= policy.entry_count:
+        return []
+    return [_issue(
+        "PORTFOLIO_POLICY_THESIS_CAPACITY_INSUFFICIENT",
+        f"thesis {thesis.name!r}: its Captains may captain {room} of {policy.entry_count} entries under the Captain caps",
+        "raise the Captain caps on the thesis's Captains; the thesis itself is never loosened",
+    )]
+
+
 def _necessary_capacity_issues(
     policy: NormalizedPortfolioPolicy, slate: SlateContract
 ) -> tuple[PolicyIssue, ...]:
@@ -999,7 +1234,9 @@ def validate_portfolio_policy_bytes(
         return PortfolioPolicyValidation(source_sha256, None, tuple(problems), ())
     _unknown_fields(root, {"schema_version", "bindings", "controls"}, "policy", problems)
     declared_schema_version = root.get("schema_version")
-    is_v2 = declared_schema_version == POLICY_SCHEMA_VERSION_V2
+    is_v3 = declared_schema_version == POLICY_SCHEMA_VERSION_V3
+    # v3 carries every v2 control; "v2" below reads "v2 or later".
+    is_v2 = declared_schema_version == POLICY_SCHEMA_VERSION_V2 or is_v3
     if declared_schema_version not in SUPPORTED_POLICY_SCHEMA_VERSIONS:
         problems.append(
             _issue(
@@ -1133,6 +1370,7 @@ def validate_portfolio_policy_bytes(
     overlap_limit: int | None = None
     unique = True
     structural_bounds: StructuralBounds | None = OPEN_STRUCTURAL_BOUNDS
+    theses: tuple[ShowdownThesis, ...] | None = ()
     allowed_control_fields = {
         "fraction_unit",
         "max_combined_person_exposure",
@@ -1143,8 +1381,16 @@ def validate_portfolio_policy_bytes(
     }
     if is_v2:
         allowed_control_fields = allowed_control_fields | {"structural_bounds"}
+    if is_v3:
+        allowed_control_fields = allowed_control_fields | {"theses"}
     if controls is not None:
         _unknown_fields(controls, allowed_control_fields, "controls", problems)
+        if is_v3:
+            theses = _theses(controls.get("theses"), slate=slate, expected=expected_people,
+                             dk_roles=dk_roles, problems=problems)
+        elif "theses" in controls:
+            problems.append(_thesis_issue(
+                "controls.theses", f"requires schema_version {POLICY_SCHEMA_VERSION_V3!r}"))
         if is_v2:
             structural_bounds = _structural_bounds(
                 controls.get("structural_bounds"),
@@ -1254,6 +1500,7 @@ def validate_portfolio_policy_bytes(
         or captain_rule is None
         or excluded_people is None
         or structural_bounds is None
+        or theses is None
     ):
         return PortfolioPolicyValidation(source_sha256, None, tuple(problems), tuple(findings))
 
@@ -1313,6 +1560,26 @@ def validate_portfolio_policy_bytes(
                 exclusion_source=exclusion_source,
             )
         )
+    # Session 23b: a thesis no lineup could follow is dropped and named, never loosened;
+    # a policy count bound that contradicts an active thesis gives way to the thesis.
+    theses = tuple(_resolved_thesis(thesis, slate, effective_limits) for thesis in theses)
+    declared_bounds, overrides = structural_bounds, []
+    for thesis in theses:
+        if thesis.status == DROPPED:
+            findings.append(_issue(
+                "THESIS_DROPPED",
+                f"thesis {thesis.name!r} cannot be built and is dropped, not loosened: {thesis.dropped_reason}",
+                "the bound rows are built without it and name no thesis; restore a required person or revise the thesis",
+            ))
+        else:
+            structural_bounds, widened = _thesis_widened_bounds(structural_bounds, thesis)
+            overrides.extend(widened)
+            if widened:
+                findings.append(_issue(
+                    "PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND",
+                    f"thesis {thesis.name!r} asks for counts the policy's bounds forbid: " + "; ".join(widened),
+                    "no action is required unless the policy bound should win, in which case revise the thesis",
+                ))
     policy = NormalizedPortfolioPolicy(
         salary_sha256=slate.salary_hash,
         game_id=slate.games[0].game_id,
@@ -1325,8 +1592,11 @@ def validate_portfolio_policy_bytes(
         require_unique_lineups=unique,
         effective_limits=tuple(effective_limits),
         structural_bounds=structural_bounds,
+        theses=theses,
+        declared_structural_bounds=declared_bounds if overrides else None,
+        thesis_bound_overrides=tuple(overrides),
     )
-    capacity = _necessary_capacity_issues(policy, slate)
+    capacity = (*_necessary_capacity_issues(policy, slate), *_thesis_capacity_issues(policy))
     if capacity:
         problems.extend(capacity)
         return PortfolioPolicyValidation(

@@ -40,6 +40,14 @@ additionally drops the QB-count band. Rung 4 writes nothing: run-slate without
 --portfolio-policy-json. `--exclude` and uniqueness are never relaxed (R29).
 `run-slate` walks these rungs itself when SD3 fails on a trigger, after trying
 a re-sized bank first; this flag writes one by hand.
+
+THESIS (Session 23b). `--thesis PATH` reads one game thesis Ben chose (a JSON
+object: `name`, `teams`, `captain_set`, optional `team_bounds`, `position_bounds`,
+`excluded_people` and `named_backup_quarterbacks`, people as underlying IDs) and
+writes v3 with it as `controls.theses`. Its Captains are exempt from
+`--captain-zero-pos`, so a kicker or DST Captain the thesis requires stays
+possible. Every rung carries the thesis unchanged; a policy count bound that
+contradicts it gives way at validation, named (`docs/DATA_CONTRACTS.md` § SD3 v3).
 """
 import argparse, csv, hashlib, json, os, sys
 from collections import defaultdict
@@ -148,6 +156,7 @@ def main(argv=None):
                     help='relax the policy the flags describe to this rung (nfl_dfs.relaxation)')
     ap.add_argument('--entry-id', action='append', default=[],
                     help='bind only this fillable Entry ID (repeatable); the rest are filled sequentially')
+    ap.add_argument('--thesis', help='JSON file holding one game thesis (Session 23b); writes v3')
     a = ap.parse_args(argv)
     if a.rung == 4:
         print("rung 4 emits no policy by design: run run-slate without --portfolio-policy-json, so"
@@ -171,9 +180,11 @@ def main(argv=None):
     comb_ovr = parse_ovr(a.combined_override)
     capt_ovr = parse_ovr(a.captain_override)
 
+    thesis = read_thesis(a.thesis, people) if a.thesis else None
+    thesis_captains = {item['underlying_id'] for item in thesis['captain_set']} if thesis else set()
     zero_pos = {p.strip() for p in a.captain_zero_pos.split(',') if p.strip()}
     for uid, e in people.items():
-        if uid in capt_ovr:
+        if uid in capt_ovr or uid in thesis_captains:
             continue
         if e['pos'] in zero_pos or e['flex_salary'] <= a.captain_zero_below_flex_salary:
             capt_ovr[uid] = 0.0
@@ -185,7 +196,7 @@ def main(argv=None):
         excl.append(ident(people[uid]))
 
     pol = {
-        'schema_version': 'nfl_showdown_portfolio_policy_v2',
+        'schema_version': 'nfl_showdown_portfolio_policy_v3' if thesis else 'nfl_showdown_portfolio_policy_v2',
         'bindings': {
             'salary_sha256': sha256(sal),
             'game_id': game_id(sal),
@@ -215,6 +226,7 @@ def main(argv=None):
                 'dst_count': a.dst_count_max,
                 'offense_against_own_dst': a.offense_against_own_dst,
             },
+            **({'theses': [thesis]} if thesis else {}),
         },
     }
     out = os.path.abspath(a.out)
@@ -250,6 +262,24 @@ def main(argv=None):
     return 0
 
 
+def read_thesis(path, people):
+    """One thesis from `path`, its people resolved to exact identities; the validator checks the rest."""
+
+    with open(path, encoding='utf-8') as f:
+        raw = json.load(f)
+    if not isinstance(raw, dict):
+        sys.exit(f"THESIS_NOT_AN_OBJECT: {path}")
+    thesis = dict(raw)
+    for field in ('captain_set', 'excluded_people', 'named_backup_quarterbacks'):
+        resolved = []
+        for uid in raw.get(field) or []:
+            if uid not in people:
+                sys.exit(f"UNKNOWN_UNDERLYING_ID (thesis {field}): {uid!r}")
+            resolved.append(ident(people[uid]))
+        thesis[field] = resolved
+    return thesis
+
+
 def _written_controls(path):
     from decimal import Decimal
 
@@ -271,9 +301,8 @@ def relaxed_document(document, salary_path, entry_path, rung):
 
     from nfl_dfs.dk import parse_salaries
     from nfl_dfs.portfolio_policy import (
-        POLICY_SCHEMA_VERSION_V2, canonical_decimal_json_bytes, portfolio_policy_template,
-        validate_portfolio_policy_bytes)
-    from nfl_dfs.relaxation import showdown_relaxed_controls
+        canonical_decimal_json_bytes, portfolio_policy_template, validate_portfolio_policy_bytes)
+    from nfl_dfs.relaxation import showdown_relaxed_controls, showdown_schema_version
 
     slate = parse_salaries(salary_path)
     entry_ids = read_entries(entry_path, salary_path)
@@ -283,7 +312,8 @@ def relaxed_document(document, salary_path, entry_path, rung):
         sys.exit("RUNG_0_POLICY_INVALID: " + "; ".join(validation.blockers()))
     controls = showdown_relaxed_controls(validation.policy, rung)
     relaxed = portfolio_policy_template(
-        slate, validation.policy.entry_ids, controls=controls, schema_version=POLICY_SCHEMA_VERSION_V2)
+        slate, validation.policy.entry_ids, controls=controls,
+        schema_version=showdown_schema_version(validation.policy))
     return canonical_decimal_json_bytes(relaxed) + b"\n"
 
 

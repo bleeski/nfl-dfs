@@ -48,6 +48,13 @@ is the floor and R29 keeps every lineup distinct. Classic rung 4 (Session 49)
 that builds k of n rows delivers the k and names the rest; with no row built, and
 on Showdown, the baseline stays the file.
 
+A SHOWDOWN THESIS (Session 23b, `showdown_theses.py`) is never on the ladder. Every
+rung copies the policy's `theses` byte for byte (`_changes` refuses a rung that
+would change one), so only caps loosen. A thesis no lineup can follow
+(`THESIS_UNBUILDABLE`, proved before any bank) is dropped by name and the same
+policy is built without it, with no rung taken; rung 4 drops a thesis with the
+policy, by name. Each drop is a `THESIS_DROPPED` record.
+
 NEVER ON EITHER LADDER. `require_unique_lineups` (R29) and every exact exclusion
 (a Classic policy's `exact_exclusions`, a Showdown policy's `excluded_people`),
 which rung 4 carries as operator exclusions. A person a policy caps at zero
@@ -100,6 +107,7 @@ from .portfolio_policy import (
     FRACTION_UNIT,
     OPEN_RANGE,
     POLICY_SCHEMA_VERSION_V2,
+    POLICY_SCHEMA_VERSION_V3,
     ExposureRule,
     NormalizedPortfolioPolicy,
     StructuralBoundRange,
@@ -564,8 +572,20 @@ def showdown_relaxed_controls(policy: NormalizedPortfolioPolicy, rung: int | Non
         "excluded_people": [person.as_mapping() for person in policy.excluded_people],
         "max_pairwise_person_overlap": overlap,
         "require_unique_lineups": True,
-        "structural_bounds": _showdown_relaxed_structural_bounds(policy.structural_bounds, spec),
+        # Session 23b: from the bounds as declared, so a bound a thesis widened is re-derived
+        # by each rung's validation (and restored when the thesis is dropped), never carried as
+        # if Ben had declared it.
+        "structural_bounds": _showdown_relaxed_structural_bounds(
+            policy.declared_structural_bounds or policy.structural_bounds, spec),
+        # Session 23b: a thesis is never relaxed; every rung carries it exactly as declared.
+        **({"theses": [thesis.source_mapping() for thesis in policy.theses]} if policy.theses else {}),
     }
+
+
+def showdown_schema_version(policy: NormalizedPortfolioPolicy) -> str:
+    """The schema a rung's policy is written in: v3 while it carries a thesis, else v2."""
+
+    return POLICY_SCHEMA_VERSION_V3 if policy.theses else POLICY_SCHEMA_VERSION_V2
 
 
 def _showdown_relaxed_structural_bounds(
@@ -598,9 +618,11 @@ STRUCTURE = "STRUCTURE"
 THROUGHPUT = "THROUGHPUT"
 SOLVER_ERROR = "SOLVER_ERROR"
 BANK_DEPTH = "BANK_DEPTH"
+# A thesis no lineup can follow (Session 23b) is dropped, not walked down the rungs.
+THESIS_UNBUILDABLE = "THESIS_UNBUILDABLE"
 STRUCTURE_TRIGGERS = frozenset({
     "MODELED_BANK_INFEASIBILITY", "INCOMPLETE_BANK_EXHAUSTION", "STRUCTURAL_INFEASIBILITY",
-    "MODELED_BANK_INFEASIBLE_PROVEN",
+    "MODELED_BANK_INFEASIBLE_PROVEN", THESIS_UNBUILDABLE,
 })
 THROUGHPUT_TRIGGERS = frozenset({
     "CANDIDATE_BANK_TIMEOUT", "CANDIDATE_BANK_SEARCH_LIMIT", "CANDIDATE_BANK_TIME_LIMIT",
@@ -623,6 +645,7 @@ _JOINT_LIMITS = frozenset({
 _SD3_BANK_LIMITS = frozenset({"CANDIDATE_BANK_TIME_LIMIT", "CANDIDATE_BANK_SEARCH_LIMIT"})
 NEVER_RELAXED = (
     "require_unique_lineups (R29: every lineup in a portfolio distinct)",
+    "a Showdown thesis's structure (dropped and named when it cannot be built, never loosened)",
     "exact exclusions: a Classic policy's exact_exclusions and a Showdown policy's excluded_people",
     "every evidence gate: official activity, current role, weather, identity, expiry, hash bindings",
 )
@@ -789,11 +812,46 @@ def selection_overlap_steps(reports: Mapping[str, object] | None) -> list[dict[s
     for step in (construction.get("relaxations") if isinstance(construction, Mapping) else None) or ():
         if isinstance(step, Mapping):
             found.append({**step, "scope": "THESES"})
+    # Session 23b: the teams whose backup quarterbacks no depth evidence orders, from the
+    # SD3 report's `theses` block.
+    policy = payload.get("portfolio_policy")
+    theses = policy.get("theses") if isinstance(policy, Mapping) else None
+    # A thesis dropped at validation, and a bound it widened, are named by the ladder from the
+    # policy itself (`Ladder._policy_notes`), so they are named even when no selection reports.
+    if isinstance(theses, Mapping):
+        active = [item.get("name") for item in theses.get("theses") or ()
+                  if isinstance(item, Mapping) and item.get("status") == "ACTIVE"]
+        if active and theses.get("backup_quarterbacks_unevaluated_teams"):
+            found.append({"scope": "THESIS", "constraint": "thesis_backup_quarterbacks", "thesis": active[0],
+                          "teams": list(theses["backup_quarterbacks_unevaluated_teams"])})
     return found
+
+
+THESIS_STEPS = {"thesis": "THESIS_DROP", "thesis_bound_override": "THESIS_BOUND_OVERRIDE",
+                "thesis_backup_quarterbacks": "THESIS_EVIDENCE_GAP"}
+
+
+def _thesis_step_text(step: Mapping[str, object]) -> str:
+    if step["constraint"] == "thesis_bound_override":
+        return _limitation_text(
+            "PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND",
+            f"thesis {step.get('thesis')} asks for counts the policy's bounds forbid, so they gave way for its rows:"
+            f" {'; '.join(map(str, step.get('moved') or ()))}")
+    if step["constraint"] == "thesis":
+        return _limitation_text(
+            "THESIS_DROPPED",
+            f"thesis {step.get('thesis')} cannot be built and was dropped, not loosened: {step.get('reason')};"
+            " the bound rows were built without it and name no thesis")
+    return _limitation_text(
+        "THESIS_BACKUP_QB_UNEVALUATED",
+        f"thesis {step.get('thesis')}: no quarterback depth evidence orders {', '.join(map(str, step.get('teams') or ()))},"
+        " so no backup quarterback of that team was excluded (R33's default needs the evidence; none was guessed)")
 
 
 def overlap_step_text(step: Mapping[str, object]) -> str:
     constraint = step.get("constraint", "classic_person_overlap")
+    if constraint in THESIS_STEPS:
+        return _thesis_step_text(step)
     return _limitation_text(
         "RELAXATION_STRUCTURE_RELAXED",
         f"{constraint} {step['from']} to {step['used']} for {step['scope']} row"
@@ -852,6 +910,7 @@ class Ladder:
         self.defects: list[str] = []  # rungs the validator refused on a code no rung loosens
         self._attempt = -1  # the last attempt run; an intake relaxation feeds attempt 0
         self._bank_why = ""  # why the last bank step could not be taken
+        self._policy_notes(supplied)
 
     # -- what happened ------------------------------------------------------
 
@@ -890,6 +949,9 @@ class Ladder:
         if current.policy is None or current.rung == NO_POLICY_RUNG or failure.kind not in {
                 STRUCTURE, THROUGHPUT, SOLVER_ERROR, BANK_DEPTH}:
             return None
+        if failure.status == THESIS_UNBUILDABLE and isinstance(current.policy, NormalizedPortfolioPolicy) \
+                and current.policy.active_thesis is not None:
+            return self._drop_thesis(current, failure, overhead_seconds)
         if failure.kind != STRUCTURE and current.bank_steps == 0:
             candidate = self._bank_step(current, failure, overhead_seconds)
             if candidate is not None:
@@ -1002,7 +1064,8 @@ class Ladder:
                                                f" ({max(0.0, window):.1f} s left, {SD3_MINIMUM_WINDOW_SECONDS:g} s"
                                                " the least)")
                 document = portfolio_policy_template(
-                    self.slate, self.entry_ids, controls=controls, schema_version=POLICY_SCHEMA_VERSION_V2
+                    self.slate, self.entry_ids, controls=controls,
+                    schema_version=showdown_schema_version(current.policy),
                 )
             made = self._materialize(document, rung, bank=False)
             if isinstance(made, _Refused):
@@ -1018,6 +1081,31 @@ class Ladder:
                               failure, step="STRUCTURE")
         return self._no_policy(current, failure, overhead_seconds, why="no structural rung is left")
 
+    def _drop_thesis(self, current: Rung, failure: Failure, overhead_seconds: float) -> Rung | None:
+        """The same policy without its thesis, which no lineup can follow (Session 23b).
+
+        Not a rung: every cap and bound is as declared (a bound the thesis widened is
+        restored). The drop is recorded by name. A rebuilt policy the validator refuses,
+        or a window too short for another SD3 attempt, leaves rung 4, which needs none.
+        """
+
+        window = self._window(overhead_seconds)
+        if window is not None and window < SD3_MINIMUM_WINDOW_SECONDS:
+            return self._no_policy(current, failure, overhead_seconds,
+                                   why=f"the window cannot hold the policy without its thesis"
+                                       f" ({max(0.0, window):.1f} s left)")
+        controls = {key: value for key, value in showdown_relaxed_controls(current.policy, None).items()
+                    if key != "theses"}
+        document = portfolio_policy_template(self.slate, self.entry_ids, controls=controls,
+                                             schema_version=POLICY_SCHEMA_VERSION_V2)
+        made = self._materialize(document, current.rung, bank=False, suffix="_thesis_dropped")
+        if isinstance(made, _Refused):
+            return self._no_policy(current, failure, overhead_seconds,
+                                   why=f"the policy without its thesis was refused ({', '.join(made.codes)})")
+        reason = str(failure.facts.get("reason") or failure.detail)
+        return self._take(replace(made, showdown_candidate_limit=current.showdown_candidate_limit),
+                          failure, step="THESIS_DROP", why=f"no lineup can follow it: {reason}")
+
     def _no_policy(self, current: Rung, failure: Failure, overhead_seconds: float, *, why: str) -> Rung | None:
         window = self._window(overhead_seconds)
         needed = (len(self.fillable) + 1) * SOLVE_MINIMUM_SECONDS
@@ -1032,11 +1120,12 @@ class Ladder:
 
     # -- artifacts and records ----------------------------------------------
 
-    def _materialize(self, document: Mapping[str, object], rung: int | None, *, bank: bool) -> Rung | _Refused:
+    def _materialize(self, document: Mapping[str, object], rung: int | None, *, bank: bool,
+                     suffix: str = "") -> Rung | _Refused:
         """Write, hash, validate and normalize a rung's policy the way a supplied one is."""
 
         name = f"attempt_{self._attempt + 1}_rung_{'SUPPLIED' if rung is None else rung}"
-        folder = self.folder / (name + ("_bank" if bank else ""))
+        folder = self.folder / (name + ("_bank" if bank else "") + suffix)
         folder.mkdir(parents=True, exist_ok=False)  # never over an earlier output
         raw = canonical_decimal_json_bytes(_exact_decimals(document)) + b"\n"
         source = folder / "portfolio_policy.json"
@@ -1070,21 +1159,51 @@ class Ladder:
 
     def _take(self, new: Rung, failure: Failure, *, step: str, why: str = "") -> Rung:
         old = self.current
-        for constraint, original, final, kind in self._changes(old, new):
+        for constraint, original, final, kind in self._changes(old, new, thesis_drop=step == "THESIS_DROP"):
             self._record(old, new, failure, step=step, constraint=constraint, original=original,
                          final=final, kind=kind, why=why)
         self.current = new
+        self._policy_notes(new)
         return new
 
-    def _changes(self, old: Rung, new: Rung) -> list[tuple[str, object, object, str]]:
+    def _policy_notes(self, rung: Rung) -> None:
+        """Name what a rung's own validation did to its thesis (Session 23b), once each.
+
+        A thesis it dropped and a count bound it widened for one are read from the
+        policy, not from a selection report, so they are named even when no attempt
+        reaches selection.
+        """
+
+        policy = rung.policy
+        if not isinstance(policy, NormalizedPortfolioPolicy):
+            return
+        for thesis in policy.theses:
+            if not thesis.active:
+                self._record_overlap_step(self._attempt + 1, {
+                    "scope": "THESIS", "constraint": "thesis", "thesis": thesis.name, "reason": thesis.dropped_reason})
+        if policy.thesis_bound_overrides and policy.active_thesis is not None:
+            self._record_overlap_step(self._attempt + 1, {
+                "scope": "THESIS", "constraint": "thesis_bound_override", "thesis": policy.active_thesis.name,
+                "moved": list(policy.thesis_bound_overrides)})
+
+    def _changes(self, old: Rung, new: Rung, *, thesis_drop: bool = False) -> list[tuple[str, object, object, str]]:
+        # Session 23b: each active thesis the step drops, by name, before what else changed.
+        dropped = [(f"theses.{thesis.name}", thesis.source_mapping(), None, "THESIS_DROP")
+                   for thesis in getattr(old.policy, "theses", ()) if thesis.active
+                   and (new.policy is None or thesis_drop)]
         if new.policy is None:
-            return [("portfolio_policy",
+            return [*dropped, ("portfolio_policy",
                      {"rung": old.label, "normalized_sha256": old.normalized_sha256},
                      {"rung": new.label, "policy": None,
                       "carried_exclusion_dk_ids": list(new.excluded_dk_ids),
                       **({"construction": THESIS_CONSTRUCTION_VERSION}
                          if self.mode is EngineMode.CLASSIC else {})}, "DROP")]
-        changes: list[tuple[str, object, object, str]] = []
+        if (isinstance(new.policy, NormalizedPortfolioPolicy) and not thesis_drop
+                and [item.source_mapping() for item in getattr(old.policy, "theses", ())]
+                != [item.source_mapping() for item in new.policy.theses]):
+            # A thesis is never relaxed: a rung that changed one is a defect, never taken.
+            raise ValueError("RELAXATION_RUNG_UNBUILDABLE: a rung's policy changed a Showdown thesis, which no rung may relax")
+        changes: list[tuple[str, object, object, str]] = list(dropped)
 
         def compare(constraint: str, before: object, after: object, kind: str = "STRUCTURE") -> None:
             if before != after:
@@ -1115,8 +1234,10 @@ class Ladder:
             compare("max_captain_exposure", _rule_summary(before.captain_rule), _rule_summary(after.captain_rule))
             compare("max_pairwise_person_overlap", before.max_pairwise_person_overlap,
                     after.max_pairwise_person_overlap)
-            compare("structural_bounds", before.structural_bounds.as_mapping(),
-                    after.structural_bounds.as_mapping())
+            # A thesis drop restores the bounds as declared; that is not a relaxation (Session 23b).
+            declared = (before.declared_structural_bounds or before.structural_bounds) if thesis_drop \
+                else before.structural_bounds
+            compare("structural_bounds", declared.as_mapping(), after.structural_bounds.as_mapping())
         count = len(self.entry_ids)
         compare("candidate_bank.candidate_limit", old.showdown_candidate_limit or scaled_candidate_limit(count),
                 new.showdown_candidate_limit or scaled_candidate_limit(count), "BANK")
@@ -1132,6 +1253,8 @@ class Ladder:
             text = _limitation_text("RELAXATION_BANK_RESIZED", detail)
         elif kind == "DROP":
             text = _limitation_text("RELAXATION_POLICY_DROPPED", detail)
+        elif kind == "THESIS_DROP":
+            text = _limitation_text("THESIS_DROPPED", detail)
         else:
             text = _limitation_text("RELAXATION_STRUCTURE_RELAXED", detail)
         code = text.split(":", 1)[0]
@@ -1171,32 +1294,42 @@ class Ladder:
         """
 
         text = overlap_step_text(step)
-        family = self.registry.family_of("RELAXATION_STRUCTURE_RELAXED")
+        thesis_step = step.get("constraint") in THESIS_STEPS
+        if thesis_step and any(record["limitation_text"] == text for record in self.records):
+            return  # a thesis event every rung or attempt reports again is recorded once (Session 23b)
+        code = text.split(":", 1)[0]
+        family = self.registry.family_of(code)
         binding = self.current.binding()
         self.records.append({
             "schema_version": CONTRACT_VERSION,
             "sequence": len(self.records) + 1,
             "attempt": attempt,
-            "step": "OVERLAP_CAP" if step.get("constraint", "classic_person_overlap") == "classic_person_overlap"
-                    else "THESIS_PREFERENCE",
+            "step": (THESIS_STEPS[step["constraint"]] if thesis_step
+                     else "OVERLAP_CAP" if step.get("constraint", "classic_person_overlap") == "classic_person_overlap"
+                     else "THESIS_PREFERENCE"),
             "constraint": step.get("constraint", "classic_person_overlap"),
             "class": family.gate_class.value,
             "family": family.name,
             "provenance": family.provenance.model_dump(mode="json"),
-            "original": step["from"],
-            "final": step["used"],
-            "trigger": step["trigger_status"],
+            "original": step.get("thesis") if thesis_step else step["from"],
+            "final": None if thesis_step else step["used"],
+            "trigger": code if thesis_step else step["trigger_status"],
             "trigger_kind": STRUCTURE,
-            "trigger_origin": "SELECTION",
-            "trigger_detail": (f"{step['scope']} row {step['index']}: {step['reason']}")[:600],
+            "trigger_origin": ("SELECTION" if not thesis_step or step["constraint"] == "thesis_backup_quarterbacks"
+                               else "POLICY_VALIDATION"),
+            "trigger_detail": (text if thesis_step else f"{step['scope']} row {step['index']}: {step['reason']}")[:600],
             "rung_from": self.current.label,
             "rung_to": self.current.label,
-            "why": "a construction preference; distinct lineups (R29) are never relaxed",
+            "why": ("a thesis is dropped and named, never loosened" if step.get("constraint") == "thesis"
+                    else "a policy bound gave way to the thesis Ben chose for its rows"
+                    if step.get("constraint") == "thesis_bound_override"
+                    else "missing evidence is never permission to guess" if thesis_step
+                    else "a construction preference; distinct lineups (R29) are never relaxed"),
             "at_utc": self._now(),
             "elapsed_seconds": round(self.budget.elapsed(), 3) if self.budget is not None else None,
             "entry_ids": list(self.entry_ids),
             "policy": binding,
-            "limitation_code": "RELAXATION_STRUCTURE_RELAXED",
+            "limitation_code": code,
             "limitation_text": text,
         })
 

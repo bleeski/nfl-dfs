@@ -1400,6 +1400,121 @@ a proper portfolio-level two-QB quota is future work (a natural fit for
 Session 23b/23c's thesis machinery, which already allots rows across bounded
 sleeves).
 
+### SD3 v3: one game thesis (Session 23b, chunk P8, R33 and R34)
+
+`nfl_showdown_portfolio_policy_v3` is v2 plus `controls.theses`: an array holding
+exactly one thesis (a portfolio of theses is Session 23c; two are refused by
+name). v1 and v2 are unchanged; `controls.theses` on a v2 policy is refused. A
+thesis is a construction preference Ben chooses: its name is a label, never a
+model value, and it moves no projection. It is never loosened.
+
+```json
+"theses": [{
+  "name": "GB_WIN_CLOSE_LOW",
+  "teams": ["GB"],
+  "captain_set": [{"underlying_id": "...", "cpt_dk_id": "...", "flex_dk_id": "..."}],
+  "team_bounds": [{"team": "GB", "minimum": 4, "maximum": 5}],
+  "position_bounds": [{"position": "K", "minimum": 1, "maximum": 2}],
+  "excluded_people": [],
+  "named_backup_quarterbacks": []
+}]
+```
+
+- `name`: a printable label, 1 to 80 characters. `teams`: one or both slate teams.
+- `captain_set` (required, nonempty): exact identities; every lineup's Captain is
+  one of them. Any position, kickers and DSTs included.
+- `team_bounds`, `position_bounds` (optional): inclusive person counts per team or
+  per position (`QB`, `RB`, `WR`, `TE`, `K`, `DST`), 0 to 6, `minimum` defaulting
+  to 0 and `maximum` to 6; a key at most once; minima total at most 6.
+- `excluded_people` (optional): out of every lineup built under the thesis. A
+  person may not be both required (Captain set, named quarterback) and excluded.
+- `named_backup_quarterbacks` (optional, QBs only): see the backup rule below.
+
+A malformed thesis is `PORTFOLIO_POLICY_THESIS_INVALID` (`showdown_policy_input`,
+`P`): the policy is refused as any malformed policy is.
+
+**Normalized bytes.** Without a thesis the normalized policy is exactly
+`nfl_showdown_portfolio_policy_normalized_v2` as before. With one it is
+`nfl_showdown_portfolio_policy_normalized_v3`: v2 plus `controls.theses`, each
+thesis as declared (every optional field written out) with `status`
+(`ACTIVE` or `DROPPED`), `dropped_reason` and `unavailable_captains`
+(`underlying_id`, `source`). The SD4 audit and the readable review accept both.
+
+**Dropped, never bent (principle 6).** At validation a thesis is `DROPPED` when
+every Captain it requires is unavailable (a run exclusion: official inactive,
+DraftKings status or operator, `SOURCE_OR_PARTICIPATION_PRECEDENCE`; the policy's
+own `POLICY_EXCLUSION`; or a declared combined fraction of exactly 0,
+`COMBINED_FRACTION_ZERO`), or when fewer available people
+than a team or position minimum asks for remain. The policy stays valid, the
+finding is `THESIS_DROPPED` (`portfolio_bounds`, `S`), the bound rows are built
+without the thesis and name none, and the run carries one `THESIS_DROPPED`
+limitation naming the thesis and the reason. The ladder (every run with a policy
+has one; a policy on another profile is refused) records it from the policy
+itself, so it is named even when no attempt reaches selection, and once however
+many rungs re-derive it. A positive combined cap that floors to zero rows is a
+cap, not an exclusion: it never drops a thesis, and it leaves the thesis's
+Captains short, which is the capacity issue below.
+At selection, before any bank, one solve under the thesis and the run's
+exclusions alone (no cap, overlap or structural bound) proves a lineup can follow
+it; a proved infeasibility raises `THESIS_UNBUILDABLE` (`S`), and the ladder
+rebuilds the same policy without the thesis (not a rung: every cap and bound as declared; a window too short for another
+SD3 attempt takes rung 4 instead) and
+records `THESIS_DROPPED` with the reason. A solve a limit stopped proves nothing
+and drops nothing.
+
+**Caps give way, the thesis does not.** Captain caps whose sum over the thesis's
+Captains is below the entry count are `PORTFOLIO_POLICY_THESIS_CAPACITY_INSUFFICIENT`
+(`S`), so the ladder loosens the caps at intake. A `qb_count`, `kicker_count` or
+`dst_count` that forbids a count the thesis's `position_bounds` asks for widens by
+the least step in the normalized policy (`controls.thesis_bound_overrides`
+holds the declared bounds and what moved), named by the finding and by one
+relaxation record, `PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND` (`S`). Each rung is
+built from the declared bounds and re-derives the widening; dropping the thesis
+restores them. Every rung copies `theses` byte
+for byte and is written v3 while it carries one; `Ladder._changes` refuses a rung
+whose thesis differs (`RELAXATION_RUNG_UNBUILDABLE`). Rung 4 (no policy) drops
+the thesis with the policy, one `THESIS_DROPPED` record per thesis before the
+`RELAXATION_POLICY_DROPPED` record.
+
+**The build (`showdown_single_thesis_sd3_v1`).** Every SD3 stratum's model takes
+the team and position counts as MILP rows; every other person's CPT row, the
+thesis's exclusions and the backup quarterbacks below are excluded rows, so the
+Captain strata seed only the thesis's Captains. R29 is unchanged: every lineup
+distinct and none a prefilled roster. The selection report's
+`portfolio_policy.theses` names each bound Entry ID's thesis (`entries`), every
+declared thesis's `status` and `dropped_reason`, `backup_quarterbacks_excluded`,
+`backup_quarterbacks_unevaluated_teams` and `does_not_establish`
+(`THAT_THE_THESIS_WILL_HAPPEN`, `EV_ROI_OR_WIN_PROBABILITY`,
+`LEVERAGE_NO_OWNERSHIP_INPUT_SO_LEVERAGE_IS_UNMEASURED`, `CALIBRATION`,
+`UPLOAD_CLEARANCE`). The assignment CSV is unchanged (no thesis column). Rows the
+unbound fill writes follow no thesis and name none.
+
+**Backup quarterbacks (R33).** Under an active thesis, every quarterback the
+current depth evidence (`nfl_qb_depth_role_evidence_v1`, its `starters_by_team`)
+puts behind his team's starter, or declares unlisted, is out of the bound rows'
+pool, unless the thesis names him in `named_backup_quarterbacks` or its Captain
+set. A team the evidence does not declare keeps every quarterback: missing
+evidence is never permission to guess, and the run names the gap as
+`THESIS_BACKUP_QB_UNEVALUATED` (`qb_depth_roles`, `P`). Outside a thesis nothing
+changes.
+
+**The audit.** SD4 reparses the normalized thesis and recomputes, from each
+roster's exact IDs, the Captain set, every team and position count, the
+exclusions and the backup rule (from the depth resolver's own report carried in
+the selection report, `qb_depth_roles.starters_by_team`, not the selector's
+exclusion list; the audit does not re-read the depth evidence bytes, so this rule
+is recomputed from the roster but bound to the evidence only through that report);
+a breach is
+`PORTFOLIO_AUDIT_THESIS_VIOLATED:entry=...:thesis=...:rule=...`. The audit report's
+`theses` block names each audited row's thesis and whether it follows it.
+
+The generator's `--thesis PATH` writes v3 (people as underlying IDs in the file)
+and leaves the thesis's Captains out of `--captain-zero-pos`.
+
+Does not establish: that the thesis will happen, any EV, ROI, win or cash
+probability, leverage (no ownership input), calibration, or upload clearance.
+Every path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## SD5 prior-only readable review
 
 A successful Showdown `prior_review` creates canonical
@@ -2624,7 +2739,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `1eecc5a370481dc232be71b1cfda107e386a8e228d631e1fab023d155fa7dc7a`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `9b120424ae158ad8df4cbc5262d2ef7934c9f15529210d6eb20d042598da3fdf`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -3141,6 +3256,19 @@ requested cap only for the first), `trigger` the solver status that made the req
 infeasible, `trigger_origin` `SELECTION`, and `limitation_code`
 `RELAXATION_STRUCTURE_RELAXED`. The value is additive: no earlier field changed
 meaning, and no consumer reads `step` as a closed set.
+
+Since Session 23b (Showdown theses, § SD3 v3) the record also names thesis events,
+each once however many rungs or attempts report it: step `THESIS_DROP` (constraint
+`thesis` for a thesis a policy's validation dropped, `trigger_origin`
+`POLICY_VALIDATION`; constraint `theses.<name>` for one the ladder dropped, on
+`THESIS_UNBUILDABLE` or with the policy at rung 4), code `THESIS_DROPPED`; step
+`THESIS_BOUND_OVERRIDE` (constraint `thesis_bound_override`, `POLICY_VALIDATION`),
+code `PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND`; and step `THESIS_EVIDENCE_GAP`
+(constraint `thesis_backup_quarterbacks`, `SELECTION`), code
+`THESIS_BACKUP_QB_UNEVALUATED`. The last is a named evidence gap (`P`), not a
+relaxation; it travels in the same list because this list is how a run's named
+gaps reach its limitations. A thesis step's `original` is the thesis name and
+`final` is null.
 
 Codes, on every exit that reports the record, the delivered file's or the
 baseline's, the pre-review exit included: `RELAXATION_STRUCTURE_RELAXED` and

@@ -1,5 +1,23 @@
 # Implementation Status
 
+## Capability added: 2026-10-01 (Session 23b, Showdown thesis structures)
+
+Working and verified through the synthetic NE@SEA and DEN@KC Showdown fixtures and the supplied NE@SEA 20-entry bytes
+(`tests/test_showdown_theses.py`, 32 tests, 31 of which fail on the code before it) and the full suite: a Showdown policy
+can carry one named game thesis Ben chooses (`nfl_showdown_portfolio_policy_v3`, `controls.theses`;
+`src/nfl_dfs/showdown_theses.py`, `showdown_single_thesis_sd3_v1`). Its Captain set (kickers and DSTs included), team and
+position counts and exclusions are MILP rows and excluded rows on every SD3 stratum, the SD4 audit recomputes each from
+the roster bytes, and each bound Entry ID names its thesis in the selection and audit reports. The ladder never loosens
+it: every rung carries it byte for byte and a rung that changes it is refused; caps that starve it loosen instead. A
+thesis no lineup can follow (an inactive required Captain, at validation; any proved infeasibility, at selection) is
+dropped and named (`THESIS_DROPPED`, by the ladder from the policy itself) and the policy builds without it. Under a thesis, quarterbacks the depth evidence
+puts behind a starter are out unless the thesis names them; a team with no depth evidence keeps every quarterback and
+the gap is named (`THESIS_BACKUP_QB_UNEVALUATED`). **Not done, named:** one thesis per policy (the multi-thesis
+portfolio is Session 23c); rows the unbound fill writes follow no thesis; rung 4 (sequential Showdown) carries no
+thesis, so a thesis that survives the pre-check but cannot fill every row distinctly is dropped there by name; the
+backup-quarterback default applies only under a thesis (`[BEN: ...]` flag on the 23b card); the review workbook and
+readable review do not show the thesis yet (23c). Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-09-30 (Session 49, thesis builder as the rung-4 path)
 
 Working and verified through the Classic fixtures (`tests/test_classic_theses.py`, the rung-4 and no-policy `run-slate`
