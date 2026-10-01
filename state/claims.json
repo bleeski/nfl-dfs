@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "c0a33692-1f69-58ce-a785-921e67a38f8f",
+      "branch": "claude/friendly-sagan-y4rkxo",
+      "chunk": "S23b",
+      "claimed_at": "2026-10-01T21:04:06Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
