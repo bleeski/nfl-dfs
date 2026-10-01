@@ -51,6 +51,14 @@ from .portfolio_enforcement import (
 )
 from .portfolio_policy import NormalizedPortfolioPolicy
 from .prior_score import PriorScores, TeamSplits, score_pool
+from .showdown_theses import (
+    DOES_NOT_ESTABLISH as THESIS_DOES_NOT_ESTABLISH,
+    THESIS_BUILD_VERSION,
+    ShowdownThesis,
+    apply_thesis_rows,
+    backup_quarterbacks,
+    thesis_excluded_dk_ids,
+)
 from .classic_theses import select_thesis_lineups
 from .relaxation import own_exclusion_dk_ids
 
@@ -334,10 +342,16 @@ def select_prior_lineups(
     # The run's own exclusions bind every row; a policy's own exclusions and zero
     # caps (below) bind only the rows it binds, so the unbound fill uses these.
     run_excluded = tuple(sorted(set(excluded_set)))
+    # Session 23b (R33): under an active thesis, the quarterbacks the depth evidence puts
+    # behind a starter leave the pool unless the thesis names them. Bound rows only.
+    thesis = portfolio_policy.active_thesis if isinstance(portfolio_policy, NormalizedPortfolioPolicy) else None
+    backups, unevaluated_teams = (
+        backup_quarterbacks(slate, thesis, qb_depth.report) if thesis is not None else (frozenset(), ()))
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
         for limit in portfolio_policy.effective_limits:
             if limit.combined_max_entries == 0:
                 excluded_set.extend((limit.person.cpt_dk_id, limit.person.flex_dk_id))
+        excluded_set.extend(player.dk_id for player in slate.players if player.underlying_id in backups)
     elif isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
         by_person = {player.underlying_id: player for player in slate.players}
         for limit in portfolio_policy.player_bounds:
@@ -499,6 +513,8 @@ def select_prior_lineups(
         return tuple(selected), scores, report
 
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
+        if thesis is not None:
+            _refuse_unbuildable_thesis(slate, objective, excluded, thesis, backups, time_limit_seconds)
         entry_count = portfolio_policy.entry_count
         candidate_limit = (
             scaled_candidate_limit(entry_count)
@@ -626,6 +642,8 @@ def select_prior_lineups(
                 "entry_ids": list(portfolio_policy.entry_ids),
                 "candidate_bank": bank.as_report(),
                 "solve": portfolio_solve.as_report(),
+                **({"theses": _thesis_report(portfolio_policy, len(selected), backups, unevaluated_teams)}
+                   if portfolio_policy.theses else {}),
             },
             "never_calls": ["field.py", "economics.py", "portfolio economics"],
         }
@@ -690,6 +708,58 @@ def select_prior_lineups(
     verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
     _refuse_prefilled_repeats(selected, forbidden_keys)
     return tuple(selected), scores, report
+
+
+def _refuse_unbuildable_thesis(
+    slate: SlateContract,
+    objective: Mapping[str, float],
+    excluded: Sequence[str],
+    thesis: ShowdownThesis,
+    backups: frozenset[str],
+    time_limit_seconds: float,
+) -> None:
+    """Raise `THESIS_UNBUILDABLE` when no single lineup can follow the thesis (Session 23b).
+
+    One solve under the thesis and this run's exclusions alone, before any bank: no
+    cap, overlap or structural bound, since those loosen and the thesis does not. Only
+    a proved infeasibility drops it; a solve a limit stopped proves nothing.
+    """
+
+    optimizer = LineupOptimizer(
+        slate, excluded_ids=tuple(sorted({*excluded, *thesis_excluded_dk_ids(slate, thesis, backups)})),
+        time_limit_seconds=time_limit_seconds)
+    apply_thesis_rows(optimizer, slate, thesis)
+    if optimizer.solve(objective).status != "INFEASIBLE":
+        return
+    gone = set(excluded) | set(thesis_excluded_dk_ids(slate, thesis, backups))
+    captains = sorted(person.underlying_id for person in thesis.captain_set if person.cpt_dk_id in gone)
+    reason = ("every required Captain is out of this run's pool: " + ", ".join(captains)
+              if len(captains) == len(thesis.captain_set)
+              else "no legal lineup follows it under this run's exclusions")
+    raise SelectionError(
+        f"THESIS_UNBUILDABLE:thesis={thesis.name}:{reason}",
+        status="THESIS_UNBUILDABLE",
+        facts={"stage": "THESIS", "thesis": thesis.name, "reason": reason, "unavailable_captains": captains},
+    )
+
+
+def _thesis_report(
+    policy: NormalizedPortfolioPolicy, rows: int, backups: frozenset[str], unevaluated: Sequence[str]
+) -> dict[str, object]:
+    """Each bound row's thesis and every declared thesis's state; a name is a label, not a number."""
+
+    active = policy.active_thesis
+    return {
+        "build_version": THESIS_BUILD_VERSION,
+        "theses": [{"name": thesis.name, "teams": list(thesis.teams), "status": thesis.status,
+                    "dropped_reason": thesis.dropped_reason,
+                    "captain_set": sorted(thesis.captain_people)} for thesis in policy.theses],
+        "entries": {entry: (active.name if active is not None else None) for entry in policy.entry_ids[:rows]},
+        "backup_quarterbacks_excluded": sorted(backups),
+        # Teams whose quarterbacks no depth evidence orders: none of them was excluded.
+        "backup_quarterbacks_unevaluated_teams": list(unevaluated) if active is not None else [],
+        "does_not_establish": list(THESIS_DOES_NOT_ESTABLISH),
+    }
 
 
 @dataclass

@@ -449,11 +449,24 @@ the k rows it built, leaves the other unbound rows blank and names them in
 selection record does not name still fails the readable review. The request's
 `lineup_count` is still every fillable row.
 
-Until Sessions 23b and 23c land, a multi-thesis Showdown portfolio is built in
+Since Session 23b a Showdown policy can carry one named game thesis Ben
+chooses (`scripts/make_showdown_policy.py --thesis <file>`, policy v3,
+`docs/DATA_CONTRACTS.md` § SD3 v3): its Captain set (a kicker or DST allowed),
+team and position counts and exclusions bind every row the policy binds, and
+each bound Entry ID names its thesis in the selection report. The ladder
+loosens caps around it and never the thesis: a thesis no lineup can follow, for
+instance one whose only Captain is officially inactive, is dropped and named
+(`THESIS_DROPPED`) and the rows are built without it. Under a thesis the depth
+evidence's backup quarterbacks are out unless the thesis names them; with no
+depth evidence for a team nobody is guessed out and the run says so
+(`THESIS_BACKUP_QB_UNEVALUATED`). Supply the QB depth package on any thesis run.
+
+Until Session 23c lands, a multi-thesis Showdown portfolio is built in
 prefilled rounds (PHI@CHI, 2026-09-28; `changelog.md` has the run). Allot the
 rows to theses, interleaved across contests. Round 1 binds thesis 1's rows with
-its own policy (exclusions and caps shape the thesis: fade a team's pass game,
-zero every Captain but K and DST). Copy only those rows' lines from the review
+its own policy (`--entry-id` for its rows and `--thesis` for its structure;
+before Session 23b, exclusions and caps shaped the thesis: fade a team's pass
+game, zero every Captain but K and DST). Copy only those rows' lines from the review
 CSV into a new copy of the template, verified to differ from the previous
 template in the six roster cells alone, and run round 2 on that copy: the
 earlier rows are now prefilled, preserved byte for byte and never repeated

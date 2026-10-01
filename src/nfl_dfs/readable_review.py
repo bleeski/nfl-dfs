@@ -179,7 +179,9 @@ def _parse_normalized_policy(
         )
         return {}
     root = _mapping(payload, "normalized_policy", problems)
-    if root.get("schema_version") != "nfl_showdown_portfolio_policy_normalized_v2":
+    # normalized_v3 is v2 plus a thesis (Session 23b); the controls read here are the same.
+    if root.get("schema_version") not in {"nfl_showdown_portfolio_policy_normalized_v2",
+                                          "nfl_showdown_portfolio_policy_normalized_v3"}:
         problems.append("READABLE_REVIEW_NORMALIZED_POLICY_SCHEMA_MISMATCH")
     bindings = _mapping(root.get("bindings"), "normalized_policy.bindings", problems)
     policy_entries = tuple(str(value) for value in _sequence(bindings.get("entry_ids"), "policy.entry_ids", problems))

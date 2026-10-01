@@ -30,12 +30,25 @@ from .optimizer import LIMIT_INCUMBENT_STATUS, LineupOptimizer
 from .portfolio_policy import (
     OPEN_RANGE,
     OPEN_STRUCTURAL_BOUNDS,
+    NORMALIZED_POLICY_SCHEMA_VERSIONS,
     EffectivePersonLimit,
     NormalizedPortfolioPolicy,
+    PersonBinding,
     StructuralBoundRange,
     StructuralBounds,
     canonical_decimal_json_bytes,
     structural_bound_violations,
+)
+from .showdown_theses import (
+    ACTIVE,
+    DROPPED,
+    THESIS_BUILD_VERSION,
+    CountBound,
+    ShowdownThesis,
+    apply_thesis_rows,
+    backup_quarterbacks,
+    thesis_excluded_dk_ids,
+    thesis_violations,
 )
 
 
@@ -244,6 +257,7 @@ class PortfolioAudit:
     hashes: tuple[tuple[str, str], ...]
     max_person_share: Mapping[str, object] = field(default_factory=dict)
     contest_assignment: Mapping[str, object] = field(default_factory=dict)
+    theses: Mapping[str, object] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -265,6 +279,7 @@ class PortfolioAudit:
             ],
             "max_person_share": dict(self.max_person_share),
             **({"contest_assignment": dict(self.contest_assignment)} if self.contest_assignment else {}),
+            **({"theses": dict(self.theses)} if self.theses else {}),
             "hashes": dict(self.hashes),
             "checks_run": [
                 "EXACT_ENTRY_ID_SEQUENCE_AND_COVERAGE",
@@ -365,6 +380,7 @@ class _StratifiedEnumerator:
         per_solve_budget: float,
         forbidden_rosters: Sequence[tuple[str, ...]] = (),
         structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS,
+        thesis: ShowdownThesis | None = None,
     ) -> None:
         self.slate = slate
         self.objective = objective
@@ -376,6 +392,9 @@ class _StratifiedEnumerator:
         # still reject never enters the bank; it is no-good'd and the search
         # continues, the same way an already-seen candidate is.
         self.structural_bounds = structural_bounds
+        # Session 23b: an active thesis's team and position counts are rows on every
+        # stratum's model too; its Captain set and exclusions arrive as excluded rows.
+        self.thesis = thesis
         self.candidate_limit = candidate_limit
         self.total_budget = total_budget
         self.per_solve_budget = per_solve_budget
@@ -429,6 +448,8 @@ class _StratifiedEnumerator:
             time_limit_seconds=min(self.total_budget, self.per_solve_budget),
         )
         _apply_structural_bounds(optimizer, self.slate, self.structural_bounds)
+        if self.thesis is not None:
+            apply_thesis_rows(optimizer, self.slate, self.thesis)
         for dk_id in required_ids:
             optimizer.add_required_row(dk_id)
         if seed_no_goods:
@@ -670,6 +691,12 @@ def build_policy_candidate_bank(
     per_solve_budget = _finite_positive(
         per_solve_time_limit_seconds, "per-solve candidate budget"
     )
+    # Session 23b: an active thesis keeps every other Captain row and its own exclusions
+    # out of every stratum, so the Captain strata seed only the thesis's Captains. The
+    # run's backup quarterbacks arrive in `excluded_ids` from the selector.
+    thesis = policy.active_thesis if policy is not None else None
+    if thesis is not None:
+        excluded_ids = (*excluded_ids, *thesis_excluded_dk_ids(slate, thesis))
     enumerator = _StratifiedEnumerator(
         slate,
         objective,
@@ -679,6 +706,7 @@ def build_policy_candidate_bank(
         per_solve_budget=per_solve_budget,
         forbidden_rosters=forbidden_rosters,
         structural_bounds=policy.structural_bounds if policy is not None else OPEN_STRUCTURAL_BOUNDS,
+        thesis=thesis,
     )
     if policy is None:
         enumerator.enumerate(kind="fill", target=candidate_limit)
@@ -1073,6 +1101,7 @@ class _AuditedPolicyControls:
     max_pairwise_person_overlap: int
     person_limits: tuple[tuple[str, int, int], ...]
     structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS
+    theses: tuple[ShowdownThesis, ...] = ()
 
 
 def _strict_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -1131,6 +1160,75 @@ def _structural_bounds_at(value: object, label: str) -> StructuralBounds:
     )
 
 
+def _people_at(value: object, label: str, *, nonempty: bool = False) -> tuple[PersonBinding, ...]:
+    if not isinstance(value, list) or (nonempty and not value):
+        raise ValueError(f"{label} must be a{' nonempty' if nonempty else 'n'} array")
+    people = []
+    for index, raw in enumerate(value):
+        item = _mapping_at(raw, f"{label}[{index}]")
+        keys = ("underlying_id", "cpt_dk_id", "flex_dk_id")
+        if set(item) != set(keys) or any(not isinstance(item[key], str) or not item[key] for key in keys):
+            raise ValueError(f"{label}[{index}] must bind one person's exact CPT and FLEX IDs")
+        people.append(PersonBinding(*(str(item[key]) for key in keys)))
+    return tuple(people)
+
+
+def _count_bounds_at(value: object, label: str, key: str) -> tuple[CountBound, ...]:
+    if not isinstance(value, list):
+        raise ValueError(f"{label} must be an array")
+    bounds = []
+    for index, raw in enumerate(value):
+        item = _mapping_at(raw, f"{label}[{index}]")
+        if set(item) != {key, "minimum", "maximum"} or not isinstance(item[key], str):
+            raise ValueError(f"{label}[{index}] must hold {key}, minimum and maximum")
+        low = _integer_at(item["minimum"], f"{label}[{index}].minimum")
+        high = _integer_at(item["maximum"], f"{label}[{index}].maximum")
+        if low > high or high > 6:
+            raise ValueError(f"{label}[{index}] must be an ordered count from 0 through 6")
+        bounds.append(CountBound(str(item[key]), low, high))
+    return tuple(bounds)
+
+
+def _theses_at(value: object, label: str) -> tuple[ShowdownThesis, ...]:
+    """Strictly reparse `controls.theses` (Session 23b, normalized_v3): one thesis."""
+
+    if not isinstance(value, list) or len(value) != 1:
+        raise ValueError(f"{label} must hold exactly one thesis")
+    theses = []
+    for index, raw in enumerate(value):
+        where = f"{label}[{index}]"
+        item = _mapping_at(raw, where)
+        expected = {"name", "teams", "captain_set", "team_bounds", "position_bounds", "excluded_people",
+                    "named_backup_quarterbacks", "status", "dropped_reason", "unavailable_captains"}
+        if set(item) != expected:
+            raise ValueError(f"{where} fields are not the normalized thesis fields")
+        name, teams, status = item["name"], item["teams"], item["status"]
+        if not isinstance(name, str) or not name or status not in {ACTIVE, DROPPED}:
+            raise ValueError(f"{where} name or status is invalid")
+        if not isinstance(teams, list) or not teams or any(not isinstance(team, str) for team in teams):
+            raise ValueError(f"{where}.teams must be a nonempty array of team codes")
+        unavailable = []
+        for position, entry in enumerate(item["unavailable_captains"] if isinstance(item["unavailable_captains"], list)
+                                         else [None]):
+            entry = _mapping_at(entry, f"{where}.unavailable_captains[{position}]")
+            if set(entry) != {"underlying_id", "source"} or not all(isinstance(entry[key], str) for key in entry):
+                raise ValueError(f"{where}.unavailable_captains[{position}] is invalid")
+            unavailable.append((str(entry["underlying_id"]), str(entry["source"])))
+        reason = item["dropped_reason"]
+        if (status == DROPPED) != isinstance(reason, str) or (reason is not None and not isinstance(reason, str)):
+            raise ValueError(f"{where}.dropped_reason must be text exactly when the thesis is dropped")
+        theses.append(ShowdownThesis(
+            name=name, teams=tuple(teams),
+            captain_set=_people_at(item["captain_set"], f"{where}.captain_set", nonempty=True),
+            team_bounds=_count_bounds_at(item["team_bounds"], f"{where}.team_bounds", "team"),
+            position_bounds=_count_bounds_at(item["position_bounds"], f"{where}.position_bounds", "position"),
+            excluded_people=_people_at(item["excluded_people"], f"{where}.excluded_people"),
+            named_backup_quarterbacks=_people_at(item["named_backup_quarterbacks"],
+                                                 f"{where}.named_backup_quarterbacks"),
+            status=status, dropped_reason=reason, unavailable_captains=tuple(unavailable)))
+    return tuple(theses)
+
+
 def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
     """Strictly reparse only the normalized controls the audit must enforce."""
 
@@ -1143,7 +1241,8 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
     root = _mapping_at(payload, "normalized policy")
     if canonical_decimal_json_bytes(root) != raw:
         raise ValueError("normalized policy bytes are not canonical")
-    if root.get("schema_version") != "nfl_showdown_portfolio_policy_normalized_v2":
+    schema_version = root.get("schema_version")
+    if schema_version not in NORMALIZED_POLICY_SCHEMA_VERSIONS:
         raise ValueError("normalized policy schema_version is unsupported")
 
     bindings = _mapping_at(root.get("bindings"), "bindings")
@@ -1201,6 +1300,10 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
     ):
         raise ValueError("effective.people contains duplicate underlying IDs")
     structural_bounds = _structural_bounds_at(controls.get("structural_bounds"), "controls.structural_bounds")
+    # normalized_v3 carries theses and normalized_v2 never does (Session 23b).
+    if (schema_version == NORMALIZED_POLICY_SCHEMA_VERSIONS[1]) != ("theses" in controls):
+        raise ValueError("controls.theses must be present exactly in a normalized_v3 policy")
+    theses = _theses_at(controls["theses"], "controls.theses") if "theses" in controls else ()
     return _AuditedPolicyControls(
         salary_sha256=salary_sha256,
         entry_ids=entry_ids,
@@ -1208,6 +1311,7 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
         max_pairwise_person_overlap=overlap,
         person_limits=tuple(person_limits),
         structural_bounds=structural_bounds,
+        theses=theses,
     )
 
 
@@ -1410,6 +1514,15 @@ def audit_policy_assignments(
     structural_bounds = (
         audited_policy.structural_bounds if audited_policy is not None else policy.structural_bounds
     )
+    # Session 23b: the active thesis, recomputed per roster from the reparsed bytes. Its
+    # backup quarterbacks come from the depth evidence's own report (`starters_by_team`),
+    # never from the selector's list of whom it excluded.
+    audited_theses = audited_policy.theses if audited_policy is not None else policy.theses
+    thesis = next((item for item in audited_theses if item.active), None)
+    backups, unevaluated = (
+        backup_quarterbacks(slate, thesis, (selector_summary or {}).get("qb_depth_roles"))
+        if thesis is not None else (frozenset(), ()))
+    thesis_entries: dict[str, list[str]] = {}
     for entry, roster in normalized_pairs:
         validation = validate_lineup(slate, roster)
         if not validation.valid or validation.lineup is None:
@@ -1426,6 +1539,11 @@ def audit_policy_assignments(
                     "PORTFOLIO_AUDIT_STRUCTURAL_BOUND_VIOLATED", f"entry={entry}:bound={violation}"
                 )
             )
+        if thesis is not None:
+            thesis_entries[entry] = list(thesis_violations(slate, roster, thesis, backups))
+            problems.extend(
+                _audit_problem("PORTFOLIO_AUDIT_THESIS_VIOLATED", f"entry={entry}:thesis={thesis.name}:rule={rule}")
+                for rule in thesis_entries[entry])
         people = frozenset(by_id[dk_id].underlying_id for dk_id in roster)
         captain = by_id[roster[0]].underlying_id
         canonical.append((entry, validation.lineup.canonical_key))
@@ -1544,4 +1662,28 @@ def audit_policy_assignments(
         hashes=tuple(sorted(actual_hashes.items())),
         max_person_share=max_person_share,
         contest_assignment=contest_reading,
+        theses=_audited_theses_report(audited_theses, thesis_entries, backups, unevaluated),
     )
+
+
+def _audited_theses_report(
+    theses: Sequence[ShowdownThesis],
+    entries: Mapping[str, Sequence[str]],
+    backups: frozenset[str],
+    unevaluated: Sequence[str],
+) -> dict[str, object]:
+    """Each audited row's thesis and whether its roster follows it (empty without a thesis)."""
+
+    if not theses:
+        return {}
+    active = next((item for item in theses if item.active), None)
+    return {
+        "build_version": THESIS_BUILD_VERSION,
+        "theses": [{"name": item.name, "status": item.status, "dropped_reason": item.dropped_reason}
+                   for item in theses],
+        "entries": {entry: {"thesis": active.name if active else None,
+                            "follows": not broken, "broken_rules": list(broken)}
+                    for entry, broken in entries.items()},
+        "backup_quarterbacks_excluded": sorted(backups),
+        "backup_quarterbacks_unevaluated_teams": list(unevaluated),
+    }
