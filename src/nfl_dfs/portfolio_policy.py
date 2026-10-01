@@ -231,8 +231,11 @@ class NormalizedPortfolioPolicy:
     require_unique_lineups: bool
     effective_limits: tuple[EffectivePersonLimit, ...]
     structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS
-    # Session 23b: the declared theses, each ACTIVE or DROPPED (v3 only; empty otherwise).
+    # Session 23b: the declared theses, each ACTIVE or DROPPED (v3 only; empty otherwise),
+    # and, when an active thesis widened a count bound, the bounds as declared and what moved.
     theses: tuple[ShowdownThesis, ...] = ()
+    declared_structural_bounds: StructuralBounds | None = None
+    thesis_bound_overrides: tuple[str, ...] = ()
 
     @property
     def entry_count(self) -> int:
@@ -266,6 +269,10 @@ class NormalizedPortfolioPolicy:
                 "require_unique_lineups": self.require_unique_lineups,
                 "structural_bounds": self.structural_bounds.as_mapping(),
                 **({"theses": [thesis.as_mapping() for thesis in self.theses]} if self.theses else {}),
+                **({"thesis_bound_overrides": {
+                    "declared_structural_bounds": self.declared_structural_bounds.as_mapping(),
+                    "widened": list(self.thesis_bound_overrides)}}
+                   if self.thesis_bound_overrides and self.declared_structural_bounds is not None else {}),
             },
             "effective": {
                 "entry_count_denominator": self.entry_count,
@@ -988,16 +995,19 @@ def _resolved_thesis(
     """`thesis`, or the same thesis DROPPED when no lineup could follow it.
 
     Dropped when every Captain it requires is unavailable (an exclusion from the
-    run, the policy's own, or a combined cap of zero), or when fewer people are
-    available than a team or position minimum asks for. Never loosened: the
-    exclusions decide, and the thesis is named rather than bent.
+    run, the policy's own, or a declared combined fraction of exactly 0, which the
+    selector treats as an exclusion), or when fewer people are available than a
+    team or position minimum asks for. A positive cap that floors to zero rows is a
+    cap, not an exclusion: it stays a capacity issue the ladder loosens. Never
+    loosened: the exclusions decide, and the thesis is named rather than bent.
     """
 
     by_person = {limit.person.underlying_id: limit for limit in limits}
     available = {person for person, limit in by_person.items()
-                 if limit.combined_max_entries > 0 and person not in thesis.excluded_ids}
+                 if limit.exclusion_source is None and limit.combined_fraction != 0
+                 and person not in thesis.excluded_ids}
     unavailable = tuple(sorted(
-        (person, by_person[person].exclusion_source or "COMBINED_CAP_ZERO")
+        (person, by_person[person].exclusion_source or "COMBINED_FRACTION_ZERO")
         for person in thesis.captain_people if person not in available))
     reasons: list[str] = []
     if len(unavailable) == len(thesis.captain_set):
@@ -1553,6 +1563,7 @@ def validate_portfolio_policy_bytes(
     # Session 23b: a thesis no lineup could follow is dropped and named, never loosened;
     # a policy count bound that contradicts an active thesis gives way to the thesis.
     theses = tuple(_resolved_thesis(thesis, slate, effective_limits) for thesis in theses)
+    declared_bounds, overrides = structural_bounds, []
     for thesis in theses:
         if thesis.status == DROPPED:
             findings.append(_issue(
@@ -1562,6 +1573,7 @@ def validate_portfolio_policy_bytes(
             ))
         else:
             structural_bounds, widened = _thesis_widened_bounds(structural_bounds, thesis)
+            overrides.extend(widened)
             if widened:
                 findings.append(_issue(
                     "PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND",
@@ -1581,6 +1593,8 @@ def validate_portfolio_policy_bytes(
         effective_limits=tuple(effective_limits),
         structural_bounds=structural_bounds,
         theses=theses,
+        declared_structural_bounds=declared_bounds if overrides else None,
+        thesis_bound_overrides=tuple(overrides),
     )
     capacity = (*_necessary_capacity_issues(policy, slate), *_thesis_capacity_issues(policy))
     if capacity:

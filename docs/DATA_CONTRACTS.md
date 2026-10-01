@@ -1443,16 +1443,22 @@ thesis as declared (every optional field written out) with `status`
 **Dropped, never bent (principle 6).** At validation a thesis is `DROPPED` when
 every Captain it requires is unavailable (a run exclusion: official inactive,
 DraftKings status or operator, `SOURCE_OR_PARTICIPATION_PRECEDENCE`; the policy's
-own `POLICY_EXCLUSION`; or `COMBINED_CAP_ZERO`), or when fewer available people
+own `POLICY_EXCLUSION`; or a declared combined fraction of exactly 0,
+`COMBINED_FRACTION_ZERO`), or when fewer available people
 than a team or position minimum asks for remain. The policy stays valid, the
 finding is `THESIS_DROPPED` (`portfolio_bounds`, `S`), the bound rows are built
 without the thesis and name none, and the run carries one `THESIS_DROPPED`
-limitation naming the thesis and the reason (`selection_overlap_steps`, so with
-or without a ladder; the ladder records it once however many attempts report it).
+limitation naming the thesis and the reason. The ladder (every run with a policy
+has one; a policy on another profile is refused) records it from the policy
+itself, so it is named even when no attempt reaches selection, and once however
+many rungs re-derive it. A positive combined cap that floors to zero rows is a
+cap, not an exclusion: it never drops a thesis, and it leaves the thesis's
+Captains short, which is the capacity issue below.
 At selection, before any bank, one solve under the thesis and the run's
 exclusions alone (no cap, overlap or structural bound) proves a lineup can follow
 it; a proved infeasibility raises `THESIS_UNBUILDABLE` (`S`), and the ladder
-rebuilds the same policy without the thesis (not a rung: every cap stays) and
+rebuilds the same policy without the thesis (not a rung: every cap and bound as declared; a window too short for another
+SD3 attempt takes rung 4 instead) and
 records `THESIS_DROPPED` with the reason. A solve a limit stopped proves nothing
 and drops nothing.
 
@@ -1460,8 +1466,11 @@ and drops nothing.
 Captains is below the entry count are `PORTFOLIO_POLICY_THESIS_CAPACITY_INSUFFICIENT`
 (`S`), so the ladder loosens the caps at intake. A `qb_count`, `kicker_count` or
 `dst_count` that forbids a count the thesis's `position_bounds` asks for widens by
-the least step in the normalized policy, named by the finding
-`PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND` (`S`). Every rung copies `theses` byte
+the least step in the normalized policy (`controls.thesis_bound_overrides`
+holds the declared bounds and what moved), named by the finding and by one
+relaxation record, `PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND` (`S`). Each rung is
+built from the declared bounds and re-derives the widening; dropping the thesis
+restores them. Every rung copies `theses` byte
 for byte and is written v3 while it carries one; `Ladder._changes` refuses a rung
 whose thesis differs (`RELAXATION_RUNG_UNBUILDABLE`). Rung 4 (no policy) drops
 the thesis with the policy, one `THESIS_DROPPED` record per thesis before the
@@ -1491,8 +1500,11 @@ changes.
 
 **The audit.** SD4 reparses the normalized thesis and recomputes, from each
 roster's exact IDs, the Captain set, every team and position count, the
-exclusions and the backup rule (from the selection report's own
-`qb_depth_roles.starters_by_team`, not the selector's exclusion list); a breach is
+exclusions and the backup rule (from the depth resolver's own report carried in
+the selection report, `qb_depth_roles.starters_by_team`, not the selector's
+exclusion list; the audit does not re-read the depth evidence bytes, so this rule
+is recomputed from the roster but bound to the evidence only through that report);
+a breach is
 `PORTFOLIO_AUDIT_THESIS_VIOLATED:entry=...:thesis=...:rule=...`. The audit report's
 `theses` block names each audited row's thesis and whether it follows it.
 
@@ -3244,6 +3256,19 @@ requested cap only for the first), `trigger` the solver status that made the req
 infeasible, `trigger_origin` `SELECTION`, and `limitation_code`
 `RELAXATION_STRUCTURE_RELAXED`. The value is additive: no earlier field changed
 meaning, and no consumer reads `step` as a closed set.
+
+Since Session 23b (Showdown theses, § SD3 v3) the record also names thesis events,
+each once however many rungs or attempts report it: step `THESIS_DROP` (constraint
+`thesis` for a thesis a policy's validation dropped, `trigger_origin`
+`POLICY_VALIDATION`; constraint `theses.<name>` for one the ladder dropped, on
+`THESIS_UNBUILDABLE` or with the policy at rung 4), code `THESIS_DROPPED`; step
+`THESIS_BOUND_OVERRIDE` (constraint `thesis_bound_override`, `POLICY_VALIDATION`),
+code `PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND`; and step `THESIS_EVIDENCE_GAP`
+(constraint `thesis_backup_quarterbacks`, `SELECTION`), code
+`THESIS_BACKUP_QB_UNEVALUATED`. The last is a named evidence gap (`P`), not a
+relaxation; it travels in the same list because this list is how a run's named
+gaps reach its limitations. A thesis step's `original` is the thesis name and
+`final` is null.
 
 Codes, on every exit that reports the record, the delivered file's or the
 baseline's, the pre-review exit included: `RELAXATION_STRUCTURE_RELAXED` and

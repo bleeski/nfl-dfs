@@ -172,18 +172,36 @@ def test_a_thesis_whose_only_captain_is_inactive_is_dropped_and_named_not_relaxe
     assert all(kicker not in {_row(slate, dk_id).underlying_id for dk_id in lineup.roster} for lineup in lineups)
     block = report["portfolio_policy"]["theses"]
     assert block["entries"] == {"1": None, "2": None}
-    # Named once, in the ladder-less path's reader and in the ladder's record.
-    steps = selection_overlap_steps({"selection": {"selection": report}})
-    texts = [overlap_step_text(step) for step in steps]
-    assert len(texts) == 1 and texts[0].startswith("THESIS_DROPPED:") and kicker in texts[0]
-    ladder, *_rest = _supplied_ladder(tmp_path / "ladder", None)
-    outcome = type("Outcome", (), {"reports": {"selection": {"selection": report}}, "file_valid": True,
-                                   "blocked": False, "stage": "SELECTION"})()
-    for attempt in (0, 1):  # every attempt reports the same drop; it is recorded once
-        ladder.observe(attempt=attempt, run_root=tmp_path, outcome=outcome, failure=None,
-                       elapsed_seconds=0.0, pre_selection_seconds=0.0)
+    assert block["theses"][0]["status"] == "DROPPED"
+
+
+def test_a_validation_drop_is_named_once_by_the_ladder_even_when_no_selection_reports(tmp_path):
+    slate = parse_salaries(SUPPLIED / "DKSalaries Salary CSV Showdown.csv")
+    captain = _two_captains(slate)["captain_set"]
+    inactive = tuple(person["underlying_id"] for person in captain)  # both Captains officially inactive
+    ladder, validation, _thesis_, _slate = _supplied_ladder(tmp_path, _two_captains, external=inactive)
+    assert validation.policy.theses[0].status == "DROPPED"
     assert [record["limitation_code"] for record in ladder.records] == ["THESIS_DROPPED"]
-    assert ladder.records[0]["class"] == "S"
+    assert ladder.records[0]["class"] == "S" and ladder.records[0]["trigger_origin"] == "POLICY_VALIDATION"
+    assert all(person in ladder.records[0]["limitation_text"] for person in inactive)
+    # Every SD3 attempt fails before selection; rung 4 names only the policy drop beside it.
+    ladder.next(Failure("MODELED_BANK_INFEASIBILITY", STRUCTURE, "joint infeasible"))
+    ladder._no_policy(ladder.current, Failure("MODELED_BANK_INFEASIBILITY", STRUCTURE, "x"), 0.0, why="the test")
+    codes = [record["limitation_code"] for record in ladder.records]
+    assert codes.count("THESIS_DROPPED") == 1 and codes[-1] == "RELAXATION_POLICY_DROPPED"
+    texts = ladder.texts()
+    assert len(texts) == len(set(texts))
+
+
+def test_a_positive_cap_that_floors_to_zero_never_drops_a_thesis(tmp_path):
+    slate = parse_salaries(SUPPLIED / "DKSalaries Salary CSV Showdown.csv")
+    captain = _two_captains(slate)["captain_set"]
+    tiny = [{**person, "fraction": Decimal("0.04")} for person in captain]  # 0.04 x 20 floors to 0 rows
+    _ladder, validation, _thesis_, _slate = _supplied_ladder(
+        tmp_path, _two_captains,
+        max_combined_person_exposure={"default_fraction": Decimal("0.8"), "overrides": tiny})
+    assert validation.policy.theses[0].status == "ACTIVE"
+    assert [issue.code for issue in validation.problems] == ["PORTFOLIO_POLICY_THESIS_CAPACITY_INSUFFICIENT"]
 
 
 def test_a_thesis_no_lineup_can_follow_raises_thesis_unbuildable_before_any_bank(tmp_path):
@@ -196,7 +214,7 @@ def test_a_thesis_no_lineup_can_follow_raises_thesis_unbuildable_before_any_bank
 # ------------------------------------------------------------------ the ladder never relaxes a thesis
 
 
-def _supplied_ladder(tmp_path, thesis_builder, **controls):
+def _supplied_ladder(tmp_path, thesis_builder, *, external=(), **controls):
     slate = parse_salaries(SUPPLIED / "DKSalaries Salary CSV Showdown.csv")
     entries = parse_entries(SUPPLIED / "DKEntries CSV 20 entries.csv")
     entry_ids = tuple(item.entry_id for item in entries.authorizations)
@@ -212,9 +230,10 @@ def _supplied_ladder(tmp_path, thesis_builder, **controls):
                                   "kicker_count": 1, "dst_count": 1, "offense_against_own_dst": True},
             **controls, **({"theses": [thesis]} if thesis else {})})
     validation = validate_portfolio_policy_bytes(
-        canonical_decimal_json_bytes(document), slate=slate, entry_ids=entry_ids)
+        canonical_decimal_json_bytes(document), slate=slate, entry_ids=entry_ids, externally_excluded_people=external)
     assert validation.policy is not None, validation.blockers()
     ladder = Ladder(slate=slate, entries=entries, folder=tmp_path / "relaxation", registry=load_gate_registry(),
+                    externally_excluded_people=external,
                     supplied=supplied_rung(validation.policy, source_path=None, source_sha256=None,
                                            normalized_path=None, normalized_sha256=validation.policy.normalized_sha256))
     return ladder, validation, thesis, slate
@@ -268,12 +287,28 @@ def test_an_unbuildable_thesis_is_dropped_by_name_and_the_same_policy_builds_wit
     ladder, validation, _thesis_, _slate = _supplied_ladder(tmp_path, _two_captains)
     made = ladder.next(Failure("THESIS_UNBUILDABLE", STRUCTURE, "no lineup", {"reason": "the test's reason"}))
     assert made is not None and made.rung is None and made.policy.theses == ()
-    # Not a rung: every cap and bound is what it was.
+    # Not a rung: every cap and bound is what it was declared.
     before, after = showdown_relaxed_controls(validation.policy, None), showdown_relaxed_controls(made.policy, None)
     assert {key: value for key, value in before.items() if key != "theses"} == after
+    assert made.policy.structural_bounds == validation.policy.structural_bounds
     (record,) = ladder.records
     assert record["limitation_code"] == "THESIS_DROPPED" and record["constraint"] == "theses.SUPPLIED_THESIS"
     assert "the test's reason" in record["limitation_text"]
+
+
+def test_a_bound_widened_for_a_thesis_is_named_and_restored_when_the_thesis_drops(tmp_path):
+    def kickers(slate):
+        return {**_two_captains(slate), "position_bounds": [{"position": "K", "minimum": 2, "maximum": 2}]}
+
+    ladder, validation, _thesis_, _slate = _supplied_ladder(tmp_path, kickers)
+    assert validation.policy.structural_bounds.kicker_count_maximum == 2  # declared 1
+    (named,) = ladder.records
+    assert named["limitation_code"] == "PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND"
+    assert "kicker_count 1 to 2" in named["limitation_text"]
+    made = ladder.next(Failure("THESIS_UNBUILDABLE", STRUCTURE, "no lineup", {"reason": "the test's reason"}))
+    assert made.policy.theses == () and made.policy.structural_bounds.kicker_count_maximum == 1
+    assert [record["limitation_code"] for record in ladder.records] == [
+        "PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND", "THESIS_DROPPED"]
 
 
 def test_rung_4_names_each_thesis_it_drops(tmp_path):

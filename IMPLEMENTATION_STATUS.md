@@ -3,14 +3,14 @@
 ## Capability added: 2026-10-01 (Session 23b, Showdown thesis structures)
 
 Working and verified through the synthetic NE@SEA and DEN@KC Showdown fixtures and the supplied NE@SEA 20-entry bytes
-(`tests/test_showdown_theses.py`, 29 tests, 28 of which fail on the code before it) and the full suite: a Showdown policy
+(`tests/test_showdown_theses.py`, 32 tests, 31 of which fail on the code before it) and the full suite: a Showdown policy
 can carry one named game thesis Ben chooses (`nfl_showdown_portfolio_policy_v3`, `controls.theses`;
 `src/nfl_dfs/showdown_theses.py`, `showdown_single_thesis_sd3_v1`). Its Captain set (kickers and DSTs included), team and
 position counts and exclusions are MILP rows and excluded rows on every SD3 stratum, the SD4 audit recomputes each from
 the roster bytes, and each bound Entry ID names its thesis in the selection and audit reports. The ladder never loosens
 it: every rung carries it byte for byte and a rung that changes it is refused; caps that starve it loosen instead. A
 thesis no lineup can follow (an inactive required Captain, at validation; any proved infeasibility, at selection) is
-dropped and named (`THESIS_DROPPED`) and the policy builds without it. Under a thesis, quarterbacks the depth evidence
+dropped and named (`THESIS_DROPPED`, by the ladder from the policy itself) and the policy builds without it. Under a thesis, quarterbacks the depth evidence
 puts behind a starter are out unless the thesis names them; a team with no depth evidence keeps every quarterback and
 the gap is named (`THESIS_BACKUP_QB_UNEVALUATED`). **Not done, named:** one thesis per policy (the multi-thesis
 portfolio is Session 23c); rows the unbound fill writes follow no thesis; rung 4 (sequential Showdown) carries no
