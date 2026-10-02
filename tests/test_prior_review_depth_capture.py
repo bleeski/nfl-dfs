@@ -146,7 +146,8 @@ def test_one_teams_refusal_drops_that_team_and_keeps_the_default_for_the_other(t
     report = reports["qb_depth_capture"]
     assert report["status"] == capture.QB_DEPTH_CAPTURE_REFUSED
     assert list(report["refused_teams"]) == ["KC"] and "PROMOTION_OVER_AVAILABLE_PERSON" in report["refused_teams"]["KC"]
-    assert report["package"] == used and used.endswith("qb_depth_without_KC/qb_depth_roles.json")
+    assert report["package"] == used
+    assert capture.Path(used).parts[-2:] == ("qb_depth_without_KC", "qb_depth_roles.json")
     default = selection["showdown_backup_qb_default"]
     assert default["excluded_people"] == [depth._person(slate, "DEN Backup QB")]
     assert default["unevaluated_teams"] == ["KC"]
