@@ -4,6 +4,18 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-01: Rule -- Showdown judgment pass (second correction: Keenum, then Watson)
+
+Docs only. No gate, contract or protected path touched. `docs/claude/working.md` gains § Showdown judgment pass. Ben corrected the same
+omission on two slates: a starter with no prior-season row (Keenum, PHI@CHI; Watson, PIT@CLE) never reaches selection, and each time the
+file shipped without him until Ben asked. Verified in code, not assumed: `selection.py` puts every role-gated person in `run_excluded`
+(lines 333 to 346), which binds every row, and `portfolio_policy.py` drops a thesis whose only Captain is excluded, so a thesis cannot
+force a gated Captain. The rule makes the judgment step manual and unprompted: roster each left-out starter by construction (a
+starting quarterback is Captain in at least 2 rows), and treat a concentration breach (a person above 60% of lineups, a Captain above
+20%) as a construction failure to rotate away before the handoff. Thresholds are defaults for Ben to overturn. PIT@CLE's file had three
+people at 82% and shipped with it named. The engine-side fix (an input channel for the judgment, and an in-season prior for players with
+no prior-season row) is not built and needs a ruling; it is in the handoff, not on the roadmap yet.
+
 ### 2026-10-01: Slate run -- PIT@CLE Showdown, 22 Entry IDs across 8 contests (thesis sleeves in prefilled rounds)
 
 No protected path touched; no gate touched. Every file below ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`,
