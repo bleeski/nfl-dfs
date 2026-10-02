@@ -238,9 +238,11 @@ be short-lived by default; see `.claude/rules/git-authority.md`. Never
 engine, the docs and the ledgers, and with none of the bytes any previous run
 produced. Three consequences worth knowing before you plan work in one:
 
-- `scripts/standings_checklist.py` scans `data/runs/*/inputs/` and loose root
-  CSVs. In a fresh clone both are empty, so it returns an empty checklist rather
-  than an error. That is not a finding about the corpus.
+- `scripts/standings_checklist.py` scans `data/runs/*/inputs/`, the tracked
+  `data/inbox/slates/*/` intake and loose root CSVs. A fresh clone has no
+  `data/runs/`, so a slate that was only ever run in a cloud session is listed
+  from `data/inbox/slates/` alone; a slate whose entry file sits in neither is
+  invisible to it. That is not a finding about the corpus.
 - `data/registry/` is a real SQLite database and does not travel. A cloud
   session starts with a blank registry.
 - `late-swap --prior-manifest` and `settle --replay` need artifacts from an

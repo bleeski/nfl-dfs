@@ -88,6 +88,7 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "parse_entries", _stub_parse_entries)
     monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(module, "RUNS_DIR", tmp_path / "data" / "runs")
+    monkeypatch.setattr(module, "SLATES_DIR", tmp_path / "data" / "inbox" / "slates")
     monkeypatch.setattr(module, "STANDINGS_DIR", tmp_path / "data" / "standings")
     monkeypatch.setattr(module, "INBOX_DIR", tmp_path / "data" / "standings" / "inbox")
     # Without these two the tests read the real repo's normalized and settled
@@ -132,6 +133,36 @@ def test_discovery_separates_snapshot_from_loose(repo):
     assert set(contests) == {"195379585", "195520918"}
     assert contests["195379585"].confidence == "snapshot"
     assert contests["195520918"].confidence == "loose"
+
+
+def test_a_tracked_slate_folder_is_scanned_as_a_snapshot_dated_by_its_name(repo):
+    # A slate run in a cloud session lands in data/inbox/slates/<slug>-<date>/;
+    # data/runs/ is gitignored, so the desktop never sees it. Until 2026-10-02
+    # the scan skipped this folder and every slate from 9/17 on was invisible.
+    module, tmp_path = repo
+    slate = tmp_path / "data" / "inbox" / "slates" / "phi-chi-sd-2026-09-28"
+    entries = _write_entries(
+        slate / "5ed750e7-DKEntries_97.csv",
+        [("SHOWDOWN", "196036210", "NFL Showdown $100K mini-MAX (PHI @ CHI)", "1.0", "4901")],
+    )
+    # A review copy of the same entries must not double-count or mask the ID.
+    _write_entries(
+        slate / "DK_REVIEW_ENTRY_phi-chi-sd-v1.csv",
+        [("SHOWDOWN", "196036210", "NFL Showdown $100K mini-MAX (PHI @ CHI)", "1.0", "4901")],
+    )
+    (slate / "bdc34f2b-DKSalaries_119.csv").write_text("Position,Name,Salary\n", encoding="utf-8")
+
+    contests = module.discover_entered_contests()
+    record = contests["196036210"]
+    assert record.confidence == "snapshot"
+    assert record.provenance == {"slate:phi-chi-sd-2026-09-28"}
+    assert record.evidence_dates == {"2026-09-28"}
+    assert module._evidence_date_for(entries) == "2026-09-28"
+    # Its export is owed like any other entered contest's.
+    owed = {
+        r["contest_id"] for r in module.build_report()["contests"] if r["status"] == "awaiting"
+    }
+    assert "196036210" in owed
 
 
 def test_salary_csv_is_skipped_not_guessed_at(repo):
