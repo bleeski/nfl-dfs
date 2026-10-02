@@ -105,9 +105,18 @@ STARTER_RANK = 1
 class QbDepthRoleError(ValueError):
     """A named fail-closed quarterback-depth error."""
 
-    def __init__(self, message: str, report: Mapping[str, object] | None = None):
+    def __init__(
+        self,
+        message: str,
+        report: Mapping[str, object] | None = None,
+        *,
+        team: str | None = None,
+    ):
         super().__init__(message)
         self.report = dict(report or {"evidence_state": "UNKNOWN", "blocker": message})
+        # Set only by a refusal that is about one team's declaration (R25's promotion refusals), so
+        # a caller that built the package itself can drop that team and keep the others.
+        self.team = team
 
 
 class QbDepthSource(KickerRoleSource):
@@ -457,7 +466,7 @@ def resolve_qb_depth_roles(
             )
         except DepthRoleError as exc:
             raise QbDepthRoleError(
-                str(exc).replace("DEPTH_", "QB_DEPTH_", 1)
+                str(exc).replace("DEPTH_", "QB_DEPTH_", 1), team=team
             ) from exc
         if stepped_over:
             promotions.append(

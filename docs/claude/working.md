@@ -59,7 +59,10 @@ prior-season row. The engine scores only people it has a row for, so a starter w
 dropped, `portfolio_policy.py`). The deterministic layer cannot be asked to add him. The judgment is yours, it runs every slate, and
 it runs before the handoff without being asked. Since Session 51 the engine rates a starter who has current-season rows before the
 slate (nflverse in-season file, no look-ahead), so this pass is for whoever v3 still leaves out: a true cold start or a same-day
-promotion. Until Session 52 gives it an input channel, it is manual.
+promotion. Since Session 53 `run-slate` captures the QB depth package itself and keeps every backup quarterback out of every Showdown
+row, so list the backups the report names (`showdown_backup_qb_default`) rather than rebuilding that rule by hand; a limitation named
+`QB_DEPTH_CAPTURE_*` or `SHOWDOWN_BACKUP_QB_UNEVALUATED` means the rule did not run for that team and the check is yours. Until Session 52
+gives the rest an input channel, it is manual.
 
 - **Left-out starters.** List every person a role gate or DK status kept out of the pool who a source names a starter, the depth-chart
   quarterback first. Roster each by construction or write why not in the handoff. A starting quarterback is Captain in at least 2 rows

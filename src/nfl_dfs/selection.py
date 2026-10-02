@@ -339,25 +339,51 @@ def select_prior_lineups(
                 }
             )
     )
+    # Session 53 (R36, Ben 2026-10-01: "apply to every showdown"): every quarterback the depth
+    # evidence puts behind a declared starter is out of every Showdown row, a plain policy or no
+    # policy included, unless a thesis names him for its own rows. A team the evidence does not
+    # declare keeps every quarterback and is named; nobody is guessed out. The starter the report
+    # names is the resolver's effective one (R25 promotes over a DraftKings-unavailable starter and
+    # refuses any other unavailable one). The offensive role gate runs after the resolver, so a starter
+    # with no usable history can still leave his team with no selectable quarterback (Session 54).
+    qb_depth_report = qb_depth.report
+    default_backups, default_unevaluated = (
+        backup_quarterbacks(slate, None, qb_depth_report)
+        if slate.mode is EngineMode.SHOWDOWN
+        else (frozenset(), ())
+    )
+    default_backup_ids = {player.dk_id for player in slate.players if player.underlying_id in default_backups}
     # The run's own exclusions bind every row; a policy's own exclusions and zero
-    # caps (below) bind only the rows it binds, so the unbound fill uses these.
-    run_excluded = tuple(sorted(set(excluded_set)))
+    # caps (below) bind only the rows it binds, so the unbound fill uses these. The default
+    # backups bind every row, the unbound fill included.
+    run_excluded = tuple(sorted(set(excluded_set) | default_backup_ids))
     # Session 23b (R33): under an active thesis, the quarterbacks the depth evidence puts
-    # behind a starter leave the pool unless the thesis names them. Bound rows only.
+    # behind a starter leave the pool unless the thesis names them. Bound rows only: the thesis's
+    # own rows may hold the backups it names, so for them `row_backups` is the thesis's set and
+    # not the default; `run_excluded` above (the unbound fill) keeps every backup out.
     thesis = portfolio_policy.active_thesis if isinstance(portfolio_policy, NormalizedPortfolioPolicy) else None
     backups, unevaluated_teams = (
-        backup_quarterbacks(slate, thesis, qb_depth.report) if thesis is not None else (frozenset(), ()))
+        backup_quarterbacks(slate, thesis, qb_depth_report) if thesis is not None else (frozenset(), ()))
+    row_backups = backups if thesis is not None else default_backups
+    excluded_set.extend(player.dk_id for player in slate.players if player.underlying_id in row_backups)
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
         for limit in portfolio_policy.effective_limits:
             if limit.combined_max_entries == 0:
                 excluded_set.extend((limit.person.cpt_dk_id, limit.person.flex_dk_id))
-        excluded_set.extend(player.dk_id for player in slate.players if player.underlying_id in backups)
     elif isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
         by_person = {player.underlying_id: player for player in slate.players}
         for limit in portfolio_policy.player_bounds:
             if limit.maximum_entries == 0:
                 excluded_set.append(by_person[limit.entity_id].dk_id)
     excluded = tuple(sorted(set(excluded_set)))
+    backup_default_report = {
+        "rule": "SHOWDOWN_BACKUP_QUARTERBACKS_OUT_OF_EVERY_ROW_R36",
+        "applies": slate.mode is EngineMode.SHOWDOWN,
+        "excluded_people": sorted(default_backups),
+        "unevaluated_teams": list(default_unevaluated),
+        "thesis_named_backups_readmitted_for_bound_rows": sorted(default_backups - backups) if thesis is not None else [],
+        "does_not_establish": ["THAT_THE_DECLARED_STARTER_IS_PLAYING", "OFFICIAL_ACTIVE_STATUS"],
+    }
     if pool_scores_target is not None:
         write_pool_scores(scores, pool_scores_target, excluded_dk_ids=excluded)
     objective = _objective(slate, scores, excluded)
@@ -473,7 +499,8 @@ def select_prior_lineups(
             "kicker_role_excluded_people": sorted(zero_share_people),
             "kicker_roles": kicker_roles.as_report(),
             "offensive_roles": offense.report,
-            "qb_depth_roles": qb_depth.report,
+            "qb_depth_roles": qb_depth_report,
+            "showdown_backup_qb_default": backup_default_report,
             "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
             "selectable_people": len(contract.selectable_people),
             "person_exposure": dict(sorted(exposure.items())),
@@ -626,7 +653,8 @@ def select_prior_lineups(
             "kicker_role_excluded_people": sorted(zero_share_people),
             "kicker_roles": kicker_roles.as_report(),
             "offensive_roles": offense.report,
-            "qb_depth_roles": qb_depth.report,
+            "qb_depth_roles": qb_depth_report,
+            "showdown_backup_qb_default": backup_default_report,
             "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
             "selectable_people": len(contract.selectable_people),
             "person_exposure": dict(sorted(exposure.items())),
@@ -688,7 +716,8 @@ def select_prior_lineups(
         "kicker_role_excluded_people": sorted(zero_share_people),
         "kicker_roles": kicker_roles.as_report(),
         "offensive_roles": offense.report,
-        "qb_depth_roles": qb_depth.report,
+        "qb_depth_roles": qb_depth_report,
+        "showdown_backup_qb_default": backup_default_report,
         "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
         "selectable_people": len(contract.selectable_people),
         "person_exposure": run.person_exposure(slate),
