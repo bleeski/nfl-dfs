@@ -4,6 +4,52 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-02: Session 54 -- a depth-declared starter with no usable history is selectable (R36)
+
+Branch `claude/s54-declared-starter-selectable`, claimed at `c6cc49b` (on `32c08a0`, PR #98's merge), task file `state/tasks/S54.md`. No
+protected path, evidence gate or permanent boundary touched; every path still ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`.
+Baseline `2251 passed, 1 skipped in 569.08s (0:09:29)` (Linux). Final `2269 passed, 1 skipped in 569.27s (0:09:29)`: 18 tests added
+(`tests/test_declared_starter_selectable.py`), none removed or loosened; one line added to `NOT_BLOCKERS` in `tests/test_gate_registry.py`.
+
+**Why.** Keenum (PHI@CHI) and Watson (PIT@CLE) were left out because the role gate excludes a person with no prior-season row whatever the
+depth chart says. Session 51 rates a starter who has current-season rows; this is the person nothing rates, a rookie or a week-1 starter.
+Ben (R36, 2026-10-01): "We can't over rely on history. This is where the research, judgement, and reasoning of the LLM come in."
+
+**Added.**
+- `offensive_roles.resolve_offensive_roles(..., declared_starters=())`. A quarterback in that set, with history state `MISSING_HISTORY` and a
+  positive depth-resolved `qb_attempt_share`, is a `DIAGNOSTIC` (finding `OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY`), not an `EXCLUDE`.
+  Carry and target shares stay 0. The finding says the share is a depth-chart order, not a role fact and not confirmed activity, and names a
+  refused Session 51 gap-fill when there was one. `evidence_state` stays `UNKNOWN`. Participation precedence is the first branch, so
+  DraftKings status, an official inactive, an operator exclusion and an `EXPLICIT_NONPARTICIPATION` fact still win; a declared backup, a
+  non-quarterback and a declared starter with a zero share (allocation v1, empty pool) stay excluded, the last one with a sentence saying why.
+- `selection.py` passes the effective starters from the QB depth report (`starters_by_team` values, already past R25's promotion), so a
+  DraftKings-unavailable published starter is never in the set.
+- Contract: `docs/DATA_CONTRACTS.md` § A depth-declared starter with no usable history is selectable. The new code is a per-person finding
+  pinned in `NOT_BLOCKERS` beside `OFFENSIVE_TRANSFER_PRIOR_UNVERIFIED`; the registry bytes and `REGISTRY_SHA256` did not move.
+
+**Review findings, 2026-10-02 (reviewer agent on the uncommitted diff), and what changed.**
+- A hash-bound fact that disagreed with the depth chart no longer lost to it. A `NAMED_BACKUP` or `MATERIAL_ROLE_CHANGE` fact for the quarterback
+  keeps the old `OFFENSIVE_MISSING_HISTORY` exclusion (two bound sources disagree, so the engine chooses neither); a `NAMED_STARTER` fact agrees
+  and changes nothing; `EXPLICIT_NONPARTICIPATION` was already first. Pinned by tests, and a mutation check (guard removed, two tests fail) ran.
+- **Judgment call, recorded:** a no-history backup that R25 promotes over a DraftKings-unavailable starter is selectable. R25 (Ben, ruled) makes
+  him the effective starter and the card scopes the rule to `starters_by_team`, which holds him. The alternative (published rank-1 only) would
+  keep a quarterback out of the pool because his team's starter is out, which is the Keenum miss again. The finding now says "effective starter",
+  not "declared", and a test pins the promotion. Ben can overturn it.
+- Stale text corrected: `docs/DATA_CONTRACTS.md` (the `MISSING_HISTORY` table row and the v2 depth paragraph), `docs/RUNBOOK.md` (one sentence,
+  outside the card's file list but an operator-facing statement the change made false), and two code comments. `docs/claude/working.md` is also
+  edited (Claude-owned procedure text, not on the card).
+- The finding now names the depth package by SHA-256, prints the shares as scored instead of a fixed "0", and the report gains an assumption
+  entry. Tests added for the bound-fact cases, an operator-excluded declared starter (the gate alone; selection refuses earlier), the promoted
+  backup, and an explicit team allocation (it still decides first). **Not tested, named:** Classic. The branch reads `rows["FLEX"]`, which Classic
+  aliases, and Classic reaches it only with an operator-supplied depth package (`run-slate` captures for Showdown only).
+
+**Replay, PIT@CLE (through `run-slate`, not a delivery).** The same command as Session 53's replay (`--prior-package-dir` the saved frozen
+package, `--as-of 2026-10-01T23:40:00Z`), run `S54_REPLAY`. `DO_NOT_UPLOAD`, `DELIVERABLE`. Watson's finding is `DIAGNOSTIC` /
+`OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY`, attempt share 1.0, every other share 0. The 22 exported rows (22 distinct) hold Watson in 10
+(Captain once) and Rodgers in all 22. **Not fixed here, and named:** that is a concentration breach by `docs/claude/working.md`'s defaults
+(Rodgers 100%, Fannin 91%, Warren 68% against a 60% person cap, and one Watson Captain against the 2-row guidance). The engine's prior ranks the
+two quarterbacks and the policy needs one in every row; rotating them is the judgment layer, Session 52.
+
 ### 2026-10-02: Session 53 -- backup-quarterback default for every Showdown run, and the depth package captured by `run-slate` (R36)
 
 Branch `claude/s53-backup-qb-default`, claimed at `4cf4231` (on `2cd0cdd`, PR #97's merge), task file `state/tasks/S53.md`. No protected

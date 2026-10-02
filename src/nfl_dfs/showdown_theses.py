@@ -144,9 +144,10 @@ def backup_quarterbacks(
     unavailable has already been promoted over (R25), and a starter the run
     cannot select for another reason is refused there. The resolver checks him
     against the participation contract only. The offensive role gate runs after
-    it, so a starter with no usable history (`MISSING_HISTORY`) can still be kept
-    out of every row while his backups are out too, leaving that team with no
-    selectable quarterback until Session 54 makes him selectable.
+    it. Since Session 54 it selects a starter with no usable history
+    (`MISSING_HISTORY`), but a hash-bound fact that he is a backup or has an
+    unresolved role change keeps him out, and with his backups out too that team
+    has no selectable quarterback.
     """
 
     report = qb_depth_report if isinstance(qb_depth_report, Mapping) else {}

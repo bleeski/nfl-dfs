@@ -316,12 +316,16 @@ def select_prior_lineups(
     qb_depth = resolve_qb_depth_roles(
         slate, model, contract, evidence_path=qb_depth_role_evidence_json, as_of=as_of,
     )
+    # Session 54 (R36): the effective starters the depth evidence names are selectable even with no
+    # history. `starters_by_team` is already past R25's promotion over a DraftKings-unavailable starter.
     offense = resolve_offensive_roles(
         slate,
         qb_depth.model,
         contract,
         evidence_path=offensive_role_evidence_json,
         as_of=as_of,
+        declared_starters=frozenset((qb_depth.report.get("starters_by_team") or {}).values()),
+        depth_evidence_sha256=qb_depth.evidence_sha256,
     )
     scores = score_pool(slate, offense.model, splits, kicker_roles=kicker_roles, offensive_roles=offense)
     # Scoring may leave out an unresolved role change (R28); its resolution is
@@ -344,8 +348,9 @@ def select_prior_lineups(
     # policy included, unless a thesis names him for its own rows. A team the evidence does not
     # declare keeps every quarterback and is named; nobody is guessed out. The starter the report
     # names is the resolver's effective one (R25 promotes over a DraftKings-unavailable starter and
-    # refuses any other unavailable one). The offensive role gate runs after the resolver, so a starter
-    # with no usable history can still leave his team with no selectable quarterback (Session 54).
+    # refuses any other unavailable one). The offensive role gate runs after the resolver; since Session
+    # 54 it selects a declared starter with no history, but a hash-bound fact that he is a backup, or an
+    # allocation or participation rule, can still leave his team with no selectable quarterback.
     qb_depth_report = qb_depth.report
     default_backups, default_unevaluated = (
         backup_quarterbacks(slate, None, qb_depth_report)
