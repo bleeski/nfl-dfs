@@ -4,6 +4,88 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-02: Session 53 -- backup-quarterback default for every Showdown run, and the depth package captured by `run-slate` (R36)
+
+Branch `claude/s53-backup-qb-default`, claimed at `4cf4231` (on `2cd0cdd`, PR #97's merge), task file `state/tasks/S53.md`. No protected
+path, evidence gate or permanent boundary touched; every path still ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`.
+Baseline `2207 passed, 1 skipped in 562.65s (0:09:22)` (Linux). Final `2251 passed, 1 skipped in 569.08s (0:09:29)`: 44 tests added
+(`tests/test_qb_depth_capture.py` 22, `tests/test_showdown_backup_qb_default.py` 8, `tests/test_prior_review_depth_capture.py` 14),
+none removed.
+
+**Why.** PIT@CLE's engine baseline captained Mason Rudolph ($9k, a backup) and rostered Shedeur Sanders in 3 lineups. R33's backup rule
+ran only under a thesis and only when a depth package was supplied, and `run-slate` never supplied one. Ben (R36, 2026-10-01): apply it
+to every Showdown run.
+
+**Added.**
+- `src/nfl_dfs/qb_depth_capture.py`. The pure producer logic moved here verbatim from `scripts/make_offensive_role_evidence.py`
+  (`read_depth_chart`, `select_snapshot`, `slice_for_team`, `build_package`, `_match_person`, the constants); the script imports it and its
+  command line is unchanged (the 62 producer tests in `tests/test_qb_depth_roles.py` pass untouched, and a new test holds the script's
+  package bytes equal to the run's). New: `read_quarterback_rows` (streams the 51 MB / 545,184-row file keeping only QB rows; the full
+  read cost 14.9 s and 519 MB on the lock path), `locate_frozen_depth_chart`, and `capture_for_run`, which never raises.
+- `prior_review.py`: for a Showdown run with no supplied package, the package is built from the `depth_charts` bytes the prior package
+  already froze (no extra fetch) under `<run>/prior_review/qb_depth/`. If the resolver refuses an auto-captured package
+  (`QbDepthRoleError`), the run retries without it and records `QB_DEPTH_CAPTURE_REFUSED`; a refusal of a supplied package still raises.
+- `selection.py`: every Showdown selection (thesis, plain policy or none) puts every quarterback behind the resolver's effective starter
+  into `run_excluded` (so the unbound fill too) and the excluded set. A thesis that names a backup re-admits him for its own bound rows
+  only. Nothing is removed from the excluded set, so a role-gated backup cannot be re-admitted. New report block
+  `showdown_backup_qb_default`, beside `qb_depth_roles` in all three report shapes. `showdown_theses.backup_quarterbacks` takes
+  `thesis=None`.
+- `cli.py`: `QB_DEPTH_CAPTURE_STALE`, `QB_DEPTH_CAPTURE_REFUSED:<reason>`, `QB_DEPTH_CAPTURE_UNAVAILABLE` and
+  `SHOWDOWN_BACKUP_QB_UNEVALUATED:<teams>` travel with the file in `blockers`. All four are class `P` in
+  `config/gate_registry_v1.json` (family `qb_depth_roles`); `REGISTRY_SHA256` is re-pinned to
+  `7fa2259162718ee1441e7b231bb3a401c386805d515dc4a1d2a6e54acf096014` in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`, and
+  the two constant-carried codes are pinned in `UNSCANNED_CODES`. Contract: `docs/DATA_CONTRACTS.md` § Depth package captured by
+  `run-slate`.
+
+**A guard the card asked for, corrected after review.** The card carried a "starter-unavailable guard"
+(`SHOWDOWN_BACKUP_QB_DEFAULT_SKIPPED`) for a team whose declared starter DraftKings cannot field. For a DraftKings-unavailable starter
+(`OUT`, `IR`) it was dead code: R25 promotes his backup over him, `starters_by_team` is the effective starter, and the default never
+sees the case (a test pins it). The pre-close-out review found the other half: R25 refuses to promote past a starter the salary bytes
+still show as available, so an operator exclusion or an official inactive with an Active status raises, and a first version of
+`run-slate` then dropped the whole package, which switched the default off for the healthy team too (the PIT@CLE failure). Fixed: the
+refusal carries its team (`QbDepthRoleError.team`), the run drops that team, rebuilds the package for the others, selects again and
+names the dropped team (`QB_DEPTH_CAPTURE_REFUSED` with `refused_teams`, and `SHOWDOWN_BACKUP_QB_UNEVALUATED`); that team's backups stay in
+the pool. A refusal that names no team still drops the whole package.
+
+**Review findings, 2026-10-02 (reviewer agent on the uncommitted diff), and what changed.**
+- `capture_for_run` did not always return: a `csv.Error` from a 131,072-character field, or a frozen manifest entry with no
+  `relative_path` or a JSON list for a manifest, raised out of it and would have turned the review into `SELECTION_FAILED`. It now locates
+  the chart inside its guard and catches every exception as `QB_DEPTH_CAPTURE_REFUSED:<ExceptionName>`; tests inject each failure.
+- The streaming reader chose its snapshot from quarterback rows only, so a newer snapshot with no quarterback made the run read an older
+  order than the script would. It now returns every snapshot time in the file (`pick_snapshot`), and the changed-while-read re-hash that
+  `read_depth_chart` had is back. A test with a wide-receiver-only newer snapshot pins both.
+- The wiring was untested at run level. The capture and the select-then-drop-or-degrade flow are now `prior_review._auto_capture_depth`
+  and `_select_under_depth_package`, and the limitation strings are `cli._qb_depth_limitations`, each under test: supplied package wins,
+  Classic captures nothing (also through a real Classic `run_prior_review`), STALE/UNAVAILABLE/REFUSED named, a supplied package's refusal
+  still raises, a package damaged after capture is dropped, and the per-team drop with a real `select_prior_lineups` (a Denver backup stays
+  out while Kansas City is undeclared).
+- The docstring and a comment said a team is never left without a quarterback. That is false until Session 54: the offensive role gate runs
+  after the resolver, so a starter with no usable history (Watson) can leave his team with none. Both now say so.
+- "Classic is unchanged" sat over a test that asserted Showdown. It is renamed, and Classic is asserted through a real run. The unbound
+  fill with a thesis-named backup is now tested (bound rows hold him, the fill rows do not).
+
+**Disclosed, not changed.** Auto-capture turns on the existing `qb_depth` allocation for every Showdown run, so a declared starter's
+`qb_attempt_share` moves to 1.0 and each backup's to 0 in the prior: starter scores change, not only exclusions. The package schema and
+allocation version are the registered ones, and the file stays `PRIOR_ONLY`. The R28 baseline (`baseline.py`, built from DraftKings bytes
+alone, published before any evidence stage) carries no default; only the review export does. The standalone `nfl select` command applies
+the default but does not print `SHOWDOWN_BACKUP_QB_UNEVALUATED`. Capture time and memory on the real 56 MB chart (210 snapshots, 22,646
+quarterback rows): the streaming reader takes 1.07 s and 75 MB peak, against 14.9 s and 519 MB for the full read.
+
+**Replay, PIT@CLE (through `run-slate`, not a delivery).** `run-slate --profile prior_review --prior-package-dir
+data/runs/20261001T233526Z-PIT_CLE_SD_20261001/prior_review/priors/frozen --as-of 2026-10-01T23:40:00Z --no-session-probe` on the
+uploaded files, run `20261002T014752Z-S53_REPLAY`. Exit 0, `DO_NOT_UPLOAD`, `DELIVERY_STATE=DELIVERABLE`. `qb_depth_capture` status
+`CAPTURED` (snapshot observed 2026-10-01T14:25:58Z, upstream sha256 `1a1c4149017b2d78...`); effective starters Watson (CLE) and Rodgers
+(PIT); `showdown_backup_qb_default.excluded_people` Gabriel, Sanders, Green, Allar, Rudolph, Howard. In the 22 exported rows
+(22 distinct, parsed from `DK_REVIEW_ENTRY_S53_REPLAY.csv`): no backup quarterback in any row; Rodgers is the only quarterback, in 20.
+A full live replay was not possible without `--as-of`: the freshness gate refuses a package observed after lock, correctly.
+**Not fixed here, and named.** Watson is in no row and Fannin and Rodgers are each in 91% of rows (the 60% person and 20% Captain
+defaults of `docs/claude/working.md` are breached). Watson is Session 54 (a depth-declared starter with no history) and concentration is
+Session 52's judgment input.
+
+**Errors on the way, fixed.** A test fixture whose helper wrote into sub-directories that did not exist; a fixture where one player's rows
+supplied the week a test needed missing; and a first selection.py shape that could re-admit a role-gated backup by filtering him out of
+the excluded set, rewritten so nothing is removed from it.
+
 ### 2026-10-01: Session 51 -- in-season gap-fill for the player prior (R35)
 
 Branch `claude/s51-in-season-prior`, claimed at `50974c2` (on `06cc19f`, PR #96's merge), task file `state/tasks/S51.md`. No protected

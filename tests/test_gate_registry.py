@@ -563,6 +563,11 @@ UNSCANNED_CODES = {
                                                   "qa.referee_blocks returns it as the reason beside True"),
     "REFEREE_SIGN_DISAGREEMENT": ("qa.py", '"REFEREE_SIGN_DISAGREEMENT"',
                                   "qa.referee_blocks returns it as the reason beside True"),
+    "QB_DEPTH_CAPTURE_STALE": ("qb_depth_capture.py", 'QB_DEPTH_CAPTURE_STALE = "QB_DEPTH_CAPTURE_STALE"',
+                               "a CaptureOutcome status held in a module constant; run-slate names it as a P limitation"),
+    "QB_DEPTH_CAPTURE_UNAVAILABLE": ("qb_depth_capture.py",
+                                     'QB_DEPTH_CAPTURE_UNAVAILABLE = "QB_DEPTH_CAPTURE_UNAVAILABLE"',
+                                     "a CaptureOutcome status held in a module constant; run-slate names it as a P limitation"),
 }
 
 # Strings the scan reads that block nothing. The scan is flow-insensitive: in
@@ -967,7 +972,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "ab3f5d254ab676d938332b19adb9bd9f5d00d8bab995e98b1fd383c0d01645d5"
+REGISTRY_SHA256 = "7fa2259162718ee1441e7b231bb3a401c386805d515dc4a1d2a6e54acf096014"
 
 
 def test_the_registry_is_the_pinned_bytes():

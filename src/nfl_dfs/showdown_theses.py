@@ -130,19 +130,29 @@ def admitted_quarterbacks(slate: SlateContract, thesis: ShowdownThesis) -> froze
 
 
 def backup_quarterbacks(
-    slate: SlateContract, thesis: ShowdownThesis, qb_depth_report: Mapping[str, object] | None
+    slate: SlateContract, thesis: ShowdownThesis | None, qb_depth_report: Mapping[str, object] | None
 ) -> tuple[frozenset[str], tuple[str, ...]]:
-    """(people out of the thesis pool, teams with quarterbacks the evidence does not declare).
+    """(people out of the pool, teams with quarterbacks the evidence does not declare).
 
     Read from the depth evidence's own `starters_by_team`: every other quarterback
     of a declared team is out unless the thesis names him. A team with no
     declaration keeps every quarterback and is returned as unevaluated.
+
+    With no thesis (Session 53, R36: the default of every Showdown run) nobody is
+    named, so every backup of a declared team is out. `starters_by_team` is the
+    resolver's effective starter: a published starter the salary bytes flag
+    unavailable has already been promoted over (R25), and a starter the run
+    cannot select for another reason is refused there. The resolver checks him
+    against the participation contract only. The offensive role gate runs after
+    it, so a starter with no usable history (`MISSING_HISTORY`) can still be kept
+    out of every row while his backups are out too, leaving that team with no
+    selectable quarterback until Session 54 makes him selectable.
     """
 
     report = qb_depth_report if isinstance(qb_depth_report, Mapping) else {}
     starters = report.get("starters_by_team")  # empty when no evidence was supplied
     starters = starters if isinstance(starters, Mapping) else {}
-    admitted = admitted_quarterbacks(slate, thesis)
+    admitted = admitted_quarterbacks(slate, thesis) if thesis is not None else frozenset()
     by_team: dict[str, set[str]] = {}
     for row in slate.players:
         if row.position == "QB":

@@ -108,6 +108,8 @@ from .prelock_manifest import (
     write_prelock_manifest,
 )
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
+from .qb_depth_capture import QB_DEPTH_CAPTURE_REFUSED, capture_for_run, locate_frozen_depth_chart
+from .qb_depth_roles import QbDepthRoleError
 from .selection import SelectionError, assignments_for_entries, select_prior_lineups
 from .sources import SourcePolicyError, validate_source_reference_policy
 from .venues import home_team_of, resolve_blank_roof
@@ -1414,6 +1416,70 @@ def _emit_prelock_manifest(
     )
 
 
+def _auto_capture_depth(*, supplied, showdown, capture_depth, reports):
+    """(package path, whether this run built it). A supplied package always wins; Classic builds none.
+
+    Session 53 (R36). A capture failure is a named limitation in `reports["qb_depth_capture"]` and
+    the run goes on without a package (R28); nothing here raises.
+    """
+
+    if supplied is not None or not showdown:
+        return supplied, False
+    capture = capture_depth(None, "qb_depth")
+    reports["qb_depth_capture"] = capture.as_report()
+    if capture.captured:
+        return str(capture.package), True
+    return None, False
+
+
+def _select_under_depth_package(*, select, capture_depth, qb_teams, depth_path, auto_captured, reports):
+    """`select(depth_path)`, dropping what selection refuses from a package this run built itself.
+
+    Returns `(lineups, scores, selection, depth_path_used)`. A package the operator supplied still
+    refuses as it always has. For one this run built (Session 53, R36; never a stop under R28):
+    a refusal that names a team (R25's, when an operator excluded a starter DraftKings still lists as
+    available) drops that team, rebuilds the package for the others and tries again, so the
+    backup-quarterback default stays on for the teams that can take it; any other refusal drops the
+    whole package. Each refused team and its reason are named in `reports["qb_depth_capture"]`.
+    """
+
+    refused: dict[str, str] = {}
+    while True:
+        try:
+            lineups, scores, selection = select(depth_path)
+            return lineups, scores, selection, depth_path
+        except QbDepthRoleError as exc:
+            if not auto_captured:
+                raise
+            reason = " ".join(str(exc).split())[:260]
+            team = getattr(exc, "team", None)
+            if team is not None and team in qb_teams and team not in refused:
+                refused[team] = reason
+                remaining = tuple(name for name in qb_teams if name not in refused)
+                again = (
+                    capture_depth(remaining, "qb_depth_without_" + "_".join(sorted(refused)))
+                    if remaining else None
+                )
+                if again is not None and again.captured:
+                    depth_path = str(again.package)
+                    reports["qb_depth_capture"] = {
+                        **again.as_report(),
+                        "status": QB_DEPTH_CAPTURE_REFUSED,
+                        "detail": "refused at selection, so these teams are undeclared: "
+                        + "; ".join(f"{name}: {why}" for name, why in sorted(refused.items())),
+                        "refused_teams": dict(sorted(refused.items())),
+                    }
+                    continue
+            reports["qb_depth_capture"] = {
+                **reports["qb_depth_capture"],
+                "status": QB_DEPTH_CAPTURE_REFUSED,
+                "package": None,
+                "detail": "the captured package was refused at selection: " + reason,
+            }
+            lineups, scores, selection = select(None)
+            return lineups, scores, selection, None
+
+
 def run_prior_review(
     *,
     salary_csv: str | Path,
@@ -2314,9 +2380,33 @@ def run_prior_review(
             teams=sorted({player.team for player in slate.players}),
             provider_team_by_team=team_binding or None,
         )
+        # Session 53 (R36). A Showdown slate with no quarterback depth package supplied gets one
+        # built from the depth-chart bytes the prior package already froze, so the backup-quarterback
+        # default has the evidence it needs. A stale, unmatched or absent chart is named and the run
+        # goes on without it (R28): nothing here can stop a run, and a supplied package always wins.
+        qb_teams = tuple(sorted({player.team for player in slate.players if player.position == "QB"}))
+
+        def _capture_depth(teams, directory):
+            return capture_for_run(
+                salaries=Path(salary_path),
+                proposal_dir=proposal_dir,
+                package_dir=(None if proposal_dir is not None else Path(package.team_source).parent),
+                season=package.season,
+                as_of=as_of,
+                out_dir=run_dir / directory,
+                teams=teams,
+            )
+
+        qb_depth_role_evidence_json, auto_captured_depth = _auto_capture_depth(
+            supplied=qb_depth_role_evidence_json,
+            showdown=slate.mode is EngineMode.SHOWDOWN,
+            capture_depth=_capture_depth,
+            reports=reports,
+        )
         measured = budget.stage("selection") if budget is not None else nullcontext()
-        with measured:
-            lineups, scores, selection = select_prior_lineups(
+
+        def _select(depth_path):
+            return select_prior_lineups(
                 slate,
                 model,
                 splits,
@@ -2333,11 +2423,21 @@ def run_prior_review(
                 max_person_overlap=max_person_overlap,
                 role_evidence_json=role_evidence_json,
                 offensive_role_evidence_json=offensive_role_evidence_json,
-                qb_depth_role_evidence_json=qb_depth_role_evidence_json,
+                qb_depth_role_evidence_json=depth_path,
                 as_of=as_of,
                 portfolio_policy=portfolio_policy,
                 forbidden_rosters=entry_plan.forbidden_rosters,
                 **selection_limits,
+            )
+
+        with measured:
+            lineups, scores, selection, qb_depth_role_evidence_json = _select_under_depth_package(
+                select=_select,
+                capture_depth=_capture_depth,
+                qb_teams=qb_teams,
+                depth_path=qb_depth_role_evidence_json,
+                auto_captured=auto_captured_depth,
+                reports=reports,
             )
         policy_rosters = [lineup.roster for lineup in lineups[: len(bound_ids)]]
         if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):

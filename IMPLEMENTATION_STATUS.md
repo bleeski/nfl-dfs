@@ -1,5 +1,19 @@
 # Implementation Status
 
+## Capability added: 2026-10-02 (Session 53, backup-quarterback default and the depth package captured by `run-slate`)
+
+Working and verified through synthetic fixtures (`tests/test_qb_depth_capture.py`, `tests/test_showdown_backup_qb_default.py`, `tests/test_prior_review_depth_capture.py`, 44 tests), a
+`run-slate` replay of PIT@CLE on its saved frozen package (`--as-of` before lock; the 22 exported rows hold no backup quarterback) and the
+full suite: for a Showdown run with no supplied package, `run-slate` builds the QB depth package from the `depth_charts` bytes the prior
+package already froze (`src/nfl_dfs/qb_depth_capture.py`), and every Showdown selection, with or without a policy or thesis, keeps every
+quarterback behind the resolver's effective starter out of every row (`selection.py`). This closes Session 51's "run-slate does not
+capture the QB depth package". A stale, refused or missing chart, and a team the chart does not declare, are named `P` limitations
+(`QB_DEPTH_CAPTURE_*`, `SHOWDOWN_BACKUP_QB_UNEVALUATED`) and never stop a run. When R25 refuses one team's evidence (an operator excluded a
+starter DraftKings still lists as available), that team alone is dropped and named; the other team keeps the default.
+**Not done, named:** the chart does not say the starter is playing (official activity is a separate gate); a starter with no row anywhere
+is Session 54; the concentration and left-out-starter judgment is manual until Session 52 (on the PIT@CLE replay Fannin and Rodgers are each
+in 91% of rows and Watson in none). Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-10-01 (Session 51, in-season gap-fill for the player prior)
 
 Working and verified through synthetic fixtures (`tests/test_prior_current_season_gap_fill.py`, 29 tests), a records-level replay of PIT@CLE

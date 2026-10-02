@@ -2974,6 +2974,27 @@ def _export_classic_c1_csv(
     ), ()
 
 
+def _qb_depth_limitations(reports: Mapping[str, object]) -> list[str]:
+    """The named `P` limitations of the run-time QB depth capture and the backup default (Session 53)."""
+
+    limitations: list[str] = []
+    capture_report = reports.get("qb_depth_capture")
+    if isinstance(capture_report, Mapping) and capture_report.get("status") not in (None, "CAPTURED"):
+        detail = str(capture_report.get("detail") or "")
+        limitations.append(f"{capture_report['status']}:{detail}" if detail else str(capture_report["status"]))
+    selection_view = reports.get("selection")
+    selector_view = selection_view.get("selection") if isinstance(selection_view, Mapping) else None
+    default_view = selector_view.get("showdown_backup_qb_default") if isinstance(selector_view, Mapping) else None
+    if isinstance(default_view, Mapping) and default_view.get("applies") and default_view.get("unevaluated_teams"):
+        limitations.append(
+            "SHOWDOWN_BACKUP_QB_UNEVALUATED:no quarterback depth evidence orders "
+            + ", ".join(map(str, default_view["unevaluated_teams"]))
+            + ", so no backup quarterback of those teams was excluded (R36's default needs the evidence;"
+            " none was guessed)"
+        )
+    return limitations
+
+
 def _run_prior_review_profile(
     *,
     args: argparse.Namespace,
@@ -3292,6 +3313,11 @@ def _run_prior_review_profile(
     if outcome.file_valid:
         for weather_code in reversed(list(outcome.reports.get("weather_unobserved") or ())):
             blockers.insert(0, str(weather_code))
+    # Session 53 (R36): a depth package `run-slate` could not capture or use, and the Showdown
+    # backup-quarterback default's gap, travel with the file by name (`P`, never a stop).
+    if outcome.file_valid:
+        for limitation in reversed(_qb_depth_limitations(outcome.reports)):
+            blockers.insert(0, limitation)
     # Session 50: a failed contest-assignment step left the solver's order in the
     # file; it ships with the gap named (`P`, never a stop).
     contest_step_report = outcome.reports.get("contest_assignment")

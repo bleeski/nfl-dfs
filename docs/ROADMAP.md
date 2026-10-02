@@ -17,7 +17,7 @@ full code review and a sweep of every plan, brief, archive and ledger.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 52 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S52`, on the branch your session was assigned or a new `claude/s52-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 54 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S54`, on the branch your session was assigned or a new `claude/s54-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
 On 2026-09-25 a full code review (`docs/critiques/Code_Review_2026-09-25.md`)
 and a sweep of every plan, brief, retrospective, archive and ledger were
@@ -31,8 +31,9 @@ cap, the witness chain and the fill's exclusions landed, and the partial fill
 (thesis builder as the rung-4 path: Classic rung 4 builds several stack theses under one
 person cap) closed on 2026-09-30; Session 23b
 (Ben's game theses, part 1: the v3 thesis contract and a single-thesis build) closed on 2026-10-01; Session 51
-(the in-season gap-fill for the player prior, R35) closed on 2026-10-01; the first
-startable row by order is Session 52 (the construction judgment input), then Session 23c (the thesis portfolio), and Session 23d is startable too. Session 23b (Ben's game
+(the in-season gap-fill for the player prior, R35) closed on 2026-10-01; Session 53
+(the backup-quarterback default and the depth package, R36) closed on 2026-10-02, and Session 54 (a depth-declared starter with no usable history, R36) is startable; the first
+startable row by order is Session 23c (the thesis portfolio), and Session 23d is startable too. Session 23b (Ben's game
 theses) shares `relaxation.py` and `docs/DATA_CONTRACTS.md` with Sessions 39 and
 39b; run them one at a time, or in separate worktrees, and merge `origin/main`
 before the final suite. Session 23c builds on 23b's v3 thesis contract.
@@ -143,7 +144,9 @@ Every session follows this protocol, and the cards only add to it:
 | Session 49 | Standalone | Thesis builder as the rung-4 path: rung 4 (no policy, C1 sequential selection) concentrates badly under real conditions -- the 2026-09-27 Week 3 fallback file had three players in 25 of 25 lineups and zero stacks -- because sequential selection is one construction repeated with no diversification pressure across separate game scripts; port `scripts/build_thesis_portfolio.py`'s multi-thesis approach (or call it directly) as rung 4's replacement inside `run-slate`, so a fully relaxed run still diversifies across market reads instead of maximizing one central estimate 25 times | changelog 2026-09-27 (Week 3 slate run); `scripts/build_thesis_portfolio.py` | `src/nfl_dfs/relaxation.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/cli.py`, `scripts/build_thesis_portfolio.py` | S | Session 39 | `sh ./nfl.sh test tests/test_relaxation_controller.py tests/test_prior_review_profile.py -x --tb=short`; a rung-4 fixture run has no player over 40% exposure and every lineup stacked | Complete |
 | Session 23b | Standalone | P8 part 1, thesis structures: a Showdown thesis contract (name, teams, a required captain set with kickers and DSTs allowed, per-team and per-position bounds, exclusions) validated as a policy sleeve; a single-thesis build whose captain comes from the thesis's set and whose structure the ladder never relaxes (a thesis that cannot be built is dropped and named); backup quarterbacks out of the pool by default from depth evidence; each lineup names its thesis | Chunk P8; R33, R34; ATL@GB 2026-09-24; Showdown retro §7c | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_showdown_policy.py`, `docs/DATA_CONTRACTS.md` | S | Session 23 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_portfolio_enforcement.py tests/test_relaxation_controller.py -x --tb=short`, plus the tests it adds; a fixture thesis that requires a kicker captain builds one | Complete |
 | Session 51 | Standalone | In-season gap-fill for the player prior (R35): a new player transformation rates, from current-season current-team rows read only up to the slate's own week, the people v2 cannot rate (no prior-season row, observed zero, or a transfer who now has rows on his new team) and leaves every other record exactly as v2 wrote it; season-aware keys, a named finding instead of a build failure for an out-of-range thin-sample efficiency, a per-team completeness check that falls back to v2 by name, no `snap_counts` source | R35; PIT@CLE 2026-10-01 and PHI@CHI 2026-09-28 handoffs; Opus design review 2026-10-01 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/sources.py`, `docs/DATA_CONTRACTS.md` | P | none | `sh ./nfl.sh test tests/test_priors_adapter.py tests/test_offensive_roles.py -x --tb=short`, plus the tests it adds; a fixture rookie and a fixture quarterback with three current-team rows before the slate week leave `OFFENSIVE_MISSING_HISTORY`, and a fixture whose only current-season row is the slate's own week stays excluded by name | Complete |
-| Session 52 | Standalone | Construction judgment input (R35): a versioned `nfl_construction_judgment_v1` that rosters a person the role gate left out, as a minimum-entries row (not a thesis), only when the role-gate report names his sole exclusion reason on a short list after Session 51 has run; writes no model number, never overrides DK status, an official inactive, participation precedence, a BLOCK or an unresolved material role change, is capped by the Captain default, can be dropped by the ladder by name, and travels with a P-class limitation; replaces the manual route in `docs/claude/working.md` | R35; Opus design review 2026-10-01 | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/readable_review.py`, `docs/DATA_CONTRACTS.md` | S | Session 51 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_readable_review.py -x --tb=short`, plus the tests it adds; a Keenum-shaped fixture (starter, no rows before the slate) is Captain in the declared minimum of rows, a DK-`OUT` person named in the file is refused, and the file stays `DO_NOT_UPLOAD` | Pending |
+| Session 53 | Standalone | Backup-quarterback default for every Showdown run, and the QB depth package captured by `run-slate` itself (R36): the capture logic moves from `scripts/make_offensive_role_evidence.py` to `src/nfl_dfs/qb_depth_capture.py`; `run-slate` builds the package for a Showdown slate from the depth-chart bytes the prior package already froze (a stale, unmatched or absent chart is named and the run goes on without it); every quarterback the evidence puts behind a declared starter is then out of every Showdown row unless a thesis names him (a DraftKings-unavailable declared starter is promoted over by his backup under R25, who then stays; one R25 refuses to promote past drops that team's evidence only) | R36; PIT@CLE handoff (the engine baseline captained a backup quarterback) | `src/nfl_dfs/qb_depth_capture.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/showdown_theses.py`, `scripts/make_offensive_role_evidence.py`, `docs/DATA_CONTRACTS.md` | S | none | `sh ./nfl.sh test tests/test_qb_depth_roles.py tests/test_showdown_theses.py -x --tb=short`, plus the tests it adds; a fixture Showdown run with no thesis and a depth chart naming a starter has no backup quarterback in any row, and a team whose starter is DraftKings-`OUT` keeps its backup | Complete |
+| Session 54 | Standalone | A depth-declared starter with no usable history is selectable (R36; closes the Session 48 flag): `resolve_offensive_roles` takes the declared starters from the QB depth resolution and selects one whose history state is `MISSING_HISTORY` on the depth package's attempt share with carry share 0, as an unconfirmed diagnostic with a named finding; never a person the participation contract excludes | R36; Session 48's result note | `src/nfl_dfs/offensive_roles.py`, `src/nfl_dfs/selection.py`, `docs/DATA_CONTRACTS.md` | P | Session 53 | `sh ./nfl.sh test tests/test_offensive_roles.py tests/test_qb_depth_roles.py -x --tb=short`, plus the tests it adds; a fixture quarterback with no history, declared the starter, is scored and selectable with carry share 0, and a DraftKings-`OUT` declared starter stays excluded | Pending |
+| Session 52 | Standalone | Construction judgment input (R35): a versioned `nfl_construction_judgment_v1` that rosters a person the role gate left out, as a minimum-entries row (not a thesis), only when the role-gate report names his sole exclusion reason on a short list after Session 51 has run; writes no model number, never overrides DK status, an official inactive, participation precedence, a BLOCK or an unresolved material role change, is capped by the Captain default, can be dropped by the ladder by name, and travels with a P-class limitation; replaces the manual route in `docs/claude/working.md` | R35; Opus design review 2026-10-01 | `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/readable_review.py`, `docs/DATA_CONTRACTS.md` | S | Session 54 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_readable_review.py -x --tb=short`, plus the tests it adds; a Keenum-shaped fixture (starter, no rows before the slate) is Captain in the declared minimum of rows, a DK-`OUT` person named in the file is refused, and the file stays `DO_NOT_UPLOAD` | Pending |
 | Session 23c | Standalone | P8 part 2, the thesis portfolio: rows allotted across Ben's theses; one joint assembly with every lineup distinct across theses and prefilled rows (R29), the one share limit from Session 23, captains spread across theses; the review reports per Entry ID the thesis, captain counts per thesis, every person in more than half the rows and the most rows one player's bad night sinks; ATL@GB and NE@SEA replays | Chunk P8 "Done looks like"; R34 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/readable_review.py`, `docs/DATA_CONTRACTS.md` | S | Session 23b | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_entry_groups.py tests/test_readable_review.py -x --tb=short`, plus the tests it adds; the 20-row fixture spreads across six theses with no repeat and no player over the share limit | Pending |
 | Session 23d | Batched | P2 part 2, contest facts and screening (narrowed 2026-09-29: the `round_robin_by_contest` default assignment order is superseded by Session 50's `within_contest_diversity_v1`, which needs no policy input); `contest_facts_csv` (contest id, field size, places paid, entry fee) tags each entry's paid fraction and labels entries under 5% `FIRST_PLACE_OBJECTIVE`, never from a contest name; a contest-screening checklist (rake, overlay, payout shape, field size, max entries) in the runbook | Chunk P2; debrief §4, §6; RUN_RECORD DEN@KC defect 5; `plan.md:395`; critique V9 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/contracts.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | S | Session 23 | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_portfolio_policy.py -x --tb=short`; a `contest_facts_csv` with a bad row is refused by name and entries under 5% paid are labelled | Pending |
 | Session 12 | Standalone | Late-swap bridge and C5: a hash-bound record of the entries actually submitted (Ben's post-upload DKEntries download) anchors governed late swap without claiming certification; multi-contest by group; locked cells byte-identical; later-lock players preferred in flexible slots; the `--as-of` clock is refused when it disagrees with the wall clock past a registered tolerance; current cells in the `Name (ID)` form resolve through `prefilled_cell_id`; a post-kickoff salary export parses | Audit D9, DD-6; archive § C5; code review V12, V13, E11 | `src/nfl_dfs/late_swap.py`, `src/nfl_dfs/lineups.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/dk.py`, `docs/DATA_CONTRACTS.md` | V | Session 11 | `sh ./nfl.sh test tests/test_governed_late_swap.py tests/test_late_swap_learning.py -x --tb=short`; seam: the clock bound and the `(ID)` form first, the submitted-state contract second | Pending |
@@ -1295,10 +1298,8 @@ Every session follows this protocol, and the cards only add to it:
   him; suite green.
 - **Closed 2026-10-01** (changelog). The backup-quarterback default applies
   under a thesis only (the thesis is "the request" that can name him).
-  `[BEN: should R33's backup-quarterback default, from depth evidence, also
-  apply to Showdown runs with no thesis (a plain policy, or no policy)? Today
-  they keep every quarterback the salary file sells; with no depth evidence a
-  team keeps every quarterback either way and the gap is named.]`
+  Ruled by Ben, 2026-10-01 (R36): yes, apply the default to every Showdown run;
+  Session 53 does it and has `run-slate` capture the depth evidence itself.
 
 #### Session 51: in-season gap-fill for the player prior
 
@@ -1357,11 +1358,65 @@ Every session follows this protocol, and the cards only add to it:
   not fixed here: `run-slate` does not capture the QB depth package (a benched backup keeps his per-game rate), a player traded in
   2026 with no rows yet on his new team is unchanged, and no recency weight or calibration exists.
 
+#### Session 53: backup-quarterback default for every Showdown run, and the depth package captured by `run-slate`
+
+- **Depends on.** None. Ruling: R36.
+- **Why.** PIT@CLE's engine baseline captained Mason Rudolph ($9k, a backup) and rostered Shedeur Sanders in 3 lineups, because the
+  backup-quarterback rule ran only under a thesis (`selection.py:347-349`) and only when a depth package was supplied, which
+  `run-slate` never does. Ben (2026-10-01, R36): apply it to every Showdown run.
+- **Scope.**
+  - **Capture.** The pure logic of `scripts/make_offensive_role_evidence.py` (`read_depth_chart`, `select_snapshot`,
+    `slice_for_team`, `build_package`, `_match_person`) moves to `src/nfl_dfs/qb_depth_capture.py`; the script imports it and its
+    command line is unchanged. A streaming reader keeps only quarterback rows (the file is 51 MB and 545,184 rows; materializing it
+    cost 14.9 s and 519 MB on the lock path, `tests/test_priors_adapter.py` § provenance-only).
+  - **Wire it.** For a Showdown slate with no `qb_depth_role_evidence_json`, `run-slate` builds the package from the
+    `depth_charts` bytes the prior package already froze (the proposal's `raw/` or a reused frozen package's `raw/`), under
+    `<run>/qb_depth/`, at the latest snapshot at or before `as_of`. A snapshot older than its 36-hour window
+    (`QB_DEPTH_CAPTURE_STALE`), a chart that names a quarterback DraftKings does not list or has no rank-1 quarterback
+    (`QB_DEPTH_CAPTURE_REFUSED:<reason>`), or no frozen chart (`QB_DEPTH_CAPTURE_UNAVAILABLE`) is named, never a stop: the run goes
+    on without the package. A supplied package always wins. Classic is unchanged.
+  - **The default.** In every Showdown selection (a thesis, a plain policy, or none) every quarterback the evidence puts behind
+    a declared starter is out of every row (`run_excluded`, so the unbound fill too), unless a thesis names him for its own rows.
+    A team the evidence does not declare keeps every quarterback and is named (`SHOWDOWN_BACKUP_QB_UNEVALUATED`, class `P`).
+  - **A starter DraftKings cannot field.** Two cases. DraftKings-unavailable (`OUT`, `IR`): R25 promotes his backup over him, so
+    `starters_by_team` names the effective starter and the default removes only quarterbacks behind him; no separate guard is
+    needed. Available on the salary bytes but excluded (an operator exclusion or an official inactive): R25 refuses to hand the job
+    to a backup, and the resolver raises. For a package `run-slate` built itself that refusal names its team, so the run drops that
+    team, rebuilds the package for the others, keeps the default on them, and names the team (`QB_DEPTH_CAPTURE_REFUSED` and
+    `SHOWDOWN_BACKUP_QB_UNEVALUATED`); that team's backups stay in the pool. A refusal that names no team drops the whole package.
+    A supplied package still raises.
+- **Acceptance.** (1) A fixture Showdown run with a depth chart naming a starter, no thesis and no policy, has no backup
+  quarterback in any row. (2) The same with a v2 policy, and with a thesis that names one backup (only that thesis's rows may hold
+  him). (3) A team whose starter is `OUT` keeps its backup, now the effective starter. (4) With no depth chart, nothing is excluded and the gap is named.
+  (5) A stale, unmatched or absent frozen chart is named and the run completes. (6) The script's command line produces the same
+  package bytes as before. (7) Still `PRIOR_ONLY / DO_NOT_UPLOAD`. (8) An operator exclusion of one team's available starter
+  drops that team's evidence only; the other team's backups stay out.
+- **Size.** Five files plus tests; read `prior_review.py` `:1417-2400` by section and `selection.py` `:300-380`. One session.
+- **Does not establish.** That the chart's rank-1 quarterback is playing: official activity is a separate gate, and a same-day
+  promotion the chart has not caught is Session 52's case.
+
+#### Session 54: a depth-declared starter with no usable history is selectable
+
+- **Depends on.** Session 53. Ruling: R36 (closes the open flag on Session 48's card).
+- **Why.** Ben (2026-10-01): "Yes if it makes sense. We can't over rely on history. This is where the research, judgement, and
+  reasoning of the LLM come in." Session 51 rates a starter who has current-season rows; what is left is a starter with no row
+  anywhere (a rookie quarterback, week 1). `offensive_roles.py:373-381` excludes him whatever the depth chart says.
+- **Scope.** `resolve_offensive_roles` takes the declared starters (the QB depth resolution's `starters_by_team`) and, for one whose
+  history state is `MISSING_HISTORY` and whom the participation contract keeps selectable, selects him on the depth package's
+  attempt share (1.0) and carry share 0 (he has no history to carry) as a `DIAGNOSTIC` with a named finding, not an exclusion. His
+  evidence state stays `UNKNOWN`; the finding says the share is a depth-chart order and not a role fact. Never a person excluded by
+  DraftKings status, an official inactive or an operator exclusion; never a non-quarterback. "If it makes sense" is the judgment of
+  whoever supplies or captures the depth evidence: the engine acts only on hash-bound depth bytes.
+- **Acceptance.** (1) A fixture quarterback with no history, declared the starter, is scored and selectable with carry share 0.
+  (2) The same quarterback declared a backup stays excluded. (3) A declared starter who is DraftKings-`OUT` stays excluded.
+  (4) A declared starter with history is unchanged. (5) The finding names the depth source and says it is not a role.
+- **Size.** Three files plus tests. One session.
+
 #### Session 52: construction judgment input
 
-- **Depends on.** Session 51. Ruling: R35. The session's first step is to count, on the next slate's run, who v3 still leaves
-  out of the pool; if that is few enough for the manual route in `docs/claude/working.md`, defer the rest of this card. Also
-  wire the QB depth package into `run-slate` (Session 51 left a benched backup's rate undecayed without one).
+- **Depends on.** Session 54. Rulings: R35 and R36. The session's first step is to count, on the next slate's run, who Sessions 51,
+  53 and 54 still leave out of the pool; if that is few enough for the manual route in `docs/claude/working.md`, defer the rest of
+  this card. Ben (R36): "We can't over rely on history. This is where the research, judgement, and reasoning of the LLM come in."
 - **Why.** Some people no source can rate before lock: a true cold start, a same-day promotion (Keenum's depth-chart rank was
   third at lock). The judgment that a starter should be rostered, as Captain in some rows, today runs by hand after the
   engine, outside the Showdown audit (`docs/claude/working.md` § Showdown judgment pass).
@@ -1943,9 +1998,9 @@ contract is the part that survives. Session 35 (C3X) stays parked by R30.
   version pair; see `changelog.md`. Named limitations, not fixed here: a declared starter whose
   history state is `MISSING_HISTORY` or whose own old-team share was zero is still excluded by
   `resolve_offensive_roles` regardless of the depth chart, and a transfer starter's carry share is
-  still his old-team history. [BEN: should a depth-declared starter with no usable history be
-  selectable on attempt share 1.0 and carry share 0? It is an evidence-gate semantic, so it is
-  yours; if yes, it is a follow-up card touching `offensive_roles.py`, not a change to this rule.]
+  still his old-team history. Ruled by Ben, 2026-10-01 (R36): yes, a depth-declared starter with
+  no usable history is selectable on attempt share 1.0 and carry share 0; Session 54 is the
+  follow-up card touching `offensive_roles.py`.
 
 #### Session 49: thesis builder as the rung-4 path
 
@@ -2280,7 +2335,18 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
     before the handoff. In force since 2026-10-01 in `docs/claude/working.md`; the defaults (60% a person, 20% a Captain)
     are Claude's to set and Ben's to overturn.
   - The open Ben flag on Session 48's card (a depth-declared starter with no history, selectable on share 1.0 and carry 0)
-    is a separate evidence-gate question and stays open.
+    is a separate evidence-gate question and was answered by R36 below.
+- **R36, depth-declared starters, the backup-quarterback default and the R35 defaults** (Ben, 2026-10-01, answering the three open
+  items after R35).
+  - Session 48's flag, whether a depth-declared starter with no usable history is selectable on attempt share 1.0 and carry
+    share 0: "Yes of it makes sense. We can't over rely on history. This is where the research, judgement, and reasoning of the
+    LLM come in." Yes (Session 54). "If it makes sense" is the judgment of whoever supplies the depth evidence; the engine acts
+    only on hash-bound depth bytes, writes no number from prose, and leaves the gate named as unmet. The same principle is why
+    Session 52's judgment input stands.
+  - Session 23b's flag, whether R33's backup-quarterback default applies to Showdown runs with no thesis: "Yes apply to every
+    showdown." Yes (Session 53), from depth evidence, and `run-slate` captures that evidence itself.
+  - R35's wording and the concentration defaults (no person above 60% of lineups, no Captain above 20%): "Your recommendation."
+    Both stand as written; the defaults remain Claude's to set and Ben's to overturn.
 
 Still in force from earlier, with full text in the backlog archive:
 
@@ -2598,4 +2664,7 @@ session, because a commit cannot contain its own merge.
 | 2026-10-01 | Session 23b | In Progress to Complete | recorded by the next session | A Showdown policy carries one named game thesis (`nfl_showdown_portfolio_policy_v3`, `controls.theses`; `src/nfl_dfs/showdown_theses.py`, `showdown_single_thesis_sd3_v1`): a Captain set (K and DST allowed), team and position counts and exclusions as MILP rows on every SD3 stratum, recomputed by the SD4 audit; the ladder carries it byte for byte and refuses a rung that changes it; a thesis no lineup can follow is dropped and named (`THESIS_DROPPED`) and the policy builds without it; under a thesis the depth evidence's backup quarterbacks are out unless named, and a team without evidence is named, not guessed (`[BEN: ...]` flag on the card for runs without a thesis); seven registry codes, pin re-pinned; no existing test edited; size past the breakpoint, not split (changelog); suite `2178 passed, 1 skipped in 570.86s (0:09:30)`; PR link and merge SHA recorded by the claim release (changelog) |
 | 2026-10-01 | Session 51 | Added as In Progress | claim commit | R35 (Ben, 2026-10-01); claimed on `claude/s51-in-season-prior` (at `06cc19f`, PR #96's merge); baseline suite `2178 passed, 1 skipped in 562.27s (0:09:22)` on Linux; card written after the Opus design review (gap-fill, no look-ahead, season-aware keys) |
 | 2026-10-01 | Session 52 | Added as Pending | claim commit | R35; construction judgment input, depends on Session 51 |
+| 2026-10-01 | Session 53 | Added as In Progress | claim commit | R36 (Ben, 2026-10-01); claimed on `claude/s53-backup-qb-default` (at `2cd0cdd`, PR #97's merge); baseline suite `2207 passed, 1 skipped in 562.65s (0:09:22)` on Linux |
+| 2026-10-01 | Session 54 | Added as Pending | claim commit | R36; closes the Session 48 flag; depends on Session 53. Session 52 now depends on Session 54 |
 | 2026-10-01 | Session 51 | In Progress to Complete | recorded by the next session | Player transformation v3 (default for a new freeze): current-season gap-fill for the people v2 cannot rate, no look-ahead, season-aware keys, a completeness check, named refusals, optional `player_stats_current` source, `current_season_gap_fill_refused` registered (`REGISTRY_SHA256` re-pinned); suite `2207 passed, 1 skipped in 562.65s (0:09:22)` |
+| 2026-10-02 | Session 53 | In Progress to Complete | recorded by the next session | Showdown backup-quarterback default for every run (R36) and the QB depth package captured by `run-slate` from the frozen `depth_charts` bytes (`qb_depth_capture.py`; stale, refused and unavailable are named `P` limitations, never a stop); `SHOWDOWN_BACKUP_QB_UNEVALUATED` registered (`REGISTRY_SHA256` re-pinned); PIT@CLE replay through `run-slate` on the saved frozen package: no backup quarterback in any of 22 rows; suite `2251 passed, 1 skipped in 569.08s (0:09:29)`; the card's starter-unavailable guard was dead for a DraftKings-unavailable starter (R25 promotes) and is replaced, for one R25 refuses to promote past, by a per-team drop of that team's evidence; review findings fixed (capture never raises, snapshot read from every row, run-level tests) |

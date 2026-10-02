@@ -1994,6 +1994,71 @@ cannot disagree about whether one capture is fresh. Expiry is not a freshness
 guarantee here and must not be read as one: an unexpired chart is still blind to
 inactives, which is what the effective rank above exists to handle.
 
+### Depth package captured by `run-slate`, and the Showdown backup default (Session 53, R36, 2026-10-02)
+
+Registered by Session 53 on Ben's ruling of 2026-10-01 (R36): R33's backup-quarterback
+rule applies to every Showdown run, not only under a thesis, and `run-slate`
+builds the evidence it needs. No schema changes: the package is the existing
+`nfl_qb_depth_role_evidence_v1`, byte for byte what
+`scripts/make_offensive_role_evidence.py` writes (the script and the run call the same
+`nfl_dfs.qb_depth_capture.build_package`; a test holds the two equal).
+
+**Capture.** For a Showdown run with no supplied `qb_depth_role_evidence_json`,
+`prior_review` locates the `depth_charts` bytes the prior package already froze (the
+proposal's `raw/` or a reused frozen package's `raw/`; no extra fetch), reads only the
+quarterback rows (the file is about 545,000 rows; the reader streams), selects the
+latest snapshot at or before `as_of` and builds the package under
+`<run>/prior_review/qb_depth/`. A supplied package always wins. Classic is unchanged.
+`reports["qb_depth_capture"]` carries `status`, `package`, `depth_chart_observed_at`,
+`upstream_sha256`, `detail` and `does_not_establish` (`TARGET_SHARE`, `CARRY_SHARE`,
+`OFFICIAL_ACTIVE_STATUS`, `THAT_THE_RANK_ONE_QUARTERBACK_IS_PLAYING`,
+`MODEL_VALIDATION`).
+
+| `status` | Meaning | Limitation on the file |
+|---|---|---|
+| `CAPTURED` | Package built and accepted by the resolver | none |
+| `QB_DEPTH_CAPTURE_STALE` | The snapshot at or before `as_of` is older than 36 hours | `QB_DEPTH_CAPTURE_STALE:<detail>` |
+| `QB_DEPTH_CAPTURE_REFUSED` | The chart names a quarterback DraftKings does not list, has no rank-1 quarterback, was changed while it was read, or any unforeseen exception was raised during capture; or the resolver refused the package at selection (whole package, or one team: see below) | `QB_DEPTH_CAPTURE_REFUSED:<reason>` |
+| `QB_DEPTH_CAPTURE_UNAVAILABLE` | No frozen chart exists for the run | `QB_DEPTH_CAPTURE_UNAVAILABLE` |
+
+A non-`CAPTURED` status never stops a run (R28): the run goes on as if no package were
+supplied and the limitation travels with the file in `blockers`, class `P` in
+`config/gate_registry_v1.json` (stops certification, not construction). `capture_for_run`
+catches every exception, locating the frozen chart included, and reports it as
+`QB_DEPTH_CAPTURE_REFUSED:<ExceptionName>: ...`. The snapshot is the latest `dt` at or before
+the run over every row of the chart (not only the quarterback rows), so the run reads the
+snapshot the script would.
+
+**Refused at selection.** A package this run built itself can still be refused by the
+resolver. R25 refuses to promote past a starter the salary bytes show available even when an
+operator exclusion or official inactive removed him; the refusal carries its team
+(`QbDepthRoleError.team`). The run drops that team, rebuilds the package for the others
+(`teams=`, under `<run>/prior_review/qb_depth_without_<TEAM>/`), selects again and reports
+`status=QB_DEPTH_CAPTURE_REFUSED`, `detail` naming each refused team and reason, and
+`refused_teams` (team to reason). The dropped team is undeclared, so its backups stay in the
+pool and it is named `SHOWDOWN_BACKUP_QB_UNEVALUATED`. A refusal naming no team (a damaged
+package, a hash mismatch) drops the whole package. A package the operator supplied still
+raises, as before.
+
+**The default.** `selection.select_prior_lineups` computes the backups with
+`showdown_theses.backup_quarterbacks(slate, None, qb_depth_report)` for every Showdown
+selection, adds them to `run_excluded` (which binds the unbound fill) and to the
+excluded set, so no row holds one. A backup is a quarterback behind the resolver's
+effective starter for his team (`starters_by_team`, which already applies R25: a
+DraftKings-unavailable declared starter is promoted over by his backup, so on that team
+the backup is the starter and stays). A thesis that names a backup
+(`named_backup_quarterbacks`) re-admits him for that thesis's bound rows only. A team the
+evidence does not declare keeps every quarterback and is named
+`SHOWDOWN_BACKUP_QB_UNEVALUATED:<teams>` (class `P`); nobody is excluded on a guess.
+The selector report carries `showdown_backup_qb_default`: `rule`
+(`SHOWDOWN_BACKUP_QUARTERBACKS_OUT_OF_EVERY_ROW_R36`), `applies`, `excluded_people`,
+`unevaluated_teams`, `thesis_named_backups_readmitted_for_bound_rows`,
+`does_not_establish` (`THAT_THE_DECLARED_STARTER_IS_PLAYING`, `OFFICIAL_ACTIVE_STATUS`).
+
+**Does not establish** that the chart's rank-1 quarterback is playing. Official activity
+is a separate gate; a same-day promotion the chart has not caught is Session 52's case.
+Every path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Ownership brackets
 
 ```text
@@ -2833,7 +2898,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `ab3f5d254ab676d938332b19adb9bd9f5d00d8bab995e98b1fd383c0d01645d5`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `7fa2259162718ee1441e7b231bb3a401c386805d515dc4a1d2a6e54acf096014`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
