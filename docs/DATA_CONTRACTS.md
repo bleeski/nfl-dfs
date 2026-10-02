@@ -195,6 +195,100 @@ is the same, and `projection.py` gates its unknown-basis tolerance on it. An
 unregistered value stops with `PLAYER_TRANSFORMATION_UNKNOWN`. Every path still
 ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
+### Player transformation v3: current-season gap-fill (Session 51, R35, 2026-10-01)
+
+v3, `NFLVERSE_PRIOR_SEASON_PER_GAME_RATE_PLUS_CURRENT_SEASON_GAP_FILL_V3`, is the
+default of a new freeze since Session 51 (it supersedes "a new freeze defaults to
+v2" above); v1 and v2 stay selectable and a package written under any of them is
+read as written. It exists because a starter with no prior-season row (Case Keenum
+on PHI@CHI, Deshaun Watson, Denzel Boston and KC Concepcion Jr. on PIT@CLE) was
+`MISSING_HISTORY`, got zero share and left the pool at the role gate, so no run
+could roster him.
+
+v3 is v2 for every person v2 can rate. It rates only these three states from the
+current season: `MISSING_HISTORY`, `OBSERVED_HISTORY_ZERO`, and
+`CURRENT_ROLE_UNKNOWN` (a transfer who now has rows on his new team). There is no
+recency weight and no blend: a veteran's rate is exactly v2's.
+
+```text
+rows read       season == this season, REG, team == the current team, week < slate_week
+slate_week      the smallest `week` of the bound games in games.csv
+games           distinct weeks among those rows
+floor           max(1, min(MINIMUM_PRIOR_GAMES, the team's REG games before slate_week))
+rate            counts / max(games, floor)
+share           rate / sum of the pool's rates in the eligible group (v2's pool)
+```
+
+The new optional source is `player_stats_current`
+(`stats_player/stats_player_week_{season}.csv`, parser
+`nflverse_stats_player_week_csv_v1`, the same columns as `player_stats`, expiry 24
+hours, staleness basis `IN_SEASON_WEEKLY_PUBLICATION_CHECKED_AGAINST_TEAM_GAMES_BEFORE_SLATE`).
+It is the only optional source: one that cannot be fetched or read is named in
+`propose`'s `optional_sources_absent` and the build proceeds as v2. A policy
+refusal or a spent deadline is never an absence.
+
+Rules, each pinned by `tests/test_prior_current_season_gap_fill.py`:
+
+- **No look-ahead.** A row at or after `slate_week` is never read. A person whose only
+  current-season row is at or after it stays where v2 left him with
+  `gap_fill_refused = CURRENT_SEASON_ROW_AT_OR_AFTER_SLATE_WEEK`; rows beside earlier
+  ones are counted in `ignored_rows_at_or_after_slate_week`.
+- **Season-aware.** Every key carries the season; a prior-season week and a
+  current-season week of the same number never stand in for each other.
+- **Completeness.** Each team's REG games before `slate_week` (from games.csv) must
+  have rows in the file. A team with a gap refuses its people with
+  `CURRENT_SEASON_STATS_INCOMPLETE:{team}:{first missing week}` and they stay as v2.
+- **Nothing is clamped and nothing fails the build.** A missing cell
+  (`CURRENT_SEASON_ROW_HAS_MISSING_CELLS`), all-zero opportunity
+  (`CURRENT_SEASON_ROWS_ALL_ZERO_OPPORTUNITY`), or an efficiency outside its bounds
+  (`OFFENSIVE_THIN_SAMPLE_EFFICIENCY_OUT_OF_RANGE`: yards per target outside 0 to 30,
+  or a catch rate above 1) refuses that one person, who stays as v2 left him.
+  These five codes are one registered family, `current_season_gap_fill_refused`
+  (class `P`, stops `CERTIFICATION`, R35).
+
+v3 writes these additions and no others:
+
+- `coverage.transformation_does_not_establish`: `CURRENT_TEAM_ROLE`,
+  `OFFICIAL_ACTIVE_STATUS`, `RECENCY_WEIGHT`, `CALIBRATION`,
+  `GAMES_FLOOR_IS_A_CALIBRATED_SHRINKAGE`,
+  `THAT_A_GAP_FILLED_RATE_IS_COMPARABLE_WITH_TEAMMATES_PRIOR_SEASON_RATES`,
+  `MODEL_VALIDATION`; `coverage.rate_games_floor` and `rate_games_floor_basis`.
+- `coverage.current_season_stats`: `status` (`BOUND`, `ABSENT` with limitation
+  `CURRENT_SEASON_STATS_ABSENT`, `UNUSED`, or `NOT_APPLICABLE`), and when bound the
+  source hash and URI, `slate_week`, `slate_weeks`, `read_rule`, `through_week`,
+  `team_games_before_slate` and `incomplete_teams`.
+- `coverage.current_season_gap_fill`: `basis_version`
+  `current_season_gap_fill_v1`, `slate_week`, `applied`, `people` and `refused`.
+- Per gap-filled person in `offensive_history_by_person`: `state` is
+  `OBSERVED_HISTORY` (the enum `attach_history` validates is unchanged),
+  `basis_version` `offensive_current_team_history_v3`, `history_source`
+  `CURRENT_SEASON_GAP_FILL`, `gap_fill_from_state`, `current_season`, `slate_week`,
+  `through_week`, `weeks`, `games`, `effective_denominator`, `games_floor`,
+  `team_games_before_slate`, `thin_sample` (true when `games < 4`) and
+  `ignored_rows_at_or_after_slate_week`. A refused person carries `gap_fill_refused`.
+- The in-season file joins the sources the player artifact's expiry rests on.
+
+With no in-season file, or none before the slate's week, every record and every
+identity mapping equals v2's byte for byte; only the metadata above differs. With
+one, a rated person's teammates keep their v2 per-game rates but their pool shares
+dilute, because the newly rated people enter the pool. On the PIT@CLE replay (the
+real frozen inputs and the real 2026 weeks 1 to 3) 11 people were rated and 32 of 51
+records moved for that reason.
+
+Findings are unchanged in kind: a gap-filled person is a `DIAGNOSTIC` finding whose
+next action says he is rated from N current-season games through week W (thin sample
+named) and is unconfirmed history, not a current role; `EVIDENCE_STATE` stays
+`UNKNOWN`. A gap-filled transfer leaves `TRANSFER_PRIOR_UNVERIFIED`, which is the only
+state the P1 divergence gate fires on, so the gate's reach narrows (a transfer with
+real rows on his new team is no longer "unresolved"). A quarterback rated this way
+keeps a benched backup's per-game rate undecayed; the QB depth package is what moves
+attempts to the declared starter, so a team whose quarterbacks v3 rates from current
+rows should have one in the running order. A player traded in 2026 with no rows yet
+on his new team still reads his prior-season old team (`transfer_prior_from_old_team`).
+
+Adapter version stays `nflverse_prior_adapter_v2`. Every path still ends
+`MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ### The `roof` column is retrospective (R26, 2026-09-21)
 
 nflverse writes `games.csv` `roof` only after the game is played, so an unplayed
@@ -2739,7 +2833,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `9b120424ae158ad8df4cbc5262d2ef7934c9f15529210d6eb20d042598da3fdf`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `ab3f5d254ab676d938332b19adb9bd9f5d00d8bab995e98b1fd383c0d01645d5`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

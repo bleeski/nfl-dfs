@@ -1542,4 +1542,7 @@ def test_only_the_depth_chart_is_provenance_only():
         name for name, item in specs.items() if not item.rows_are_joined_on
     }
     assert provenance_only == {"depth_charts"}
-    assert len(specs) == 8
+    # Session 51 added `player_stats_current`, the one optional source: absent is
+    # named and v3 rates as v2, and every other source still fails the build.
+    assert len(specs) == 9
+    assert {name for name, item in specs.items() if item.optional} == {"player_stats_current"}

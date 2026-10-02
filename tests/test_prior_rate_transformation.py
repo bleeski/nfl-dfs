@@ -124,13 +124,20 @@ def test_v1_reproduces_the_pre_session_21_bytes(package, tmp_path):
     assert _digest(_build(package, transfer, player_transformation=V1)) == V1_GOLDEN_TRANSFER
 
 
-def test_new_packages_default_to_v2_and_the_two_versions_are_told_apart(package, tmp_path):
-    assert priors.DEFAULT_PLAYER_TRANSFORMATION == V2 != V1
+def test_new_packages_default_to_v3_and_without_current_rows_equal_v2(package, tmp_path):
+    # Session 51 moved the default from v2 to v3. v3 is v2 for everyone v2 can
+    # rate and, with no current-season rows, for everyone: the records and the
+    # identity mappings are byte-identical, and the report differs only by the
+    # `current_season_gap_fill` block v3 adds.
+    assert priors.DEFAULT_PLAYER_TRANSFORMATION == priors.PLAYER_TRANSFORMATION_V3 != V2 != V1
     base = _base_rows(tmp_path)
     default = _build(package, base)
-    assert _digest(default) == _digest(_build(package, base, player_transformation=V2))
+    v2 = _build(package, base, player_transformation=V2)
+    assert _digest(default[:2]) == _digest(v2[:2])
+    assert {k: v for k, v in default[2].items() if k != "current_season_gap_fill"} == v2[2]
+    assert default[2]["current_season_gap_fill"]["applied"] is False
     assert _digest(default) != _digest(_build(package, base, player_transformation=V1))
-    _records, mappings, report = default
+    _records, mappings, report = _build(package, base, player_transformation=V2)
     history = _history(mappings, report, PUKA)
     assert history["basis_version"] == "offensive_current_team_history_v2"
     assert history["rate_basis"] == "PER_GAME_RATE_OVER_WEEKS_WITH_A_CURRENT_TEAM_ROW"
@@ -331,12 +338,18 @@ def _player_metadata(result):
 
 def test_freeze_records_the_transformation_it_used(package, tmp_path):
     default = _freeze(package, tmp_path, name="default")
+    explicit_v2 = _freeze(package, tmp_path, name="v2", player_transformation=V2)
     explicit_v1 = _freeze(package, tmp_path, name="v1", player_transformation=V1)
-    assert _player_metadata(default)["transformation"] == V2
+    assert _player_metadata(default)["transformation"] == priors.PLAYER_TRANSFORMATION_V3
+    assert _player_metadata(explicit_v2)["transformation"] == V2
     assert _player_metadata(explicit_v1)["transformation"] == V1
     assert _player_metadata(default)["transformation_does_not_establish"]
+    assert "RECENCY_WEIGHT" in _player_metadata(default)["transformation_does_not_establish"]
+    assert _player_metadata(explicit_v2)["transformation_does_not_establish"]
     assert "transformation_does_not_establish" not in _player_metadata(explicit_v1)
-    for result in (default, explicit_v1):
+    # This fixture's package has no in-season file, so v3 says so and rates as v2.
+    assert _player_metadata(default)["current_season_stats"]["status"] == "ABSENT"
+    for result in (default, explicit_v2, explicit_v1):
         assert result["MODEL_STATUS"] == "PRIOR_ONLY"
         assert result["status"] == "DO_NOT_UPLOAD"
 
