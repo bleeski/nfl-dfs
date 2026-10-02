@@ -50,6 +50,7 @@ from .projection import (
     TEAM_SOURCE_SCHEMA_V2,
 )
 from .sources import (
+    SourceDeadlineError,
     SourcePolicyError,
     fetch_public_artifact,
     validate_source_reference_policy,
@@ -143,6 +144,10 @@ class NflverseSource:
     # expiry-bound and column-checked; its rows are counted rather than kept,
     # because keeping them costs the lock path and nothing reads them.
     rows_are_joined_on: bool = True
+    # Session 51. An optional source that cannot be fetched (not published yet in
+    # week 1, a transport failure) is named as absent and the build proceeds on
+    # the sources it has. A policy refusal or a spent deadline still raises.
+    optional: bool = False
 
 
 _NFLDATA_RAW = "https://raw.githubusercontent.com/nflverse/nfldata/master/data"
@@ -230,6 +235,35 @@ def source_specifications(*, season: int, prior_season: int) -> tuple[NflverseSo
                 "rushing_tds",
                 "receiving_tds",
             ),
+        ),
+        NflverseSource(
+            name="player_stats_current",
+            url=f"{_NFLVERSE_RELEASE}/stats_player/stats_player_week_{season}.csv",
+            parser_version="nflverse_stats_player_week_csv_v1",
+            # Session 51. The in-season file grows by one week after each slate
+            # week. Its expiry is not what makes it safe to read: v3 reads only
+            # weeks before the slate's week and checks every team's completed
+            # games against `games`, so a copy that is missing a week is named
+            # (`CURRENT_SEASON_STATS_INCOMPLETE`) and that team falls back to v2.
+            expires_after=timedelta(hours=24),
+            staleness_basis="IN_SEASON_WEEKLY_PUBLICATION_CHECKED_AGAINST_TEAM_GAMES_BEFORE_SLATE",
+            required_columns=(
+                "player_id",
+                "player_display_name",
+                "position",
+                "season",
+                "week",
+                "season_type",
+                "team",
+                "attempts",
+                "carries",
+                "receptions",
+                "targets",
+                "receiving_yards",
+                "rushing_tds",
+                "receiving_tds",
+            ),
+            optional=True,
         ),
         NflverseSource(
             name="snap_counts",
@@ -631,6 +665,7 @@ def freeze_sources(
     *,
     package_root: Path,
     as_of: datetime,
+    absent: list[dict[str, str]] | None = None,
 ) -> dict[str, FrozenArtifact]:
     """Fetch each approved artifact and archive its raw bytes in the package.
 
@@ -638,19 +673,38 @@ def freeze_sources(
     allowlist, the license decision and the single permitted GitHub
     release-asset hop all still apply. Nothing here talks to the network
     directly.
+
+    A specification marked `optional` that cannot be fetched or read is left out
+    and named in `absent` (Session 51), so a week-1 slate with no in-season file
+    builds on the prior season alone. A policy refusal or a spent deadline is
+    never an absence; it raises as for any source.
     """
 
     raw_root = package_root / RAW_DIRNAME
     raw_root.mkdir(parents=True, exist_ok=True)
     frozen: dict[str, FrozenArtifact] = {}
     for specification in specifications:
-        artifact = fetch_public_artifact(
-            specification.url,
-            raw_root,
-            source=f"NFLVERSE_{specification.name.upper()}",
-            license_decision=specification.license_decision,
-            parser_version=specification.parser_version,
-        )
+        try:
+            artifact = fetch_public_artifact(
+                specification.url,
+                raw_root,
+                source=f"NFLVERSE_{specification.name.upper()}",
+                license_decision=specification.license_decision,
+                parser_version=specification.parser_version,
+            )
+        except (SourcePolicyError, SourceDeadlineError):
+            raise
+        except Exception as exc:
+            if not specification.optional:
+                raise
+            if absent is not None:
+                absent.append(
+                    {
+                        "name": specification.name,
+                        "reason": f"{type(exc).__name__}:{str(exc)[:160]}",
+                    }
+                )
+            continue
         path = Path(artifact.path)
         captured = artifact.captured_at.astimezone(timezone.utc)
         if captured > as_of + timedelta(minutes=5):
@@ -664,6 +718,10 @@ def freeze_sources(
                 path, specification.required_columns, label=specification.name
             )
         if not row_count:
+            if specification.optional:
+                if absent is not None:
+                    absent.append({"name": specification.name, "reason": "SOURCE_EMPTY"})
+                continue
             raise PriorsBuildError(f"SOURCE_EMPTY:{specification.name}")
         frozen[specification.name] = FrozenArtifact(
             name=specification.name,
@@ -1668,8 +1726,37 @@ TRANSFER_PRIOR_VERSION_V2 = "transfer_prior_own_old_team_share_v2"
 # the records, never the counts).
 PLAYER_TRANSFORMATION_V1 = "NFLVERSE_PRIOR_SEASON_POOL_NORMALIZED_OPPORTUNITY_SHARES_V1"
 PLAYER_TRANSFORMATION_V2 = "NFLVERSE_PRIOR_SEASON_PER_GAME_RATE_OPPORTUNITY_SHARES_V2"
-PLAYER_TRANSFORMATIONS = (PLAYER_TRANSFORMATION_V1, PLAYER_TRANSFORMATION_V2)
-DEFAULT_PLAYER_TRANSFORMATION = PLAYER_TRANSFORMATION_V2
+# Session 51 (R35). v3 is v2 for everyone v2 can rate, and for the people v2
+# cannot (no prior-season row, a historically zero person, a transfer who now has
+# rows on his new team) it rates a per-game rate from this season's current-team
+# rows played before the slate's week. It is a gap-fill, not a pooled blend: no
+# recency weight exists, so no model number is added for a veteran. Without
+# current-season rows, or with none before the slate's week, every record is
+# exactly v2's. A new freeze defaults to v3; v1 and v2 stay selectable, and a
+# package written under any of them is read as written.
+PLAYER_TRANSFORMATION_V3 = "NFLVERSE_PRIOR_SEASON_PER_GAME_RATE_PLUS_CURRENT_SEASON_GAP_FILL_V3"
+PLAYER_TRANSFORMATIONS = (
+    PLAYER_TRANSFORMATION_V1,
+    PLAYER_TRANSFORMATION_V2,
+    PLAYER_TRANSFORMATION_V3,
+)
+RATE_TRANSFORMATIONS = (PLAYER_TRANSFORMATION_V2, PLAYER_TRANSFORMATION_V3)
+DEFAULT_PLAYER_TRANSFORMATION = PLAYER_TRANSFORMATION_V3
+PLAYER_TRANSFORMATION_V3_DOES_NOT_ESTABLISH = (
+    "CURRENT_TEAM_ROLE",
+    "OFFICIAL_ACTIVE_STATUS",
+    "RECENCY_WEIGHT",
+    "CALIBRATION",
+    "GAMES_FLOOR_IS_A_CALIBRATED_SHRINKAGE",
+    "THAT_A_GAP_FILLED_RATE_IS_COMPARABLE_WITH_TEAMMATES_PRIOR_SEASON_RATES",
+    "MODEL_VALIDATION",
+)
+# Findings a gap-fill refusal can leave on a person (history key `gap_fill_refused`).
+GAP_FILL_REFUSED_LOOK_AHEAD = "CURRENT_SEASON_ROW_AT_OR_AFTER_SLATE_WEEK"
+GAP_FILL_REFUSED_INCOMPLETE_TEAM = "CURRENT_SEASON_STATS_INCOMPLETE"
+GAP_FILL_REFUSED_EFFICIENCY = "OFFENSIVE_THIN_SAMPLE_EFFICIENCY_OUT_OF_RANGE"
+GAP_FILL_REFUSED_INCOMPLETE_ROW = "CURRENT_SEASON_ROW_HAS_MISSING_CELLS"
+GAP_FILL_REFUSED_ALL_ZERO = "CURRENT_SEASON_ROWS_ALL_ZERO_OPPORTUNITY"
 PLAYER_TRANSFORMATION_V2_DOES_NOT_ESTABLISH = (
     "CURRENT_TEAM_ROLE",
     "OFFICIAL_ACTIVE_STATUS",
@@ -1763,7 +1850,7 @@ def transfer_prior_from_old_team(
     for pair in pairs:
         for name in _RAW_COLUMNS:
             denominators[name] += team_week_totals.get(pair, {}).get(name, Decimal("0"))
-    rate_mode = player_transformation == PLAYER_TRANSFORMATION_V2
+    rate_mode = player_transformation in RATE_TRANSFORMATIONS
     # v2 puts a transfer's old-team weeks under the same floor an incumbent's
     # games get: his rate is own / max(weeks, floor) against the old team's rate
     # over the same weeks, which is the v1 share times weeks / max(weeks, floor).
@@ -1826,6 +1913,139 @@ def transfer_prior_from_old_team(
     }
 
 
+_MISSING_CELL = frozenset({"", "NA", "NaN", "null"})
+
+
+def _row_week(row: Mapping[str, str]) -> int | None:
+    text = (row.get("week") or "").strip()
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def _is_season_regular_row(row: Mapping[str, str], season: int) -> bool:
+    return (row.get("season") or "").strip() == str(season) and (
+        (row.get("season_type") or "").strip().upper() == "REG"
+    )
+
+
+def current_season_weeks_present(
+    current_season_rows: Sequence[Mapping[str, str]], *, season: int, slate_week: int
+) -> dict[str, set[int]]:
+    """Each team's weeks before the slate's week that the in-season file has rows for.
+
+    Keyed on the file's own season, so a prior-season week and a current-season
+    week of the same number can never be mistaken for one another.
+    """
+
+    present: dict[str, set[int]] = {}
+    for row in current_season_rows:
+        if not _is_season_regular_row(row, season):
+            continue
+        week = _row_week(row)
+        if week is None or week >= slate_week:
+            continue
+        present.setdefault((row.get("team") or "").strip().upper(), set()).add(week)
+    return present
+
+
+def team_weeks_before_slate(
+    schedule_rows: Sequence[Mapping[str, str]], *, season: int, slate_week: int
+) -> dict[str, tuple[int, ...]]:
+    """Each team's regular-season game weeks before the slate's week, from `games`."""
+
+    weeks: dict[str, set[int]] = {}
+    for row in schedule_rows:
+        if (row.get("season") or "").strip() != str(season):
+            continue
+        if (row.get("game_type") or "").strip().upper() != "REG":
+            continue
+        week = _row_week(row)
+        if week is None or week >= slate_week:
+            continue
+        for column in ("away_team", "home_team"):
+            team = (row.get(column) or "").strip().upper()
+            if team:
+                weeks.setdefault(team, set()).add(week)
+    return {team: tuple(sorted(values)) for team, values in sorted(weeks.items())}
+
+
+def _gap_fill_from_current_season(
+    *,
+    provider_id: str,
+    provider_team: str,
+    current_season_rows: Sequence[Mapping[str, str]],
+    season: int,
+    slate_week: int,
+    expected_weeks: Sequence[int],
+    weeks_present: Mapping[str, set[int]],
+) -> tuple[dict[str, object] | None, str | None]:
+    """Rate one person from this season's current-team rows before the slate's week.
+
+    Returns `(fill, None)` or `(None, refusal)`. A refusal is a named code kept in
+    the person's history, and he stays exactly where v2 left him. Nothing here
+    clamps or invents a value: a number that cannot be taken from the bound rows
+    is refused. Only rows with `week < slate_week` are ever read, so no replay,
+    late swap or grading run can read the slate's own result into a prior.
+    """
+
+    own = [
+        row
+        for row in current_season_rows
+        if (row.get("player_id") or "").strip() == provider_id and _is_season_regular_row(row, season)
+    ]
+    earlier = [
+        row
+        for row in own
+        if (_row_week(row) or slate_week) < slate_week
+        and (row.get("team") or "").strip().upper() == provider_team
+    ]
+    at_or_after = [row for row in own if (_row_week(row) is None or _row_week(row) >= slate_week)]
+    if not earlier:
+        return None, (GAP_FILL_REFUSED_LOOK_AHEAD if at_or_after else None)
+    gaps = sorted(set(expected_weeks) - weeks_present.get(provider_team, set()))
+    if gaps:
+        return None, f"{GAP_FILL_REFUSED_INCOMPLETE_TEAM}:{provider_team}:{gaps[0]}"
+    if any(
+        (row.get(column) or "").strip() in _MISSING_CELL for row in earlier for column in _RAW_COLUMNS
+    ):
+        return None, GAP_FILL_REFUSED_INCOMPLETE_ROW
+    totals = {name: Decimal("0") for name in _RAW_COLUMNS}
+    for row in earlier:
+        for name in _RAW_COLUMNS:
+            totals[name] += _decimal_cell(row, name, label=f"player_stats_current:{name}")
+    if not any(totals[name] for name in ("attempts", "carries", "targets")):
+        return None, GAP_FILL_REFUSED_ALL_ZERO
+    if totals["targets"] > 0:
+        yards_per_target = totals["receiving_yards"] / totals["targets"]
+        catch_rate = totals["receptions"] / totals["targets"]
+        if not (Decimal("0") <= yards_per_target <= Decimal("30")) or not (
+            Decimal("0") <= catch_rate <= Decimal("1")
+        ):
+            return None, GAP_FILL_REFUSED_EFFICIENCY
+    weeks = sorted({_row_week(row) for row in earlier})
+    games = len(weeks)
+    # The floor is the smaller of v2's four and the team's own completed games, so
+    # a player who played every game his team has played is not charged one it has
+    # not. A judgment, recorded as one in the package.
+    floor = max(1, min(MINIMUM_PRIOR_GAMES, len(expected_weeks)))
+    return (
+        {
+            "raw": totals,
+            "games": games,
+            "effective": max(games, floor),
+            "floor": floor,
+            "weeks": weeks,
+            "through_week": max(weeks),
+            "rows": len(earlier),
+            "team_games_before_slate": len(expected_weeks),
+            "ignored_rows_at_or_after_slate_week": len(at_or_after),
+        },
+        None,
+    )
+
+
 def _role_capacities(
     snap_rows: Sequence[Mapping[str, str]], *, prior_season: int
 ) -> dict[str, Decimal]:
@@ -1859,6 +2079,9 @@ def build_player_records(
     prior_season: int,
     season: int,
     player_transformation: str = DEFAULT_PLAYER_TRANSFORMATION,
+    current_season_rows: Sequence[Mapping[str, str]] | None = None,
+    slate_week: int | None = None,
+    team_weeks_before_slate_by_team: Mapping[str, Sequence[int]] | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, object]]:
     """Derive one player-prior record and one identity mapping per person.
 
@@ -1867,10 +2090,29 @@ def build_player_records(
     shares are normalized over: the same counts under v1, per-game rates under
     v2 (counts over the weeks he has a current-team row, floored at
     `MINIMUM_PRIOR_GAMES`). See `PLAYER_TRANSFORMATION_V2`.
+
+    Under `PLAYER_TRANSFORMATION_V3` a person v2 cannot rate (`MISSING_HISTORY`,
+    `OBSERVED_HISTORY_ZERO`, or a transfer) is rated instead from the current
+    season's rows on his current team before `slate_week`, when
+    `current_season_rows` and `slate_week` are given and the team's completed
+    games are all present. Everyone else, and everyone when those inputs are
+    absent, is exactly v2. See `_gap_fill_from_current_season`.
     """
 
     _require_player_transformation(player_transformation)
-    rate_mode = player_transformation == PLAYER_TRANSFORMATION_V2
+    rate_mode = player_transformation in RATE_TRANSFORMATIONS
+    gap_fill_mode = (
+        player_transformation == PLAYER_TRANSFORMATION_V3
+        and current_season_rows is not None
+        and slate_week is not None
+    )
+    weeks_present = (
+        current_season_weeks_present(current_season_rows, season=season, slate_week=slate_week)
+        if gap_fill_mode
+        else {}
+    )
+    gap_filled_people: list[str] = []
+    gap_fill_refusals: dict[str, str] = {}
     people = slate_people(slate)
     totals = _player_totals(player_stat_rows, prior_season=prior_season)
     capacities = _role_capacities(snap_rows, prior_season=prior_season)
@@ -1930,7 +2172,61 @@ def build_player_records(
                     name: raw[underlying_id][name] / Decimal(effective_games)
                     for name in _RAW_COLUMNS
                 }
-            if transfer and not incomplete:
+            gap_filled = False
+            if gap_fill_mode and state in {
+                "MISSING_HISTORY", "OBSERVED_HISTORY_ZERO", "CURRENT_ROLE_UNKNOWN"
+            }:
+                provider_team = crosswalk[flex.team]
+                fill, refused = _gap_fill_from_current_season(
+                    provider_id=provider_id,
+                    provider_team=provider_team,
+                    current_season_rows=current_season_rows,
+                    season=season,
+                    slate_week=slate_week,
+                    expected_weeks=(team_weeks_before_slate_by_team or {}).get(provider_team, ()),
+                    weeks_present=weeks_present,
+                )
+                if fill is not None:
+                    gap_filled = True
+                    gap_filled_people.append(f"{flex.dk_id}:{flex.name}:{flex.position}")
+                    raw[underlying_id] = dict(fill["raw"])
+                    history[underlying_id].update(
+                        {
+                            "state": "OBSERVED_HISTORY",
+                            "incompatible_transfer": False,
+                            "current_team_rows": fill["rows"],
+                            "receiving_efficiency_observed": raw[underlying_id]["targets"] > 0,
+                            "basis_version": "offensive_current_team_history_v3",
+                            "denominator_basis": (
+                                "CURRENT_SEASON_CURRENT_TEAM_ROWS_BEFORE_SLATE_WEEK_PER_GAME_RATE"
+                            ),
+                            "rate_basis": (
+                                "PER_GAME_RATE_OVER_WEEKS_WITH_A_CURRENT_SEASON_CURRENT_TEAM_ROW"
+                            ),
+                            "history_source": "CURRENT_SEASON_GAP_FILL",
+                            "gap_fill_from_state": state,
+                            "current_season": season,
+                            "slate_week": slate_week,
+                            "through_week": fill["through_week"],
+                            "weeks": fill["weeks"],
+                            "games": fill["games"],
+                            "effective_denominator": fill["effective"],
+                            "games_floor": fill["floor"],
+                            "team_games_before_slate": fill["team_games_before_slate"],
+                            "thin_sample": fill["games"] < MINIMUM_PRIOR_GAMES,
+                            "ignored_rows_at_or_after_slate_week": fill[
+                                "ignored_rows_at_or_after_slate_week"
+                            ],
+                        }
+                    )
+                    weight_basis[underlying_id] = {
+                        name: raw[underlying_id][name] / Decimal(fill["effective"])
+                        for name in _RAW_COLUMNS
+                    }
+                elif refused:
+                    gap_fill_refusals[f"{flex.dk_id}:{flex.name}:{flex.position}"] = refused
+                    history[underlying_id]["gap_fill_refused"] = refused
+            if transfer and not incomplete and not gap_filled:
                 prior = transfer_prior_from_old_team(
                     person_rows,
                     provider_id=provider_id,
@@ -2126,6 +2422,19 @@ def build_player_records(
             " and tranche W3 owns the participation mask"
         ),
         "people_without_prior_season_rows": sorted(no_prior_rows),
+        **(
+            {
+                "current_season_gap_fill": {
+                    "basis_version": "current_season_gap_fill_v1",
+                    "slate_week": slate_week,
+                    "applied": gap_fill_mode,
+                    "people": sorted(gap_filled_people),
+                    "refused": dict(sorted(gap_fill_refusals.items())),
+                }
+            }
+            if player_transformation == PLAYER_TRANSFORMATION_V3
+            else {}
+        ),
         "non_opportunity_positions_present": sorted(
             {
                 people[key]["FLEX"].position
@@ -2140,6 +2449,64 @@ def build_player_records(
 # --------------------------------------------------------------------------- #
 # Phase one: propose
 # --------------------------------------------------------------------------- #
+
+
+def _current_season_stats_coverage(
+    artifact: FrozenArtifact | None,
+    current_rows: Sequence[Mapping[str, str]] | None,
+    *,
+    season: int,
+    slate_week: int | None,
+    slate_weeks: Sequence[int],
+    completed_weeks: Mapping[str, Sequence[int]],
+    teams: Sequence[str],
+    transformation: str,
+) -> dict[str, object]:
+    """What the in-season file contributed, written into the player artifact.
+
+    `ABSENT` is a named limitation, not a failure: v3 then rates every person as
+    v2 does. `INCOMPLETE` teams are those with a completed game before the slate
+    that the file has no rows for; their people fall back to v2.
+    """
+
+    if transformation != PLAYER_TRANSFORMATION_V3:
+        return {"status": "NOT_APPLICABLE", "transformation": transformation}
+    if artifact is None or current_rows is None:
+        return {
+            "status": "ABSENT",
+            "limitation": "CURRENT_SEASON_STATS_ABSENT",
+            "effect": "EVERY_PERSON_RATED_AS_V2",
+        }
+    if slate_week is None:
+        return {
+            "status": "UNUSED",
+            "limitation": "SLATE_WEEK_UNRESOLVED",
+            "source_sha256": artifact.sha256,
+            "effect": "EVERY_PERSON_RATED_AS_V2",
+        }
+    present = current_season_weeks_present(current_rows, season=season, slate_week=slate_week)
+    incomplete = {
+        team: sorted(set(completed_weeks.get(team, ())) - present.get(team, set()))[0]
+        for team in teams
+        if set(completed_weeks.get(team, ())) - present.get(team, set())
+    }
+    return {
+        "status": "BOUND",
+        "source_sha256": artifact.sha256,
+        "source_uri": artifact.source_uri,
+        "observed_at": artifact.observed_at.isoformat(),
+        "slate_week": slate_week,
+        "slate_weeks": list(slate_weeks),
+        "read_rule": "ROWS_WITH_WEEK_BEFORE_THE_SLATE_WEEK_ONLY",
+        "through_week": max((max(weeks) for weeks in present.values()), default=None),
+        "team_games_before_slate": {
+            team: len(completed_weeks.get(team, ())) for team in teams
+        },
+        "incomplete_teams": {
+            team: f"{GAP_FILL_REFUSED_INCOMPLETE_TEAM}:{team}:{week}"
+            for team, week in sorted(incomplete.items())
+        },
+    }
 
 
 def _require_salary(salaries: str | Path, salary_sha256: str) -> tuple[Path, SlateContract, str]:
@@ -2186,7 +2553,10 @@ def propose_prior_package(
 
     package_root.mkdir(parents=True)
     specifications = source_specifications(season=season, prior_season=prior_season)
-    frozen = freeze_sources(specifications, package_root=package_root, as_of=when)
+    optional_absent: list[dict[str, str]] = []
+    frozen = freeze_sources(
+        specifications, package_root=package_root, as_of=when, absent=optional_absent
+    )
     _verify_frozen(frozen)
 
     specification_by_name = {item.name: item for item in specifications}
@@ -2299,6 +2669,7 @@ def propose_prior_package(
         "salary_artifact_id": salary_digest,
         "people": len(people),
         "salary_rows": len(slate.players),
+        "optional_sources_absent": optional_absent,
         "team_crosswalk": dict(sorted(crosswalk.items())),
         "nflverse_game_id": (
             (game_rows[slate.games[0].game_id].get("game_id") or "").strip()
@@ -2645,6 +3016,22 @@ def freeze_prior_package(
         season=season,
         prior_season=prior_season,
     )
+    # Session 51. The in-season file is optional; without it, or with a
+    # transformation before v3, every person is rated exactly as v2 rates him.
+    current_rows: list[dict[str, str]] | None = (
+        rows("player_stats_current")
+        if "player_stats_current" in frozen and player_transformation == PLAYER_TRANSFORMATION_V3
+        else None
+    )
+    slate_weeks = sorted(
+        {int(text) for row in game_rows.values() if (text := (row.get("week") or "").strip()).isdigit()}
+    )
+    slate_week = slate_weeks[0] if slate_weeks else None
+    completed_weeks = (
+        team_weeks_before_slate(schedule_rows, season=season, slate_week=slate_week)
+        if slate_week is not None
+        else {}
+    )
     player_records, player_mappings, player_diagnostics = build_player_records(
         slate,
         resolved,
@@ -2654,6 +3041,19 @@ def freeze_prior_package(
         prior_season=prior_season,
         season=season,
         player_transformation=player_transformation,
+        current_season_rows=current_rows,
+        slate_week=slate_week,
+        team_weeks_before_slate_by_team=completed_weeks,
+    )
+    current_season_stats = _current_season_stats_coverage(
+        frozen.get("player_stats_current"),
+        current_rows,
+        season=season,
+        slate_week=slate_week,
+        slate_weeks=slate_weeks,
+        completed_weeks=completed_weeks,
+        teams=sorted({crosswalk[person["FLEX"].team] for person in people.values()}),
+        transformation=player_transformation,
     )
 
     team_payload = {
@@ -2711,7 +3111,8 @@ def freeze_prior_package(
     player_payload = {
         "schema_version": PLAYER_SOURCE_SCHEMA,
         "metadata": _artifact_metadata(
-            [frozen["player_stats"], frozen["snap_counts"], frozen["weekly_rosters"]],
+            [frozen["player_stats"], frozen["snap_counts"], frozen["weekly_rosters"]]
+            + ([frozen["player_stats_current"]] if current_rows is not None else []),
             parser_version=PLAYER_SOURCE_PARSER,
             coverage={
                 "people": len(player_records),
@@ -2728,6 +3129,22 @@ def freeze_prior_package(
                         ),
                     }
                     if player_transformation == PLAYER_TRANSFORMATION_V2
+                    else {}
+                ),
+                **(
+                    {
+                        "transformation_does_not_establish": list(
+                            PLAYER_TRANSFORMATION_V3_DOES_NOT_ESTABLISH
+                        ),
+                        "rate_games_floor": MINIMUM_PRIOR_GAMES,
+                        "rate_games_floor_basis": (
+                            "PRIOR_SEASON_RATES_REUSE_MINIMUM_PRIOR_GAMES;"
+                            "CURRENT_SEASON_GAP_FILL_USES_THE_SMALLER_OF_IT_AND_TEAM_GAMES_BEFORE_SLATE;"
+                            "A_JUDGMENT_NOT_A_CALIBRATION"
+                        ),
+                        "current_season_stats": current_season_stats,
+                    }
+                    if player_transformation == PLAYER_TRANSFORMATION_V3
                     else {}
                 ),
                 "role_capacity_definition": "MEAN_REGULAR_SEASON_OFFENSE_SNAP_SHARE",

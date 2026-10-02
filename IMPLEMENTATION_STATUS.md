@@ -1,5 +1,18 @@
 # Implementation Status
 
+## Capability added: 2026-10-01 (Session 51, in-season gap-fill for the player prior)
+
+Working and verified through synthetic fixtures (`tests/test_prior_current_season_gap_fill.py`, 29 tests), a records-level replay of PIT@CLE
+on the real frozen inputs and the real 2026 weeks 1 to 3, and the full suite: a new prior freeze writes player transformation v3 by
+default (`src/nfl_dfs/priors.py`). A person v2 cannot rate (no prior-season row, a historically zero person, a transfer with rows on his
+new team) is rated from this season's current-team rows played before the slate's week, from an optional nflverse in-season source;
+everyone else keeps v2's per-game rate, and with no usable in-season file every record equals v2's. A row at or after the slate's week
+is never read, a team missing a completed game falls back to v2 by name, and a thin-sample value that cannot be taken from the rows is
+refused by name rather than clamped or allowed to fail the build. On the replay Watson, Boston and Concepcion are rated and selectable.
+**Not done, named:** `run-slate` does not capture the QB depth package, so a benched backup's rate persists unless one is passed;
+the judgment input for people no source can rate is Session 52; no recency weight, no calibration; a player traded in 2026 with no
+rows yet on his new team is unchanged. Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-10-01 (Session 23b, Showdown thesis structures)
 
 Working and verified through the synthetic NE@SEA and DEN@KC Showdown fixtures and the supplied NE@SEA 20-entry bytes

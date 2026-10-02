@@ -4,6 +4,66 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-01: Session 51 -- in-season gap-fill for the player prior (R35)
+
+Branch `claude/s51-in-season-prior`, claimed at `50974c2` (on `06cc19f`, PR #96's merge), task file `state/tasks/S51.md`. No protected
+path, evidence gate or permanent boundary touched; every path still ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`.
+Baseline `2178 passed, 1 skipped in 562.27s (0:09:22)` (Linux). Final `2207 passed, 1 skipped in 562.65s (0:09:22)`: 29 tests added
+(`tests/test_prior_current_season_gap_fill.py`), none removed.
+
+**Why.** Case Keenum (PHI@CHI) and Deshaun Watson, Denzel Boston and KC Concepcion Jr. (PIT@CLE) had no prior-season row, so the role
+gate excluded them before selection and each file shipped without them until Ben asked. nflverse's in-season file already holds their
+rows before the slate, so a real source clears the gate and nothing is relaxed.
+
+**Added.**
+- `PLAYER_TRANSFORMATION_V3` (`priors.py`), default for a new freeze. For the people v2 cannot rate (`MISSING_HISTORY`,
+  `OBSERVED_HISTORY_ZERO`, a transfer with rows on his new team) it takes a per-game rate from this season's current-team REG rows with
+  `week < slate_week`; everyone else keeps v2's per-game rate, with no recency weight. Floor `max(1, min(4, team games before the
+  slate))`. Contract: `docs/DATA_CONTRACTS.md` § Player transformation v3.
+- Optional source `player_stats_current` (`NflverseSource.optional`): a fetch or read failure is named in `propose`'s
+  `optional_sources_absent` and the build proceeds as v2; a policy refusal or spent deadline still raises. No `snap_counts` source:
+  `role_capacity` is diagnostic only (`projection.py:200`, `:620`).
+- No look-ahead (`CURRENT_SEASON_ROW_AT_OR_AFTER_SLATE_WEEK`), season-aware keys, a per-team completeness check
+  (`CURRENT_SEASON_STATS_INCOMPLETE:{team}:{week}`), and a named refusal instead of a build failure for a missing cell, an all-zero row
+  or an out-of-range efficiency. The five refusal codes are one registered family, `current_season_gap_fill_refused` (class `P`, R35);
+  `config/gate_registry_v1.json` moved and `REGISTRY_SHA256` is re-pinned to `ab3f5d254ab676d938332b19adb9bd9f5d00d8bab995e98b1fd383c0d01645d5`
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`.
+- `offensive_roles.py`: a gap-filled person's finding says he is rated from N current-season games through week W (thin sample named)
+  and is unconfirmed history, not a role; a refused person's exclusion names the refusal. No new reason code.
+
+**Changed, and why.** Three existing tests pinned what Session 51 deliberately changes, so each was updated, not loosened:
+`test_new_packages_default_to_v2_and_the_two_versions_are_told_apart` became `..._default_to_v3_and_without_current_rows_equal_v2`
+(the default moved; it now asserts v3's records and mappings equal v2's byte for byte and the report differs only by the new block),
+`test_freeze_records_the_transformation_it_used` (default v3, explicit v2 and v1 each recorded, v3's coverage block), and
+`test_only_the_depth_chart_is_provenance_only` (nine sources, exactly one optional).
+
+**Replay, PIT@CLE (records level, not a delivery).** A full live replay is impossible after lock: the freshness gate refuses a package
+observed after it, correctly. So `build_player_records` was run on tonight's real frozen inputs plus the real 2026 file fetched now
+(sha256 `de05005fcd731f28...`, weeks 1 to 3), slate week 4. The guard reads only weeks 1 to 3, which is why a late fetch is legitimate.
+11 people were rated (Watson QB share 0 to 0.378, Boston target share 0 to 0.128, Concepcion 0 to 0.171, Bernard to 0.098); 18 deep-bench
+people stayed unrated; 32 of 51 records moved, almost all by pool dilution, since teammates keep their v2 rates but share the pool with
+the newly rated. Pittman moved from 0.201 to 0.087 (a transfer with two current-team games, now rated from them); Travis Homer left the
+unresolved-transfer path (the P1 divergence gate fires only on `TRANSFER_PRIOR_UNVERIFIED`, `offensive_roles.py:487`), which narrows a
+gate Ben ruled on.
+
+**Correction.** The 2026-10-01 PIT@CLE entry above says no real source clears this gate for a player new to a team. That was wrong: the
+in-season file does, for anyone with rows before the slate. What no source can clear is a true cold start or a same-day promotion with
+no rows (Keenum's only 2026 row was the slate's own game, so v3 correctly leaves him out); that is Session 52's case.
+
+**Design review.** `/advisor` as an `Agent` on `fable` failed on a usage-credit limit before returning anything; the same brief ran
+read-only on Opus. Adopted: gap-fill over pooling, the no-look-ahead cut, season-aware keys, a named refusal for thin samples, the
+smaller-of-four-and-team-games floor, the completeness check, no `snap_counts`, and a Session 52 reshaped to a row minimum with
+preconditions from the gate report. Not adopted: that Session 48's open flag alone would have covered Keenum (the depth chart ranked him
+third at lock, 2026-09-28 v3 above). Whether a 2026 snap-counts file exists was not checked; no snap source was added.
+
+**Left open, named.**
+- A quarterback rated from current rows keeps a benched backup's per-game rate undecayed (replay: Watson 0.378, Sanders 0.366, Gabriel
+  0.256). The QB depth package moves attempts to the declared starter, and `run-slate` does not capture one on its own, so a thesis run must
+  pass it. Session 52 or a follow-up should wire the capture.
+- A player traded in 2026 with no rows yet on his new team still reads his prior-season old team (`transfer_prior_from_old_team`).
+- A gap-filled rate is normalized beside teammates' prior-season rates (mixed seasons); `RECENCY_WEIGHT` and `CALIBRATION` are not
+  established. The Session 48 flag is untouched.
+
 ### 2026-10-01: Rule -- Showdown judgment pass (second correction: Keenum, then Watson)
 
 Docs only. No gate, contract or protected path touched. `docs/claude/working.md` gains § Showdown judgment pass. Ben corrected the same

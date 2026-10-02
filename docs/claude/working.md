@@ -57,7 +57,9 @@ Ben corrected the same thing twice: PHI@CHI left Case Keenum out and PIT@CLE lef
 prior-season row. The engine scores only people it has a row for, so a starter without one never reaches selection
 (`selection.py` puts every role-gated person in `run_excluded`, which binds every row, and a thesis whose only Captain is excluded is
 dropped, `portfolio_policy.py`). The deterministic layer cannot be asked to add him. The judgment is yours, it runs every slate, and
-it runs before the handoff without being asked. Until a session gives it an input channel, it is manual.
+it runs before the handoff without being asked. Since Session 51 the engine rates a starter who has current-season rows before the
+slate (nflverse in-season file, no look-ahead), so this pass is for whoever v3 still leaves out: a true cold start or a same-day
+promotion. Until Session 52 gives it an input channel, it is manual.
 
 - **Left-out starters.** List every person a role gate or DK status kept out of the pool who a source names a starter, the depth-chart
   quarterback first. Roster each by construction or write why not in the handoff. A starting quarterback is Captain in at least 2 rows

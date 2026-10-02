@@ -415,6 +415,23 @@ def resolve_offensive_roles(
             next_action = "Capture current opportunity evidence before selecting this historically zero person."
         elif not any(getattr(original, field) for field in FIELDS):
             action, reason, next_action = "BLOCK", "OFFENSIVE_ZERO_BASIS_UNRESOLVED", "Rebuild history coverage to distinguish missing from observed zero."
+        # Session 51 (R35). A person rated from this season's rows before the
+        # slate's week is selectable on a prior-season-free, current-season rate,
+        # which is still unconfirmed history and never a role fact; a person whose
+        # gap-fill was refused says which refusal. Both live in `history_basis`
+        # too. No new reason code: the finding keeps its existing reason.
+        if history.get("history_source") == "CURRENT_SEASON_GAP_FILL" and action == "DIAGNOSTIC":
+            next_action = (
+                f"Rated from {history.get('games')} current-season game(s) through week"
+                f" {history.get('through_week')} (floor {history.get('games_floor')},"
+                f" thin sample: {bool(history.get('thin_sample'))}); this is unconfirmed"
+                " history, not a current role. Capture an explicit numerical current-team"
+                " allocation to replace it."
+            )
+        elif history.get("gap_fill_refused") and action == "EXCLUDE":
+            next_action = (
+                f"{next_action} Current-season gap-fill refused: {history['gap_fill_refused']}."
+            )
         if action == "EXCLUDE":
             excluded.add(person)
         if action == "BLOCK":
@@ -451,7 +468,9 @@ def resolve_offensive_roles(
               "coverage": {"offensive_people": len(people), "findings": len(findings), "blocked_people": len(blocked)},
               "assumptions": ["HISTORY_IS_UNCONFIRMED; VACATED_VOLUME_REMAINS_UNALLOCATED", "ROLE_CAPACITY_IS_NOT_A_CEILING",
                               *(["TRANSFER_PRIOR_IS_OWN_OLD_TEAM_SHARE_NOT_A_CURRENT_ROLE"] if transfer_priors else []),
-                              *(["MISSING_HISTORY_PEOPLE_EXCLUDED_WITH_ZERO_SHARE"] if any(f["finding"] == "OFFENSIVE_MISSING_HISTORY" for f in findings) else [])],
+                              *(["MISSING_HISTORY_PEOPLE_EXCLUDED_WITH_ZERO_SHARE"] if any(f["finding"] == "OFFENSIVE_MISSING_HISTORY" for f in findings) else []),
+                              *(["CURRENT_SEASON_GAP_FILL_PEOPLE_RATED_FROM_THIS_SEASONS_ROWS_BEFORE_THE_SLATE_WEEK_NOT_A_CURRENT_ROLE"]
+                                if any((f["history_basis"] or {}).get("history_source") == "CURRENT_SEASON_GAP_FILL" for f in findings) else [])],
               "transfer_priors": transfer_priors,
               "excluded_by_finding": {
                   reason: sorted(f["person"] for f in findings if f["selection_action"] == "EXCLUDE" and f["finding"] == reason)
