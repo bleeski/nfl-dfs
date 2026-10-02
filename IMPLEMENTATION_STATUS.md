@@ -1,5 +1,16 @@
 # Implementation Status
 
+## Capability added: 2026-10-02 (Session 54, a depth-declared starter with no usable history is selectable)
+
+Working and verified through synthetic fixtures (`tests/test_declared_starter_selectable.py`, 18 tests), a `run-slate` replay of PIT@CLE on its
+saved frozen package (Watson scored, in 10 of 22 rows, Captain once) and the full suite: a quarterback the QB depth evidence declares the
+starter, with no prior-season row and no current-season rate, is selectable as a `DIAGNOSTIC` on the depth resolution's attempt share, carry and
+target shares zero (`src/nfl_dfs/offensive_roles.py`, `selection.py`). Participation precedence, backups, non-quarterbacks and a zero share still
+exclude, and so does a hash-bound fact that calls him a backup or says his role changed. A backup R25 promotes over a DraftKings-unavailable
+starter is the effective starter and is selectable. This closes the Keenum and Watson misses for a declared starter. **Not done, named:** a person no source declares (a same-day
+promotion the chart has not caught) is Session 52; on the replay Rodgers is in every row and Fannin in 91%, so concentration is still manual until
+Session 52. Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-10-02 (Session 53, backup-quarterback default and the depth package captured by `run-slate`)
 
 Working and verified through synthetic fixtures (`tests/test_qb_depth_capture.py`, `tests/test_showdown_backup_qb_default.py`, `tests/test_prior_review_depth_capture.py`, 44 tests), a

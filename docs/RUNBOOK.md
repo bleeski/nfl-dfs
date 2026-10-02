@@ -386,9 +386,10 @@ or a frozen v1-transformation prior in a thin room) receives the whole team pool
 of zero; a package that already holds a pool gives the same number as before. A package written
 before Session 48 says `qb_depth_chart_order_v1` and is read as written, so it still leaves such
 a starter at zero and names him under `declared_starters_without_allocated_pool` in the
-`qb_depth_roles` report: regenerate the package to clear it. A declared starter with no history
-is still excluded by the offensive role gate (`OFFENSIVE_MISSING_HISTORY`,
-`OFFENSIVE_TRANSFER_PRIOR_ZERO`); the depth chart gives him attempts, not a role fact.
+`qb_depth_roles` report: regenerate the package to clear it. Since Session 54 a declared starter
+with no history is selectable as a diagnostic (`OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY`) unless a
+bound fact calls him a backup; one whose own old-team share was zero is still excluded
+(`OFFENSIVE_TRANSFER_PRIOR_ZERO`). The depth chart gives him attempts, not a role fact.
 
 Offensive history is now explicit. Rebuild older frozen prior packages that
 lack SD2 coverage (a package frozen before 2026-09-10 has no `transfer_prior`

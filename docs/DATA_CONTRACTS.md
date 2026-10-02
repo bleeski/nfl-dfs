@@ -1039,7 +1039,7 @@ The current-role report contains exactly one finding per offensive person:
 | State | Selection treatment |
 |---|---|
 | `OBSERVED_HISTORY_ZERO` | Exclude; historical zero does not establish current nonparticipation |
-| `MISSING_HISTORY` | Exclude with zero share (2026-09-10); no prior-season row exists anywhere, so there is no source-bound number to carry. The person is named with FLEX/CPT salary in `pool_coverage` (`OFFENSIVE_ROLE_GATE_EXCLUDED:OFFENSIVE_MISSING_HISTORY`). A person with no prior record at all still blocks (`OFFENSIVE_PRIOR_ROW_MISSING`) |
+| `MISSING_HISTORY` | Exclude with zero share (2026-09-10), except a quarterback the QB depth evidence makes his team's effective starter, who is selectable as a diagnostic (Session 54, below); no prior-season row exists anywhere, so there is no source-bound number to carry. The person is named with FLEX/CPT salary in `pool_coverage` (`OFFENSIVE_ROLE_GATE_EXCLUDED:OFFENSIVE_MISSING_HISTORY`). A person with no prior record at all still blocks (`OFFENSIVE_PRIOR_ROW_MISSING`) |
 | `TRANSFER_PRIOR_UNVERIFIED` | Keep as a diagnostic (2026-09-10): the producer carried the person's own prior-team share (see below); `EVIDENCE_STATE=UNKNOWN`, never a role fact, cannot certify |
 | `TRANSFER_PRIOR_ZERO` | Exclude: the person's own prior-team share was zero in every column |
 | `CURRENT_ROLE_UNKNOWN` | Block a transfer whose frozen package carries no `transfer_prior` (rebuild the package), or any declared material change; unchanged positive history may remain an explicitly unconfirmed diagnostic |
@@ -1900,9 +1900,10 @@ limitation) and `starter_share_basis` on the starter's `changed_people` row
 
 `does_not_establish` under v2 adds `DECLARED_STARTER_HAS_NO_CURRENT_TEAM_ROLE_EVIDENCE_BEYOND_THE_DEPTH_CHART`
 and `CARRY_SHARE_OF_A_TRANSFER_STARTER_IS_STILL_HIS_OLD_TEAM_HISTORY`. v2 moves `qb_attempt_share`
-only. It does not make anyone selectable: `resolve_offensive_roles` still excludes a person whose
-history state is `MISSING_HISTORY` or whose own old-team share was zero
-(`OFFENSIVE_MISSING_HISTORY`, `OFFENSIVE_TRANSFER_PRIOR_ZERO`), independently of the depth chart.
+only. It does not make anyone selectable by itself: `resolve_offensive_roles` still excludes a person
+whose own old-team share was zero (`OFFENSIVE_TRANSFER_PRIOR_ZERO`) and a person whose history state is
+`MISSING_HISTORY` (`OFFENSIVE_MISSING_HISTORY`), with one exception added by Session 54 (below): a
+quarterback with no history whom the depth evidence makes his team's effective starter.
 It does clear the material-role-change exclusion for an unverified transfer starter that v1 had
 left at zero attempts, because his prior points are no longer scored at zero.
 
@@ -2057,6 +2058,45 @@ The selector report carries `showdown_backup_qb_default`: `rule`
 
 **Does not establish** that the chart's rank-1 quarterback is playing. Official activity
 is a separate gate; a same-day promotion the chart has not caught is Session 52's case.
+Every path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+### A depth-declared starter with no usable history is selectable (Session 54, R36, 2026-10-02)
+
+Registered by Session 54 on Ben's ruling of 2026-10-01 (R36): "We can't over rely on history."
+No schema changes. `offensive_roles.resolve_offensive_roles` takes `declared_starters`, a set of
+underlying ids (default empty, so every caller that passes none is unchanged). `selection.py` passes the
+QB depth report's `starters_by_team` values: the resolver's effective starter, already past R25's
+promotion over a DraftKings-unavailable published starter.
+
+A person is selected under this rule only if **all** of these hold, tested in the per-person loop after
+participation precedence and after an explicit team allocation: he is in `declared_starters` (his team's
+effective starter: the published rank-1, or the backup R25 promotes over a DraftKings-unavailable one,
+named in the report's `effective_starter_promotions`); his history state is `MISSING_HISTORY` (no
+prior-season row, and no Session 51 current-season rate); he is a quarterback; his depth-resolved
+`qb_attempt_share` is positive; and no hash-bound role fact calls him a `NAMED_BACKUP` or says he has a
+`MATERIAL_ROLE_CHANGE` (two bound sources that disagree choose neither, so the old exclusion stands; a
+`NAMED_STARTER` fact agrees and changes nothing). Then the finding is `selection_action=DIAGNOSTIC`, `state=MISSING_HISTORY`,
+`finding=OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY`, and `after` holds the attempt share with every other
+share 0 (he has no history to carry). `next_evidence_action` names the depth package by SHA-256, gives the
+attempt, carry and target shares as scored, says the share is a depth-chart order, not a role fact and
+not confirmed activity, and names a refused Session 51 gap-fill when there was one. The report's
+`assumptions` gain `DEPTH_DECLARED_STARTER_WITHOUT_HISTORY_IS_A_DEPTH_CHART_ORDER_NOT_A_ROLE`. The
+report's `evidence_state` stays `UNKNOWN` (any DIAGNOSTIC makes it so). The code is a per-person finding, not
+a blocker: it is pinned in `NOT_BLOCKERS` in `tests/test_gate_registry.py` beside
+`OFFENSIVE_TRANSFER_PRIOR_UNVERIFIED`, and the registry bytes and `REGISTRY_SHA256` do not move.
+
+**Where the share comes from.** From the hash-bound depth package and its registered allocation version,
+never from prose. Under allocation v2 the declared starter takes the team's quarterback pool at the unit
+share, even when every quarterback on the team has no history (`TEAM_QB_POOL_UNIT_NO_ALLOCATED_POOL`).
+Under v1 an empty pool stays at zero, so the starter stays excluded (`OFFENSIVE_MISSING_HISTORY`) and the
+finding says why. The scored value is the existing deterministic projection on that share; nothing here
+writes a number.
+
+**Never selected by this rule.** A person DraftKings lists out, an official inactive, an operator exclusion
+or an `EXPLICIT_NONPARTICIPATION` fact (participation precedence is the first branch); a backup the
+resolver has not promoted; a non-quarterback; a quarterback a bound fact calls a backup or says has a
+material role change; a declared starter whose attempt share is zero. A declared starter with history is
+untouched. **Does not establish** that the quarterback is playing, that the chart is current, or any role.
 Every path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
 ## Ownership brackets
