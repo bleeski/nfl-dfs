@@ -4,6 +4,34 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-02: Session 52 -- counted and deferred (R35)
+
+Branch `claude/s52-count-and-defer`, on `a9fbcf5` (PR #99's merge). Documentation only: `docs/ROADMAP.md`, `docs/claude/working.md`, this file.
+No code, test, contract, protected path or permanent boundary touched; the suite line is unchanged at `2269 passed, 1 skipped in 569.27s
+(0:09:29)` (Session 54's, on the same code).
+
+**What ran.** The card's first step: count who Sessions 51, 53 and 54 still leave out of the pool, and defer the rest if the manual route in
+`docs/claude/working.md` covers it. There is no next slate yet, so the count ran on PIT@CLE (2026-10-01), the slate that prompted R35:
+`run-slate` on its saved frozen package with Sessions 53 and 54 (`S54_REPLAY2`), plus Session 51's records-level replay for the v3 rates
+(the frozen package predates v3, so it still shows Boston, Concepcion and Bernard excluded, and v3 rates all three).
+
+**Result.** 18 people stay unrated or left out. Seven are DraftKings `OUT` or `IR` (Green, Allar and Howard at $6,000, Heidenreich $2,200,
+Wallace $1,000, Royer and Burgess $200). The other eleven are all at the $200 minimum (Gray, Ryan, Swinson, Means, Nowakowski, McRee,
+B. Johnson, B. Smith, Wetjen, and Horn and Hodgins, who are in the pool on an unverified prior-team share). No depth-declared starter is left
+out. Nobody the engine left out and DraftKings has not marked unavailable is priced above $200.
+
+**Decision, and why.** Session 52 is `Deferred`, not built. The card says to defer when the count is small, and it is: the cases that
+prompted R35 (Keenum, Watson) are closed by R25's promotion, Session 51 and Session 54, and an in-season slate leaves only players with no
+snaps yet, who are minimum-salary depth. What remains open is a week-1 slate, where no rookie or transfer has a current-season row. The
+card now names what reactivates it (a slate whose count lists a person a source names a starter, or a rotation player priced above about
+$3,000, whom no real source can rate, or Ben's word). The caveat is one sample; a second slate with the same shape would confirm it.
+Ben can overturn this and have Session 52 built now.
+
+**Concentration, still manual, named.** The same replay has Rodgers in all 22 rows, Fannin in 91% and Warren in 68%, against the 60%
+person cap in `docs/claude/working.md`. That default is a hand-rotation at the handoff, not engine code, and Session 52's card never covered
+it (its row minimum is capped by the Captain default but does not enforce a person cap). If the manual rotation proves slow or error-prone
+on the next slate, an engine-side person cap on the sequential Showdown path is its own session; none exists yet.
+
 ### 2026-10-02: Session 54 -- a depth-declared starter with no usable history is selectable (R36)
 
 Branch `claude/s54-declared-starter-selectable`, claimed at `c6cc49b` (on `32c08a0`, PR #98's merge), task file `state/tasks/S54.md`. No

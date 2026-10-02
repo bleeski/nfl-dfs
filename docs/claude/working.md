@@ -63,8 +63,9 @@ promotion. Since Session 53 `run-slate` captures the QB depth package itself and
 row, so list the backups the report names (`showdown_backup_qb_default`) rather than rebuilding that rule by hand; a limitation named
 `QB_DEPTH_CAPTURE_*` or `SHOWDOWN_BACKUP_QB_UNEVALUATED` means the rule did not run for that team and the check is yours. Since Session 54 a
 quarterback the depth evidence declares the starter is selectable with no history (finding
-`OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY`), so the left-out list is now whoever the chart does not declare. Until Session 52 gives the
-rest an input channel, it is manual.
+`OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY`), so the left-out list is now whoever the chart does not declare. Session 52 (an input channel
+for the rest) was counted and deferred on 2026-10-02: on PIT@CLE nobody left out was a starter or priced above $200 apart from DraftKings
+`OUT` and `IR` players, so the pass below stays manual until a slate's count says otherwise (`docs/ROADMAP.md` § Session 52).
 
 - **Left-out starters.** List every person a role gate or DK status kept out of the pool who a source names a starter, the depth-chart
   quarterback first. Roster each by construction or write why not in the handoff. A starting quarterback is Captain in at least 2 rows
