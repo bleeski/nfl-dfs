@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "77ac5e61-3a67-5982-b843-3255de988861",
-      "branch": "claude/s54-declared-starter-selectable",
-      "chunk": "S54",
-      "claimed_at": "2026-10-02T02:52:35Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
