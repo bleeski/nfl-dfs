@@ -4,6 +4,35 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-02: Code review triage (Codex review of 2026-10-02)
+
+Branch `claude/review-2026-10-02-triage`, on `7439bb8` (PR #100's merge). Documentation only: `docs/critiques/Code_Review_2026-10-02_Codex.md`
+(eight `Decision` cells filled; the file and `docs/critiques/REVIEW_PROMPT.md` committed), `docs/ROADMAP.md` (Sessions 55 to 59 added, §1,
+§2.8, §2.9, the Session 18, 18b and 23c rows), `docs/claude/working.md` (F-05), this file. No code, test, contract, protected path or
+permanent boundary touched by the triage; the suite on this Windows host, after the test fix below: `2268 passed, 2 skipped in 764.09s (0:12:44)`, both skips the symlink-permission case (`test_cowork.py:112` and the fixed test), the same 2,270 tests as Session 54's Linux `2269 passed, 1 skipped`.
+
+**Decisions.** F-01 accepted, modified: Session 55 builds the swap as a `scripts/` tool; severity HIGH, tier 1 (DraftKings refuses a
+repeated person at upload, so the harm is a refused file under the clock). F-02 accepted: Session 56; Session 23c now depends on it.
+F-06 and F-07 accepted: Session 57. F-03 accepted: Session 58. F-08 accepted in part: Session 18 no longer waits on Session 17b or O2 and
+Session 18b no longer waits on Session 24b; the sequencing question (run the local grading before Sessions 56 and 57) is Ben's and sits as a
+a flag to Ben in §2.8 with the recommendation to do so. F-04 accepted: Session 59. F-05 modified and done here: the Showdown judgment
+block stays always-loaded (Ben's double correction is why it exists) and lost its history, 3,275 to about 2,300 bytes.
+
+**Verified in the triage, against the code at `7439bb8`.** F-01: `keenum_swap.py:32` builds the new roster without checking the person is
+already in it. F-02: `make_showdown_policy.py:126-129` defaults 0.80 and 0.40 against R35's 60% and 20%; `selection.py` only reports
+`captain_exposure`. F-03: `offensive_roles.py:385` guards `MISSING_HISTORY` only. F-06 and F-07: defaults at `make_showdown_policy.py:142-154`;
+the Showdown ladder drops the own-DST veto at rung 2 and the QB band at rung 3 (`relaxation.py:519-524`). The field counts in F-06, F-07
+and F-08 are the review's, run on the standings inbox, and were not re-derived here; Session 18's acceptance now requires the grader to
+reproduce them.
+
+**Test fix, its own commit.** `tests/test_standings_transport.py::test_a_symlink_at_an_inbox_name_is_never_bound` raised `WinError 1314` on
+this host instead of skipping (`.claude/rules/tests.md` names the Windows symlink-permission case as the one expected platform skip, and the
+Codex review's Windows run had the same one failure); it now skips when the host cannot create a symlink and still runs wherever it can,
+which includes Linux CI. Not a loosening: the assertion is unchanged.
+
+**What would have made it better.** The review prompt is reusable and is now tracked (`docs/critiques/REVIEW_PROMPT.md`); the next
+review should start from the current `HEAD` and name it, since this one ran at `ab50652`, one commit past the merge it reviewed.
+
 ### 2026-10-02: Session 52 -- counted and deferred (R35)
 
 Branch `claude/s52-count-and-defer`, on `a9fbcf5` (PR #99's merge). Documentation only: `docs/ROADMAP.md`, `docs/claude/working.md`, this file.

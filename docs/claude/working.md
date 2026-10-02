@@ -53,33 +53,26 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 
 ## Showdown judgment pass (Ben, 2026-10-01; second correction)
 
-Ben corrected the same thing twice: PHI@CHI left Case Keenum out and PIT@CLE left Deshaun Watson out, each because he has no
-prior-season row. The engine scores only people it has a row for, so a starter without one never reaches selection
-(`selection.py` puts every role-gated person in `run_excluded`, which binds every row, and a thesis whose only Captain is excluded is
-dropped, `portfolio_policy.py`). The deterministic layer cannot be asked to add him. The judgment is yours, it runs every slate, and
-it runs before the handoff without being asked. Since Session 51 the engine rates a starter who has current-season rows before the
-slate (nflverse in-season file, no look-ahead), so this pass is for whoever v3 still leaves out: a true cold start or a same-day
-promotion. Since Session 53 `run-slate` captures the QB depth package itself and keeps every backup quarterback out of every Showdown
-row, so list the backups the report names (`showdown_backup_qb_default`) rather than rebuilding that rule by hand; a limitation named
-`QB_DEPTH_CAPTURE_*` or `SHOWDOWN_BACKUP_QB_UNEVALUATED` means the rule did not run for that team and the check is yours. Since Session 54 a
-quarterback the depth evidence declares the starter is selectable with no history (finding
-`OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY`), so the left-out list is now whoever the chart does not declare. Session 52 (an input channel
-for the rest) was counted and deferred on 2026-10-02: on PIT@CLE nobody left out was a starter or priced above $200 apart from DraftKings
-`OUT` and `IR` players, so the pass below stays manual until a slate's count says otherwise (`docs/ROADMAP.md` § Session 52).
+Runs on every Showdown slate, before the first handoff message, without being asked. History: `changelog.md` 2026-09-28 and
+2026-10-01, R35 and R36 (`docs/ROADMAP.md` §2.5). The engine scores only people it has a row for, so a starter without one never
+reaches selection. Sessions 51, 53 and 54 rate in-season rows, keep every backup quarterback out (`showdown_backup_qb_default`;
+list the backups the report names rather than rebuilding that rule) and select a depth-declared starter with no history. This
+pass is for whoever is still left out: a true cold start or a same-day promotion. A limitation named `QB_DEPTH_CAPTURE_*` or
+`SHOWDOWN_BACKUP_QB_UNEVALUATED` means the backup rule did not run for that team, and the check is yours.
 
-- **Left-out starters.** List every person a role gate or DK status kept out of the pool who a source names a starter, the depth-chart
-  quarterback first. Roster each by construction or write why not in the handoff. A starting quarterback is Captain in at least 2 rows
-  (about 10%) and FLEX where the thesis fits, rotated across contests. Use a one-row replacement or the Keenum swap rule
-  (`data/inbox/slates/phi-chi-sd-2026-09-28/keenum_swap.py`, `changelog.md` 2026-09-28 v4; `swap_inactives.py value-add` is the
-  Classic analogue and takes only scored players). Never write a projection: he adds 0 prior points, his gate stays unmet and is named
-  as a limitation, and the file stays `DO_NOT_UPLOAD`. Research informs the choice, never a number.
-- **Concentration.** After the build, count Captains and each person's share of lineups. Defaults, mine to set under the lock-clock
-  ruling and Ben's to overturn: no person above 60% of lineups and no Captain above 20%, unless the selectable pool cannot meet it, and
-  then say so with the pool size. A breach is a construction failure, not a finding to report: rotate rows by hand (replace the most
-  shared row, check distinctness and overlap with `qa_showdown_portfolio.py`) before the handoff. PIT@CLE shipped Warren, Metcalf and
-  Pittman at 82% each with the breach named and not acted on; that is the miss this rule closes.
-- **Order.** Do both before the first handoff message, with the clock measured. A lock inside five minutes ships what is built and
-  names both gaps.
+- **Left-out starters.** List every person a role gate or DK status kept out of the pool whom a source names a starter, the
+  depth-chart quarterback first. Roster each by construction or write why not in the handoff. A starting quarterback is Captain
+  in at least 2 rows (about 10%) and FLEX where the thesis fits, rotated across contests. Use a one-row replacement, validated
+  with `qa_showdown_portfolio.py` (Session 55 is the Showdown swap tool; `swap_inactives.py value-add` is the Classic analogue
+  and takes only scored players). Never write a projection: he adds 0 prior points, his gate stays unmet and is named as a
+  limitation, and the file stays `DO_NOT_UPLOAD`. Research informs the choice, never a number.
+- **Concentration.** After the build, count Captains and each person's share of lineups. Defaults, mine to set under the
+  lock-clock ruling and Ben's to overturn: no person above 60% of lineups and no Captain above 20%, unless the selectable pool
+  cannot meet it, and then say so with the pool size. A breach is a construction failure, not a finding to report: rotate rows by
+  hand (replace the most shared row, check distinctness and overlap with `qa_showdown_portfolio.py`) before the handoff. Session
+  56 moves the defaults into the engine; the by-hand rotation stays for what the pool cannot meet.
+- **Order.** Do both before the first handoff message, with the clock measured. A lock inside five minutes ships what is built
+  and names both gaps.
 
 ## Repo etiquette and gotchas
 
