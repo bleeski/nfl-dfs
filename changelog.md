@@ -4,6 +4,39 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-01: Slate run -- PIT@CLE Showdown, 22 Entry IDs across 8 contests (thesis sleeves in prefilled rounds)
+
+No protected path touched; no gate touched. Every file below ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`,
+`EVIDENCE_STATE=UNKNOWN`. Inputs: salaries `15afb2d9507c861c221e13f4f0f2f4abbe69e2b204c61a75dba296423ca853a1`, entries
+`e8b5eea16628e429f58ccec50d985f53759e18d60ed616b74b6f7bce58c43bc3`. Lock 20:15 ET; measured 40.1 minutes at the first probe, run started 19:35 ET.
+
+- **Engine baseline** (`run-slate --profile prior_review --build-priors`, run `20261001T233526Z-PIT_CLE_SD_20261001`, exit 0,
+  `DELIVERABLE`, file `084dbdeb...de32`, `qa_showdown_portfolio.py` 0 defects). Read against R34 it was legal and weak: Fannin in 21 of 22
+  lineups, Metcalf 18, Warren 16, Pittman 15, Rodgers 14; 22 distinct Captains, 13 of them at or under $7.8k CPT; salary used $35.4k to $50.0k.
+- **Pool gap, taken to Ben.** The role gate dropped Deshaun Watson, Denzel Boston, KC Concepcion Jr., Germie Bernard and twelve others as
+  `OFFENSIVE_ROLE_GATE_EXCLUDED:OFFENSIVE_MISSING_HISTORY` (no prior-season row). Web research (labelled research, moved no number) has Watson as
+  the Browns' starter over Shedeur Sanders and Boston and Concepcion active. The selectable pool was 25 people, about 8 of them relevant, so every
+  portfolio from it is concentrated. `make_offensive_role_evidence.py` gives a declared starter attempts, never a role fact, so no source clears this
+  for a player new to a team. That is a gate no real source can clear for rookies and returners; recommendation is in the run handoff, not applied here.
+- **Thesis sleeves** (`make_showdown_policy.py --thesis`, four prefilled rounds, 6/6/5/5 rows, interleaved across contests): PIT wins through the
+  air, CLE home upset, shootout, defensive battle with K/DST Captains. Settings measured, all on this slate:
+  - Default `pass_catchers_with_rostered_qb` max 2 and `qb_count` min 1 make a stack or a no-QB sleeve infeasible. Sleeves need
+    `--pass-catchers-max 4 --qb-count-min 0`.
+  - With backup quarterbacks out, Rodgers was the only legal QB, so `qb_count` min 1 put him in 6 of 6 rows and any combined cap under 1.0 was
+    infeasible. The ladder then stripped the Captain cap (rung 3, six Rodgers Captains). `--qb-count-min 0` fixed it.
+  - Combined cap 0.67 sent sleeve A to rung 3 at overlap 4 and rung 2 at overlap 5 (a $39.7k lineup), sleeve C to rung 1 (a $22.7k lineup) and sleeve D
+    to rung 3 (five Fannin Captains). Combined 0.84, overlap 5, Captain 0.34 to 0.4 solved A, D and E at the supplied rung; C (CLE minimum 3) needed
+    rung 1 (salary band lost, lineups $43.5k to $48.7k).
+  - A leftover `DKEntries_next.csv` beside the template in a run's input directory gives `CoworkInputError: ambiguous Cowork CSV inputs`.
+    Keep the spliced template outside the input directory.
+- **Result** (`outputs/PIT_CLE_SD_20261001_THESIS/DK_REVIEW_ENTRY_PIT_CLE_THESIS.csv`, `bd4b847fb091b613113098233e6cfddf0beb472e396646c5e2e204bb1d3f18c2`, after
+  `diversify_showdown_contests.py`): `qa_showdown_portfolio.py --max-overlap 5` PASS, 0 defects, 22 distinct lineups, 10 distinct Captains
+  (six K or DST), salary $43.5k to $49.9k, max pairwise overlap 5 (45 pairs exceed the default 4). Warren, Metcalf and Pittman are each in 18
+  of 22; Judkins 16, Jeudy 14, Rodgers 13, Fannin 13, Boswell 12. Leverage is unmeasured (no ownership input). Weather `UNOBSERVED`; no payout,
+  field size or official status supplied.
+- Not done: no readable review HTML or workbook for the assembled file (only the engine baseline has one), and the file is not behind
+  `LATEST_DELIVERABLE.json`. Session 23c (multi-thesis in one run) would remove the hand splice.
+
 ### 2026-10-01: Session 23b -- Showdown thesis structures (P8 part 1: the thesis contract and a single-thesis build)
 
 Branch `claude/friendly-sagan-y4rkxo` (assigned, at `1401f44`, Session 49's merge), task file `state/tasks/S23b.md`. No
