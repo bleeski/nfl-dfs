@@ -51,6 +51,28 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
   `explorer`. Pre-close-out diff review: `reviewer`. Both answer from their own context.
 - `git diff --stat` before `git diff`; one session per conversation, then `/clear`.
 
+## Showdown judgment pass (Ben, 2026-10-01; second correction)
+
+Ben corrected the same thing twice: PHI@CHI left Case Keenum out and PIT@CLE left Deshaun Watson out, each because he has no
+prior-season row. The engine scores only people it has a row for, so a starter without one never reaches selection
+(`selection.py` puts every role-gated person in `run_excluded`, which binds every row, and a thesis whose only Captain is excluded is
+dropped, `portfolio_policy.py`). The deterministic layer cannot be asked to add him. The judgment is yours, it runs every slate, and
+it runs before the handoff without being asked. Until a session gives it an input channel, it is manual.
+
+- **Left-out starters.** List every person a role gate or DK status kept out of the pool who a source names a starter, the depth-chart
+  quarterback first. Roster each by construction or write why not in the handoff. A starting quarterback is Captain in at least 2 rows
+  (about 10%) and FLEX where the thesis fits, rotated across contests. Use a one-row replacement or the Keenum swap rule
+  (`data/inbox/slates/phi-chi-sd-2026-09-28/keenum_swap.py`, `changelog.md` 2026-09-28 v4; `swap_inactives.py value-add` is the
+  Classic analogue and takes only scored players). Never write a projection: he adds 0 prior points, his gate stays unmet and is named
+  as a limitation, and the file stays `DO_NOT_UPLOAD`. Research informs the choice, never a number.
+- **Concentration.** After the build, count Captains and each person's share of lineups. Defaults, mine to set under the lock-clock
+  ruling and Ben's to overturn: no person above 60% of lineups and no Captain above 20%, unless the selectable pool cannot meet it, and
+  then say so with the pool size. A breach is a construction failure, not a finding to report: rotate rows by hand (replace the most
+  shared row, check distinctness and overlap with `qa_showdown_portfolio.py`) before the handoff. PIT@CLE shipped Warren, Metcalf and
+  Pittman at 82% each with the breach named and not acted on; that is the miss this rule closes.
+- **Order.** Do both before the first handoff message, with the clock measured. A lock inside five minutes ships what is built and
+  names both gaps.
+
 ## Repo etiquette and gotchas
 
 - `docs/ROADMAP.md`, `changelog.md`, `IMPLEMENTATION_STATUS.md` and `backlog.md`
