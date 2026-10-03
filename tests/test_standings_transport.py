@@ -517,7 +517,10 @@ def test_a_symlink_at_an_inbox_name_is_never_bound(tmp_path: Path) -> None:
     name = "contest-standings-100001.csv"
     outside = tmp_path / "elsewhere.csv"
     outside.write_bytes(FILES[name])  # same bytes, but the inbox entry is a mutable pointer
-    (inbox / name).symlink_to(outside)
+    try:
+        (inbox / name).symlink_to(outside)
+    except OSError as error:  # Windows without the symlink privilege: the one expected platform skip
+        pytest.skip(f"this host cannot create a symlink: {error}")
     record = _run(tmp_path, FakeGithub())
     assert _codes(record)[name] == "STANDINGS_TRANSPORT_NAME_COLLISION"
     assert (inbox / name).is_symlink() and outside.read_bytes() == FILES[name]
