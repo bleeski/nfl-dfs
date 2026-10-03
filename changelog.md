@@ -102,6 +102,38 @@ which includes Linux CI. Not a loosening: the assertion is unchanged.
 **What would have made it better.** The review prompt is reusable and is now tracked (`docs/critiques/REVIEW_PROMPT.md`); the next
 review should start from the current `HEAD` and name it, since this one ran at `ab50652`, one commit past the merge it reviewed.
 
+### 2026-10-02: the standings checklist now scans the tracked slate intake
+
+Branch `claude/standings-checklist-slates`, on `7439bb8`. Touches `scripts/standings_checklist.py`, `tests/test_standings_checklist.py`,
+`docs/RUNBOOK.md`, `.claude/skills/standings-checklist/SKILL.md`, and regenerates `data/standings/CONTESTS_AWAITING_STANDINGS.{md,html}`
+plus the dated `standings_pulls_2026-10-02.html`. No engine code, contract, protected path or permanent boundary touched.
+
+**Defect.** Ben asked whether contests with generated portfolios were "not getting filed". The checklist said `awaiting=0`, but it only
+scanned `data/runs/*/inputs/`, the repo root and `Claude outputs/`. `data/runs/` is gitignored and its newest folder is 2026-09-16; every
+slate since landed in the tracked `data/inbox/slates/<slug>-<date>/` (the RUNBOOK's cloud intake). 35 entered contests were invisible:
+DET@BUF 2026-09-17 (6), Week 3 Classic 2026-09-27 (17), PHI@CHI 2026-09-28 (12). The contest IDs were read with `parse_entries`, not
+guessed.
+
+**Fix.** `SLATES_DIR` joins the scan (`*/*.csv`, top level of each slate folder), tagged `snapshot` (git-tracked, hash-prefixed operator
+downloads) with provenance `slate:<folder>`, and dated from the folder name's `YYYY-MM-DD` before the mtime fallback (every file in a fresh
+checkout shares one mtime). One new test (`test_a_tracked_slate_folder_is_scanned_as_a_snapshot_dated_by_its_name`) writes an entries file,
+a review copy of it and a salary file into a slate folder and asserts the contest is found once, as a snapshot, dated 2026-09-28, and owed.
+Real tree after the fix: `awaiting=35 filed=8 normalized=0 settled=0 raw_on_disk=26 dispositioned=18 total=61`.
+
+**Not fixed, named.**
+- PIT@CLE (2026-10-01) has no entry file anywhere the scan looks (`data/runs/`, `data/inbox/slates/`, repo root, `Claude outputs/`), so its
+  contests cannot be listed until that file is placed in a slate folder.
+- Filed is still not settled. The 18 `placeholder` dispositions are real contests marked unsettleable by the 2026-09-14 Q1B ruling (no
+  `nfl_prelock_run_manifest_v1` from `prior_review`/C1-C3); pulling their exports adds nothing to the validation corpus. Whether current
+  runs should write that manifest is a recommendation for Ben, not done here.
+
+**Verification.** Focused: `tests/test_standings_checklist.py` `23 passed in 1.04s`. Full suite, Windows desktop, watched to the end:
+`1 failed, 2269 passed, 1 skipped in 836.51s (0:13:56)`. The one failure is
+`tests/test_standings_transport.py::test_a_symlink_at_an_inbox_name_is_never_bound`: `os.symlink` raises `OSError [WinError 1314] A required
+privilege is not held by the client` on this desktop, before any checklist code runs. It is an environment finding, not caused by this
+change, and not skipped or loosened here. `.claude/rules/tests.md` expects a symlink-permission skip on Windows; that test has no guard, so a
+follow-up should add one (or enable Developer Mode on the desktop). CI's pinned suite is the merge gate.
+
 ### 2026-10-02: Session 52 -- counted and deferred (R35)
 
 Branch `claude/s52-count-and-defer`, on `a9fbcf5` (PR #99's merge). Documentation only: `docs/ROADMAP.md`, `docs/claude/working.md`, this file.

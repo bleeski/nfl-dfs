@@ -29,7 +29,8 @@ This is a logistics tool only:
   that parse as a reserved-entry template (a salary CSV fails that parse and
   is silently skipped) — the same parser the engine itself uses, so this
   tool and the engine can never disagree about what counts as an entered
-  contest. A hit under ``data/runs/*/inputs/`` is tagged ``confidence:
+  contest. A hit under ``data/runs/*/inputs/`` or ``data/inbox/slates/*/``
+  (the tracked intake a cloud-run slate lands in) is tagged ``confidence:
   snapshot`` (immutable, hash-bound); a hit only in the repo root or
   ``Claude outputs/`` is tagged ``confidence: loose`` (real, but not
   hash-bound — the file could still be edited or deleted by hand).
@@ -66,6 +67,10 @@ except ImportError:
     )
 
 RUNS_DIR = REPO_ROOT / "data" / "runs"
+# Tracked slate intake (RUNBOOK: cloud sessions put a slate's DKEntries here,
+# and data/runs/ is gitignored, so a slate run in the cloud never reaches a
+# desktop's data/runs/). One folder per slate, ``<slug>-<YYYY-MM-DD>``.
+SLATES_DIR = REPO_ROOT / "data" / "inbox" / "slates"
 STANDINGS_DIR = REPO_ROOT / "data" / "standings"
 INBOX_DIR = STANDINGS_DIR / "inbox"
 NORMALIZED_DIR = STANDINGS_DIR / "normalized"
@@ -81,6 +86,7 @@ HTML_PATH = STANDINGS_DIR / "CONTESTS_AWAITING_STANDINGS.html"
 DK_EXPORT_URL = "https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
 
 _RUN_DATE_RE = re.compile(r"20\d{6}")
+_SLATE_DATE_RE = re.compile(r"(20\d{2})-(\d{2})-(\d{2})$")
 UNKNOWN_DATE = "date unknown"
 
 
@@ -125,6 +131,11 @@ def _provenance_for(csv_path: Path) -> tuple[str, bool]:
     except ValueError:
         pass
     try:
+        relative = csv_path.relative_to(SLATES_DIR)
+        return f"slate:{relative.parts[0]}", True
+    except ValueError:
+        pass
+    try:
         relative = csv_path.relative_to(REPO_ROOT)
     except ValueError:
         relative = csv_path
@@ -136,7 +147,8 @@ def _evidence_date_for(csv_path: Path) -> str:
 
     A ``data/runs/`` snapshot carries its own date in the run ID
     (``20260913T161138Z-week1-portfolio``), which is the date the slate was
-    actually operated. Anything else falls back to the file's own
+    actually operated; a ``data/inbox/slates/<slug>-YYYY-MM-DD`` folder carries
+    it in its name. Anything else falls back to the file's own
     modification time. Neither is DraftKings' contest date, which the entry
     CSV does not contain: this is a proxy, and the rendered outputs say so.
     """
@@ -149,6 +161,16 @@ def _evidence_date_for(csv_path: Path) -> str:
             return datetime.strptime(candidate, "%Y%m%d").date().isoformat()
         except ValueError:
             continue
+    try:
+        slate_id = csv_path.relative_to(SLATES_DIR).parts[0]
+    except ValueError:
+        slate_id = ""
+    match = _SLATE_DATE_RE.search(slate_id)
+    if match:
+        try:
+            return datetime.strptime("-".join(match.groups()), "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            pass
     try:
         mtime = csv_path.stat().st_mtime
     except OSError:
@@ -180,8 +202,12 @@ def group_by_evidence_date(rows: list[dict]) -> list[tuple[str, list[dict]]]:
 def _candidate_csv_paths() -> list[Path]:
     """Every CSV this tool is willing to try as a reserved-entry template.
 
-    The canonical source is ``data/runs/*/inputs/*.csv`` — every immutable
-    snapshot Cowork's own intake step writes. This repo's actual history
+    The canonical sources are ``data/runs/*/inputs/*.csv`` — every immutable
+    snapshot Cowork's own intake step writes — and ``data/inbox/slates/*/*.csv``,
+    the git-tracked intake a slate run in a cloud session lands in (its
+    ``data/runs/`` is gitignored and never reaches the desktop). Before
+    2026-10-02 only the first was scanned, so every slate built from 9/17 on
+    was invisible to the checklist. This repo's actual history
     (see the 2026-09-13 retrospectives) also has at least one live slate
     built through emergency scripts under a lock clock rather than a full
     `cowork-run` intake, so its reserved-entry file may only ever have
@@ -194,6 +220,8 @@ def _candidate_csv_paths() -> list[Path]:
     globs = []
     if RUNS_DIR.is_dir():
         globs.append(RUNS_DIR.glob("*/inputs/*.csv"))
+    if SLATES_DIR.is_dir():
+        globs.append(SLATES_DIR.glob("*/*.csv"))
     if REPO_ROOT.is_dir():
         globs.append(REPO_ROOT.glob("*.csv"))
     claude_outputs = REPO_ROOT / "Claude outputs"
@@ -502,7 +530,8 @@ def render_markdown(report: dict) -> str:
             "",
             "These filenames in `data/standings/inbox/` carry a digit run that "
             "does not match any contest ID recovered from an entered-contest "
-            "CSV (`data/runs/`, the repo root, or `Claude outputs/`). Not a "
+            "CSV (`data/runs/`, `data/inbox/slates/`, the repo root, or "
+            "`Claude outputs/`). Not a "
             "blocker — could be a contest run outside this repo, a renamed "
             "file, or a stale export. Named here rather than silently dropped:",
             "",
@@ -698,8 +727,8 @@ def render_html(report: dict) -> str:
 {other_html}
 {inbox_html}
   <p class="note">Evidence date is the newest date any entry file for that contest
-  carries (a <code>data/runs/</code> snapshot ID, else the file's own modification
-  date). It is this repo's best proxy for when the contest ran; DraftKings' own
+  carries (a <code>data/runs/</code> snapshot ID or <code>data/inbox/slates/</code>
+  folder date, else the file's own modification date). It is this repo's best proxy for when the contest ran; DraftKings' own
   contest date is not in the entry CSV.</p>
 </div>
 <script>

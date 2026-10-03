@@ -29,15 +29,17 @@ invent a `claim.py`-style take/release around this run.
   click per contest, not two.
 
 Evidence date is the newest date any entry file for that contest carries: a
-`data/runs/` snapshot ID (`20260910-showdown-sf-lar`), else that file's own
+`data/runs/` snapshot ID (`20260910-showdown-sf-lar`) or `data/inbox/slates/`
+folder date (`phi-chi-sd-2026-09-28`), else that file's own
 modification date. It is a proxy for when the contest ran, not a DraftKings
 fact; the entry CSV does not contain a contest date, and the outputs say so.
 
 ## Run it
 
-Run it in the checkout that holds the runs. `data/runs/` and the inbox are
-gitignored, so a cloud clone has neither and its list is empty by
-construction; the Windows desktop checkout is where the corpus lives.
+Run it in the checkout that holds the runs. `data/runs/` and the standings
+inbox are gitignored, so a cloud clone has neither; the Windows desktop checkout
+is where the exports live. The tracked `data/inbox/slates/` intake travels with
+git, so a slate run in the cloud is still listed from either checkout.
 
 ```powershell
 .venv\Scripts\python.exe scripts\standings_checklist.py
@@ -52,10 +54,10 @@ repo). It never touches the network.
 
 Read the tool's own module docstring for the exact discovery rules rather
 than re-deriving them here. In short: it reuses `nfl_dfs.dk.parse_entries`,
-the engine's own parser, against every CSV under `data/runs/*/inputs/` plus
-loose `DKEntries*` / `DK_REVIEW_ENTRY*` CSVs in the repo root and
+the engine's own parser, against every CSV under `data/runs/*/inputs/` and
+`data/inbox/slates/*/` (both tagged `snapshot`) plus loose `DKEntries*` / `DK_REVIEW_ENTRY*` CSVs in the repo root and
 `Claude outputs/`; a salary CSV fails that parse and is skipped. Contests
-found only outside `data/runs/` are tagged `loose` (real, but not hash-bound
+found only outside those two are tagged `loose` (real, but not hash-bound
 — the 2026-09-13 DAL@NYG slate was built under a lock clock and only ever
 existed as root CSVs). A contest counts as `filed` the moment any filename in
 `data/standings/inbox/` carries its ID; that is a "something landed" check,
@@ -129,7 +131,7 @@ about what happened to a contest.
 Everything in `CLAUDE.md` applies, especially the permanent boundaries:
 DraftKings login, contest entry, upload and money movement are manual;
 uploaded bytes and earlier outputs are never overwritten. This skill reads
-`data/runs/`, the repo root and `Claude outputs/`, and writes only under
+`data/runs/`, `data/inbox/slates/`, the repo root and `Claude outputs/`, and writes only under
 `data/standings/`.
 
 ## This is not
