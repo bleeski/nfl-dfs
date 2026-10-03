@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "9fb8cd02-0831-4cc0-8c9f-efb7ec0477ff",
+      "branch": "claude/s55-showdown-value-add",
+      "chunk": "S55",
+      "claimed_at": "2026-10-03T22:04:30Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
