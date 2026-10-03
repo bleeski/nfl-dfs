@@ -313,6 +313,33 @@ list. It derives replaceable cells from exact DraftKings IDs, the certified
 prior assignment, game lock times, the current prefilled template, and the
 timezone-aware `--as-of` value.
 
+## Showdown value-add swap
+
+`scripts/showdown_value_add.py` (Session 55) works one person the engine left out, such as a depth-chart starter with no
+prior row, into rows of an already-filled Showdown review file by one swap each. It is construction only. He adds 0 prior
+points, no projection is written, his evidence gate stays unmet, and the file stays `DO_NOT_UPLOAD`; the report says so.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\showdown_value_add.py `
+  --salaries 'C:\full\path\DKSalaries.csv' --template 'C:\full\path\DKEntries.csv' `
+  --review 'C:\full\path\DK_REVIEW_ENTRY_v4.csv' --out 'C:\full\path\DK_REVIEW_ENTRY_v5.csv' `
+  --dk-id 44282409 --count 6
+```
+
+- `--dk-id` is his exact current-slate DraftKings ID, either role row. `--template` is the original DKEntries download: only a
+  row it left blank can change, and a row DraftKings prefilled is never edited, though it still counts for distinctness.
+- A FLEX cell is swapped; `--captain` swaps the Captain instead. `--count N` is up to N rows (default 3). `--entry-id` names
+  exact rows instead, and any named row that cannot take him refuses the whole run. `--theses` with `--thesis` limits the
+  rows by label. `--scores` (`by_dk_id`, each cell by its own ID) only orders which cell goes first; without it the
+  cheapest goes first. `--entry-id` does not combine with `--count` or `--thesis`.
+- A swap is taken only if the row is legal (six distinct people, cap, both teams) and no other row has the same roster
+  (R29: a FLEX permutation is the same roster, a different Captain is not). The tool also never creates the same six
+  people under another Captain, a construction choice stricter than R29 that `keenum_swap.py` made too. A row that already
+  holds him, in either slot, is never edited.
+- The output is rebuilt, reparsed and audited against the template before it is created, and created exclusively. Any
+  invalid row in the file, including one this tool never touched, exits 2 and writes nothing. Exit 3 means the file was
+  written with fewer than N rows. Run `scripts/qa_showdown_portfolio.py` on the result next, then the concentration check.
+
 ## Settlement capture and replay
 
 After the contest is final, prepare the strict `nfl_settlement_request_v1`
