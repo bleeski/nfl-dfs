@@ -258,6 +258,16 @@ moved to `docs/claude/working.md`. No roadmap session number.
   them under one global cap. Every builder call gets a fresh `--out` path and
   its exit code is checked before the file is read (the 2026-09-27 stale-read
   slip, now a regression test). 16 tests, including one real subprocess call.
+- **`scripts/showdown_value_add.py`** (Session 55) works one named person (exact
+  DraftKings ID, either role row) into up to N rows of a filled Showdown review
+  file by one FLEX swap each, or the Captain with `--captain`. Only rows the
+  supplied `--template` left blank can change; a row already holding him is never
+  edited; every row passes `validate_lineup`, every `roster_canonical_key` is
+  distinct across the file, and no new pair shares all six people. The output is
+  rebuilt, reparsed, audited against the template and created exclusively, so one
+  invalid row refuses the whole publication. It writes no projection (0 prior
+  points; the file stays `DO_NOT_UPLOAD`). Replaces the unvalidated
+  `keenum_swap.py`, which stays as a record. 49 tests.
 - **`selection.write_pool_scores`** now writes after the run's own exclusion
   set is computed and names it (`excluded_dk_ids`), instead of before. Two
   regression tests, both confirmed to fail against the pre-fix ordering.
