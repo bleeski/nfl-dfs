@@ -4,6 +4,75 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-03: Session 55 -- a validated Showdown value-add swap (2026-10-02 review F-01)
+
+Branch `claude/s55-showdown-value-add`, claimed at `526409a` (on `17cfbb9`, PR #102's merge), task file `state/tasks/S55.md`. No protected
+path, evidence gate, contract or permanent boundary touched; every path still ends `MODEL_STATUS=PRIOR_ONLY / RELEASE_DECISION=DO_NOT_UPLOAD`.
+Baseline `2268 passed, 2 skipped in 662.07s (0:11:02)` (Windows). Final `2317 passed, 2 skipped in 743.22s (0:12:23)` (Windows): 49 tests
+added (`tests/test_showdown_value_add.py`), none removed, skipped or loosened; the two skips are the symlink-permission case, as at baseline.
+
+**Why.** `data/inbox/slates/phi-chi-sd-2026-09-28/keenum_swap.py` (line 32) builds the new roster without checking the person is not already
+in it, so a re-run on the tracked v4 publishes two `LINEUP_PERSON_REPEATED` rows and exits 0 (DraftKings refuses a repeated person at upload).
+It stays untouched as the record of what shipped on 2026-09-28; `docs/claude/working.md` no longer recommends it.
+
+**Added.** `scripts/showdown_value_add.py` (338 lines, 298 non-blank).
+- One person by exact current-slate DK ID (either role row resolves to him) into up to `--count N` rows by one FLEX swap each, or the Captain
+  with `--captain`. Refused by name: an unknown ID, a DraftKings `OUT`/`IR`/`D` person, a Classic salary or entries file.
+- A row that already holds him, in either slot, is never edited. A swap is taken only if `validate_lineup` accepts the row and its
+  `roster_canonical_key` matches no other row of the file (R29: a FLEX permutation is the same lineup, a different Captain is not).
+- Before anything is created the output bytes are rebuilt, reparsed with `parse_entry_bytes` and audited: every line equals the template
+  except the swapped cells, the diff against the review is exactly one cell per swapped row, every filled row is legal and every key distinct.
+  One bad row, even one this tool never touched, refuses the whole publication (exit 2, no file). The create is `open(..., "xb")`, last; a
+  failed write removes only the file this call created and says so plainly if it cannot (`OUTPUT_LEFT_BEHIND`).
+- The report is one JSON object: swaps, `already_holds`, `skipped`, the ordering basis, the most shared person and most frequent Captain
+  after the swap, six input and output hashes, a `LIMITATION` (0 prior points, evidence gate unmet) and `DO_NOT_UPLOAD`. No projection and
+  no sidecar file is written.
+
+**Card refinements, mine to set and Ben's to overturn.**
+1. `--template` (the original DKEntries download) is required: the review file cannot say which rows DraftKings prefilled, and `CLAUDE.md`
+   lets only blank cells the template authorizes change. Prefilled rows pass through byte for byte and still count for distinctness.
+   Raised by the advisor before code.
+2. `--entry-id` (repeatable) names exact rows; one that holds him, is blank or prefilled, is absent or has no legal distinct swap refuses the
+   whole run. That is what makes acceptance (1) and (2) literal for a named row. It excludes `--count` and `--thesis`. Automatic mode skips a
+   row that holds him (`already_holds`) and exits 2 (`NO_ROW_CHANGED`) when nothing can change.
+3. A swap that would create the same six people under another Captain is refused. That is stricter than R29, which calls it a different
+   lineup; `keenum_swap.py` refused it too, and the first draft without it raised v4's maximum pairwise overlap from 5 to 6.
+4. Exit 3 means written with a shortfall (the convention of `swap_inactives.py` and the QA scripts); `--count` is "up to N".
+5. `--scores` (`by_dk_id`) is read only to order, by each cell's own ID; absent or missing scores 0 and salary breaks the tie.
+6. Size: 338 lines against the card's "under 300", for the template audit, the output gate and the post-create handling.
+
+**Verified.**
+- Focused: `49 passed in 1.10s`. Mutation checks, each failing at least one test: ordered-tuple identity in place of the canonical key (also
+  refused by the output gate with `DUPLICATE_LINEUP`, so nothing would have been published), the output gate's raise turned to `pass`, no
+  unlink after a failed write, no read-back check, a cross-role score fallback, unvalidated scores, an unbound double read of the inputs.
+- A fresh-context `reviewer` pass found nothing blocking (its own 400-case fuzz: no invalid row, no repeated lineup, no file after a refusal,
+  one cell changed per swapped row; byte variants with a BOM, LF endings, no final newline, a cp1252 byte, rows without trailing fields). Its
+  findings were fixed: the output gate now has its own tests, a failure after the file exists is a refusal, each input is read once and
+  hashed, a score that is not a finite number is refused, scores are looked up by exact ID, `--entry-id` with `--thesis` is refused, and
+  the wording about R29. Byte-variant tests were added. `git diff --check`, `check_protected_paths.py` and `doctor` are clean.
+- **Acceptance (5), through a script, not a committed test** (the instruction was synthetic fixtures in tests and the tracked PHI@CHI files only
+  for this check; `test_a_rerun_on_a_file_that_already_holds_him_publishes_no_invalid_row` pins the shape on synthetic data). On the tracked
+  v4 (`DK_REVIEW_ENTRY_phi-chi-sd-v4.csv`, sha256 `967f0872b5fb721b...`; salaries `322d7acf2266bb57...`; template `3d1f911a00968ee2...`;
+  `theses_v3.json` `43655824a22ddd98...`), Keenum `44282409`: `keenum_swap.py` with the review's empty score map and 36 requested, exit 0, 13
+  rows chosen, `5274843728` and `5274846778` both `LINEUP_PERSON_REPEATED`, 15 rows holding him (the review's numbers). The new tool with
+  `--count 36 --theses theses_v3.json --thesis S2 --thesis S3 --thesis S4`, unscored: exit 3 (13 eligible rows), 13 swapped, the 9 rows that
+  already held him untouched, 36 filled rows, 22 holding him, 0 invalid, 0 duplicate keys, `qa_showdown_portfolio.py` 0 defects (its default
+  `--max-overlap 4` still reports 35 limit breaches and a maximum overlap of 5; the shipped v4 has 56 and 5). Output sha256 `9de2aa98ef157bd4...`.
+  A second run on the same `--out` was refused `OUTPUT_EXISTS`; no input hash changed.
+
+**Left open, and what would have made it better.**
+- Slip: the claim commit `526409a` carries a `Co-Authored-By` line naming a model, which `.claude/rules/git-authority.md` forbids; it cannot
+  be amended, and every later commit and the pull request omit the model name.
+- The `by_dk_id` score map and the `{entry_id: thesis}` map have no contract in `docs/DATA_CONTRACTS.md` (the gap predates this session and
+  `swap_inactives.py` shares it); neither does the report's `showdown_value_add_v1` tag. The card's file list did not include the contracts.
+- The entries file is not bound to the salary file through `embedded_pool_ids`; any roster ID outside the pool still refuses. An odd double
+  quote in a pool-table cell refuses the whole file (fail closed; `csv.reader` would accept it).
+- `keenum_swap.py`'s thesis-specific rules (keep a CHI WR/TE stack partner, Hurts only in S4) are not generalized; an operator uses
+  `--entry-id` or `--thesis`. Concentration is reported after the swap, not enforced (Session 56).
+- On Windows `Tee-Object` writes a UTF-16 log, which `scripts/record_verify.py` (reads UTF-8) cannot parse; this run decoded a copy first. A
+  one-line fix to `record_verify.py` is the next procedure change, outside this card.
+- The always-loaded Showdown block in `docs/claude/working.md` grew by three lines.
+
 ### 2026-10-02: Code review triage (Codex review of 2026-10-02)
 
 Branch `claude/review-2026-10-02-triage`, on `7439bb8` (PR #100's merge). Documentation only: `docs/critiques/Code_Review_2026-10-02_Codex.md`

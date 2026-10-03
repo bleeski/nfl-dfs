@@ -62,10 +62,13 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
 
 - **Left-out starters.** List every person a role gate or DK status kept out of the pool whom a source names a starter, the
   depth-chart quarterback first. Roster each by construction or write why not in the handoff. A starting quarterback is Captain
-  in at least 2 rows (about 10%) and FLEX where the thesis fits, rotated across contests. Use a one-row replacement, validated
-  with `qa_showdown_portfolio.py` (Session 55 is the Showdown swap tool; `swap_inactives.py value-add` is the Classic analogue
-  and takes only scored players). Never write a projection: he adds 0 prior points, his gate stays unmet and is named as a
-  limitation, and the file stays `DO_NOT_UPLOAD`. Research informs the choice, never a number.
+  in at least 2 rows (about 10%) and FLEX where the thesis fits, rotated across contests. Use `scripts/showdown_value_add.py`
+  (Session 55; `docs/OPERATOR_GUIDE.md` § Showdown value-add swap): his exact DK ID, one swap per row, `--captain` for a
+  Captain, then `qa_showdown_portfolio.py`. It refuses a row that already holds him and publishes no file when any row is
+  invalid, which `data/inbox/slates/phi-chi-sd-2026-09-28/keenum_swap.py` did not (a record, never a tool).
+  `swap_inactives.py value-add` is the Classic analogue and takes only scored players. Never write a projection: he adds 0
+  prior points, his gate stays unmet and is named as a limitation, and the file stays `DO_NOT_UPLOAD`. Research informs the
+  choice, never a number.
 - **Concentration.** After the build, count Captains and each person's share of lineups. Defaults, mine to set under the
   lock-clock ruling and Ben's to overturn: no person above 60% of lineups and no Captain above 20%, unless the selectable pool
   cannot meet it, and then say so with the pool size. A breach is a construction failure, not a finding to report: rotate rows by
