@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "claude-s60-session",
+      "branch": "claude/s60-injury-room-workload",
+      "chunk": "S60",
+      "claimed_at": "2026-10-04T21:10:27Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
