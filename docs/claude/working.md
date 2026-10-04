@@ -81,6 +81,21 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
 - **Order.** Do both before the first handoff message, with the clock measured. A lock inside five minutes ships what is built
   and names both gaps.
 
+## Classic judgment pass (Ben, 2026-10-04; the Showdown correction, made again for Classic)
+
+Runs on every Classic slate before the handoff, without being asked. Ben: do not blindly exclude players, starting quarterbacks
+above all, because they lack history; do not blindly roster them either. The engine scores only what its history supports, so a
+starter whose role is new today (a promoted backup, a transfer, a rookie, an injury replacement) can sit at or near zero.
+
+- **Starting quarterbacks first.** Check every depth-chart starter (the QB depth package's `starter`, and the promoted backup of a
+  DraftKings-`OUT` starter) is in the scored pool. One who is not gets rostered by construction or a written reason.
+- **Then the injury rooms.** For each DraftKings `OUT` or officially inactive starter, name who takes the role (research), find him
+  in the pool, and read his prior. A replacement whose prior reflects his old role is a value candidate: place him in a share of
+  rows sized to the role and the game, by recorded construction swap (Week 4: `data/inbox/slates/wk4-classic-2026-10-04/
+  construction/manual_add_record.py`), never by writing a number. Then spend any salary the swap freed on the other slots without
+  touching him, and rerun `qa_classic_portfolio.py` on the written file.
+- **Say who was passed over and why** in the handoff, alongside who was added. Late-game candidates can wait for late swap.
+
 ## Repo etiquette and gotchas
 
 - `docs/ROADMAP.md`, `changelog.md`, `IMPLEMENTATION_STATUS.md` and `backlog.md`

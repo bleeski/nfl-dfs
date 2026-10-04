@@ -53,6 +53,19 @@ delivered 16:28Z.
   `PRIOR_ONLY / DO_NOT_UPLOAD`. Not supplied: official activity, weather
   captures (9 outdoor games `UNOBSERVED`), ownership; LAR and PHI had no market
   line in the frozen games file and ran on the 21.0 baseline.
+- Ben, 16:45Z, before lock: do not blindly exclude starters, quarterbacks above
+  all, for lacking history; do not blindly roster them either. QA pass: all 23
+  depth-chart starting quarterbacks were in the scored pool (the gate excluded
+  only backups). Added by construction, priors untouched: Zach Ertz (PHI TE1,
+  prior 0.55) 4 rows, Jauan Jennings (MIN WR2, prior 0.29) 3, Emanuel Wilson
+  (SEA RB1, prior 3.04) 2; Allen kept at 6. Freed salary spent on unprotected
+  slots (`construction/protect_upgrade_record.py`). Delivered at 16:47Z,
+  replacing the first file: `DK_REVIEW_ENTRY_wk4_classic_FINAL_v4.csv`,
+  `7ef3d2eb…3aa1`, 39 of 39, QA Tier 1 PASS, max exposure 13/39, top-3 union
+  29/39, 16 quarterbacks, stacked and bring-back 39/39. Held for late swap:
+  Brandin Cooks if Mike Evans (Q) sits. Second time Ben made this correction
+  (the Showdown pass is the first), so `docs/claude/working.md` gains a Classic
+  judgment pass.
 - What would have made it better, and where it went: the two construction holes
   above are now in `.claude/rules/slate-operation.md`. Not fixed here, for a
   roadmap card: DK `OUT` should redistribute the starter's share the way an
