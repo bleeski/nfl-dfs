@@ -602,7 +602,8 @@ and loose uniqueness/overlap capacity before candidate solving.
 declares either fails with `CLASSIC_POLICY_STRUCTURAL_BOUND_TYPE_INVALID`, and v1 keeps
 validating exactly as before. Omitting a control, or a side of it, leaves it open (v1
 behaviour). Both mirror Session 23's Showdown vocabulary (§ SD3 v2 below) so 23b and 23c
-read one shape.
+read one shape. The values below are illustrative, not the generator's defaults (Session 57
+below).
 
 ```json
 "structural_bounds": {
@@ -1411,7 +1412,8 @@ object; `nfl_showdown_portfolio_policy_v1` is never mutated and keeps validating
 exactly as before (a v1 document may not declare `structural_bounds` at all —
 `PORTFOLIO_POLICY_STRUCTURAL_BOUND_TYPE_INVALID` otherwise). Omitting the object
 on a v2 document, or omitting one of its sides, means that bound is fully open,
-identical to v1 behaviour. The complete shape:
+identical to v1 behaviour. The complete shape (the values are illustrative, not
+the generator's defaults, which are below):
 
 ```json
 "structural_bounds": {
