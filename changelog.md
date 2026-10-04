@@ -66,6 +66,17 @@ delivered 16:28Z.
   Brandin Cooks if Mike Evans (Q) sits. Second time Ben made this correction
   (the Showdown pass is the first), so `docs/claude/working.md` gains a Classic
   judgment pass.
+- Ben, 16:52Z: confirm actives, redeploy excess salary only as a Pareto gain on
+  both goals. All 77 early-game rostered players are absent from the 16 early
+  teams' inactive lists (Yahoo, 16:13Z); late-game lists were not yet posted.
+  A first redeploy (any prior gain, target under 8 rows) was rejected: mean
+  overlap 1.13 to 1.15, distinct players 115 to 112. The shipped rule takes a
+  swap only when the incoming player is used at least 2 fewer times than the
+  outgoing one (`construction/pareto_redeploy_record.py`), which can only lower
+  shared exposure: 19 swaps, prior sum 4148.5 to 4189.8, distinct 115 to 120,
+  mean overlap 1.13 to 1.07, top-3 union 29 to 28, max exposure 13 unchanged.
+  Delivered 16:54Z: `DK_REVIEW_ENTRY_wk4_classic_FINAL_v6.csv`, `2671f506…5214`,
+  39 of 39, QA Tier 1 PASS. It replaces v4.
 - What would have made it better, and where it went: the two construction holes
   above are now in `.claude/rules/slate-operation.md`. Not fixed here, for a
   roadmap card: DK `OUT` should redistribute the starter's share the way an
