@@ -176,10 +176,17 @@ def test_a_generator_policy_at_the_default_pair_gives_its_caps_way_before_any_st
 def test_a_generator_rung_n_is_the_policy_the_ladder_holds_at_rung_n(tmp_path, capsys):
     policy, _out = _default_cap_policy(tmp_path, capsys)
     slate, _entries, entry_ids = _supplied_world()
+    walk = _ladder(tmp_path / "walk", supplied=_supply(policy, _out))
     for rung in (1, 2, 3):
         _document, written = _generate(tmp_path / f"r{rung}", capsys, "--rung", str(rung))
         generated = validate_portfolio_policy_bytes(written.read_bytes(), slate=slate, entry_ids=entry_ids).policy
         held = showdown_relaxed_controls(policy, rung, concentration=0)
+        held_rung = walk.next(STRUCTURE_FAILURE)  # the cap steps come first: SUPPLIED, 0.8/0.4, off, then rung 1, 2, 3
+        while held_rung.rung is None:
+            held_rung = walk.next(STRUCTURE_FAILURE)
+        assert held_rung.rung == rung
+        # The file the ladder wrote at rung N and the one the generator writes for `--rung N` are the same bytes.
+        assert Path(held_rung.source_path).read_bytes() == written.read_bytes()
         assert generated.combined_rule.default_fraction is None and generated.captain_rule.default_fraction is None
         assert held["max_combined_person_exposure"]["default_fraction"] is None
         assert held["max_captain_exposure"]["default_fraction"] is None
@@ -313,3 +320,14 @@ def test_a_supplied_policy_keeps_the_older_window_rule(tmp_path, capsys):
     policy, out = _default_cap_policy(tmp_path, capsys)
     ladder = _ladder(tmp_path / "walk", supplied=_supply(policy, out), budget=_Window(60.0))
     assert ladder.next(STRUCTURE_FAILURE).label == "CAPS_0_80_0_40"  # SD3's 2.5 s least, exactly as before this session
+
+
+def test_a_thesis_drop_is_not_a_cap_step_so_the_concentration_state_carries_across_it(tmp_path):
+    from dataclasses import replace
+
+    from .test_showdown_theses import _supplied_ladder, _two_captains
+
+    ladder, _validation, _thesis, _slate = _supplied_ladder(tmp_path, _two_captains)
+    ladder.current = replace(ladder.current, concentration=0)
+    made = ladder.next(Failure("THESIS_UNBUILDABLE", STRUCTURE, "no lineup", {"reason": "the test's reason"}))
+    assert made is not None and made.policy.theses == () and made.concentration == 0

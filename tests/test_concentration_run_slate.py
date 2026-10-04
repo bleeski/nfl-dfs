@@ -164,6 +164,7 @@ def test_a_no_policy_showdown_run_delivers_20_legal_distinct_rows_within_the_def
     assert block["version"] == "showdown_concentration_defaults_v1" and block["defaults_sha256"]
     # The report's own delivered counts are a recount of the file, and they agree with this test's.
     delivered = block["delivered"]
+    assert delivered["scope"] == "ALL_FILLED_ROWS_INCLUDING_PREFILLED"  # the caps bind the fillable rows; the file may hold more
     assert (delivered["rows"], delivered["distinct_lineups"]) == (ENTRY_COUNT, ENTRY_COUNT)
     assert (delivered["max_person_entries"], delivered["max_captain_entries"]) == (
         max(people.values()), max(captains.values()))
@@ -172,6 +173,9 @@ def test_a_no_policy_showdown_run_delivers_20_legal_distinct_rows_within_the_def
     # The independent audit read the delivered bytes against the same caps and passed.
     audit = report["prior_review_reports"]["portfolio_policy_audit"]
     assert audit["status"] == "PASS"
+    # Its own recount, from the final roster IDs, agrees with this test's recount of the file's bytes.
+    assert max(audit["combined_person_counts"].values()) == max(people.values()) <= 12
+    assert max(audit["captain_counts"].values()) == max(captains.values()) <= 4
     # The policy was written, hash-bound and re-checked like any rung's, and no relaxation was needed.
     relaxation = report["relaxation"]
     assert relaxation["started_from"]["rung"] == "DEFAULT" and relaxation["relaxations"] == []
@@ -442,4 +446,87 @@ def test_a_default_policy_changed_after_it_is_written_is_refused_before_selectio
     assert any("PORTFOLIO_POLICY_SOURCE_CHANGED_BEFORE_SELECTION" in text for text in report["blockers"])
     assert not list((root / "review").glob("DK_REVIEW_ENTRY_*.csv"))
     assert report["concentration"]["status"] == "NOT_APPLIED"
+    _evidence_gates_untouched(report)
+
+
+def test_the_independent_audit_refuses_a_default_portfolio_that_breaks_the_caps(tmp_path, monkeypatch):
+    """The caps are recomputed from the final rosters, not trusted from the solve: hand the audit the bank's twenty
+    most alike candidates in place of the joint solve's choice and it refuses, so no file is exported."""
+
+    from dataclasses import replace
+
+    from nfl_dfs import selection
+
+    real = selection.solve_policy_portfolio
+
+    def alike(policy, bank, **kwargs):
+        solved = real(policy, bank, **kwargs)
+        return replace(solved, selected_candidate_indexes=tuple(range(len(solved.selected_candidate_indexes))))
+
+    monkeypatch.setattr(selection, "solve_policy_portfolio", alike)
+    code, report, root, slate = _run(tmp_path, monkeypatch, run_id="overcap")
+    assert code == 2
+    _is_baseline(report, root)
+    joined = ";".join(report["blockers"])
+    assert "PORTFOLIO_POLICY_INDEPENDENT_AUDIT_FAILED" in joined
+    for code_name in ("PORTFOLIO_AUDIT_COMBINED_PERSON_CAP_EXCEEDED", "PORTFOLIO_AUDIT_CAPTAIN_CAP_EXCEEDED",
+                      "PORTFOLIO_AUDIT_PAIRWISE_OVERLAP_EXCEEDED"):
+        assert code_name in joined, code_name  # each control the default declares is recomputed and refused on its own
+    assert not list((root / "review").glob("DK_REVIEW_ENTRY_*.csv"))
+    _evidence_gates_untouched(report)
+
+
+def test_an_unexpected_failure_building_the_default_never_costs_the_run_its_review(tmp_path, monkeypatch):
+    from nfl_dfs import relaxation
+
+    def broken(self, **kwargs):
+        raise KeyError("an unforeseen failure")
+
+    monkeypatch.setattr(relaxation.Ladder, "begin_with_defaults", broken)
+    code, report, root, slate = _run(tmp_path, monkeypatch, run_id="unforeseen")
+    assert code == 0 and report["improvement"]["status"] == "DELIVERED"  # the sequential path, as before this session
+    block = report["concentration"]
+    assert block["status"] == "NOT_APPLIED" and any("KeyError" in reason for reason in block["reasons"])
+    assert _codes(report)["SHOWDOWN_CONCENTRATION_NOT_APPLIED"] == "S"
+    _evidence_gates_untouched(report)
+
+
+def test_an_unexpected_failure_reading_the_exclusion_inputs_is_named_not_applied(tmp_path, monkeypatch):
+    def broken(request, slate):
+        raise RuntimeError("an unforeseen failure")
+
+    monkeypatch.setattr(cli, "_policy_exclusion_inputs", broken)
+    ladder, run = _intake(tmp_path, monkeypatch)
+    assert ladder is None and run.applies
+    (text,) = run.texts()
+    assert text.startswith("SHOWDOWN_CONCENTRATION_NOT_APPLIED:") and "RuntimeError" in text
+
+
+def test_a_report_that_cannot_be_built_never_costs_the_run_its_result(tmp_path, monkeypatch):
+    def broken(*args, **kwargs):
+        raise ValueError("an unforeseen failure")
+
+    monkeypatch.setattr(cli, "_concentration_report_body", broken)
+    code, report, root, slate = _run(tmp_path, monkeypatch, run_id="noreport")
+    assert code == 0 and report["improvement"]["status"] == "DELIVERED"
+    assert report["concentration"]["status"] == "REPORT_UNAVAILABLE" and "ValueError" in report["concentration"]["problem"]
+
+
+def test_an_unexpected_failure_in_the_defaults_ladder_ends_it_by_name_and_never_costs_the_run(tmp_path, monkeypatch):
+    """Nine people cannot hold 20 rows, so the review fails and asks the ladder for a step, which then fails unforeseen:
+    the ladder ends by name and the run ships its baseline instead of leaving through the outer failure exit."""
+
+    from nfl_dfs import relaxation
+
+    def broken(self, failure, *, overhead_seconds=0.0):
+        raise KeyError("an unforeseen failure")
+
+    monkeypatch.setattr(relaxation.Ladder, "next", broken)
+    code, report, root, slate = _run(tmp_path, monkeypatch, run_id="halted", exclude=_all_but(tmp_path, NINE))
+    assert code == 2 and report["stage"] == "PRIOR_REVIEW_SELECT_BLOCKED"  # not the outer handler's failure exit
+    _is_baseline(report, root)
+    stop = report["relaxation"]["stop"]
+    assert stop.startswith("RELAXATION_RUNG_UNBUILDABLE:") and "KeyError" in stop
+    texts = [b for b in report["blockers"] if b.startswith("SHOWDOWN_CONCENTRATION_NOT_APPLIED:")]
+    assert texts and "RELAXATION_RUNG_UNBUILDABLE" in texts[0] and "window" not in texts[0].split("stopped", 1)[0]
     _evidence_gates_untouched(report)

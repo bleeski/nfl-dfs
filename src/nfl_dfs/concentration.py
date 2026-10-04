@@ -177,7 +177,10 @@ def measure_delivered_concentration(slate, csv_path: str | Path) -> dict[str, ob
         text = Path(csv_path).read_bytes().decode("utf-8-sig")
     except (OSError, UnicodeDecodeError) as exc:
         return {"problem": f"the delivered file could not be read: {exc}"}
-    rows = list(csv.reader(io.StringIO(text, newline="")))
+    try:
+        rows = list(csv.reader(io.StringIO(text, newline="")))
+    except csv.Error as exc:
+        return {"problem": f"the delivered file is not readable as CSV: {exc}"}
     header = rows[0] if rows else []
     if "Entry Fee" not in header:
         return {"problem": "the delivered file has no Entry Fee column to anchor the roster cells"}
@@ -207,7 +210,9 @@ def measure_delivered_concentration(slate, csv_path: str | Path) -> dict[str, ob
         person_counts.update(set(underlying))
         captain_counts[underlying[0]] += 1
         lineups.add((underlying[0], tuple(sorted(underlying[1:]))))
-    report: dict[str, object] = {"rows": measured, "distinct_lineups": len(lineups), "unknown_id_rows": unknown}
+    # Every filled row counts, the template's prefilled rows included: the caps bind the fillable rows only.
+    report: dict[str, object] = {"scope": "ALL_FILLED_ROWS_INCLUDING_PREFILLED", "rows": measured,
+                                 "distinct_lineups": len(lineups), "unknown_id_rows": unknown}
     if measured:
         person, person_entries = person_counts.most_common(1)[0]
         captain, captain_entries = captain_counts.most_common(1)[0]

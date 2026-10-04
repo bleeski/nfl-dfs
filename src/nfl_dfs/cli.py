@@ -3092,9 +3092,9 @@ class _ConcentrationRun:
         if ladder is not None and ladder.started_from.engine_default and ladder.stop is not None:
             # The window could not hold even rung 4's floor, so the run's file is the baseline (the ladder's own
             # `RELAXATION_LADDER_STOPPED` says why in its words; this names the preference that was lost).
-            reasons.append("the window left the ladder no step that fits"
-                           + (f" (the delivery deadline left the run's own review no time:"
-                              f" {deadline_stop.split(':', 1)[0]})" if deadline_stop is not None else ""))
+            reasons.append(f"the relaxation ladder stopped ({ladder.stop.split(':', 1)[0]}, named in its own limitation)"
+                           + (f"; the delivery deadline left the run's own review no time:"
+                              f" {deadline_stop.split(':', 1)[0]}" if deadline_stop is not None else ""))
         return [concentration_not_applied_text(self.defaults, reason) for reason in reasons]
 
 
@@ -3120,7 +3120,11 @@ def _begin_concentration_defaults(
             f"lineup_count={request.lineup_count} differs from the {len(fillable)} fillable entries, and a policy"
             " binds every fillable row")
         return None, run
-    external_people, input_blockers = _policy_exclusion_inputs(request, slate)
+    try:
+        external_people, input_blockers = _policy_exclusion_inputs(request, slate)
+    except Exception as exc:  # noqa: BLE001 - the default never adds a stop; the review reads these inputs itself
+        run.unapplied.append(f"the exclusion inputs could not be read here ({type(exc).__name__}: {exc})")
+        return None, run
     if input_blockers:
         run.unapplied.append(
             "an exclusion input has a problem of its own, named as its own blocker"
@@ -3133,13 +3137,24 @@ def _begin_concentration_defaults(
             externally_excluded_people=external_people, budget=budget, rate=_host_classic_rate, defaults=defaults,
         )
         ladder.begin_with_defaults(overlap=request.max_person_overlap)
-    except (OSError, ValueError) as exc:  # a default it cannot write or validate never costs the run its review
+    except Exception as exc:  # noqa: BLE001 - a default it cannot write or validate never costs the run its review
         run.unapplied.append(f"the default policy could not be built ({type(exc).__name__}: {exc})")
         return None, run
     return ladder, run
 
 
 def _concentration_report(
+    run: _ConcentrationRun, ladder: Ladder | None, *, slate, improvement: Mapping[str, object], latest
+) -> dict[str, object]:
+    """`_concentration_report_body`, which never raises: a view of the run is not a reason to lose its result."""
+
+    try:
+        return _concentration_report_body(run, ladder, slate=slate, improvement=improvement, latest=latest)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "REPORT_UNAVAILABLE", "problem": f"{type(exc).__name__}: {exc}"}
+
+
+def _concentration_report_body(
     run: _ConcentrationRun, ladder: Ladder | None, *, slate, improvement: Mapping[str, object], latest
 ) -> dict[str, object]:
     """`result["concentration"]`: requested and effective caps, the steps taken, and the delivered file's own counts.
@@ -3314,7 +3329,11 @@ def _run_prior_review_profile(
             break
         try:
             following = ladder.next(failure, overhead_seconds=before_selection)
-        except (OSError, ValueError) as exc:  # a rung it cannot write or validate ends it, named
+        except Exception as exc:  # noqa: BLE001 - see below
+            # A rung it cannot write or validate ends the ladder, named. The engine's own concentration default (Session
+            # 56) is never a reason to lose the run, so any other failure in its new ladder code ends it the same way.
+            if not (isinstance(exc, (OSError, ValueError)) or ladder.started_from.engine_default):
+                raise
             ladder.halt(failure, exc)
             following = None
         if following is None:

@@ -1329,7 +1329,10 @@ class Ladder:
             return self._no_policy(current, failure, overhead_seconds,
                                    why=f"the policy without its thesis was refused ({', '.join(made.codes)})")
         reason = str(failure.facts.get("reason") or failure.detail)
-        return self._take(replace(made, showdown_candidate_limit=current.showdown_candidate_limit),
+        # The caps are exactly the current rung's, so its concentration state (Session 56) carries across the drop.
+        return self._take(replace(made, showdown_candidate_limit=current.showdown_candidate_limit,
+                                  concentration=current.concentration, step_name=current.step_name,
+                                  engine_default=current.engine_default),
                           failure, step="THESIS_DROP", why=f"no lineup can follow it: {reason}")
 
     def _no_policy(self, current: Rung, failure: Failure, overhead_seconds: float, *, why: str) -> Rung | None:

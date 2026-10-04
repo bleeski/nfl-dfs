@@ -4,6 +4,128 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: Session 56 -- concentration defaults in the engine (2026-10-02 review F-02, R35)
+
+Branch `claude/s56-concentration-defaults`, claimed at `0832a18` (on `ffcbb9d`, PR #101's merge), task file `state/tasks/S56.md`. No protected
+path, evidence gate, request wire format or permanent boundary touched; every path still ends `MODEL_STATUS=PRIOR_ONLY /
+RELEASE_DECISION=DO_NOT_UPLOAD`. Baseline `2318 passed, 2 skipped in 726.62s (0:12:06)` (Windows). Final `2374 passed, 2 skipped in 679.77s (0:11:19)` (Windows): 56
+tests added, none removed or skipped; the two skips are the symlink-permission case, as at baseline. Three existing tests were edited and one pin
+re-pinned, each named under **Existing tests edited**. Size past the card's breakpoint (about 1,900 changed lines, about half of them tests and docs), not
+split: the registry, the ladder and the wiring are one mechanism and a seam would have left the run-slate half untested.
+
+**Why.** R35's defaults (60% a person, 20% a Captain) lived in `docs/claude/working.md` and were applied by hand after every build, while
+`make_showdown_policy.py` defaulted to 0.80 and 0.4 and the no-policy Showdown selector (`_sequential_lineups`) only reported
+`captain_exposure`. The review's counterexample (the Session 54 world, 20 rows): two receivers in 20 of 20 and a Captain in 7 of 20 unbound,
+12 and 4 under the existing policy mechanism at 0.60 and 0.20.
+
+**Added.**
+- `config/showdown_concentration_defaults_v1.json` and `src/nfl_dfs/concentration.py`: one registered default set (0.60, 0.20, overlap 4), the
+  order the caps give way in (`CAPS_0_80_0_40`; `CAPS_OFF` for a policy only), `does_not_establish` text, a loader that hashes the bytes,
+  refuses a file that tightens a step, repeats a name or names an unknown target, and `measure_delivered_concentration`, which recounts a delivered
+  file's most-shared person and Captain from its own bytes. v1's sha256 is pinned in `tests/test_concentration_defaults.py`. Contract:
+  `docs/DATA_CONTRACTS.md` § Showdown concentration defaults.
+- `scripts/make_showdown_policy.py` reads it: `--combined-default`, `--captain-default` and `--max-overlap` default to the registered values
+  (they were 0.80, 0.4 and 4); an explicit flag wins; `--rung N` writes what the ladder holds at rung N.
+- `src/nfl_dfs/relaxation.py`: `Ladder.begin_with_defaults` builds, writes (through `_materialize`, so the same canonical bytes, validation,
+  normalized policy and hash re-check as any rung) and starts a no-policy Showdown run on the engine's own default: exactly the three controls,
+  structure open, no exclusion, every fillable Entry ID, overlap the request's. The ladder gives caps way before any structural rung
+  (`_concentration_step`): a step the validator refuses on `S` codes is passed over for the next; a structural rung taken after them carries the
+  caps off (`showdown_relaxed_controls(..., concentration=)`), so a relaxed cap is never reapplied. One record and one limitation per step,
+  `SHOWDOWN_CONCENTRATION_RELAXED`; rung 4 adds the same constraint ending in no caps. The engine default's order is 0.60/0.20, 0.80/0.40, rung 4;
+  a policy at exactly the registered pair (what the generator writes) takes `CAPS_OFF` too, keeping its overrides and structural bounds, before rung 1.
+- `src/nfl_dfs/cli.py`: `run-slate` starts a `prior_review` Showdown run that supplied no policy on the default, through the same ladder, window,
+  audit and baseline-first delivery; `_policy_exclusion_inputs` is the supplied-policy branch's exclusion reading moved into a function (no
+  behaviour change) so the default can read the same inputs without turning a problem into a stop; `result["concentration"]` carries requested
+  and effective caps, the status (`AS_REQUESTED`, `RELAXED`, `NOT_APPLIED`, `NOT_APPLICABLE`), the steps, and the delivered file's own counts.
+- `config/gate_registry_v1.json`: `SHOWDOWN_CONCENTRATION_RELAXED` and `SHOWDOWN_CONCENTRATION_NOT_APPLIED` (class `S`, family
+  `portfolio_bounds`); `REGISTRY_SHA256` re-pinned from `7fa22591...` to `98f5db6b851fd2c59bf031f6a9410bae4ae0bf99ce7caee2a3b7b2e5e156b01f`
+  in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`. Docs: `docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md`, `docs/claude/working.md`
+  (the Concentration paragraph now says what the engine does and keeps the by-hand rotation for what the pool cannot meet).
+- `selection.py` is unchanged: the policy path already enforces and audits, and the sequential selector is the floor. Applying the defaults at
+  `run-slate` rather than inside `select_prior_lineups` is what gets the independent audit, hash binding, baseline-first delivery and window
+  accounting for free, and leaves `nfl select` and direct callers as they were.
+
+**Decisions, mine to set and Ben's to overturn (advisor call before code).**
+1. The engine default's "off" is rung 4, not an uncapped joint solve: sequential selection keeps a distinct Captain per row until the pool is
+   exhausted; an uncapped SD3 has no Captain differentiation, and rung 3 would raise the overlap to 5.
+2. Cap steps are keyed on the caps themselves: a policy whose two default fractions are exactly 0.60 and 0.20 takes them, any other explicit
+   value is untouched. The generator writes no provenance field. **Behaviour change for a frozen policy:** one saved at exactly 0.60 and 0.20 now
+   takes 0.80/0.40 and then no caps before rung 1, where it took rung 1 first. Its policy bytes, hashes and audit are unchanged.
+3. The default never adds a stop: no `policy_summary`, no `policy_blocker`, no pre-review exit. A count it cannot bind (fewer than five
+   fillable entries, where 0.20 floors to no Captain slot: `NOT_APPLICABLE`, reported, no limitation), a `lineup_count` that differs, an
+   exclusion input with its own problem, an unreadable defaults file or a default that cannot be written is `SHOWDOWN_CONCENTRATION_NOT_APPLIED`.
+4. A window guard before every capped attempt (`declared bank + joint solve + (rows + 1) x 0.5 s`, 70.5 s for 20 rows): below it the engine default
+   starts, or goes, to rung 4 while rung 4 still fits, so a capped search never uses the window up and leaves the baseline where the sequential
+   floor would have delivered. A supplied policy keeps SD3's 2.5 s rule.
+5. A supplied policy is never replaced. The report says what the file is, not what was requested: `effective` is null for rung 4 and when the baseline ships.
+
+**Existing tests edited (a ruling or a premise changed, never loosened).**
+- `tests/test_showdown_structural_hygiene_acceptance.py::test_generator_defaults_pass_100_percent_hygiene_and_cap_max_person_share`: the
+  generator's defaults are now 0.60 and 0.20, which need a deeper bank than the scaled 32 for eight rows (measured: NE@SEA solves from 48
+  candidates, DET@BUF from 120; 32, 48 and 64 end `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`), so the bank is 120. The cap assertions are stricter:
+  max person share at most the registered 0.60 (was 0.80) and a new Captain share assertion at most 0.20.
+- `tests/test_contest_assignment_run_slate.py`: `[sequential]` and the tampered-assignment test pinned "no policy means the sequential exit",
+  which is now the engine default; each pins the sequential exit explicitly (`_sequential_exit`), a `default` variant covers the new path, and a
+  sibling test shows the default path's independent audit refusing the same tampered assignment. One assertion compared decimal strings
+  (`"6.000000" <= "24.666667"` is false as text); it compares numbers now.
+- `tests/test_gate_registry.py`: `REGISTRY_SHA256` re-pinned, as above.
+
+**Verified.**
+- Focused: `tests/test_concentration_defaults.py`, `tests/test_concentration_ladder.py`, `tests/test_concentration_run_slate.py`,
+  `tests/test_concentration_counterexample.py`; neighbours (run-slate baseline-first, deadline controller, artifact preservation, prior-review
+  profile, partial fill, entry groups, contest assignment, theses, depth capture, R28, portfolio policy and enforcement, hygiene acceptance,
+  gate registry, relaxation controller, roadmap queue, repo boundaries): 633 passed and 5 failed before the fixes below, all passing after.
+  The five: a test that replaces `showdown_relaxed_controls` with a two-argument function (the ladder now passes `concentration=` only to a
+  defaults-keyed policy, so every other policy takes the exact call it always did), the two contest-assignment tests and the two hygiene cases above.
+- **Acceptance (1)**, `run-slate`, no policy, 20 rows on the synthetic pre-lock sources: 20 legal distinct rows, most-shared person 12, most
+  frequent Captain 4, the audit `PASS`; the delivered file's counts recomputed independently in the test and by the report agree. The control
+  (default switched off) breaches both caps. **(2)** a supplied policy is never replaced; the request's own `max_person_overlap` is the default's.
+  **(3)** a pool cut to ten people relaxes to 0.80/0.40 by name and still delivers (14 and 8 against 16 and 8); a pool of nine, where rung 4 cannot
+  place 20 rows either, ships the baseline with `SHOWDOWN_CONCENTRATION_RELAXED` and `RELAXATION_POLICY_DROPPED` named, the baseline's own 18 and 5 reported
+  from its bytes and no excluded person in the file. **(4)** a 40 s window starts at rung 4 and improves (the guard's regression test); an 8 s window and a
+  deadline already passed ship the baseline with `SHOWDOWN_CONCENTRATION_NOT_APPLIED` and `RELAXATION_LADDER_STOPPED`; every evidence gap the run
+  named before it still names, class `P`, and no `V` appears. **(5)** the review's counterexample, the engine's own default policy on the Session 54
+  world with the review's bank and joint-solve budgets: 20 distinct legal rows, 12 and 4, in 8.9 s on this Windows host (the review
+  host: 14.0 s). Linux: the 30 s bound is asserted by CI (`pyproject.toml` addopts carry no `--durations`), the time not measured there.
+- Real inputs, through a script, never printed: the tracked PHI@CHI Showdown files (112 rows, 36 fillable) give a valid default of 21 a person and
+  7 a Captain, declared search 108 s plus 18.5 s for rung 4. Not run: a full `run-slate` replay of a real slate (no frozen prior package for one is
+  tracked); the window guard and the SD3 time at 36 real rows are therefore measured only through the declared budgets.
+- A fresh-context `reviewer` pass (it never ran the full suite) found one blocking gap, fixed here: the review loop's `ladder.next` caught only
+  `OSError` and `ValueError`, so an unforeseen failure in the engine default's new ladder code would have left through the outer handler and
+  lost a review the same run delivered before this session; it ends the ladder by name now, as do the default's setup, exclusion reading and report
+  (`except Exception`, each a `NOT_APPLIED` reason or a `RELAXATION_RUNG_UNBUILDABLE` stop, never a stop of the run). Also taken: a thesis drop
+  carries the concentration state (it reset it), the not-applied reason names the ladder's own stop (a halt is not always the window), the delivered counts
+  say their scope (every filled row, a template's prefilled rows included, where the caps bind the fillable rows), and the `--rung` parity test now compares
+  bytes with the ladder's rung file. It confirmed the exclusion refactor is logic-identical and found no vacuous test and no loosened edit.
+- The advisor before code took the "off is rung 4", generator-policy and never-a-stop points above; at the finish it asked for the audit's own
+  recount in acceptance 1 (the audit's `combined_person_counts` and `captain_counts` equal the test's recount of the file), a negative test (twenty
+  alike candidates in place of the joint solve's choice trip the person-cap, Captain-cap and overlap audit codes and export nothing) and the
+  never-a-stop widening.
+- Mutation checks, each failing a test and every file restored from its saved bytes (26 in all): the least-entries, `lineup_count` and input-blocker guards off; a
+  window guard that is always true (and the later-attempt guard on the bank step); a cap step that tightens; a structural rung that does not carry the
+  caps off; the default pair never keyed; the engine default taking the uncapped step; a step recorded under another code; the request's overlap
+  ignored; the not-applied limitation dropped; the status always `AS_REQUESTED`; the measurement reading the wrong cells; the loader accepting a
+  tightening step; the generator ignoring the registry; `--rung` ignoring the cap steps; the default never applied; a supplied policy replaced; the
+  pinned defaults bytes changed; an unforeseen failure escaping the setup, the report or the review loop; a thesis drop losing the state; `--rung` ignoring
+  the cap steps; the audit's person-cap code renamed.
+- `git diff --check`, `scripts/check_protected_paths.py` and `.\nfl.ps1 doctor`: clean (`git diff --check` exit 0; `check_protected_paths.py`: no protected path touched; `doctor`: `pass_status` true).
+
+**Found, left open.**
+- At eight entries the engine's scaled bank (`max(32, 4 x entries)`) cannot hold the 0.60/0.20 portfolio on DET@BUF (it needs about 120 candidates);
+  the ladder deepens a bank once (to 48) and then relaxes the caps by name, so a small real portfolio may ship at 0.80/0.40 where a deeper bank would
+  have kept 0.60/0.20. A deeper default bank for small portfolios is a separate change in `portfolio_enforcement.py`; not made here.
+- `CAPS_OFF` for a generated policy at the pair comes before rung 1 and skips the old 0.25 and 0.50 Captain steps (the card's "0.80/0.40, then
+  off"). An uncapped joint solve can put one Captain in many rows (review S7), where rung 4 would keep distinct Captains, and two attempts can go on
+  caps when a structural bound is what binds. Not changed: it is the card's order and the policy keeps its overrides. Recommendation, Ben's to take or
+  leave: drop `CAPS_OFF` from `applies_to` for `POLICY` (a one-line registry change and a new pin), so a generated policy goes 0.80/0.40 and then
+  its structural rungs, whose rung 3 uncaps.
+- The window guard reads the window before the first attempt's pre-selection stages, so a window just over 70.5 s can still be used up by a capped
+  search that follows a long evidence stage; later attempts subtract the overhead. Lock-clock-tight windows only; the baseline stays the file then.
+- The report's `delivered` block counts every filled row; on a template with prefilled rows `AS_REQUESTED` can sit beside a share the caps (which bind
+  the fillable rows) did not produce. `delivered.scope` says so.
+- The fixtures' `DEADLINE_AFTER_EARLIEST_LOCK` limitation comes from their 2099 replay deadline against a 2026-09 lock, not from this session.
+- `data/standings/standings_pulls_2026-09-28.html` and `docs/critiques/ADJUDICATION_PROMPT.md` are Ben's untracked files and were left alone.
+
 ### 2026-10-03: Session 55 -- a validated Showdown value-add swap (2026-10-02 review F-01)
 
 Branch `claude/s55-showdown-value-add`, claimed at `526409a` (on `17cfbb9`, PR #102's merge), task file `state/tasks/S55.md`. No protected

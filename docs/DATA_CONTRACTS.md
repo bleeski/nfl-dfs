@@ -3396,10 +3396,12 @@ count, an exclusion input with a problem of its own (its own blocker stands), an
 or a window that cannot hold rung 4 leave the run as it was before this session and name it
 `SHOWDOWN_CONCENTRATION_NOT_APPLIED:<reason>` (class `S`, family `portfolio_bounds`). No evidence gate is read or relaxed.
 
-**Report.** `result["concentration"]` (in every `run-slate` exit of such a run): `version`, `defaults_sha256`, `status`
+**Report.** `result["concentration"]` (in the pre-review blocked exit and the review exit of such a run, beside `relaxation`; the
+outer exception exit carries neither): `version`, `defaults_sha256`, `status`
 (`AS_REQUESTED`, `RELAXED`, `NOT_APPLIED`, `NOT_APPLICABLE`), `requested`, `effective` (the caps of the policy the delivered improvement
 was built under; `null` for rung 4 or when the baseline is the file), `started_from`, `final_rung`, `steps_taken`, `reasons`,
-`delivered_file` and `delivered` (the file the pointer names, recounted from its own bytes: `rows`, `distinct_lineups`, `max_person`,
+`delivered_file` and `delivered` (the file the pointer names, recounted from its own bytes over every filled row, a template's prefilled
+rows included, while the caps bind the fillable rows only: `scope`, `rows`, `distinct_lineups`, `max_person`,
 `max_person_entries`, `max_person_share`, `max_captain`, `max_captain_entries`, `max_captain_share`), `does_not_establish`. The two new
 codes are registered in `config/gate_registry_v1.json`; `REGISTRY_SHA256` moved with them.
 
