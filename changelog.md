@@ -34,6 +34,21 @@ Clock: request at 23:37Z, lock 00:20Z, delivery deadline 00:15Z; file delivered 
 - What would have made it better: a practice-squad check. A non-elevated practice-squad player appears on no inactive list, so the
   DraftKings status stays blank and an old-team prior makes him a $200 value. Added to the Showdown judgment pass in
   `docs/claude/working.md`. An engine fix (an elevation or active-roster source through `sources.py`) is a card for a later session.
+- Adversarial Pareto pass (Ben asked, 23:50Z). Full pool scores from a third run (`NFL_DFS_DUMP_SCORES`, same request). Measures:
+  prior total 2,699.92, max exposure 16, max Captain 5, 8 Captains, 17 people, mean pair overlap 2.7275, max pair overlap 4, top-3
+  union 22, unused salary $6,800. Single swaps (FLEX and Captain; Captain, QBs and Tremayne held): 0 Pareto; all 11 prior-raising
+  swaps add Gibbs or McMillan (16 to 17) and raise mean overlap. Two-row salary chains: 0; the cheapest upgrade (Metchie to Lions DST,
+  +$800) needs more than any two rows hold together. The portfolio is on its prior-versus-washout frontier for these moves.
+- Contest level: `diversify_showdown_contests.py` on the final file was not Pareto (Dime Package mean shared 2.842 to 2.805, but
+  Captains 8 to 7, same-Captain pairs 22 to 24, pairs sharing 4 51 to 52); rejected. A whole-lineup swap search between Entry IDs that
+  accepts only a move no contest measure worsens found two (`construction/pareto_reassignment_record.v3.json`): 5283426224 with
+  5283440977 and 5283426215 with 5283432785. Dime Package: Captains 8 to 8, same-Captain pairs 22 to 20, max shared 4 to 4, mean shared
+  2.842 to 2.632, pairs sharing 4 51 to 39, pairs sharing 3 or more 126 to 107; the 2-entry contests unchanged; the 28 lineups
+  unchanged. Delivered `construction/DK_REVIEW_ENTRY_det-car-sd_final_v3.csv`, `534795ae…e576`, CRLF like the template, QA PASS (0
+  defects, 0 limit breaches, overlap 4, 8 Captains). It differs from the first final file in those four rows only. A v2 written with LF
+  endings failed QA parsing (0 lineups read) and was discarded: write a DraftKings CSV with the template's line endings.
+- Finding for the engine: `within_contest_diversity_v1` scores a contest by worst pair plus mean pair, so it can trade away a Captain
+  for a lower mean. A no-worse-on-every-measure acceptance rule would have caught it. Candidate card, not filed tonight.
 
 ### 2026-10-04: Session 60 -- the injury room moves the workload (R37, P9 part 1)
 
