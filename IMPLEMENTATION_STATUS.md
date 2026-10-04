@@ -1,5 +1,20 @@
 # Implementation Status
 
+## Capability added: 2026-10-04 (Session 56, concentration defaults in the engine)
+
+Working and verified through synthetic fixtures (`tests/test_concentration_defaults.py`, `test_concentration_ladder.py`,
+`test_concentration_run_slate.py`, `test_concentration_counterexample.py`), the review's own counterexample, a mutation pass and the full
+suite: one registered default set (`config/showdown_concentration_defaults_v1.json`: no person above 0.60 of the lineups, no Captain above
+0.20, overlap 4) is read by `scripts/make_showdown_policy.py` and applied by `run-slate` to a Showdown run that supplied no policy, as a
+hash-bound policy through the existing SD3 bank, joint solve and independent audit of the delivered bytes. The ladder gives the caps way by name
+(0.80 and 0.40, then rung 4 for the engine's own default; also `CAPS_OFF` for a generated policy at the default pair) before any structural rung,
+carries a relaxed cap forward, and a window that cannot hold the capped search starts at rung 4. The result's `concentration` block reports
+requested and effective caps, the steps, and the delivered file's own counts recomputed from its bytes. It never adds a stop: whatever keeps it
+from applying is a named `SHOWDOWN_CONCENTRATION_NOT_APPLIED` limitation and the run is what it was before. **Not done, named:** under five
+entries the default binds nothing (reported, not applied); a small portfolio's scaled bank can be too shallow to keep 0.60/0.20 (the ladder
+relaxes to 0.80/0.40 by name); the by-hand rotation in `docs/claude/working.md` stays for what the pool cannot meet; no full `run-slate` replay of
+a real slate was run. Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-10-02 (Session 54, a depth-declared starter with no usable history is selectable)
 
 Working and verified through synthetic fixtures (`tests/test_declared_starter_selectable.py`, 18 tests), a `run-slate` replay of PIT@CLE on its

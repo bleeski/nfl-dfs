@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 import traceback
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -31,6 +31,12 @@ from .classic_portfolio_policy import (
 )
 from .preflight import historical_artifact_integrity, live_pre_upload_check
 from .candidate_families import coverage_report
+from .concentration import (
+    ConcentrationDefaults,
+    ConcentrationDefaultsError,
+    load_concentration_defaults,
+    measure_delivered_concentration,
+)
 from .contracts import (
     CertificationBasis,
     ContestObjective,
@@ -144,6 +150,8 @@ from .gate_registry import GateRegistry, load_gate_registry
 from .relaxation import (
     DEFAULT_SECONDS_PER_CANDIDATE,
     Ladder,
+    Rung,
+    concentration_not_applied_text,
     failure_of,
     intake_failure,
     overlap_step_text,
@@ -2995,6 +3003,198 @@ def _qb_depth_limitations(reports: Mapping[str, object]) -> list[str]:
     return limitations
 
 
+def _policy_exclusion_inputs(request, slate) -> tuple[tuple[str, ...], list[str]]:
+    """The people this run's own inputs exclude, for a policy's capacity checks, and the blockers reading them raised.
+
+    The request's exclusions, an official inactive snapshot and the DraftKings statuses, through the same
+    contract the review reads. A supplied policy turns the blockers into stops, as it always did; the
+    engine's own concentration default never does (Session 56): a problem here is the review's to name.
+    """
+
+    blockers: list[str] = []
+    by_dk_id = {player.dk_id: player for player in slate.players}
+    official_exclusions: tuple[str, ...] = ()
+    if request.official_status_csv is not None:
+        try:
+            official_snapshot = parse_official_inactive_snapshot(request.official_status_csv, slate.players)
+        except EvidenceError as exc:
+            blockers.append(
+                "PORTFOLIO_POLICY_OFFICIAL_STATUS_INVALID: "
+                f"{exc}; next action: repair the exact-ID official activity snapshot"
+            )
+        else:
+            if official_snapshot.problems:
+                blockers.append(
+                    "PORTFOLIO_POLICY_OFFICIAL_STATUS_INVALID: "
+                    f"{';'.join(official_snapshot.problems)}; next action: repair the exact-ID "
+                    "official activity snapshot"
+                )
+            official_exclusions = tuple(
+                dk_id
+                for dk_id, status in official_snapshot.statuses.items()
+                if status == "INACTIVE"
+            )
+    all_request_exclusions = tuple(request.exclude_dk_ids) + official_exclusions
+    unknown_exclusions = sorted(set(all_request_exclusions).difference(by_dk_id))
+    if unknown_exclusions:
+        blockers.append(
+            "PORTFOLIO_POLICY_EXTERNAL_EXCLUSION_DK_ID_UNKNOWN: "
+            f"request exclusions are outside the salary pool {unknown_exclusions}; "
+            "next action: use exact current salary CPT/FLEX IDs"
+        )
+    external_people: tuple[str, ...] = ()
+    try:
+        participation = build_participation_contract(
+            slate,
+            operator_excluded_dk_ids=all_request_exclusions,
+            extra_unavailable_statuses=request.unavailable_statuses,
+            extra_available_statuses=request.available_statuses,
+        )
+    except ParticipationError as exc:
+        blockers.append(
+            "PORTFOLIO_POLICY_PARTICIPATION_INVALID: "
+            f"{exc}; next action: reconcile status and exclusion inputs to the current salary file"
+        )
+    else:
+        external_people = tuple(
+            sorted(set(participation.unavailable_people) | set(participation.operator_excluded_people))
+        )
+    return external_people, blockers
+
+
+def _registered_defaults() -> ConcentrationDefaults | None:
+    """The registered concentration defaults, or None when the file cannot be read (a policy's ladder then keeps its old table)."""
+
+    try:
+        return load_concentration_defaults()
+    except ConcentrationDefaultsError:
+        return None
+
+
+@dataclass
+class _ConcentrationRun:
+    """What became of the registered Showdown concentration defaults in one `run-slate` run (Session 56, R35).
+
+    They apply to a `prior_review` Showdown run that supplied no policy. They never add a stop: a count they
+    cannot bind, a request they do not fit, an input that has its own blocker, or a file that cannot be read
+    leaves the run exactly as it was before, named here and as an `S` limitation, never as a blocker.
+    """
+
+    applies: bool = False
+    defaults: ConcentrationDefaults | None = None
+    not_applicable: str | None = None  # too few entries for the Captain default to bind: reported, not a limitation
+    unapplied: list[str] = field(default_factory=list)  # why the defaults were not applied; each a named limitation
+
+    def texts(self, ladder: Ladder | None = None, deadline_stop: str | None = None) -> list[str]:
+        """The `SHOWDOWN_CONCENTRATION_NOT_APPLIED` limitations this run owes (the ladder names its own relaxations)."""
+
+        reasons = list(self.unapplied)
+        if ladder is not None and ladder.started_from.engine_default and ladder.stop is not None:
+            # The window could not hold even rung 4's floor, so the run's file is the baseline (the ladder's own
+            # `RELAXATION_LADDER_STOPPED` says why in its words; this names the preference that was lost).
+            reasons.append("the window left the ladder no step that fits"
+                           + (f" (the delivery deadline left the run's own review no time:"
+                              f" {deadline_stop.split(':', 1)[0]})" if deadline_stop is not None else ""))
+        return [concentration_not_applied_text(self.defaults, reason) for reason in reasons]
+
+
+def _begin_concentration_defaults(
+    request, *, slate, entries, entry_plan, run_id: str, budget
+) -> tuple[Ladder | None, _ConcentrationRun]:
+    """The ladder a Showdown run with no supplied policy starts on, and what became of the defaults (Session 56)."""
+
+    run = _ConcentrationRun(applies=True)
+    try:
+        defaults = run.defaults = load_concentration_defaults()
+    except ConcentrationDefaultsError as exc:
+        run.unapplied.append(f"the registered defaults could not be read ({exc})")
+        return None, run
+    fillable = entry_plan.fillable
+    if len(fillable) < defaults.least_entries():
+        run.not_applicable = (
+            f"{len(fillable)} fillable entries is fewer than the {defaults.least_entries()} on which a Captain"
+            f" default of {defaults.captain_fraction} binds at all (it floors to no Captain slot)")
+        return None, run
+    if request.lineup_count is not None and int(request.lineup_count) != len(fillable):
+        run.unapplied.append(
+            f"lineup_count={request.lineup_count} differs from the {len(fillable)} fillable entries, and a policy"
+            " binds every fillable row")
+        return None, run
+    external_people, input_blockers = _policy_exclusion_inputs(request, slate)
+    if input_blockers:
+        run.unapplied.append(
+            "an exclusion input has a problem of its own, named as its own blocker"
+            f" ({input_blockers[0].split(':', 1)[0]})")
+        return None, run
+    try:
+        ladder = Ladder(
+            slate=slate, entries=entries, folder=DEFAULT_RUNS_DIR / run_id / "relaxation",
+            supplied=Rung(None, None, engine_default=True, concentration=0), registry=load_gate_registry(),
+            externally_excluded_people=external_people, budget=budget, rate=_host_classic_rate, defaults=defaults,
+        )
+        ladder.begin_with_defaults(overlap=request.max_person_overlap)
+    except (OSError, ValueError) as exc:  # a default it cannot write or validate never costs the run its review
+        run.unapplied.append(f"the default policy could not be built ({type(exc).__name__}: {exc})")
+        return None, run
+    return ladder, run
+
+
+def _concentration_report(
+    run: _ConcentrationRun, ladder: Ladder | None, *, slate, improvement: Mapping[str, object], latest
+) -> dict[str, object]:
+    """`result["concentration"]`: requested and effective caps, the steps taken, and the delivered file's own counts.
+
+    `effective` describes the file the pointer names: the caps of the policy the improvement was built under,
+    or none when it was built by rung 4 or the baseline is the file. `delivered` is recomputed from that
+    file's bytes. A preference, never a claim about winnings (`does_not_establish`).
+    """
+
+    defaults = run.defaults
+    delivered_improvement = improvement.get("status") == "DELIVERED"
+    reasons = list(run.unapplied)
+    effective: dict[str, object] | None = None
+    started = ladder.started_from if ladder is not None else None
+    if run.not_applicable:
+        status = "NOT_APPLICABLE"
+        reasons.append(run.not_applicable)
+    elif ladder is None or started is None or started.concentration is None:
+        status = "NOT_APPLIED"
+    elif delivered_improvement:
+        current = ladder.current
+        policy = current.policy
+        if policy is not None:
+            effective = {"person_fraction": None if policy.combined_rule.default_fraction is None
+                         else str(policy.combined_rule.default_fraction),
+                         "captain_fraction": None if policy.captain_rule.default_fraction is None
+                         else str(policy.captain_rule.default_fraction),
+                         "pairwise_person_overlap": policy.max_pairwise_person_overlap}
+        status = ("AS_REQUESTED" if policy is not None and current.concentration == 0 and current.rung is None
+                  else "RELAXED")
+    else:
+        status = "NOT_APPLIED"
+        if ladder.stop:
+            reasons.append(ladder.stop)
+        reasons.extend(str(item) for item in list(improvement.get("reasons") or ())[:3]
+                       if not str(item).startswith("SHOWDOWN_CONCENTRATION_"))
+        reasons = list(dict.fromkeys(reasons))
+    steps = ([] if ladder is None else list(dict.fromkeys(
+        str(record["rung_to"]) for record in ladder.records if record["step"] in {"CONCENTRATION", "STRUCTURE", "NO_POLICY"})))
+    return {
+        "version": defaults.version if defaults is not None else None,
+        "defaults_sha256": defaults.sha256 if defaults is not None else None,
+        "status": status,
+        "requested": defaults.requested() if defaults is not None else None,
+        "effective": effective,
+        "started_from": started.label if started is not None else None,
+        "final_rung": ladder.current.label if ladder is not None else None,
+        "steps_taken": steps,
+        "reasons": reasons,
+        "delivered_file": str(latest.deliverable.path) if latest is not None else None,
+        "delivered": measure_delivered_concentration(slate, latest.deliverable.path) if latest is not None else None,
+        "does_not_establish": list(defaults.does_not_establish) if defaults is not None else [],
+    }
+
+
 def _run_prior_review_profile(
     *,
     args: argparse.Namespace,
@@ -3018,6 +3218,7 @@ def _run_prior_review_profile(
     baseline: _SlateBaseline | None = None,
     budget: Budget | None = None,
     ladder: Ladder | None = None,
+    concentration: _ConcentrationRun | None = None,
 ) -> int:
     """Drive the prior-only review chain from one gated Cowork command.
 
@@ -3131,6 +3332,9 @@ def _run_prior_review_profile(
         ladder.texts() if ladder is not None
         else [overlap_step_text(step) for step in selection_overlap_steps(outcome.reports)]
     )
+    if concentration is not None:  # Session 56: a default that was not applied is named like a relaxation
+        relaxation_texts = [*relaxation_texts,
+                            *(text for text in concentration.texts(ladder) if text not in relaxation_texts)]
     blockers[0:0] = [text for text in relaxation_texts if text not in blockers]
     if budget is not None:
         blockers.extend(
@@ -3590,6 +3794,9 @@ def _run_prior_review_profile(
             _write_json(DEFAULT_RUNS_DIR / run_id / "relaxation" / "relaxation.json", result["relaxation"])
         except OSError as exc:
             result["relaxation_record_problems"] = [f"RELAXATION_RECORD_UNWRITTEN:{exc}"]
+    if concentration is not None and concentration.applies:
+        result["concentration"] = _concentration_report(
+            concentration, ladder, slate=slate, improvement=improvement, latest=latest)
     if policy_summary is not None:
         selector_policy = (
             dict(outcome.reports.get("selection", {}))
@@ -3916,63 +4123,12 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
     policy_blockers: list[str] = []
     validated_policy = None
     ladder: Ladder | None = None
+    concentration = _ConcentrationRun()  # Session 56 (R35): the registered Showdown concentration defaults
     normalized_path: Path | None = None
     expected_policy_sha256: str | None = None
     if snapshotted.portfolio_policy_json is not None:
-        by_dk_id = {player.dk_id: player for player in slate.players}
-        official_exclusions: tuple[str, ...] = ()
-        if snapshotted.official_status_csv is not None:
-            try:
-                official_snapshot = parse_official_inactive_snapshot(
-                    snapshotted.official_status_csv, slate.players
-                )
-            except EvidenceError as exc:
-                policy_blockers.append(
-                    "PORTFOLIO_POLICY_OFFICIAL_STATUS_INVALID: "
-                    f"{exc}; next action: repair the exact-ID official activity snapshot"
-                )
-            else:
-                if official_snapshot.problems:
-                    policy_blockers.append(
-                        "PORTFOLIO_POLICY_OFFICIAL_STATUS_INVALID: "
-                        f"{';'.join(official_snapshot.problems)}; next action: repair the exact-ID "
-                        "official activity snapshot"
-                    )
-                official_exclusions = tuple(
-                    dk_id
-                    for dk_id, status in official_snapshot.statuses.items()
-                    if status == "INACTIVE"
-                )
-        all_request_exclusions = tuple(snapshotted.exclude_dk_ids) + official_exclusions
-        unknown_exclusions = sorted(
-            set(all_request_exclusions).difference(by_dk_id)
-        )
-        if unknown_exclusions:
-            policy_blockers.append(
-                "PORTFOLIO_POLICY_EXTERNAL_EXCLUSION_DK_ID_UNKNOWN: "
-                f"request exclusions are outside the salary pool {unknown_exclusions}; "
-                "next action: use exact current salary CPT/FLEX IDs"
-            )
-        external_people: tuple[str, ...] = ()
-        try:
-            participation = build_participation_contract(
-                slate,
-                operator_excluded_dk_ids=all_request_exclusions,
-                extra_unavailable_statuses=snapshotted.unavailable_statuses,
-                extra_available_statuses=snapshotted.available_statuses,
-            )
-        except ParticipationError as exc:
-            policy_blockers.append(
-                "PORTFOLIO_POLICY_PARTICIPATION_INVALID: "
-                f"{exc}; next action: reconcile status and exclusion inputs to the current salary file"
-            )
-        else:
-            external_people = tuple(
-                sorted(
-                    set(participation.unavailable_people)
-                    | set(participation.operator_excluded_people)
-                )
-            )
+        external_people, exclusion_blockers = _policy_exclusion_inputs(snapshotted, slate)
+        policy_blockers.extend(exclusion_blockers)
         original_policy = str(Path(request.portfolio_policy_json or "").resolve())
         expected_policy_sha256 = str(intake["hashes"][original_policy])
         if slate.mode is EngineMode.CLASSIC:
@@ -4064,7 +4220,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 supplied=supplied_rung(
                     validation.policy, source_path=snapshotted.portfolio_policy_json,
                     source_sha256=expected_policy_sha256, normalized_path=normalized_path,
-                    normalized_sha256=validation.normalized_sha256),
+                    normalized_sha256=validation.normalized_sha256, defaults=_registered_defaults()),
                 registry=registry, externally_excluded_people=external_people, budget=budget,
                 rate=_host_classic_rate,
             )
@@ -4091,6 +4247,15 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                     policy_blockers.append(ladder.stop)
             elif not validation.valid:
                 ladder = None
+    elif snapshotted.profile == "prior_review" and slate.mode is EngineMode.SHOWDOWN:
+        # Session 56 (R35): no policy was supplied, so the registered concentration defaults are the one the
+        # run starts on, through the same ladder, window and audit as any policy. This never adds a stop.
+        ladder, concentration = _begin_concentration_defaults(
+            snapshotted, slate=slate, entries=entries, entry_plan=entry_plan, run_id=run_id, budget=budget)
+        if ladder is not None:
+            validated_policy = ladder.current.policy
+            budget.record("policy_validation", started_after=policy_started,
+                          elapsed=budget.elapsed() - policy_started)
     if policy_summary is not None:
         budget.record("policy_validation", started_after=policy_started,
                       elapsed=budget.elapsed() - policy_started)
@@ -4151,6 +4316,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         if ladder is not None:
             # An intake relaxation, or its stop, is named here too (Session 10).
             blockers[0:0] = [text for text in ladder.texts() if text not in blockers]
+        # Session 56: the concentration defaults a deadline or an unusable input kept from the review.
+        blockers[0:0] = [text for text in concentration.texts(ladder, deadline_stop) if text not in blockers]
         stage = (
             "DEADLINE_IMPROVEMENT_SKIPPED" if deadline_stop is not None
             else "PORTFOLIO_POLICY_ENFORCEMENT_BLOCKED" if policy_summary is not None
@@ -4166,7 +4333,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             plan=entry_plan,
             blockers=[*blockers, *latest_problems, *baseline.problems], registry=registry,
             extra=(*budget.limitations(registry),
-                   *(blocker_limitations(ladder.texts(), registry) if ladder is not None else ())),
+                   *(blocker_limitations(ladder.texts(), registry) if ladder is not None else ()),
+                   *blocker_limitations(concentration.texts(ladder, deadline_stop), registry)),
         )
         review_path = output_root / f"NFL_DFS_Cowork_Review_{run_id}.xlsx"
         create_cowork_status_workbook(
@@ -4215,6 +4383,9 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
                 _write_json(DEFAULT_RUNS_DIR / run_id / "relaxation" / "relaxation.json", result["relaxation"])
             except OSError as exc:
                 result["relaxation_record_problems"] = [f"RELAXATION_RECORD_UNWRITTEN:{exc}"]
+        if concentration.applies:
+            result["concentration"] = _concentration_report(
+                concentration, ladder, slate=slate, improvement=improvement, latest=latest)
         if policy_summary is not None:
             result["portfolio_policy"] = policy_summary
             result["bulk_entry_csv"] = None
@@ -4263,6 +4434,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
             baseline=baseline,
             budget=budget,
             ladder=ladder,
+            concentration=concentration,
         )
 
     review_started = budget.elapsed()

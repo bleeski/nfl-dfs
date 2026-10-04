@@ -28,6 +28,15 @@ SIX = tuple(f"90000000{index}" for index in range(1, 7))
 TWO_CONTESTS = {entry_id: ("111" if index < 3 else "222") for index, entry_id in enumerate(SIX)}
 
 
+def _sequential_exit(monkeypatch):
+    """Pin the sequential exit (Session 56): with no policy supplied a Showdown run of five or more rows now starts on the
+    registered concentration defaults, a policy run with its own audit; rung 4 and a run under five rows still end here."""
+
+    from nfl_dfs import cli
+
+    monkeypatch.setattr(cli, "_begin_concentration_defaults", lambda *args, **kwargs: (None, cli._ConcentrationRun()))
+
+
 def _run(tmp_path, monkeypatch, *, run_id, contests, cells=None, policy_controls=None, bound=None,
          entry_ids=SIX, wrap_step=None, cowork=None):
     from nfl_dfs import cli
@@ -107,10 +116,13 @@ def _assert_truths_unchanged(report):
     assert report["DELIVERY_STATE"] == "DELIVERABLE"
 
 
-@pytest.mark.parametrize("policy_controls", [None, SD3_CONTROLS], ids=["sequential", "policy"])
-def test_the_diversified_assignment_reaches_the_file_the_audit_and_the_review(
-    tmp_path, monkeypatch, policy_controls
-):
+@pytest.mark.parametrize("path", ["sequential", "policy", "default"])
+def test_the_diversified_assignment_reaches_the_file_the_audit_and_the_review(tmp_path, monkeypatch, path):
+    # "sequential" is the exit this test always covered under that name, now pinned; "default" is the same run on the
+    # engine's own concentration default (Session 56), whose policy audit also stands guard.
+    policy_controls = SD3_CONTROLS if path == "policy" else None
+    if path == "sequential":
+        _sequential_exit(monkeypatch)
     code, report, entries, slate = _run(
         tmp_path, monkeypatch, run_id="cd-run", contests=TWO_CONTESTS, policy_controls=policy_controls)
     assert code == 0, report["blockers"]
@@ -139,11 +151,12 @@ def test_the_diversified_assignment_reaches_the_file_the_audit_and_the_review(
     assert block["reported_statistics_match"] is True
     assert block["basis"] == ca.REVIEW_BASIS and block["status"] == "IMPROVED"
     assert {row["contest_id"] for row in block["contests"]} == {"111", "222"}
-    assert all(row["score_after"] <= row["score_before"] for row in block["contests"])
+    # A decimal is compared as a number: as text "6.000000" sorts after "24.666667" (found on the default path, Session 56).
+    assert all(float(row["score_after"]) <= float(row["score_before"]) for row in block["contests"])
     assert readable["reconciliation"]["status"] == "PASS"
     assert "Within each contest" in Path(report["prior_review_artifacts"]["readable_review_html"]).read_text("utf-8")
 
-    if policy_controls is not None:
+    if path != "sequential":
         audit = report["prior_review_reports"]["portfolio_policy_audit"]
         assert audit["status"] == "PASS"
         reading = audit["contest_assignment"]
@@ -316,10 +329,35 @@ def test_the_readable_review_withholds_a_file_whose_lineups_are_not_the_selectio
         assignments[SIX[0]] = tuple(outsider)  # legal, distinct, and never in the selection
         return ca.StepOutcome(assignments, step.report, step.claim, step.failure)
 
+    _sequential_exit(monkeypatch)  # the premise above: a no-policy exit with no policy audit (Session 56 pins it)
     code, report, _entries, _slate = _run(
         tmp_path, monkeypatch, run_id="cd-swap", contests=TWO_CONTESTS, wrap_step=swap_in_an_outsider)
     joined = ";".join(report["blockers"])
     assert "READABLE_REVIEW" in joined
+    assert report["latest_deliverable"] is None or report["latest_deliverable"]["producer"] == "run-slate:baseline"
+    assert report["release_truths"]["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
+
+
+def test_the_same_tampered_assignment_on_the_default_path_is_refused_by_the_policy_audit(tmp_path, monkeypatch):
+    """Session 56: the engine default is a policy run, so the independent audit refuses the swap before any export."""
+
+    from nfl_dfs import baseline
+
+    def swap_in_an_outsider(step, slate):
+        held = set(step.assignments.values())
+        built = baseline.build_distinct_lineups(
+            slate, count=8, excluded_ids=(), per_solve_seconds=5.0, deadline=1e12, clock=lambda: 0.0)
+        outsider = next(lineup.roster for lineup in built.lineups if tuple(lineup.roster) not in held)
+        assignments = dict(step.assignments)
+        assignments[SIX[0]] = tuple(outsider)
+        return ca.StepOutcome(assignments, step.report, step.claim, step.failure)
+
+    code, report, _entries, _slate = _run(
+        tmp_path, monkeypatch, run_id="cd-swap-default", contests=TWO_CONTESTS, wrap_step=swap_in_an_outsider)
+    assert code == 2
+    assert any("PORTFOLIO_POLICY_INDEPENDENT_AUDIT_FAILED:CONTEST_ASSIGNMENT_MULTISET_CHANGED" in text
+               for text in report["blockers"])
+    # Nothing was exported: the baseline is the file when this fixture's baseline holds one, as in the sequential test above.
     assert report["latest_deliverable"] is None or report["latest_deliverable"]["producer"] == "run-slate:baseline"
     assert report["release_truths"]["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
 

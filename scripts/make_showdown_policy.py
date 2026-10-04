@@ -23,10 +23,12 @@ rostered QB) sharing a rostered DST's team. Kickers and DSTs stay in the
 combined pool (`--captain-zero-pos` only zeroes their Captain fraction, never
 excludes them): kickers were in 45%/68% and defenses 68%/82% of the top 1% in
 the graded games. `--combined-default` (this session's name for
-`max_person_share`) defaults to 0.80, the field median. `--captain-default`
-now defaults to 0.4 instead of requiring an explicit value every time (review
-S7: an unbounded default let the captain strata and the summed-points
-objective put every entry under one Captain).
+`max_person_share`), `--captain-default` and `--max-overlap` default to the
+registered concentration defaults, `config/showdown_concentration_defaults_v1.json`
+(Session 56, R35: 0.60 a person, 0.20 a Captain, overlap 4; they were 0.80, 0.4
+and 4 before, 0.80 being the field median). An explicit flag wins. A Captain
+default exists at all because of review S7: an unbounded default let the captain
+strata and the summed-points objective put every entry under one Captain.
 
 RUNGS (Session 10, extended Session 23). `--rung 0` is the policy the flags
 describe. Rungs 1 to 3 are `nfl_dfs.relaxation.SHOWDOWN_RUNGS` applied to it,
@@ -39,7 +41,13 @@ and `offense_against_own_dst`; 3 drops every exposure cap (which drops
 additionally drops the QB-count band. Rung 4 writes nothing: run-slate without
 --portfolio-policy-json. `--exclude` and uniqueness are never relaxed (R29).
 `run-slate` walks these rungs itself when SD3 fails on a trigger, after trying
-a re-sized bank first; this flag writes one by hand.
+a re-sized bank first; this flag writes one by hand. Session 56: a policy whose
+two default fractions are exactly the registered pair (0.60 and 0.20, which is
+what the flags give unless you set them) gives its caps way first on the
+ladder, 0.80 and 0.40 and then none, before any structural rung, so rungs 1 to
+3 written for it carry the caps already off (zeroed Captain overrides and the
+structural bounds stay the rung's own). Any other value you set is yours and
+the rungs treat it exactly as before.
 
 THESIS (Session 23b). `--thesis PATH` reads one game thesis Ben chose (a JSON
 object: `name`, `teams`, `captain_set`, optional `team_bounds`, `position_bounds`,
@@ -119,15 +127,21 @@ def ident(e):
     return {'underlying_id': e['underlying_id'], 'cpt_dk_id': e['cpt_dk_id'], 'flex_dk_id': e['flex_dk_id']}
 
 def main(argv=None):
+    from nfl_dfs.concentration import load_concentration_defaults
+
+    defaults = load_concentration_defaults()  # Session 56: one registered default set (R35)
     ap = argparse.ArgumentParser()
     ap.add_argument('--salaries', required=True)
     ap.add_argument('--entries', required=True)
     ap.add_argument('--out', required=True)
-    ap.add_argument('--combined-default', type=float, default=0.80,
-                    help='max_person_share default (Session 23); 0.80 is the field median')
-    ap.add_argument('--captain-default', type=float, default=0.4,
-                    help='default Captain fraction cap (review S7); was required with no default')
-    ap.add_argument('--max-overlap', type=int, default=4)
+    ap.add_argument('--combined-default', type=float, default=float(defaults.person_fraction),
+                    help='max_person_share default, from config/showdown_concentration_defaults_v1.json'
+                         ' (R35, Session 56; it was 0.80, the field median, until then)')
+    ap.add_argument('--captain-default', type=float, default=float(defaults.captain_fraction),
+                    help='default Captain fraction cap (review S7), from the same registered defaults;'
+                         ' it was 0.4 until Session 56')
+    ap.add_argument('--max-overlap', type=int, default=defaults.pairwise_person_overlap,
+                    help='most people two lineups may share, from the same registered defaults')
     ap.add_argument('--captain-zero-pos', default='K,DST',
                     help='comma-separated positions forced to captain fraction 0 (they stay in the'
                          ' combined pool: never excluded, only barred from captaining by default)')
@@ -302,7 +316,8 @@ def relaxed_document(document, salary_path, entry_path, rung):
     from nfl_dfs.dk import parse_salaries
     from nfl_dfs.portfolio_policy import (
         canonical_decimal_json_bytes, portfolio_policy_template, validate_portfolio_policy_bytes)
-    from nfl_dfs.relaxation import showdown_relaxed_controls, showdown_schema_version
+    from nfl_dfs.concentration import load_concentration_defaults
+    from nfl_dfs.relaxation import concentration_state, showdown_relaxed_controls, showdown_schema_version
 
     slate = parse_salaries(salary_path)
     entry_ids = read_entries(entry_path, salary_path)
@@ -310,7 +325,10 @@ def relaxed_document(document, salary_path, entry_path, rung):
     validation = validate_portfolio_policy_bytes(raw, slate=slate, entry_ids=entry_ids)
     if validation.policy is None:
         sys.exit("RUNG_0_POLICY_INVALID: " + "; ".join(validation.blockers()))
-    controls = showdown_relaxed_controls(validation.policy, rung)
+    # A policy at the registered default pair has taken the cap steps before any structural rung
+    # (Session 56), so rung N writes what the ladder holds at rung N, caps already off.
+    state = concentration_state(validation.policy, load_concentration_defaults())
+    controls = showdown_relaxed_controls(validation.policy, rung, concentration=state)
     relaxed = portfolio_policy_template(
         slate, validation.policy.entry_ids, controls=controls,
         schema_version=showdown_schema_version(validation.policy))

@@ -55,6 +55,16 @@ would change one), so only caps loosen. A thesis no lineup can follow
 policy is built without it, with no rung taken; rung 4 drops a thesis with the
 policy, by name. Each drop is a `THESIS_DROPPED` record.
 
+THE CONCENTRATION STEPS (Session 56, R35). Before any structural rung a Showdown policy whose two default fractions are exactly the
+registered pair (`config/showdown_concentration_defaults_v1.json`: 0.60 a person, 0.20 a Captain) gives its caps way: 0.80 and 0.40,
+then none (`CAPS_OFF`; its overrides, exclusions and structural bounds stay), and a structural rung taken after them carries the caps
+off, so a relaxed cap is never reapplied (`showdown_relaxed_controls(..., concentration=)`). A Showdown run that supplied no policy
+starts on the engine's own default of that pair (`Ladder.begin_with_defaults`: three controls, structure open, every fillable row,
+written and validated like a rung); its off is rung 4 because sequential selection keeps a distinct Captain per row where an
+uncapped joint solve would not, and it starts at rung 4 when the window cannot hold the declared bank and joint solve and leave rung 4
+its own. Any other value an operator wrote is theirs and these steps never touch it. Each step is one record, code
+`SHOWDOWN_CONCENTRATION_RELAXED`; a default that could not apply at all is `concentration_not_applied_text`.
+
 NEVER ON EITHER LADDER. `require_unique_lineups` (R29) and every exact exclusion
 (a Classic policy's `exact_exclusions`, a Showdown policy's `excluded_people`),
 which rung 4 carries as operator exclusions. A person a policy caps at zero
@@ -96,16 +106,25 @@ from .classic_portfolio_policy import (
     write_classic_portfolio_policy_validation,
     write_normalized_classic_portfolio_policy,
 )
+from .concentration import (
+    ENGINE_DEFAULT,
+    POLICY,
+    ConcentrationDefaults,
+    ConcentrationStep,
+    ConcentrationDefaultsError,
+    load_concentration_defaults,
+)
 from .contracts import EngineMode, GateClass
 from .deadline import JOINT_SHARE as SD3_JOINT_SHARE
 from .deadline import SOLVE_MINIMUM_SECONDS, Budget
 from .entry_groups import plan_entries
 from .gate_registry import GateRegistry, GateRegistryError
 from .hashing import sha256_bytes
-from .portfolio_enforcement import scaled_candidate_limit
+from .portfolio_enforcement import scaled_candidate_limit, scaled_candidate_seconds, scaled_selection_seconds
 from .portfolio_policy import (
     FRACTION_UNIT,
     OPEN_RANGE,
+    OPEN_STRUCTURAL_BOUNDS,
     POLICY_SCHEMA_VERSION_V2,
     POLICY_SCHEMA_VERSION_V3,
     ExposureRule,
@@ -121,6 +140,7 @@ from .portfolio_policy import (
 
 CONTRACT_VERSION = "nfl_relaxation_record_v1"
 NO_POLICY_RUNG = 4
+_CONTINUE = object()  # `_concentration_step`: no cap step is left; the structural rungs follow
 
 # -- the Classic rung table (moved from scripts/make_classic_policy.py) -------
 
@@ -530,10 +550,21 @@ SHOWDOWN_DEEP_BANK_PER_ENTRY = 6
 SD3_MINIMUM_WINDOW_SECONDS = SOLVE_MINIMUM_SECONDS / SD3_JOINT_SHARE
 
 
-def showdown_relaxed_controls(policy: NormalizedPortfolioPolicy, rung: int | None) -> dict[str, object]:
-    """The loosest of `policy` and a Showdown rung; `rung=None` is `policy` itself."""
+def showdown_relaxed_controls(
+    policy: NormalizedPortfolioPolicy, rung: int | None, *, concentration: int | None = None
+) -> dict[str, object]:
+    """The loosest of `policy` and a Showdown rung; `rung=None` is `policy` itself.
+
+    `concentration` (Session 56) is the cap steps a defaults-keyed policy has taken (0 for one
+    whose default fractions are exactly the registered pair, `None` for any other). The cap
+    steps come before every structural rung, so a rung taken from such a policy carries the
+    default fractions off (its overrides and structural bounds are the rung's own business):
+    the generator's `--rung N` and the ladder's rung N then agree, and a relaxed cap is never
+    reapplied by a later rung.
+    """
 
     spec = None if rung is None else SHOWDOWN_RUNGS[rung]
+    caps_off = spec is not None and concentration is not None
 
     def rule(item: ExposureRule, *, captain: bool) -> dict[str, object]:
         if spec is not None and spec.uncapped:
@@ -557,7 +588,7 @@ def showdown_relaxed_controls(policy: NormalizedPortfolioPolicy, rung: int | Non
             return max(fraction, floor)
 
         return {
-            "default_fraction": loosen(item.default_fraction),
+            "default_fraction": None if caps_off else loosen(item.default_fraction),
             "overrides": [{**override.person.as_mapping(), "fraction": loosen(override.fraction)}
                           for override in item.overrides],
         }
@@ -735,10 +766,19 @@ class Rung:
     showdown_candidate_limit: int | None = None
     bank_steps: int = 0
     excluded_dk_ids: tuple[str, ...] = ()  # the policy's own exclusions, which rung 4 carries
+    # Session 56: the concentration cap steps taken so far (0: the requested pair), or None for a
+    # policy whose default fractions are not the registered ones (its caps are the operator's).
+    concentration: int | None = None
+    step_name: str | None = None  # the cap step that made this rung, for its label
+    engine_default: bool = False  # `run-slate` built this policy itself; there was no supplied one
 
     @property
     def label(self) -> str:
-        return "SUPPLIED" if self.rung is None else str(self.rung)
+        if self.rung is not None:
+            return str(self.rung)
+        if self.step_name:
+            return self.step_name
+        return "DEFAULT" if self.engine_default else "SUPPLIED"
 
     def binding(self) -> dict[str, object] | None:
         if self.policy is None:
@@ -768,10 +808,24 @@ def own_exclusion_dk_ids(policy) -> tuple[str, ...]:
     return ()
 
 
-def supplied_rung(policy, *, source_path, source_sha256, normalized_path, normalized_sha256) -> Rung:
+def concentration_state(policy, defaults: ConcentrationDefaults | None) -> int | None:
+    """0 for a Showdown policy whose default fractions are exactly the registered pair, else None.
+
+    The generator writes no provenance field, so the caps themselves are the key: a policy at
+    the requested pair takes the cap steps before any structural rung, and any other value the
+    operator wrote stays exactly theirs (Session 56).
+    """
+
+    if defaults is None or not isinstance(policy, NormalizedPortfolioPolicy):
+        return None
+    return 0 if defaults.matches(policy.combined_rule.default_fraction, policy.captain_rule.default_fraction) else None
+
+
+def supplied_rung(policy, *, source_path, source_sha256, normalized_path, normalized_sha256,
+                  defaults: ConcentrationDefaults | None = None) -> Rung:
     return Rung(None, policy, str(source_path) if source_path else None, source_sha256,
                 str(normalized_path) if normalized_path else None, normalized_sha256,
-                excluded_dk_ids=own_exclusion_dk_ids(policy))
+                excluded_dk_ids=own_exclusion_dk_ids(policy), concentration=concentration_state(policy, defaults))
 
 
 @dataclass(frozen=True)
@@ -779,6 +833,7 @@ class _Refused:
     codes: tuple[str, ...]
     relaxable: bool
     folder: str
+    policy: NormalizedPortfolioPolicy | NormalizedClassicPortfolioPolicy | None = None  # what the validator built
 
 
 def _limitation_text(code: str, detail: str) -> str:
@@ -848,6 +903,16 @@ def _thesis_step_text(step: Mapping[str, object]) -> str:
         " so no backup quarterback of that team was excluded (R33's default needs the evidence; none was guessed)")
 
 
+def concentration_not_applied_text(defaults: ConcentrationDefaults | None, reason: str) -> str:
+    """The `S` limitation naming that a run's file was built without the registered concentration defaults (Session 56)."""
+
+    held = ("the registered Showdown concentration defaults" if defaults is None else
+            f"the registered Showdown concentration defaults ({defaults.person_fraction} a person,"
+            f" {defaults.captain_fraction} a Captain, overlap {defaults.pairwise_person_overlap})")
+    return _limitation_text("SHOWDOWN_CONCENTRATION_NOT_APPLIED",
+                            f"{held} were not applied: {reason}; the delivered file was built without them")
+
+
 def overlap_step_text(step: Mapping[str, object]) -> str:
     constraint = step.get("constraint", "classic_person_overlap")
     if constraint in THESIS_STEPS:
@@ -887,6 +952,7 @@ class Ladder:
         externally_excluded_people: Sequence[str] = (),
         budget: Budget | None = None,
         rate: Callable[[], tuple[float, str]] = lambda: (DEFAULT_SECONDS_PER_CANDIDATE, "the default"),
+        defaults: ConcentrationDefaults | None = None,
     ) -> None:
         self.slate = slate
         self.mode = slate.mode
@@ -910,7 +976,14 @@ class Ladder:
         self.defects: list[str] = []  # rungs the validator refused on a code no rung loosens
         self._attempt = -1  # the last attempt run; an intake relaxation feeds attempt 0
         self._bank_why = ""  # why the last bank step could not be taken
+        self._defaults = defaults  # Session 56: read on first use, so a ladder that never needs it never opens the file
         self._policy_notes(supplied)
+
+    @property
+    def defaults(self) -> ConcentrationDefaults:
+        if self._defaults is None:
+            self._defaults = load_concentration_defaults()
+        return self._defaults
 
     # -- what happened ------------------------------------------------------
 
@@ -1030,9 +1103,18 @@ class Ladder:
         if window is not None and window < SD3_MINIMUM_WINDOW_SECONDS:
             self._bank_why = f"the window cannot hold a bank and joint solve ({max(0.0, window):.1f} s left)"
             return None
+        if current.engine_default and not self._capped_search_fits(window):
+            self._bank_why = (f"the window ({max(0.0, window):.1f} s) cannot hold another capped bank and joint solve"
+                              " and still keep rung 4 its own time")
+            return None
         return replace(current, showdown_candidate_limit=limit, bank_steps=1)
 
     def _structural(self, current: Rung, failure: Failure, overhead_seconds: float) -> Rung | None:
+        # Session 56: a defaults-keyed Showdown policy gives its caps way before any structural rung.
+        if self.mode is EngineMode.SHOWDOWN and current.rung is None and current.concentration is not None:
+            moved = self._concentration_step(current, failure, overhead_seconds)
+            if moved is not _CONTINUE:
+                return moved
         start = 0 if current.rung is None else current.rung + 1
         if self.mode is EngineMode.SHOWDOWN:
             start = max(start, 1)
@@ -1055,7 +1137,9 @@ class Ladder:
                     self.slate, self.entry_ids, entry_sha256=self.entries.raw_hash, controls=controls,
                     limits=limits)
             else:
-                controls = showdown_relaxed_controls(current.policy, rung)
+                # `concentration` only for a defaults-keyed policy, so every other policy takes the exact call it always did.
+                keyed = {} if current.concentration is None else {"concentration": current.concentration}
+                controls = showdown_relaxed_controls(current.policy, rung, **keyed)
                 if controls == showdown_relaxed_controls(current.policy, None):
                     continue
                 if window is not None and window < SD3_MINIMUM_WINDOW_SECONDS:
@@ -1080,6 +1164,148 @@ class Ladder:
             return self._take(replace(made, showdown_candidate_limit=current.showdown_candidate_limit),
                               failure, step="STRUCTURE")
         return self._no_policy(current, failure, overhead_seconds, why="no structural rung is left")
+
+    def _capped_search_fits(self, window: float | None) -> bool:
+        """Another capped bank and joint solve fits `window` and still leaves rung 4 its own time.
+
+        The engine default's rule (Session 56), applied before each of its SD3 attempts: a capped search that
+        used the window up would leave the baseline as the file where the sequential floor would have delivered.
+        A supplied policy keeps the ladder's older rule (SD3's least window only).
+        """
+
+        if window is None:
+            return True
+        count = len(self.fillable)
+        return window >= (scaled_candidate_seconds(count) + scaled_selection_seconds(count)
+                          + (count + 1) * SOLVE_MINIMUM_SECONDS)
+
+    def _concentration_step(self, current: Rung, failure: Failure, overhead_seconds: float):
+        """The next concentration cap step as a Rung; None when the ladder ended; `_CONTINUE` when none is left.
+
+        The same policy with its two default fractions loosened to the registered step's
+        (loosest of the two, so nothing tightens); its overrides, exclusions and structural
+        bounds are untouched. A step the validator refuses on `S` codes is passed over for the
+        next, looser one. The engine's own default has no uncapped step: after the last capped
+        one its off is rung 4, which keeps a distinct Captain per row, where an uncapped joint
+        solve would not (the registered `step_notes`).
+        """
+
+        steps = self.defaults.steps_for(ENGINE_DEFAULT if current.engine_default else POLICY)
+        window = self._window(overhead_seconds)
+        for index in range(current.concentration, len(steps)):
+            step = steps[index]
+            if current.engine_default and not self._capped_search_fits(window):
+                return self._no_policy(current, failure, overhead_seconds,
+                                       why=f"the window ({max(0.0, window):.1f} s) cannot hold another capped bank and"
+                                           f" joint solve and still keep rung 4 its own time")
+            if window is not None and window < SD3_MINIMUM_WINDOW_SECONDS:
+                return self._no_policy(current, failure, overhead_seconds,
+                                       why=f"the window cannot hold cap step {step.name}'s bank and joint solve"
+                                           f" ({max(0.0, window):.1f} s left, {SD3_MINIMUM_WINDOW_SECONDS:g} s the least)")
+            document = portfolio_policy_template(
+                self.slate, self.entry_ids, controls=self._capped_controls(current.policy, step),
+                schema_version=showdown_schema_version(current.policy))
+            made = self._materialize(document, None, bank=False, label=step.name)
+            if isinstance(made, _Refused):
+                if made.relaxable:
+                    continue  # a looser step may still pass; the refusal is in `attempts`
+                self._unbuildable(failure, f"cap step {step.name}'s policy was refused by the validator"
+                                           f" ({', '.join(made.codes)}, {made.folder})")
+                return self._no_policy(current, failure, overhead_seconds,
+                                       why=f"cap step {step.name}'s policy could not be built")
+            return self._take(
+                replace(made, concentration=index + 1, step_name=step.name, engine_default=current.engine_default,
+                        showdown_candidate_limit=current.showdown_candidate_limit),
+                failure, step="CONCENTRATION")
+        if current.engine_default:
+            return self._no_policy(
+                current, failure, overhead_seconds,
+                why="every capped step is spent; rung 4, sequential selection with a distinct Captain per row, is the"
+                    " engine default's off")
+        return _CONTINUE
+
+    @staticmethod
+    def _capped_controls(policy: NormalizedPortfolioPolicy, step: ConcentrationStep) -> dict[str, object]:
+        controls = showdown_relaxed_controls(policy, None)
+        for key, fraction in (("max_combined_person_exposure", step.person_fraction),
+                              ("max_captain_exposure", step.captain_fraction)):
+            rule = dict(controls[key])
+            held = rule["default_fraction"]
+            rule["default_fraction"] = None if held is None or fraction is None else max(held, fraction)
+            controls[key] = rule
+        return controls
+
+    def begin_with_defaults(self, *, overlap: int | None = None) -> Rung:
+        """Start a Showdown run that supplied no policy on the registered concentration defaults (Session 56).
+
+        The requested pair (0.60 a person, 0.20 a Captain, overlap 4 unless the request named
+        another), written and validated through `_materialize` exactly as a rung is, with every
+        structural bound open and nothing excluded. A pair the validator refuses on `S` codes (a
+        pool or entry count it cannot hold) is passed over for the registered looser step, each
+        recorded; when none is accepted, or the window cannot hold the declared bank and joint
+        solve and still leave rung 4 its own, the run starts at rung 4, the floor a no-policy
+        Showdown run always had. Nothing here reads or relaxes an evidence gate.
+        """
+
+        defaults = self.defaults
+        count = len(self.fillable)
+        overlap = defaults.pairwise_person_overlap if overlap is None else overlap
+        steps: list[ConcentrationStep | None] = [None, *defaults.steps_for(ENGINE_DEFAULT)]
+        placeholder = Rung(None, None, engine_default=True, concentration=0)
+        self.current = self.started_from = placeholder
+        window = self._window(0.0)
+        failure: Failure | None = None
+        if not self._capped_search_fits(window):
+            declared = scaled_candidate_seconds(count) + scaled_selection_seconds(count)
+            failure = Failure(
+                "DEADLINE_POLICY_SEARCH_EXCEEDS_WINDOW", THROUGHPUT,
+                f"{max(0.0, window):.1f} s are left; the capped bank and joint solve declare {declared:g} s and rung 4's"
+                f" {count} sequential solves need {(count + 1) * SOLVE_MINIMUM_SECONDS:g} s", {}, "DEADLINE")
+            floor = self._no_policy(
+                placeholder, failure, 0.0,
+                why="the window cannot hold the capped bank and joint solve and still keep rung 4 its own time,"
+                    " so the run starts at the floor")
+            return floor if floor is not None else placeholder
+        for index, step in enumerate(steps):
+            label = "DEFAULT" if step is None else step.name
+            person = defaults.person_fraction if step is None else step.person_fraction
+            captain = defaults.captain_fraction if step is None else step.captain_fraction
+            made = self._materialize(self._default_document(person, captain, overlap), None, bank=False, label=label)
+            if isinstance(made, Rung):
+                rung = replace(made, engine_default=True, concentration=index,
+                               step_name=None if step is None else step.name)
+                if index == 0:
+                    self.current = self.started_from = rung
+                    self._policy_notes(rung)
+                    return rung
+                return self._take(rung, failure, step="CONCENTRATION")
+            failure = Failure((made.codes or ("RELAXATION_RUNG_UNBUILDABLE",))[0], STRUCTURE,
+                              "; ".join(made.codes), {"codes": list(made.codes)}, "INTAKE")
+            if not made.relaxable or made.policy is None:
+                self._unbuildable(failure, f"the {label} policy was refused by the validator"
+                                           f" ({', '.join(made.codes)}, {made.folder})")
+                break
+            self.current = Rung(None, made.policy, engine_default=True, concentration=index,
+                                step_name=None if step is None else step.name)
+            if index == 0:
+                self.started_from = self.current
+        floor = self._no_policy(self.current, failure, 0.0,
+                                why="no capped step of the defaults passed validation for this pool and entry count")
+        return floor if floor is not None else self.current
+
+    def _default_document(self, person, captain, overlap: int) -> dict[str, object]:
+        return portfolio_policy_template(
+            self.slate, self.fillable,
+            controls={
+                "fraction_unit": FRACTION_UNIT,
+                "max_combined_person_exposure": {"default_fraction": person, "overrides": []},
+                "max_captain_exposure": {"default_fraction": captain, "overrides": []},
+                "excluded_people": [],
+                "max_pairwise_person_overlap": overlap,
+                "require_unique_lineups": True,
+                "structural_bounds": _showdown_relaxed_structural_bounds(OPEN_STRUCTURAL_BOUNDS, None),
+            },
+            schema_version=POLICY_SCHEMA_VERSION_V2)
 
     def _drop_thesis(self, current: Rung, failure: Failure, overhead_seconds: float) -> Rung | None:
         """The same policy without its thesis, which no lineup can follow (Session 23b).
@@ -1121,10 +1347,15 @@ class Ladder:
     # -- artifacts and records ----------------------------------------------
 
     def _materialize(self, document: Mapping[str, object], rung: int | None, *, bank: bool,
-                     suffix: str = "") -> Rung | _Refused:
-        """Write, hash, validate and normalize a rung's policy the way a supplied one is."""
+                     suffix: str = "", label: str | None = None) -> Rung | _Refused:
+        """Write, hash, validate and normalize a rung's policy the way a supplied one is.
 
-        name = f"attempt_{self._attempt + 1}_rung_{'SUPPLIED' if rung is None else rung}"
+        `label` (Session 56) names a concentration cap step's folder and attempt record;
+        without one a rung is its number, or `SUPPLIED` for the policy the run began with.
+        """
+
+        shown = label or ("SUPPLIED" if rung is None else str(rung))
+        name = f"attempt_{self._attempt + 1}_rung_{shown}"
         folder = self.folder / (name + ("_bank" if bank else "") + suffix)
         folder.mkdir(parents=True, exist_ok=False)  # never over an earlier output
         raw = canonical_decimal_json_bytes(_exact_decimals(document)) + b"\n"
@@ -1149,8 +1380,8 @@ class Ladder:
                 write_normalized_portfolio_policy(normalized, validation.policy)
         if not validation.valid:
             codes = tuple(issue.code for issue in validation.problems)
-            refused = _Refused(codes, intake_failure(codes, self.registry) is not None, str(folder))
-            self.attempts.append({"attempt": None, "rung": "SUPPLIED" if rung is None else str(rung),
+            refused = _Refused(codes, intake_failure(codes, self.registry) is not None, str(folder), validation.policy)
+            self.attempts.append({"attempt": None, "rung": shown,
                                   "outcome": "REFUSED_AT_VALIDATION", "codes": list(codes),
                                   "policy": {"source_path": str(source), "source_sha256": digest}})
             return refused
@@ -1159,7 +1390,17 @@ class Ladder:
 
     def _take(self, new: Rung, failure: Failure, *, step: str, why: str = "") -> Rung:
         old = self.current
-        for constraint, original, final, kind in self._changes(old, new, thesis_drop=step == "THESIS_DROP"):
+        changes = self._changes(old, new, thesis_drop=step == "THESIS_DROP")
+        if step == "CONCENTRATION" and isinstance(old.policy, NormalizedPortfolioPolicy) \
+                and isinstance(new.policy, NormalizedPortfolioPolicy):
+            # Session 56: the two default fractions are one preference, so one record (and one limitation) names the
+            # step, in place of one for each fraction `_changes` compared.
+            caps = {"max_combined_person_exposure", "max_captain_exposure"}
+            pair = lambda policy: {"person_fraction": policy.combined_rule.default_fraction,  # noqa: E731
+                                   "captain_fraction": policy.captain_rule.default_fraction}
+            changes = [("concentration_defaults", _plain(pair(old.policy)), _plain(pair(new.policy)), "CONCENTRATION"),
+                       *(change for change in changes if change[0] not in caps)]
+        for constraint, original, final, kind in changes:
             self._record(old, new, failure, step=step, constraint=constraint, original=original,
                          final=final, kind=kind, why=why)
         self.current = new
@@ -1186,13 +1427,27 @@ class Ladder:
                 "scope": "THESIS", "constraint": "thesis_bound_override", "thesis": policy.active_thesis.name,
                 "moved": list(policy.thesis_bound_overrides)})
 
+    def _concentration_ended(self, old: Rung) -> list[tuple[str, object, object, str]]:
+        """The record that rung 4 ends a policy's concentration caps (Session 56): the sequential floor has none."""
+
+        if old.concentration is None:
+            return []
+        policy = old.policy
+        held = ({"person_fraction": policy.combined_rule.default_fraction,
+                 "captain_fraction": policy.captain_rule.default_fraction}
+                if isinstance(policy, NormalizedPortfolioPolicy) else
+                {"person_fraction": self.defaults.person_fraction, "captain_fraction": self.defaults.captain_fraction})
+        return [("concentration_defaults", _plain(held),
+                 {"person_fraction": None, "captain_fraction": None,
+                  "selection": "SEQUENTIAL_DISTINCT_CAPTAINS_UNTIL_THE_POOL_RUNS_OUT"}, "CONCENTRATION")]
+
     def _changes(self, old: Rung, new: Rung, *, thesis_drop: bool = False) -> list[tuple[str, object, object, str]]:
         # Session 23b: each active thesis the step drops, by name, before what else changed.
         dropped = [(f"theses.{thesis.name}", thesis.source_mapping(), None, "THESIS_DROP")
                    for thesis in getattr(old.policy, "theses", ()) if thesis.active
                    and (new.policy is None or thesis_drop)]
         if new.policy is None:
-            return [*dropped, ("portfolio_policy",
+            return [*dropped, *self._concentration_ended(old), ("portfolio_policy",
                      {"rung": old.label, "normalized_sha256": old.normalized_sha256},
                      {"rung": new.label, "policy": None,
                       "carried_exclusion_dk_ids": list(new.excluded_dk_ids),
@@ -1255,6 +1510,8 @@ class Ladder:
             text = _limitation_text("RELAXATION_POLICY_DROPPED", detail)
         elif kind == "THESIS_DROP":
             text = _limitation_text("THESIS_DROPPED", detail)
+        elif kind == "CONCENTRATION":
+            text = _limitation_text("SHOWDOWN_CONCENTRATION_RELAXED", detail)
         else:
             text = _limitation_text("RELAXATION_STRUCTURE_RELAXED", detail)
         code = text.split(":", 1)[0]

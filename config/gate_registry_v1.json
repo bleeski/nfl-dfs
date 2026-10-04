@@ -80,7 +80,7 @@
     "portfolio_bounds": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
       "provenance": {"kind": "RULING", "ref": "2026-09-12 lock-clock ruling"},
-      "covers": "An exposure, captain, team, game, group, stack, overlap or salary bound is breached, contradictory or infeasible, or captains repeat. Since Session 10 also a bound the relaxation controller loosened, or the policy it dropped for rung 4, delivered and named."
+      "covers": "An exposure, captain, team, game, group, stack, overlap or salary bound is breached, contradictory or infeasible, or captains repeat. Since Session 10 also a bound the relaxation controller loosened, or the policy it dropped for rung 4, delivered and named. Since Session 56 also the Showdown concentration defaults (a cap step or the floor: `SHOWDOWN_CONCENTRATION_RELAXED`; not applied at all, with the reason: `SHOWDOWN_CONCENTRATION_NOT_APPLIED`)."
     },
     "delivery_deadline": {
       "class": "S", "stops": "CONSTRUCTION_PREFERENCE",
@@ -1404,6 +1404,8 @@
     "SELECT_PASSING_RECEIVING_ACCOUNTING_FAILED": "qa_evidence",
     "SELECT_SHARE_CONSERVATION_FAILED": "qa_evidence",
     "SHOWDOWN_BACKUP_QB_UNEVALUATED": "qb_depth_roles",
+    "SHOWDOWN_CONCENTRATION_NOT_APPLIED": "portfolio_bounds",
+    "SHOWDOWN_CONCENTRATION_RELAXED": "portfolio_bounds",
     "SHOWDOWN_GAME_COUNT": "slate_mode",
     "SHOWDOWN_ROLE_IDENTITY_CONFLICT": "provider_identity",
     "SHOWDOWN_ROLE_PAIR_INCOMPLETE": "slate_mode",

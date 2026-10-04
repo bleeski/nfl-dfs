@@ -169,6 +169,20 @@ file with fewer rows than the baseline cannot replace it (the pointer's coverage
 the baseline stays the file. When no engine file is good enough, the Classic fallback path
 below still exists. Showdown rung 4 is unchanged: sequential Showdown selection.
 
+**Showdown with no policy (Session 56, R35).** A `prior_review` Showdown run that supplies no policy no longer goes straight to
+sequential selection. `run-slate` starts it on the registered concentration defaults
+(`config/showdown_concentration_defaults_v1.json`: no person in more than 0.60 of the lineups, no Captain in more than 0.20, two
+lineups sharing at most 4 people), as a policy of exactly those three controls over every fillable row, written, hashed and audited like
+any rung's, so the same SD3 bank, joint solve, independent audit of the delivered bytes and deadline budget apply. When the pool, the
+entry count or the window cannot hold them the run relaxes by name, never by hand: 0.80 and 0.40, then rung 4 (sequential selection,
+a distinct Captain per row), each step an `S` limitation `SHOWDOWN_CONCENTRATION_RELAXED`; a window that cannot hold the capped
+search and still leave rung 4 its time starts at rung 4. Under five entries a 0.20 Captain default binds no slot, so it is reported
+(`NOT_APPLICABLE`), not applied. It never adds a stop: whatever keeps it from applying is `SHOWDOWN_CONCENTRATION_NOT_APPLIED` and
+the run is what it was before. Read the result's `concentration` block first: `status`, the requested and effective caps, the steps
+taken, and the delivered file's own counts recomputed from its bytes. A supplied policy is never replaced; a generated one at the
+default pair takes the same cap steps before its structural rungs. `docs/claude/working.md` keeps the by-hand rotation for what the
+pool cannot meet.
+
 A C2 policy binds every fillable row, or a subset of them in template order:
 `scripts/make_classic_policy.py --entry-id <id>`, once per row (Session 11b); a
 prefilled or unknown row is refused. Its bounds, stack rules and bank count its
