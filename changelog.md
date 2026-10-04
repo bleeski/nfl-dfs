@@ -84,10 +84,15 @@ call site: the attribution run, six tests)
 - Baseline before any change: `2395 passed, 2 skipped in 1883.66s (0:31:23)` on Windows (another repository's pytest ran beside it).
 - Synthetic fixture (NE@SEA shared pool, Seattle lead back `OUT`, receiver `IR`), prior points off to on: Sea Backup RB 7.117 to 19.209,
   Sea Third RB 1.519 to 4.298, Sea Alpha WR 42.111 to 45.594, NE Lead RB 16.107 unchanged.
-- Mutations, each broken and each caught on the intended assertion: both call sites handed the unreduced model (3 tests: "selection was handed a
-  model other than the redistributed one"); spill across positions switched on (2); operator exclusions vacate (2); residual zeroed (4);
-  `non_absorbers` dropped (3); official ids not passed at the call site (1; the reviewer found this one passed every test before the run-level
-  test existed); `kept = left` (1; caught only after a test with two same-position vacators and a stranded field was added).
+- Mutations, run again against the committed code after the wrapper's last rewrite (quarterbacks out, `applied` meaning somebody absorbed, its own
+  rule label), each broken in turn and each caught, with the tests that caught it: `prior_review` hands selection the unreduced model (3: the
+  Showdown run, the Classic run, the official-`INACTIVE` run; "selection was handed a model other than the redistributed one"); `cli select`
+  does (1); spill across positions switched on (5); operator exclusions vacate (2); residual zeroed instead of kept (1, the stranded-field test:
+  nothing else observes it); `non_absorbers` dropped (3); official ids not passed at the call site (1; the reviewer found this one passed every
+  test before the run-level test existed); `kept = left` (1; caught only after that stranded-field test with two same-position vacators was
+  added); quarterbacks take part (5); `applied` true whenever somebody vacated (3); the legacy rule label leaking into the applied report (3);
+  declared allocations never marked (2). Eleven mutations, twelve variants. Several counts changed after the rewrite, which is why they were
+  re-measured rather than carried over.
 - Full suite, run once on the finished tree: `2436 passed, 2 skipped in 854.86s (0:14:14)` on Windows, 41 more than the baseline's 2395 (the new file). The two skips are the expected symlink-permission ones (`tests/test_cowork.py:112`, `tests/test_standings_transport.py:523`). A first run of the same tree, with a second `-q` on the command line, showed no failures but printed no summary line, so it was repeated rather than reported from the dots.
 - `doctor`, `git diff --check`, `check_protected_paths.py`: `doctor` `pass_status: true`; `git diff --check` clean; `check_protected_paths.py` "No protected path touched"; `compileall` of the eight changed modules clean; `test_roadmap_queue`, `test_repo_boundaries` and `test_gate_registry` rerun after the doc edits (313 passed).
 - The adversarial `reviewer` agent ran on the diff: four blocking items (the contract entry, a run-level official-`INACTIVE` test, a wrong rule
@@ -113,8 +118,10 @@ call site: the attribution run, six tests)
   on a real one.
 - `nfl_prior_pool_scores_v1` carries no marker, so a run before Session 60 and one after are not told apart by that dump; the selection report is.
   Every team with a vacancy shifts, so comparisons against `scores_qbclean.json` shift too.
-- Size: past the card's 300 lines (about 1,590 changed lines counting the docs, about 1,300 without them: 496 insertions in `src/` and a 766-line new test file; just past the 1,500-line breakpoint when docs are counted), under the 1,500-line breakpoint, not split. The card's estimate assumed the call sites were the
-  whole change; the readable reviews, the offensive-role assumption, the workbook and four existing tests are the rest.
+- Size: past the card's 300 lines (1,765 changed lines, 1,720 added and 45 deleted; 1,494 without the docs: 496 insertions in `src/` and a
+  944-line new test file). Just past the 1,500-line breakpoint when the docs are counted, and not split: the change is one seam, the model
+  scoring receives, and the card names none. The card's estimate assumed the call sites were the whole change; the readable reviews, the
+  offensive-role assumption, the workbook and five existing tests are the rest.
 - Not fixed here, for a card: `docs/claude/working.md` still tells the operator to place injury beneficiaries by hand (Session 61 replaces it).
 
 ### 2026-10-04: Week 4 Classic late swap (the 4:25 window)
