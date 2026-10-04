@@ -4,6 +4,26 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: Week 4 Classic late swap (the 4:25 window)
+
+Ben, 19:43Z: check the afternoon inactives, update lineups, look for value and leverage from active statuses, and redeploy only as
+a Pareto gain. No standings were supplied.
+
+- Inactives: every late window list was posted (FantasyPros, team sites); all 29 late-window rostered people and every early one
+  absent from them. Mike Evans and Brock Bowers active. No forced swap. MIA@MIN (4:05) treated as locked so the file could be
+  uploaded in time; only 4:25 cells moved.
+- Lock-aware pass (`construction/late_swap_pareto_record.py`): same-position, in-place swaps in 4:25 cells only, each candidate
+  checked against the four washout measures at the portfolio level. A first version (v7) took McCaffrey out three times for Emanuel
+  Wilson and raised top-3 union 28 to 31 although mean overlap fell; it was not delivered.
+- Delivered at 19:47Z: `DK_REVIEW_ENTRY_wk4_classic_LATESWAP_v8.csv`, `9d296534…90ae`. 7 cells changed, all in 4:25 games; every
+  locked cell identical to v6 by a column-by-column comparison. Wilson (both Seattle backs inactive) into 3 more rows, 5 in all, a
+  judgment add on a prior of 3.04; Pareto swaps Kittle to Bowers, Worthy to Tre Tucker, Kittle to Kelce (KC's Jared Wiley out),
+  Horton to Theo Wease Jr. Washout v6 to v8: max exposure 13 to 13, top-3 union 28 to 28, distinct 120 to 120, mean overlap 1.07 to
+  1.05. Prior sum 4189.8 to 4153.3: the Wilson adds give up prior the engine cannot see (Session 60); the Pareto swaps add 3.14. QA
+  Tier 1 PASS.
+- In-game, locked: Ja'Marr Chase (13 rows) and Saquon Barkley ruled out. Without standings the late cells were not re-aimed at the
+  rows still alive; that is the next improvement for a late-swap pass, and belongs with Session 61's late-swap watch list.
+
 ### 2026-10-04: R37 recorded -- the judgment layer, Pareto redeploy, late windows (Sessions 60 to 62 added)
 
 Ben, after the Week 4 Classic slate: capture the judgment discipline so it can go into the engine "and I don't need to steer so
