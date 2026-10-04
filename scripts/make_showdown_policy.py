@@ -17,9 +17,21 @@ fillable blank row. run-slate fills the rows the policy leaves unbound with
 sequential Showdown after the policy's joint solve, and every fraction's
 denominator is the bound rows.
 
-DEFAULTS (Session 23). One QB, one to two pass catchers with him, $1 to $500
-left, at most one kicker and one DST, no offense (any position, including the
-rostered QB) sharing a rostered DST's team. Kickers and DSTs stay in the
+DEFAULTS (Session 23, two re-cut by Session 57). One to two quarterbacks, one to
+two pass catchers with each, $1 to $500 left, at most one kicker and one DST,
+and no bar on a person sharing a rostered DST's team. Session 57 (2026-10-02
+review F-06 and F-07) re-cut the two Session 23 defaults the graded fields
+contradict: `offense_against_own_dst` is off (it forbade any non-DST person on a
+rostered DST's team, and every rank-1 entry in NE@SEA, DEN@KC and PHI@CHI holds
+one) and `--qb-count-max` is 2, minimum 1 (it was 1; two-quarterback rows were
+24.7% of PHI@CHI entries and 73.5% of its top 1%, so a feasible one-quarterback
+bank never reached the rung that admitted them). Nothing forces a second
+quarterback or adds a bonus; the depth exclusions and the per-quarterback
+pass-catcher bound are as they were. `--offense-against-own-dst` and
+`--qb-count-max 1` write the old policy, and the policy field, the auditors, the
+MILP rows and the relaxation table keep their meaning for an explicit or a frozen
+policy (the Boolean is never read as the DST's opponent). Both are construction
+preferences: Claude's defaults, Ben's to overturn. Kickers and DSTs stay in the
 combined pool (`--captain-zero-pos` only zeroes their Captain fraction, never
 excludes them): kickers were in 45%/68% and defenses 68%/82% of the top 1% in
 the graded games. `--combined-default` (this session's name for
@@ -36,7 +48,8 @@ each the loosest of the policy and the rung, never tighter: 1 widens every
 capped Captain fraction to at least 0.25 (zeroed Captains stay zero) and drops
 the salary band; 2 lets zeroed Captains captain, widens Captain caps to at
 least 0.5, and additionally drops the pass-catcher band, the kicker/DST caps
-and `offense_against_own_dst`; 3 drops every exposure cap (which drops
+and `offense_against_own_dst` (already open in a default policy, so it moves
+only a policy that asked for it); 3 drops every exposure cap (which drops
 `max_person_share` too), raises the overlap cap to at least 5, and
 additionally drops the QB-count band. Rung 4 writes nothing: run-slate without
 --portfolio-policy-json. `--exclude` and uniqueness are never relaxed (R29).
@@ -154,7 +167,9 @@ def main(argv=None):
     ap.add_argument('--exclude', action='append', default=[],
                     help='UNDERLYING_ID to exclude entirely (repeatable)')
     ap.add_argument('--qb-count-min', type=int, default=1)
-    ap.add_argument('--qb-count-max', type=int, default=1)
+    ap.add_argument('--qb-count-max', type=int, default=2,
+                    help='most quarterbacks a lineup may hold (default 2, minimum 1: Session 57, review F-07;'
+                         ' it was 1). Nothing forces a second one; --qb-count-max 1 asks for the old band')
     ap.add_argument('--pass-catchers-min', type=int, default=1,
                     help='minimum WR/TE on the rostered QB\'s team (0 QBs rostered is unaffected)')
     ap.add_argument('--pass-catchers-max', type=int, default=2)
@@ -163,9 +178,11 @@ def main(argv=None):
     ap.add_argument('--kicker-count-max', type=int, default=1)
     ap.add_argument('--dst-count-max', type=int, default=1)
     ap.add_argument('--offense-against-own-dst', dest='offense_against_own_dst',
-                    action='store_true', default=True,
-                    help='forbid any position sharing a rostered DST\'s team (default on)')
-    ap.add_argument('--no-offense-against-own-dst', dest='offense_against_own_dst', action='store_false')
+                    action='store_true', default=False,
+                    help='forbid any position sharing a rostered DST\'s team (default off since Session 57,'
+                         ' review F-06: the field holds a DST beside a teammate; it was on)')
+    ap.add_argument('--no-offense-against-own-dst', dest='offense_against_own_dst', action='store_false',
+                    default=False, help='the default, spelled out')
     ap.add_argument('--rung', type=int, default=0, choices=(0, 1, 2, 3, 4),
                     help='relax the policy the flags describe to this rung (nfl_dfs.relaxation)')
     ap.add_argument('--entry-id', action='append', default=[],

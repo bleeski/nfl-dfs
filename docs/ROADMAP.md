@@ -2617,9 +2617,13 @@ the evidence for its lift, then by cost.
    the Windows fallback command the runbook names but the launcher refuses.
    Sessions 37 and 38. Small, first.
 2. **Construction changes with measured lift on graded standings.** The
-   hygiene bounds and the 0.80 share cap (Session 23) are the only rule set
-   that lifted P(at least one top-1%) and cut P(nothing paid) in every graded
-   game; Classic diversification (39) removes the one-player-variant washout
+   hygiene bounds and the 0.80 share cap (Session 23), taken as a bundle, are
+   the only rule set that lifted P(at least one top-1%) and cut P(nothing paid)
+   in every graded game. That lift was measured for the bundle, not for each
+   component: the 2026-10-02 review found two components the field contradicts
+   (the own-DST veto, F-06; the one-QB maximum, F-07), and Session 57 re-cut
+   their generator defaults, so this endorsement covers the bundle and nothing
+   narrower. Classic diversification (39) removes the one-player-variant washout
    shape from our own portfolio; Ben's game theses (23b, 23c) are R33's answer
    to captain concentration; contest-aware assignment (23d) stops sending the
    weakest lineups to the first-place contests.

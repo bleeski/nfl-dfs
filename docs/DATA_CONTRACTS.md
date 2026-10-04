@@ -681,6 +681,21 @@ either moves. `scripts/make_classic_policy.py` writes a v2 document on every run
 `max_person_share` 0.80 for three or more entries and `null` for two or fewer, as the
 per-person rows already skip that case.
 
+**Session 57 (2026-10-02 review F-06): the generated default leaves `offense_against_own_dst`
+open.** The table above is the relaxation table: what an explicit or a frozen policy that
+declares `true` loosens by, and it is unchanged (that policy loses the veto at rung 2, as
+before). It is no longer what the generator writes. `classic_rung_controls` writes
+`offense_against_own_dst: false` on every rung unless asked (`--offense-against-own-dst`
+writes `true` at rungs 0 and 1, then the table's `false` from rung 2, so a rung never
+tightens it); the `salary_left` and `max_person_share` columns are as they were. This is a
+changed generator default, not a schema change: `nfl_classic_portfolio_policy_c2_v2` and its
+normalization are as they were. The review's reconstruction found 22.1% of Classic Week 1's
+and 13.0% of Week 3's top-1% entries holding a non-DST person on a rostered DST's team (counts
+Session 18's local mode is to reproduce), and a feasible restricted bank never reaches the
+rung that drops the veto. The Boolean is never read as the DST's opponent. The `RB_DST_PAIR`
+stack value, always zero while the veto was on, can now be positive; the rule stays advisory.
+A construction preference (class S): Claude's default, Ben's to overturn.
+
 `nfl_classic_candidate_bank_c2_v1` contains the normalized-policy hash,
 requested and produced counts, canonical-unique count, explicit bounded versus
 exhaustive state, family/group/stack coverage, every documented stratum and
@@ -1472,9 +1487,10 @@ normalized artifact is produced fresh within the run that reads it back
 (the audit, the readable review); no archived normalized artifact from an
 earlier run is ever reparsed by a later one.
 
-Generator defaults (`scripts/make_showdown_policy.py`): one QB, one to two
-pass catchers with him, $1 to $500 left, at most one kicker and one DST,
-`offense_against_own_dst=true`. Kickers and DSTs are never excluded from the
+Generator defaults (`scripts/make_showdown_policy.py`): one to two QBs (exactly one
+until Session 57), one to two pass catchers with each, $1 to $500 left, at most one
+kicker and one DST, `offense_against_own_dst=false` (`true` until Session 57; see
+"Session 57" below). Kickers and DSTs are never excluded from the
 combined pool by default; `--captain-zero-pos K,DST` only zeroes their Captain
 fraction (they were in 45%/68% and 68%/82% of the top 1% in the graded games).
 `--captain-default` defaulted to 0.4 instead of requiring an explicit value
@@ -1493,7 +1509,37 @@ this session's per-lineup `structural_bounds`, and is not implemented here.
 A two-QB build is still reachable by an explicit `--qb-count-max 2` override;
 a proper portfolio-level two-QB quota is future work (a natural fit for
 Session 23b/23c's thesis machinery, which already allots rows across bounded
-sleeves).
+sleeves). Session 57 reversed the one-QB default, below.
+
+**Session 57 (2026-10-02 review F-06 and F-07): two generator defaults re-cut.**
+This changes what `make_showdown_policy.py` writes by default, not the schema:
+`nfl_showdown_portfolio_policy_v2` and its normalized form are as they were, no
+version is added, and no policy document already written changes meaning. The
+generator now writes `offense_against_own_dst=false` (`--offense-against-own-dst`
+writes `true`; `--no-offense-against-own-dst` is the default spelled out) and
+`qb_count` `{minimum: 1, maximum: 2}` (`--qb-count-max 1` writes the old band).
+The review's counts, which Session 18's local mode is to reproduce: every rank-1
+entry in NE@SEA, DEN@KC and PHI@CHI holds a DST beside a teammate (854 of 1,261,
+1,982 of 2,420 and 636 of 2,552 of those games' top-1% entries do); two-QB lineups
+were 24.7% of PHI@CHI entries and 73.5% of its top 1%, against 0.03x to 1.45x lift
+in the earlier games, so no one shape is forced. Nothing forces a second QB, adds a
+point bonus or fixes a family share: the scorer compares the larger bank, the depth
+exclusions and the per-QB `pass_catchers_with_rostered_qb` bound are unchanged
+(that bound is per rostered QB, so a second QB needs his own one or two pass
+catchers), and a QB's backup is still excluded by the Session 53 default where it
+ran. Where it did not (`SHOWDOWN_BACKUP_QB_UNEVALUATED`, `QB_DEPTH_CAPTURE_*`) a
+starter and his backup can now share a lineup at rung 0, where the one-QB band
+once made that a rung-3 event; `qa_showdown_portfolio.py --backup-pairs` reports it
+and `docs/claude/working.md` § Showdown judgment pass owns the check. The Boolean keeps Session 23's "own" reading and is never inverted to mean the
+DST's opponent; a separately named opponent-correlation preference would be a new
+field from new evidence. The auditor, `add_no_offense_with_dst`, `SHOWDOWN_RUNGS`
+(rung 2 drops the Boolean, rung 3 the QB-count band) and the normalizer are
+unchanged: an explicit or a frozen policy is enforced, audited and relaxed exactly
+as before, and for a policy written with the new defaults the rung-2 drop of the
+Boolean is a no-op. The engine's own no-policy Showdown default
+(`Ladder.begin_with_defaults`) already had every structural bound open. These are
+construction preferences (class S): Claude's defaults under the lock-clock ruling,
+Ben's to overturn.
 
 ### SD3 v3: one game thesis (Session 23b, chunk P8, R33 and R34)
 
