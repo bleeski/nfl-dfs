@@ -917,7 +917,7 @@ Successful C3 publication is atomic and adds:
 |---|---|
 | `classic_review_export_audit.json` | Canonical `prior_only_classic_export_audit_c3_v3` since Session 11c (v2 and v1 stay as written). v3 adds `bound_entry_ids`, `unbound_entry_ids`, `row_sources` (each filled row, `POLICY` or `C1`) and the `checks_run` item `POLICY_AND_C1_ROW_PARTITION_AND_THE_RUN_S_EXCLUSIONS_OVER_EVERY_ROW`; `entry_ids` and `output.entries` are every filled row, `recomputed`'s counts and `pairwise_person_overlap` the policy's rows, and `recomputed.canonical_lineups` every filled row. v2 since Session 09: every boundary hash, recomputed fact, exact output hash, status, limitations, truths, and one next action. v2 reports `recomputed.selected_activity` as `PASS` or `INCOMPLETE` (v1 always wrote `PASS`), adds `recomputed.selected_activity_without_row`, lists `SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE` in `checks_run` only when every selected person has an `ACTIVE` row (otherwise `SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW`), and names the gap in `limitations` as `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED:NO_EXACT_ID_ROW_IN_SUPPLIED_FILE:<n>_of_<m>_selected_people` or `OFFICIAL_STATUS_REQUIRED:NO_OFFICIAL_STATUS_FILE_SUPPLIED:<n>_of_<m>_selected_people` |
 | `DK_REVIEW_ENTRY_<label>.csv` | Exact reserved-entry template bytes with only nine previously blank authorized roster cells rewritten for each exact Entry ID in template order |
-| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v2` display data independently reconstructed from the accepted artifacts, since Session 11c (v1 stays as written and was never produced for a subset policy). v2 adds each entry's `source` (`POLICY` or `C1`) and `unbound_rows`: `null` when the policy binds every fillable row, otherwise the C1 rows' `entry_ids`, `source`, `basis`, `checks`, `person_exposure` and `maximum_person_overlap_with_any_filled_row` (C1 cuts only exact rosters, so no overlap cap covers them). `exposure.entry_count_denominator` is the policy's rows; `reconciliation.entry_count` is every filled row |
+| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v3` display data independently reconstructed from the accepted artifacts, since Session 60 (v1 stays as written and was never produced for a subset policy; v2 stays readable as written). v3 adds `pool_coverage.workload_redistribution` and, when it applied, the section Injury-room redistribution (Injury-room workload redistribution, Session 60). v2 adds each entry's `source` (`POLICY` or `C1`) and `unbound_rows`: `null` when the policy binds every fillable row, otherwise the C1 rows' `entry_ids`, `source`, `basis`, `checks`, `person_exposure` and `maximum_person_overlap_with_any_filled_row` (C1 cuts only exact rosters, so no overlap cap covers them). `exposure.entry_count_denominator` is the policy's rows; `reconciliation.entry_count` is every filled row |
 | `prior_only_readable_review.html` | Self-contained escaped rendering of the canonical readable JSON |
 | `NFL_DFS_Cowork_Review_<run-id>.xlsx` | Eight sheets: Run Control, Evidence Paste, Portfolio, QA, Upload, Exposure, Review Evidence, and Artifacts |
 
@@ -1108,7 +1108,10 @@ volume, captured metadata, hashes and original expiry. Unchanged historical
 shares remain unconfirmed; excluding people leaves their volume unallocated,
 so no unsupported backup inherits it. This is an understated retained-volume
 diagnostic, not a guaranteed lower bound on fantasy points or a current-role
-forecast. Historical `role_capacity` is never a forward ceiling.
+forecast. Historical `role_capacity` is never a forward ceiling. (This describes
+`offensive_explicit_team_shares_v1`, unchanged. Since Session 60 the model it reads has
+already had a DraftKings-status vacancy moved to its position room by a separate registered
+transformation: see Injury-room workload redistribution, below.)
 
 An unresolved transfer the market prices far above his prior (the P1 gate,
 `unresolved_material_role_change_gate_v2` since Session 09) no longer stops the
@@ -1128,6 +1131,102 @@ copied packages. Invalid evidence writes no new `DK_REVIEW_ENTRY` CSV and leaves
 earlier outputs intact. The prior-review path always reports independent
 `FILE_VALID`, `EVIDENCE_STATE`, `MODEL_STATUS=PRIOR_ONLY` and
 `RELEASE_DECISION=DO_NOT_UPLOAD`. SD2 does not change upload gates or W3's simulator.
+
+## Injury-room workload redistribution (Session 60, R37)
+
+`injury_room_workload_redistribution_v1` is the transformation `prior_review` (both modes) and `select` apply to the opportunity
+model after the participation contract and before any role resolver or scoring reads a share
+(`participation.redistribute_vacated_workload`). The model it returns is the model `select_prior_lineups` scores. Before Session 60
+both call sites computed a reduced model, discarded it, and passed the unreduced one on (since SD2, `7f9ae4d`, 2026-09-09), so every
+survivor was scored at his backup share.
+
+**What it does.** A person the run binds as unavailable who holds a nonzero opportunity share vacates it. The share goes to the
+survivors at his own position on his own team, in proportion to their own prior share, uncapped. The rule it reports is
+`PROPORTIONAL_TO_PRIOR_WITHIN_VACATING_POSITION_NO_SPILL_V1`: the proportional, position-scoped rule of
+`participation.redistribute_opportunity` (the registered label `PROPORTIONAL_TO_PRIOR_WITHIN_VACATING_POSITION_UNCAPPED_V1`,
+unchanged since W3) with the spill that function offers across the wider absorption set switched off, so it needs its own name.
+A share whose position room holds no survivor who can take it stays unallocated and is reported as such. The fields are
+`carry_share`, `target_share`, `qb_attempt_share`, `rushing_td_share` and `receiving_td_share`; kickers and defenses are untouched.
+It never crosses a team and never crosses a position.
+
+**Quarterbacks are outside it.** An unavailable quarterback vacates nothing and no quarterback absorbs. Who starts at quarterback is
+the depth evidence's question (R25, R36, Session 54) and the starting-quarterback check's (Session 61): a share-proportional
+inheritance would lift whichever backup has any prior share to the whole unit, played or not, and with no depth package that
+would have replaced the near-zero prior that kept an unlisted backup out of a build. With a package the depth resolver already moves
+every attempt onto the declared or promoted starter. The report names them (`quarterbacks_left_to_the_depth_evidence`).
+
+**Trigger.** `contract.unavailable_people` (DraftKings `OUT`, `IR` and `D`, and any code the run classifies with
+`--unavailable-status`) plus the people on supplied official `INACTIVE` rows (`prior_review` folds those into the operator
+exclusions, so the function is told separately). The trigger is a status the run already binds and a row it already supplied for
+the activity gate. It is not official activity evidence, clears nothing, and `OFFICIAL_STATUS_*` is untouched. `Q` is never a
+trigger and is never removed; his shares move only if he shares a room with a vacancy, as any survivor's do. A plain operator
+exclusion (`--exclude`, a policy fade) neither triggers nor stops being an absorber: it is a construction choice, and the model's
+view of who plays is the DraftKings status plus the official rows. The report names those people
+(`operator_exclusions_that_move_nothing`).
+
+**Who never absorbs.** A survivor whose current role is unresolved takes none of a vacated share: one whose
+`offensive_history_by_person` state is `CURRENT_ROLE_UNKNOWN` (a transfer carrying his old team's share), or whose prior row is not
+`PASS`. The room's other survivors take it instead, and when nobody else can it stays unallocated. This is an evidence-gate
+interaction, measured rather than assumed: on the DEN@KC shape (`tests/test_qb_depth_roles.py`'s pool) an unresolved transfer
+behind a DraftKings-`OUT` back went from 8.60 to 24.16 prior points when he absorbed it, and the P1 material-role-change gate
+stopped excluding him. The rule keeps that gate (R28, Ben 2026-09-19) from being made moot by a model number: he is never selected
+on the old team's share, with or without a vacancy beside him. The report names these people
+(`not_absorbing_unresolved_current_role`). Raising an absorber's prior can still push a person in another room across the P1
+gate's divergence threshold; that is the gate tightening, not weakening, and it is reported through the gate's own findings.
+
+**Conservation.** Every person stays in the returned model. A vacating person keeps only the part of his share that could not be
+placed, so each team's pooled share per field is the same before and after (to 1e-9; a violation is an internal refusal in prose,
+never a blocker code). The offensive-role resolver needs every prior row. The returned model carries
+`OpportunityModel.workload_redistribution = "injury_room_workload_redistribution_v1"` only when somebody absorbed a share
+(`applied`); otherwise the model object scoring receives is the one it always did.
+
+**Declared allocations.** The offensive-role resolver runs after this transformation, and a declared allocation replaces every
+recipient's shares for its team. Once selection has run, `mark_declared_allocations` marks each move on such a team
+`superseded_by_declared_allocation` and lists those teams at the top level. The move stays in the report, flagged as not having
+decided that team's scores. Classic C3 always binds a declared allocation.
+
+**Why proportional and not the depth-chart successor.** `redistribute_opportunity(depth_ranks=...)` (P7, below) is ungraded against
+the proportional rule and stays off (P0). Proportional also never hands a share to a person whose prior share is zero, whom the
+role gate then excludes, which would lose it.
+
+**The report.** `redistribution` in the run record (`select`'s result and `prior_review`'s selection report) and the same object at
+`pool_coverage.workload_redistribution`, which is what the hash-bound Classic coverage artifact and both readable reviews carry.
+Keys: `transformation_version`, `rule`, `trigger`, `applied`, `enabled`, `cross_position_spill` (`NEVER`),
+`official_activity_evidence` (`NOT_IMPLIED`), `does_not_establish`, `vacating_people` (person, name, team, position, `dk_status`,
+`triggered_by` from `DK_STATUS_UNAVAILABLE` and `OFFICIAL_INACTIVE_ROW`), `quarterbacks_left_to_the_depth_evidence`,
+`operator_exclusions_that_move_nothing`, `not_absorbing_unresolved_current_role`, `moves` (one per team, position and field: the
+vacated people with their shares, `vacated_total`, `basis`, the absorbing people with `before`, `after` and `gained`,
+`unallocated`, and after selection `superseded_by_declared_allocation`), `moves_count`, `absorbing_people`,
+`superseded_by_declared_allocation`, `unallocated_by_team`, `team_totals_conserved`, and the diagnostics
+`redistribute_opportunity` already reported (`capacity_data_quality`, `share_above_prior_capacity_after_redistribution`,
+`shares_changed`, `largest_gains`). `applied` is false when nobody absorbed a share and when `select --no-redistribute` asked for the
+old reading (`rule=NO_REDISTRIBUTION_SURVIVORS_KEEP_PRIOR_SHARES`); `run-slate` has no opt-out. The keys `removed_people`,
+`removed_count` and `surviving_people` of the earlier block are gone (nothing read them); a run before Session 60 carries the old
+block, whose `rule` says nothing was redistributed. `redistribute_opportunity` itself gained three additive parameters
+(`cross_position_spill`, `non_absorbers`, and per-step recording in `steps` and `unallocated_by_team_position`; all defaults keep every
+earlier caller) and now reports a field no survivor on a team can hold (a team's only listed quarterback is out) as unallocated
+instead of dropping it without a word.
+
+**Does not establish** (`does_not_establish`): `OFFICIAL_ACTIVE_STATUS`, `A_CURRENT_ROLE`,
+`THAT_ANY_ABSORBER_RECEIVES_THE_VACATED_WORKLOAD`, `MODEL_VALIDATION`, `OWNERSHIP_OR_LEVERAGE`. It is a prior, not a forecast, not
+graded against outcomes, and every run still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`. A share an
+absorber takes is the model's own, moved; a person the role evidence or an operator later removes after absorbing leaves that share
+unplaced, and a team's scores can move slightly for people whose own shares did not (fumbles use the renormalised team-touch share).
+
+**What it supersedes.** SD2's text above ("excluding people leaves their volume unallocated, so no unsupported backup inherits it")
+describes `offensive_explicit_team_shares_v1`, which is unchanged and still leaves unallocated whatever it excludes. The SD2 session
+removed generic redistribution from the prior-review path because prose cannot write a share. This transformation is not prose: it
+is deterministic, registered, bound to the DraftKings bytes the run already hashes, and reported move by move. The offensive-role
+report's assumption says the vacated volume was redistributed when this transformation applied
+(`VACATED_VOLUME_OF_UNAVAILABLE_PEOPLE_REDISTRIBUTED_WITHIN_POSITION_ROOM_BY_RULE_V1; RESIDUAL_REMAINS_UNALLOCATED`), and the
+pool-coverage note, the review observations, the readable-review heading and the workbook header stop saying a vacated share is
+not reassigned. Frozen artifacts from earlier runs keep their meaning. The pool-scores dump (`nfl_prior_pool_scores_v1`) carries no
+marker: read the run's selection report to tell a run before Session 60 from one after.
+
+**Readable reviews.** `prior_only_readable_review_sd5_v3` and `prior_only_readable_review_classic_c3_v3` carry
+`pool_coverage.workload_redistribution` and, when it applied, the section **Injury-room redistribution** (a table of the moves, with
+the does-not-establish text); the unallocated-volume heading then reads "Volume left unallocated after the injury-room
+redistribution". A reader of v1 or v2 sees none of it; every other field means what it meant, and v2 files stay readable as written.
 
 ## SD3 Showdown portfolio policy
 
@@ -1662,7 +1761,7 @@ Every path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPL
 
 A successful Showdown `prior_review` creates canonical
 `prior_only_readable_review.json` with schema
-`prior_only_readable_review_sd5_v2` (since Session 11b; v1 below), a
+`prior_only_readable_review_sd5_v3` (since Session 60; v1 and v2 below), a
 self-contained escaped HTML rendering, and an extended review workbook. This is a presentation contract, not a new
 selection, evidence, model or release contract. The JSON records:
 
@@ -1717,6 +1816,15 @@ other blank one (`READABLE_REVIEW_LINEUP_INVALID`). A reader of
 v1 sees no `source` and no `unbound_rows`; for a run without a subset every
 other field means what it meant, and v1 files stay readable as written. v1 was
 never produced for a subset policy.
+
+**`prior_only_readable_review_sd5_v3` (Session 60, R37).** Adds
+`pool_coverage.workload_redistribution` (the selector's own `redistribution` report, display-only
+here; contract: Injury-room workload redistribution) and, when it applied, the section
+**Injury-room redistribution** with a table of every move and the transformation's
+does-not-establish text. The unallocated-volume heading then reads "Volume left unallocated after
+the injury-room redistribution", and the `unallocated_volume` observation and the workbook header
+stop saying a vacated share is not reassigned. A reader of v1 or v2 sees none of it; every other
+field means what it meant, and v2 files stay readable as written.
 
 Canonical JSON and HTML are written atomically and reported with independent
 SHA-256 values. HTML markup is escaped. Every user/provider-controlled workbook

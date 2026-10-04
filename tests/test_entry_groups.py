@@ -846,7 +846,10 @@ def test_c3s_export_audit_still_refuses_a_written_prefilled_row(tmp_path):
 # purpose (`C2_FULL_FILLABLE_SHA256`, below): the old file's three rows were one
 # lineup with the quarterback swapped, the witness chain review S4 named.
 
-SD3_FULL_FILLABLE_SHA256 = "1918820d809eea637425f1970b5bae65c406efca7b35fa3264b867863e43eed1"
+# Re-pinned in Session 60 (was 1918820d...eed1): this fixture's pool holds a DraftKings `OUT` back and an `IR`
+# receiver, whose vacated shares now reach their rooms before scoring, so the policy's lineups differ. With the
+# transformation switched off at the call site the old bytes come back (changelog, 2026-10-04, Session 60).
+SD3_FULL_FILLABLE_SHA256 = "99ace68ab2fd12f8c0becebc5ebdc76c427d26fb44eaee2a968d32e668c21b80"
 C2_FULL_FILLABLE_SHA256 = "128a0fac2530eda8e7091efb84c94e44d356f2e7deffc78de1e5bf1a2bfd0e34"
 SD3_CONTROLS = {"max_captain_exposure": {"default_fraction": 0.5, "overrides": []},
                 "max_pairwise_person_overlap": 4}
@@ -900,7 +903,7 @@ def test_a_showdown_subset_policy_fills_its_rows_and_sequential_showdown_the_res
     assert not _keys(slate, filled) & _keys(slate, [first])
 
     readable = _readable(report)
-    assert readable["schema_version"] == "prior_only_readable_review_sd5_v2"
+    assert readable["schema_version"] == "prior_only_readable_review_sd5_v3"
     assert {entry["entry_id"]: entry["source"] for entry in readable["entries"]} == report["row_sources"]
     assert readable["exposure"]["entry_count_denominator"] == 2
     assert readable["reconciliation"]["entry_count"] == 4
@@ -1043,7 +1046,7 @@ def test_a_classic_subset_policy_fills_its_rows_by_c2_and_the_rest_by_c1(tmp_pat
     assert not _keys(slate, filled) & _keys(slate, [prefilled])
 
     readable = _readable(report)
-    assert readable["schema_version"] == "prior_only_readable_review_classic_c3_v2"
+    assert readable["schema_version"] == "prior_only_readable_review_classic_c3_v3"
     assert {entry["entry_id"]: entry["source"] for entry in readable["entries"]} == sources
     assert readable["exposure"]["entry_count_denominator"] == 2
     assert readable["reconciliation"]["entry_count"] == 4

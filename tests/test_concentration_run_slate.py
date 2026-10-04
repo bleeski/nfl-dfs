@@ -33,7 +33,13 @@ from .test_prior_selection import _entries_bytes
 
 ENTRY_COUNT = 20
 # Two small pools carved out of the shared synthetic pool by operator exclusions (which no rung ever relaxes).
-NINE = ("Starter QB", "Lead RB", "Alpha WR", "Starting TE", "Sea QB", "Sea Alpha WR", "Sea Backup RB", "Seahawks",
+# Session 60: "Sea Third RB" stands where "Sea Backup RB" did. Seattle's lead back is DraftKings `OUT` in the shared pool,
+# so his backup now inherits the carries (7.1 became 19.2 prior points) and became the carve's one dominant score. In this
+# ten-person pool, at the edge of what the caps can hold, that was enough to leave the capped bank unfillable inside its
+# limits (about 10 s became 45 to 96 s and the ladder ended at the baseline), which is a property of a pool this small and
+# not what this test pins. The third back keeps a Seattle running back in the pool without being the room's inheritor.
+# Both tests that use the pool are otherwise unchanged. Other carves fail with or without the change (checked).
+NINE = ("Starter QB", "Lead RB", "Alpha WR", "Starting TE", "Sea QB", "Sea Alpha WR", "Sea Third RB", "Seahawks",
         "Patriots")
 TEN = NINE + ("NE Kicker",)
 # What a run delivering an improvement, and a run left with the baseline, each report before this session and after it.
