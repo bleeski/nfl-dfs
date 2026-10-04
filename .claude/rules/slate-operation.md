@@ -150,6 +150,26 @@ and a concentrated single-construction file is exactly the failure a
 multi-thesis build exists to fix. Report what you did and why in the handoff,
 the same as any other relaxation.
 
+## Two holes the thesis build does not close by itself
+
+Added 2026-10-04 from the Week 4 Classic slate.
+
+- **Backup quarterbacks reach the thesis pool.** The dump scores every
+  quarterback the role gate kept, and `restrict_qb_teams` picks by team, so
+  Week 4's first build rostered Nick Mullens (not on Jacksonville's depth chart
+  at all). Before `build_thesis_portfolio.py`, drop every quarterback who is not
+  his team's depth-chart starter from the scores file, keeping the promoted
+  backup of any DraftKings-`OUT` starter. Then pass the same pairs to QA as
+  `--backup-pairs`.
+- **A DraftKings `OUT` tag does not move the workload.** Without an official
+  inactive file the prior keeps the injured starter's share where it was, so his
+  replacement scores as a backup (Braelon Allen, 3.6 points, with Breece Hall
+  out). `swap_inactives.py value-add` and `redeploy` both rank by that prior and
+  will not place him, and `redeploy` takes him back out. Place him by
+  construction with a recorded swap (Week 4:
+  `data/inbox/slates/wk4-classic-2026-10-04/construction/manual_add_record.py`),
+  rerun QA on the written file, and never write him a number.
+
 ## Decide what is yours to decide
 
 Ben's standing preference is that a menu of approaches is work handed back to

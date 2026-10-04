@@ -177,12 +177,10 @@ def main(argv: list[str] | None = None) -> int:
                     "MODEL_VALIDATION",
                 ],
                 "next": (
-                    "Pass this path to select_prior_lineups as"
-                    " qb_depth_role_evidence_json. NOTE: there is no `run-slate`"
-                    " flag for it yet — wiring it into the request contract is"
-                    " chunk P1b — so today this package is reachable from the"
-                    " library entry point only. It is not an upload"
-                    " authorization and it clears no other gate."
+                    "Pass this path to run-slate as"
+                    " --qb-depth-role-evidence-json, as an ABSOLUTE path (a"
+                    " relative one is refused without a request base). It is"
+                    " not an upload authorization and it clears no other gate."
                 ),
             },
             indent=2,

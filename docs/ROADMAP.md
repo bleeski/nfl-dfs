@@ -153,6 +153,9 @@ Every session follows this protocol, and the cards only add to it:
 | Session 55 | Standalone | A validated Showdown value-add swap: `scripts/showdown_value_add.py` works one named person (exact current-slate DK ID) into up to N rows of a filled Showdown review file by one FLEX swap each, refuses a row already holding him, runs `validate_lineup` on every resulting row and `roster_canonical_key` distinctness across the file, creates the output exclusively and publishes nothing when any row is invalid; writes no projection (0 prior points, the gate named as a limitation); `keenum_swap.py` stays as the record and `docs/claude/working.md` points at the tool | 2026-10-02 review F-01 (reproduced: the PHI@CHI helper re-run on v4 publishes two `LINEUP_PERSON_REPEATED` rows and exits 0) | new `scripts/showdown_value_add.py`, new `tests/test_showdown_value_add.py`, `docs/claude/working.md`, `docs/OPERATOR_GUIDE.md` | V | none | `sh ./nfl.sh test tests/test_showdown_value_add.py -x --tb=short`; the person already in FLEX or at Captain is refused with no file written, a valid substitution keeps every non-roster byte, every row legal and every canonical key distinct; under five seconds, no solver | Complete |
 | Session 56 | Standalone | Concentration defaults in the engine (R35): one registered default set (`showdown_concentration_defaults_v1`: 0.60 a person, 0.20 a Captain, overlap 4) read by `make_showdown_policy.py` and applied to the no-policy Showdown improvement path through the existing policy controls; the ladder relaxes the caps first (0.80/0.40, then off) before any structural rung and carries an already-relaxed rung forward; the report carries requested and effective caps and the relaxation name; explicit policy values win; deadline or pool infeasibility leaves the baseline as the deliverable with a named concentration limitation | 2026-10-02 review F-02 (reproduced on the Session 54 fixture: 20 distinct rows with two receivers in 20/20 and a Captain in 7/20 unbound, 12/20 and 4/20 under 0.60/0.20); R35, R36 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_showdown_policy.py`, `config/`, `docs/DATA_CONTRACTS.md`, `docs/claude/working.md` | S | none | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_relaxation_controller.py tests/test_showdown_structural_hygiene_acceptance.py -x --tb=short`, plus the tests it adds; a no-policy Showdown `run-slate` on synthetic pre-lock sources delivers 20 legal distinct rows with no person above 12 and no Captain above 4, recomputed from delivered bytes; an infeasible pool and a short deadline deliver the baseline and name the relaxed preference | Complete |
 | Session 57 | Standalone | Default structural bounds re-cut from the field: new default policies in both modes leave `offense_against_own_dst` open (the Showdown argument default and the Classic generator's emitted rung controls) and the Showdown generator's QB maximum default becomes 2 (minimum 1; depth exclusions and per-QB pass-catcher bounds unchanged); the policy field, auditors, MILP rows and relaxation table keep their meaning for explicit and frozen policies, the Boolean is never inverted, nothing forces two quarterbacks or adds a bonus | 2026-10-02 review F-06, F-07 (every rank-1 entry in NE@SEA, DEN@KC and PHI@CHI violates the own-DST veto, with 854/1,261, 1,982/2,420 and 636/2,552 of their top-1% entries; two-QB rows were 24.7% of PHI@CHI entries and 73.5% of its top 1%; a feasible restricted bank never reaches the rung that drops either) | `scripts/make_showdown_policy.py`, `scripts/make_classic_policy.py`, `src/nfl_dfs/relaxation.py`, `tests/test_classic_policy_generator.py`, `tests/test_portfolio_policy.py` | S | none | `sh ./nfl.sh test tests/test_classic_policy_generator.py tests/test_portfolio_policy.py tests/test_relaxation_controller.py -x --tb=short`, plus the tests it adds; generated defaults in each mode leave the bound open and emit `qb_count={1,2}`, an explicit true or one-QB policy still forbids, a fixed legal DST-plus-teammate roster and a fixed legal two-QB roster pass the new defaults and fail the legacy ones; frozen-policy replay anchors unchanged | Pending |
+| Session 60 | Standalone | The injury room moves the workload (R37, P9 part 1): the scoring path stops calling `participation.redistribute_opportunity` with `redistribute=False` (`prior_review.py:2364`, `cli.py:1932`), so the share a DraftKings `OUT` or `IR` person vacates goes to his position room by the function's own documented rule; registered as a versioned transformation, reported person by person (vacated, absorbed, from whom), writing no number from prose; confirm first that no ruling chose `False` (none found on 2026-10-04) | R37; Week 4 Classic slate (`changelog.md` 2026-10-04); `docs/chunks/P9-judgment-layer.md` | `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/participation.py`, `docs/DATA_CONTRACTS.md`, tests | P | none | `sh ./nfl.sh test tests/test_participation.py tests/test_prior_review_profile.py -x --tb=short`, plus the tests it adds; on the Week 4 frozen inputs Braelon Allen, Emanuel Wilson and Zach Ertz score above their Week 4 priors (3.58, 3.04, 0.55), every DK-`OUT` person stays out of the pool, a `Q` person is untouched, and the file stays `DO_NOT_UPLOAD` | Pending |
+| Session 61 | Standalone | The Classic judgment pass inside the run (R37, P9 part 2): the run names any depth-chart starting QB missing from the scored pool, reports each injury room (who inherits, prior before and after Session 60, salary) and a ranked list of underpriced-role candidates for the agent to research; backup QBs leave the thesis pool unless promoted; Session 52's judgment input gains a Classic schema version that places a named person (exact DK ID, row minimum, reason, sources) as a protected placement in the thesis build, writing no number and overriding no DK `OUT`, official inactive, `BLOCK` or unresolved material role change; the late-window people with no posted inactive list are reported as a late-swap watch list, not an open blocker | R37; Week 4 Classic slate; `docs/chunks/P9-judgment-layer.md`; Session 52's card | `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/classic_theses.py`, `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/readable_review.py`, `docs/DATA_CONTRACTS.md`, `docs/claude/working.md`, tests | S | Session 60 | `sh ./nfl.sh test tests/test_classic_theses.py tests/test_prior_review_profile.py -x --tb=short`, plus the tests it adds; on the Week 4 frozen inputs the run names every starting QB scored, lists Allen, Ertz, Jennings and Wilson as candidates, rosters no backup QB whose starter is active, places a judgment-named person in at least his minimum rows, refuses a judgment naming a DK-`OUT` person, and the file stays `DO_NOT_UPLOAD` | Pending |
+| Session 62 | Standalone | Pareto-only salary redeploy (R37, P9 part 3): unused salary is never a defect; a redeploy swap is accepted only when it raises the row's prior, fits the cap, keeps the row legal and distinct, leaves the QB, his stack, the bring-back, the DST and every protected person alone, and leaves no washout proxy worse (max exposure, top-3 union, mean pairwise overlap no higher; distinct people no fewer); the report shows both goals before and after and every rejected swap with the goal it would have hurt; `swap_inactives.py redeploy` and the thesis build use it, and `--protect` names people a redeploy never removes | R37; Week 4 Classic slate (`construction/pareto_redeploy_record.py`); `docs/chunks/P9-judgment-layer.md` | `scripts/swap_inactives.py`, `scripts/build_thesis_portfolio.py`, `scripts/qa_classic_portfolio.py`, `docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md`, tests | S | none | `sh ./nfl.sh test tests/test_swap_inactives.py tests/test_build_thesis_portfolio.py -x --tb=short`, plus the tests it adds; on the Week 4 v4 portfolio with `--protect` naming Allen, Ertz, Jennings and Wilson, every accepted swap raises its row's prior, no washout proxy worsens, no protected person moves, and a fixture whose only prior-raising swap concentrates exposure is left unchanged with that swap reported | Pending |
 | Session 23c | Standalone | P8 part 2, the thesis portfolio: rows allotted across Ben's theses; one joint assembly with every lineup distinct across theses and prefilled rows (R29), the one share limit from Session 23, captains spread across theses; the review reports per Entry ID the thesis, captain counts per thesis, every person in more than half the rows and the most rows one player's bad night sinks; ATL@GB and NE@SEA replays | Chunk P8 "Done looks like"; R34 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/readable_review.py`, `docs/DATA_CONTRACTS.md` | S | Session 23b, Session 56 | `sh ./nfl.sh test tests/test_portfolio_policy.py tests/test_entry_groups.py tests/test_readable_review.py -x --tb=short`, plus the tests it adds; the 20-row fixture spreads across six theses with no repeat and no player over the share limit | Pending |
 | Session 23d | Batched | P2 part 2, contest facts and screening (narrowed 2026-09-29: the `round_robin_by_contest` default assignment order is superseded by Session 50's `within_contest_diversity_v1`, which needs no policy input); `contest_facts_csv` (contest id, field size, places paid, entry fee) tags each entry's paid fraction and labels entries under 5% `FIRST_PLACE_OBJECTIVE`, never from a contest name; a contest-screening checklist (rake, overlay, payout shape, field size, max entries) in the runbook | Chunk P2; debrief §4, §6; RUN_RECORD DEN@KC defect 5; `plan.md:395`; critique V9 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/contracts.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | S | Session 23 | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_portfolio_policy.py -x --tb=short`; a `contest_facts_csv` with a bad row is refused by name and entries under 5% paid are labelled | Pending |
 | Session 58 | Standalone | Observed-zero history for a declared starter (R36): the Session 54 branch of `resolve_offensive_roles` extends to `OBSERVED_HISTORY_ZERO` under the same guards (declared starter, QB, positive depth attempt share, participation permits, no `NAMED_BACKUP` or `MATERIAL_ROLE_CHANGE` fact), carry and target shares zero, the finding keeping the actual history state, evidence state `UNKNOWN`; not extended to transfer, role-unknown or BLOCK cases | 2026-10-02 review F-03 (reproduced on the Session 54 fixture: `MISSING_HISTORY` gives DIAGNOSTIC at share 1.0, `OBSERVED_HISTORY_ZERO` gives EXCLUDE at 0) | `src/nfl_dfs/offensive_roles.py`, `docs/DATA_CONTRACTS.md`, `tests/test_declared_starter_selectable.py` | P | none | `sh ./nfl.sh test tests/test_offensive_roles.py tests/test_declared_starter_selectable.py -x --tb=short`; Session 54's acceptance parameterized over both history states, backups and DK-`OUT` starters unchanged, one bounded selection test proves the person reaches the pool | Pending |
@@ -2316,6 +2319,70 @@ contract is the part that survives. Session 35 (C3X) stays parked by R30.
   modes, identical truths, counts and code sets in the summary; the summary under 4 KiB on the two replay reports.
 - **Size.** `cli.py` plus tests and two docs. Under 200 lines.
 
+#### Session 60: the injury room moves the workload
+
+- **Depends on.** none. Ruling: R37. Brief: `docs/chunks/P9-judgment-layer.md`, part 1.
+- **Why.** On Week 4, four starters whose role changed that morning were priced as backups: Braelon Allen 3.58 (Breece Hall
+  `OUT`), Emanuel Wilson 3.04 (Price on IR, Charbonnet `OUT`), Zach Ertz 0.55 (Goedert `OUT`), Jauan Jennings 0.29 (Jefferson
+  `OUT`). `participation.redistribute_opportunity` already moves a vacated share to the position room, and its docstring measures
+  that on Charbonnet and Wilson and calls it the default. The scoring path passes `redistribute=False` anyway
+  (`prior_review.py:2364`, `cli.py:1932`). A grep of this file, `changelog.md`, both archives and `git log` on 2026-10-04 found no
+  ruling behind `False`; confirm that before changing it, and stop for Ben if one exists.
+- **Scope.** Score from the redistributed model in both modes. Register the rule as a versioned transformation with
+  `does_not_establish` text. Report every move (vacated person, share, absorbing people, shares before and after) in the selection
+  report and the readable review. The trigger is the DraftKings status the run already binds; it is not official activity evidence
+  and certifies nothing. An official `INACTIVE` row redistributes the same way.
+- **Acceptance.** On the Week 4 frozen inputs Allen, Wilson and Ertz score above 3.58, 3.04 and 0.55; every DK-`OUT` person stays
+  out of the pool; a `Q` person is untouched; redistribution never crosses positions; the file stays `PRIOR_ONLY / DO_NOT_UPLOAD`.
+- **Size.** Two call sites, the report, a contract entry and tests. Under 300 lines.
+
+#### Session 61: the Classic judgment pass inside the run
+
+- **Depends on.** Session 60 (the candidate list is what redistribution leaves). Rulings: R36, R37. Brief:
+  `docs/chunks/P9-judgment-layer.md`, part 2. Absorbs the Classic half of Session 52, which stays `Deferred` for Showdown.
+- **Why.** Ben (2026-10-04): do not blindly exclude players, starting quarterbacks above all, because they lack history, and do
+  not blindly roster them either; "make sure it can be incorporated into the engine and I don't need to steer so much." Today
+  `docs/claude/working.md` § Classic judgment pass does it by hand after the engine, and Week 4 needed three prompts from Ben to get
+  there.
+- **Scope.**
+  - **Starters check.** Name any depth-chart starting QB (including the promoted backup of a DK-`OUT` starter) missing from the
+    scored pool, with the reason.
+  - **Injury-room report.** Each DK-`OUT` or `IR` starter, who inherits, the inheritor's prior before and after Session 60, and
+    salary.
+  - **Candidates.** A ranked list for the agent's research, never a selection: depth rank 1 at his position with a low prior, the
+    main absorber of a vacated share, a transfer whose new-team role is larger than his old one.
+  - **Backup QBs** leave the thesis pool before construction unless promoted (Week 4's first build rostered Nick Mullens).
+  - **Judgment input, Classic.** Session 52's `nfl_construction_judgment_v1` gets a Classic schema version: exact DK ID, a row
+    minimum, a reason, sources (URI, observed time), an author, bound to the salary SHA-256. The thesis build treats the person as a
+    protected placement; Session 62's redeploy never removes him. It writes no number, overrides no DK `OUT`, official inactive,
+    `BLOCK` or unresolved material role change, and a P-class limitation travels with the file.
+  - **Late-swap watch list.** People in a later window with no posted inactive list are listed with their DraftKings status, not
+    raised as an open blocker (R37). `OFFICIAL_STATUS_*` still stops certification.
+- **Acceptance.** On the Week 4 frozen inputs: every starting QB named scored; Allen, Ertz, Jennings and Wilson listed as candidates
+  (Allen and Wilson may drop off once Session 60 prices them); no backup QB whose starter is active is rostered; a judgment-named
+  person sits in at least his minimum rows; a judgment naming a DK-`OUT` person is refused by name; the file stays `DO_NOT_UPLOAD`.
+
+#### Session 62: Pareto-only salary redeploy
+
+- **Depends on.** none (the `--protect` list is manual until Session 61 supplies it). Ruling: R37. Brief:
+  `docs/chunks/P9-judgment-layer.md`, part 3.
+- **Why.** Ben (2026-10-04): leaving salary on the table is fine and can be strategic; the goal is to find out whether unused
+  salary can be redeployed as a Pareto gain on both goals (R34), not to spend the cap. On Week 4, `redeploy` took two hand-placed
+  starters back out because it ranks by their stale prior, and a first by-hand redeploy that took any prior gain made the portfolio
+  more concentrated (mean overlap 1.13 to 1.15, distinct people 115 to 112). The rule that shipped
+  (`data/inbox/slates/wk4-classic-2026-10-04/construction/pareto_redeploy_record.py`) improved both: prior sum 4148.5 to 4189.8,
+  distinct 115 to 120, mean overlap 1.13 to 1.07, top-3 union 29 to 28, max exposure unchanged.
+- **Scope.** One acceptance rule in `swap_inactives.py redeploy` and the thesis build's fill step: the swap raises the row's prior,
+  fits the cap, keeps the row legal and distinct, leaves the QB, his stack, the bring-back, the DST and every `--protect` person
+  alone, and leaves no washout proxy worse. Check the proxies at the portfolio level after each swap; the local sufficient rule (the
+  incoming person used at least 2 fewer times than the outgoing one) is a fast filter, not the proof. Report both goals before and
+  after, and every rejected swap with the goal it would have hurt. Unused salary is never a defect: no QA line, default or limit
+  treats it as one.
+- **Acceptance.** On the Week 4 v4 portfolio with `--protect` naming Allen, Ertz, Jennings and Wilson: every accepted swap raises
+  its row's prior, no washout proxy worsens, no protected person moves. A fixture whose only prior-raising swap concentrates
+  exposure is left unchanged, with that swap reported. Rerunning on its own output changes nothing.
+- **Size.** Two scripts, QA wording, two doc sections and tests. Under 300 lines.
+
 ### 2.4 Audit triage
 
 Verified by three read-only passes against `f8c6942`. None of the audit's
@@ -2459,6 +2526,19 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
     showdown." Yes (Session 53), from depth evidence, and `run-slate` captures that evidence itself.
   - R35's wording and the concentration defaults (no person above 60% of lineups, no Captain above 20%): "Your recommendation."
     Both stand as written; the defaults remain Claude's to set and Ben's to overturn.
+
+- **R37, the judgment layer, Pareto redeploy and late windows** (Ben, 2026-10-04, during the Week 4 Classic slate). Brief:
+  `docs/chunks/P9-judgment-layer.md`; Sessions 60 to 62.
+  - "I don't think we should immediately exclude players -- especially starting QBs -- given how many points they can account
+    for. ... This isn't to say we should blindly roster them, we just also shouldn't blindly exclude them." The judgment and
+    research layer decides, by construction, from sources; it writes no number.
+  - "Let's capture this thought process and discipline ... to make sure it can be incorporated into the engine and I don't need
+    to steer so much."
+  - "I am fine, leaving salary on the table, and in fact it can be strategic to do so. The goal isn't to consume all available
+    salary, but to identify if available salary can be redeployed in a way that supports Pareto improvements on our two
+    optimization goals." Unused salary is never a defect; a redeploy swap must not worsen either goal (R34).
+  - "Not having an active list for a late slate is totally fine. We can do late swap." Late-window people with no posted
+    inactive list go on the late-swap watch list, not the blocker list; certification is unchanged.
 
 Still in force from earlier, with full text in the backlog archive:
 
@@ -2667,6 +2747,12 @@ reason). Session 50b (per-contest constraints inside the joint solves) is
 `Deferred` behind Session 50's acceptance and does not move anything else: on
 PHI@CHI the permutation alone reached the target, so 50b stays parked.
 
+**Sessions 60 to 62 (added 2026-10-04, R37).** Placed directly below Session 57, which stays the first startable row and the
+§1 Quick-Start because it is small and already queued. They rank above the remaining rows because they decide how every slate
+prices a same-day role change and how it spends salary: on Week 4 the four starters whose role changed that morning were priced as
+backups, and Ben had to steer three times before lock. Session 60 (redistribution) goes first among them because Session 61's
+candidate list is what redistribution leaves; Session 62 has no dependency and can run beside either.
+
 **Questions for Ben that block nothing.** Sleeve size and risk tolerance
 (findings §7); a paid ownership-capture source (Showdown retro §7d, a
 spending decision); Week-by-week stake sizing (retro §8 Q3); an odds-API
@@ -2809,3 +2895,4 @@ session, because a commit cannot contain its own merge.
 | 2026-10-03 | Session 55 | In Progress to Complete | `f78d088` | A validated Showdown value-add swap, `scripts/showdown_value_add.py` (2026-10-02 review F-01): one person by exact DK ID into up to N template-blank rows by one FLEX swap each (Captain with `--captain`), a row already holding him never edited, `validate_lineup` and `roster_canonical_key` distinctness over the whole file, the output rebuilt, reparsed and audited against the template before an exclusive create, one invalid row refuses the whole publication; no projection, `DO_NOT_UPLOAD`; PHI@CHI v4 reproduction: `keenum_swap.py` exit 0 with two `LINEUP_PERSON_REPEATED` rows, the new tool 13 swaps, 0 invalid, QA 0 defects; suite `2317 passed, 2 skipped in 743.22s (0:12:23)` on Windows; card refinements (`--template`, `--entry-id`, a same-six-people guard stricter than R29, exit 3, 338 lines) named in the changelog; merged as PR #103 |
 | 2026-10-04 | Session 56 | Pending to In Progress | claim commit | 2026-10-02 review F-02; claimed on `claude/s56-concentration-defaults` (at `ffcbb9d`, PR #101's merge); baseline suite `2318 passed, 2 skipped in 726.62s (0:12:06)` on Windows; §1 repointed to Session 57 in the same commit |
 | 2026-10-04 | Session 56 | In Progress to Complete | recorded by the next session | One registered default set, `showdown_concentration_defaults_v1` (0.60 a person, 0.20 a Captain, overlap 4), read by `make_showdown_policy.py` (whose flag defaults were 0.80, 0.4 and 4) and applied by `run-slate` to a no-policy Showdown run as a hash-bound policy through the existing SD3 bank, joint solve and independent audit (`Ladder.begin_with_defaults`; `selection.py` unchanged); the ladder gives the caps way by name (0.80 and 0.40, then rung 4 for the engine default; also `CAPS_OFF` for a generated policy at the pair) before any structural rung and carries a relaxed cap forward; a window that cannot hold the capped search starts at rung 4; `result["concentration"]` reports requested and effective caps, the steps and the delivered file's own counts recomputed from its bytes; it never adds a stop (`SHOWDOWN_CONCENTRATION_RELAXED` and `SHOWDOWN_CONCENTRATION_NOT_APPLIED` registered, `REGISTRY_SHA256` re-pinned); the review's counterexample holds 12 and 4 in 8.9 s; suite `2374 passed, 2 skipped in 679.77s (0:11:19)` on Windows; three existing tests edited and named in the changelog; size past the breakpoint, not split |
+| 2026-10-04 | Sessions 60 to 62 | Added as Pending | slate-record PR | R37 from the Week 4 Classic slate: Session 60 scores from the redistributed model (a DK `OUT` person's vacated share to his position room), Session 61 runs the Classic judgment pass inside the run and gives Session 52's judgment input a Classic version, Session 62 makes salary redeploy Pareto-only; brief `docs/chunks/P9-judgment-layer.md`; placed below Session 57 (§2.8) |

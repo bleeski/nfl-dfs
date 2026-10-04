@@ -1,0 +1,48 @@
+{
+ "schema": "nfl_classic_slate_context_v1",
+ "gameday": "2026-10-04",
+ "games": [
+  "ARI@NYG",
+  "DAL@HOU",
+  "DEN@SF",
+  "GB@TB",
+  "JAX@CIN",
+  "KC@LV",
+  "LAC@SEA",
+  "LAR@PHI",
+  "MIA@MIN",
+  "NE@BUF",
+  "NYJ@CHI",
+  "TEN@BAL"
+ ],
+ "implied_team_totals": {
+  "BAL": 27.0,
+  "TEN": 15.5,
+  "BUF": 28.25,
+  "NE": 21.25,
+  "CHI": 23.5,
+  "NYJ": 20.0,
+  "CIN": 27.0,
+  "JAX": 24.5,
+  "HOU": 25.75,
+  "DAL": 22.75,
+  "NYG": 20.5,
+  "ARI": 23.0,
+  "TB": 17.75,
+  "GB": 20.75,
+  "MIN": 24.25,
+  "MIA": 14.25,
+  "LV": 21.5,
+  "KC": 26.0,
+  "SEA": 24.75,
+  "LAC": 17.75,
+  "SF": 25.75,
+  "DEN": 22.75
+ },
+ "projected_ownership": {},
+ "role_boosts": {},
+ "teams_without_a_market_line": [
+  "LAR",
+  "PHI"
+ ]
+}

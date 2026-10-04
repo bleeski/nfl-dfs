@@ -1,0 +1,47 @@
+==============================================================
+TIER 1  VALIDITY, COVERAGE AND ENFORCEMENT  (blocking)
+==============================================================
+  lineups: 39
+  export checked: outputs/wk4-classic-2026-10-04-thesis/DK_REVIEW_ENTRY_wk4_thesis_v4.csv
+  validity failures: 0
+    all lineups legal
+  unfilled authorized Entry IDs: 0 []
+  enforcement defects (operator-requested limits): 0
+    no enforced limit exceeded
+
+==============================================================
+TIER 2  PORTFOLIO COHERENCE  (scored, must be shown at handoff)
+==============================================================
+  CONCENTRATION
+    max single-player exposure : 13/39 (33%)  Puka Nacua
+    top-3 union coverage       : 29/39 (74%)   <- 85% on 2026-09-13 meant a 4-lineup portfolio
+    distinct players           : 116
+    pairwise overlap max/mean  : 5 / 1.12
+  ANTI-CORRELATION  (all should be zero)
+    dst_vs_own_skill    : 0
+    dst_vs_own_qb       : 0
+  STACK INTEGRITY
+    QB + own pass catcher      : 39/39
+    bring-back                 : 39/39   <- suggested floor 70%, was 12/18 on 2026-09-20
+  GAME ENVIRONMENT  (avg implied total of skill slots)
+    portfolio mean             : 21.93
+    weakest lineups            : L4=12.5, L1=14.4, L31=14.5, L11=15.2
+  LEVERAGE
+    no ownership supplied: this portfolio carries NO leverage model.
+    Say so at handoff. Mean-max in a large field is chalk.
+
+  TOP EXPOSURES
+    13/39  33%  Puka Nacua             WR   LAR  $7500
+    13/39  33%  Ja'Marr Chase          WR   CIN  $8100
+    12/39  30%  Christian McCaffrey    RB   SF   $7700
+    12/39  30%  Kalif Raymond          WR   CHI  $3600
+    12/39  30%  George Pickens         WR   DAL  $6300
+    11/39  28%  James Cook III         RB   BUF  $7400
+     8/39  20%  Cardinals              DST  ARI  $2500
+     8/39  20%  Rhamondre Stevenson    RB   NE   $5100
+     8/39  20%  Chase Brown            RB   CIN  $6100
+     8/39  20%  George Kittle          TE   SF   $5100
+     7/39  17%  Dontayvion Wicks       WR   PHI  $4300
+     7/39  17%  Jaxon Smith-Njigba     WR   SEA  $9100
+
+  VERDICT: PASS

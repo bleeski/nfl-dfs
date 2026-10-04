@@ -4,6 +4,106 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: R37 recorded -- the judgment layer, Pareto redeploy, late windows (Sessions 60 to 62 added)
+
+Ben, after the Week 4 Classic slate: capture the judgment discipline so it can go into the engine "and I don't need to steer so
+much"; unused salary is fine and can be strategic, and only a Pareto gain on both goals justifies a redeploy; a late window with
+no active list at the early lock is fine, because late swap covers it.
+
+- `docs/ROADMAP.md`: R37 in §2.5; Sessions 60 (score from the redistributed model, so a DK `OUT` starter's vacated share reaches
+  his position room), 61 (the Classic judgment pass inside the run, and a Classic version of Session 52's judgment input) and 62
+  (Pareto-only salary redeploy) added as `Pending` below Session 57, with cards, a §2.8 placement note and a §4 row. Session 57
+  stays first startable, so §1 is unchanged.
+- `docs/chunks/P9-judgment-layer.md`: the strategy, written from the slate. The two goals and their proxies, the three parts, the
+  late-window rule, what the chunk does not do, and acceptance on the committed Week 4 inputs.
+- Found while writing Session 60's card: `prior_review.py:2364` and `cli.py:1932` call `redistribute_opportunity` with
+  `redistribute=False`, although the function's own docstring measures that it understates a promoted survivor and calls the
+  redistributing reading the default. No ruling for `False` turned up (this file, the roadmap, both archives, `git log`); the card
+  has the session confirm that first.
+- `docs/claude/working.md` § Classic judgment pass: the line telling the operator to spend freed salary is replaced by the
+  Pareto-only redeploy rule (no washout measure worse, hand-placed people untouched, unused salary acceptable); the backup-QB
+  removal and the late-swap watch list are added.
+
+### 2026-10-04: Week 4 Classic slate (39 entries, 11 contests, 12 games)
+
+Inputs, committed under `data/inbox/slates/wk4-classic-2026-10-04/`:
+
+    salary  085f9ff8a224744c002d2f712b11748fcb7f8f11e46e5439510aaede77c8552a
+    entries 4cb4978c29152f549c074b71670ee58bc543d5e46c4c925c47d838ec6a3fd91d
+
+Clock: request at 16:17Z, lock 17:00Z, delivery deadline 16:55Z; file
+delivered 16:28Z.
+
+- `session_probe.py`: every allowlisted host reachable, `CAN_COMPLETE_A_RUN`.
+  `.venv-linux` was absent; `setup` took about a minute.
+- Run `20261004T161833Z-wk4-classic-2026-10-04` (`--build-priors`): baseline
+  first, then `PRIOR_REVIEW_IDENTITY_BLOCKED` on six people, each a unique
+  name, team and position row in the captured roster: Matt/Matthew Hibner
+  `00-0040879`, Joshua/Josh Palmer `00-0036988`, Mitch/Mitchell Tinsley
+  `00-0038839`, Audric Estime/Estimé `00-0039373`, Nick/Nicholas Singleton
+  `00-0040886`, Hollywood/Marquise Brown `00-0035662` (DK `OUT`). The same
+  variants as Week 3. Reviewed crosswalk `identity_reviewed_wk4.csv`
+  (`82b00591…30aa`), then `priors-freeze` (8 s).
+- QB depth package (`make_offensive_role_evidence.py --fetch`, snapshot
+  2026-10-04T13:09:16Z) refused the whole slate: the depth chart lists no
+  quarterback for LAR. Rebuilt with `--teams` naming the other 23. It promotes
+  Tyson Bagent over DK-`OUT` Caleb Williams and Jalon Daniels over DK-`OUT`
+  Baker Mayfield. Its `next` text said `run-slate` had no flag for the package;
+  it has had `--qb-depth-role-evidence-json` for a while, and the flag refuses a
+  relative path without a request base. Text corrected in this commit.
+- Run `20261004T162144Z-wk4-classic-r2`: `PRIOR_REVIEW_SELECT_BLOCKED`,
+  `OFFENSIVE_ZERO_BASIS_UNRESOLVED:PHI|QB|Andy Dalton`. Run
+  `20261004T162217Z-wk4-classic-r3` with `--exclude 44312254` (Dalton, a
+  backup) reached EXPORT: C1 file `5b55ac72…de7b`, `FILE_VALID=true`,
+  `EVIDENCE_STATE=UNKNOWN`. Legal and too narrow: 5 quarterbacks, 13 people at
+  15 of 39.
+- Thesis build (`build_thesis_portfolio.py`, seven theses, global exposure 13,
+  overlap 5, QB cap 3 per thesis) on the run's own filtered dump, with 17
+  non-starting quarterbacks removed first (the first build had rostered Nick
+  Mullens, absent from Jacksonville's depth chart). Braelon Allen (NYJ, Breece
+  Hall `OUT`) placed by construction in 6 rows: the prior scored him 3.58
+  because a DK `OUT` tag does not redistribute workload, and `value-add`
+  refuses a lower-prior player. `redeploy` on the freed salary took him back
+  out of two rows; he was re-added. Record:
+  `construction/manual_add_record.py`.
+- Delivered `DK_REVIEW_ENTRY_wk4_classic_FINAL.csv`, `134e56f5…b088bab`, 39 of
+  39, 0 bytes changed outside the roster cells. QA Tier 1 PASS; Tier 2 max
+  exposure 13/39, top-3 union 29/39, 116 distinct players, overlap max 5 mean
+  1.12, stacked and bring-back 39/39, anti-correlation 0, 16 quarterbacks.
+  `PRIOR_ONLY / DO_NOT_UPLOAD`. Not supplied: official activity, weather
+  captures (9 outdoor games `UNOBSERVED`), ownership; LAR and PHI had no market
+  line in the frozen games file and ran on the 21.0 baseline.
+- Ben, 16:45Z, before lock: do not blindly exclude starters, quarterbacks above
+  all, for lacking history; do not blindly roster them either. QA pass: all 23
+  depth-chart starting quarterbacks were in the scored pool (the gate excluded
+  only backups). Added by construction, priors untouched: Zach Ertz (PHI TE1,
+  prior 0.55) 4 rows, Jauan Jennings (MIN WR2, prior 0.29) 3, Emanuel Wilson
+  (SEA RB1, prior 3.04) 2; Allen kept at 6. Freed salary spent on unprotected
+  slots (`construction/protect_upgrade_record.py`). Delivered at 16:47Z,
+  replacing the first file: `DK_REVIEW_ENTRY_wk4_classic_FINAL_v4.csv`,
+  `7ef3d2eb…3aa1`, 39 of 39, QA Tier 1 PASS, max exposure 13/39, top-3 union
+  29/39, 16 quarterbacks, stacked and bring-back 39/39. Held for late swap:
+  Brandin Cooks if Mike Evans (Q) sits. Second time Ben made this correction
+  (the Showdown pass is the first), so `docs/claude/working.md` gains a Classic
+  judgment pass.
+- Ben, 16:52Z: confirm actives, redeploy excess salary only as a Pareto gain on
+  both goals. All 77 early-game rostered players are absent from the 16 early
+  teams' inactive lists (Yahoo, 16:13Z); late-game lists were not yet posted.
+  A first redeploy (any prior gain, target under 8 rows) was rejected: mean
+  overlap 1.13 to 1.15, distinct players 115 to 112. The shipped rule takes a
+  swap only when the incoming player is used at least 2 fewer times than the
+  outgoing one (`construction/pareto_redeploy_record.py`), which can only lower
+  shared exposure: 19 swaps, prior sum 4148.5 to 4189.8, distinct 115 to 120,
+  mean overlap 1.13 to 1.07, top-3 union 29 to 28, max exposure 13 unchanged.
+  Delivered 16:54Z: `DK_REVIEW_ENTRY_wk4_classic_FINAL_v6.csv`, `2671f506…5214`,
+  39 of 39, QA Tier 1 PASS. It replaces v4.
+- What would have made it better, and where it went: the two construction holes
+  above are now in `.claude/rules/slate-operation.md`. Not fixed here, for a
+  roadmap card: DK `OUT` should redistribute the starter's share the way an
+  official `INACTIVE` row does, or the engine undervalues every injury
+  beneficiary; and the depth package should skip a team with no listed
+  quarterback rather than refuse the slate.
+
 ### 2026-10-04: Session 56 -- concentration defaults in the engine (2026-10-02 review F-02, R35)
 
 Branch `claude/s56-concentration-defaults`, claimed at `0832a18` (on `ffcbb9d`, PR #101's merge), task file `state/tasks/S56.md`. No protected
