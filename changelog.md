@@ -4,6 +4,92 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: Session 57 -- default structural bounds re-cut from the field (2026-10-02 review F-06 and F-07)
+
+Branch `claude/s57-structural-defaults`, from `main` at `9204cc5`; claim commit `7a872c0`, work commit `d48d551`. Class S: construction
+preferences, Claude's defaults under the lock-clock ruling and Ben's to overturn. R29 is untouched (nothing here reads distinctness), no
+evidence gate is touched, and every path still ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+**Changed**
+- `scripts/make_showdown_policy.py`: `--offense-against-own-dst` is now opt-in (default off; it was on); `--no-offense-against-own-dst`
+  stays as the default spelled out; `--qb-count-max` defaults to 2, minimum 1 (it was 1). Depth exclusions and the per-QB pass-catcher
+  bound are as they were. Docstring and help text say what moved and why.
+- `src/nfl_dfs/relaxation.py`: `classic_rung_controls(slate, count, rung, *, offense_against_own_dst=False)` writes the veto only when
+  asked, and then follows the table (on through rung 1, off from rung 2), so a rung never tightens it. `classic_structural_bounds` and
+  `SHOWDOWN_RUNGS` are unchanged: they are the relaxation tables, and making the Classic one default-open would have dropped an explicit
+  true policy a rung early. Module docstring and the table's docstring say so.
+- `scripts/make_classic_policy.py`: an opt-in `--offense-against-own-dst` (not in the card; it gives "an explicit true policy still
+  forbids" a route through the Classic generator as Showdown has), the rung list and a paragraph on the veto, and the printed line:
+  `no offense with own DST: on`, `off at this rung` (flag given, rung 2 or later) or `off (the default since Session 57; ...)`.
+- `docs/DATA_CONTRACTS.md`: a Session 57 paragraph in C2 v2 and in SD3 v2, the generator-defaults sentence, and an "illustrative values"
+  note on both JSON examples. A changed generator default, not a schema change: no version added, no policy already written changes meaning.
+- `docs/ROADMAP.md` §2.8: the tier-2 sentence endorsed the hygiene bundle as measured; it now says the lift was measured for the bundle, not
+  for each component. `IMPLEMENTATION_STATUS.md`: a Session 57 entry and two in-place notes. `docs/claude/working.md`: one line on starting a
+  background suite on Windows (below).
+
+**Added**
+- `tests/test_structural_default_recut.py`, 21 tests in 2.4 s: the Showdown generator's default and each explicit flag; the Classic emission
+  on every rung and its printed line as an exact line; an explicit true policy still forbidding and relaxing where it always did, in both
+  modes; three frozen phi-chi policies (`policy_K1b`, `policy_S3`, `policy_S1`) pinned to raw and normalized SHA-256 captured from the code
+  at `9204cc5`, before any edit (CSVs are `-text`, the JSONs LF, and no path is in the normalized bytes, so they hold on CI's Linux);
+  fixed legal rosters built on small synthetic pools, checked with `validate_lineup` and the generator's own full default bounds: DST plus
+  teammate (fails legacy with exactly `offense_against_own_dst`), two quarterbacks (fails the one-QB band with exactly `qb_count`), a second
+  quarterback with no pass catcher (the per-QB bound still fires), a Classic RB plus his own DST (fails legacy only), each also as a
+  six-row-fixed `LineupOptimizer` solve (OPTIMAL under the default, INFEASIBLE under the legacy rows: the review's isolated reproduction
+  without its worktree script); and a one-QB and a two-QB favouring bank that each admit their count with no relaxation.
+
+**Existing tests edited (named, none loosened)** in `tests/test_classic_structural_hygiene.py`:
+`test_the_generator_writes_v2_with_the_bounds_and_the_share_and_says_so` (its expectation is what the ruling changes: generated rung 0 now
+writes `offense_against_own_dst: false` and prints the new line); `test_a_relaxation_never_tightens_the_bounds_or_the_share` and
+`test_rung_zero_on_the_supplied_classic_pool_proposes_only_rosters_that_pass_hygiene` (they reached the veto only through the generator's old
+default, so they now ask for it, `offense_against_own_dst=True`, with one assertion added each, and keep proving the explicit veto).
+`test_the_rung_table_drops_the_bounds_in_the_briefs_order_and_the_share_last` and the Showdown table test in
+`tests/test_relaxation_controller.py` are untouched and stay the anchors for the unchanged tables.
+
+**Decisions** (advisor consulted before code and before close-out)
+- The Classic table and the Classic emission are separate functions of `rung`. Rung 2's drop of the veto stays in both tables; for a policy
+  written with the new defaults it is a no-op, and no rung is newly skipped (`controls == relaxed(policy, None)` still differs at every
+  rung: salary band at 1, stack rules and exposure at 2 and 3 in Classic; salary band, pass-catcher band and K/DST caps, QB band in
+  Showdown). A reviewer ran the real `Ladder` on a default policy in both modes and found no rung skipped and no drop recorded that did not
+  happen.
+- The QA scripts needed no change: `qa_showdown_portfolio.py` reports own-DST and QB count as observations (and `STARTER_WITH_OWN_BACKUP`
+  as an operator limit); `qa_classic_portfolio.py`, `build_thesis_portfolio.py` and `swap_inactives.py` bar the DST's opponent, not its team.
+- No registry entry was added, so `REGISTRY_SHA256` stays. `Ladder.begin_with_defaults` already built every structural bound open
+  (`tests/test_concentration_ladder.py:83`), so a no-policy Showdown run is unaffected.
+
+**Verification**
+- Full suite on `d48d551` (Windows, background, `--durations=25`): `2395 passed, 2 skipped in 846.74s (0:14:06)`; baseline before any edit
+  `2374 passed, 2 skipped in 1235.47s (0:20:35)` (21 added). The two skips are the expected Windows symlink-permission ones (`tests/test_cowork.py:112`, `tests/test_standings_transport.py:523`). The close-out commit adds
+  only ledgers and docs; `test_roadmap_queue`, `test_repo_boundaries` and `test_gate_registry` were rerun after those edits.
+- The widened neighbour list (20 files, with `test_entry_groups`, `test_concentration_run_slate`, `test_concentration_counterexample`,
+  `test_qa_showdown_portfolio`): `754 passed in 568.92s`, after the three edits above.
+- Mutation pass, 18 of 18 caught: the two generator defaults reverted, the Classic emission back to the table, the Classic table open at
+  rung 1, `SHOWDOWN_RUNGS[1]` and `[2]` changed, the Classic flag ignored, the printed line, the QB band dropping at rung 2, the auditor's
+  own-DST, QB-count and per-QB pass-catcher checks removed, both MILP no-offense rows removed, the normalizer inverting a declared veto, a
+  rung tightening a default policy, the Classic relaxation never dropping an explicit veto, and `--no-offense-against-own-dst` setting it.
+- A fresh reviewer (diff against the card, acceptance and boundaries): no blocking finding; it ran the real `Ladder` on default policies and
+  spot-mutated five guards in a scratch process.
+- F-06's runtime risk (a larger admissible space), the NE@SEA and DET@BUF bank-and-solve hygiene acceptance: before the change 12.18 s and
+  12.42 s (a quiet-looking host, file 25.37 s); after 7.01 s and 4.80 s (file 12.22 s); in the full suites 10.74 s and 10.25 s before and
+  7.07 s after. Another repository's pytest runs shared this host for part of the session, so the numbers are noisy; they show no sign of a
+  regression and no more is claimed.
+- `git diff --check`, `check_protected_paths.py` and `.\nfl.ps1 doctor` are recorded in the pull request.
+- The diff is past the card's 300 lines: 393 are the new test file, about 85 source and docstrings, the rest contracts and ledgers. Not split.
+
+**Found, left open**
+- The review's field counts (854 of 1,261, 1,982 of 2,420 and 636 of 2,552 top-1% entries holding a DST beside a teammate; two-QB lineups
+  24.7% of PHI@CHI and 73.5% of its top 1%; 22.1% and 13.0% of Classic Week 1's and Week 3's) are the review's, quoted as such. They were not
+  reproduced here; Session 18's local mode is to, and the §2.8 `[BEN: ...]` flag asking whether it should run first is still open.
+- Where the backup-QB rule did not run (`SHOWDOWN_BACKUP_QB_UNEVALUATED`, `QB_DEPTH_CAPTURE_*`) a starter and his backup can now share a
+  rung-0 lineup (the one-QB band made that a rung-3 event). Nothing in the engine's limitations names it; the operator's `--backup-pairs`
+  QA limit and the working.md Showdown judgment pass are the checks. Recommendation: a named limitation when a Showdown run keeps two
+  quarterbacks of one team in the pool; not built here.
+- The Classic `RB_DST_PAIR` stack value, always zero while the veto was on, can now be positive; the rule stays advisory.
+- The baseline suite took 20:35 against 11 to 12 minutes: a second suite process was started by mistake and killed in the first minute, and
+  another repository's pytest runs (an `nhl-dfs` worktree) shared the host. Not a test finding. `docs/claude/working.md` now says to start
+  a background suite once and to check `Get-CimInstance Win32_Process` for `pytest` before relaunching, because the `Tee-Object` log only
+  appears when pytest's pipe first flushes.
+
 ### 2026-10-04: R37 recorded -- the judgment layer, Pareto redeploy, late windows (Sessions 60 to 62 added)
 
 Ben, after the Week 4 Classic slate: capture the judgment discipline so it can go into the engine "and I don't need to steer so
