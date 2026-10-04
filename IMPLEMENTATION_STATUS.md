@@ -1,5 +1,27 @@
 # Implementation Status
 
+## Capability added: 2026-10-04 (Session 60, the injury room moves the workload, R37)
+
+Working and verified through synthetic fixtures (`tests/test_injury_room_redistribution.py`, 41 tests), a mutation pass at both call
+sites and in the function (each guard broken, a test failed on the intended assertion), an attribution run (the five existing tests that failed
+passed again with the transformation off at the call site) and the full suite: the model `select_prior_lineups` scores is now the one
+`participation.redistribute_vacated_workload` returns, in both modes and at both call sites (`prior_review.py`, `cli.py`). A share a person
+DraftKings marks `OUT`, `IR` or `D` (or a supplied official `INACTIVE` row) vacates goes to the survivors at his own position on his own team in
+proportion to their own prior share, never across a position or a team; a share no survivor can take stays unallocated, each team's pool is
+conserved exactly, and every move (vacated person and share, absorbing people, shares before and after) is in the selection report, the
+coverage the Classic reviews bind, both readable reviews (`..._sd5_v3`, `..._classic_c3_v3`) and the workbook. Registered as
+`injury_room_workload_redistribution_v1` with `does_not_establish` text; the contract is `docs/DATA_CONTRACTS.md` § Injury-room workload
+redistribution. Until now both call sites computed a reduced model and discarded it (SD2, `7f9ae4d`), so every survivor was scored at his
+backup share; the SD2 wording in the contract ("so no unsupported backup inherits it") describes the offensive-role resolver and is unchanged.
+Narrowings, named: **quarterbacks are outside it** (the depth evidence moves attempts: R25, R36, Session 54; Session 61 owns the starting-QB
+check) and **a person whose current role is unresolved never absorbs** (`CURRENT_ROLE_UNKNOWN` history, or a prior row that is not `PASS`),
+because on the DEN@KC shape an unresolved transfer behind an `OUT` back went from 8.6 to 24.2 prior points and left the P1 material-role-change
+gate. **Not done, named:** the Week 4 frozen inputs are not on this host (only the salary file, the entries, the QB depth package and the
+earlier scores are committed), so Allen, Wilson and Ertz above 3.58, 3.04 and 0.55 is **unproven**: the mechanism is proved on fixtures shaped
+like the card's cases, and an absorber whose frozen row is `CURRENT_ROLE_UNKNOWN` (Ertz, if he joined from another team) would stay where he
+was by design; a person the role evidence or an operator removes after he absorbed a share leaves it unplaced; a transfer is never priced up by
+this (Session 61's candidate list). Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-10-04 (Session 57, default structural bounds re-cut from the field)
 
 Working and verified through synthetic fixtures (`tests/test_structural_default_recut.py`, 21 tests in 2.4 s; three edited tests in

@@ -26,6 +26,12 @@ SIX = tuple(f"90000000{index}" for index in range(1, 7))
 # Solver order puts lineups 1 to 3 in contest A and 4 to 6 in B; a good assignment
 # splits the strongest, most alike lineups across the two.
 TWO_CONTESTS = {entry_id: ("111" if index < 3 else "222") for index, entry_id in enumerate(SIX)}
+# Session 60: the diversified-assignment test below needs a grouping that leaves something to improve. With the 3 and 3
+# split above, the lineups the run selects once the vacated shares of the OUT and IR people reach their rooms are already
+# the best admissible assignment in the sequential and the policy variants: checked by brute force over every split of the
+# six lineups into two contests of three, with the step's own pair cost, score and no-regression rule (neither contest may
+# get worse). Entries 1, 3, 5 in one contest and 2, 4, 6 in the other leave an admissible improvement in all three variants.
+INTERLEAVED_CONTESTS = {entry_id: ("111" if index % 2 == 0 else "222") for index, entry_id in enumerate(SIX)}
 
 
 def _sequential_exit(monkeypatch):
@@ -124,7 +130,7 @@ def test_the_diversified_assignment_reaches_the_file_the_audit_and_the_review(tm
     if path == "sequential":
         _sequential_exit(monkeypatch)
     code, report, entries, slate = _run(
-        tmp_path, monkeypatch, run_id="cd-run", contests=TWO_CONTESTS, policy_controls=policy_controls)
+        tmp_path, monkeypatch, run_id="cd-run", contests=INTERLEAVED_CONTESTS, policy_controls=policy_controls)
     assert code == 0, report["blockers"]
     assert report["latest_deliverable"]["producer"] == "run-slate:prior_review:SHOWDOWN"
     _assert_truths_unchanged(report)

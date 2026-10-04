@@ -578,7 +578,15 @@ def _populate_readable_review(workbook, review: Mapping[str, object]) -> None:
                     exposure.cell(coverage_row, column).number_format = '"$"#,##0'
                 exposure.row_dimensions[coverage_row].height = 44
         coverage_row += 2
-        _section_header(exposure, coverage_row, 1, 6, "Prior-season volume left unallocated (held by unselectable people, not reassigned)")
+        _redistributed = isinstance(coverage.get("workload_redistribution"), Mapping) and bool(
+            coverage["workload_redistribution"].get("applied")
+        )
+        _section_header(
+            exposure, coverage_row, 1, 6,
+            "Volume left unallocated after the injury-room redistribution (nobody in the room could take it)"
+            if _redistributed
+            else "Prior-season volume left unallocated (held by unselectable people, not reassigned)",
+        )
         coverage_row += 1
         share_keys = ("qb_attempt_share", "carry_share", "target_share", "rushing_td_share", "receiving_td_share")
         for column, value in enumerate(("Team", *share_keys), start=1):

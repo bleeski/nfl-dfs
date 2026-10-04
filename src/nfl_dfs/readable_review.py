@@ -27,7 +27,7 @@ from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup
 
 
-READABLE_REVIEW_VERSION = "prior_only_readable_review_sd5_v2"
+READABLE_REVIEW_VERSION = "prior_only_readable_review_sd5_v3"
 # Each row's source (Session 11b, the reason for v2): the policy's joint solve, or
 # sequential Showdown filling the rows a subset policy leaves unbound (every row
 # when there is no policy).
@@ -551,7 +551,7 @@ def _pool_coverage_view(
             )
         )
     unallocated = raw.get("unallocated_by_team")
-    return {
+    view: dict[str, object] = {
         "people_in_pool": len(by_person),
         "selectable_people": selectable,
         "participation_selectable_people": raw.get("participation_selectable_people"),
@@ -565,6 +565,10 @@ def _pool_coverage_view(
         "unallocated_by_team": unallocated if isinstance(unallocated, Mapping) else {},
         "note": raw.get("note"),
     }
+    if isinstance(raw.get("workload_redistribution"), Mapping):
+        # Session 60 (R37): the moves are display-only here; the selector's own report is the record.
+        view["workload_redistribution"] = raw["workload_redistribution"]
+    return view
 
 
 def _source_observations(
@@ -648,7 +652,16 @@ def _source_observations(
                             {
                                 "category": "unallocated_volume",
                                 "state": "PRIOR_ONLY_LIMITATION",
-                                "observation": f"{team}: prior-season share held by unselectable people, not reassigned: {held}",
+                                "observation": (
+                                    f"{team}: share nobody could take after the injury-room redistribution"
+                                    f" (a room with no survivor who can take it, or a person excluded by an operator choice or a role gate): {held}"
+                                    if _redistribution_applied(
+                                        selection_record.get("pool_coverage")
+                                        if isinstance(selection_record.get("pool_coverage"), Mapping)
+                                        else {}
+                                    )
+                                    else f"{team}: prior-season share held by unselectable people, not reassigned: {held}"
+                                ),
                                 "observed_at": None,
                                 "expires_at": None,
                                 "source": None,
@@ -702,6 +715,59 @@ def _html_table(headers: Sequence[str], rows: Iterable[Sequence[object]], css_cl
         for row in rows
     )
     return f'<table class="{_escape(css_class)}"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
+
+
+def _redistribution_applied(coverage: Mapping[str, object]) -> bool:
+    block = coverage.get("workload_redistribution")
+    return isinstance(block, Mapping) and bool(block.get("applied"))
+
+
+def _unallocated_heading(coverage: Mapping[str, object]) -> str:
+    # The volume the offensive-role report leaves unallocated is no longer prior-season volume
+    # held by people who cannot be selected once the injury-room transformation has moved it.
+    if _redistribution_applied(coverage):
+        return "Volume left unallocated after the injury-room redistribution"
+    return "Prior-season volume left unallocated"
+
+
+def _redistribution_html(coverage: Mapping[str, object]) -> list[str]:
+    """Session 60 (R37): every move, person by person, with the text of what it does not establish."""
+
+    block = coverage.get("workload_redistribution")
+    if not _redistribution_applied(coverage) or not isinstance(block, Mapping):
+        return []
+    rows = []
+    for move in _sequence(block.get("moves"), "redistribution.moves", []):
+        if not isinstance(move, Mapping):
+            continue
+        vacated = "; ".join(
+            f'{item.get("name")} ({item.get("dk_status") or "official INACTIVE row"}) {item.get("share")}'
+            for item in _sequence(move.get("vacated"), "redistribution.vacated", [])
+            if isinstance(item, Mapping)
+        )
+        absorbed = "; ".join(
+            f'{item.get("name")} {item.get("before")} to {item.get("after")}'
+            for item in _sequence(move.get("absorbed"), "redistribution.absorbed", [])
+            if isinstance(item, Mapping)
+        )
+        rows.append(
+            (
+                move.get("team"), move.get("position"), move.get("field"), vacated,
+                move.get("vacated_total"), absorbed or "nobody in the room", move.get("unallocated"),
+                "A declared allocation replaced this team's shares" if move.get("superseded_by_declared_allocation") else "",
+            )
+        )
+    return [
+        "<h3>Injury-room redistribution</h3>",
+        f'<p class="small">{_escape(block.get("transformation_version"))}: a share a person '
+        "DraftKings marks unavailable (or a supplied official INACTIVE row) vacates goes to his position "
+        "room, in proportion to his teammates' own prior share, never to another position. "
+        f'Does not establish: {_escape(", ".join(str(v) for v in _sequence(block.get("does_not_establish"), "redistribution.does_not_establish", [])))}.</p>',
+        _html_table(
+            ("Team", "Position", "Field", "Vacated by", "Vacated share", "Absorbed by (before to after)", "Unallocated", "Note"),
+            rows,
+        ),
+    ]
 
 
 def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
@@ -874,9 +940,12 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
         for team, fields in _mapping(coverage.get("unallocated_by_team"), "coverage.unallocated", []).items():
             if isinstance(fields, Mapping):
                 unallocated_rows.append((team, *[fields.get(key) for key in ("qb_attempt_share", "carry_share", "target_share", "rushing_td_share", "receiving_td_share")]))
+        if _redistribution_applied(coverage):
+            sections.append(f"<h3>{_escape(_unallocated_heading(coverage))}</h3>")
         sections.append(
             _html_table(("Team", "QB attempt share", "Carry share", "Target share", "Rushing TD share", "Receiving TD share"), unallocated_rows)
         )
+        sections.extend(_redistribution_html(coverage))
 
     sections.append("<h2>Evidence and limitations</h2>")
     evidence_rows = [
@@ -1059,11 +1128,12 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
                 unallocated_rows.append(
                     (team, *[fields.get(key) for key in ("qb_attempt_share", "carry_share", "target_share", "rushing_td_share", "receiving_td_share")])
                 )
-        sections.append("<h3>Prior-season volume left unallocated</h3>")
+        sections.append(f"<h3>{_escape(_unallocated_heading(coverage))}</h3>")
         sections.append(
             _html_table(("Team", "QB attempt share", "Carry share", "Target share", "Rushing TD share", "Receiving TD share"), unallocated_rows)
         )
         sections.append(f'<p class="small">{_escape(coverage.get("note"))}</p>')
+        sections.extend(_redistribution_html(coverage))
     sections.append("<h2>Evidence, role, and model limitations</h2>")
     evidence_rows = [
         (row.get("category"), row.get("state"), row.get("observation"), row.get("observed_at"), row.get("expires_at"), row.get("source"), row.get("next_action"))

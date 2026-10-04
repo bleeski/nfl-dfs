@@ -511,7 +511,10 @@ def resolve_offensive_roles(
     report = {"schema_version": VERSION, "transformation_version": TRANSFORM, "findings": findings,
               "evidence_state": "UNKNOWN" if not manifest or blocked or synthetic or any(f["selection_action"] == "DIAGNOSTIC" for f in findings) else "PASS",
               "coverage": {"offensive_people": len(people), "findings": len(findings), "blocked_people": len(blocked)},
-              "assumptions": ["HISTORY_IS_UNCONFIRMED; VACATED_VOLUME_REMAINS_UNALLOCATED", "ROLE_CAPACITY_IS_NOT_A_CEILING",
+              "assumptions": [("HISTORY_IS_UNCONFIRMED; VACATED_VOLUME_OF_UNAVAILABLE_PEOPLE_REDISTRIBUTED_WITHIN_POSITION_ROOM_BY_RULE_V1;"
+                               " RESIDUAL_REMAINS_UNALLOCATED" if model.workload_redistribution
+                               else "HISTORY_IS_UNCONFIRMED; VACATED_VOLUME_REMAINS_UNALLOCATED"),
+                              "ROLE_CAPACITY_IS_NOT_A_CEILING",
                               *(["TRANSFER_PRIOR_IS_OWN_OLD_TEAM_SHARE_NOT_A_CURRENT_ROLE"] if transfer_priors else []),
                               *(["MISSING_HISTORY_PEOPLE_EXCLUDED_WITH_ZERO_SHARE"] if any(f["finding"] == "OFFENSIVE_MISSING_HISTORY" for f in findings) else []),
                               *(["CURRENT_SEASON_GAP_FILL_PEOPLE_RATED_FROM_THIS_SEASONS_ROWS_BEFORE_THE_SLATE_WEEK_NOT_A_CURRENT_ROLE"]

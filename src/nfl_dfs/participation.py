@@ -26,8 +26,8 @@ candidate pool is sufficient here and is not a substitute for that work.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, Mapping
+from dataclasses import dataclass, replace
+from typing import Collection, Iterable, Mapping
 
 from .contracts import (
     UNAVAILABLE_DK_STATUSES,
@@ -50,6 +50,22 @@ UNAVAILABLE_STATUSES = UNAVAILABLE_DK_STATUSES
 # Flagged but still permitted to play. Reported, never silently excluded: fading
 # a questionable player is an operator judgement, not a legality fact.
 DEGRADED_STATUSES = frozenset({"Q"})
+
+# Session 60 (R37). The registered version of the transformation `redistribute_vacated_workload`
+# applies: a share a person the run binds as unavailable vacates goes to his position room.
+# `docs/DATA_CONTRACTS.md` § Injury-room workload redistribution is its contract.
+WORKLOAD_REDISTRIBUTION_VERSION = "injury_room_workload_redistribution_v1"
+# The rule label the transformation reports. It is its own: the registered label
+# `PROPORTIONAL_TO_PRIOR_WITHIN_VACATING_POSITION_UNCAPPED_V1` includes a spill across positions this
+# transformation switches off, and an existing version's name never describes different behaviour.
+WORKLOAD_REDISTRIBUTION_RULE = "PROPORTIONAL_TO_PRIOR_WITHIN_VACATING_POSITION_NO_SPILL_V1"
+WORKLOAD_REDISTRIBUTION_DOES_NOT_ESTABLISH = (
+    "OFFICIAL_ACTIVE_STATUS",
+    "A_CURRENT_ROLE",
+    "THAT_ANY_ABSORBER_RECEIVES_THE_VACATED_WORKLOAD",
+    "MODEL_VALIDATION",
+    "OWNERSHIP_OR_LEVERAGE",
+)
 
 
 class ParticipationError(ValueError):
@@ -441,6 +457,8 @@ def redistribute_opportunity(
     *,
     redistribute: bool = True,
     depth_ranks: Mapping[tuple[str, str], object] | None = None,
+    cross_position_spill: bool = True,
+    non_absorbers: Collection[str] = (),
 ) -> tuple[OpportunityModel, dict[str, object]]:
     """Drop unavailable people and, by default, reallocate what they vacate.
 
@@ -482,6 +500,17 @@ def redistribute_opportunity(
     chunk `P0` and is blocked on the corpus transport. Switching the default is
     a modelling change that should follow a number, not precede one. Supplying
     the ranks is an explicit caller decision until then.
+
+    `cross_position_spill=False` (Session 60) leaves a share unallocated when the
+    vacating position room has no survivor with a prior share, instead of
+    spilling it across the wider absorption set. The default keeps the spill, so
+    every earlier caller means what it meant. The report also lists each step
+    (`steps`: who vacated, who absorbed how much, what stayed unallocated) and
+    the residual by position (`unallocated_by_team_position`), which
+    `redistribute_vacated_workload` reads. A field no survivor on a team can hold
+    at all (the team's only listed quarterback is out) is reported unallocated
+    rather than dropped without a word. `non_absorbers` names survivors who never
+    take a share (default none): the room's other members take it instead.
     """
 
     from dataclasses import replace
@@ -516,14 +545,18 @@ def redistribute_opportunity(
             " not a forward ceiling; a promoted survivor is expected to exceed it"
         ),
     }
+    detail = vacated_opportunity_by_position(model, contract)
     if not redistribute:
         report["unallocated_by_team"] = vacated
+        report["unallocated_by_team_position"] = detail
+        report["steps"] = []
         report["share_above_prior_capacity_after_redistribution"] = []
         return replace(model, players=tuple(survivors)), report
 
-    detail = vacated_opportunity_by_position(model, contract)
     updated: dict[str, dict[str, float]] = {p.underlying_id: {} for p in survivors}
     unallocated: dict[str, dict[str, float]] = {}
+    residual_detail: dict[str, dict[str, dict[str, float]]] = {}
+    steps: list[dict[str, object]] = []
     gains: list[dict[str, object]] = []
     for team in sorted({p.team for p in survivors}):
         team_survivors = [p for p in survivors if p.team == team]
@@ -532,6 +565,28 @@ def redistribute_opportunity(
                 p for p in team_survivors if p.position in _ELIGIBLE_POSITIONS[field]
             ]
             if not eligible:
+                # Nobody left on the team can hold this field at all. The share is
+                # unallocated, never dropped without a word.
+                for source_position, amount in sorted(
+                    detail.get(team, {}).get(field, {}).items()
+                ):
+                    residual_detail.setdefault(team, {}).setdefault(field, {})[
+                        source_position
+                    ] = amount
+                    unallocated.setdefault(team, {})[field] = round(
+                        unallocated.get(team, {}).get(field, 0.0) + amount, 6
+                    )
+                    steps.append(
+                        {
+                            "team": team,
+                            "field": field,
+                            "position": source_position,
+                            "amount": amount,
+                            "tier": None,
+                            "absorbed": [],
+                            "unallocated": amount,
+                        }
+                    )
                 continue
             prior = {p.underlying_id: float(getattr(p, field)) for p in eligible}
             position_of = {p.underlying_id: p.position for p in eligible}
@@ -542,18 +597,23 @@ def redistribute_opportunity(
                 detail.get(team, {}).get(field, {}).items()
             ):
                 remaining = amount
+                placed: list[tuple[str, float]] = []
+                basis: str | None = None
                 # The depth chart absorbs its own vacancy first. Only a position
                 # group with no prior share at all spills to the wider absorption
                 # set, which is what keeps vacated carries in the running back
                 # room instead of handing a sixth of them to a tight end.
-                for tier in (frozenset({source_position}), absorbers):
+                for tier_index, tier in enumerate((frozenset({source_position}), absorbers)):
                     if remaining <= 1e-12:
+                        break
+                    if tier_index == 1 and not cross_position_spill:
                         break
                     pool = {
                         person: prior[person]
                         for person in prior
                         if position_of[person] in tier
                         and position_of[person] in absorbers
+                        and person not in non_absorbers
                     }
                     # P7. The depth chart names who inherits the role, so when
                     # the caller supplied effective ranks the vacated share goes
@@ -561,7 +621,7 @@ def redistribute_opportunity(
                     # Scoped to the vacating position only: a successor at RB
                     # inherits vacated carries, and nothing about him says he
                     # absorbs a spill from another position group.
-                    if depth_ranks and tier == frozenset({source_position}):
+                    if depth_ranks and tier_index == 0:
                         successor = _successor_at(
                             depth_ranks, pool, position=source_position
                         )
@@ -571,9 +631,27 @@ def redistribute_opportunity(
                     if not pool or weight <= 0:
                         continue
                     for person, value in pool.items():
-                        shares[person] += remaining * (value / weight)
+                        gain = remaining * (value / weight)
+                        shares[person] += gain
+                        placed.append((person, gain))
+                    basis = "SAME_POSITION_ROOM" if tier_index == 0 else "SPILL_TO_ABSORPTION_SET"
                     remaining = 0.0
                 residual += remaining
+                if remaining > 1e-9:
+                    residual_detail.setdefault(team, {}).setdefault(field, {})[
+                        source_position
+                    ] = remaining
+                steps.append(
+                    {
+                        "team": team,
+                        "field": field,
+                        "position": source_position,
+                        "amount": amount,
+                        "tier": basis,
+                        "absorbed": placed,
+                        "unallocated": remaining if remaining > 1e-9 else 0.0,
+                    }
+                )
             for person, value in shares.items():
                 updated[person][field] = value
                 if value - prior[person] > 1e-6:
@@ -602,12 +680,281 @@ def redistribute_opportunity(
     report["unallocated_by_team"] = {
         team: fields for team, fields in sorted(unallocated.items())
     }
+    report["unallocated_by_team_position"] = residual_detail
+    report["steps"] = steps
     report["share_above_prior_capacity_after_redistribution"] = sorted(exceeded)
     report["shares_changed"] = len(gains)
     report["largest_gains"] = sorted(
         gains, key=lambda item: item["before"] - item["after"]
     )[:10]
     return replace(model, players=rebuilt), report
+
+
+def redistribute_vacated_workload(
+    slate: SlateContract,
+    model: OpportunityModel,
+    contract: ParticipationContract,
+    *,
+    official_inactive_dk_ids: Iterable[str] = (),
+    enabled: bool = True,
+) -> tuple[OpportunityModel, dict[str, object]]:
+    """The model scoring receives: the injury room moves the workload (Session 60, R37).
+
+    A person the run binds as unavailable vacates his opportunity shares; they go
+    to the survivors at his own position on his own team, in proportion to their
+    own prior share (`redistribute_opportunity`'s rule, with its spill across
+    positions switched off). Until Session 60 both call sites computed a reduced
+    model and discarded it, so every survivor was scored at his backup share.
+
+    The trigger is `contract.unavailable_people` (DraftKings `OUT`, `IR`, `D` and
+    any status the run classifies unavailable) plus the people on the supplied
+    official `INACTIVE` rows (`official_inactive_dk_ids`; the run folds those
+    into the operator exclusions, so they are passed separately). A plain
+    operator exclusion is a construction choice, not a statement that he is not
+    playing: it neither triggers nor stops being an absorber. `Q` is never a
+    trigger. None of this is official activity evidence, and nothing here
+    touches an evidence gate.
+
+    Quarterbacks are outside this transformation. Who starts at quarterback is
+    the depth evidence's question (R25, R36, Session 54) and the starting-
+    quarterback check's (Session 61): a share-proportional inheritance would lift
+    whichever backup has any prior share to the whole unit, whether or not he
+    plays. An `OUT` quarterback vacates nothing and no quarterback absorbs; the
+    report names them. A survivor whose current role is unresolved (his history
+    state is `CURRENT_ROLE_UNKNOWN`, or his prior row is not `PASS`) never
+    absorbs, because a model number must not make an unresolved-role gate moot.
+
+    Every person stays in the returned model, because the offensive-role resolver
+    needs every prior row. A vacating person keeps only what could not be placed
+    (a room with no survivor who can take it), so each team's pooled share per
+    field is conserved exactly. When nobody absorbed anything the model object is
+    returned unchanged and the report says `applied` is false. `enabled=False` is
+    the explicit, reported opt-out for the old reading (`select --no-redistribute`).
+    """
+
+    by_dk_id = {player.dk_id: player for player in slate.players}
+    official_ids = {
+        str(value).strip() for value in official_inactive_dk_ids if str(value).strip()
+    }
+    outside = sorted(official_ids.difference(by_dk_id))
+    if outside:
+        raise ParticipationError(
+            f"official INACTIVE rows name DraftKings ids outside the slate pool: {outside}"
+        )
+    official_people = {by_dk_id[dk_id].underlying_id for dk_id in official_ids}
+    in_model = {player.underlying_id: player for player in model.players}
+    unavailable = set(contract.unavailable_people)
+    triggered = sorted((unavailable | official_people) & set(in_model))
+    quarterbacks = [person for person in triggered if in_model[person].position == "QB"]
+    vacating = [person for person in triggered if person not in set(quarterbacks)]
+    names = {player.underlying_id: player.name for player in slate.players}
+    # The wrapped function sees only the non-quarterbacks as unavailable, so a quarterback is a survivor
+    # there whose shares nothing moves.
+    trigger_contract = replace(
+        contract,
+        unavailable_people=tuple(
+            person for person in contract.unavailable_people if person not in set(quarterbacks)
+        ),
+        operator_excluded_people=tuple(
+            sorted(person for person in official_people if person not in set(quarterbacks))
+        ),
+    )
+
+    def person_row(person: str) -> dict[str, object]:
+        row = in_model[person]
+        return {
+            "person": person,
+            "name": names.get(person, ""),
+            "team": row.team,
+            "position": row.position,
+            "dk_status": contract.status_by_person.get(person, ""),
+            "triggered_by": [
+                *(["DK_STATUS_UNAVAILABLE"] if person in unavailable else []),
+                *(["OFFICIAL_INACTIVE_ROW"] if person in official_people else []),
+            ],
+        }
+
+    base: dict[str, object] = {
+        "transformation_version": WORKLOAD_REDISTRIBUTION_VERSION,
+        "trigger": "DK_STATUS_UNAVAILABLE_OR_SUPPLIED_OFFICIAL_INACTIVE_ROW",
+        "official_activity_evidence": "NOT_IMPLIED",
+        "does_not_establish": list(WORKLOAD_REDISTRIBUTION_DOES_NOT_ESTABLISH),
+        "cross_position_spill": "NEVER",
+        "vacating_people": [person_row(person) for person in vacating],
+        # An unavailable quarterback's attempts are the depth evidence's to move (R25, R36, Session 54).
+        "quarterbacks_left_to_the_depth_evidence": [person_row(person) for person in quarterbacks],
+        "operator_exclusions_that_move_nothing": sorted(
+            set(contract.operator_excluded_people) - set(triggered)
+        ),
+    }
+    if not enabled or not vacating:
+        # The wrapped call still refuses a team with no survivor, as it always did.
+        _kept, inner = redistribute_opportunity(
+            model, trigger_contract, redistribute=False
+        )
+        inner.pop("steps", None)
+        inner.pop("unallocated_by_team_position", None)
+        for key in ("removed_people", "removed_count", "surviving_people"):
+            inner.pop(key, None)
+        return model, {
+            **inner,
+            **base,
+            "rule": (
+                WORKLOAD_REDISTRIBUTION_RULE
+                if enabled
+                else "NO_REDISTRIBUTION_SURVIVORS_KEEP_PRIOR_SHARES"
+            ),
+            "applied": False,
+            "enabled": enabled,
+            "moves": [],
+            "moves_count": 0,
+            "absorbing_people": [],
+            "not_absorbing_unresolved_current_role": [],
+        }
+
+    # A person whose current role is unresolved never absorbs. His share is the old team's, carried and
+    # unverified (a transfer), or his prior row is not PASS; stacking a vacated share on top would score a
+    # person the offensive-role evidence gate treats as unresolved above the prior that gate read, and
+    # that raises exactly what the P1 material-role-change gate compares against the market. Measured on
+    # the DEN@KC shape: an unresolved transfer behind a DraftKings-`OUT` back went from 8.6 to 24.2 prior
+    # points and left the gate's exclusion. A gate a real source could still clear (an explicit
+    # current-team allocation) is never made moot by a model number.
+    unresolved = sorted(
+        player.underlying_id
+        for player in model.players
+        if player.underlying_id not in set(vacating)
+        and (
+            dict(model.offensive_history_by_person.get(player.underlying_id) or {}).get("state")
+            == "CURRENT_ROLE_UNKNOWN"
+            or player.evidence_state != "PASS"
+        )
+    )
+    reduced, inner = redistribute_opportunity(
+        model,
+        trigger_contract,
+        redistribute=True,
+        cross_position_spill=False,
+        non_absorbers=frozenset(unresolved),
+    )
+    steps = inner.pop("steps")
+    residual = inner.pop("unallocated_by_team_position")
+    for key in ("removed_people", "removed_count", "surviving_people"):
+        inner.pop(key, None)
+    detail = vacated_opportunity_by_position(model, trigger_contract)
+    fields = _CAPPED_SHARE_FIELDS + _UNCAPPED_SHARE_FIELDS
+    survivors = {player.underlying_id: player for player in reduced.players}
+    vacating_set = set(vacating)
+    players = []
+    for player in model.players:
+        if player.underlying_id not in vacating_set:
+            players.append(survivors[player.underlying_id])
+            continue
+        kept = {field: 0.0 for field in fields}
+        for field in fields:
+            share = float(getattr(player, field))
+            if share <= 0:
+                continue
+            amount = detail[player.team][field][player.position]
+            left = residual.get(player.team, {}).get(field, {}).get(player.position, 0.0)
+            kept[field] = share * (left / amount)
+        players.append(replace(player, **kept))
+    # Applied only when somebody took a share. With none placed the shares are exactly what they were,
+    # so scoring receives the model object it always did and nothing claims otherwise.
+    applied = any(step["absorbed"] for step in steps)
+    result = (
+        replace(
+            model,
+            players=tuple(players),
+            workload_redistribution=WORKLOAD_REDISTRIBUTION_VERSION,
+        )
+        if applied
+        else model
+    )
+    for team in sorted({player.team for player in model.players}):
+        for field in fields:
+            before = sum(float(getattr(p, field)) for p in model.players if p.team == team)
+            after = sum(float(getattr(p, field)) for p in result.players if p.team == team)
+            if abs(before - after) > 1e-9:
+                raise ParticipationError(
+                    f"injury-room redistribution did not conserve {team} {field}:"
+                    f" {before!r} became {after!r}"
+                )
+
+    final = {player.underlying_id: player for player in result.players}
+    moves = []
+    for step in steps:
+        field = step["field"]
+        moves.append(
+            {
+                "team": step["team"],
+                "position": step["position"],
+                "field": field,
+                "vacated": [
+                    {**person_row(person), "share": round(float(getattr(in_model[person], field)), 6)}
+                    for person in vacating
+                    if in_model[person].team == step["team"]
+                    and in_model[person].position == step["position"]
+                    and float(getattr(in_model[person], field)) > 0
+                ],
+                "vacated_total": round(step["amount"], 6),
+                "basis": step["tier"],
+                "absorbed": [
+                    {
+                        "person": person,
+                        "name": names.get(person, ""),
+                        "before": round(float(getattr(in_model[person], field)), 6),
+                        "after": round(float(getattr(final[person], field)), 6),
+                        "gained": round(gain, 6),
+                    }
+                    for person, gain in step["absorbed"]
+                ],
+                "unallocated": round(step["unallocated"], 6),
+            }
+        )
+    rooms = {(in_model[person].team, in_model[person].position) for person in vacating}
+    return result, {
+        **inner,
+        **base,
+        "rule": WORKLOAD_REDISTRIBUTION_RULE,
+        "applied": applied,
+        "enabled": True,
+        "team_totals_conserved": True,
+        # Survivors in a room with a vacancy who took none of it because their current role is unresolved.
+        "not_absorbing_unresolved_current_role": [
+            person for person in unresolved
+            if (in_model[person].team, in_model[person].position) in rooms
+        ],
+        "moves": moves,
+        "moves_count": len(moves),
+        "absorbing_people": sorted(
+            {entry["person"] for move in moves for entry in move["absorbed"]}
+        ),
+    }
+
+
+def mark_declared_allocations(
+    report: Mapping[str, object], declared_teams: Iterable[str]
+) -> dict[str, object]:
+    """Say which reported moves a declared offensive-role allocation replaced.
+
+    The offensive-role resolver runs after `redistribute_vacated_workload` and a
+    declared allocation replaces every recipient's shares for its team, so a move
+    on such a team is reported but did not decide that team's scores. Called once
+    selection has run and the declared teams are known.
+    """
+
+    declared = sorted({str(team) for team in declared_teams})
+    moves = [
+        {**move, "superseded_by_declared_allocation": move["team"] in declared}
+        for move in report.get("moves") or ()
+    ]
+    return {
+        **report,
+        "moves": moves,
+        "superseded_by_declared_allocation": sorted(
+            {move["team"] for move in moves if move["superseded_by_declared_allocation"]}
+        ),
+    }
 
 
 def person_status(contract: ParticipationContract, person: str) -> str:

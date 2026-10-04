@@ -43,7 +43,7 @@ from .readable_review import _render_html
 # v3 and v2 (Session 11c): each row's source, and the rows a subset policy
 # leaves to C1. v2 and v1 stay as written.
 AUDIT_VERSION = "prior_only_classic_export_audit_c3_v3"
-READABLE_VERSION = "prior_only_readable_review_classic_c3_v2"
+READABLE_VERSION = "prior_only_readable_review_classic_c3_v3"
 ROW_SOURCE_POLICY = "POLICY"
 ROW_SOURCE_C1 = "C1"
 SCORE_SNAPSHOT_VERSION = "nfl_classic_selected_prior_scores_c3_v1"

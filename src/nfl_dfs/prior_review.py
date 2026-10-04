@@ -75,7 +75,8 @@ from .participation import (
     UNAVAILABLE_STATUSES,
     ParticipationContract,
     build_participation_contract,
-    redistribute_opportunity,
+    mark_declared_allocations,
+    redistribute_vacated_workload,
 )
 from .prior_score import read_team_splits
 from .priors import (
@@ -1097,6 +1098,7 @@ def pool_coverage_summary(
     offense_excluded_by_finding: Mapping[str, Sequence[str]] | None = None,
     offense_findings: Sequence[Mapping[str, object]] = (),
     official_statuses: Mapping[str, str] | None = None,
+    workload_redistribution: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Say who was selectable, who was not, why, and what it cost in salary.
 
@@ -1200,7 +1202,8 @@ def pool_coverage_summary(
         slot[pool_key] = slot.get(pool_key, 0) + 1
         if row["reason"] == "SELECTABLE":
             slot[key] = slot.get(key, 0) + 1
-    return {
+    redistributed = bool(dict(workload_redistribution or {}).get("applied"))
+    summary: dict[str, object] = {
         "people_in_pool": len(rows),
         # Selectable here means selectable by the solver: participation-eligible
         # AND not removed by a role gate. The participation-only count is kept
@@ -1215,12 +1218,28 @@ def pool_coverage_summary(
         },
         "people": rows,
         "note": (
-            "Unallocated shares are prior-season volume held by people who cannot"
-            " be selected; it is not reassigned. Salary totals are DraftKings FLEX"
-            " and, for Showdown, CPT prices of the excluded people, a coverage measure, not a"
-            " projection or an edge claim."
-        ),
+            (
+                "Unallocated shares are volume nobody could take: a share left by a person who"
+                " cannot be selected whose position room has no survivor with a share, or held"
+                " by a person excluded by an operator choice or a role gate. The rest of what"
+                " unavailable people held was reassigned within their position rooms"
+                " (workload_redistribution)."
+            )
+            if redistributed
+            else (
+                "Unallocated shares are prior-season volume held by people who cannot"
+                " be selected; it is not reassigned."
+            )
+        )
+        + " Salary totals are DraftKings FLEX"
+        " and, for Showdown, CPT prices of the excluded people, a coverage measure, not a"
+        " projection or an edge claim.",
     }
+    if workload_redistribution is not None:
+        # Session 60: the moves travel with the coverage, which is what the hash-bound Classic
+        # coverage artifact and both readable reviews already carry.
+        summary["workload_redistribution"] = dict(workload_redistribution)
+    return summary
 
 
 #: The frozen model artifacts a prior-only run produces, and the schema version
@@ -2361,7 +2380,13 @@ def run_prior_review(
             extra_unavailable_statuses=tuple(extra_unavailable_statuses),
             extra_available_statuses=tuple(extra_available_statuses),
         )
-        _reduced, redistribution = redistribute_opportunity(model, contract, redistribute=False)
+        # Session 60 (R37). The model scoring receives is the one the DraftKings status and any supplied
+        # official INACTIVE row leave: a vacated share goes to his position room, by a registered,
+        # reported transformation. Until Session 60 this call computed a reduced model, discarded it
+        # and passed the unreduced one on, so every survivor was scored at his backup share.
+        model, redistribution = redistribute_vacated_workload(
+            slate, model, contract, official_inactive_dk_ids=official_exclusions
+        )
         if sha256_file(package.identity_map) != package.hashes[IDENTITY_MAP_FILENAME]:
             raise PriorReviewError("TEAM_SPLIT_IDENTITY_MAP_CHANGED")
         identity_payload = json.loads(Path(package.identity_map).read_text(encoding="utf-8"))
@@ -2818,6 +2843,12 @@ def run_prior_review(
             hashes=hashes,
         )
 
+    # Session 60: a declared allocation replaces its team's shares after the redistribution ran, so the
+    # moves on such a team are reported but marked as not having decided its scores.
+    redistribution = mark_declared_allocations(
+        redistribution,
+        dict(scores.offensive_role_resolution.report.get("declared_totals") or {}),
+    )
     selection_report = {
         "status": "DO_NOT_UPLOAD",
         "MODEL_STATUS": "PRIOR_ONLY",
@@ -2862,6 +2893,7 @@ def run_prior_review(
             official_statuses=dict(
                 (reports.get("official_status") or {}).get("statuses") or {}
             ),
+            workload_redistribution=redistribution,
         ),
         "official_status_coverage": activity_coverage,
         "assignment_summary": {

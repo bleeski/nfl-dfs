@@ -140,7 +140,8 @@ from .priors import (
 from .participation import (
     ParticipationError,
     build_participation_contract,
-    redistribute_opportunity,
+    mark_declared_allocations,
+    redistribute_vacated_workload,
 )
 from .prior_score import read_team_splits
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
@@ -1929,7 +1930,11 @@ def command_select(args: argparse.Namespace) -> int:
         extra_unavailable_statuses=args.unavailable_status or (),
         extra_available_statuses=args.available_status or (),
     )
-    _reduced, redistribution = redistribute_opportunity(model, contract, redistribute=False)
+    # Session 60 (R37): the model scoring receives is the redistributed one. `--no-redistribute`, declared
+    # since W3 and unread since SD2, is the explicit and reported opt-out for the old reading.
+    model, redistribution = redistribute_vacated_workload(
+        slate, model, contract, enabled=not getattr(args, "no_redistribute", False)
+    )
     splits = read_team_splits(
         args.team_splits,
         prior_season=args.prior_season,
@@ -1980,7 +1985,10 @@ def command_select(args: argparse.Namespace) -> int:
         "reserved_entries": entry_ids,
         "lineups": [lineup.as_payload(names) for lineup in lineups],
         "participation": contract.as_report(),
-        "redistribution": redistribution,
+        "redistribution": mark_declared_allocations(
+            redistribution,
+            dict(scores.offensive_role_resolution.report.get("declared_totals") or {}),
+        ),
         "selection": selection,
         "prior_scores": scores.as_report(),
         # R28 (Session 09): who the P1 gate left out of these assignments.

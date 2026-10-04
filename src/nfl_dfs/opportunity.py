@@ -59,6 +59,10 @@ class OpportunityModel:
     route_participation_state: str = "UNKNOWN"
     model_label: str = "OPPORTUNITY_DIAGNOSTIC_V1"
     offensive_history_by_person: dict[str, dict[str, object]] = field(default_factory=dict)
+    # Session 60 (R37): the registered version of the injury-room workload redistribution already
+    # applied to `players` (`participation.redistribute_vacated_workload`), or None. Only a reader
+    # that would otherwise describe the vacated volume wrongly looks at it.
+    workload_redistribution: str | None = None
 
 
 TEAM_COLUMNS = (

@@ -335,6 +335,11 @@ def test_review_surface_shows_pool_coverage_and_the_kicker_assumption(
     salary_path, entry_path, package_dir, project = _prepared_run(
         tmp_path, expires_at=datetime.now(timezone.utc) + timedelta(hours=6)
     )
+    # Session 60: four rows, not two (five or more start on the concentration defaults, a different path).
+    # Whether two lineups happen to include the kicker depends on how the scores fall, and they moved once the
+    # vacated shares of the OUT back and the IR receiver reached their rooms; this test needs a selected
+    # kicker to read the sole-listed-kicker assumption off the review surface.
+    entry_path.write_bytes(_entries_bytes(tuple(str(900000201 + index) for index in range(4))))
     attachments = _attachments(tmp_path, salary_path, entry_path)
     monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
     real = prior_review_module.run_prior_review

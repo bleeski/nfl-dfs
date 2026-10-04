@@ -4,6 +4,119 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: Session 60 -- the injury room moves the workload (R37, P9 part 1)
+
+Branch `claude/s60-injury-room-workload`, from `main` at `f9ed717`; claim commit `ac1838f`. Class P (model quality). R29 is untouched
+(nothing here reads distinctness), no evidence gate is touched, and every path still ends `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+**STEP 0, the card's first instruction: is there a ruling behind `redistribute=False`? No ruling; a design choice.** `git log -S'redistribute=False'`
+finds 62fbff7 (W1/W3/W4, 2026-09-08: the function and its default, `True`) and 7f9ae4d (SD2, 2026-09-09). Before SD2 the call was
+`redistribute=not args.no_redistribute` (`cli.py`) and the default (`prior_review.py`) and selection received `reduced`; SD2 changed both calls
+to `redistribute=False` **and** passed the unreduced `model` to selection. Its source is `docs/SHOWDOWN_PRIORITY_TRACKER_2026-09-09.md` (a Codex
+session's tracker, superseded as authority on 2026-09-22) and `docs/DATA_CONTRACTS.md` § SD2 ("excluding people leaves their volume
+unallocated, so no unsupported backup inherits it"). Grepped for a Ben ruling in `docs/ROADMAP.md` (whole file), this file, both changelog
+archives, both backlog archives, `plan.md`, the runbook, the operator guide and `IMPLEMENTATION_STATUS.md`: none. R37 (Ben, later) and the Week 4
+measurements (`construction/scores_qbclean.json`: Allen 3.579, Wilson 3.04, Ertz 0.552, Jennings 0.295) go the other way. The card said no
+ruling was found and that is right; what it did not know is that SD2 chose this on purpose, so the answer to its objection ("unsupported") is
+part of the work: this transformation is deterministic, registered, bound to bytes the run already hashes, and reported move by move. **The trace
+found `_reduced` discarded at both call sites**, so flipping the flag alone would have changed only the report; the feed to `select_prior_lineups`
+is what changed.
+
+**Added**
+- `participation.redistribute_vacated_workload(slate, model, contract, *, official_inactive_dk_ids, enabled)`: the one function both call sites use.
+  Registered as `injury_room_workload_redistribution_v1` with `does_not_establish` (`OFFICIAL_ACTIVE_STATUS`, `A_CURRENT_ROLE`,
+  `THAT_ANY_ABSORBER_RECEIVES_THE_VACATED_WORKLOAD`, `MODEL_VALIDATION`, `OWNERSHIP_OR_LEVERAGE`) and its own rule label
+  `PROPORTIONAL_TO_PRIOR_WITHIN_VACATING_POSITION_NO_SPILL_V1`. Trigger: DraftKings `OUT`, `IR`, `D` (and any code the run classifies unavailable)
+  plus supplied official `INACTIVE` rows; `Q` and a plain operator exclusion trigger nothing. A share goes to the survivors at the same position on
+  the same team in proportion to their own prior share; never across a position or a team; what no survivor can take stays unallocated; every
+  person stays in the model and each team's pooled share per field is conserved to 1e-9. `mark_declared_allocations` flags moves on a team whose
+  declared offensive-role allocation then replaced its shares (Classic C3 always binds one).
+- `redistribute_opportunity` gained two additive parameters (`cross_position_spill`, `non_absorbers`) and recording (`steps`,
+  `unallocated_by_team_position`); defaults keep every earlier caller. It also reports a field no survivor on a team can hold (a team's only listed
+  quarterback is out) as unallocated, where it used to drop it without a word.
+- `OpportunityModel.workload_redistribution` (defaulted marker), set only when somebody absorbed a share.
+- `tests/test_injury_room_redistribution.py`: 41 tests.
+- `docs/DATA_CONTRACTS.md` § Injury-room workload redistribution; `IMPLEMENTATION_STATUS.md`.
+
+**Changed**
+- `prior_review.py` and `cli.py` pass the redistributed model to `select_prior_lineups`; `select --no-redistribute`, declared since W3 and read by
+  nothing since SD2, is now the explicit, reported opt-out (`rule=NO_REDISTRIBUTION_SURVIVORS_KEEP_PRIOR_SHARES`). `run-slate` has none.
+- Report: `redistribution` now carries `vacating_people`, `moves` (vacated people and shares, absorbing people with shares before and after,
+  unallocated), `quarterbacks_left_to_the_depth_evidence`, `not_absorbing_unresolved_current_role`, `operator_exclusions_that_move_nothing`; the
+  keys `removed_people`, `removed_count`, `surviving_people` are gone (nothing read them). The same object rides at
+  `pool_coverage.workload_redistribution`, so the hash-bound Classic coverage artifact carries it too.
+- Statements that stopped being true when the transformation applies: the offensive-role report's assumption
+  (`VACATED_VOLUME_REMAINS_UNALLOCATED`, now conditional), the pool-coverage note, the readable review's `unallocated_volume` observation and
+  heading, and the workbook header ("not reassigned"). Review versions bumped: `prior_only_readable_review_sd5_v3` and
+  `prior_only_readable_review_classic_c3_v3` (Session 11b's precedent); a new section **Injury-room redistribution** in both renderers.
+
+**Narrowings of the card, named**
+- **Quarterbacks are outside it.** The depth evidence moves attempts onto the declared or promoted starter (R25, R36, Session 54) and Session 61
+  owns the starting-QB check. A share-proportional inheritance would lift whichever backup has any prior share to the whole unit, played or not,
+  and without a depth package that replaces the near-zero prior that kept an unlisted backup out of a build (found by the review of this diff;
+  Week 4's salary file lists eleven QBs `OUT` or `IR`).
+- **A person whose current role is unresolved never absorbs** (`CURRENT_ROLE_UNKNOWN` history, or a prior row that is not `PASS`). Measured, not
+  assumed: on the DEN@KC shape (`tests/test_qb_depth_roles.py`) an unresolved transfer behind a DraftKings-`OUT` back went from 8.60 to 24.16 prior
+  points when he absorbed it, and the P1 material-role-change gate stopped excluding him (one exclusion to none). A gate a real source could
+  still clear must not be made moot by a model number (the lock-clock ruling's third bound).
+- Plain operator exclusions neither trigger nor are removed as absorbers (a fade is a construction choice). `Q` is untouched in the sense that
+  matters (never a trigger, never removed, his shares move only if he shares a room with a vacancy); his *score* can move in the third decimal
+  because fumbles use the renormalised team-touch share (synthetic fixture: Sea TE 14.444 to 14.459 with identical shares).
+
+**Existing tests edited, each its own visible change** (all five failed with the transformation on and passed with it off at the `prior_review`
+call site: the attribution run, six tests)
+- `tests/test_entry_groups.py`: `SD3_FULL_FILLABLE_SHA256` re-pinned from `1918820d809eea637425f1970b5bae65c406efca7b35fa3264b867863e43eed1` to
+  `99ace68ab2fd12f8c0becebc5ebdc76c427d26fb44eaee2a968d32e668c21b80`; deterministic across two runs; the file is the delivered, byte-audited one.
+  The two readable-review version pins (`:903`, `:1046`) moved to `sd5_v3` and `classic_c3_v3`.
+- `tests/test_cowork_rerun_regressions.py::test_review_surface_shows_pool_coverage_and_the_kicker_assumption`: four rows instead of two (five or
+  more start on Session 56's default-policy path, which labels exclusion sources differently); with two the run no longer selected the kicker the
+  test reads its assumption from. Every other assertion unchanged.
+- `tests/test_contest_assignment_run_slate.py::test_the_diversified_assignment_reaches_the_file_the_audit_and_the_review[sequential|policy]`:
+  `INTERLEAVED_CONTESTS` (entries 1, 3, 5 and 2, 4, 6) instead of 1 to 3 and 4 to 6. **Checked first that `UNCHANGED` is right, not a missed
+  improvement:** brute force over every split of the six lineups into two contests of three, with the step's own pair cost, score and
+  no-regression rule, finds the solver order is the best admissible assignment in both variants (the unrestricted best would worsen a contest);
+  the interleaved grouping leaves an admissible improvement in all three variants. `TWO_CONTESTS` is untouched for the other tests.
+- `tests/test_concentration_run_slate.py::test_a_pool_too_small_for_the_requested_caps_relaxes_by_name_and_still_delivers`: `NINE` holds
+  `Sea Third RB` where it held `Sea Backup RB`. Same pool size and shape; the other tests that use it are unchanged. **See Found.**
+
+**Verification**
+- Baseline before any change: `2395 passed, 2 skipped in 1883.66s (0:31:23)` on Windows (another repository's pytest ran beside it).
+- Synthetic fixture (NE@SEA shared pool, Seattle lead back `OUT`, receiver `IR`), prior points off to on: Sea Backup RB 7.117 to 19.209,
+  Sea Third RB 1.519 to 4.298, Sea Alpha WR 42.111 to 45.594, NE Lead RB 16.107 unchanged.
+- Mutations, each broken and each caught on the intended assertion: both call sites handed the unreduced model (3 tests: "selection was handed a
+  model other than the redistributed one"); spill across positions switched on (2); operator exclusions vacate (2); residual zeroed (4);
+  `non_absorbers` dropped (3); official ids not passed at the call site (1; the reviewer found this one passed every test before the run-level
+  test existed); `kept = left` (1; caught only after a test with two same-position vacators and a stranded field was added).
+- Full suite, run once on the finished tree: `2436 passed, 2 skipped in 854.86s (0:14:14)` on Windows, 41 more than the baseline's 2395 (the new file). The two skips are the expected symlink-permission ones (`tests/test_cowork.py:112`, `tests/test_standings_transport.py:523`). A first run of the same tree, with a second `-q` on the command line, showed no failures but printed no summary line, so it was repeated rather than reported from the dots.
+- `doctor`, `git diff --check`, `check_protected_paths.py`: `doctor` `pass_status: true`; `git diff --check` clean; `check_protected_paths.py` "No protected path touched"; `compileall` of the eight changed modules clean; `test_roadmap_queue`, `test_repo_boundaries` and `test_gate_registry` rerun after the doc edits (313 passed).
+- The adversarial `reviewer` agent ran on the diff: four blocking items (the contract entry, a run-level official-`INACTIVE` test, a wrong rule
+  label, stale "not reassigned" text on the review surfaces), all fixed; its other findings are under Found.
+
+**Found, left open or not confirmable**
+- **The card's acceptance on the real Week 4 inputs is unproven.** The frozen prior package and the Week 4 run folders are not committed and
+  `data/runs/` has no Week 4 run on this host; the salary file's SHA-256 (`085f9ff8a224744c002d2f712b11748fcb7f8f11e46e5439510aaede77c8552a`)
+  appears only in this file and in the committed `qb_depth/qb_depth_roles.json`. The mechanism is proved on fixtures shaped like the card's four
+  cases (RB, TE and WR rooms, a `Q` person, a DraftKings-`OUT` person, a cross-position check). **Ertz is the open one:** if his frozen row is
+  `CURRENT_ROLE_UNKNOWN` (a transfer) or not `PASS` the rule above leaves him at 0.552 by design, and Jennings (a transfer) is not priced up either;
+  whether they absorb is a decision about what the P1 gate compares, not a number. Read `offensive_roles.findings[Ertz].history_state` in the
+  Week 4 run report before writing "Ertz scores above 0.55".
+- Raising an absorber's prior can push a person in another room across the P1 gate's divergence threshold (the gate tightening; reported
+  through its own findings). The in-room direction is tested; the cross-room one is not.
+- A person the role evidence (`EXPLICIT_NONPARTICIPATION`) or an operator removes after he absorbed a share leaves it unplaced: the function sees
+  only the DraftKings status and the official rows, so a practice-squad or cut survivor in a room still takes his proportional part and is then
+  dropped, which dilutes the real beneficiary's lift. Not measured on a real slate.
+- **The ten-person concentration test is sensitive to score movement**: with the Seattle back that inherits the lead back's carries in the pool
+  its runtime went from about 10 s to 45 to 96 s and the ladder ended at the baseline (`CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`, then
+  `CANDIDATE_BANK_TIME_LIMIT` at 0.80/0.40). Other carves fail with the transformation on or off (checked), so the pool is at the edge of what the
+  caps can hold and a small score change decides it. Real Showdown pools are several times larger; this is a property of tiny pools, not measured
+  on a real one.
+- `nfl_prior_pool_scores_v1` carries no marker, so a run before Session 60 and one after are not told apart by that dump; the selection report is.
+  Every team with a vacancy shifts, so comparisons against `scores_qbclean.json` shift too.
+- Size: past the card's 300 lines (about 1,590 changed lines counting the docs, about 1,300 without them: 496 insertions in `src/` and a 766-line new test file; just past the 1,500-line breakpoint when docs are counted), under the 1,500-line breakpoint, not split. The card's estimate assumed the call sites were the
+  whole change; the readable reviews, the offensive-role assumption, the workbook and four existing tests are the rest.
+- Not fixed here, for a card: `docs/claude/working.md` still tells the operator to place injury beneficiaries by hand (Session 61 replaces it).
+
 ### 2026-10-04: Week 4 Classic late swap (the 4:25 window)
 
 Ben, 19:43Z: check the afternoon inactives, update lineups, look for value and leverage from active statuses, and redeploy only as
