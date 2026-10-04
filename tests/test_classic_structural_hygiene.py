@@ -211,8 +211,9 @@ def test_the_rung_table_drops_the_bounds_in_the_briefs_order_and_the_share_last(
 
 def test_a_relaxation_never_tightens_the_bounds_or_the_share() -> None:
     slate = _slate()
-    policy = _validate(classic_rung_controls(slate, 5, 0), count=5).policy
-    assert policy is not None
+    # Session 57: asked for explicitly, so the veto is still one of the two bounds this walks down.
+    policy = _validate(classic_rung_controls(slate, 5, 0, offense_against_own_dst=True), count=5).policy
+    assert policy is not None and policy.structural_bounds.offense_against_own_dst
     previous_share, previous_open = Decimal(1), 0
     for rung in range(4):
         relaxed = classic_relaxed_controls(policy, rung)
@@ -262,13 +263,15 @@ def test_the_generator_writes_v2_with_the_bounds_and_the_share_and_says_so(tmp_p
                        wall=lambda: IMPROVEMENT_STOP - timedelta(seconds=86_400.0))
     assert code == 0
     printed = capsys.readouterr().out
-    assert "salary left:       $0 to $1,000" in printed and "no offense with own DST: on" in printed
+    # Session 57 (review F-06): the generated policy leaves the own-DST veto open; it printed "on" and wrote true before.
+    assert "salary left:       $0 to $1,000" in printed
+    assert "no offense with own DST: off (the default since Session 57; --offense-against-own-dst forbids it)" in printed
     assert "max person share:  <= 80% of entries (16/20); the last cap to go" in printed
     document = json.loads(out.read_text(encoding="utf-8"))
     assert document["schema_version"] == POLICY_SCHEMA_VERSION_V2
     assert document["controls"]["max_person_share"] == 0.8
     assert document["controls"]["structural_bounds"] == {
-        "salary_left": {"minimum": 0, "maximum": 1000}, "offense_against_own_dst": True}
+        "salary_left": {"minimum": 0, "maximum": 1000}, "offense_against_own_dst": False}
     slate, entries = parse_salaries(SALARY), parse_entries(TWENTY)
     validation = validate_classic_portfolio_policy_bytes(
         out.read_bytes(), slate=slate, entry_ids=tuple(item.entry_id for item in entries.authorizations),
@@ -286,12 +289,16 @@ def test_rung_zero_on_the_supplied_classic_pool_proposes_only_rosters_that_pass_
 
     slate, entries = parse_salaries(SALARY), parse_entries(TWENTY)
     entry_ids = tuple(item.entry_id for item in entries.authorizations)
+    # Session 57: the generator's default now leaves the own-DST veto open, so this asks for it, to keep proving the
+    # explicit veto's MILP rows on a real pool (the default's isolated behaviour is tests/test_structural_default_recut.py).
     document = classic_portfolio_policy_template(
-        slate, entry_ids, entry_sha256=entries.raw_hash, controls=classic_rung_controls(slate, len(entry_ids), 0))
+        slate, entry_ids, entry_sha256=entries.raw_hash,
+        controls=classic_rung_controls(slate, len(entry_ids), 0, offense_against_own_dst=True))
     validation = validate_classic_portfolio_policy_bytes(
         json.dumps(document).encode("utf-8"), slate=slate, entry_ids=entry_ids, entry_sha256=entries.raw_hash)
     assert validation.valid and validation.policy is not None
     policy = validation.policy
+    assert policy.structural_bounds.offense_against_own_dst is True
     objective = {row.dk_id: row.salary / 1000.0 + (sum(map(ord, row.underlying_id)) % 97) / 50.0 for row in slate.players}
     enumerator = _Enumerator(slate, policy, objective, excluded_ids=())
     enumerator.enumerate(kind="top_k_fill", target=6)

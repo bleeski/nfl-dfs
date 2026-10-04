@@ -1,5 +1,22 @@
 # Implementation Status
 
+## Capability added: 2026-10-04 (Session 57, default structural bounds re-cut from the field)
+
+Working and verified through synthetic fixtures (`tests/test_structural_default_recut.py`, 21 tests in 2.4 s; three edited tests in
+`tests/test_classic_structural_hygiene.py`), the three frozen phi-chi policies on disk, a mutation pass (18 of 18 caught) and the full suite:
+new default policies leave `offense_against_own_dst` open in both modes (`make_showdown_policy.py`'s argument default; `classic_rung_controls`,
+which writes the veto only when `make_classic_policy.py --offense-against-own-dst` asks and then follows the unchanged table) and the Showdown
+generator's `--qb-count-max` default is 2, minimum 1 (`--qb-count-max 1` and `--offense-against-own-dst` write the old policy). The auditors, the
+MILP rows, `classic_structural_bounds` and `SHOWDOWN_RUNGS` are untouched, so an explicit or a frozen policy is enforced, audited and relaxed exactly
+as before; the frozen policies normalize to the hashes pinned from the pre-change code. A fixed legal DST-plus-teammate roster and a fixed legal
+two-quarterback roster pass the generator's own default bounds and fail the legacy ones, in the auditor and as six-row-fixed MILP solves (OPTIMAL
+against INFEASIBLE); a Classic RB-plus-own-DST roster does the same. Construction preferences (class S): Claude's defaults, Ben's to overturn. **Not
+done, named:** the review's field counts (854 of 1,261, 1,982 of 2,420 and 636 of 2,552 top-1% entries; 24.7% and 73.5% two-QB in PHI@CHI) are the
+review's, not reproduced here (Session 18's local mode is to); no `run-slate` replay of a real slate; where the backup-QB rule did not run
+(`SHOWDOWN_BACKUP_QB_UNEVALUATED`, `QB_DEPTH_CAPTURE_*`) a starter and his backup can now share a rung-0 lineup, and only the operator's
+`--backup-pairs` QA limit and the working.md judgment pass report it; the Classic `RB_DST_PAIR` stack value can now be positive. Still
+`MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-10-04 (Session 56, concentration defaults in the engine)
 
 Working and verified through synthetic fixtures (`tests/test_concentration_defaults.py`, `test_concentration_ladder.py`,
@@ -239,7 +256,8 @@ of Session 23's card.
   person(s) named in the audit and in `exposure.max_person_share`.
 - `relaxation.py`: rung 1 drops the salary band, rung 2 `offense_against_own_dst`,
   and the 0.80 share stays through rung 3, dropped only by rung 4.
-  `make_classic_policy.py` writes v2 on every rung.
+  `make_classic_policy.py` writes v2 on every rung (the generator leaves
+  `offense_against_own_dst` open since Session 57; the table is the relaxation table).
 - Seven gate codes registered; registry re-pinned.
 
 Verified: `tests/test_classic_structural_hygiene.py` (23 tests, including the
@@ -333,7 +351,8 @@ the one construction change with measured lift in every graded game
   already dropped there via the pre-existing `uncapped` mechanism).
 - `scripts/make_showdown_policy.py` v2 defaults: one QB, one to two pass
   catchers with him, $1 to $500 left, at most one kicker and one DST,
-  `offense_against_own_dst=true`; kickers and DSTs stay in the combined pool
+  `offense_against_own_dst=true` (the QB maximum is 2 and `offense_against_own_dst`
+  false since Session 57); kickers and DSTs stay in the combined pool
   (only their Captain fraction zeroes by default); `--captain-default` now
   defaults to 0.4 instead of requiring an explicit value every call.
 - Five new gate codes (alphabetical, class `S`/`P` per the existing family

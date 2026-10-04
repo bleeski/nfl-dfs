@@ -13,7 +13,10 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 - Focused tests first (`-x --tb=short`), then the complete suite: ~5 min on Linux,
   ~10 on Windows (CI, 2026-09-25), past the 600000 ms tool maximum. Run it in
   the background on Windows; a run killed by a timeout is a tooling artifact, not a
-  failure. Record the result: `python3 scripts/record_verify.py --from-log <log>`.
+  failure. Record the result: `python3 scripts/record_verify.py --from-log <log>`. Start a background suite once: the
+  `Tee-Object` log appears only when pytest's pipe first flushes, so a missing log is not a failed start (check
+  `Get-CimInstance Win32_Process` for `pytest` before relaunching, or two suites run). Another repository's pytest on this host
+  can double the wall time (Session 57's baseline: 20:35 against 11 to 12).
 - Python 3.13.7 under `uv.lock`; `uv sync` needs `README.md` present.
   `NFL_DFS_TLS_ALLOW_NONSTRICT_CA=1` is the approved opt-in and clears only
   `VERIFY_X509_STRICT`. Container facts: `docs/CLAUDE_CODE_SETUP.md`.

@@ -22,14 +22,21 @@ preference. The table lives in `src/nfl_dfs/relaxation.py` (Session 10), which
 `run-slate` walks itself; this script is a thin wrapper that writes one rung:
 
   0  every entry stacks QB + pass catcher; 70% carry a bring-back; overlap 5;
-     player exposure <= 50% of entries; at most $1,000 of salary left; no
-     offense on a rostered DST's team (Session 23e)
+     player exposure <= 50% of entries; at most $1,000 of salary left
   1  bring-back drops to 34% of entries; the salary-left band goes
-  2  bring-back drops to ADVISORY; overlap 6; player exposure <= 65%; the
-     own-DST offense rule goes
+  2  bring-back drops to ADVISORY; overlap 6; player exposure <= 65%
   3  QB pass-catcher holds on half the entries; overlap 7; no per-person
      exposure rows, so the 80% `max_person_share` is the cap that binds
   4  emit nothing; run C1 with no policy at all, which is the proven floor
+
+OWN-DST OFFENSE (Session 23e; re-cut Session 57, 2026-10-02 review F-06). The policy
+leaves `offense_against_own_dst` open on every rung: the veto on any non-DST person
+sharing a rostered DST's team excluded 22.1% of Classic Week 1's top-1% entries and
+13.0% of Week 3's (the review's counts), and a feasible restricted bank never reached
+the rung that dropped it. `--offense-against-own-dst` writes the old veto: on at rungs
+0 and 1, dropped from rung 2 (the table in `nfl_dfs.relaxation` is unchanged, so an
+explicit or a frozen policy relaxes where it always did). The Boolean is never read
+as the DST's opponent. A construction preference: Claude's default, Ben's to overturn.
 
 `max_person_share` (0.80, written on every rung of a portfolio of three or more
 entries) is the default maximum of any person without an explicit exposure row
@@ -172,6 +179,12 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
         default=[],
         help="bind only this fillable Entry ID (repeatable); C1 fills the rest after the joint solve",
     )
+    parser.add_argument(
+        "--offense-against-own-dst",
+        action="store_true",
+        help="forbid any non-DST person on a rostered DST's team, on at rungs 0 and 1 (default off since"
+             " Session 57, review F-06: the field holds a DST beside a teammate; it was on)",
+    )
     args = parser.parse_args(argv)
 
     if args.rung == 4:
@@ -234,7 +247,7 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
         )
         return 2
     fraction = _exposure_fraction(args.rung)
-    controls = classic_rung_controls(slate, count, args.rung)
+    controls = classic_rung_controls(slate, count, args.rung, offense_against_own_dst=args.offense_against_own_dst)
 
     document = classic_portfolio_policy_template(
         slate,
@@ -270,7 +283,10 @@ def main(argv: "list[str] | None" = None, *, wall: "Callable[[], datetime] | Non
     print("salary left:       " + (
         "unbounded at this rung" if salary_left["maximum"] is None
         else f"${salary_left['minimum']} to ${salary_left['maximum']:,}"))
-    print(f"no offense with own DST: {'on' if bounds['offense_against_own_dst'] else 'off at this rung'}")
+    print("no offense with own DST: " + (
+        "on" if bounds["offense_against_own_dst"]
+        else "off at this rung" if args.offense_against_own_dst
+        else "off (the default since Session 57; --offense-against-own-dst forbids it)"))
     share = controls["max_person_share"]
     print("max person share:  " + (
         "none (two entries or fewer)" if share is None
