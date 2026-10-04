@@ -4,6 +4,62 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: Week 4 Classic slate (39 entries, 11 contests, 12 games)
+
+Inputs, committed under `data/inbox/slates/wk4-classic-2026-10-04/`:
+
+    salary  085f9ff8a224744c002d2f712b11748fcb7f8f11e46e5439510aaede77c8552a
+    entries 4cb4978c29152f549c074b71670ee58bc543d5e46c4c925c47d838ec6a3fd91d
+
+Clock: request at 16:17Z, lock 17:00Z, delivery deadline 16:55Z; file
+delivered 16:28Z.
+
+- `session_probe.py`: every allowlisted host reachable, `CAN_COMPLETE_A_RUN`.
+  `.venv-linux` was absent; `setup` took about a minute.
+- Run `20261004T161833Z-wk4-classic-2026-10-04` (`--build-priors`): baseline
+  first, then `PRIOR_REVIEW_IDENTITY_BLOCKED` on six people, each a unique
+  name, team and position row in the captured roster: Matt/Matthew Hibner
+  `00-0040879`, Joshua/Josh Palmer `00-0036988`, Mitch/Mitchell Tinsley
+  `00-0038839`, Audric Estime/Estimé `00-0039373`, Nick/Nicholas Singleton
+  `00-0040886`, Hollywood/Marquise Brown `00-0035662` (DK `OUT`). The same
+  variants as Week 3. Reviewed crosswalk `identity_reviewed_wk4.csv`
+  (`82b00591…30aa`), then `priors-freeze` (8 s).
+- QB depth package (`make_offensive_role_evidence.py --fetch`, snapshot
+  2026-10-04T13:09:16Z) refused the whole slate: the depth chart lists no
+  quarterback for LAR. Rebuilt with `--teams` naming the other 23. It promotes
+  Tyson Bagent over DK-`OUT` Caleb Williams and Jalon Daniels over DK-`OUT`
+  Baker Mayfield. Its `next` text said `run-slate` had no flag for the package;
+  it has had `--qb-depth-role-evidence-json` for a while, and the flag refuses a
+  relative path without a request base. Text corrected in this commit.
+- Run `20261004T162144Z-wk4-classic-r2`: `PRIOR_REVIEW_SELECT_BLOCKED`,
+  `OFFENSIVE_ZERO_BASIS_UNRESOLVED:PHI|QB|Andy Dalton`. Run
+  `20261004T162217Z-wk4-classic-r3` with `--exclude 44312254` (Dalton, a
+  backup) reached EXPORT: C1 file `5b55ac72…de7b`, `FILE_VALID=true`,
+  `EVIDENCE_STATE=UNKNOWN`. Legal and too narrow: 5 quarterbacks, 13 people at
+  15 of 39.
+- Thesis build (`build_thesis_portfolio.py`, seven theses, global exposure 13,
+  overlap 5, QB cap 3 per thesis) on the run's own filtered dump, with 17
+  non-starting quarterbacks removed first (the first build had rostered Nick
+  Mullens, absent from Jacksonville's depth chart). Braelon Allen (NYJ, Breece
+  Hall `OUT`) placed by construction in 6 rows: the prior scored him 3.58
+  because a DK `OUT` tag does not redistribute workload, and `value-add`
+  refuses a lower-prior player. `redeploy` on the freed salary took him back
+  out of two rows; he was re-added. Record:
+  `construction/manual_add_record.py`.
+- Delivered `DK_REVIEW_ENTRY_wk4_classic_FINAL.csv`, `134e56f5…b088bab`, 39 of
+  39, 0 bytes changed outside the roster cells. QA Tier 1 PASS; Tier 2 max
+  exposure 13/39, top-3 union 29/39, 116 distinct players, overlap max 5 mean
+  1.12, stacked and bring-back 39/39, anti-correlation 0, 16 quarterbacks.
+  `PRIOR_ONLY / DO_NOT_UPLOAD`. Not supplied: official activity, weather
+  captures (9 outdoor games `UNOBSERVED`), ownership; LAR and PHI had no market
+  line in the frozen games file and ran on the 21.0 baseline.
+- What would have made it better, and where it went: the two construction holes
+  above are now in `.claude/rules/slate-operation.md`. Not fixed here, for a
+  roadmap card: DK `OUT` should redistribute the starter's share the way an
+  official `INACTIVE` row does, or the engine undervalues every injury
+  beneficiary; and the depth package should skip a team with no listed
+  quarterback rather than refuse the slate.
+
 ### 2026-10-04: Session 56 -- concentration defaults in the engine (2026-10-02 review F-02, R35)
 
 Branch `claude/s56-concentration-defaults`, claimed at `0832a18` (on `ffcbb9d`, PR #101's merge), task file `state/tasks/S56.md`. No protected

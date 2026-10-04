@@ -1,0 +1,1095 @@
+{
+  "allocation_version": "qb_depth_chart_attempt_share_allocation_v2",
+  "declarations": [
+    {
+      "backups": [
+        {
+          "dk_id": "44312251",
+          "player_name": "Gardner Minshew II",
+          "pos_rank": 2,
+          "provider_player_id": "00-0035289",
+          "underlying_id": "ARI|QB|Gardner Minshew II"
+        },
+        {
+          "dk_id": "44312252",
+          "player_name": "Carson Beck",
+          "pos_rank": 3,
+          "provider_player_id": "00-0041561",
+          "underlying_id": "ARI|QB|Carson Beck"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "ARI@NYG",
+      "source_sha256": "98ca62d207cafcb817b9a31d56889edb7695541b8113a7adca9f445b2cba595a",
+      "starter": {
+        "dk_id": "44312217",
+        "player_name": "Jacoby Brissett",
+        "pos_rank": 1,
+        "provider_player_id": "00-0033119",
+        "underlying_id": "ARI|QB|Jacoby Brissett"
+      },
+      "team": "ARI",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312260",
+          "player_name": "Tyler Huntley",
+          "pos_rank": 2,
+          "provider_player_id": "00-0035993",
+          "underlying_id": "BAL|QB|Tyler Huntley"
+        },
+        {
+          "dk_id": "44312261",
+          "player_name": "Joe Fagnano",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040981",
+          "underlying_id": "BAL|QB|Joe Fagnano"
+        },
+        {
+          "dk_id": "44312262",
+          "player_name": "Skylar Thompson",
+          "pos_rank": 4,
+          "provider_player_id": "00-0037327",
+          "underlying_id": "BAL|QB|Skylar Thompson"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "TEN@BAL",
+      "source_sha256": "d5eaff3db4d2bd483cc990834296630bdb6d50f7e30e29bfdb0651c1dab5541e",
+      "starter": {
+        "dk_id": "44312198",
+        "player_name": "Lamar Jackson",
+        "pos_rank": 1,
+        "provider_player_id": "00-0034796",
+        "underlying_id": "BAL|QB|Lamar Jackson"
+      },
+      "team": "BAL",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312274",
+          "player_name": "Kyle Allen",
+          "pos_rank": 2,
+          "provider_player_id": "00-0034577",
+          "underlying_id": "BUF|QB|Kyle Allen"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "NE@BUF",
+      "source_sha256": "59a9cc93a0650d8165ac9379d5022d16ad2fd625df2c42d227344dead796fdd8",
+      "starter": {
+        "dk_id": "44312197",
+        "player_name": "Josh Allen",
+        "pos_rank": 1,
+        "provider_player_id": "00-0034857",
+        "underlying_id": "BUF|QB|Josh Allen"
+      },
+      "team": "BUF",
+      "unlisted": [
+        {
+          "dk_id": "44312275",
+          "player_name": "Shane Buechele",
+          "underlying_id": "BUF|QB|Shane Buechele"
+        }
+      ]
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312219",
+          "player_name": "Tyson Bagent",
+          "pos_rank": 2,
+          "provider_player_id": "00-0038416",
+          "underlying_id": "CHI|QB|Tyson Bagent"
+        },
+        {
+          "dk_id": "44312221",
+          "player_name": "Case Keenum",
+          "pos_rank": 3,
+          "provider_player_id": "00-0028986",
+          "underlying_id": "CHI|QB|Case Keenum"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "NYJ@CHI",
+      "source_sha256": "0aa15e9feaf8402bd867955351f6ea4c2ef9767468e3a94d438d0331f5714b68",
+      "starter": {
+        "dk_id": "44312204",
+        "player_name": "Caleb Williams",
+        "pos_rank": 1,
+        "provider_player_id": "00-0039918",
+        "underlying_id": "CHI|QB|Caleb Williams"
+      },
+      "team": "CHI",
+      "unlisted": [
+        {
+          "dk_id": "44312243",
+          "player_name": "Miller Moss",
+          "underlying_id": "CHI|QB|Miller Moss"
+        }
+      ]
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312224",
+          "player_name": "Joe Flacco",
+          "pos_rank": 2,
+          "provider_player_id": "00-0026158",
+          "underlying_id": "CIN|QB|Joe Flacco"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "JAX@CIN",
+      "source_sha256": "61eb56741b08b0b544c900e74569d0f08e378744734f0a8d811c9d9fd8f5bda3",
+      "starter": {
+        "dk_id": "44312199",
+        "player_name": "Joe Burrow",
+        "pos_rank": 1,
+        "provider_player_id": "00-0036442",
+        "underlying_id": "CIN|QB|Joe Burrow"
+      },
+      "team": "CIN",
+      "unlisted": [
+        {
+          "dk_id": "44312271",
+          "player_name": "Josh Johnson",
+          "underlying_id": "CIN|QB|Josh Johnson"
+        },
+        {
+          "dk_id": "44312270",
+          "player_name": "Sean Clifford",
+          "underlying_id": "CIN|QB|Sean Clifford"
+        }
+      ]
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312237",
+          "player_name": "Sam Howell",
+          "pos_rank": 2,
+          "provider_player_id": "00-0037077",
+          "underlying_id": "DAL|QB|Sam Howell"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "DAL@HOU",
+      "source_sha256": "361f6deb36b83c2748a87c52fa1c3fe6b836eb8734f11daf2efc62b0dc4f5ff1",
+      "starter": {
+        "dk_id": "44312203",
+        "player_name": "Dak Prescott",
+        "pos_rank": 1,
+        "provider_player_id": "00-0033077",
+        "underlying_id": "DAL|QB|Dak Prescott"
+      },
+      "team": "DAL",
+      "unlisted": [
+        {
+          "dk_id": "44312238",
+          "player_name": "Joe Milton III",
+          "underlying_id": "DAL|QB|Joe Milton III"
+        }
+      ]
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312246",
+          "player_name": "Jarrett Stidham",
+          "pos_rank": 2,
+          "provider_player_id": "00-0035264",
+          "underlying_id": "DEN|QB|Jarrett Stidham"
+        },
+        {
+          "dk_id": "44312247",
+          "player_name": "Sam Ehlinger",
+          "pos_rank": 3,
+          "provider_player_id": "00-0036879",
+          "underlying_id": "DEN|QB|Sam Ehlinger"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "DEN@SF",
+      "source_sha256": "bc0db7c2dbff923c53bafeb88bdb2724d4b56542f3915fd7d1394ca3bbd67957",
+      "starter": {
+        "dk_id": "44312210",
+        "player_name": "Bo Nix",
+        "pos_rank": 1,
+        "provider_player_id": "00-0039732",
+        "underlying_id": "DEN|QB|Bo Nix"
+      },
+      "team": "DEN",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312229",
+          "player_name": "Tyrod Taylor",
+          "pos_rank": 2,
+          "provider_player_id": "00-0028118",
+          "underlying_id": "GB|QB|Tyrod Taylor"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "GB@TB",
+      "source_sha256": "1b03439bf1db6e3a350c40fa83d184f954360d9ccecfdcc72fb4ee8923a5a21e",
+      "starter": {
+        "dk_id": "44312208",
+        "player_name": "Jordan Love",
+        "pos_rank": 1,
+        "provider_player_id": "00-0036264",
+        "underlying_id": "GB|QB|Jordan Love"
+      },
+      "team": "GB",
+      "unlisted": [
+        {
+          "dk_id": "44312266",
+          "player_name": "Kedon Slovis",
+          "underlying_id": "GB|QB|Kedon Slovis"
+        }
+      ]
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312239",
+          "player_name": "Davis Mills",
+          "pos_rank": 2,
+          "provider_player_id": "00-0036898",
+          "underlying_id": "HOU|QB|Davis Mills"
+        },
+        {
+          "dk_id": "44312240",
+          "player_name": "Graham Mertz",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040211",
+          "underlying_id": "HOU|QB|Graham Mertz"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "DAL@HOU",
+      "source_sha256": "a5b96b8654e2aab80dd29717466fd150fbdd05334e441f1604d4b10dce2439e7",
+      "starter": {
+        "dk_id": "44312209",
+        "player_name": "C.J. Stroud",
+        "pos_rank": 1,
+        "provider_player_id": "00-0039163",
+        "underlying_id": "HOU|QB|C.J. Stroud"
+      },
+      "team": "HOU",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312267",
+          "player_name": "Quinn Ewers",
+          "pos_rank": 2,
+          "provider_player_id": "00-0040234",
+          "underlying_id": "JAX|QB|Quinn Ewers"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "JAX@CIN",
+      "source_sha256": "a7089aac836080f41e1119cf00bb74cbefcdeab82756310fd4380f59194ea82a",
+      "starter": {
+        "dk_id": "44312207",
+        "player_name": "Trevor Lawrence",
+        "pos_rank": 1,
+        "provider_player_id": "00-0036971",
+        "underlying_id": "JAX|QB|Trevor Lawrence"
+      },
+      "team": "JAX",
+      "unlisted": [
+        {
+          "dk_id": "44312269",
+          "player_name": "Joey Aguilar",
+          "underlying_id": "JAX|QB|Joey Aguilar"
+        },
+        {
+          "dk_id": "44312268",
+          "player_name": "Nick Mullens",
+          "underlying_id": "JAX|QB|Nick Mullens"
+        }
+      ]
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312235",
+          "player_name": "Justin Fields",
+          "pos_rank": 2,
+          "provider_player_id": "00-0036945",
+          "underlying_id": "KC|QB|Justin Fields"
+        },
+        {
+          "dk_id": "44312236",
+          "player_name": "Garrett Nussmeier",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040906",
+          "underlying_id": "KC|QB|Garrett Nussmeier"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "KC@LV",
+      "source_sha256": "0c669acd4e7e9aa4ac0271bd470917dc7e1dc50642ec9d2ff90329adc9d96e17",
+      "starter": {
+        "dk_id": "44312202",
+        "player_name": "Patrick Mahomes",
+        "pos_rank": 1,
+        "provider_player_id": "00-0033873",
+        "underlying_id": "KC|QB|Patrick Mahomes"
+      },
+      "team": "KC",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312232",
+          "player_name": "Trey Lance",
+          "pos_rank": 2,
+          "provider_player_id": "00-0037012",
+          "underlying_id": "LAC|QB|Trey Lance"
+        },
+        {
+          "dk_id": "44312233",
+          "player_name": "DJ Uiagalelei",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040464",
+          "underlying_id": "LAC|QB|DJ Uiagalelei"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "LAC@SEA",
+      "source_sha256": "16bcbc308bb6babddb7b2dcef30dc60292b771b8654ce286a9841c5b9f561ff4",
+      "starter": {
+        "dk_id": "44312212",
+        "player_name": "Justin Herbert",
+        "pos_rank": 1,
+        "provider_player_id": "00-0036355",
+        "underlying_id": "LAC|QB|Justin Herbert"
+      },
+      "team": "LAC",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312225",
+          "player_name": "Fernando Mendoza",
+          "pos_rank": 2,
+          "provider_player_id": "00-0041562",
+          "underlying_id": "LV|QB|Fernando Mendoza"
+        },
+        {
+          "dk_id": "44312234",
+          "player_name": "Aidan O'Connell",
+          "pos_rank": 3,
+          "provider_player_id": "00-0038579",
+          "underlying_id": "LV|QB|Aidan O'Connell"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "KC@LV",
+      "source_sha256": "53f24bdb5197b25063e710932bf6193ee2dc6e32d8c3d0af6e17b346557540ae",
+      "starter": {
+        "dk_id": "44312216",
+        "player_name": "Kirk Cousins",
+        "pos_rank": 1,
+        "provider_player_id": "00-0029604",
+        "underlying_id": "LV|QB|Kirk Cousins"
+      },
+      "team": "LV",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312249",
+          "player_name": "Kyle McCord",
+          "pos_rank": 2,
+          "provider_player_id": "00-0040014",
+          "underlying_id": "MIA|QB|Kyle McCord"
+        },
+        {
+          "dk_id": "44312250",
+          "player_name": "Brady Cook",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040398",
+          "underlying_id": "MIA|QB|Brady Cook"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "MIA@MIN",
+      "source_sha256": "10f0797589eb2f80999bf0bfbfbccef65df974510eea516094ea13c1d675b5e1",
+      "starter": {
+        "dk_id": "44312218",
+        "player_name": "Malik Willis",
+        "pos_rank": 1,
+        "provider_player_id": "00-0038128",
+        "underlying_id": "MIA|QB|Malik Willis"
+      },
+      "team": "MIA",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312227",
+          "player_name": "Carson Wentz",
+          "pos_rank": 2,
+          "provider_player_id": "00-0032950",
+          "underlying_id": "MIN|QB|Carson Wentz"
+        },
+        {
+          "dk_id": "44312248",
+          "player_name": "Max Brosmer",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040494",
+          "underlying_id": "MIN|QB|Max Brosmer"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "MIA@MIN",
+      "source_sha256": "0f90c1132c4757be1173539528147d88b6356a9511e7f23ad3f84fad69356128",
+      "starter": {
+        "dk_id": "44312213",
+        "player_name": "Kyler Murray",
+        "pos_rank": 1,
+        "provider_player_id": "00-0035228",
+        "underlying_id": "MIN|QB|Kyler Murray"
+      },
+      "team": "MIN",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312272",
+          "player_name": "Tommy DeVito",
+          "pos_rank": 2,
+          "provider_player_id": "00-0038476",
+          "underlying_id": "NE|QB|Tommy DeVito"
+        },
+        {
+          "dk_id": "44312273",
+          "player_name": "Behren Morton",
+          "pos_rank": 3,
+          "provider_player_id": "00-0041123",
+          "underlying_id": "NE|QB|Behren Morton"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "NE@BUF",
+      "source_sha256": "734825046462598ffd1819555e958a18d4dd383d77361992f38a846957bbc9b2",
+      "starter": {
+        "dk_id": "44312206",
+        "player_name": "Drake Maye",
+        "pos_rank": 1,
+        "provider_player_id": "00-0039851",
+        "underlying_id": "NE|QB|Drake Maye"
+      },
+      "team": "NE",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312228",
+          "player_name": "J.J. McCarthy",
+          "pos_rank": 2,
+          "provider_player_id": "00-0039923",
+          "underlying_id": "NYG|QB|J.J. McCarthy"
+        },
+        {
+          "dk_id": "44312253",
+          "player_name": "Jake Haener",
+          "pos_rank": 3,
+          "provider_player_id": "00-0038998",
+          "underlying_id": "NYG|QB|Jake Haener"
+        },
+        {
+          "dk_id": "44312230",
+          "player_name": "Jaxson Dart",
+          "pos_rank": 4,
+          "provider_player_id": "00-0040691",
+          "underlying_id": "NYG|QB|Jaxson Dart"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "ARI@NYG",
+      "source_sha256": "475bcc2c5772c4455382f3c9816584dee09f1c00317d768e1abf701a98b612d3",
+      "starter": {
+        "dk_id": "44312222",
+        "player_name": "Jameis Winston",
+        "pos_rank": 1,
+        "provider_player_id": "00-0031503",
+        "underlying_id": "NYG|QB|Jameis Winston"
+      },
+      "team": "NYG",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312241",
+          "player_name": "Cade Klubnik",
+          "pos_rank": 2,
+          "provider_player_id": "00-0041056",
+          "underlying_id": "NYJ|QB|Cade Klubnik"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "NYJ@CHI",
+      "source_sha256": "c495de91c2648ab128e6faf44da97dc10503adc5c7ec7af1dff271f61fd303b0",
+      "starter": {
+        "dk_id": "44312215",
+        "player_name": "Geno Smith",
+        "pos_rank": 1,
+        "provider_player_id": "00-0030565",
+        "underlying_id": "NYJ|QB|Geno Smith"
+      },
+      "team": "NYJ",
+      "unlisted": [
+        {
+          "dk_id": "44312242",
+          "player_name": "Will Levis",
+          "underlying_id": "NYJ|QB|Will Levis"
+        }
+      ]
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312255",
+          "player_name": "Tanner McKee",
+          "pos_rank": 2,
+          "provider_player_id": "00-0038400",
+          "underlying_id": "PHI|QB|Tanner McKee"
+        },
+        {
+          "dk_id": "44312254",
+          "player_name": "Andy Dalton",
+          "pos_rank": 3,
+          "provider_player_id": "00-0027973",
+          "underlying_id": "PHI|QB|Andy Dalton"
+        },
+        {
+          "dk_id": "44312256",
+          "player_name": "Cole Payton",
+          "pos_rank": 4,
+          "provider_player_id": "00-0040891",
+          "underlying_id": "PHI|QB|Cole Payton"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "LAR@PHI",
+      "source_sha256": "61161e485db435e21b74da70d5cca6da6421f120e2c285d34a650477bb8f96d3",
+      "starter": {
+        "dk_id": "44312201",
+        "player_name": "Jalen Hurts",
+        "pos_rank": 1,
+        "provider_player_id": "00-0036389",
+        "underlying_id": "PHI|QB|Jalen Hurts"
+      },
+      "team": "PHI",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312226",
+          "player_name": "Drew Lock",
+          "pos_rank": 2,
+          "provider_player_id": "00-0035704",
+          "underlying_id": "SEA|QB|Drew Lock"
+        },
+        {
+          "dk_id": "44312231",
+          "player_name": "Jalen Milroe",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040673",
+          "underlying_id": "SEA|QB|Jalen Milroe"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "LAC@SEA",
+      "source_sha256": "afd08d1feb36a96bbfa1dc42e57d6232a5a0352eb0c05c3e6dad54833d17bba2",
+      "starter": {
+        "dk_id": "44312211",
+        "player_name": "Sam Darnold",
+        "pos_rank": 1,
+        "provider_player_id": "00-0034869",
+        "underlying_id": "SEA|QB|Sam Darnold"
+      },
+      "team": "SEA",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312244",
+          "player_name": "Mac Jones",
+          "pos_rank": 2,
+          "provider_player_id": "00-0036972",
+          "underlying_id": "SF|QB|Mac Jones"
+        },
+        {
+          "dk_id": "44312245",
+          "player_name": "Kurtis Rourke",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040589",
+          "underlying_id": "SF|QB|Kurtis Rourke"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "DEN@SF",
+      "source_sha256": "d655a192b7a45b6021e264e3e39e7fd31fdad1999fcc8c9bd9e09774a9a99a76",
+      "starter": {
+        "dk_id": "44312200",
+        "player_name": "Brock Purdy",
+        "pos_rank": 1,
+        "provider_player_id": "00-0037834",
+        "underlying_id": "SF|QB|Brock Purdy"
+      },
+      "team": "SF",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312223",
+          "player_name": "Jalon Daniels",
+          "pos_rank": 2,
+          "provider_player_id": "00-0041251",
+          "underlying_id": "TB|QB|Jalon Daniels"
+        },
+        {
+          "dk_id": "44312265",
+          "player_name": "Easton Stick",
+          "pos_rank": 3,
+          "provider_player_id": "00-0035282",
+          "underlying_id": "TB|QB|Easton Stick"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "GB@TB",
+      "source_sha256": "1a7136b0b1fc98d54d866e07a97052be098225333763b466efb325559e04a465",
+      "starter": {
+        "dk_id": "44312214",
+        "player_name": "Baker Mayfield",
+        "pos_rank": 1,
+        "provider_player_id": "00-0034855",
+        "underlying_id": "TB|QB|Baker Mayfield"
+      },
+      "team": "TB",
+      "unlisted": [
+        {
+          "dk_id": "44361599",
+          "player_name": "Brett Rypien",
+          "underlying_id": "TB|QB|Brett Rypien"
+        }
+      ]
+    },
+    {
+      "backups": [
+        {
+          "dk_id": "44312263",
+          "player_name": "Mitchell Trubisky",
+          "pos_rank": 2,
+          "provider_player_id": "00-0033869",
+          "underlying_id": "TEN|QB|Mitchell Trubisky"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "TEN@BAL",
+      "source_sha256": "144982b6641eb464129d56d3648691e5f9737f93656912ef9bd5e8670d8f4a34",
+      "starter": {
+        "dk_id": "44312220",
+        "player_name": "Cam Ward",
+        "pos_rank": 1,
+        "provider_player_id": "00-0040676",
+        "underlying_id": "TEN|QB|Cam Ward"
+      },
+      "team": "TEN",
+      "unlisted": [
+        {
+          "dk_id": "44312264",
+          "player_name": "Hendon Hooker",
+          "underlying_id": "TEN|QB|Hendon Hooker"
+        }
+      ]
+    }
+  ],
+  "game_ids": [
+    "ARI@NYG",
+    "DAL@HOU",
+    "DEN@SF",
+    "GB@TB",
+    "JAX@CIN",
+    "KC@LV",
+    "LAC@SEA",
+    "LAR@PHI",
+    "MIA@MIN",
+    "NE@BUF",
+    "NYJ@CHI",
+    "TEN@BAL"
+  ],
+  "salary_sha256": "085f9ff8a224744c002d2f712b11748fcb7f8f11e46e5439510aaede77c8552a",
+  "schema_version": "nfl_qb_depth_role_evidence_v1",
+  "sources": [
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/98ca62d207cafcb817b9a31d56889edb7695541b8113a7adca9f445b2cba595a.csv",
+      "sha256": "98ca62d207cafcb817b9a31d56889edb7695541b8113a7adca9f445b2cba595a",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,ARI,Jacoby Brissett,2578570,00-0033119,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,ARI,Gardner Minshew II,4038524,00-0035289,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,ARI,Carson Beck,4430841,00-0041561,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/d5eaff3db4d2bd483cc990834296630bdb6d50f7e30e29bfdb0651c1dab5541e.csv",
+      "sha256": "d5eaff3db4d2bd483cc990834296630bdb6d50f7e30e29bfdb0651c1dab5541e",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,BAL,Lamar Jackson,3916387,00-0034796,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,BAL,Tyler Huntley,4035671,00-0035993,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,BAL,Joe Fagnano,4429582,00-0040981,21,3WR 1TE,8,Quarterback,QB,9,3\n2026-10-04T13:09:16Z,BAL,Skylar Thompson,4036419,00-0037327,21,3WR 1TE,8,Quarterback,QB,9,4\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/59a9cc93a0650d8165ac9379d5022d16ad2fd625df2c42d227344dead796fdd8.csv",
+      "sha256": "59a9cc93a0650d8165ac9379d5022d16ad2fd625df2c42d227344dead796fdd8",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,BUF,Josh Allen,3918298,00-0034857,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,BUF,Kyle Allen,3115293,00-0034577,21,3WR 1TE,8,Quarterback,QB,9,2\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/0aa15e9feaf8402bd867955351f6ea4c2ef9767468e3a94d438d0331f5714b68.csv",
+      "sha256": "0aa15e9feaf8402bd867955351f6ea4c2ef9767468e3a94d438d0331f5714b68",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,CHI,Caleb Williams,4431611,00-0039918,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,CHI,Tyson Bagent,4434153,00-0038416,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,CHI,Case Keenum,15168,00-0028986,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/61eb56741b08b0b544c900e74569d0f08e378744734f0a8d811c9d9fd8f5bda3.csv",
+      "sha256": "61eb56741b08b0b544c900e74569d0f08e378744734f0a8d811c9d9fd8f5bda3",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,CIN,Joe Burrow,3915511,00-0036442,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,CIN,Joe Flacco,11252,00-0026158,21,3WR 1TE,8,Quarterback,QB,9,2\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/361f6deb36b83c2748a87c52fa1c3fe6b836eb8734f11daf2efc62b0dc4f5ff1.csv",
+      "sha256": "361f6deb36b83c2748a87c52fa1c3fe6b836eb8734f11daf2efc62b0dc4f5ff1",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,DAL,Dak Prescott,2577417,00-0033077,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,DAL,Sam Howell,4426875,00-0037077,21,3WR 1TE,8,Quarterback,QB,9,2\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/bc0db7c2dbff923c53bafeb88bdb2724d4b56542f3915fd7d1394ca3bbd67957.csv",
+      "sha256": "bc0db7c2dbff923c53bafeb88bdb2724d4b56542f3915fd7d1394ca3bbd67957",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,DEN,Bo Nix,4426338,00-0039732,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,DEN,Jarrett Stidham,3892775,00-0035264,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,DEN,Sam Ehlinger,4241820,00-0036879,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/1b03439bf1db6e3a350c40fa83d184f954360d9ccecfdcc72fb4ee8923a5a21e.csv",
+      "sha256": "1b03439bf1db6e3a350c40fa83d184f954360d9ccecfdcc72fb4ee8923a5a21e",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,GB,Jordan Love,4036378,00-0036264,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,GB,Tyrod Taylor,14163,00-0028118,21,3WR 1TE,8,Quarterback,QB,9,2\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/a5b96b8654e2aab80dd29717466fd150fbdd05334e441f1604d4b10dce2439e7.csv",
+      "sha256": "a5b96b8654e2aab80dd29717466fd150fbdd05334e441f1604d4b10dce2439e7",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,HOU,C.J. Stroud,4432577,00-0039163,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,HOU,Davis Mills,4242546,00-0036898,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,HOU,Graham Mertz,4426335,00-0040211,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/a7089aac836080f41e1119cf00bb74cbefcdeab82756310fd4380f59194ea82a.csv",
+      "sha256": "a7089aac836080f41e1119cf00bb74cbefcdeab82756310fd4380f59194ea82a",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,JAX,Trevor Lawrence,4360310,00-0036971,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,JAX,Quinn Ewers,4889929,00-0040234,21,3WR 1TE,8,Quarterback,QB,9,2\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/0c669acd4e7e9aa4ac0271bd470917dc7e1dc50642ec9d2ff90329adc9d96e17.csv",
+      "sha256": "0c669acd4e7e9aa4ac0271bd470917dc7e1dc50642ec9d2ff90329adc9d96e17",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,KC,Patrick Mahomes,3139477,00-0033873,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,KC,Justin Fields,4362887,00-0036945,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,KC,Garrett Nussmeier,4567747,00-0040906,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/16bcbc308bb6babddb7b2dcef30dc60292b771b8654ce286a9841c5b9f561ff4.csv",
+      "sha256": "16bcbc308bb6babddb7b2dcef30dc60292b771b8654ce286a9841c5b9f561ff4",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,LAC,Justin Herbert,4038941,00-0036355,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,LAC,Trey Lance,4383351,00-0037012,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,LAC,DJ Uiagalelei,4429020,00-0040464,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/53f24bdb5197b25063e710932bf6193ee2dc6e32d8c3d0af6e17b346557540ae.csv",
+      "sha256": "53f24bdb5197b25063e710932bf6193ee2dc6e32d8c3d0af6e17b346557540ae",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,LV,Kirk Cousins,14880,00-0029604,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,LV,Fernando Mendoza,4837248,00-0041562,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,LV,Aidan O'Connell,4260394,00-0038579,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/10f0797589eb2f80999bf0bfbfbccef65df974510eea516094ea13c1d675b5e1.csv",
+      "sha256": "10f0797589eb2f80999bf0bfbfbccef65df974510eea516094ea13c1d675b5e1",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,MIA,Malik Willis,4242512,00-0038128,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,MIA,Kyle McCord,4433971,00-0040014,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,MIA,Brady Cook,4429435,00-0040398,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/0f90c1132c4757be1173539528147d88b6356a9511e7f23ad3f84fad69356128.csv",
+      "sha256": "0f90c1132c4757be1173539528147d88b6356a9511e7f23ad3f84fad69356128",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,MIN,Kyler Murray,3917315,00-0035228,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,MIN,Carson Wentz,2573079,00-0032950,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,MIN,Max Brosmer,4573398,00-0040494,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/734825046462598ffd1819555e958a18d4dd383d77361992f38a846957bbc9b2.csv",
+      "sha256": "734825046462598ffd1819555e958a18d4dd383d77361992f38a846957bbc9b2",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,NE,Drake Maye,4431452,00-0039851,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,NE,Tommy DeVito,4240391,00-0038476,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,NE,Behren Morton,4431465,00-0041123,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/475bcc2c5772c4455382f3c9816584dee09f1c00317d768e1abf701a98b612d3.csv",
+      "sha256": "475bcc2c5772c4455382f3c9816584dee09f1c00317d768e1abf701a98b612d3",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,NYG,Jameis Winston,2969939,00-0031503,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,NYG,J.J. McCarthy,4433970,00-0039923,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,NYG,Jake Haener,4243322,00-0038998,21,3WR 1TE,8,Quarterback,QB,9,3\n2026-10-04T13:09:16Z,NYG,Jaxson Dart,4689114,00-0040691,21,3WR 1TE,8,Quarterback,QB,9,4\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/c495de91c2648ab128e6faf44da97dc10503adc5c7ec7af1dff271f61fd303b0.csv",
+      "sha256": "c495de91c2648ab128e6faf44da97dc10503adc5c7ec7af1dff271f61fd303b0",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,NYJ,Geno Smith,15864,00-0030565,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,NYJ,Cade Klubnik,4685413,00-0041056,21,3WR 1TE,8,Quarterback,QB,9,2\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/61161e485db435e21b74da70d5cca6da6421f120e2c285d34a650477bb8f96d3.csv",
+      "sha256": "61161e485db435e21b74da70d5cca6da6421f120e2c285d34a650477bb8f96d3",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,PHI,Jalen Hurts,4040715,00-0036389,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,PHI,Tanner McKee,4685201,00-0038400,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,PHI,Andy Dalton,14012,00-0027973,21,3WR 1TE,8,Quarterback,QB,9,3\n2026-10-04T13:09:16Z,PHI,Cole Payton,4879250,00-0040891,21,3WR 1TE,8,Quarterback,QB,9,4\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/afd08d1feb36a96bbfa1dc42e57d6232a5a0352eb0c05c3e6dad54833d17bba2.csv",
+      "sha256": "afd08d1feb36a96bbfa1dc42e57d6232a5a0352eb0c05c3e6dad54833d17bba2",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,SEA,Sam Darnold,3912547,00-0034869,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,SEA,Drew Lock,3924327,00-0035704,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,SEA,Jalen Milroe,4432734,00-0040673,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/d655a192b7a45b6021e264e3e39e7fd31fdad1999fcc8c9bd9e09774a9a99a76.csv",
+      "sha256": "d655a192b7a45b6021e264e3e39e7fd31fdad1999fcc8c9bd9e09774a9a99a76",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,SF,Brock Purdy,4361741,00-0037834,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,SF,Mac Jones,4241464,00-0036972,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,SF,Kurtis Rourke,4430431,00-0040589,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/1a7136b0b1fc98d54d866e07a97052be098225333763b466efb325559e04a465.csv",
+      "sha256": "1a7136b0b1fc98d54d866e07a97052be098225333763b466efb325559e04a465",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,TB,Baker Mayfield,3052587,00-0034855,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,TB,Jalon Daniels,4596472,00-0041251,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,TB,Easton Stick,3120590,00-0035282,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T16:21:00.175572+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/144982b6641eb464129d56d3648691e5f9737f93656912ef9bd5e8670d8f4a34.csv",
+      "sha256": "144982b6641eb464129d56d3648691e5f9737f93656912ef9bd5e8670d8f4a34",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,TEN,Cam Ward,4688380,00-0040676,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,TEN,Mitchell Trubisky,3039707,00-0033869,21,3WR 1TE,8,Quarterback,QB,9,2\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    }
+  ],
+  "transformation_version": "qb_depth_chart_order_v2"
+}

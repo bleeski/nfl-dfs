@@ -1,0 +1,23 @@
+{
+  "schema": "nfl_dfs_thesis_portfolio_config_v1",
+  "seeds": [913, 4401],
+  "lineups_per_thesis_multiplier": 3,
+  "global": {"max_exposure": 13, "max_overlap": 5, "per_thesis_qb_cap": 3},
+  "flat_team_total": 22.5,
+  "theses": [
+    {"name": "MARKET_ALL", "quota": 10, "team_totals": "market"},
+    {"name": "JAX_CIN_SHOOTOUT", "quota": 6, "team_totals": "market",
+     "restrict_qb_teams": ["JAX", "CIN"],
+     "score_multipliers": {"JAX": {"WR": 1.2, "TE": 1.15}, "CIN": {"WR": 1.1}}},
+    {"name": "BUF_NE", "quota": 5, "team_totals": "market", "restrict_qb_teams": ["BUF", "NE"]},
+    {"name": "LAR_PHI_DEPLETED_SECONDARIES", "quota": 5, "team_totals": "market",
+     "restrict_qb_teams": ["LAR", "PHI"],
+     "score_multipliers": {"PHI": {"WR": 1.35, "TE": 1.5}, "LAR": {"WR": 1.1}}},
+    {"name": "DAL_HOU", "quota": 5, "team_totals": "market", "restrict_qb_teams": ["DAL", "HOU"]},
+    {"name": "LATE_WINDOW_QBS", "quota": 5, "team_totals": "market",
+     "restrict_qb_teams": ["KC", "SF", "DEN", "SEA", "LV"]},
+    {"name": "BACKUP_QB_LEVERAGE", "quota": 3, "team_totals": "market",
+     "restrict_qb_teams": ["CHI", "NYG", "TB", "MIA"],
+     "exclude_dst_unless_teams": ["GB", "NYJ", "MIN", "ARI", "BAL", "BUF", "CIN", "HOU", "SF", "KC", "SEA"]}
+  ]
+}
