@@ -4,6 +4,48 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: Week 4 afternoon Classic slate (7 entries, 4 contests, 4 games)
+
+Inputs, committed under `data/inbox/slates/wk4-afternoon-2026-10-04/`:
+
+    salary  a4d55780d3cda65854c32c9c6abff5a368f1cf602d1fe272a3283c2843dafeb0
+    entries 6edc179b923279d88c406a532d1443b09018958a95086209a8401bdccea2423a
+
+Clock: request at 19:45Z, lock 20:05Z (MIA@MIN), delivery deadline 20:00Z;
+file delivered 19:49Z.
+
+- `.venv-linux` absent again; `setup` took about a minute, run in the
+  background while the inputs were snapshotted.
+- Run `20261004T194617Z-wk4-afternoon` (`--build-priors`):
+  `PRIOR_REVIEW_IDENTITY_BLOCKED` on Audric Estime (`44361643`, MIN RB),
+  the same person as the morning slate under a new DK ID. Reviewed crosswalk
+  `identity_reviewed_wk4pm.csv` (`ce500a04…4a01`, ACCEPT `00-0039373`), then
+  `priors-freeze` to `data/runs/wk4pm-priors-frozen`.
+- Run `20261004T194724Z-wk4-afternoon-r2` (`--prior-package-dir`): EXPORT,
+  C1 file `b0a9a372…6c28`, 7 of 7, `FILE_VALID=true`,
+  `EVIDENCE_STATE=UNKNOWN`. No QB depth package was built (clock).
+- Judgment pass, by recorded construction swap
+  (`construction/qb_fix_record.py`): Justin Fields, KC's backup QB, replaced
+  by Kirk Cousins (LV starter per the morning depth package and press
+  previews); three DST-versus-opponent conflicts removed (Seahawks DST to
+  Vikings and to 49ers in the two rows holding Chargers; Greg Dulcich to
+  Michael Mayer in the row holding the Vikings DST). QA Tier 2 before and
+  after: dst_vs_own_skill 3 to 0, distinct 36 to 37, overlap mean 1.29 to
+  1.24, max exposure 2/7, stacked and bring-back 7/7.
+- Delivered `DK_REVIEW_ENTRY_wk4_afternoon_FINAL.csv`, `0c0e9f6b…f032`, 7 of
+  7, header identical to the template, QA Tier 1 PASS.
+  `PRIOR_ONLY / DO_NOT_UPLOAD`. Official inactive lists for all eight teams
+  (NFL.com, modified 19:08Z) checked by hand: no rostered player listed.
+  Late-swap watch: Mike Evans (SF, ribs, game-time decision, active) rows 2
+  and 7; Ladd McConkey (LAC, foot, active) rows 3 and 6. Not supplied: official
+  activity as evidence, weather (DEN@SF, LAC@SEA `UNOBSERVED`), ownership.
+- What would have made it better: (1) a reviewed identity decision keyed on
+  the provider ID should carry across draft groups, so the same Estime
+  variant does not block a second slate the same day; (2) the C1 export
+  rosters a backup QB and pairs a DST with opposing skill players, both of
+  which the judgment pass then fixes by hand. Both are covered by the queued
+  judgment-layer sessions (60 to 62) and the depth package; no new card.
+
 ### 2026-10-04: R37 recorded -- the judgment layer, Pareto redeploy, late windows (Sessions 60 to 62 added)
 
 Ben, after the Week 4 Classic slate: capture the judgment discipline so it can go into the engine "and I don't need to steer so
