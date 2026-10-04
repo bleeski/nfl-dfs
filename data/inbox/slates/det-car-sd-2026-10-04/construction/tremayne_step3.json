@@ -1,0 +1,50 @@
+{
+  "tool": "showdown_value_add_v1",
+  "person": {
+    "dk_id": "44358470",
+    "name": "Brycen Tremayne",
+    "team": "CAR",
+    "position": "WR",
+    "slot_rows_used": "FLEX"
+  },
+  "requested": 1,
+  "swapped": 1,
+  "shortfall": 0,
+  "swaps": [
+    {
+      "entry_id": "5283425650",
+      "slot": "FLEX 5",
+      "removed_dk_id": "44358471",
+      "removed": "Tommy Tremble",
+      "removed_score": 4.295115114407589
+    }
+  ],
+  "already_holds": [
+    "5283425875",
+    "5283426229"
+  ],
+  "skipped": {},
+  "order": "scores",
+  "after": {
+    "filled_rows": 28,
+    "rows_holding_person": 3,
+    "most_shared_person": [
+      "Jahmyr Gibbs",
+      16
+    ],
+    "most_frequent_captain": [
+      "Jahmyr Gibbs",
+      5
+    ]
+  },
+  "salary_sha256": "aeb2928372870a42e6077e6077b469f397da424da77668f012c437f2d37e1a02",
+  "template_sha256": "dabcc1f370d5338e69ae0603364538a1513d088fe93e95913512050226ee4604",
+  "review_sha256": "99286532a252e28f9b80b33a1c7d2c56d4fce72ba3f21170d191d57a004cb3e4",
+  "scores_sha256": "90cf51f05817990b2f43e2283d9d137d56c8cec8fa3a6e7e60ab530bfd083584",
+  "theses_sha256": null,
+  "out": "data/inbox/slates/det-car-sd-2026-10-04/construction/tremayne_step3.csv",
+  "out_sha256": "44b43b768d4df4136078b063aeea7834c6d4d1efc3e0745ce3d76f007919b38d",
+  "LIMITATION": "Brycen Tremayne adds 0 prior points by construction: no projection was written, and his evidence gate (official activity, current role) stays unmet. MODEL_STATUS=PRIOR_ONLY, RELEASE_DECISION=DO_NOT_UPLOAD.",
+  "MODEL_STATUS": "PRIOR_ONLY",
+  "RELEASE_DECISION": "DO_NOT_UPLOAD"
+}

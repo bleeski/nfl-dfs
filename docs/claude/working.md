@@ -81,8 +81,12 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   hand (replace the most shared row, check distinctness and overlap with `qa_showdown_portfolio.py`) before the handoff, unless the
   selectable pool cannot meet them, and then say so with the pool size. The defaults are mine to set under the lock-clock ruling and
   Ben's to overturn.
-- **Order.** Do both before the first handoff message, with the clock measured. A lock inside five minutes ships what is built
-  and names both gaps.
+- **Practice-squad punts (DET@CAR, 2026-10-04).** A practice-squad player who was not elevated cannot play, and no inactive list
+  names him, so a blank DraftKings status and an old-team prior keep him selectable. Check every rostered player under about $1,000
+  against the team's elevations for the game (the club's Saturday transaction post); exclude any who was not elevated with
+  `--exclude <CPT id> --exclude <FLEX id>` on a `--request` rerun. Casey Washington ($200) was in 7 of 28 rows before this check.
+- **Order.** Do all three before the first handoff message, with the clock measured. A lock inside five minutes ships what is
+  built and names the gaps.
 
 ## Classic judgment pass (Ben, 2026-10-04, R37; the Showdown correction, made again for Classic)
 

@@ -4,6 +4,37 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: DET@CAR Sunday night Showdown (28 entries, 6 contests)
+
+Inputs, committed under `data/inbox/slates/det-car-sd-2026-10-04/input/`:
+
+    salary  aeb2928372870a42e6077e6077b469f397da424da77668f012c437f2d37e1a02
+    entries dabcc1f370d5338e69ae0603364538a1513d088fe93e95913512050226ee4604
+
+Clock: request at 23:37Z, lock 00:20Z, delivery deadline 00:15Z; file delivered 23:44Z.
+
+- `.venv-linux` absent; `setup` took 9 s. Probe: every allowlisted host reachable, `CAN_COMPLETE_A_RUN`.
+- QB depth package (`roles/qb_depth_roles.json`, nflverse `dt` 2026-10-04T13:09Z): starters Goff and Young; backups Dobbs, Pickett,
+  King; Altmyer unlisted.
+- Run `20261004T233948Z-det-car-sd` (`--build-priors`, depth package): EXPORT in about 25 s, rung `DEFAULT`, concentration
+  `AS_REQUESTED`, 28 of 28, QA PASS. Casey Washington (CAR WR, $200) in 7 of 28 rows.
+- Research: the official inactive lists (DET: Bartch, Conklin, B. Fitzgerald, Hassanein, D. White, Wingo; CAR: Sanders, H. King,
+  Coker, D. Lewis, Reese, C. Jackson) match DraftKings' `OUT` tags for every skill player. Washington is on Carolina's practice squad
+  and was not elevated (Carolina elevated Ja'Seem Reed and Robert Rochell), so he cannot play.
+- Run `20261004T234208Z-det-car-sd-r2` (`--request`, frozen priors, `--exclude` both Washington IDs): EXPORT, `DEFAULT`, `AS_REQUESTED`,
+  28 of 28.
+- Judgment pass: Coker's workload went to McMillan in proportion to prior share (Session 60), so Brycen Tremayne, the reported No. 2
+  receiver tonight, kept his old prior and was in no row. Placed in three rows by `showdown_value_add.py --entry-id`
+  (`construction/tremayne_step{1,2,3}.json`): 5283425875 and 5283426229 replace Mitchell Evans, 5283425650 replaces Tommy Tremble.
+  The `--count 3 --scores` pass would have taken John Metchie's only row; the per-row passes kept him.
+- Delivered `construction/DK_REVIEW_ENTRY_det-car-sd_final.csv`, `44b43b76…b38d`. QA: 0 defects, 0 limit breaches, max overlap 4,
+  salary 48,700 to 50,000, 8 distinct Captains (Gibbs, Goff, St. Brown 5 each; Waller, McMillan 4; Young, LaPorta 2; Hubbard 1), six
+  people at 16 of 28 (Gibbs, Waller, McMillan, Young, Goff, LaPorta). No DST rostered. `PRIOR_ONLY / DO_NOT_UPLOAD`. Not supplied:
+  official activity as evidence, weather (`UNOBSERVED`), ownership.
+- What would have made it better: a practice-squad check. A non-elevated practice-squad player appears on no inactive list, so the
+  DraftKings status stays blank and an old-team prior makes him a $200 value. Added to the Showdown judgment pass in
+  `docs/claude/working.md`. An engine fix (an elevation or active-roster source through `sources.py`) is a card for a later session.
+
 ### 2026-10-04: Session 60 -- the injury room moves the workload (R37, P9 part 1)
 
 Branch `claude/s60-injury-room-workload`, from `main` at `f9ed717`; claim commit `ac1838f`. Class P (model quality). R29 is untouched
