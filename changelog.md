@@ -49,6 +49,17 @@ Clock: request at 23:37Z, lock 00:20Z, delivery deadline 00:15Z; file delivered 
   endings failed QA parsing (0 lineups read) and was discarded: write a DraftKings CSV with the template's line endings.
 - Finding for the engine: `within_contest_diversity_v1` scores a contest by worst pair plus mean pair, so it can trade away a Captain
   for a lower mean. A no-worse-on-every-measure acceptance rule would have caught it. Candidate card, not filed tonight.
+- Ruling (Ben, 23:56Z): "Err on side of trying to win large prizes if at odds with minimizing the washout factor." Ceiling pass on v3
+  (`construction/ceiling_pass_record.py`, record `DK_REVIEW_ENTRY_det-car-sd_final_v4_record.json`). Phase 1 puts each WR/TE Captain
+  with his own starting QB; phase 2 takes FLEX swaps raising a row's prior by 1.0 or more (person cap 21 of 28, overlap 4, Captains,
+  phase-1 QBs and Tremayne held); phase 3 retries the QB fix at overlap 5. 21 moves. Before to after: prior total 2,699.92 to
+  2,754.79, lowest row 78.39 to 85.88, pass-catcher Captains without their QB 8 to 0, zero-QB rows 3 to 2, two-kicker rows 1 to 0;
+  max exposure 16 to 21 (McMillan and Goff), mean pair overlap 2.7275 to 3.0926, max pair overlap 4 to 5 (three pairs), people 17
+  to 16 (Metchie out), Hubbard 8 to 3 rows. Captains unchanged (8, max 5). Then three whole-lineup contest swaps that worsen no
+  contest measure (`pareto_reassignment_record.v5.json`): Dime Package same-Captain pairs 20 to 19, mean shared 3.053 to 2.989,
+  pairs sharing 4 66 to 58. Delivered `construction/DK_REVIEW_ENTRY_det-car-sd_final_v5.csv`, `855e3431…4bc2`, QA PASS at
+  `--max-overlap 5` (at 4: the three named pairs). `PRIOR_ONLY / DO_NOT_UPLOAD`; leverage unmeasured (no ownership), and McMillan
+  and Goff at 75% is the likeliest chalk. The tie-break is now in `docs/claude/working.md` and `.claude/rules/slate-operation.md`.
 
 ### 2026-10-04: Session 60 -- the injury room moves the workload (R37, P9 part 1)
 

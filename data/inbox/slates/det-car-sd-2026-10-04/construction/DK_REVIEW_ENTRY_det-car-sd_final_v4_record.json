@@ -1,0 +1,230 @@
+{
+ "ruling": "Ben 2026-10-04: err on the side of large prizes when at odds with minimizing washouts",
+ "rules": "Large-prize pass (Ben 2026-10-04: err toward large prizes when they conflict with washouts).\nPhase 1: every WR/TE Captain row holds its own team's starting QB (min prior loss swap).\nPhase 2: greedy FLEX swaps that raise the row prior by >= 1.0, washout allowed to worsen within: person <= 21/28 (0.75),\npair overlap <= 4, Captains untouched, phase-1 QBs kept, Tremayne kept, distinct lineups (R29). Prior points order swaps only.",
+ "before": {
+  "prior_total": 2699.92,
+  "prior_min": 78.39,
+  "max_exposure": 16,
+  "max_captain": 5,
+  "distinct_captains": 8,
+  "distinct_people": 17,
+  "mean_pair_overlap": 2.7275,
+  "max_pair_overlap": 4,
+  "top3_union": 22,
+  "passcatcher_cpt_without_own_qb": 8,
+  "zero_qb_rows": 3,
+  "two_kicker_rows": 1,
+  "exposure": {
+   "Tetairoa McMillan": 16,
+   "Jahmyr Gibbs": 16,
+   "Darren Waller": 16,
+   "Jared Goff": 16,
+   "Sam LaPorta": 16,
+   "Bryce Young": 16,
+   "Jameson Williams": 14,
+   "Amon-Ra St. Brown": 13,
+   "Jake Bates": 12,
+   "Brock Wright": 8
+  }
+ },
+ "after": {
+  "prior_total": 2754.79,
+  "prior_min": 85.88,
+  "max_exposure": 21,
+  "max_captain": 5,
+  "distinct_captains": 8,
+  "distinct_people": 16,
+  "mean_pair_overlap": 3.0926,
+  "max_pair_overlap": 5,
+  "top3_union": 28,
+  "passcatcher_cpt_without_own_qb": 0,
+  "zero_qb_rows": 2,
+  "two_kicker_rows": 0,
+  "exposure": {
+   "Tetairoa McMillan": 21,
+   "Jared Goff": 21,
+   "Darren Waller": 19,
+   "Jahmyr Gibbs": 17,
+   "Sam LaPorta": 16,
+   "Bryce Young": 14,
+   "Jameson Williams": 14,
+   "Jake Bates": 11,
+   "Amon-Ra St. Brown": 9,
+   "Brock Wright": 8
+  }
+ },
+ "moves": [
+  {
+   "phase": 1,
+   "entry_id": "5283426215",
+   "captain": "Sam LaPorta",
+   "result": "NO_FEASIBLE_SWAP"
+  },
+  {
+   "phase": 1,
+   "entry_id": "5283426219",
+   "captain": "Tetairoa McMillan",
+   "result": "NO_FEASIBLE_SWAP"
+  },
+  {
+   "phase": 1,
+   "entry_id": "5283426220",
+   "captain": "Amon-Ra St. Brown",
+   "result": "NO_FEASIBLE_SWAP"
+  },
+  {
+   "phase": 1,
+   "entry_id": "5283426222",
+   "captain": "Tetairoa McMillan",
+   "out": "Jared Goff",
+   "incoming": "Bryce Young",
+   "prior_change": -2.34
+  },
+  {
+   "phase": 1,
+   "entry_id": "5283426226",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Bryce Young",
+   "incoming": "Jared Goff",
+   "prior_change": 2.34
+  },
+  {
+   "phase": 1,
+   "entry_id": "5283426227",
+   "captain": "Tetairoa McMillan",
+   "out": "Amon-Ra St. Brown",
+   "incoming": "Bryce Young",
+   "prior_change": -0.78
+  },
+  {
+   "phase": 1,
+   "entry_id": "5283425650",
+   "captain": "Amon-Ra St. Brown",
+   "result": "NO_FEASIBLE_SWAP"
+  },
+  {
+   "phase": 1,
+   "entry_id": "5283433521",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Bryce Young",
+   "incoming": "Jared Goff",
+   "prior_change": 2.34
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426215",
+   "captain": "Sam LaPorta",
+   "out": "Amon-Ra St. Brown",
+   "incoming": "Jahmyr Gibbs",
+   "prior_change": 15.49
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426216",
+   "captain": "Jahmyr Gibbs",
+   "out": "Chuba Hubbard",
+   "incoming": "Tetairoa McMillan",
+   "prior_change": 3.73
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426220",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Chuba Hubbard",
+   "incoming": "Tetairoa McMillan",
+   "prior_change": 3.73
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426224",
+   "captain": "Bryce Young",
+   "out": "Chuba Hubbard",
+   "incoming": "Tetairoa McMillan",
+   "prior_change": 3.73
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426226",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Chuba Hubbard",
+   "incoming": "Tetairoa McMillan",
+   "prior_change": 3.73
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283425650",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Chuba Hubbard",
+   "incoming": "Tetairoa McMillan",
+   "prior_change": 3.73
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426215",
+   "captain": "Sam LaPorta",
+   "out": "Bryce Young",
+   "incoming": "Jared Goff",
+   "prior_change": 2.34
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426220",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Bryce Young",
+   "incoming": "Jared Goff",
+   "prior_change": 2.34
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426220",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Ryan Fitzgerald",
+   "incoming": "Darren Waller",
+   "prior_change": 3.58
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426224",
+   "captain": "Bryce Young",
+   "out": "Amon-Ra St. Brown",
+   "incoming": "Jared Goff",
+   "prior_change": 1.57
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283426224",
+   "captain": "Bryce Young",
+   "out": "John Metchie III",
+   "incoming": "Darren Waller",
+   "prior_change": 6.46
+  },
+  {
+   "phase": 2,
+   "entry_id": "5283433521",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Jake Bates",
+   "incoming": "Darren Waller",
+   "prior_change": 1.32
+  },
+  {
+   "phase": 3,
+   "entry_id": "5283426219",
+   "captain": "Tetairoa McMillan",
+   "out": "Amon-Ra St. Brown",
+   "incoming": "Bryce Young",
+   "prior_change": -0.78,
+   "max_overlap_used": 5
+  },
+  {
+   "phase": 3,
+   "entry_id": "5283425650",
+   "captain": "Amon-Ra St. Brown",
+   "out": "Bryce Young",
+   "incoming": "Jared Goff",
+   "prior_change": 2.34,
+   "max_overlap_used": 5
+  }
+ ],
+ "source_sha256": "534795ae746a8e1b221357f424c6c955624b4a72c7e998386b60601c3fd7e576",
+ "out_sha256": "4f095ebcc15071632eb0c082b29c09e4123616f8e557a98ee80ad6bb80917aeb"
+}
