@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "2bbe429d-e52c-4aa0-b9b0-2ebf08d329bf",
-      "branch": "claude/s56-concentration-defaults",
-      "chunk": "S56",
-      "claimed_at": "2026-10-04T14:27:38Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
