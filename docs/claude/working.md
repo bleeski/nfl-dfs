@@ -81,19 +81,30 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
 - **Order.** Do both before the first handoff message, with the clock measured. A lock inside five minutes ships what is built
   and names both gaps.
 
-## Classic judgment pass (Ben, 2026-10-04; the Showdown correction, made again for Classic)
+## Classic judgment pass (Ben, 2026-10-04, R37; the Showdown correction, made again for Classic)
 
 Runs on every Classic slate before the handoff, without being asked. Ben: do not blindly exclude players, starting quarterbacks
 above all, because they lack history; do not blindly roster them either. The engine scores only what its history supports, so a
-starter whose role is new today (a promoted backup, a transfer, a rookie, an injury replacement) can sit at or near zero.
+starter whose role is new today (a promoted backup, a transfer, a rookie, an injury replacement) can sit at or near zero. Strategy
+and the engine work that replaces each step: `docs/chunks/P9-judgment-layer.md`, Sessions 60 to 62.
 
 - **Starting quarterbacks first.** Check every depth-chart starter (the QB depth package's `starter`, and the promoted backup of a
-  DraftKings-`OUT` starter) is in the scored pool. One who is not gets rostered by construction or a written reason.
+  DraftKings-`OUT` starter) is in the scored pool. One who is not gets rostered by construction or a written reason. Drop every
+  other quarterback from the thesis pool before building, or the builder rosters a backup.
 - **Then the injury rooms.** For each DraftKings `OUT` or officially inactive starter, name who takes the role (research), find him
   in the pool, and read his prior. A replacement whose prior reflects his old role is a value candidate: place him in a share of
   rows sized to the role and the game, by recorded construction swap (Week 4: `data/inbox/slates/wk4-classic-2026-10-04/
-  construction/manual_add_record.py`), never by writing a number. Then spend any salary the swap freed on the other slots without
-  touching him, and rerun `qa_classic_portfolio.py` on the written file.
+  construction/manual_add_record.py`), never by writing a number, and rerun `qa_classic_portfolio.py` on the written file.
+- **Salary: redeploy only as a Pareto gain; unused salary is fine.** Ben: leaving salary on the table can be strategic; the goal is
+  to find out whether it can buy a gain on both goals at once, not to spend the cap. Take a swap only when it raises the row's
+  prior, leaves the QB, his stack, the bring-back, the DST and every hand-placed person alone, and leaves no washout measure worse
+  (max exposure, top-3 union, mean pairwise overlap no higher; distinct people no fewer). The incoming person used at least 2 fewer
+  times than the outgoing one is a rule that guarantees it (Week 4: `construction/pareto_redeploy_record.py`). Compare QA Tier 2
+  before and after, show both in the handoff, and keep the earlier file when nothing passes. `swap_inactives.py redeploy` ranks by
+  the prior alone and takes hand-placed people back out: do not use it for this until Session 62.
+- **Late windows need no active list at the early lock.** Ben: late swap covers it. Confirm the early-window players against the
+  posted official inactive lists; put every later-window player on a **late-swap watch list** with his DraftKings status (`Q`,
+  illness, a depth-chart call), not under Needs Ben as an open gap.
 - **Say who was passed over and why** in the handoff, alongside who was added. Late-game candidates can wait for late swap.
 
 ## Repo etiquette and gotchas

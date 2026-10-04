@@ -4,6 +4,26 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: R37 recorded -- the judgment layer, Pareto redeploy, late windows (Sessions 60 to 62 added)
+
+Ben, after the Week 4 Classic slate: capture the judgment discipline so it can go into the engine "and I don't need to steer so
+much"; unused salary is fine and can be strategic, and only a Pareto gain on both goals justifies a redeploy; a late window with
+no active list at the early lock is fine, because late swap covers it.
+
+- `docs/ROADMAP.md`: R37 in §2.5; Sessions 60 (score from the redistributed model, so a DK `OUT` starter's vacated share reaches
+  his position room), 61 (the Classic judgment pass inside the run, and a Classic version of Session 52's judgment input) and 62
+  (Pareto-only salary redeploy) added as `Pending` below Session 57, with cards, a §2.8 placement note and a §4 row. Session 57
+  stays first startable, so §1 is unchanged.
+- `docs/chunks/P9-judgment-layer.md`: the strategy, written from the slate. The two goals and their proxies, the three parts, the
+  late-window rule, what the chunk does not do, and acceptance on the committed Week 4 inputs.
+- Found while writing Session 60's card: `prior_review.py:2364` and `cli.py:1932` call `redistribute_opportunity` with
+  `redistribute=False`, although the function's own docstring measures that it understates a promoted survivor and calls the
+  redistributing reading the default. No ruling for `False` turned up (this file, the roadmap, both archives, `git log`); the card
+  has the session confirm that first.
+- `docs/claude/working.md` § Classic judgment pass: the line telling the operator to spend freed salary is replaced by the
+  Pareto-only redeploy rule (no washout measure worse, hand-placed people untouched, unused salary acceptable); the backup-QB
+  removal and the late-swap watch list are added.
+
 ### 2026-10-04: Week 4 Classic slate (39 entries, 11 contests, 12 games)
 
 Inputs, committed under `data/inbox/slates/wk4-classic-2026-10-04/`:
