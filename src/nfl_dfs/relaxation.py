@@ -24,6 +24,14 @@ the `salary_left` band, rung 2 `offense_against_own_dst`, and `max_person_share`
 stays through rung 3, dropped only by rung 4. See `classic_structural_bounds` and
 `docs/DATA_CONTRACTS.md` § C2 v2.
 
+Session 57 (2026-10-02 review F-06, F-07) re-cut what a NEW policy is written with, not what the tables do. The
+generators leave `offense_against_own_dst` open (Classic: `classic_rung_controls`, which writes it only when asked and
+then follows `classic_structural_bounds`, on through rung 1 and off from rung 2; Showdown: `make_showdown_policy.py`) and
+the Showdown generator admits one to two quarterbacks. `classic_structural_bounds` and `SHOWDOWN_RUNGS` stay exactly the
+relaxation tables, so an explicit or a frozen policy relaxes where it always did (rung 2 drops its `offense_against_own_dst`,
+rung 3 its QB-count band) and the Boolean is never read as the DST's opponent; for a policy written with the new defaults
+those drops are no-ops. A construction preference: relaxed or restored on Claude's authority, Ben's to overturn.
+
 WHAT A FAILURE ASKS FOR. The selection's failure status, carried structured on
 `SelectionError` into `reports["selection_failure"]` (never parsed from text),
 picks the step:
@@ -266,8 +274,13 @@ def _exact_decimals(value: object) -> object:
 
 
 def classic_structural_bounds(rung: int) -> ClassicStructuralBounds:
-    """The rung's structural bounds: salary left to $1,000 through rung 0, no offense against
-    an own DST through rung 1."""
+    """The relaxation table's structural bounds at `rung`: salary left to $1,000 through rung 0, no
+    offense against an own DST through rung 1.
+
+    This is the table `classic_relaxed_controls` loosens a policy by, so an explicit or a frozen
+    policy that declares the veto loses it at rung 2 as it always did. It is not what a generated
+    policy is written with: `classic_rung_controls` leaves the veto open unless asked (Session 57).
+    """
 
     return ClassicStructuralBounds(
         StructuralBoundRange(0, CLASSIC_SALARY_LEFT_MAXIMUM) if rung <= 0 else OPEN_RANGE,
@@ -366,14 +379,25 @@ def classic_limits(
     }
 
 
-def classic_rung_controls(slate, count: int, rung: int) -> dict[str, object]:
-    """The generator's controls at `rung`: the table, a bound on every person."""
+def classic_rung_controls(
+    slate, count: int, rung: int, *, offense_against_own_dst: bool = False
+) -> dict[str, object]:
+    """The generator's controls at `rung`: the table, a bound on every person.
 
+    `offense_against_own_dst` (Session 57, review F-06) asks for the veto on a person sharing a
+    rostered DST's team. It is off unless asked: the field contradicts it, so a generated policy
+    leaves it open on every rung. A policy that asks for it follows the table
+    (`classic_structural_bounds`: on through rung 1, off from rung 2), so a rung never tightens it.
+    """
+
+    table = classic_structural_bounds(rung)
+    structural = ClassicStructuralBounds(
+        table.salary_left, offense_against_own_dst and table.offense_against_own_dst)
     controls: dict[str, object] = {
         "stack_rules": classic_stack_rules(count, rung),
         "max_pairwise_person_overlap": min(classic_overlap(rung), ROSTER_SIZE - 1),
         "require_unique_lineups": True,
-        "structural_bounds": classic_structural_bounds(rung).as_mapping(),
+        "structural_bounds": structural.as_mapping(),
         "max_person_share": _json_number(classic_generated_share(count)),
     }
     if classic_exposure_fraction(rung) is not None and count > 2:
