@@ -256,6 +256,11 @@ The versioned review workbook contains:
 - `Upload`: all four release truths, compatibility status, certification basis,
   proposed/final SHA-256, exact CSV path, and operator action.
 
+A Showdown run that supplied no policy also reports `concentration` (Session 56): the registered defaults (no person above 0.60 of
+the lineups, no Captain above 0.20), what was requested and what the delivered file was built under, any relaxation by name, and
+that file's own most-shared person and most frequent Captain recounted from its bytes. `AS_REQUESTED` needs nothing; anything else
+is a named gap to read before the handoff.
+
 Only a green `RELEASE_DECISION=CERTIFIED_UPLOAD_PACKAGE` cell permits
 consideration of manual upload. Recheck the Entry IDs and lineups in DraftKings
 before clicking upload.

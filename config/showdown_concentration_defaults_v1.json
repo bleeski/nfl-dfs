@@ -1,0 +1,40 @@
+{
+  "schema_version": "showdown_concentration_defaults_v1",
+  "registered_at": "2026-10-04",
+  "scope": "SHOWDOWN",
+  "authority": [
+    "R35 (Ben, 2026-10-01): no person above 60% of lineups and no Captain above 20%, the working defaults",
+    "R36 (Ben, 2026-10-01): applied to every Showdown run",
+    "docs/critiques/Code_Review_2026-10-02_Codex.md F-02, accepted into Session 56"
+  ],
+  "defaults": {
+    "person_fraction": "0.60",
+    "captain_fraction": "0.20",
+    "pairwise_person_overlap": 4
+  },
+  "relaxation_steps": [
+    {
+      "name": "CAPS_0_80_0_40",
+      "person_fraction": "0.80",
+      "captain_fraction": "0.40",
+      "applies_to": ["ENGINE_DEFAULT", "POLICY"]
+    },
+    {
+      "name": "CAPS_OFF",
+      "person_fraction": null,
+      "captain_fraction": null,
+      "applies_to": ["POLICY"]
+    }
+  ],
+  "step_notes": {
+    "ENGINE_DEFAULT": "The engine's own default has no step after CAPS_0_80_0_40: its off is rung 4, sequential selection, which keeps a distinct Captain per row until the pool is exhausted. An uncapped joint solve has no Captain differentiation.",
+    "POLICY": "A policy whose default fractions equal the requested pair exactly takes CAPS_OFF (its overrides and structural bounds stay) before structural rung 1. Any other explicit value is the operator's and is not touched by these steps."
+  },
+  "does_not_establish": [
+    "THAT_SIXTY_OR_TWENTY_PERCENT_MAXIMIZES_WINNINGS",
+    "THAT_A_CAPPED_PORTFOLIO_IS_BETTER_THAN_AN_UNCAPPED_ONE",
+    "LINEUP_QUALITY",
+    "UPLOAD_CLEARANCE",
+    "CERTIFICATION"
+  ]
+}

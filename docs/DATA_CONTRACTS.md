@@ -1442,8 +1442,9 @@ treats as its `STRUCTURE` trigger.
 
 `max_person_share` is not a new field: it is exactly
 `max_combined_person_exposure.default_fraction`, the share of entries
-containing one underlying person (Captain or FLEX). Generators default it to
-0.80, the field median among multi-entry portfolios
+containing one underlying person (Captain or FLEX). Generators defaulted it to
+0.80, the field median among multi-entry portfolios, until Session 56; they now read the registered
+0.60 (§ Showdown concentration defaults)
 (`docs/STANDINGS_DUAL_OPTIMIZATION_FINDINGS_2026-09-15.md` §8.1 C). It is
 audited exactly as every other combined-person cap
 (`PORTFOLIO_AUDIT_COMBINED_PERSON_CAP_EXCEEDED`) and reported in every review
@@ -1476,8 +1477,8 @@ pass catchers with him, $1 to $500 left, at most one kicker and one DST,
 `offense_against_own_dst=true`. Kickers and DSTs are never excluded from the
 combined pool by default; `--captain-zero-pos K,DST` only zeroes their Captain
 fraction (they were in 45%/68% and 68%/82% of the top 1% in the graded games).
-`--captain-default` now defaults to 0.4 instead of requiring an explicit value
-(review S7): an unbounded default let the Captain strata and the summed-points
+`--captain-default` defaulted to 0.4 instead of requiring an explicit value
+(review S7; 0.20 since Session 56, from the registered defaults): an unbounded default let the Captain strata and the summed-points
 objective put every entry under one Captain.
 
 These defaults follow the Session 23 card's own line (`docs/ROADMAP.md`
@@ -2938,7 +2939,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `7fa2259162718ee1441e7b231bb3a401c386805d515dc4a1d2a6e54acf096014`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `98f5db6b851fd2c59bf031f6a9410bae4ae0bf99ce7caee2a3b7b2e5e156b01f`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -3346,6 +3347,64 @@ Does not establish: upload clearance, certification, lineup quality, or any EV,
 ROI, win, cash, ownership or edge claim. It says which file to hand over, which
 step made it, and why the other did not.
 
+## Showdown concentration defaults (Session 56, R35)
+
+Registered 2026-10-04 by Session 56 (2026-10-02 review F-02; R35 and R36, Ben, 2026-10-01). `config/showdown_concentration_defaults_v1.json`,
+schema `showdown_concentration_defaults_v1`, loaded and validated by `nfl_dfs.concentration.load_concentration_defaults` (which hashes the
+bytes, refuses any other bytes when given `expected_sha256`, and refuses a file that tightens a step, repeats a name or names an unknown
+target). The file's SHA-256 is pinned in `tests/test_concentration_defaults.py` (`PINNED_SHA256`); v1 is never mutated, a change is a new
+file and a new `schema_version`. A construction preference (class `S`): it is relaxed on the lock-clock authority and every relaxation is
+named. It establishes nothing about winnings (`does_not_establish`: `THAT_SIXTY_OR_TWENTY_PERCENT_MAXIMIZES_WINNINGS`,
+`THAT_A_CAPPED_PORTFOLIO_IS_BETTER_THAN_AN_UNCAPPED_ONE`, `LINEUP_QUALITY`, `UPLOAD_CLEARANCE`, `CERTIFICATION`).
+
+| Field | Meaning |
+|---|---|
+| `defaults.person_fraction` | `"0.60"`: the most lineups one person (Captain or FLEX, once per lineup) may be in; `max_combined_person_exposure.default_fraction` |
+| `defaults.captain_fraction` | `"0.20"`: the most lineups one person may Captain; `max_captain_exposure.default_fraction` |
+| `defaults.pairwise_person_overlap` | `4`: `max_pairwise_person_overlap` |
+| `relaxation_steps` | In order, each only looser than the one before (`null` is no cap): `CAPS_0_80_0_40` (0.80 and 0.40) for the engine default and a policy, then `CAPS_OFF` for a policy only |
+| `step_notes` | Why the engine default has no `CAPS_OFF`: its off is rung 4 |
+
+A fraction floors against the entry count (`floor(f x entries)`; 12 and 4 of 20), so 0.20 binds no Captain slot under five entries
+(`least_entries()`).
+
+**Where it applies.** (1) `scripts/make_showdown_policy.py`: `--combined-default`, `--captain-default` and `--max-overlap` default to these
+(they were 0.80, 0.4 and 4); an explicit flag wins. (2) A `run-slate` Showdown run in the `prior_review` profile that supplied no policy:
+`Ladder.begin_with_defaults` writes a policy of exactly the three controls, every structural bound open, no exclusion, bound to every fillable
+Entry ID, overlap the request's `max_person_overlap` (default 4), through the same `_materialize` as a rung (`data/runs/<run_id>/relaxation/attempt_0_rung_DEFAULT/`:
+canonical bytes, validation, normalized policy, both hashes re-checked before selection), and the run walks the ordinary ladder from it:
+the SD3 candidate bank and joint solve, the independent audit that recomputes both caps from the delivered CSV's bytes, baseline-first
+delivery, the deadline budget. Classic, `nfl select`, `nfl baseline` and the sequential selector itself are unchanged. A supplied
+policy is never replaced: an explicit value is the operator's.
+
+**The ladder.** The engine default's order is the requested pair, then `CAPS_0_80_0_40`, then rung 4 (sequential selection keeps a distinct
+Captain per row until the pool is exhausted; an uncapped joint solve has none, and rung 3 would raise the overlap to 5). A Showdown policy
+whose two default fractions are exactly the requested pair (what the generator writes unless told otherwise; the generator writes no
+provenance field, so the caps themselves are the key) takes `CAPS_0_80_0_40`, then `CAPS_OFF` (overrides, exclusions and structural bounds
+untouched), before structural rung 1; a structural rung taken from it carries the caps off (`showdown_relaxed_controls(..., concentration=)`),
+so a relaxed cap is never reapplied and `make_showdown_policy.py --rung N` writes what the ladder holds at rung N. Any other explicit value
+is untouched by these steps. A step the validator refuses on `S` codes (a pool or entry count it cannot hold) is passed over for the next;
+none accepted, or a window that cannot hold the declared bank and joint solve (`scaled_candidate_seconds + scaled_selection_seconds`) and
+still leave rung 4 its `(rows + 1) x 0.5 s`, starts the run at rung 4. Each step is one relaxation record: step `CONCENTRATION`, constraint
+`concentration_defaults` (`original` and `final` the two fractions), code `SHOWDOWN_CONCENTRATION_RELAXED`; rung 4 adds the same constraint
+ending in no caps, then the existing `RELAXATION_POLICY_DROPPED`. Labels are `DEFAULT`, the step name, then rung numbers (never `SUPPLIED`
+for a policy the engine built). Additive to `nfl_relaxation_record_v1`: `step` is not a closed set.
+
+**It never adds a stop.** The default never writes a `policy_summary`, a `policy_blocker` or a pre-review exit. A count it cannot bind
+(fewer than `least_entries()` fillable entries: `NOT_APPLICABLE`, reported, no limitation), a `lineup_count` that differs from the fillable
+count, an exclusion input with a problem of its own (its own blocker stands), an unreadable defaults file, a default that cannot be written,
+or a window that cannot hold rung 4 leave the run as it was before this session and name it
+`SHOWDOWN_CONCENTRATION_NOT_APPLIED:<reason>` (class `S`, family `portfolio_bounds`). No evidence gate is read or relaxed.
+
+**Report.** `result["concentration"]` (in the pre-review blocked exit and the review exit of such a run, beside `relaxation`; the
+outer exception exit carries neither): `version`, `defaults_sha256`, `status`
+(`AS_REQUESTED`, `RELAXED`, `NOT_APPLIED`, `NOT_APPLICABLE`), `requested`, `effective` (the caps of the policy the delivered improvement
+was built under; `null` for rung 4 or when the baseline is the file), `started_from`, `final_rung`, `steps_taken`, `reasons`,
+`delivered_file` and `delivered` (the file the pointer names, recounted from its own bytes over every filled row, a template's prefilled
+rows included, while the caps bind the fillable rows only: `scope`, `rows`, `distinct_lineups`, `max_person`,
+`max_person_entries`, `max_person_share`, `max_captain`, `max_captain_entries`, `max_captain_share`), `does_not_establish`. The two new
+codes are registered in `config/gate_registry_v1.json`; `REGISTRY_SHA256` moved with them.
+
 ## Relaxation record (Session 10)
 
 Registered 2026-09-24 by Session 10 (the 2026-09-12 lock-clock ruling, R28,
@@ -3468,6 +3527,12 @@ code `PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND`; and step `THESIS_EVIDENCE_GAP`
 relaxation; it travels in the same list because this list is how a run's named
 gaps reach its limitations. A thesis step's `original` is the thesis name and
 `final` is null.
+
+Since Session 56 (§ Showdown concentration defaults) a Showdown run that supplied no policy starts on the engine's own default
+(`started_from.rung` is `DEFAULT`, never `SUPPLIED`), and a policy at the registered default pair takes cap steps before any structural
+rung: step `CONCENTRATION`, constraint `concentration_defaults` (`original` and `final` are `{person_fraction, captain_fraction}`),
+code `SHOWDOWN_CONCENTRATION_RELAXED`, rung labels `DEFAULT`, `CAPS_0_80_0_40` and `CAPS_OFF`. Rung 4 from such a policy adds the same
+constraint ending in no caps before its `portfolio_policy` drop. The values are additive; no earlier field changed meaning.
 
 Codes, on every exit that reports the record, the delivered file's or the
 baseline's, the pre-review exit included: `RELAXATION_STRUCTURE_RELAXED` and

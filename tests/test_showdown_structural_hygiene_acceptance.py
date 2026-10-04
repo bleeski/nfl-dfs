@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from nfl_dfs.concentration import load_concentration_defaults
 from nfl_dfs.dk import parse_entries, parse_salaries
 from nfl_dfs.entry_groups import plan_entries
 from nfl_dfs.portfolio_enforcement import build_policy_candidate_bank, solve_policy_portfolio
@@ -38,6 +39,11 @@ GENERATOR = REPO_ROOT / "scripts" / "make_showdown_policy.py"
 
 NE_SEA = (SUPPLIED / "DKSalaries Salary CSV Showdown.csv", SUPPLIED / "DKEntries CSV 20 entries.csv")
 DET_BUF_FILES = (DET_BUF / "7c85ca11-DKSalaries_97.csv", DET_BUF / "53fe7f5a-DKEntries_74.csv")
+# Session 56: the generator's defaults are the registered concentration defaults (0.60 a person, 0.20 a Captain; they were 0.80
+# and 0.4). Eight rows under them need a deeper bank than the scaled 32: measured on these two fixtures, NE@SEA solves from 48
+# candidates and DET@BUF from 120 (32, 48 and 64 all end `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE`). `run-slate`'s ladder deepens a
+# bank once and then gives the caps way by name; this test proves the defaults are satisfiable, so it gives the bank what it needs.
+CANDIDATE_LIMIT = 120
 
 
 def _generator():
@@ -73,7 +79,7 @@ def test_generator_defaults_pass_100_percent_hygiene_and_cap_max_person_share(
 
     objective = {row.dk_id: 1.0 for row in slate.players}
     bank = build_policy_candidate_bank(
-        slate, objective, policy=policy, candidate_limit=max(32, 4 * len(bound)),
+        slate, objective, policy=policy, candidate_limit=CANDIDATE_LIMIT,
         total_time_limit_seconds=30, per_solve_time_limit_seconds=3,
     )
     assert bank.candidates, "the generator's own defaults built no candidates"
@@ -97,12 +103,16 @@ def test_generator_defaults_pass_100_percent_hygiene_and_cap_max_person_share(
     # More than one captain.
     assert len({candidate.captain_person for candidate in selected}) > 1
 
-    # max_person_share <= 0.80, the generator's own default cap.
+    # max_person_share and the Captain share stay within the generator's own default caps: the registered 0.60 and 0.20 (it was
+    # 0.80 and no Captain assertion before Session 56).
+    defaults = load_concentration_defaults()
     combined: Counter[str] = Counter()
     for candidate in selected:
         combined.update(candidate.people)
     max_share = max(combined.values()) / len(selected)
-    assert max_share <= 0.80
+    assert max_share <= float(defaults.person_fraction)
+    captains = Counter(candidate.captain_person for candidate in selected)
+    assert max(captains.values()) / len(selected) <= float(defaults.captain_fraction)
 
 
 def test_an_infeasible_structural_bound_fails_closed(tmp_path) -> None:

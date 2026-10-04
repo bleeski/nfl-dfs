@@ -69,11 +69,15 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   `swap_inactives.py value-add` is the Classic analogue and takes only scored players. Never write a projection: he adds 0
   prior points, his gate stays unmet and is named as a limitation, and the file stays `DO_NOT_UPLOAD`. Research informs the
   choice, never a number.
-- **Concentration.** After the build, count Captains and each person's share of lineups. Defaults, mine to set under the
-  lock-clock ruling and Ben's to overturn: no person above 60% of lineups and no Captain above 20%, unless the selectable pool
-  cannot meet it, and then say so with the pool size. A breach is a construction failure, not a finding to report: rotate rows by
-  hand (replace the most shared row, check distinctness and overlap with `qa_showdown_portfolio.py`) before the handoff. Session
-  56 moves the defaults into the engine; the by-hand rotation stays for what the pool cannot meet.
+- **Concentration.** Since Session 56 the engine applies the defaults itself (`config/showdown_concentration_defaults_v1.json`: no
+  person above 60% of lineups, no Captain above 20%, overlap 4) to a Showdown run that supplied no policy, relaxes them by name (0.80
+  and 0.40, then rung 4) when the pool, the entry count or the window cannot hold them, and reports `concentration` in the result:
+  requested, effective, the steps taken and the delivered file's own counts. Read that block first. `AS_REQUESTED` needs nothing
+  more. `RELAXED`, `NOT_APPLIED` or `NOT_APPLICABLE` (under five entries) is the by-hand case: count Captains and each person's
+  share of lineups in the delivered file. A breach of the defaults is a construction failure, not a finding to report: rotate rows by
+  hand (replace the most shared row, check distinctness and overlap with `qa_showdown_portfolio.py`) before the handoff, unless the
+  selectable pool cannot meet them, and then say so with the pool size. The defaults are mine to set under the lock-clock ruling and
+  Ben's to overturn.
 - **Order.** Do both before the first handoff message, with the clock measured. A lock inside five minutes ships what is built
   and names both gaps.
 
