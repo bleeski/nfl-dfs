@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "02fae090-57d8-4d88-bd7d-02d91588790b",
+      "branch": "claude/s61-classic-judgment-pass",
+      "chunk": "S61",
+      "claimed_at": "2026-10-05T17:04:45Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
