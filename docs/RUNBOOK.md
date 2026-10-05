@@ -1217,7 +1217,10 @@ scripts/build_thesis_portfolio.py   MULTIPLE constructions (a JSON thesis
                                  this instead of build_classic_portfolio.py
                                  when the portfolio should not be one bet
                                  placed many times (see Build for both goals,
-                                 below)
+                                 below). Since Session 62 its fill step runs
+                                 the Pareto redeploy below (no salary floor by
+                                 default; `--protect`, `--protect-from`,
+                                 `--no-pareto-redeploy`)
 scripts/write_dk_entries.py      exact-template fill plus a byte audit; writes
                                  a new file only, and exits 3 naming every
                                  blank authorized row it did not fill
@@ -1225,9 +1228,9 @@ scripts/qa_classic_portfolio.py  two-tier gate, REQUIRED before handoff
 scripts/swap_inactives.py       post-handoff edits to the written portfolio:
                                  inactive replacement (single swap, then a
                                  two-player fallback), a named value add, a
-                                 salary redeploy once a cheaper swap frees cap
-                                 room, or a late-swap mode that never touches
-                                 a cell whose game has already locked
+                                 Pareto-only salary redeploy (below), or a
+                                 late-swap mode that never touches a cell whose
+                                 game has already locked
 ```
 
 Three things that are not optional:
@@ -1237,8 +1240,9 @@ Three things that are not optional:
   the JSON, not the file, and says so. Tier 1 exits 1 on a validity failure
   (roster, slot, bytes, export against assignment, a repeated lineup), 3 when
   authorized rows are unfilled, naming each Entry ID, and 2 when only a limit you
-  passed (`--min-salary`, `--max-overlap`, `--max-exposure`, `--backup-pairs`)
-  is exceeded. Tier 2 does not block and is the
+  passed (`--max-overlap`, `--max-exposure`, `--backup-pairs`) is exceeded.
+  `--min-salary` is accepted but is only an informational Tier 2 note: unused
+  salary is never a defect (R37). Tier 2 does not block and is the
   half that matters: on 2026-09-13 a portfolio passed every legality check with
   three players covering 17 of 20 lineups, and on 2026-09-20 one shipped with
   bring-back at 12 of 18 against a suggested floor of 70%. Tier 2 measured that
@@ -1254,6 +1258,31 @@ Three things that are not optional:
   An inactive replacement, a value add, a redeploy or a late swap all write a
   new portfolio file; none of them is the handoff until the gate has run on
   it again.
+
+**Salary is redeployed only as a Pareto gain (Session 62, R37).** Ben: leaving
+salary on the table is fine and can be strategic; the question is whether it can
+buy a gain on both goals at once, never how to spend the cap. So nothing in the
+tool chain has a salary floor by default, and `swap_inactives.py --mode
+redeploy` (and the thesis build's fill step) takes a swap only when it raises the
+row's prior, fits the cap, keeps the row legal and distinct, leaves the QB, the
+DST, his stack, the bring-back and every `--protect` person alone, and leaves no
+washout proxy worse on the whole portfolio (max exposure, top-3 union and mean
+pairwise overlap no higher, distinct people no fewer). It scans every row to a
+fixed point, so a rerun on its own output changes nothing (the report says
+`fixed_point`, and `PASS_BOUND_REACHED` if its 25-pass bound stops it first), and
+it prints both goals before and after and every rejected swap with the goal it
+would have hurt. It has no lock awareness: run it before the earliest lock.
+Where no gain exists the portfolio stays and the report says so. After a
+Classic `run-slate`, protect whoever its construction judgment placed:
+
+```
+python scripts/swap_inactives.py --portfolio <portfolio.json> --scores <scores.json> \
+  --salaries <DKSalaries.csv> --mode redeploy --protect-from <cowork_run.json> --out <new_portfolio.json>
+```
+
+`--protect NAME_OR_ID` names anyone else (a hand-placed starter, for instance);
+an unknown or ambiguous name is refused, never ignored. Re-run QA on the new file
+and show Tier 2 before and after; keep the earlier file when nothing passes.
 
 The builder's `--scores` comes from a C1 run with `NFL_DFS_DUMP_SCORES=<path>`
 set; C1 takes about 20 seconds. **Run `scripts/filter_pool_scores.py` on that

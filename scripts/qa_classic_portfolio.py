@@ -35,8 +35,11 @@ could not measure at all. Recorded in `changelog.md`. Changes:
   enforceable here, opt-in via `--max-overlap` / `--max-exposure`.
 * **Byte fidelity, duplicate lineups and entry-ID coverage were absent**, all
   three present in the twin. Ported.
-* **No salary floor.** Added as `--min-salary`: unspent salary is late-swap
-  option value (P1-7), and a lineup far under the cap is usually an accident.
+* **A salary floor, retired as a defect (Session 62, R37).** `--min-salary` was added on
+  the reasoning that a lineup far under the cap is usually an accident. Ben (2026-10-04):
+  leaving salary on the table is fine and can be strategic, so no QA line, limit or default
+  treats it as a defect. The flag is still accepted; a lineup under it is an informational
+  Tier 2 note (`salary_notes` in the JSON) that changes neither the verdict nor the exit code.
 
 Usage:
     python scripts/qa_classic_portfolio.py \\
@@ -45,7 +48,8 @@ Usage:
         --status    <run>/status/official_status.csv \\
         [--template <DKEntries.csv> --export <written entries csv>]  # after the writer \\
         [--backup-pairs 'Brock Purdy>Mac Jones;Lamar Jackson>Tyler Huntley'] \\
-        [--min-salary 47500] [--max-overlap 4] [--max-exposure 6] \\
+        [--min-salary 47500]   # informational only: unused salary is never a defect \\
+        [--max-overlap 4] [--max-exposure 6] \\
         [--implied-totals team_totals.csv]   # TEAM,IMPLIED_TOTAL
         [--ownership ownership.csv]          # NAME,OWNERSHIP_PCT
         [--json out.json]
@@ -75,7 +79,7 @@ Exit codes separate validity from strategy: 1 a validity failure (roster
 legality, slot eligibility, export bytes, export against assignment, a repeated
 lineup under R29, an officially inactive player); 3 valid, but authorized rows
 are unfilled and each Entry ID is named; 2 only an operator-requested limit
-(`--min-salary`, `--max-overlap`, `--max-exposure`, `--backup-pairs`); else 0.
+(`--max-overlap`, `--max-exposure`, `--backup-pairs`); else 0.
 A backup pair moved from 1 to 2: it is the operator's assertion about who
 starts, with no evidence bound to it. Tier 2 never changes the exit code; it
 prints a scorecard and names what a human has to accept. Without `--export` the
@@ -220,7 +224,8 @@ def main(argv=None):
     ap.add_argument("--ownership")
     ap.add_argument("--json")
     ap.add_argument("--cap", type=int, default=50000)
-    ap.add_argument("--min-salary", type=int, default=0)
+    ap.add_argument("--min-salary", type=int, default=0,
+                    help="informational only: a lineup under it is a Tier 2 note, never a defect (R37)")
     ap.add_argument("--max-overlap", type=int, help="enforced when given")
     ap.add_argument("--max-exposure", type=int, help="enforced when given")
     a = ap.parse_args(argv)
@@ -260,6 +265,7 @@ def main(argv=None):
     fail = []        # validity: exit 1
     defects = []     # operator-requested limits: exit 2
     unfilled = []    # coverage: exit 3
+    salary_notes = []  # informational, never a defect (R37)
 
     def check_lineup(label, r, enforce=True):
         """Validity always; the operator's limits only on the portfolio, so none prints twice."""
@@ -284,7 +290,7 @@ def main(argv=None):
         if tot > a.cap:
             fail.append(f"{label}: salary {tot} over {a.cap}")
         if enforce and a.min_salary and tot < a.min_salary:
-            defects.append(f"{label}: salary {tot} under the {a.min_salary} floor")
+            salary_notes.append(f"{label}: salary {tot} under the {a.min_salary} floor")
         if len({G(i) for i in r}) < 2:
             fail.append(f"{label}: violates the two-game rule")
         ina = [NM(i) for i in r if status.get(i) == "INACTIVE"]
@@ -368,7 +374,8 @@ def main(argv=None):
         if a.json:
             json.dump({"verdict": "FAIL", "export_checked": export_checked,
                        "validity_failures": fail + ["NO_LINEUPS"],
-                       "unfilled_entry_ids": unfilled, "enforcement_defects": defects},
+                       "unfilled_entry_ids": unfilled, "enforcement_defects": defects,
+                       "salary_notes": salary_notes},
                       open(a.json, "w"), indent=1)
         return EXIT_FAIL
 
@@ -413,6 +420,11 @@ def main(argv=None):
     print(f"    distinct players           : {len(exp)}")
     if overlaps:
         print(f"    pairwise overlap max/mean  : {max(overlaps)} / {statistics.mean(overlaps):.2f}")
+    if a.min_salary:
+        print("  SALARY  (informational: unused salary is never a defect, R37)")
+        print(f"    lineups under the {a.min_salary} floor you passed: {len(salary_notes)}/{n_l}")
+        for note in salary_notes[:6]:
+            print(f"        . {note}")
     print("  ANTI-CORRELATION  (all should be zero)")
     for k, v in anti.items():
         print(f"    {k:<20s}: {len(v)}")
@@ -462,6 +474,7 @@ def main(argv=None):
                    "validity_failures": fail,
                    "unfilled_entry_ids": unfilled,
                    "enforcement_defects": defects,
+                   "salary_notes": salary_notes,
                    "max_exposure": mx[1] / n_l,
                    "top3_union": top3_union / n_l,
                    "distinct_players": len(exp),

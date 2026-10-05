@@ -131,11 +131,13 @@ or none supplied) builds the thesis portfolio, which is where a judgment applies
 - **Salary: redeploy only as a Pareto gain; unused salary is fine.** Ben: leaving salary on the table can be strategic; the goal is
   to find out whether it can buy a gain on both goals at once, not to spend the cap. Take a swap only when it raises the row's
   prior, leaves the QB, his stack, the bring-back, the DST and every hand-placed person alone, and leaves no washout measure worse
-  (max exposure, top-3 union, mean pairwise overlap no higher; distinct people no fewer). The incoming person used at least 2 fewer
-  times than the outgoing one is a rule that guarantees it (Week 4: `construction/pareto_redeploy_record.py`). Compare QA Tier 2
-  before and after, show both in the handoff, and keep the earlier file when nothing passes. `swap_inactives.py redeploy` ranks by
-  the prior alone and takes hand-placed people back out: do not use it for this until Session 62, which will read
-  `judgment_pass.protected_people` for its `--protect` list.
+  (max exposure, top-3 union, mean pairwise overlap no higher; distinct people no fewer). Since Session 62 the tool does it:
+  `swap_inactives.py --mode redeploy --protect-from <cowork_run.json>` (`judgment_pass.protected_people`) plus `--protect NAME` for
+  anyone you placed by hand, and `build_thesis_portfolio.py` runs the same rule at its fill step. It checks the proxies on the whole
+  portfolio after each swap (the incoming person used 2 fewer times, Week 4's `construction/pareto_redeploy_record.py`, is a quick
+  screen, not the proof), scans to a fixed point (`PASS_BOUND_REACHED` means rerun it), and prints both goals before and after and
+  every rejected swap with the goal it would have hurt. Run it before the earliest lock (no lock awareness). Compare QA Tier 2 before and after, show both in the handoff, and keep the earlier file when nothing passes.
+  It works on an operator-layer portfolio JSON; `run-slate`'s own rung-4 build does not run it yet (Session 64).
 - **Late windows need no active list at the early lock (engine).** Ben: late swap covers it. `late_swap_watch` lists every rostered
   later-window person with no official row and his DraftKings status (`Q`, illness, a depth-chart call); put that list in the handoff,
   not under Needs Ben as an open gap. Confirm the early-window players (`early_window_without_official_row`) against the posted

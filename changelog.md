@@ -4,6 +4,99 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-05: Session 62 -- Pareto-only salary redeploy (R37, P9 part 3)
+
+Branch `claude/s62-pareto-redeploy`, from `main` at `912708d` (PR #111's merge: Session 61 was already merged, so the session fast-forwarded
+`main` instead of merging it); claim commit `c16cdd3`. Class S. R29 is untouched (a swap that would repeat a row is refused), no evidence gate is
+touched or cleared, no number is written for anyone, nothing is called EV or a win probability, and every path still ends
+`MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`. Ben approved the plan before any code.
+
+**Found before any code.** (1) The Week 4 hand rule (`construction/pareto_redeploy_record.py`) also chased a salary floor (`used >= 49500`) and took a
+swap only when the incoming person was used at least two fewer times; read literally that rejects a swap into a person used 0 times from one used
+once, so a fresh portfolio would never redeploy. Mean pairwise overlap is the sum over people of C(rows held, 2) over the pairs, so one swap's change
+is `incoming - outgoing + 1` and "incoming used at most one fewer time" is necessary and sufficient for it not to rise; the other three proxies are
+checked on the whole portfolio, and "two fewer" is a sufficient condition, not the proof (a test builds a swap that satisfies it and still raises the
+top-3 union from four rows to seven). (2) A read-only prototype on the committed Week 4 v4 portfolio, before any code: 49 swaps, 3 passes, 0.3 s, prior
+sum 4148.5 to 4231.6 (the hand rule: 4189.8), top-3 union 29 to 27 (28), mean overlap 1.1323 to 1.0580 (1.07), distinct people 115 to 119 (120: the one
+measure where the hand rule ended ahead; the rule asks for no fewer than before, not the most). (3) The old `redeploy` refused to run on a portfolio whose `changed_entry_ids` was empty, and a run that changes
+nothing writes `[]`, so "rerun on its own output" would have exited 2 on the card's own no-gain fixture; it now scans every row. (4) `build_thesis_portfolio.py`
+passed a 48,500 salary floor to every builder call by default, `qa_classic_portfolio.py --min-salary` made a short lineup a defect (exit 2), and
+`relaxation.py` rung 0 bounds `salary_left` to $0 to $1,000: the first two are in this session, the last is Session 64's.
+
+**Added**
+- `scripts/swap_inactives.py`: `washout_proxies` (QA Tier 2's own arithmetic, tie order included, pinned by a parity test against the QA gate),
+  `proxies_hurt`, `redeploy` as the Pareto rule (`pareto_redeploy_v1`, `does_not_establish` text), `resolve_protect`, `load_protected_from`
+  (a run's `judgment_pass.protected_people[].dk_id`, in a `cowork_run.json` or the coverage artifact), `load_gated`
+  (`excluded_dk_ids`, `operator_construction_exclusions`), `load_inactive_ids` (`official_status.csv`), `render_pareto_report`; flags `--protect`,
+  `--protect-from`, `--status`. The rule: the row's prior rises; it fits the cap; the row stays legal, keeps a stack or bring-back it had, and stays
+  distinct (R29) inside the portfolio's own overlap and exposure caps; the QB, the DST, his team and his opponent (stack and bring-back) and every
+  protected person are never outgoing, a protected person is never incoming; the incoming person has a blank DraftKings status and is not gated;
+  and the recount on the whole portfolio is no worse (max exposure, top-3 union and mean overlap no higher, distinct people no fewer). Rows in
+  assignment order, each takes its best swap (prior gain, then the less-used incoming person, then ids) until it has none, passes repeat until one
+  takes nothing, so a rerun on its own output changes nothing once `fixed_point` is true; the 25-pass bound, if hit, is `PASS_BOUND_REACHED`
+  with `available_at_stop`. The report (`construction.pareto_redeploy`, and printed): both goals before and after, every swap taken, every
+  prior-raising legal swap refused with each goal it would have hurt (all in the JSON, ten printed), the row-level refusals by reason
+  (`ILLEGAL`, `SHAPE`, `CAPS_OR_DISTINCT`), the protected people's rows before and after, `gated_people`.
+- `scripts/build_thesis_portfolio.py`: the fill step runs `swap_inactives.redeploy` on the assigned rows (a copy, committed only when the pass
+  finishes), with `--protect`, `--protect-from`, `--no-pareto-redeploy`; never fatal (`NOT_RUN` with the reason on stderr and in
+  `construction.pareto_redeploy`); `lineups` are rebuilt from the assigned rows; a bad `--protect` is refused before any builder call.
+- Tests: `tests/test_swap_inactives.py` 10 to 50, `tests/test_build_thesis_portfolio.py` to 29, `tests/test_qa_classic_portfolio.py` to 42,
+  including the Week 4 acceptance on the committed inputs (`DKSalaries.csv`, `portfolio_final_v4.json`, `scores_qbclean.json`; the four people
+  protected by name; every accepted swap raises its row's prior, no proxy worse by an independent recount, protected rows equal in the report and the
+  file, rows distinct and legal, QB/DST/core intact, rerun accepts nothing, QA Tier 1 passes with the caps 13 and 5).
+
+**Changed**
+- `redeploy` scans every row by default (`--changed-entry-id` restricts it; an unknown id is refused by name); the inherited
+  `construction.min_salary` no longer bounds it (an explicit `--min-salary` does, in the thesis pass too); `NO_CHANGED_ENTRIES` is gone; a later mode
+  drops an earlier `pareto_redeploy` block from the file it writes; the written `construction.min_salary` is the floor actually used.
+- `build_thesis_portfolio.py --min-salary` default 48500 to 0.
+- `qa_classic_portfolio.py --min-salary` is accepted but is an informational Tier 2 note (`salary_notes` in the JSON), no longer a defect or exit 2.
+  **Named test edit (R37, `.claude/rules/tests.md`):** `test_min_salary_floor_is_an_enforcement_defect_exit_two` is replaced by
+  `test_min_salary_floor_is_an_informational_note_never_a_defect`, because Ben's ruling says no QA line, limit or default treats unused salary as a
+  defect; `test_no_floor_means_no_salary_note` is new.
+- Docs: `docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md` (new Classic Pareto redeploy section), `docs/claude/working.md`, `.claude/rules/slate-operation.md`,
+  `IMPLEMENTATION_STATUS.md`. Not `docs/DATA_CONTRACTS.md`: the report is script output, not a structured input.
+
+**Decisions, each Ben's to overturn.** The rule lives in `swap_inactives.py` and the thesis build imports it by sibling path (Session 64 lifts it into
+`src/`); `--protect` accepts an exact name or DraftKings ID and an unknown, ambiguous or missing one is refused by name; protected people are never
+added either; the incoming person needs a blank DraftKings status (the rule that shipped on Week 4); redeploy scans every row. **Additions after the plan
+was approved** (from the advisor and the reviewer): the thesis pass leaves the priors-wrong thesis's rows alone (it ranks by the prior that thesis bets
+against); `--status` keeps an official INACTIVE person out; `--protect`, `--protect-from` and `--status` are refused in every other mode
+(`REDEPLOY_ONLY_FLAG`); a scores file with no `excluded_dk_ids` is named on stderr.
+
+**Review.** A fresh-context `reviewer` read the diff. Blocking (fixed, tested): the thesis pass ignored an explicit `--min-salary` (it built the board with
+floor 0, so it took a swap to 33,200 under a 36,200 floor). Mutation survivors it found, each now covered: thesis `--protect-from`, thesis scores-file
+gating, the pass-bound report (`fixed_point` and `available_at_stop`, with a Week 4 test at one pass), thesis lineups beyond the fillable rows,
+operator exclusion by DraftKings ID, the stale-report pop, status case and whitespace. Open items: flags silently ignored outside redeploy (fixed,
+`REDEPLOY_ONLY_FLAG`); thesis tags outliving a row's content (the priors-wrong rows are left alone; bust and flip rows can still take flex people by the
+base prior, which is how the build already ranks candidates, left); `load_gated` vacuous on a scores file with no `excluded_dk_ids` (stderr warning and
+`gated_people`); `operator_construction_exclusions` has no contract and nothing in `src/` writes it (documented in the function, left); the dangling
+"Session 64" (the row now exists); stale test counts (fixed). Left and named: on a 150-row portfolio the pass took about 20 s with no deadline guard and
+wrote about 1.3 MB of `construction.pareto_redeploy` (every one of 7,076 refused swaps), and the thesis build runs it by default; the other
+`swap_inactives.py` modes still inherit a portfolio's `construction.min_salary`; the redeploy has no lock awareness (Week 4's hand-run late-swap Pareto
+step filtered locked cells; run this before the earliest lock, Session 64 adds `--now`); `value-add` and `inactive` can still displace a hand-placed
+person by his stale prior.
+
+**Not met, named.** The P9 chunk's acceptance that `run-slate`, with no hand steps, produces a redeploy: the engine's rung-4 thesis build
+(`classic_theses.py`) is untouched and `src/` cannot import a script. Session 64 (added, directly below Session 63) lifts the rule, adds the lock
+awareness and measures the engine's own limits that bound unused salary (`relaxation.py` `CLASSIC_SALARY_LEFT_MAXIMUM = 1000` at rung 0, `qa.py`
+`SALARY_LEFT_OUTSIDE_FIELD_RANGE`) before any ruling. Not proven on the Week 4 frozen priors (not on this host): the acceptance runs on the committed
+score dump and portfolio. Past the card's 300 lines and about at the 1,500-line breakpoint (1,427 insertions and 80 deletions before the ledgers, 808
+of them tests): not split, since the rule, its report and its two call sites are one acceptance and the engine half is Session 64.
+
+**Verification**
+- Week 4 v4 with Allen, Ertz, Jennings and Wilson protected, all 39 rows, caps 13 and 5: 49 swaps over 29 rows in 3 passes; prior sum 4148.518 to
+  4231.611; max exposure 13 to 13 (Puka Nacua); top-3 union 29 to 27; distinct people 115 to 119; mean overlap 1.1323 to 1.0580; no protected row
+  changed; nothing taken on the third pass; 215 prior-raising legal swaps refused (every one `mean_overlap`, 95 also `distinct_people`, 19 also
+  `top3_union`), 164 more illegal and 23 over a cap or a repeat.
+- Focused: `tests/test_swap_inactives.py`, `tests/test_build_thesis_portfolio.py`, `tests/test_qa_classic_portfolio.py`, `tests/test_roadmap_queue.py`
+  145 passed. Mutation pass on a copy of the tree (the repository untouched): 52 of 53 mutations of the guards caught on the intended assertion; the
+  survivor is equivalent (`rows_after` equals `rows_before` whenever the protect guard holds).
+- Suite: `2584 passed, 2 skipped in 890.65s (0:14:50)` on Windows (baseline `2530 passed, 2 skipped in 759.34s (0:12:39)`, Session 61's final run; another repository's pytest, `nhl-dfs`,
+  ran beside this one, which inflates the wall time). The first suite run on this branch, `2573 passed, 2 skipped in 1002.94s (0:16:42)`, was on the
+  code before the reviewer's fixes and is not the result.
+- `doctor`: pass_status true (exit 0). `git diff --check` clean; `scripts/check_protected_paths.py`: no protected path touched; the ledgers are LF.
+
 ### 2026-10-05: Session 61 -- the Classic judgment pass inside the run (R37, P9 part 2)
 
 Branch `claude/s61-classic-judgment-pass`, from `main` at `bee8a45`; claim commit `3114a55`. Class S. R29 is untouched (a minimum the rows

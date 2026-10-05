@@ -350,9 +350,41 @@ To place a person the research supports, write a **construction judgment** and r
   operator exclusion, a role-gate `BLOCK` or an unresolved material role change, and anyone outside the scored pool, is **refused by
   name** and the rest still apply. A file for other salary bytes, unreadable or expired at lock is dropped by name and the run goes
   on. Every one of these travels with the file as a `CLASSIC_JUDGMENT_*` limitation.
-- `judgment_pass.protected_people` lists who was placed: the people a redeploy must never remove (Session 62's `--protect`).
+- `judgment_pass.protected_people` lists who was placed: the people a redeploy must never remove. `swap_inactives.py --mode
+  redeploy --protect-from <that run json>` reads it (see Classic Pareto redeploy, below).
 - The file stays `PRIOR_ONLY / DO_NOT_UPLOAD`. A placement is a construction choice, not a current-role fact. Contract:
   `docs/DATA_CONTRACTS.md` § Classic judgment pass and construction judgment.
+
+## Classic Pareto redeploy
+
+Since Session 62 (R37) `scripts/swap_inactives.py --mode redeploy` takes a salary-driven swap **only as a Pareto gain**, and
+`scripts/build_thesis_portfolio.py` runs the same rule at its fill step. Ben: unused salary is never a defect, so nothing chases
+the cap and no tool in the chain has a salary floor by default (`--min-salary` is an opt-in; QA reports a lineup under it as a Tier 2
+note, never a defect). The rule works on an operator-layer portfolio JSON (what `build_thesis_portfolio.py` or
+`build_classic_portfolio.py` writes), not on `run-slate`'s own file: wiring it into the run's rung-4 thesis build is Session 64.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\swap_inactives.py --portfolio 'C:\path\portfolio.json' --scores 'C:\path\scores.json' `
+  --salaries 'C:\path\DKSalaries.csv' --mode redeploy --protect-from 'C:\full\path\cowork_run.json' --out 'C:\path\portfolio_pareto.json'
+```
+
+- A swap is taken only when it raises the row's prior, fits the cap, keeps the row legal and distinct (R29), leaves the QB, the
+  DST, his stack, the bring-back and every protected person alone, and leaves **no washout proxy worse** on the whole portfolio:
+  max exposure, top-3 union and mean pairwise overlap no higher, distinct people no fewer. The incoming person has a blank
+  DraftKings status and is not one the scores file excludes (pass `--status official_status.csv` to keep an official INACTIVE
+  person out too; the thesis build always does). "Used at least two fewer times" is a quick screen, not the proof; the
+  portfolio-level recount is, and it also takes a swap whose incoming person is used one fewer time.
+- It scans every row (`--changed-entry-id` restricts it) until a whole pass takes nothing, so a rerun on its own output changes
+  nothing (`fixed_point=True`; `PASS_BOUND_REACHED` means its 25-pass bound stopped it first, so rerun it). Run it **before the
+  earliest lock**: it has no lock awareness, so after a lock use late swap. The thesis build leaves the priors-wrong thesis's rows
+  alone (that thesis bets against the prior this ranks by). `--protect NAME_OR_ID` (repeatable) and `--protect-from <cowork_run.json | coverage.json>` name who never moves; an
+  unknown or ambiguous name, an ID the salary file does not hold, or a run with no `judgment_pass` is refused, nothing written.
+- Read the printed report (also `construction.pareto_redeploy` in the new file): **both goals before and after** (prior sum;
+  max exposure, top-3 union, mean overlap, distinct people), every swap taken, and **every swap it refused**, each with the goal it
+  would have hurt (`REJECTED entry: A -> B (+gain) would hurt: mean_overlap, ...`). A swap refused for concentration is information,
+  not a failure. Where no gain exists the report says `NO_PARETO_GAIN` and the portfolio is the same.
+- It is construction only: it writes no number, calls nothing EV or a win probability, and clears no gate. Re-run
+  `qa_classic_portfolio.py` on the new file and keep the earlier file when nothing passes.
 
 ## Showdown value-add swap
 

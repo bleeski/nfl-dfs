@@ -173,8 +173,9 @@ not read either.
 - **A DraftKings `OUT` tag does not move the workload.** Without an official
   inactive file the prior keeps the injured starter's share where it was, so his
   replacement scores as a backup (Braelon Allen, 3.6 points, with Breece Hall
-  out). `swap_inactives.py value-add` and `redeploy` both rank by that prior and
-  will not place him, and `redeploy` takes him back out. Place him by
+  out). `swap_inactives.py value-add` ranks by that prior and will not place him;
+  `redeploy` took him back out until Session 62, and now leaves him alone when you
+  pass `--protect NAME` (or `--protect-from <run json>`). Place him by
   construction with a recorded swap (Week 4:
   `data/inbox/slates/wk4-classic-2026-10-04/construction/manual_add_record.py`),
   rerun QA on the written file, and never write him a number.
