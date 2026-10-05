@@ -1,5 +1,24 @@
 # Implementation Status
 
+## Capability added: 2026-10-05 (Session 61, the Classic judgment pass inside the run, R37)
+
+Working and verified through synthetic fixtures (`tests/test_classic_judgment.py`, `tests/test_classic_thesis_placements.py`), the existing Classic
+C1/C2/C3 and `run-slate` harnesses, a mutation pass over the new guards and the full suite (`2530 passed, 2 skipped in 759.34s (0:12:39)` on Windows): a Classic `run-slate` now reports the
+judgment pass (`classic_judgment_pass_v1`) in the selection report and the hash-bound coverage artifact, the C3 review (`classic_c3_v4`) and
+`scripts/judgment_pass_report.py`: the starting quarterbacks and whether the pool scored them, each injury room with its inheritors' prior points before
+and after Session 60 (the same scoring pipeline on the pre-redistribution model), a ranked candidate list for the agent to research (never a selection),
+and a late-swap watch list that touches no `OFFICIAL_STATUS_*` code. The R36 backup-quarterback default covers every Classic row. A Classic construction
+judgment (`nfl_classic_construction_judgment_v1`, bound to the salary SHA-256, request v4, `--construction-judgment-json`) is placed by the thesis build
+as protected placements (`classic_thesis_sequential_v2`): at least the named minimum of rows, distinct (R29) and stacked, with no shared relaxation
+touched by a failed attempt and a recount from the delivered rosters; it writes no number, refuses a DraftKings `OUT`, an official or operator exclusion,
+a role-gate `BLOCK` and an unresolved material role change by name, and a file the run cannot use is dropped by name. Contract: `docs/DATA_CONTRACTS.md`
+§ Classic judgment pass and construction judgment. **Not done, named:** the Week 4 frozen priors are not on this host and a replay is refused by design
+(`FETCH_CLOCK_AHEAD_OF_AS_OF`), so Allen, Ertz, Jennings and Wilson as candidates is proved by shape on fixtures, and only the starters check and the backup
+default ran on Week 4's committed inputs; Classic captures no QB depth package, so without one every team is unevaluated and the default excludes nobody;
+a person the role gate left out of the pool cannot be placed (Session 52); a policy in force makes every placement `NOT_APPLIED`; `DEPTH_RANK_ONE_AT_POSITION`
+is not evaluated (the frozen depth chart is read for quarterbacks only); the existing `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED` limitation still names
+later-window people. Still `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
 ## Capability added: 2026-10-04 (Session 60, the injury room moves the workload, R37)
 
 Working and verified through synthetic fixtures (`tests/test_injury_room_redistribution.py`, 41 tests), a mutation pass at both call

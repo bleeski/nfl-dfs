@@ -101,23 +101,45 @@ above all, because they lack history; do not blindly roster them either. The eng
 starter whose role is new today (a promoted backup, a transfer, a rookie, an injury replacement) can sit at or near zero. Strategy
 and the engine work that replaces each step: `docs/chunks/P9-judgment-layer.md`, Sessions 60 to 62.
 
-- **Starting quarterbacks first.** Check every depth-chart starter (the QB depth package's `starter`, and the promoted backup of a
-  DraftKings-`OUT` starter) is in the scored pool. One who is not gets rostered by construction or a written reason. Drop every
-  other quarterback from the thesis pool before building, or the builder rosters a backup.
-- **Then the injury rooms.** For each DraftKings `OUT` or officially inactive starter, name who takes the role (research), find him
-  in the pool, and read his prior. A replacement whose prior reflects his old role is a value candidate: place him in a share of
-  rows sized to the role and the game, by recorded construction swap (Week 4: `data/inbox/slates/wk4-classic-2026-10-04/
-  construction/manual_add_record.py`), never by writing a number, and rerun `qa_classic_portfolio.py` on the written file.
+**Since Session 61 `run-slate` does the steps that need no judgment** and hands over the rest. Read the pass first: it is
+`prior_review_reports.selection.judgment_pass` in `cowork_run.json` (and `judgment_pass` in
+`classic_complete_slate_coverage.json`, and a section of the C3 review): `starters_check`, `injury_rooms`, `candidates`,
+`late_swap_watch` and `protected_people`. `python scripts/judgment_pass_report.py <cowork_run.json>` prints it as the handoff text.
+Contract: `docs/DATA_CONTRACTS.md` § Classic judgment pass and construction judgment. A Classic run with no portfolio policy (rung 4,
+or none supplied) builds the thesis portfolio, which is where a judgment applies.
+
+- **Starting quarterbacks first (engine, then you).** `starters_check` names each team's effective starter (the promoted backup of a
+  DraftKings-`OUT` starter included) with whether the pool scored him and why not. Every other quarterback the depth evidence lists
+  is out of every Classic row by default (`classic_backup_qb_default`), so Week 4's Mullens case no longer needs a by-hand drop.
+  **Supply the QB depth package** (`--qb-depth-role-evidence-json`; Classic captures none): without it every team is
+  `unevaluated`, nobody is excluded, and `CLASSIC_BACKUP_QB_UNEVALUATED` travels with the file: the card's "no backup
+  quarterback rostered" holds only with the package. A supplied package that R25 refuses (an operator or official exclusion on a
+  rank-1 starter DraftKings still lists as available) raises, `run-slate`'s outer handler finishes with the baseline, and the
+  improvement is lost, not the file: rebuild the package with `--teams` naming the other teams (Week 4 did it for LAR) and rerun. A
+  starter in `missing_from_scored_pool` is yours: roster him by judgment or write why not.
+- **Then the injury rooms (engine lists, you research).** `injury_rooms` shows who vacated, who inherits and each inheritor's prior
+  before and after Session 60. `candidates` is the ranked list to research, never a selection: people the engine could not reprice
+  (a transfer in a room with a vacancy, whose prior is still the old role's), the absorbers, and anyone DraftKings prices far
+  above his prior. Read each one's `history_state` before calling him repriced. Research the role (web tools, never a prohibited
+  host), then write a construction judgment (`nfl_classic_construction_judgment_v1`: exact DraftKings ID and name, minimum rows, a
+  reason, sources, author, bound to the salary SHA-256) naming who to place, and rerun with `--construction-judgment-json`. The thesis
+  build rosters each in at least his minimum rows, distinct and stacked; it writes no number and refuses by name a person DraftKings
+  marks `OUT`, an official or operator exclusion, a `BLOCK`, an unresolved material role change, or anyone outside the scored pool
+  (`refused` in the report; the rest still apply). This replaces the by-hand swap (Week 4:
+  `data/inbox/slates/wk4-classic-2026-10-04/construction/manual_add_record.py`); rerun `qa_classic_portfolio.py` on the written file.
+  Placing a person the role gate left out of the pool is not built (Session 52).
 - **Salary: redeploy only as a Pareto gain; unused salary is fine.** Ben: leaving salary on the table can be strategic; the goal is
   to find out whether it can buy a gain on both goals at once, not to spend the cap. Take a swap only when it raises the row's
   prior, leaves the QB, his stack, the bring-back, the DST and every hand-placed person alone, and leaves no washout measure worse
   (max exposure, top-3 union, mean pairwise overlap no higher; distinct people no fewer). The incoming person used at least 2 fewer
   times than the outgoing one is a rule that guarantees it (Week 4: `construction/pareto_redeploy_record.py`). Compare QA Tier 2
   before and after, show both in the handoff, and keep the earlier file when nothing passes. `swap_inactives.py redeploy` ranks by
-  the prior alone and takes hand-placed people back out: do not use it for this until Session 62.
-- **Late windows need no active list at the early lock.** Ben: late swap covers it. Confirm the early-window players against the
-  posted official inactive lists; put every later-window player on a **late-swap watch list** with his DraftKings status (`Q`,
-  illness, a depth-chart call), not under Needs Ben as an open gap.
+  the prior alone and takes hand-placed people back out: do not use it for this until Session 62, which will read
+  `judgment_pass.protected_people` for its `--protect` list.
+- **Late windows need no active list at the early lock (engine).** Ben: late swap covers it. `late_swap_watch` lists every rostered
+  later-window person with no official row and his DraftKings status (`Q`, illness, a depth-chart call); put that list in the handoff,
+  not under Needs Ben as an open gap. Confirm the early-window players (`early_window_without_official_row`) against the posted
+  official inactive lists. `OFFICIAL_STATUS_*` still stops certification; the watch list changes none of it.
 - **Say who was passed over and why** in the handoff, alongside who was added. Late-game candidates can wait for late swap.
 
 ## Repo etiquette and gotchas

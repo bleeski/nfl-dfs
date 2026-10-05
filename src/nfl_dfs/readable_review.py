@@ -770,6 +770,96 @@ def _redistribution_html(coverage: Mapping[str, object]) -> list[str]:
     ]
 
 
+def _text_items(value: object) -> list[object]:
+    return list(value) if isinstance(value, (list, tuple)) else []
+
+
+def _judgment_pass_html(data: Mapping[str, object]) -> list[str]:
+    """Session 61 (R37): the Classic judgment pass, display-only, from the hash-bound coverage artifact.
+
+    Read tolerantly: a coverage artifact from before Session 61 carries none, and a pass that failed
+    carries only its error. Nothing here is recomputed or reconciled; the selector's own report is the
+    record, and none of it is a model value.
+    """
+
+    block = data.get("judgment_pass")
+    if not isinstance(block, Mapping):
+        return []
+    if block.get("status") == "FAILED":
+        return ["<h2>Classic judgment pass</h2>", f'<p>The pass did not run: {_escape(block.get("error"))}</p>']
+
+    def rows_of(value: object) -> list[Mapping[str, object]]:
+        return [item for item in value or () if isinstance(item, Mapping)] if isinstance(value, (list, tuple)) else []
+
+    sections = [
+        "<h2>Classic judgment pass</h2>",
+        f'<p class="small">{_escape(block.get("version"))}. A report for the agent: it writes no model value, clears no gate, '
+        "and nothing in it is a selection. "
+        f'Does not establish: {_escape(", ".join(str(v) for v in _text_items(block.get("does_not_establish"))))}.</p>',
+    ]
+    starters = block.get("starters_check") if isinstance(block.get("starters_check"), Mapping) else {}
+    sections.append("<h3>Starting quarterbacks</h3>")
+    sections.append(_html_table(
+        ("Team", "Starter", "Salary", "DK status", "Prior points", "Scored", "Selectable", "Reason", "Promoted over"),
+        [(row.get("team"), row.get("name"), row.get("salary"), row.get("dk_status"), row.get("prior_points"),
+          row.get("scored"), row.get("selectable"), row.get("reason"), ", ".join(map(str, row.get("promoted_over") or ())))
+         for row in rows_of(starters.get("starters"))]))
+    if starters.get("unevaluated_teams"):
+        sections.append(
+            f'<p>Teams the depth evidence does not order (nobody was guessed): '
+            f'{_escape(", ".join(map(str, starters["unevaluated_teams"])))}.</p>')
+    rooms = block.get("injury_rooms") if isinstance(block.get("injury_rooms"), Mapping) else {}
+    room_rows = []
+    for room in rows_of(rooms.get("rooms")):
+        vacated = "; ".join(f'{v.get("name")} ({v.get("dk_status") or "official INACTIVE row"}, ${v.get("salary")})'
+                            for v in rows_of(room.get("vacated")))
+        heirs = "; ".join(
+            f'{i.get("name")} ${i.get("salary")}: {i.get("prior_points_before")} to {i.get("prior_points_after")}'
+            for i in rows_of(room.get("inheritors"))) or "nobody"
+        stuck = "; ".join(f'{u.get("name")} ${u.get("salary")} ({u.get("history_state")}, prior {u.get("prior_points")})'
+                          for u in rows_of(room.get("not_inheriting_unresolved_role"))) or ""
+        room_rows.append((room.get("team"), room.get("position"), vacated, heirs, stuck))
+    sections.append("<h3>Injury rooms</h3>")
+    sections.append(_html_table(
+        ("Team", "Position", "Vacated by", "Inherits (prior points before to after)", "Not inheriting: role unresolved"),
+        room_rows))
+    candidates = block.get("candidates") if isinstance(block.get("candidates"), Mapping) else {}
+    sections.append("<h3>Candidates to research (never a selection)</h3>")
+    sections.append(_html_table(
+        ("Rank", "Name", "Pos", "Team", "Salary", "Sources", "History", "Prior before to after", "Placeable", "Question"),
+        [(row.get("rank"), row.get("name"), row.get("position"), row.get("team"), row.get("salary"),
+          ", ".join(map(str, row.get("sources") or ())), row.get("history_state"),
+          f'{row.get("prior_points_before")} to {row.get("prior_points_after")}', row.get("placement"), row.get("research"))
+         for row in rows_of(candidates.get("candidates"))]))
+    unevaluated = candidates.get("sources_unevaluated")
+    if isinstance(unevaluated, Mapping) and unevaluated:
+        sections.append("<p class=\"small\">Sources the run cannot read: "
+                        + _escape("; ".join(f"{key}: {value}" for key, value in unevaluated.items())) + "</p>")
+    protected = rows_of(block.get("protected_people"))
+    decision = data.get("construction_judgment") if isinstance(data.get("construction_judgment"), Mapping) else {}
+    if protected or decision:
+        sections.append("<h3>Construction judgment</h3>")
+        sections.append(
+            f'<p>Status {_escape(decision.get("status"))}; no number written. '
+            f'{_escape(decision.get("not_applied_reason") or "")}</p>')
+        sections.append(_html_table(
+            ("Person", "Minimum rows", "Rows holding him", "Met"),
+            [(row.get("name"), row.get("min_rows"), ", ".join(map(str, row.get("delivered_rows") or ())), row.get("met"))
+             for row in protected]))
+        refused = rows_of(decision.get("refused"))
+        if refused:
+            sections.append(_html_table(("Refused by name", "DraftKings ID", "Why"),
+                                        [(row.get("name"), row.get("dk_id"), row.get("refusal")) for row in refused]))
+    watch = block.get("late_swap_watch") if isinstance(block.get("late_swap_watch"), Mapping) else {}
+    sections.append("<h3>Late-swap watch list</h3>")
+    sections.append(f'<p class="small">{_escape(watch.get("note"))}</p>')
+    sections.append(_html_table(
+        ("Name", "Team", "Position", "Locks", "DK status", "Rows"),
+        [(row.get("name"), row.get("team"), row.get("position"), row.get("lock_at"), row.get("dk_status"), row.get("rows"))
+         for row in rows_of(watch.get("later_window_without_official_row"))]))
+    return sections
+
+
 def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
     """Render the C3 Classic schema without changing SD5 Showdown bytes."""
 
@@ -946,6 +1036,7 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
             _html_table(("Team", "QB attempt share", "Carry share", "Target share", "Rushing TD share", "Receiving TD share"), unallocated_rows)
         )
         sections.extend(_redistribution_html(coverage))
+    sections.extend(_judgment_pass_html(data))
 
     sections.append("<h2>Evidence and limitations</h2>")
     evidence_rows = [

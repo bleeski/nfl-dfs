@@ -183,6 +183,15 @@ taken, and the delivered file's own counts recomputed from its bytes. A supplied
 default pair takes the same cap steps before its structural rungs. `docs/claude/working.md` keeps the by-hand rotation for what the
 pool cannot meet.
 
+**Classic judgment pass (Session 61, R37).** A Classic run reports, beside its file, what Ben's rule asks for by hand
+(`judgment_pass` in the result and the coverage artifact; `scripts/judgment_pass_report.py` prints it): the starting quarterbacks
+scored or not, each injury room with its inheritors' prior before and after, a ranked list of candidates to research (never a
+selection), and a late-swap watch list. A quarterback the depth evidence puts behind a declared starter is out of every Classic row
+when the depth package is supplied (`CLASSIC_BACKUP_QB_UNEVALUATED` names the teams when it is not). After researching the
+candidates, a construction judgment (`--construction-judgment-json`, `nfl_classic_construction_judgment_v1`) places the people to
+roster in the thesis build; it writes no number, refuses a DraftKings `OUT`, an official inactive, a `BLOCK` and an unresolved
+material role change by name, and never moves a release truth. `docs/OPERATOR_GUIDE.md` § Classic judgment pass has the commands.
+
 A C2 policy binds every fillable row, or a subset of them in template order:
 `scripts/make_classic_policy.py --entry-id <id>`, once per row (Session 11b); a
 prefilled or unknown row is refused. Its bounds, stack rules and bank count its
@@ -1339,7 +1348,7 @@ the rows; every prefilled roster and earlier row is cut exactly (R29). The opera
 needs the operator's config and slate-context totals and shells out to another builder.
 The construction preferences relax in this order, each step a `RELAXATION_STRUCTURE_RELAXED`
 record (`constraint` `classic_bringback`, `classic_person_overlap`, `classic_person_share`,
-`classic_qb_stack`): a thesis proved infeasible drops its bring-back; then the one overlap
+`classic_qb_stack`, and since Session 61 `classic_placement_overlap` for one protected row): a thesis proved infeasible drops its bring-back; then the one overlap
 cap steps up a person; then the thesis is dropped (a `classic_thesis` record; a thesis whose quarterbacks are all at the
 person cap is dropped for that reason without touching the bring-back or the overlap); when every thesis
 is gone the person share steps up ten points at a time to 60%; then the stack requirement goes (a free thesis

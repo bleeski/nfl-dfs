@@ -5,8 +5,13 @@ DraftKings input is CP1252. Times must be timezone-aware ISO 8601 values.
 
 ## Cowork run request
 
-`cowork-run` (aliased `run-slate`) emits `nfl_cowork_run_request_v3` and accepts
-`v1`, `v2` and `v3`. Unknown keys are rejected.
+`cowork-run` (aliased `run-slate`) emits `nfl_cowork_run_request_v4` and accepts
+`v1`, `v2`, `v3` and `v4`. Unknown keys are rejected.
+
+**v4, added 2026-10-05 (Session 61), adds exactly one field:** `construction_judgment_json`, the
+Classic construction judgment documented under *Classic judgment pass and construction judgment*
+below. The CLI flag is `--construction-judgment-json`. A `v1`, `v2` or `v3` request carrying it is
+refused, naming `v4`; the pattern is the one every later field follows.
 
 **v3, added 2026-09-24 (Session 07), adds exactly one field:**
 `delivery_deadline_utc`, when the run's file is due, an ISO-8601 moment with a
@@ -917,7 +922,7 @@ Successful C3 publication is atomic and adds:
 |---|---|
 | `classic_review_export_audit.json` | Canonical `prior_only_classic_export_audit_c3_v3` since Session 11c (v2 and v1 stay as written). v3 adds `bound_entry_ids`, `unbound_entry_ids`, `row_sources` (each filled row, `POLICY` or `C1`) and the `checks_run` item `POLICY_AND_C1_ROW_PARTITION_AND_THE_RUN_S_EXCLUSIONS_OVER_EVERY_ROW`; `entry_ids` and `output.entries` are every filled row, `recomputed`'s counts and `pairwise_person_overlap` the policy's rows, and `recomputed.canonical_lineups` every filled row. v2 since Session 09: every boundary hash, recomputed fact, exact output hash, status, limitations, truths, and one next action. v2 reports `recomputed.selected_activity` as `PASS` or `INCOMPLETE` (v1 always wrote `PASS`), adds `recomputed.selected_activity_without_row`, lists `SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE` in `checks_run` only when every selected person has an `ACTIVE` row (otherwise `SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW`), and names the gap in `limitations` as `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED:NO_EXACT_ID_ROW_IN_SUPPLIED_FILE:<n>_of_<m>_selected_people` or `OFFICIAL_STATUS_REQUIRED:NO_OFFICIAL_STATUS_FILE_SUPPLIED:<n>_of_<m>_selected_people` |
 | `DK_REVIEW_ENTRY_<label>.csv` | Exact reserved-entry template bytes with only nine previously blank authorized roster cells rewritten for each exact Entry ID in template order |
-| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v3` display data independently reconstructed from the accepted artifacts, since Session 60 (v1 stays as written and was never produced for a subset policy; v2 stays readable as written). v3 adds `pool_coverage.workload_redistribution` and, when it applied, the section Injury-room redistribution (Injury-room workload redistribution, Session 60). v2 adds each entry's `source` (`POLICY` or `C1`) and `unbound_rows`: `null` when the policy binds every fillable row, otherwise the C1 rows' `entry_ids`, `source`, `basis`, `checks`, `person_exposure` and `maximum_person_overlap_with_any_filled_row` (C1 cuts only exact rosters, so no overlap cap covers them). `exposure.entry_count_denominator` is the policy's rows; `reconciliation.entry_count` is every filled row |
+| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v4` display data independently reconstructed from the accepted artifacts. v4 (Session 61) adds the Classic judgment pass and the construction judgment's decision (display-only; Classic judgment pass and construction judgment, below). v1 stays as written and was never produced for a subset policy; v2 and v3 stay readable as written. v3 (Session 60) adds `pool_coverage.workload_redistribution` and, when it applied, the section Injury-room redistribution (Injury-room workload redistribution, Session 60). v2 adds each entry's `source` (`POLICY` or `C1`) and `unbound_rows`: `null` when the policy binds every fillable row, otherwise the C1 rows' `entry_ids`, `source`, `basis`, `checks`, `person_exposure` and `maximum_person_overlap_with_any_filled_row` (C1 cuts only exact rosters, so no overlap cap covers them). `exposure.entry_count_denominator` is the policy's rows; `reconciliation.entry_count` is every filled row |
 | `prior_only_readable_review.html` | Self-contained escaped rendering of the canonical readable JSON |
 | `NFL_DFS_Cowork_Review_<run-id>.xlsx` | Eight sheets: Run Control, Evidence Paste, Portfolio, QA, Upload, Exposure, Review Evidence, and Artifacts |
 
@@ -1223,10 +1228,136 @@ pool-coverage note, the review observations, the readable-review heading and the
 not reassigned. Frozen artifacts from earlier runs keep their meaning. The pool-scores dump (`nfl_prior_pool_scores_v1`) carries no
 marker: read the run's selection report to tell a run before Session 60 from one after.
 
-**Readable reviews.** `prior_only_readable_review_sd5_v3` and `prior_only_readable_review_classic_c3_v3` carry
+**Readable reviews.** `prior_only_readable_review_sd5_v3` and `prior_only_readable_review_classic_c3_v3` (v4 from Session 61, below) carry
 `pool_coverage.workload_redistribution` and, when it applied, the section **Injury-room redistribution** (a table of the moves, with
 the does-not-establish text); the unallocated-volume heading then reads "Volume left unallocated after the injury-room
 redistribution". A reader of v1 or v2 sees none of it; every other field means what it meant, and v2 files stay readable as written.
+
+## Classic judgment pass and construction judgment (Session 61, R37)
+
+Ben's rule (R37): do not blindly exclude a starter for lack of history, and do not blindly roster one. Until Session 61 the pass that
+follows the rule ran by hand after the engine (`docs/claude/working.md` § Classic judgment pass). The engine now does the steps
+that need no judgment, hands over the rest as a short report, and places a person the agent decides to name. None of it writes a
+model value, clears a gate, or moves a release truth: every path still ends `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+### The judgment pass, `classic_judgment_pass_v1`
+
+Built by `classic_judgment.build_judgment_pass` from what the run already holds, at the one place `prior_review` assembles the
+Classic selection report, so Classic C1/C2 and C3 both carry it: `selection_report["judgment_pass"]` and, additive and hash-bound,
+the key `judgment_pass` of the Classic complete-slate coverage artifact (`nfl_classic_slate_coverage_c1_v1` and `_c2_v1`; a reader
+that does not know the key ignores it). A pass that raises is a `FAILED` object carrying its error and the named limitation
+`CLASSIC_JUDGMENT_PASS_FAILED`; it never stops a run. Showdown has none.
+
+| Block | What it says |
+|---|---|
+| `starters_check` | Each team's effective starting quarterback (`qb_depth_roles.starters_by_team`, after R25's promotion over a DraftKings-unavailable starter): salary, DraftKings status, `scored`, `selectable`, prior points, the pool-coverage `reason` and `promoted_over`. `missing_from_scored_pool` is the ones the pool left out, with why. `unevaluated_teams` are teams the depth evidence does not order; nobody is guessed. |
+| `injury_rooms` | Each room (team and position) a DraftKings-unavailable person left: who vacated and his shares by field; who inherits, with `share_gained_by_field`, salary, `prior_points_before` and `prior_points_after`, `history_state` and `repriced_by_redistribution`; the people in the room who did **not** inherit because their current role is unresolved (`not_inheriting_unresolved_role`: their prior is still the old role's); what stayed unallocated. `prior_points_before` is the same scoring pipeline run on the model as it stood before Session 60's redistribution, computed in `select_prior_lineups` (`prior_points_before_redistribution`, with `..._note` one of `SCORED`, `NOTHING_MOVED`, `NOT_REQUESTED` or `COUNTERFACTUAL_COULD_NOT_RUN:...`); where it was not computed the field is `null`, never invented. |
+| `candidates` | A ranked list **for the agent's research, never a selection** (`kind: FOR_THE_AGENTS_RESEARCH_NOT_A_SELECTION`). Sources, in rank order: `UNRESOLVED_ROLE_IN_VACATED_ROOM`, `UNRESOLVED_TRANSFER_PRIOR` (a person `offensive_roles` finds in `TRANSFER_PRIOR_UNVERIFIED`), `ABSORBER_OF_A_VACATED_SHARE`; `SALARY_RANK_ABOVE_PRIOR_RANK` is a tag on a person another source found. Offensive people priced far above their prior with none of those facts are `priced_above_prior_only`, a list of at most ten, not candidates. Within a tier the order is the room's vacated carry-plus-target share, then the salary-versus-prior rank gap, then salary, then name: shares and ranks the model already holds, never a projection. Each row carries `history_state` (read it before calling anyone repriced: a person whose history is `CURRENT_ROLE_UNKNOWN`, or whose prior row is not `PASS`, never absorbs, so his prior is still the old role's; `repriced_by_redistribution` is computed from his before and after points, not assumed), `placeable` (`IN_THE_SCORED_POOL`, or the pool-coverage reason when the role gate left him out) and a fixed-template `research` question. A person DraftKings marks unavailable, an official inactive row or an operator exclusion is not listed (`not_listed_because_nothing_can_place_them`). `sources_unevaluated` names `DEPTH_RANK_ONE_AT_POSITION`: the engine reads the frozen depth chart for quarterbacks only, and matching a name to a DraftKings row is a fuzzy join it never uses. |
+| `late_swap_watch` | Rostered people whose game locks after the earliest lock and for whom no official status row was supplied, with their DraftKings status and the rows they hold (`later_window_without_official_row`), and the rostered early-window people with no row (`early_window_without_official_row`, the open gap). Official activity for a later window is not available at the early lock and late swap covers it (R37), so this is a list to re-check, not a blocker. It is additive: no `OFFICIAL_STATUS_*` code is touched and certification still sees every one of them. |
+| `protected_people` | The people a construction judgment placed (below), with minimum, rows holding each and whether it was met: what a salary redeploy (Session 62's `--protect`) must never remove. |
+
+`does_not_establish`: `THAT_ANY_LISTED_PERSON_IS_PLAYING_OR_STARTING`, `OFFICIAL_ACTIVE_STATUS`, `A_CURRENT_ROLE_FOR_ANY_CANDIDATE`,
+`ANY_PROJECTION_EXPECTED_VALUE_OR_WIN_PROBABILITY`, `THAT_A_RANK_IS_ANYTHING_BUT_THE_ORDER_TO_RESEARCH_IN`. Deterministic: the same
+inputs give the same JSON, and the functions mutate nothing they read.
+
+### The Classic backup-quarterback default
+
+`classic_backup_qb_default` (rule `CLASSIC_BACKUP_QUARTERBACKS_OUT_OF_EVERY_ROW_R36_R37`) extends Session 53's default to every
+Classic row: a quarterback the depth evidence puts behind a declared starter is out of the pool, the unbound fill included, unless a
+named choice keeps him in (a Classic policy's `minimum_entries > 0` for him, or a validated construction judgment naming him: the
+same-day promotion case). The effective starter is the resolver's (R25 has promoted over an unavailable one), so a promoted backup
+stays in and the unavailable published starter is out on his DraftKings status. Classic builds no depth package of its own
+(`run-slate` captures for Showdown only), so a run that supplied none names every quarterback team `unevaluated` and excludes
+nobody: the limitation `CLASSIC_BACKUP_QB_UNEVALUATED:<teams>` (class `P`, family `qb_depth_roles`) travels with the file, appended
+after any blocker that withholds it. Supply `--qb-depth-role-evidence-json`. `showdown_backup_qb_default` is unchanged and reports
+`applies: false` on a Classic run.
+
+### The construction judgment, `nfl_classic_construction_judgment_v1`
+
+Session 52 specified `nfl_construction_judgment_v1` for Showdown and was deferred before any code existed; its card says Classic
+needs its own schema version, and this is it. Session 52 stays `Deferred` for Showdown. One JSON names the people the thesis build
+must roster, by exact DraftKings ID, and is bound to the salary file's SHA-256.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Exactly `nfl_classic_construction_judgment_v1`. Unknown fields are refused. |
+| `salary_sha256` | The SHA-256 of the salary file this judgment was written for; must equal the run's. |
+| `author`, `authored_at` | Who wrote it (one plain line, 1 to 80 characters, no control characters; it reaches a limitation) and when (timezone-aware; not after the run's clock). |
+| `placements` | One to twelve objects, each a DraftKings ID once. |
+| `placements[].dk_id`, `.name` | The exact Classic DraftKings row and the name the salary file gives it. The echo catches a mistyped ID, which would name another person. |
+| `placements[].min_rows` | At least one: the fewest lineups he must sit in. A construction preference, never a thesis. |
+| `placements[].reason` | 12 to 600 characters of plain text, whitespace collapsed to one line, no control characters. Prose, not a number. |
+| `placements[].sources` | One to eight `{uri, observed_at}`: an HTTPS URI of at most 500 characters with no credentials on a host the engine does not prohibit (`sources.PROHIBITED_HOSTS` and every subdomain of one: never DraftKings, never nfl.com), and a timezone-aware time not after the run's clock. |
+
+**A file the run cannot use is dropped by name and the run goes on** (`reports.construction_judgment.status = DROPPED`, the limitation
+`CLASSIC_JUDGMENT_FILE_DROPPED:<code>`, class `P`): the minimum is a construction preference, the lock-clock ruling relaxes those, and
+the worst outcome is no lineup. Codes: `CONSTRUCTION_JUDGMENT_UNREADABLE`, `_CHANGED_DURING_READ`, `_INVALID`,
+`_SALARY_HASH_MISMATCH`, `_FROM_THE_FUTURE`, `_SOURCE_FROM_THE_FUTURE`, `_EXPIRED_AT_LOCK` (the run's clock is at or after the earliest
+lock), `_ID_NOT_IN_THE_SALARY_FILE`, `_NAME_IS_NOT_THE_ROW`, `_CLOCK_REQUIRES_TIMEZONE` and `_IS_CLASSIC_ONLY` (a Showdown run drops it).
+A file the run read is bound as `construction_judgment_json` in the run's artifacts and hashes and as
+`immutable_bindings.construction_judgment_sha256` in the coverage artifact (`null` when none was used); the C3 audit checks that
+binding the way it checks the QB depth package's; and a file that changes between the read and the publish blocks publication with
+`CONSTRUCTION_JUDGMENT_CHANGED_BEFORE_ARTIFACT_PUBLISH` (family `policy_binding`, class `V`: the bytes the report names are not the bytes
+the run read).
+
+**A placement the run cannot honour is refused by name and the rest are applied.** First match wins:
+`MIN_ROWS_EXCEEDS_THE_ENTRIES:<min>><rows>`; `NEVER_OVERRIDDEN:DK_STATUS_UNAVAILABLE:<status>` (DraftKings `OUT`, `IR`, `D`);
+`NEVER_OVERRIDDEN:OPERATOR_OR_OFFICIAL_INACTIVE_EXCLUSION`; `NEVER_OVERRIDDEN:<finding>` for a role-gate `BLOCK` and for
+`OFFENSIVE_UNRESOLVED_MATERIAL_ROLE_CHANGE` (Ben, 2026-09-19: such a person "is never selected on the old-team share");
+`NOT_IN_THE_SCORED_POOL:<finding>` for a person the role gate left out for another reason (`OFFENSIVE_MISSING_HISTORY` and the
+others), `KICKER_ROLE_ZERO_SHARE` or `NO_PRIOR_ROW`. Readmitting a person the gate left out is Session 52's design (a person with a
+source that can still clear the gate comes first) and is not built here: he has no score, and a rostered person the pool coverage
+calls excluded would disagree with the review. The judgment places people **in the scored pool** (a starter whose role is new today,
+a promoted backup, an absorber) and writes no number for any of them. It applies only to the thesis construction
+(`classic_construction="THESES"`, a Classic run with no portfolio policy in force, which is rung 4 of the ladder too); with a policy
+in force every placement is `NOT_APPLIED` and the limitation `CLASSIC_JUDGMENT_NOT_APPLIED:A_PORTFOLIO_POLICY_IS_IN_FORCE` says so.
+
+**Placement budget.** A forced placement is a construction preference, so it gives way before the clock does: at most `PLACEMENT_SOLVES_PER_ROW` (8) throwaway solves a row, each under a quarter of the per-row solve limit; a person no thesis could hold in `PLACEMENT_MISS_LIMIT` (3) rows in a row is **abandoned by name** (`placements.abandoned`, a shortfall); and all forced solves together may spend `PLACEMENT_TIME_SHARE` (a quarter) of the build's window, after which everyone still owed is abandoned (`THE_PLACEMENT_TIME_SHARE_OF_THE_WINDOW_IS_SPENT`). Wall time is not in the report, which is hash-bound. With a stub that proves every pinned row infeasible the build makes 24 forced solves for the 20 rows, not one per owed row per thesis per cap.
+
+**Placement mechanics, `classic_thesis_sequential_v2`** (v1 is used, byte for byte as before, when nobody is protected). A named person
+must be in at least `min_rows` of the rows. The schedule owes him a row when his count is behind `ceil(index * min / rows)` or the
+rows left equal what he still needs. A row that owes someone is solved on a throwaway model of one thesis with his DraftKings row
+pinned, trying the theses that share his game first (his team, then the opponent, then the rest, from the round-robin cursor); a
+protected quarterback gets his own team's thesis even when the ranking left it out, and two protected quarterbacks of different teams
+never share a row. A failed attempt changes nothing shared: no thesis's bring-back is dropped, no thesis is dropped, and the one
+overlap cap stays where it was; the row is built as it always was and the debt carries. An urgent debt (rows left equal need) may try a
+looser overlap cap for that one row alone, recorded as the relaxation `classic_placement_overlap` (with the solver status the tighter attempt ended on). The rung-4 relaxation record that names the construction (`classic_thesis_sequential_v1`) is written before the build and is unchanged; the delivered report's `construction.version` is `classic_thesis_sequential_v2` whenever a judgment named someone. His person cap is
+`max(shared cap, min_rows)`. Distinct lineups (R29) are never relaxed: a minimum the rows could not hold is a shortfall, named, never
+closed by repeating a lineup. The builder recounts placements from the delivered rosters and refuses the file
+(`THESIS_CONSTRUCTION_BREACHED:placement:...`) if a recorded forced row does not hold its person.
+
+**Report.** `reports["construction_judgment"]` (also at `selection.construction_judgment` and the coverage artifact's
+`construction_judgment`): `version`, `status` (`APPLIED`, `NO_PLACEMENT_ACCEPTED`, `NOT_APPLIED`, `DROPPED`), `number_written: NONE`,
+`file` (the file's base name, SHA-256, author, authored time, salary hash: never the snapshot path, because the coverage artifact is run-ID independent), `applies_to`, `placements` (one per named person: DraftKings ID, person,
+name, position, team, salary, `min_rows`, `reason`, `sources`, `decision` of `ACCEPTED`, `REFUSED` or `NOT_APPLIED`, `refusal`),
+`accepted` (person to minimum), `refused`, `delivery` (the builder's recount: `requested`, `delivered_rows`, `met`, `shortfall`,
+`forced_rows`, `misses`, `ignored`, `person_cap_override`, `rows_delivered`) and `does_not_establish`:
+`THAT_ANY_NAMED_PERSON_IS_PLAYING_OR_HAS_THE_ROLE_THE_REASON_GIVES`, `A_CURRENT_ROLE_OR_ANY_MODEL_VALUE_FOR_A_NAMED_PERSON`,
+`OFFICIAL_ACTIVE_STATUS`, `THAT_PLACING_A_PERSON_RAISES_ANY_PAYOUT`.
+
+**Limitations that travel with the file** (class `P`, family `construction_judgment`, provenance R37, stops certification only):
+`CLASSIC_JUDGMENT_PLACEMENT_APPLIED` (who was placed, at least how many rows, by whom: a construction choice, not a current-role
+fact), `CLASSIC_JUDGMENT_PLACEMENT_REFUSED` (each refusal by name), `CLASSIC_JUDGMENT_PLACEMENT_SHORTFALL` (each unmet minimum),
+`CLASSIC_JUDGMENT_NOT_APPLIED`, `CLASSIC_JUDGMENT_FILE_DROPPED` and `CLASSIC_JUDGMENT_PASS_FAILED`. They are appended after the blockers
+that withhold a file. The registry is `config/gate_registry_v1.json` (its SHA-256 is re-pinned above); the file stays
+`PRIOR_ONLY / DO_NOT_UPLOAD`, and a placement is never evidence a person is playing, so `certify` still needs its own evidence. A
+package that used a judgment says so in its limitations and in `immutable_bindings`; `certify` does not read a placement as evidence
+for anything.
+
+**Request.** `nfl_cowork_run_request_v4` adds exactly one field, `construction_judgment_json` (flag `--construction-judgment-json`
+on `run-slate`), confined and snapshotted like every request path; v3, v2 and v1 stay accepted and may not carry it
+(`REQUEST_FIELDS_ADDED_AFTER_V1`). `run_prior_review` takes `construction_judgment_json`; `select_prior_lineups` takes the validated
+`ConstructionJudgment`.
+
+**Readable review.** `prior_only_readable_review_classic_c3_v4` carries the pass and the judgment's decision from the coverage
+artifact (display-only) and renders the section **Classic judgment pass**: the starters, the injury rooms, the candidates to research,
+the construction judgment's placements and refusals, and the late-swap watch list. A reader of v3 sees none of it; every other field
+means what it meant. The Showdown review (`sd5_v3`) is unchanged.
+
+**Does not establish** a current role, activity or a payout for any person the pass names or the judgment places; it is no
+evidence, no projection and no selection, and a judgment is the agent's research written down, hash-bound to the bytes it was written
+for and reported person by person.
 
 ## SD3 Showdown portfolio policy
 
@@ -1387,7 +1518,7 @@ team, rank, `stack_value`, `person_share`, `rows`, `bringback_required`, `drops`
 The selector recomputes distinctness, the overlap cap, the person cap and the stack count
 from the rosters and raises `THESIS_CONSTRUCTION_BREACHED` (`portfolio_bounds`) on a
 disagreement. Relaxations are construction preferences. Four are steps in `construction.relaxations`
-(`constraint`, `from`, `used`, `index`, `thesis`, `trigger_status`, `reason`): `classic_bringback` (a
+(`constraint`, `from`, `used`, `index`, `thesis`, `trigger_status`, `reason`; since Session 61 also `classic_placement_overlap`, one protected row solved under a looser overlap cap, which a failed forced attempt never moves for anyone else): `classic_bringback` (a
 proved-infeasible thesis loses its bring-back), `classic_thesis` (a thesis dropped: no distinct lineup
 left, its solve ended without a proof, or every quarterback it may use is at the person cap,
 `PERSON_CAP_REACHED`, which relaxes nothing else; the record is the thesis's first drop, every drop stays
@@ -3095,7 +3226,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `98f5db6b851fd2c59bf031f6a9410bae4ae0bf99ce7caee2a3b7b2e5e156b01f`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `939a1bda2840919cdb8882b61a8cf5810166ecdc3564e9438e530112693cc5bd`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -3647,8 +3778,8 @@ supplied one. Attempt 0's review root is `prior_review/`; attempt n's is
 Each relaxation: `sequence`, `attempt` (the one it fed), `step` (`BANK`,
 `STRUCTURE`, `NO_POLICY`, since Session 39 `OVERLAP_CAP` and since Session 49
 `THESIS_PREFERENCE`), `constraint`
-(`classic_person_overlap` for an `OVERLAP_CAP` step, `classic_bringback`, `classic_person_share`
-or `classic_qb_stack` for a `THESIS_PREFERENCE` step, `stack_rules.<rule_id>`,
+(`classic_person_overlap` for an `OVERLAP_CAP` step, `classic_bringback`, `classic_person_share`,
+`classic_qb_stack` or, since Session 61, `classic_placement_overlap` for a `THESIS_PREFERENCE` step, `stack_rules.<rule_id>`,
 `player_exposure_bounds`, `team_exposure_bounds`, `game_exposure_bounds`,
 `groups`, `max_pairwise_person_overlap`, `search_limits`,
 `max_combined_person_exposure`, `max_captain_exposure`,

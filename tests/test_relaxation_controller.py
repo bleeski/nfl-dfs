@@ -60,11 +60,12 @@ SUPPLIED = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "supplie
 
 
 def _classic(tmp_path, monkeypatch, *, run_id, policy, entries=3, window=60.0, review=None, clock=None,
-             depth=None):
+             depth=None, extra=None):
     """`run-slate` on the Classic fixture with `window` seconds before the improvement stops.
 
     `policy` is a callable that writes the supplied policy, or None for a run that supplies none.
     `depth` (Session 49) is players per position per team, for a pool wide enough to hold a cap.
+    `extra` (Session 61) is a callable from the attachments directory to more request values.
     """
 
     from nfl_dfs import cli
@@ -80,7 +81,8 @@ def _classic(tmp_path, monkeypatch, *, run_id, policy, entries=3, window=60.0, r
         label=run_id, run_id=run_id, prior_package_dir=str(package), official_status_csv=str(status),
         offensive_role_evidence_json=str(role), as_of=AS_OF.isoformat(),
         delivery_deadline_utc=deadline.isoformat(),
-        **({"portfolio_policy_json": str(policy(attachments))} if policy is not None else {}))
+        **({"portfolio_policy_json": str(policy(attachments))} if policy is not None else {}),
+        **(extra(attachments) if extra is not None else {}))
     code = cli.command_cowork_run(_cowork_args(tmp_path, attachments, **values))
     root = tmp_path / "outputs" / run_id
     return code, json.loads((root / "cowork_run.json").read_text(encoding="utf-8")), root

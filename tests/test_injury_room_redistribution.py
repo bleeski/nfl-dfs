@@ -861,7 +861,7 @@ def test_the_classic_c3_review_carries_the_moves_and_marks_those_a_declared_allo
     )
     assert not outcome.blocked, outcome.blockers
     readable = json.loads(Path(outcome.artifacts["readable_review_json"]).read_text(encoding="utf-8"))
-    assert readable["schema_version"] == "prior_only_readable_review_classic_c3_v3"
+    assert readable["schema_version"] == "prior_only_readable_review_classic_c3_v4"
     block = readable["pool_coverage"]["workload_redistribution"]
     assert block["applied"] is True
     assert [row["person"] for row in block["vacating_people"]] == ["NE|RB|NE RB One"]

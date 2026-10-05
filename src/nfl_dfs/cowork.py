@@ -23,19 +23,26 @@ from typing import Iterable, Mapping
 # file is due, as an aware ISO-8601 moment. Absent, the deadline is the earliest
 # relevant lock minus 5 minutes (R31, `deadline.default_deadline`). v2 stays
 # accepted and unchanged by the same rule that keeps v1.
-COWORK_REQUEST_VERSION = "nfl_cowork_run_request_v3"
+#
+# v4 (Session 61) adds exactly one field, `construction_judgment_json`: the Classic construction
+# judgment (`nfl_classic_construction_judgment_v1`), the people the thesis build must roster in a
+# minimum of rows. v3, v2 and v1 stay accepted and unchanged by the same rule.
+COWORK_REQUEST_VERSION = "nfl_cowork_run_request_v4"
+COWORK_REQUEST_VERSION_V3 = "nfl_cowork_run_request_v3"
 COWORK_REQUEST_VERSION_V2 = "nfl_cowork_run_request_v2"
 COWORK_REQUEST_VERSION_V1 = "nfl_cowork_run_request_v1"
 SUPPORTED_REQUEST_VERSIONS = (
     COWORK_REQUEST_VERSION_V1,
     COWORK_REQUEST_VERSION_V2,
+    COWORK_REQUEST_VERSION_V3,
     COWORK_REQUEST_VERSION,
 )
 # Fields introduced after v1, and the first version that may carry each. A
 # request may carry a field from its own version or an earlier one.
 REQUEST_FIELDS_ADDED_AFTER_V1 = {
     "qb_depth_role_evidence_json": COWORK_REQUEST_VERSION_V2,
-    "delivery_deadline_utc": COWORK_REQUEST_VERSION,
+    "delivery_deadline_utc": COWORK_REQUEST_VERSION_V3,
+    "construction_judgment_json": COWORK_REQUEST_VERSION,
 }
 
 
@@ -173,6 +180,7 @@ PATH_FIELDS = (
     "role_evidence_json",
     "offensive_role_evidence_json",
     "qb_depth_role_evidence_json",
+    "construction_judgment_json",
     "portfolio_policy_json",
     "ownership_brackets_csv",
     "source_ledger_json",
@@ -232,6 +240,7 @@ class CoworkRunRequest:
     role_evidence_json: str | None = None
     offensive_role_evidence_json: str | None = None
     qb_depth_role_evidence_json: str | None = None
+    construction_judgment_json: str | None = None
     portfolio_policy_json: str | None = None
     ownership_brackets_csv: str | None = None
     source_ledger_json: str | None = None
