@@ -1,0 +1,2384 @@
+{
+ "status": "DIAGNOSTIC_PRIOR_ONLY_NOT_AN_UPLOAD_AUTHORIZATION",
+ "RELEASE_DECISION": "DO_NOT_UPLOAD",
+ "measure_names": {
+  "contest_top1": "scenario top-1% rate per contest",
+  "washout_q75": "scenario washout rate (q75)"
+ },
+ "input": {
+  "v3": "/home/user/nfl-dfs/data/inbox/slates/atl-no-sd-2026-10-05/construction/DK_REVIEW_ENTRY_atl-no-sd_ceiling_v3.csv",
+  "v3_sha256": "30ff0a86cc51dbe0977f17feeaa2508f08a6405dbbad42e805446526067d4cfb"
+ },
+ "output": {
+  "path": "/home/user/nfl-dfs/data/inbox/slates/atl-no-sd-2026-10-05/construction/qa_iter1/DK_REVIEW_ENTRY_atl-no-sd_qa_iter1.csv",
+  "sha256": "1bcd51c4f0bb086c64f75389008d5a9d4d0a0455481552ebe1dccf7697ab6f97",
+  "v3_csv_roundtrip_identical": true
+ },
+ "diagnosis": {
+  "per_entry_top1_sharp_select": {
+   "5284812269": {
+    "contest": "196285159",
+    "captain": "Juwan Johnson",
+    "rate": 0.0047
+   },
+   "5284796317": {
+    "contest": "196285160",
+    "captain": "Chris Olave",
+    "rate": 0.0042
+   },
+   "5284811761": {
+    "contest": "196285160",
+    "captain": "Tyler Shough",
+    "rate": 0.0015
+   },
+   "5284789239": {
+    "contest": "196285161",
+    "captain": "Chris Olave",
+    "rate": 0.0027
+   },
+   "5284789375": {
+    "contest": "196285161",
+    "captain": "Juwan Johnson",
+    "rate": 0.0172
+   },
+   "5284789376": {
+    "contest": "196285161",
+    "captain": "Michael Penix Jr.",
+    "rate": 0.0003
+   },
+   "5284789377": {
+    "contest": "196285161",
+    "captain": "Bijan Robinson",
+    "rate": 0.0042
+   },
+   "5284789378": {
+    "contest": "196285161",
+    "captain": "Bijan Robinson",
+    "rate": 0.0025
+   },
+   "5284789379": {
+    "contest": "196285161",
+    "captain": "Bijan Robinson",
+    "rate": 0.0177
+   },
+   "5284789380": {
+    "contest": "196285161",
+    "captain": "Alvin Kamara",
+    "rate": 0.0548
+   },
+   "5284789381": {
+    "contest": "196285161",
+    "captain": "Nick Folk",
+    "rate": 0.0032
+   },
+   "5284789382": {
+    "contest": "196285161",
+    "captain": "Tyler Shough",
+    "rate": 0.0082
+   },
+   "5284789383": {
+    "contest": "196285161",
+    "captain": "Bijan Robinson",
+    "rate": 0.0305
+   },
+   "5284789384": {
+    "contest": "196285161",
+    "captain": "Tyler Shough",
+    "rate": 0.0208
+   },
+   "5284789385": {
+    "contest": "196285161",
+    "captain": "Michael Penix Jr.",
+    "rate": 0.0005
+   },
+   "5284789386": {
+    "contest": "196285161",
+    "captain": "Tyler Shough",
+    "rate": 0.0003
+   },
+   "5284789387": {
+    "contest": "196285161",
+    "captain": "Drake London",
+    "rate": 0.0403
+   },
+   "5284789388": {
+    "contest": "196285161",
+    "captain": "Juwan Johnson",
+    "rate": 0.0232
+   },
+   "5284789389": {
+    "contest": "196285161",
+    "captain": "Tyler Shough",
+    "rate": 0.0125
+   },
+   "5284789390": {
+    "contest": "196285161",
+    "captain": "Kyle Pitts Sr.",
+    "rate": 0.0043
+   },
+   "5284789391": {
+    "contest": "196285161",
+    "captain": "Drake London",
+    "rate": 0.009
+   },
+   "5284789392": {
+    "contest": "196285161",
+    "captain": "Alvin Kamara",
+    "rate": 0.0025
+   },
+   "5284789393": {
+    "contest": "196285161",
+    "captain": "Juwan Johnson",
+    "rate": 0.0027
+   },
+   "5284804067": {
+    "contest": "196285178",
+    "captain": "Juwan Johnson",
+    "rate": 0.0367
+   },
+   "5284816560": {
+    "contest": "196287745",
+    "captain": "Drake London",
+    "rate": 0.0015
+   },
+   "5284828093": {
+    "contest": "196287745",
+    "captain": "Juwan Johnson",
+    "rate": 0.0108
+   },
+   "5284796763": {
+    "contest": "196429904",
+    "captain": "Tyler Shough",
+    "rate": 0.0133
+   },
+   "5284816868": {
+    "contest": "196430106",
+    "captain": "Drake London",
+    "rate": 0.0092
+   },
+   "5284816959": {
+    "contest": "196430106",
+    "captain": "Bijan Robinson",
+    "rate": 0.1285
+   },
+   "5284821080": {
+    "contest": "196432194",
+    "captain": "Chris Olave",
+    "rate": 0.0102
+   },
+   "5284828437": {
+    "contest": "196432194",
+    "captain": "Drake London",
+    "rate": 0.0193
+   },
+   "5284828438": {
+    "contest": "196432194",
+    "captain": "Nick Folk",
+    "rate": 0.0057
+   },
+   "5284828439": {
+    "contest": "196432194",
+    "captain": "Tyler Shough",
+    "rate": 0.0128
+   },
+   "5284828440": {
+    "contest": "196432194",
+    "captain": "Daniel Carlson",
+    "rate": 0.0
+   },
+   "5284828441": {
+    "contest": "196432194",
+    "captain": "Juwan Johnson",
+    "rate": 0.0073
+   },
+   "5284828442": {
+    "contest": "196432194",
+    "captain": "Bijan Robinson",
+    "rate": 0.008
+   }
+  },
+  "marginal_contest_top1": {
+   "5284812269": {
+    "contest": "196285159",
+    "marginal": 0.0047,
+    "solo": 0.0047
+   },
+   "5284796317": {
+    "contest": "196285160",
+    "marginal": 0.0042,
+    "solo": 0.0042
+   },
+   "5284811761": {
+    "contest": "196285160",
+    "marginal": 0.0015,
+    "solo": 0.0015
+   },
+   "5284789239": {
+    "contest": "196285161",
+    "marginal": 0.0025,
+    "solo": 0.0027
+   },
+   "5284789375": {
+    "contest": "196285161",
+    "marginal": 0.0073,
+    "solo": 0.0172
+   },
+   "5284789376": {
+    "contest": "196285161",
+    "marginal": 0.0003,
+    "solo": 0.0003
+   },
+   "5284789377": {
+    "contest": "196285161",
+    "marginal": 0.0,
+    "solo": 0.0042
+   },
+   "5284789378": {
+    "contest": "196285161",
+    "marginal": 0.001,
+    "solo": 0.0025
+   },
+   "5284789379": {
+    "contest": "196285161",
+    "marginal": 0.0118,
+    "solo": 0.0177
+   },
+   "5284789380": {
+    "contest": "196285161",
+    "marginal": 0.0455,
+    "solo": 0.0548
+   },
+   "5284789381": {
+    "contest": "196285161",
+    "marginal": 0.0003,
+    "solo": 0.0032
+   },
+   "5284789382": {
+    "contest": "196285161",
+    "marginal": 0.0027,
+    "solo": 0.0082
+   },
+   "5284789383": {
+    "contest": "196285161",
+    "marginal": 0.0123,
+    "solo": 0.0305
+   },
+   "5284789384": {
+    "contest": "196285161",
+    "marginal": 0.0072,
+    "solo": 0.0208
+   },
+   "5284789385": {
+    "contest": "196285161",
+    "marginal": 0.0,
+    "solo": 0.0005
+   },
+   "5284789386": {
+    "contest": "196285161",
+    "marginal": 0.0002,
+    "solo": 0.0003
+   },
+   "5284789387": {
+    "contest": "196285161",
+    "marginal": 0.0275,
+    "solo": 0.0403
+   },
+   "5284789388": {
+    "contest": "196285161",
+    "marginal": 0.012,
+    "solo": 0.0232
+   },
+   "5284789389": {
+    "contest": "196285161",
+    "marginal": 0.0035,
+    "solo": 0.0125
+   },
+   "5284789390": {
+    "contest": "196285161",
+    "marginal": 0.0033,
+    "solo": 0.0043
+   },
+   "5284789391": {
+    "contest": "196285161",
+    "marginal": 0.0027,
+    "solo": 0.009
+   },
+   "5284789392": {
+    "contest": "196285161",
+    "marginal": 0.0013,
+    "solo": 0.0025
+   },
+   "5284789393": {
+    "contest": "196285161",
+    "marginal": 0.0003,
+    "solo": 0.0027
+   },
+   "5284804067": {
+    "contest": "196285178",
+    "marginal": 0.0367,
+    "solo": 0.0367
+   },
+   "5284816560": {
+    "contest": "196287745",
+    "marginal": 0.0015,
+    "solo": 0.0015
+   },
+   "5284828093": {
+    "contest": "196287745",
+    "marginal": 0.0108,
+    "solo": 0.0108
+   },
+   "5284796763": {
+    "contest": "196429904",
+    "marginal": 0.0133,
+    "solo": 0.0133
+   },
+   "5284816868": {
+    "contest": "196430106",
+    "marginal": 0.0092,
+    "solo": 0.0092
+   },
+   "5284816959": {
+    "contest": "196430106",
+    "marginal": 0.1285,
+    "solo": 0.1285
+   },
+   "5284821080": {
+    "contest": "196432194",
+    "marginal": 0.0102,
+    "solo": 0.0102
+   },
+   "5284828437": {
+    "contest": "196432194",
+    "marginal": 0.0192,
+    "solo": 0.0193
+   },
+   "5284828438": {
+    "contest": "196432194",
+    "marginal": 0.0053,
+    "solo": 0.0057
+   },
+   "5284828439": {
+    "contest": "196432194",
+    "marginal": 0.0115,
+    "solo": 0.0128
+   },
+   "5284828440": {
+    "contest": "196432194",
+    "marginal": 0.0,
+    "solo": 0.0
+   },
+   "5284828441": {
+    "contest": "196432194",
+    "marginal": 0.006,
+    "solo": 0.0073
+   },
+   "5284828442": {
+    "contest": "196432194",
+    "marginal": 0.0078,
+    "solo": 0.008
+   }
+  },
+  "zero_marginal_entries": [
+   "5284789377",
+   "5284789385"
+  ],
+  "washout_q75_sharp_select": {
+   "rate": 0.004,
+   "n_scenarios": 24,
+   "players": {
+    "Tyler Shough": {
+     "mean_pctile_in_washout": 0.286,
+     "mean_pts_washout": 5.62,
+     "mean_pts_all": 9.04,
+     "share_washout_below_p25": 0.458
+    },
+    "Michael Penix Jr.": {
+     "mean_pctile_in_washout": 0.275,
+     "mean_pts_washout": 4.05,
+     "mean_pts_all": 6.72,
+     "share_washout_below_p25": 0.583
+    },
+    "Bijan Robinson": {
+     "mean_pctile_in_washout": 0.319,
+     "mean_pts_washout": 14.48,
+     "mean_pts_all": 18.25,
+     "share_washout_below_p25": 0.458
+    },
+    "Drake London": {
+     "mean_pctile_in_washout": 0.381,
+     "mean_pts_washout": 13.85,
+     "mean_pts_all": 16.62,
+     "share_washout_below_p25": 0.375
+    },
+    "Chris Olave": {
+     "mean_pctile_in_washout": 0.783,
+     "mean_pts_washout": 17.35,
+     "mean_pts_all": 12.59,
+     "share_washout_below_p25": 0.042
+    },
+    "Juwan Johnson": {
+     "mean_pctile_in_washout": 0.373,
+     "mean_pts_washout": 12.92,
+     "mean_pts_all": 15.65,
+     "share_washout_below_p25": 0.333
+    },
+    "Alvin Kamara": {
+     "mean_pctile_in_washout": 0.431,
+     "mean_pts_washout": 12.25,
+     "mean_pts_all": 13.38,
+     "share_washout_below_p25": 0.292
+    }
+   }
+  },
+  "washout_team_points": {
+   "ATL": {
+    "washout": 76.4,
+    "all": 102.0
+   },
+   "NO": {
+    "washout": 102.7,
+    "all": 98.8
+   }
+  },
+  "captains_field_sharp_vs_ours": {
+   "field_sharp": {
+    "Bijan Robinson": 0.2264,
+    "Drake London": 0.1734,
+    "Juwan Johnson": 0.1432,
+    "Alvin Kamara": 0.0989,
+    "Chris Olave": 0.0745,
+    "Kyle Pitts Sr.": 0.0687,
+    "Nick Folk": 0.0358,
+    "Tyler Shough": 0.035
+   },
+   "field_uniform": {
+    "Bijan Robinson": 0.1602,
+    "Chris Olave": 0.1352,
+    "Drake London": 0.1108,
+    "Tyler Shough": 0.1046,
+    "Michael Penix Jr.": 0.0874,
+    "Devaughn Vele": 0.064,
+    "Juwan Johnson": 0.057,
+    "Alvin Kamara": 0.051
+   },
+   "ours": {
+    "Juwan Johnson": 0.1944,
+    "Tyler Shough": 0.1944,
+    "Bijan Robinson": 0.1667,
+    "Drake London": 0.1389,
+    "Chris Olave": 0.0833,
+    "Michael Penix Jr.": 0.0556,
+    "Alvin Kamara": 0.0556,
+    "Nick Folk": 0.0556,
+    "Kyle Pitts Sr.": 0.0278,
+    "Daniel Carlson": 0.0278
+   }
+  }
+ },
+ "moves": [
+  {
+   "type": "replace",
+   "entry": "5284828441",
+   "contest": "196432194",
+   "source": "pool",
+   "out": [
+    "Juwan Johnson",
+    "Nick Folk",
+    "Michael Penix Jr.",
+    "Alvin Kamara",
+    "Tyler Shough",
+    "Kyle Pitts Sr."
+   ],
+   "out_ids": [
+    "44358610",
+    "44358562",
+    "44358551",
+    "44358555",
+    "44358550",
+    "44358561"
+   ],
+   "into": [
+    "Juwan Johnson",
+    "Drake London",
+    "Alvin Kamara",
+    "Kyle Pitts Sr.",
+    "Bijan Robinson",
+    "Falcons"
+   ],
+   "in_ids": [
+    "44358610",
+    "44358549",
+    "44358555",
+    "44358561",
+    "44358547",
+    "44358569"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196432194": 0.06166666666666667
+     },
+     "contest_top1_after": {
+      "196432194": 0.2643333333333333
+     },
+     "washout_q75_before": 0.004,
+     "washout_q75_after": 0.0003333333333333333
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196432194": 0.2776666666666667
+     },
+     "contest_top1_after": {
+      "196432194": 0.748
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284812269",
+   "contest": "196285159",
+   "source": "pool",
+   "out": [
+    "Juwan Johnson",
+    "Michael Penix Jr.",
+    "Tyler Shough",
+    "Brian Robinson Jr.",
+    "Nick Folk",
+    "Drake London"
+   ],
+   "out_ids": [
+    "44358610",
+    "44358551",
+    "44358550",
+    "44358568",
+    "44358562",
+    "44358549"
+   ],
+   "into": [
+    "Juwan Johnson",
+    "Falcons",
+    "Nick Folk",
+    "Drake London",
+    "Bijan Robinson",
+    "Alvin Kamara"
+   ],
+   "in_ids": [
+    "44358610",
+    "44358569",
+    "44358562",
+    "44358549",
+    "44358547",
+    "44358555"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285159": 0.004666666666666667
+     },
+     "contest_top1_after": {
+      "196285159": 0.12283333333333334
+     },
+     "washout_q75_before": 0.0003333333333333333,
+     "washout_q75_after": 0.0003333333333333333
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285159": 0.0255
+     },
+     "contest_top1_after": {
+      "196285159": 0.4945
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284811761",
+   "contest": "196285160",
+   "source": "pool",
+   "out": [
+    "Tyler Shough",
+    "Austin Hooper",
+    "Michael Penix Jr.",
+    "Juwan Johnson",
+    "Nick Folk",
+    "Drake London"
+   ],
+   "out_ids": [
+    "44358606",
+    "44358571",
+    "44358551",
+    "44358554",
+    "44358562",
+    "44358549"
+   ],
+   "into": [
+    "Bijan Robinson",
+    "Juwan Johnson",
+    "Saints",
+    "Alvin Kamara",
+    "Falcons",
+    "Drake London"
+   ],
+   "in_ids": [
+    "44358603",
+    "44358554",
+    "44358567",
+    "44358555",
+    "44358569",
+    "44358549"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285160": 0.005666666666666667
+     },
+     "contest_top1_after": {
+      "196285160": 0.12066666666666667
+     },
+     "washout_q75_before": 0.0003333333333333333,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285160": 0.019
+     },
+     "contest_top1_after": {
+      "196285160": 0.42283333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789391",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Drake London",
+    "Daniel Carlson",
+    "Michael Penix Jr.",
+    "Alvin Kamara",
+    "Juwan Johnson",
+    "Kyle Pitts Sr."
+   ],
+   "out_ids": [
+    "44358605",
+    "44358564",
+    "44358551",
+    "44358555",
+    "44358554",
+    "44358561"
+   ],
+   "into": [
+    "Drake London",
+    "Alvin Kamara",
+    "Bijan Robinson",
+    "Kyle Pitts Sr.",
+    "Nick Folk",
+    "Falcons"
+   ],
+   "in_ids": [
+    "44358605",
+    "44358555",
+    "44358547",
+    "44358561",
+    "44358562",
+    "44358569"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.19066666666666668
+     },
+     "contest_top1_after": {
+      "196285161": 0.2821666666666667
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.6166666666666667
+     },
+     "contest_top1_after": {
+      "196285161": 0.7523333333333333
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789377",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Bijan Robinson",
+    "Nick Folk",
+    "Michael Penix Jr.",
+    "Tyler Shough",
+    "Juwan Johnson",
+    "Kevin Austin Jr."
+   ],
+   "out_ids": [
+    "44358603",
+    "44358562",
+    "44358551",
+    "44358550",
+    "44358554",
+    "44358578"
+   ],
+   "into": [
+    "Bijan Robinson",
+    "Juwan Johnson",
+    "Falcons",
+    "Drake London",
+    "Brian Robinson Jr.",
+    "Alvin Kamara"
+   ],
+   "in_ids": [
+    "44358603",
+    "44358554",
+    "44358569",
+    "44358549",
+    "44358568",
+    "44358555"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.2821666666666667
+     },
+     "contest_top1_after": {
+      "196285161": 0.364
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.7523333333333333
+     },
+     "contest_top1_after": {
+      "196285161": 0.8173333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789390",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Kyle Pitts Sr.",
+    "Michael Penix Jr.",
+    "Tyler Shough",
+    "Alvin Kamara",
+    "Bijan Robinson",
+    "Brian Robinson Jr."
+   ],
+   "out_ids": [
+    "44358617",
+    "44358551",
+    "44358550",
+    "44358555",
+    "44358547",
+    "44358568"
+   ],
+   "into": [
+    "Alvin Kamara",
+    "Bijan Robinson",
+    "Saints",
+    "Juwan Johnson",
+    "Drake London",
+    "Kyle Pitts Sr."
+   ],
+   "in_ids": [
+    "44358611",
+    "44358547",
+    "44358567",
+    "44358554",
+    "44358549",
+    "44358561"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.364
+     },
+     "contest_top1_after": {
+      "196285161": 0.43716666666666665
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.8173333333333334
+     },
+     "contest_top1_after": {
+      "196285161": 0.8825
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284828439",
+   "contest": "196432194",
+   "source": "pool",
+   "out": [
+    "Tyler Shough",
+    "Brian Robinson Jr.",
+    "Nick Folk",
+    "Bijan Robinson",
+    "Juwan Johnson",
+    "Kyle Pitts Sr."
+   ],
+   "out_ids": [
+    "44358606",
+    "44358568",
+    "44358562",
+    "44358547",
+    "44358554",
+    "44358561"
+   ],
+   "into": [
+    "Drake London",
+    "Chris Olave",
+    "Kyle Pitts Sr.",
+    "Juwan Johnson",
+    "Falcons",
+    "Alvin Kamara"
+   ],
+   "in_ids": [
+    "44358605",
+    "44358548",
+    "44358561",
+    "44358554",
+    "44358569",
+    "44358555"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196432194": 0.2643333333333333
+     },
+     "contest_top1_after": {
+      "196432194": 0.327
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196432194": 0.748
+     },
+     "contest_top1_after": {
+      "196432194": 0.7695
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284816560",
+   "contest": "196287745",
+   "source": "nb",
+   "out": [
+    "Drake London",
+    "Daniel Carlson",
+    "Michael Penix Jr.",
+    "Tyler Shough",
+    "Juwan Johnson",
+    "Brian Robinson Jr."
+   ],
+   "out_ids": [
+    "44358605",
+    "44358564",
+    "44358551",
+    "44358550",
+    "44358554",
+    "44358568"
+   ],
+   "into": [
+    "Drake London",
+    "Chris Olave",
+    "Nick Folk",
+    "Juwan Johnson",
+    "Falcons",
+    "Alvin Kamara"
+   ],
+   "in_ids": [
+    "44358605",
+    "44358548",
+    "44358562",
+    "44358554",
+    "44358569",
+    "44358555"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196287745": 0.012333333333333333
+     },
+     "contest_top1_after": {
+      "196287745": 0.073
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196287745": 0.072
+     },
+     "contest_top1_after": {
+      "196287745": 0.3441666666666667
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284828093",
+   "contest": "196287745",
+   "source": "pool",
+   "out": [
+    "Juwan Johnson",
+    "Michael Penix Jr.",
+    "Alvin Kamara",
+    "Bijan Robinson",
+    "Kevin Austin Jr.",
+    "Tyler Shough"
+   ],
+   "out_ids": [
+    "44358610",
+    "44358551",
+    "44358555",
+    "44358547",
+    "44358578",
+    "44358550"
+   ],
+   "into": [
+    "Juwan Johnson",
+    "Alvin Kamara",
+    "Bijan Robinson",
+    "Saints",
+    "Chris Olave",
+    "Falcons"
+   ],
+   "in_ids": [
+    "44358610",
+    "44358555",
+    "44358547",
+    "44358567",
+    "44358548",
+    "44358569"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196287745": 0.073
+     },
+     "contest_top1_after": {
+      "196287745": 0.1305
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196287745": 0.3441666666666667
+     },
+     "contest_top1_after": {
+      "196287745": 0.4646666666666667
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284796317",
+   "contest": "196285160",
+   "source": "pool",
+   "out": [
+    "Chris Olave",
+    "Brian Robinson Jr.",
+    "Nick Folk",
+    "Bijan Robinson",
+    "Tyler Shough",
+    "Kevin Austin Jr."
+   ],
+   "out_ids": [
+    "44358604",
+    "44358568",
+    "44358562",
+    "44358547",
+    "44358550",
+    "44358578"
+   ],
+   "into": [
+    "Drake London",
+    "Bijan Robinson",
+    "Nick Folk",
+    "Juwan Johnson",
+    "Austin Hooper",
+    "Alvin Kamara"
+   ],
+   "in_ids": [
+    "44358605",
+    "44358547",
+    "44358562",
+    "44358554",
+    "44358571",
+    "44358555"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285160": 0.12066666666666667
+     },
+     "contest_top1_after": {
+      "196285160": 0.17383333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285160": 0.42283333333333334
+     },
+     "contest_top1_after": {
+      "196285160": 0.5825
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284816868",
+   "contest": "196430106",
+   "source": "pool",
+   "out": [
+    "Drake London",
+    "Michael Penix Jr.",
+    "Tyler Shough",
+    "Alvin Kamara",
+    "Juwan Johnson",
+    "Kevin Austin Jr."
+   ],
+   "out_ids": [
+    "44358605",
+    "44358551",
+    "44358550",
+    "44358555",
+    "44358554",
+    "44358578"
+   ],
+   "into": [
+    "Drake London",
+    "Juwan Johnson",
+    "Nick Folk",
+    "Bijan Robinson",
+    "Kevin Austin Jr.",
+    "Alvin Kamara"
+   ],
+   "in_ids": [
+    "44358605",
+    "44358554",
+    "44358562",
+    "44358547",
+    "44358578",
+    "44358555"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196430106": 0.13766666666666666
+     },
+     "contest_top1_after": {
+      "196430106": 0.18066666666666667
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196430106": 0.5118333333333334
+     },
+     "contest_top1_after": {
+      "196430106": 0.5843333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789393",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Juwan Johnson",
+    "Kevin Austin Jr.",
+    "Nick Folk",
+    "Michael Penix Jr.",
+    "Tyler Shough",
+    "Drake London"
+   ],
+   "out_ids": [
+    "44358610",
+    "44358578",
+    "44358562",
+    "44358551",
+    "44358550",
+    "44358549"
+   ],
+   "into": [
+    "Juwan Johnson",
+    "Chris Olave",
+    "Tyler Shough",
+    "Alvin Kamara",
+    "Drake London",
+    "Kevin Austin Jr."
+   ],
+   "in_ids": [
+    "44358610",
+    "44358548",
+    "44358550",
+    "44358555",
+    "44358549",
+    "44358578"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.43716666666666665
+     },
+     "contest_top1_after": {
+      "196285161": 0.47983333333333333
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.8825
+     },
+     "contest_top1_after": {
+      "196285161": 0.9106666666666666
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789387",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Drake London",
+    "Nick Folk",
+    "Michael Penix Jr.",
+    "Alvin Kamara",
+    "Juwan Johnson",
+    "Kyle Pitts Sr."
+   ],
+   "out_ids": [
+    "44358605",
+    "44358562",
+    "44358551",
+    "44358555",
+    "44358554",
+    "44358561"
+   ],
+   "into": [
+    "Alvin Kamara",
+    "Kyle Pitts Sr.",
+    "Juwan Johnson",
+    "Falcons",
+    "Bijan Robinson",
+    "Chris Olave"
+   ],
+   "in_ids": [
+    "44358611",
+    "44358561",
+    "44358554",
+    "44358569",
+    "44358547",
+    "44358548"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.47983333333333333
+     },
+     "contest_top1_after": {
+      "196285161": 0.5198333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.9106666666666666
+     },
+     "contest_top1_after": {
+      "196285161": 0.939
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284796763",
+   "contest": "196429904",
+   "source": "pool",
+   "out": [
+    "Tyler Shough",
+    "Nick Folk",
+    "Alvin Kamara",
+    "Brian Robinson Jr.",
+    "Juwan Johnson",
+    "Drake London"
+   ],
+   "out_ids": [
+    "44358606",
+    "44358562",
+    "44358555",
+    "44358568",
+    "44358554",
+    "44358549"
+   ],
+   "into": [
+    "Drake London",
+    "Kendre Miller",
+    "Alvin Kamara",
+    "Juwan Johnson",
+    "Falcons",
+    "Bijan Robinson"
+   ],
+   "in_ids": [
+    "44358605",
+    "44358563",
+    "44358555",
+    "44358554",
+    "44358569",
+    "44358547"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196429904": 0.013333333333333334
+     },
+     "contest_top1_after": {
+      "196429904": 0.052
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196429904": 0.056666666666666664
+     },
+     "contest_top1_after": {
+      "196429904": 0.366
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284828442",
+   "contest": "196432194",
+   "source": "pool",
+   "out": [
+    "Bijan Robinson",
+    "Daniel Carlson",
+    "Tyler Shough",
+    "Alvin Kamara",
+    "Drake London",
+    "Kevin Austin Jr."
+   ],
+   "out_ids": [
+    "44358603",
+    "44358564",
+    "44358550",
+    "44358555",
+    "44358549",
+    "44358578"
+   ],
+   "into": [
+    "Bijan Robinson",
+    "Alvin Kamara",
+    "Nick Folk",
+    "Drake London",
+    "Falcons",
+    "Brian Robinson Jr."
+   ],
+   "in_ids": [
+    "44358603",
+    "44358555",
+    "44358562",
+    "44358549",
+    "44358569",
+    "44358568"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196432194": 0.327
+     },
+     "contest_top1_after": {
+      "196432194": 0.36533333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196432194": 0.7695
+     },
+     "contest_top1_after": {
+      "196432194": 0.8013333333333333
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284828440",
+   "contest": "196432194",
+   "source": "pool",
+   "out": [
+    "Daniel Carlson",
+    "Brian Robinson Jr.",
+    "Michael Penix Jr.",
+    "Tyler Shough",
+    "Alvin Kamara",
+    "Bijan Robinson"
+   ],
+   "out_ids": [
+    "44358620",
+    "44358568",
+    "44358551",
+    "44358550",
+    "44358555",
+    "44358547"
+   ],
+   "into": [
+    "Saints",
+    "Bijan Robinson",
+    "Alvin Kamara",
+    "Chris Olave",
+    "Drake London",
+    "Falcons"
+   ],
+   "in_ids": [
+    "44358623",
+    "44358547",
+    "44358555",
+    "44358548",
+    "44358549",
+    "44358569"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196432194": 0.36533333333333334
+     },
+     "contest_top1_after": {
+      "196432194": 0.4021666666666667
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196432194": 0.8013333333333333
+     },
+     "contest_top1_after": {
+      "196432194": 0.8228333333333333
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789375",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Juwan Johnson",
+    "Kevin Austin Jr.",
+    "Tyler Shough",
+    "Bijan Robinson",
+    "Brian Robinson Jr.",
+    "Drake London"
+   ],
+   "out_ids": [
+    "44358610",
+    "44358578",
+    "44358550",
+    "44358547",
+    "44358568",
+    "44358549"
+   ],
+   "into": [
+    "Juwan Johnson",
+    "Drake London",
+    "Chris Olave",
+    "Kevin Austin Jr.",
+    "Nick Folk",
+    "Bijan Robinson"
+   ],
+   "in_ids": [
+    "44358610",
+    "44358549",
+    "44358548",
+    "44358578",
+    "44358562",
+    "44358547"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.5198333333333334
+     },
+     "contest_top1_after": {
+      "196285161": 0.5465
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.939
+     },
+     "contest_top1_after": {
+      "196285161": 0.9495
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789388",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Juwan Johnson",
+    "Tyler Shough",
+    "Alvin Kamara",
+    "Bijan Robinson",
+    "Oscar Delp",
+    "Drake London"
+   ],
+   "out_ids": [
+    "44358610",
+    "44358550",
+    "44358555",
+    "44358547",
+    "44358580",
+    "44358549"
+   ],
+   "into": [
+    "Juwan Johnson",
+    "Saints",
+    "Drake London",
+    "Chris Olave",
+    "Alvin Kamara",
+    "Falcons"
+   ],
+   "in_ids": [
+    "44358610",
+    "44358567",
+    "44358549",
+    "44358548",
+    "44358555",
+    "44358569"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.5465
+     },
+     "contest_top1_after": {
+      "196285161": 0.566
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.9495
+     },
+     "contest_top1_after": {
+      "196285161": 0.9523333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284821080",
+   "contest": "196432194",
+   "source": "pool",
+   "out": [
+    "Chris Olave",
+    "Kendre Miller",
+    "Alvin Kamara",
+    "Brian Robinson Jr.",
+    "Tyler Shough",
+    "Juwan Johnson"
+   ],
+   "out_ids": [
+    "44358604",
+    "44358563",
+    "44358555",
+    "44358568",
+    "44358550",
+    "44358554"
+   ],
+   "into": [
+    "Alvin Kamara",
+    "Bijan Robinson",
+    "Brian Robinson Jr.",
+    "Nick Folk",
+    "Juwan Johnson",
+    "Chris Olave"
+   ],
+   "in_ids": [
+    "44358611",
+    "44358547",
+    "44358568",
+    "44358562",
+    "44358554",
+    "44358548"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196432194": 0.4021666666666667
+     },
+     "contest_top1_after": {
+      "196432194": 0.42383333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196432194": 0.8228333333333333
+     },
+     "contest_top1_after": {
+      "196432194": 0.8513333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789383",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Bijan Robinson",
+    "Tyler Shough",
+    "Alvin Kamara",
+    "Juwan Johnson",
+    "Nick Folk",
+    "Kevin Austin Jr."
+   ],
+   "out_ids": [
+    "44358603",
+    "44358550",
+    "44358555",
+    "44358554",
+    "44358562",
+    "44358578"
+   ],
+   "into": [
+    "Bijan Robinson",
+    "Juwan Johnson",
+    "Falcons",
+    "Austin Hooper",
+    "Drake London",
+    "Alvin Kamara"
+   ],
+   "in_ids": [
+    "44358603",
+    "44358554",
+    "44358569",
+    "44358571",
+    "44358549",
+    "44358555"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.566
+     },
+     "contest_top1_after": {
+      "196285161": 0.5811666666666667
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.9523333333333334
+     },
+     "contest_top1_after": {
+      "196285161": 0.953
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789378",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Bijan Robinson",
+    "Daniel Carlson",
+    "Michael Penix Jr.",
+    "Drake London",
+    "Juwan Johnson",
+    "Kevin Austin Jr."
+   ],
+   "out_ids": [
+    "44358603",
+    "44358564",
+    "44358551",
+    "44358549",
+    "44358554",
+    "44358578"
+   ],
+   "into": [
+    "Chris Olave",
+    "Drake London",
+    "Juwan Johnson",
+    "Falcons",
+    "Kevin Austin Jr.",
+    "Bijan Robinson"
+   ],
+   "in_ids": [
+    "44358604",
+    "44358549",
+    "44358554",
+    "44358569",
+    "44358578",
+    "44358547"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.5811666666666667
+     },
+     "contest_top1_after": {
+      "196285161": 0.5933333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285161": 0.953
+     },
+     "contest_top1_after": {
+      "196285161": 0.9576666666666667
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284789381",
+   "contest": "196285161",
+   "source": "pool",
+   "out": [
+    "Nick Folk",
+    "Michael Penix Jr.",
+    "Tyler Shough",
+    "Bijan Robinson",
+    "Brian Robinson Jr.",
+    "Juwan Johnson"
+   ],
+   "out_ids": [
+    "44358618",
+    "44358551",
+    "44358550",
+    "44358547",
+    "44358568",
+    "44358554"
+   ],
+   "into": [
+    "Bijan Robinson",
+    "Falcons",
+    "Saints",
+    "Nick Folk",
+    "Juwan Johnson",
+    "Chris Olave"
+   ],
+   "in_ids": [
+    "44358603",
+    "44358569",
+    "44358567",
+    "44358562",
+    "44358554",
+    "44358548"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285161": 0.5933333333333334
+     },
+     "contest_top1_after": {
+      "196285161": 0.603
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {},
+     "contest_top1_after": {},
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "replace",
+   "entry": "5284828437",
+   "contest": "196432194",
+   "source": "pool",
+   "out": [
+    "Drake London",
+    "Michael Penix Jr.",
+    "Bijan Robinson",
+    "Juwan Johnson",
+    "Nick Folk",
+    "Kevin Austin Jr."
+   ],
+   "out_ids": [
+    "44358605",
+    "44358551",
+    "44358547",
+    "44358554",
+    "44358562",
+    "44358578"
+   ],
+   "into": [
+    "Drake London",
+    "Brian Robinson Jr.",
+    "Juwan Johnson",
+    "Chris Olave",
+    "Kevin Austin Jr.",
+    "Bijan Robinson"
+   ],
+   "in_ids": [
+    "44358605",
+    "44358568",
+    "44358554",
+    "44358548",
+    "44358578",
+    "44358547"
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196432194": 0.42383333333333334
+     },
+     "contest_top1_after": {
+      "196432194": 0.43133333333333335
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196432194": 0.8513333333333334
+     },
+     "contest_top1_after": {
+      "196432194": 0.8533333333333334
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  },
+  {
+   "type": "swap",
+   "entries": [
+    "5284804067",
+    "5284821080"
+   ],
+   "contests": [
+    "196285178",
+    "196432194"
+   ],
+   "lineups": [
+    [
+     "Alvin Kamara",
+     "Bijan Robinson",
+     "Brian Robinson Jr.",
+     "Nick Folk",
+     "Juwan Johnson",
+     "Chris Olave"
+    ],
+    [
+     "Juwan Johnson",
+     "Alvin Kamara",
+     "Bijan Robinson",
+     "Brian Robinson Jr.",
+     "Nick Folk",
+     "Tyler Shough"
+    ]
+   ],
+   "measures": {
+    "sharp": {
+     "contest_top1_before": {
+      "196285178": 0.03666666666666667,
+      "196432194": 0.43133333333333335
+     },
+     "contest_top1_after": {
+      "196285178": 0.037333333333333336,
+      "196432194": 0.43416666666666665
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    },
+    "uniform": {
+     "contest_top1_before": {
+      "196285178": 0.155,
+      "196432194": 0.8533333333333334
+     },
+     "contest_top1_after": {
+      "196285178": 0.17733333333333334,
+      "196432194": 0.8591666666666666
+     },
+     "washout_q75_before": 0.0,
+     "washout_q75_after": 0.0
+    }
+   }
+  }
+ ],
+ "search": {
+  "iterations": 25,
+  "deadline": "2026-10-05T23:22:50+00:00",
+  "rule": "Pareto on SELECT sharp+uniform; REFEREE report only"
+ },
+ "near_misses_iter1": [
+  {
+   "key": 1251.0,
+   "entry": "5284796317",
+   "source": "pool",
+   "lineup": [
+    "Juwan Johnson",
+    "Drake London",
+    "Alvin Kamara",
+    "Kyle Pitts Sr.",
+    "Bijan Robinson",
+    "Falcons"
+   ],
+   "gain_sharp": 1231.0,
+   "wash_delta_sharp": -20.0,
+   "gain_uniform": 3615.0,
+   "wash_delta_uniform": 1.0
+  },
+  {
+   "key": 733.0,
+   "entry": "5284796317",
+   "source": "nb",
+   "lineup": [
+    "Bijan Robinson",
+    "Falcons",
+    "Nick Folk",
+    "Alvin Kamara",
+    "Kyle Pitts Sr.",
+    "Drake London"
+   ],
+   "gain_sharp": 730.0,
+   "wash_delta_sharp": -3.0,
+   "gain_uniform": 2367.0,
+   "wash_delta_uniform": 1.0
+  },
+  {
+   "key": 723.0,
+   "entry": "5284796317",
+   "source": "pool",
+   "lineup": [
+    "Juwan Johnson",
+    "Falcons",
+    "Nick Folk",
+    "Drake London",
+    "Bijan Robinson",
+    "Alvin Kamara"
+   ],
+   "gain_sharp": 712.0,
+   "wash_delta_sharp": -11.0,
+   "gain_uniform": 2882.0,
+   "wash_delta_uniform": 1.0
+  },
+  {
+   "key": 713.0,
+   "entry": "5284796317",
+   "source": "pool",
+   "lineup": [
+    "Kyle Pitts Sr.",
+    "Bijan Robinson",
+    "Alvin Kamara",
+    "Falcons",
+    "Juwan Johnson",
+    "Drake London"
+   ],
+   "gain_sharp": 694.0,
+   "wash_delta_sharp": -19.0,
+   "gain_uniform": 2945.0,
+   "wash_delta_uniform": 1.0
+  },
+  {
+   "key": 690.0,
+   "entry": "5284828442",
+   "source": "nb",
+   "lineup": [
+    "Bijan Robinson",
+    "Falcons",
+    "Nick Folk",
+    "Alvin Kamara",
+    "Kyle Pitts Sr.",
+    "Drake London"
+   ],
+   "gain_sharp": 687.0,
+   "wash_delta_sharp": -3.0,
+   "gain_uniform": 1662.0,
+   "wash_delta_uniform": 1.0
+  },
+  {
+   "key": 686.0,
+   "entry": "5284828442",
+   "source": "pool",
+   "lineup": [
+    "Juwan Johnson",
+    "Falcons",
+    "Nick Folk",
+    "Drake London",
+    "Bijan Robinson",
+    "Alvin Kamara"
+   ],
+   "gain_sharp": 677.0,
+   "wash_delta_sharp": -9.0,
+   "gain_uniform": 1877.0,
+   "wash_delta_uniform": 1.0
+  },
+  {
+   "key": 658.0,
+   "entry": "5284821080",
+   "source": "pool",
+   "lineup": [
+    "Juwan Johnson",
+    "Falcons",
+    "Nick Folk",
+    "Drake London",
+    "Bijan Robinson",
+    "Alvin Kamara"
+   ],
+   "gain_sharp": 663.0,
+   "wash_delta_sharp": 5.0,
+   "gain_uniform": 1887.0,
+   "wash_delta_uniform": 0.0
+  },
+  {
+   "key": 655.0,
+   "entry": "5284796317",
+   "source": "pool",
+   "lineup": [
+    "Drake London",
+    "Alvin Kamara",
+    "Bijan Robinson",
+    "Kyle Pitts Sr.",
+    "Nick Folk",
+    "Falcons"
+   ],
+   "gain_sharp": 651.0,
+   "wash_delta_sharp": -4.0,
+   "gain_uniform": 2203.0,
+   "wash_delta_uniform": 1.0
+  },
+  {
+   "key": 654.0,
+   "entry": "5284821080",
+   "source": "nb",
+   "lineup": [
+    "Bijan Robinson",
+    "Falcons",
+    "Nick Folk",
+    "Alvin Kamara",
+    "Kyle Pitts Sr.",
+    "Drake London"
+   ],
+   "gain_sharp": 670.0,
+   "wash_delta_sharp": 16.0,
+   "gain_uniform": 1625.0,
+   "wash_delta_uniform": 0.0
+  },
+  {
+   "key": 642.0,
+   "entry": "5284796317",
+   "source": "nb",
+   "lineup": [
+    "Drake London",
+    "Falcons",
+    "Nick Folk",
+    "Juwan Johnson",
+    "Kyle Pitts Sr.",
+    "Bijan Robinson"
+   ],
+   "gain_sharp": 639.0,
+   "wash_delta_sharp": -3.0,
+   "gain_uniform": 2516.0,
+   "wash_delta_uniform": 1.0
+  }
+ ],
+ "comparison": {
+  "SELECT_sharp": {
+   "v3": {
+    "purpose": "SELECT",
+    "contest_top1": {
+     "196285159": 0.0047,
+     "196285160": 0.0057,
+     "196285161": 0.1907,
+     "196285178": 0.0367,
+     "196287745": 0.0123,
+     "196429904": 0.0133,
+     "196430106": 0.1377,
+     "196432194": 0.0617
+    },
+    "contest_entries": {
+     "196285159": 1,
+     "196285160": 2,
+     "196285161": 20,
+     "196285178": 1,
+     "196287745": 2,
+     "196429904": 1,
+     "196430106": 2,
+     "196432194": 7
+    },
+    "mean_entry_top1": 0.0147,
+    "portfolio_any_top1": 0.3447,
+    "washout_q75": 0.004,
+    "washout_q50": 0.0,
+    "mean_score": 73.02
+   },
+   "iter1": {
+    "purpose": "SELECT",
+    "contest_top1": {
+     "196285159": 0.1228,
+     "196285160": 0.1738,
+     "196285161": 0.603,
+     "196285178": 0.0373,
+     "196287745": 0.1305,
+     "196429904": 0.052,
+     "196430106": 0.1807,
+     "196432194": 0.4342
+    },
+    "contest_entries": {
+     "196285159": 1,
+     "196285160": 2,
+     "196285161": 20,
+     "196285178": 1,
+     "196287745": 2,
+     "196429904": 1,
+     "196430106": 2,
+     "196432194": 7
+    },
+    "mean_entry_top1": 0.0544,
+    "portfolio_any_top1": 0.8773,
+    "washout_q75": 0.0,
+    "washout_q50": 0.0,
+    "mean_score": 80.14
+   }
+  },
+  "SELECT_uniform": {
+   "v3": {
+    "purpose": "SELECT",
+    "contest_top1": {
+     "196285159": 0.0255,
+     "196285160": 0.019,
+     "196285161": 0.6167,
+     "196285178": 0.155,
+     "196287745": 0.072,
+     "196429904": 0.0567,
+     "196430106": 0.5118,
+     "196432194": 0.2777
+    },
+    "contest_entries": {
+     "196285159": 1,
+     "196285160": 2,
+     "196285161": 20,
+     "196285178": 1,
+     "196287745": 2,
+     "196429904": 1,
+     "196430106": 2,
+     "196432194": 7
+    },
+    "mean_entry_top1": 0.0702,
+    "portfolio_any_top1": 0.8165,
+    "washout_q75": 0.0,
+    "washout_q50": 0.0,
+    "mean_score": 73.02
+   },
+   "iter1": {
+    "purpose": "SELECT",
+    "contest_top1": {
+     "196285159": 0.4945,
+     "196285160": 0.5825,
+     "196285161": 0.9577,
+     "196285178": 0.1773,
+     "196287745": 0.4647,
+     "196429904": 0.366,
+     "196430106": 0.5843,
+     "196432194": 0.8592
+    },
+    "contest_entries": {
+     "196285159": 1,
+     "196285160": 2,
+     "196285161": 20,
+     "196285178": 1,
+     "196287745": 2,
+     "196429904": 1,
+     "196430106": 2,
+     "196432194": 7
+    },
+    "mean_entry_top1": 0.2312,
+    "portfolio_any_top1": 0.9817,
+    "washout_q75": 0.0,
+    "washout_q50": 0.0,
+    "mean_score": 80.14
+   }
+  },
+  "REFEREE_sharp": {
+   "v3": {
+    "purpose": "REFEREE",
+    "contest_top1": {
+     "196285159": 0.006,
+     "196285160": 0.0055,
+     "196285161": 0.1802,
+     "196285178": 0.0415,
+     "196287745": 0.0098,
+     "196429904": 0.016,
+     "196430106": 0.1545,
+     "196432194": 0.0575
+    },
+    "contest_entries": {
+     "196285159": 1,
+     "196285160": 2,
+     "196285161": 20,
+     "196285178": 1,
+     "196287745": 2,
+     "196429904": 1,
+     "196430106": 2,
+     "196432194": 7
+    },
+    "mean_entry_top1": 0.0152,
+    "portfolio_any_top1": 0.3518,
+    "washout_q75": 0.0042,
+    "washout_q50": 0.0,
+    "mean_score": 72.64
+   },
+   "iter1": {
+    "purpose": "REFEREE",
+    "contest_top1": {
+     "196285159": 0.123,
+     "196285160": 0.1682,
+     "196285161": 0.5938,
+     "196285178": 0.0328,
+     "196287745": 0.125,
+     "196429904": 0.0482,
+     "196430106": 0.1933,
+     "196432194": 0.429
+    },
+    "contest_entries": {
+     "196285159": 1,
+     "196285160": 2,
+     "196285161": 20,
+     "196285178": 1,
+     "196287745": 2,
+     "196429904": 1,
+     "196430106": 2,
+     "196432194": 7
+    },
+    "mean_entry_top1": 0.0535,
+    "portfolio_any_top1": 0.8703,
+    "washout_q75": 0.0,
+    "washout_q50": 0.0,
+    "mean_score": 79.79
+   }
+  },
+  "REFEREE_uniform": {
+   "v3": {
+    "purpose": "REFEREE",
+    "contest_top1": {
+     "196285159": 0.0272,
+     "196285160": 0.0197,
+     "196285161": 0.6062,
+     "196285178": 0.1537,
+     "196287745": 0.0653,
+     "196429904": 0.0617,
+     "196430106": 0.52,
+     "196432194": 0.2693
+    },
+    "contest_entries": {
+     "196285159": 1,
+     "196285160": 2,
+     "196285161": 20,
+     "196285178": 1,
+     "196287745": 2,
+     "196429904": 1,
+     "196430106": 2,
+     "196432194": 7
+    },
+    "mean_entry_top1": 0.0696,
+    "portfolio_any_top1": 0.808,
+    "washout_q75": 0.0,
+    "washout_q50": 0.0,
+    "mean_score": 72.64
+   },
+   "iter1": {
+    "purpose": "REFEREE",
+    "contest_top1": {
+     "196285159": 0.4992,
+     "196285160": 0.574,
+     "196285161": 0.9615,
+     "196285178": 0.1745,
+     "196287745": 0.4552,
+     "196429904": 0.3532,
+     "196430106": 0.5907,
+     "196432194": 0.8672
+    },
+    "contest_entries": {
+     "196285159": 1,
+     "196285160": 2,
+     "196285161": 20,
+     "196285178": 1,
+     "196287745": 2,
+     "196429904": 1,
+     "196430106": 2,
+     "196432194": 7
+    },
+    "mean_entry_top1": 0.2297,
+    "portfolio_any_top1": 0.983,
+    "washout_q75": 0.0,
+    "washout_q50": 0.0,
+    "mean_score": 79.79
+   }
+  }
+ },
+ "referee_contests_worse": {
+  "sharp": {
+   "196285178": [
+    0.0415,
+    0.0328
+   ],
+   "washout_q75": [
+    0.0042,
+    0.0
+   ]
+  },
+  "uniform": {
+   "washout_q75": [
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "constraints": {
+  "v3": {
+   "defects": [],
+   "distinct_captains": 10,
+   "captain_counts": {
+    "Juwan Johnson": 7,
+    "Tyler Shough": 7,
+    "Bijan Robinson": 6,
+    "Drake London": 5,
+    "Chris Olave": 3,
+    "Michael Penix Jr.": 2,
+    "Alvin Kamara": 2,
+    "Nick Folk": 2,
+    "Kyle Pitts Sr.": 1,
+    "Daniel Carlson": 1
+   },
+   "max_person_count": 27,
+   "max_person": "Tyler Shough",
+   "max_overlap": 5,
+   "pitts_rows": 6,
+   "olave_rows": 7
+  },
+  "iter1": {
+   "defects": [],
+   "distinct_captains": 9,
+   "captain_counts": {
+    "Juwan Johnson": 7,
+    "Drake London": 7,
+    "Bijan Robinson": 7,
+    "Alvin Kamara": 5,
+    "Tyler Shough": 4,
+    "Chris Olave": 2,
+    "Michael Penix Jr.": 2,
+    "Nick Folk": 1,
+    "Saints": 1
+   },
+   "max_person_count": 27,
+   "max_person": "Bijan Robinson",
+   "max_overlap": 5,
+   "pitts_rows": 6,
+   "olave_rows": 17
+  }
+ }
+}
