@@ -58,6 +58,8 @@ Clock: request at 22:55Z, lock 00:15Z, delivery deadline 00:10Z; file delivered 
   and lists every person not `ACT` with both IDs and the `--exclude` arguments. On this slate it returns the same 13 people and 26 IDs
   as the hand check. Named in `docs/claude/working.md` § Showdown judgment pass. Next: the ceiling pass has now been hand-written for
   two slates; it should be a script with tests (candidate card, not filed tonight).
+- Verification: focused `129 passed in 3.08s` (the new test and `tests/test_repo_boundaries.py`); full suite (Linux)
+  `2588 passed, 1 skipped in 691.97s (0:11:31)`, the one skip the junction test.
 
 ### 2026-10-05: Session 62 -- Pareto-only salary redeploy (R37, P9 part 3)
 
