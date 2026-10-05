@@ -246,7 +246,7 @@ while now() < DEADLINE:
                 if best is not None and kv <= best[0]: continue
                 Rn = list(R); Rn[j] = cand
                 if not no_worse(port_check(Rn)[0], base_b): continue
-                best = (kv, 'replace', j, cand, src); 
+                best = (kv, 'replace', j, cand, src);
     Pm = {f: ST[f][4] @ ST[f][0].astype(np.float32) for f in FS}
     for j1 in range(N):
         for j2 in range(j1 + 1, N):
