@@ -1,0 +1,74 @@
+{
+ "tool": "pareto_contest_reassignment",
+ "rule": "swap whole lineups between Entry IDs in different contests; accept only when no contest worsens on distinct captains, same-captain pairs, max shared, mean shared, pairs sharing 4, pairs sharing 3+, and one improves; the 28 lineups are unchanged",
+ "moves": [
+  {
+   "entry_a": "5283426224",
+   "contest_a": "196285055",
+   "entry_b": "5283440977",
+   "contest_b": "196404542",
+   "lineup_a_before": [
+    "Jahmyr Gibbs",
+    "Jake Bates",
+    "Darren Waller",
+    "Sam LaPorta",
+    "Jameson Williams",
+    "Tetairoa McMillan"
+   ],
+   "lineup_b_before": [
+    "Bryce Young",
+    "Ryan Fitzgerald",
+    "Chuba Hubbard",
+    "Sam LaPorta",
+    "Amon-Ra St. Brown",
+    "John Metchie III"
+   ],
+   "prior_a_before": 109.77,
+   "prior_b_before": 78.39
+  },
+  {
+   "entry_a": "5283426215",
+   "contest_a": "196285055",
+   "entry_b": "5283432785",
+   "contest_b": "196285073",
+   "lineup_a_before": [
+    "Darren Waller",
+    "Jake Bates",
+    "Bryce Young",
+    "Jared Goff",
+    "Jahmyr Gibbs",
+    "Sam LaPorta"
+   ],
+   "lineup_b_before": [
+    "Sam LaPorta",
+    "Bryce Young",
+    "Chuba Hubbard",
+    "Brock Wright",
+    "Amon-Ra St. Brown",
+    "Jameson Williams"
+   ],
+   "prior_a_before": 104.81,
+   "prior_b_before": 82.25
+  }
+ ],
+ "dime_package_196285055_before": {
+  "distinct_captains": 8,
+  "same_captain_pairs": 22,
+  "max_shared": 4,
+  "mean_shared": 2.842105,
+  "pairs_sharing_4": 51,
+  "pairs_sharing_3plus": 126
+ },
+ "dime_package_196285055_after": {
+  "distinct_captains": 8,
+  "same_captain_pairs": 20,
+  "max_shared": 4,
+  "mean_shared": 2.631579,
+  "pairs_sharing_4": 39,
+  "pairs_sharing_3plus": 107
+ },
+ "source_sha256": "44b43b768d4df4136078b063aeea7834c6d4d1efc3e0745ce3d76f007919b38d",
+ "out_sha256": "534795ae746a8e1b221357f424c6c955624b4a72c7e998386b60601c3fd7e576",
+ "out_path": "construction/DK_REVIEW_ENTRY_det-car-sd_final_v3.csv",
+ "note": "v2 was written with LF endings and failed QA parsing; v3 is the same rows with the template CRLF endings"
+}

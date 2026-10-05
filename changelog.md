@@ -4,6 +4,63 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-04: DET@CAR Sunday night Showdown (28 entries, 6 contests)
+
+Inputs, committed under `data/inbox/slates/det-car-sd-2026-10-04/input/`:
+
+    salary  aeb2928372870a42e6077e6077b469f397da424da77668f012c437f2d37e1a02
+    entries dabcc1f370d5338e69ae0603364538a1513d088fe93e95913512050226ee4604
+
+Clock: request at 23:37Z, lock 00:20Z, delivery deadline 00:15Z; file delivered 23:44Z.
+
+- `.venv-linux` absent; `setup` took 9 s. Probe: every allowlisted host reachable, `CAN_COMPLETE_A_RUN`.
+- QB depth package (`roles/qb_depth_roles.json`, nflverse `dt` 2026-10-04T13:09Z): starters Goff and Young; backups Dobbs, Pickett,
+  King; Altmyer unlisted.
+- Run `20261004T233948Z-det-car-sd` (`--build-priors`, depth package): EXPORT in about 25 s, rung `DEFAULT`, concentration
+  `AS_REQUESTED`, 28 of 28, QA PASS. Casey Washington (CAR WR, $200) in 7 of 28 rows.
+- Research: the official inactive lists (DET: Bartch, Conklin, B. Fitzgerald, Hassanein, D. White, Wingo; CAR: Sanders, H. King,
+  Coker, D. Lewis, Reese, C. Jackson) match DraftKings' `OUT` tags for every skill player. Washington is on Carolina's practice squad
+  and was not elevated (Carolina elevated Ja'Seem Reed and Robert Rochell), so he cannot play.
+- Run `20261004T234208Z-det-car-sd-r2` (`--request`, frozen priors, `--exclude` both Washington IDs): EXPORT, `DEFAULT`, `AS_REQUESTED`,
+  28 of 28.
+- Judgment pass: Coker's workload went to McMillan in proportion to prior share (Session 60), so Brycen Tremayne, the reported No. 2
+  receiver tonight, kept his old prior and was in no row. Placed in three rows by `showdown_value_add.py --entry-id`
+  (`construction/tremayne_step{1,2,3}.json`): 5283425875 and 5283426229 replace Mitchell Evans, 5283425650 replaces Tommy Tremble.
+  The `--count 3 --scores` pass would have taken John Metchie's only row; the per-row passes kept him.
+- Delivered `construction/DK_REVIEW_ENTRY_det-car-sd_final.csv`, `44b43b76…b38d`. QA: 0 defects, 0 limit breaches, max overlap 4,
+  salary 48,700 to 50,000, 8 distinct Captains (Gibbs, Goff, St. Brown 5 each; Waller, McMillan 4; Young, LaPorta 2; Hubbard 1), six
+  people at 16 of 28 (Gibbs, Waller, McMillan, Young, Goff, LaPorta). No DST rostered. `PRIOR_ONLY / DO_NOT_UPLOAD`. Not supplied:
+  official activity as evidence, weather (`UNOBSERVED`), ownership.
+- What would have made it better: a practice-squad check. A non-elevated practice-squad player appears on no inactive list, so the
+  DraftKings status stays blank and an old-team prior makes him a $200 value. Added to the Showdown judgment pass in
+  `docs/claude/working.md`. An engine fix (an elevation or active-roster source through `sources.py`) is a card for a later session.
+- Adversarial Pareto pass (Ben asked, 23:50Z). Full pool scores from a third run (`NFL_DFS_DUMP_SCORES`, same request). Measures:
+  prior total 2,699.92, max exposure 16, max Captain 5, 8 Captains, 17 people, mean pair overlap 2.7275, max pair overlap 4, top-3
+  union 22, unused salary $6,800. Single swaps (FLEX and Captain; Captain, QBs and Tremayne held): 0 Pareto; all 11 prior-raising
+  swaps add Gibbs or McMillan (16 to 17) and raise mean overlap. Two-row salary chains: 0; the cheapest upgrade (Metchie to Lions DST,
+  +$800) needs more than any two rows hold together. The portfolio is on its prior-versus-washout frontier for these moves.
+- Contest level: `diversify_showdown_contests.py` on the final file was not Pareto (Dime Package mean shared 2.842 to 2.805, but
+  Captains 8 to 7, same-Captain pairs 22 to 24, pairs sharing 4 51 to 52); rejected. A whole-lineup swap search between Entry IDs that
+  accepts only a move no contest measure worsens found two (`construction/pareto_reassignment_record.v3.json`): 5283426224 with
+  5283440977 and 5283426215 with 5283432785. Dime Package: Captains 8 to 8, same-Captain pairs 22 to 20, max shared 4 to 4, mean shared
+  2.842 to 2.632, pairs sharing 4 51 to 39, pairs sharing 3 or more 126 to 107; the 2-entry contests unchanged; the 28 lineups
+  unchanged. Delivered `construction/DK_REVIEW_ENTRY_det-car-sd_final_v3.csv`, `534795ae…e576`, CRLF like the template, QA PASS (0
+  defects, 0 limit breaches, overlap 4, 8 Captains). It differs from the first final file in those four rows only. A v2 written with LF
+  endings failed QA parsing (0 lineups read) and was discarded: write a DraftKings CSV with the template's line endings.
+- Finding for the engine: `within_contest_diversity_v1` scores a contest by worst pair plus mean pair, so it can trade away a Captain
+  for a lower mean. A no-worse-on-every-measure acceptance rule would have caught it. Candidate card, not filed tonight.
+- Ruling (Ben, 23:56Z): "Err on side of trying to win large prizes if at odds with minimizing the washout factor." Ceiling pass on v3
+  (`construction/ceiling_pass_record.py`, record `DK_REVIEW_ENTRY_det-car-sd_final_v4_record.json`). Phase 1 puts each WR/TE Captain
+  with his own starting QB; phase 2 takes FLEX swaps raising a row's prior by 1.0 or more (person cap 21 of 28, overlap 4, Captains,
+  phase-1 QBs and Tremayne held); phase 3 retries the QB fix at overlap 5. 21 moves. Before to after: prior total 2,699.92 to
+  2,754.79, lowest row 78.39 to 85.88, pass-catcher Captains without their QB 8 to 0, zero-QB rows 3 to 2, two-kicker rows 1 to 0;
+  max exposure 16 to 21 (McMillan and Goff), mean pair overlap 2.7275 to 3.0926, max pair overlap 4 to 5 (three pairs), people 17
+  to 16 (Metchie out), Hubbard 8 to 3 rows. Captains unchanged (8, max 5). Then three whole-lineup contest swaps that worsen no
+  contest measure (`pareto_reassignment_record.v5.json`): Dime Package same-Captain pairs 20 to 19, mean shared 3.053 to 2.989,
+  pairs sharing 4 66 to 58. Delivered `construction/DK_REVIEW_ENTRY_det-car-sd_final_v5.csv`, `855e3431…4bc2`, QA PASS at
+  `--max-overlap 5` (at 4: the three named pairs). `PRIOR_ONLY / DO_NOT_UPLOAD`; leverage unmeasured (no ownership), and McMillan
+  and Goff at 75% is the likeliest chalk. The tie-break is now in `docs/claude/working.md` and `.claude/rules/slate-operation.md`.
+
 ### 2026-10-04: Session 60 -- the injury room moves the workload (R37, P9 part 1)
 
 Branch `claude/s60-injury-room-workload`, from `main` at `f9ed717`; claim commit `ac1838f`. Class P (model quality). R29 is untouched

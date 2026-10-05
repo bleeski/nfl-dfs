@@ -118,6 +118,11 @@ ATL@GB Showdown file passed every gate and QA with 0 defects, and Ben rejected
 it: five captains at 25% each, four people in 13 of 20 lineups. QA PASS says
 the file is legal, not that the portfolio is any good.
 
+When the two goals conflict, large prizes win (Ben, 2026-10-04: "Err on side
+of trying to win large prizes if at odds with minimizing the washout
+factor"). The ceiling pass that applies it is in `docs/claude/working.md`
+§ Showdown judgment pass.
+
 Before a handoff, read the portfolio against both goals and put what you find
 in the handoff:
 

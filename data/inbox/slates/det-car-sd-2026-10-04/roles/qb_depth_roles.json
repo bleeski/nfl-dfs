@@ -1,0 +1,108 @@
+{
+  "allocation_version": "qb_depth_chart_attempt_share_allocation_v2",
+  "declarations": [
+    {
+      "backups": [
+        {
+          "cpt_dk_id": "44358508",
+          "flex_dk_id": "44358458",
+          "player_name": "Kenny Pickett",
+          "pos_rank": 2,
+          "provider_player_id": "00-0038102",
+          "underlying_id": "CAR|QB|Kenny Pickett"
+        },
+        {
+          "cpt_dk_id": "44358509",
+          "flex_dk_id": "44358459",
+          "player_name": "Haynes King",
+          "pos_rank": 3,
+          "provider_player_id": "00-0041149",
+          "underlying_id": "CAR|QB|Haynes King"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "DET@CAR",
+      "source_sha256": "814b2feb8dc403dc02941a2d68118302996c4c34c4669ba50c35905ad7ebe85c",
+      "starter": {
+        "cpt_dk_id": "44358500",
+        "flex_dk_id": "44358450",
+        "player_name": "Bryce Young",
+        "pos_rank": 1,
+        "provider_player_id": "00-0039150",
+        "underlying_id": "CAR|QB|Bryce Young"
+      },
+      "team": "CAR",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "cpt_dk_id": "44358507",
+          "flex_dk_id": "44358457",
+          "player_name": "Joshua Dobbs",
+          "pos_rank": 2,
+          "provider_player_id": "00-0033949",
+          "underlying_id": "DET|QB|Joshua Dobbs"
+        }
+      ],
+      "declared_observed_at": "2026-10-04T13:09:16+00:00",
+      "game_id": "DET@CAR",
+      "source_sha256": "3ce5daf24e4d699046a54bc4899772253a0a66884bf6d1c4fc84800391ff43ee",
+      "starter": {
+        "cpt_dk_id": "44358499",
+        "flex_dk_id": "44358449",
+        "player_name": "Jared Goff",
+        "pos_rank": 1,
+        "provider_player_id": "00-0033106",
+        "underlying_id": "DET|QB|Jared Goff"
+      },
+      "team": "DET",
+      "unlisted": [
+        {
+          "cpt_dk_id": "44358506",
+          "flex_dk_id": "44358456",
+          "player_name": "Luke Altmyer",
+          "underlying_id": "DET|QB|Luke Altmyer"
+        }
+      ]
+    }
+  ],
+  "game_ids": [
+    "DET@CAR"
+  ],
+  "salary_sha256": "aeb2928372870a42e6077e6077b469f397da424da77668f012c437f2d37e1a02",
+  "schema_version": "nfl_qb_depth_role_evidence_v1",
+  "sources": [
+    {
+      "captured_at": "2026-10-04T23:39:34.643084+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/814b2feb8dc403dc02941a2d68118302996c4c34c4669ba50c35905ad7ebe85c.csv",
+      "sha256": "814b2feb8dc403dc02941a2d68118302996c4c34c4669ba50c35905ad7ebe85c",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,CAR,Bryce Young,4685720,00-0039150,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,CAR,Kenny Pickett,4240703,00-0038102,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-04T13:09:16Z,CAR,Haynes King,4428993,00-0041149,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    },
+    {
+      "captured_at": "2026-10-04T23:39:34.643084+00:00",
+      "expires_at": "2026-10-06T01:09:16+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-04T13:09:16+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/3ce5daf24e4d699046a54bc4899772253a0a66884bf6d1c4fc84800391ff43ee.csv",
+      "sha256": "3ce5daf24e4d699046a54bc4899772253a0a66884bf6d1c4fc84800391ff43ee",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-04T13:09:16Z,DET,Jared Goff,3046779,00-0033106,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-04T13:09:16Z,DET,Joshua Dobbs,3044720,00-0033949,21,3WR 1TE,8,Quarterback,QB,9,2\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "c1a69853624bd1af639a6105ae11edec52359a762d5fb0be1a9a78c1c6bf25a0"
+    }
+  ],
+  "transformation_version": "qb_depth_chart_order_v2"
+}
