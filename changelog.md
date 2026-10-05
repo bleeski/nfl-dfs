@@ -60,6 +60,30 @@ Clock: request at 22:55Z, lock 00:15Z, delivery deadline 00:10Z; file delivered 
   two slates; it should be a script with tests (candidate card, not filed tonight).
 - Verification: focused `129 passed in 3.08s` (the new test and `tests/test_repo_boundaries.py`); full suite (Linux)
   `2588 passed, 1 skipped in 691.97s (0:11:31)`, the one skip the junction test.
+- QA pass (Ben asked, 23:10Z: a data-driven adversarial agent, three iterations; goals: per-contest top-1% finish, portfolio washout).
+  Harness `construction/scenario_harness.py`: the engine's own `simulate_factor_bank` on run r3's model with Session 60's workload
+  move, SELECT bank (seed 20261005) for search and REFEREE (20261006) report-only, against a seeded 20,000-lineup legal field weighted
+  by projected total (beta 1.5 "sharp", 3.0 "very_sharp"). The engine's cold-start field was rejected: about 2.5% of Captains each,
+  practice-squad players included, so its 99th percentile measured nothing. Every rate is a prior-only diagnostic. Measures: per
+  contest, the share of scenarios where any entry reaches the field's q99; washout, the share where no entry reaches q75.
+  - Iteration 1 (`qa_iter1/`): rejected. The search drifted to QB-less chalk (24 zero-QB rows, four people at 27 of 36) because a
+    random field is easy to beat with the highest means. Diagnosis kept: v3's washouts were ATL flopping while NO scored through
+    Olave, and v3 over-used Shough and Johnson as Captain relative to the field.
+  - Iteration 2 (`qa_iter2/`): from v3 with thesis rules as hard constraints (WR/TE Captain with his own QB; one DST, never beside the
+    opposing QB; one kicker; at most 3 zero-QB rows, RB/K/DST Captain only; 10+ Captains) and the beta-3 field. Washout (very_sharp,
+    SELECT) 0.1462 to 0.0055, no contest worse on either bank.
+  - Iteration 3 (`qa_iter3/`): model-risk caps the simulator cannot see (Johnson and Kamara, whose priors are largely Session 60's
+    redistribution, and every non-QB at most 24 of 36), Penix at least 10 rows, at least 4 two-QB rows; then the Pareto search;
+    gate: no worse than v3 on every contest and washout on all four bank/field pairs. Daily Dollar: no move passed (every swap costs
+    the partner contest). Run caveat: the agent's search order depended on Python's per-process hash seed; set `PYTHONHASHSEED`.
+  - Delivered `construction/qa_iter3/DK_REVIEW_ENTRY_atl-no-sd_qa_iter3.csv`, `bcebb64c…23b7`, at 23:39Z. Independently re-scored by
+    `construction/verify_candidate.py` (identical numbers) and QA PASS at `--max-overlap 5` (0 defects, 0 limit breaches, salary
+    $47,100 to $50,000, 10 Captains, QB count 1:29 rows, 2:4, 0:3). v3 to final, SELECT very_sharp (REFEREE very_sharp): Dime Package
+    0.1225 to 0.2557 (0.1180 to 0.2427), 7-entry satellite 0.0438 to 0.1000 (0.0427 to 0.0948), First Down 0.0035 to 0.0530, Quarter
+    Jukebox 0.0067 to 0.0293, any entry 0.2145 to 0.3777 (0.2197 to 0.3728), washout q75 0.1462 to 0.0032 (0.1592 to 0.0053); Daily
+    Dollar unchanged. Captains: Johnson, Olave, London 7; Bijan 5; Shough, Folk, Kamara, B. Robinson 2; K. Austin, Saints DST 1. People:
+    Johnson, London, Shough, Kamara, Bijan 24 each; Folk 15; Penix and Austin 13; Olave 12. `PRIOR_ONLY / DO_NOT_UPLOAD`; leverage
+    against real ownership unmeasured.
 
 ### 2026-10-05: Session 62 -- Pareto-only salary redeploy (R37, P9 part 3)
 
