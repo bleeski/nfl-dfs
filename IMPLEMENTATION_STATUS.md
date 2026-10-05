@@ -322,16 +322,30 @@ moved to `docs/claude/working.md`. No roadmap session number.
   selection report for an older dump. 11 tests.
 - **`scripts/swap_inactives.py`** replaces a newly inactive player (single
   swap, then a two-player fallback), works a named value add into up to a
-  target count of lineups, redeploys freed salary as one upgrade per changed
-  lineup, or edits only cells whose game has not locked (`--mode late-swap`).
-  Every mode preserves an existing stack or bring-back and enforces the
-  portfolio's exposure and overlap caps and R29 uniqueness. 10 tests.
+  target count of lineups, redeploys salary only as a Pareto gain, or edits only
+  cells whose game has not locked (`--mode late-swap`). Every mode preserves an
+  existing stack or bring-back and enforces the portfolio's exposure and overlap
+  caps and R29 uniqueness. Since Session 62 (R37) `--mode redeploy` takes a swap
+  only when it raises the row's prior, fits the cap, keeps the row legal and
+  distinct, leaves the QB, DST, stack, bring-back and every `--protect` /
+  `--protect-from` (a run's `judgment_pass.protected_people`) person alone, and
+  leaves no washout proxy (max exposure, top-3 union, mean pairwise overlap,
+  distinct people) worse on the whole portfolio; every row, to a fixed point
+  (a rerun on its own output changes nothing; a 25-pass bound is reported if hit); it reports both goals before and
+  after and every rejected swap with the goal it would have hurt. Unused salary is
+  never a defect: no floor is inherited. Proved on the committed Week 4 v4
+  portfolio (49 swaps, prior sum 4148.5 to 4231.6, no proxy worse, no protected
+  person moved), not yet inside `run-slate` (Session 64). 50 tests.
 - **`scripts/build_thesis_portfolio.py`** builds several named theses (a
   market read, a flip, a bust, a flat-priced "priors wrong" fade) as
   independent `build_classic_portfolio.py` calls, then selects across all of
   them under one global cap. Every builder call gets a fresh `--out` path and
   its exit code is checked before the file is read (the 2026-09-27 stale-read
-  slip, now a regression test). 16 tests, including one real subprocess call.
+  slip, now a regression test). Since Session 62 its builder calls get no salary
+  floor by default (it was 48500) and its fill step runs the Pareto redeploy
+  above on the assigned rows (`--protect`, `--protect-from`,
+  `--no-pareto-redeploy`); the pass is never fatal (`NOT_RUN` with the reason).
+  29 tests, including one real subprocess call.
 - **`scripts/showdown_value_add.py`** (Session 55) works one named person (exact
   DraftKings ID, either role row) into up to N rows of a filled Showdown review
   file by one FLEX swap each, or the Captain with `--captain`. Only rows the

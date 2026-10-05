@@ -30,6 +30,16 @@ overlap cap, and a per-thesis cap on lineups sharing a QB. Selection ranks by
 the *un-boosted* gated score, so a thesis's own tilt never contaminates which
 of its own candidates looks best.
 
+Session 62 (R37): unused salary is never a defect, so no builder call gets a salary floor
+unless the operator passes `--min-salary` (the default was 48500), and the fill step then
+takes salary-driven swaps ONLY as Pareto gains: `swap_inactives.redeploy` runs on the
+assigned rows (a swap must raise the row's prior and leave every washout proxy no worse,
+never touching the QB, the DST, the stack, the bring-back or a `--protect` person; the priors-wrong
+thesis's rows are left alone, since the pass ranks by the prior that thesis bets against; the report
+is `construction.pareto_redeploy`). `--protect-from` reads a Classic run's
+`judgment_pass.protected_people`. The pass never costs the portfolio: if it cannot run, the
+selection ships unchanged with `NOT_RUN` and the reason named. `--no-pareto-redeploy` skips it.
+
 Exit codes: 0 every fillable Entry ID got a lineup; 3 written with a
 shortfall, each one named on stderr (R29: never a repeated lineup to close
 it); 2 refused by name, nothing written.
@@ -41,6 +51,7 @@ import argparse
 import collections
 import csv
 import hashlib
+import importlib.util
 import itertools
 import json
 import os
@@ -52,6 +63,10 @@ from pathlib import Path
 EXIT_OK, EXIT_REFUSED, EXIT_PARTIAL = 0, 2, 3
 CONFIG_SCHEMA = "nfl_dfs_thesis_portfolio_config_v1"
 DEFAULT_MULTIPLIER = 3
+CLASSIC_CAP = 50000
+# The thesis built by salary alone against the prior ("the market, not the prior, is wrong"): a redeploy that
+# ranks by the prior would undo it, so the Pareto pass leaves its rows alone.
+PRIORS_WRONG_NAME = "PRIORS_WRONG_SALARY_FLAT"
 
 
 class Refused(Exception):
@@ -286,6 +301,73 @@ def select_portfolio(candidates_by_thesis: dict, base_scores: dict, quotas: dict
 
 
 # --------------------------------------------------------------------------- #
+# The Pareto pass at the fill step (Session 62, R37)
+# --------------------------------------------------------------------------- #
+
+
+def _swap_module():
+    """`scripts/swap_inactives.py`, which owns the Classic legality mirror and the Pareto rule this step
+    uses. Loaded by sibling path, and reused when a test or another script already loaded it."""
+
+    existing = sys.modules.get("swap_inactives")
+    if existing is not None and hasattr(existing, "redeploy"):
+        return existing
+    spec = importlib.util.spec_from_file_location(
+        "swap_inactives", Path(__file__).resolve().parent / "swap_inactives.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["swap_inactives"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def resolve_protected(a) -> dict:
+    """`{dk_id: name}` for `--protect` and `--protect-from`. A refusal is the operator's own typo, so it
+    stops the build before any builder call rather than quietly protecting nobody."""
+
+    tokens = list(getattr(a, "protect", None) or [])
+    source = getattr(a, "protect_from", None)
+    if not tokens and not source:
+        return {}
+    swap = _swap_module()
+    try:
+        return swap.resolve_protect(
+            swap.load_salaries(a.salaries), tokens, swap.load_protected_from(source) if source else [])
+    except swap.Refused as exc:
+        raise Refused(exc.code, exc.detail)
+
+
+def pareto_redeploy_pass(a, assignments, base_scores, protect, *, entry_ids, max_exposure, max_overlap) -> dict:
+    """Salary-driven swaps on the assigned rows, taken only as Pareto gains (`swap_inactives.redeploy`: the
+    row's prior rises, no washout proxy is worse, the QB, DST, stack, bring-back and every protected person
+    stay). Only `entry_ids` are considered (every row but the priors-wrong thesis's), though every row counts in
+    the proxies; an explicit `--min-salary` is honored like the builder honors it. Edits `assignments` only
+    when it finishes. Never fatal (the lock-clock ruling: the file ships and the gap is named): a pass that
+    cannot run leaves the selection as it was and says why."""
+
+    if not getattr(a, "pareto_redeploy", True):
+        return {"state": "DISABLED", "reason": "--no-pareto-redeploy"}
+    try:
+        short = sorted(eid for eid, roster in assignments.items() if len(roster) != 9)
+        if short:
+            raise ValueError(f"ROSTERS_NOT_NINE_CELLS: {short[:5]}")
+        swap = _swap_module()
+        sal = swap.load_salaries(a.salaries)
+        trial = {eid: list(roster) for eid, roster in assignments.items()}
+        _log, report = swap.redeploy(
+            swap.Board(sal, CLASSIC_CAP, int(getattr(a, "min_salary", 0) or 0)), base_scores, trial, list(entry_ids),
+            protect=protect, gated=swap.load_gated(a.scores, sal) | swap.load_inactive_ids(a.status),
+            max_exposure=max_exposure, max_overlap=max_overlap,
+        )
+        assignments.update(trial)
+        report["left_alone"] = {PRIORS_WRONG_NAME: sorted(set(assignments) - set(entry_ids))}
+        return report
+    except Exception as exc:  # noqa: BLE001 - see the docstring
+        reason = f"{type(exc).__name__}: {exc}"
+        print(f"PARETO_REDEPLOY_NOT_RUN {reason}", file=sys.stderr)
+        return {"state": "NOT_RUN", "reason": reason}
+
+
+# --------------------------------------------------------------------------- #
 # Output
 # --------------------------------------------------------------------------- #
 
@@ -319,6 +401,7 @@ def build(a, *, runner=subprocess.run) -> dict:
     out = Path(a.out)
     if out.exists():
         raise Refused("OUTPUT_EXISTS", f"{a.out} already exists; an earlier portfolio is never overwritten")
+    protect = resolve_protected(a)
     work_dir = Path(a.work_dir)
     if work_dir.exists():
         raise Refused("WORK_DIR_EXISTS", f"{a.work_dir} already exists; every run gets a fresh scratch directory")
@@ -370,7 +453,7 @@ def build(a, *, runner=subprocess.run) -> dict:
             dk_id for dk_id, _n in heavy.most_common(fade_count * 4)
             if sal.get(dk_id, {}).get("Position") != "DST"
         ][:fade_count]
-        name, quota = "PRIORS_WRONG_SALARY_FLAT", int(priors_wrong.get("quota", 4))
+        name, quota = PRIORS_WRONG_NAME, int(priors_wrong.get("quota", 4))
         quotas[name] = quota
         salary_scores = {
             dk_id: float(row["Salary"]) / 1000.0
@@ -395,6 +478,10 @@ def build(a, *, runner=subprocess.run) -> dict:
     excluded_entries = parse_excluded_entries(a.exclude_entry_id)
     fillable = [eid for eid in read_entries_template(a.entries) if eid not in excluded_entries]
     assignments = {eid: roster for eid, roster in zip(fillable, chosen)}
+    pareto = pareto_redeploy_pass(
+        a, assignments, base_scores, protect, max_exposure=max_exposure, max_overlap=max_overlap,
+        entry_ids=[eid for eid, tag in zip(assignments, tags) if tag != PRIORS_WRONG_NAME])
+    final = list(assignments.values()) + chosen[len(assignments):]
     unfilled = [eid for eid in fillable if eid not in assignments] + list(excluded_entries)
 
     doc = {
@@ -406,7 +493,7 @@ def build(a, *, runner=subprocess.run) -> dict:
                 "salary": sum(int(sal[dk_id]["Salary"]) for dk_id in roster),
                 "prior_points": round(sum(base_scores.get(dk_id, 0.0) for dk_id in roster), 3),
             }
-            for n, (roster, tag) in enumerate(zip(chosen, tags))
+            for n, (roster, tag) in enumerate(zip(final, tags))
         ],
         "assignments_by_entry_id": assignments,
         "unfilled_entry_ids": unfilled,
@@ -419,6 +506,7 @@ def build(a, *, runner=subprocess.run) -> dict:
             "per_thesis_qb_cap": per_thesis_qb_cap,
             "seeds": seeds,
             "candidates_generated": {name: len(rosters) for name, rosters in candidates.items()},
+            "pareto_redeploy": pareto,
         },
     }
     data = json.dumps(doc, indent=1).encode("utf-8")
@@ -427,6 +515,7 @@ def build(a, *, runner=subprocess.run) -> dict:
         "unfilled": unfilled,
         "built": len(chosen),
         "asked": len(fillable),
+        "pareto": pareto,
         "sha256": hashlib.sha256(data).hexdigest(),
     }
 
@@ -451,7 +540,14 @@ def main(argv=None, *, runner=subprocess.run) -> int:
     ap.add_argument("--max-exposure", type=int, default=None)
     ap.add_argument("--max-overlap", type=int, default=None)
     ap.add_argument("--per-thesis-qb-cap", type=int, default=None)
-    ap.add_argument("--min-salary", type=int, default=48500)
+    ap.add_argument("--min-salary", type=int, default=0,
+                    help="a salary floor for every builder call; default none: unused salary is never a defect (R37)")
+    ap.add_argument("--protect", action="append", default=[],
+                    help="a DraftKings ID or exact name the Pareto pass never moves (repeatable)")
+    ap.add_argument("--protect-from",
+                    help="a run-slate cowork_run.json or Classic coverage JSON: protect judgment_pass.protected_people")
+    ap.add_argument("--no-pareto-redeploy", dest="pareto_redeploy", action="store_false", default=True,
+                    help="skip the salary-driven Pareto pass at the fill step")
     ap.add_argument("--require-bringback", action="store_true", default=True)
     ap.add_argument("--no-require-bringback", dest="require_bringback", action="store_false")
     a = ap.parse_args(argv)
@@ -462,6 +558,10 @@ def main(argv=None, *, runner=subprocess.run) -> int:
         print("nothing was written", file=sys.stderr)
         return EXIT_REFUSED
     print(f"built {result['built']} of {result['asked']} fillable entries")
+    if result["pareto"].get("rule"):
+        print("\n".join(_swap_module().render_pareto_report(result["pareto"])))
+    else:
+        print(f"pareto redeploy: {result['pareto']['state']} ({result['pareto']['reason']})")
     print(f"sha256: {result['sha256']}")
     print(f"wrote: {a.out}")
     if result["unfilled"]:

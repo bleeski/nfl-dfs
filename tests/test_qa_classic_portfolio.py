@@ -148,8 +148,27 @@ def test_backup_pairs_is_silent_when_the_starter_is_rostered(tmp_path):
     assert run(tmp_path, [LEGAL], ["--backup-pairs", "AAA QB>AAA QB2"]) == 0
 
 
-def test_min_salary_floor_is_an_enforcement_defect_exit_two(tmp_path):
-    assert run(tmp_path, [LEGAL], ["--min-salary", "49000"]) == 2
+# Session 62 (R37, Ben 2026-10-04: "leaving salary on the table is fine and can be strategic"). This test
+# was `test_min_salary_floor_is_an_enforcement_defect_exit_two` and asserted exit 2: a lineup under a
+# `--min-salary` the operator passed was an enforcement defect. R37 says no QA line, limit or default treats
+# unused salary as a defect, so the floor stays accepted (older commands still pass it) and a short lineup is an
+# informational note: exit 0, named in Tier 2, and in the JSON as `salary_notes`.
+def test_min_salary_floor_is_an_informational_note_never_a_defect(tmp_path, capsys):
+    out = tmp_path / "qa.json"
+    assert run(tmp_path, [LEGAL], ["--min-salary", "49000", "--json", str(out)]) == 0
+    text = capsys.readouterr().out
+    assert "unused salary is never a defect" in text
+    assert "VERDICT: PASS" in text
+    doc = json.loads(out.read_text(encoding="utf-8"))
+    assert doc["enforcement_defects"] == []
+    assert len(doc["salary_notes"]) == 1 and "under the 49000" in doc["salary_notes"][0]
+
+
+def test_no_floor_means_no_salary_note(tmp_path, capsys):
+    out = tmp_path / "qa.json"
+    assert run(tmp_path, [LEGAL], ["--json", str(out)]) == 0
+    assert "unused salary is never a defect" not in capsys.readouterr().out
+    assert json.loads(out.read_text(encoding="utf-8"))["salary_notes"] == []
 
 
 def test_salary_over_the_cap_is_a_legality_failure_exit_one(tmp_path):

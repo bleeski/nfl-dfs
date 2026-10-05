@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "ca4029e9-91e0-42d9-9056-1785308bea09",
-      "branch": "claude/s62-pareto-redeploy",
-      "chunk": "S62",
-      "claimed_at": "2026-10-05T21:14:52Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

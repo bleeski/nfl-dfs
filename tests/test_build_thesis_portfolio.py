@@ -366,3 +366,247 @@ def test_real_builder_end_to_end(tmp_path):
     assert doc["lineups"]
     for lineup in doc["lineups"]:
         assert len(set(lineup["roster"])) == 9
+    # Session 62: real nine-cell rosters, so the fill-step pass RAN (a NOT_RUN here would hide a dead feature).
+    assert doc["construction"]["pareto_redeploy"]["rule"] == "pareto_redeploy_v1"
+
+
+# --------------------------------------------------------------------------- #
+# Session 62 (R37, P9 part 3): the fill step takes a salary-driven swap only as a Pareto gain.
+# --------------------------------------------------------------------------- #
+
+LEGAL_POOL = [
+    ["AAAQB0", "AAAWR0", "BBBWR0", "CCCRB0", "CCCRB1", "CCCWR0", "CCCWR1", "CCCTE0", "CCCDST0"],
+    ["AAAQB0", "AAAWR0", "BBBWR0", "CCCRB2", "AAARB0", "CCCWR2", "AAAWR1", "CCCTE1", "CCCDST0"],
+    ["AAAQB0", "AAAWR0", "BBBWR0", "CCCRB0", "AAARB0", "CCCWR2", "AAAWR2", "CCCTE0", "CCCDST0"],
+    ["AAAQB0", "AAAWR0", "BBBWR0", "CCCRB1", "AAARB1", "CCCWR1", "AAAWR3", "CCCTE1", "CCCDST0"],
+    ["CCCQB0", "CCCWR0", "DDDWR0", "AAARB0", "AAARB1", "AAARB2", "AAAWR1", "AAATE0", "AAADST0"],
+    ["CCCQB0", "CCCWR1", "DDDWR1", "AAARB0", "AAARB1", "AAARB2", "AAAWR2", "AAATE1", "AAADST0"],
+]
+
+
+def _pareto_args(tmp_path, **overrides):
+    a, scores = _args(tmp_path, **overrides)
+    config = json.loads(Path(a.config).read_text(encoding="utf-8"))
+    config["lineups_per_thesis_multiplier"] = 2  # each builder call offers four of the six legal rosters
+    Path(a.config).write_text(json.dumps(config), encoding="utf-8")
+    return a, scores
+
+
+def _thesis_argv(a, *extra):
+    return [
+        "--scores", a.scores, "--salaries", a.salaries, "--status", a.status,
+        "--entries", a.entries, "--config", a.config, "--slate-context", a.slate_context,
+        "--work-dir", a.work_dir, "--out", a.out, *extra,
+    ]
+
+
+def _selection_without_the_pass(tmp_path):
+    """The rosters the selection hands to the fill, from an identical run with the pass off."""
+
+    sub = tmp_path / "plain"
+    sub.mkdir()
+    a, _scores = _pareto_args(sub)
+    thesis.main(_thesis_argv(a, "--no-pareto-redeploy"), runner=FakeBuilder(LEGAL_POOL))
+    return json.loads(Path(a.out).read_text(encoding="utf-8"))["assignments_by_entry_id"]
+
+
+def test_the_fill_step_runs_the_pareto_pass_and_reports_it(tmp_path):
+    a, scores = _pareto_args(tmp_path)
+    code = thesis.main(_thesis_argv(a), runner=FakeBuilder(LEGAL_POOL))
+    assert code == thesis.EXIT_OK
+    doc = json.loads(Path(a.out).read_text(encoding="utf-8"))
+    report = doc["construction"]["pareto_redeploy"]
+    assert report.get("state") is None and report["rule"] == "pareto_redeploy_v1"  # it RAN
+    assert report["fixed_point"] is True and report["accepted"]
+    assert report["after"]["prior_sum"] > report["before"]["prior_sum"]
+    plain = _selection_without_the_pass(tmp_path)
+    assigned = doc["assignments_by_entry_id"]
+    assert set(assigned) == set(plain) and assigned != plain
+    for entry_id, roster in assigned.items():  # the QB, the DST and every row's thesis survive the swaps
+        assert [i for i in roster if "QB" in i or "DST" in i] == [i for i in plain[entry_id] if "QB" in i or "DST" in i]
+    by_entry = dict(zip(assigned, doc["lineups"]))
+    for entry_id, lineup in by_entry.items():
+        assert lineup["roster"] == assigned[entry_id] and lineup["thesis"]
+        assert lineup["prior_points"] == round(sum(scores[i] for i in lineup["roster"]), 3)
+    assert len({frozenset(r) for r in assigned.values()}) == len(assigned)  # R29
+
+
+def test_the_pass_can_be_switched_off(tmp_path):
+    a, _scores = _pareto_args(tmp_path)
+    thesis.main(_thesis_argv(a, "--no-pareto-redeploy"), runner=FakeBuilder(LEGAL_POOL))
+    doc = json.loads(Path(a.out).read_text(encoding="utf-8"))
+    assert doc["construction"]["pareto_redeploy"]["state"] == "DISABLED"
+    assert all(roster in LEGAL_POOL for roster in doc["assignments_by_entry_id"].values())
+
+
+def test_rosters_that_are_not_nine_cells_ship_unchanged_with_the_gap_named(tmp_path, capsys):
+    a, scores = _args(tmp_path)
+    code = thesis.main(_thesis_argv(a), runner=FakeBuilder(_pool_from_salaries(scores)))
+    assert code in (thesis.EXIT_OK, thesis.EXIT_PARTIAL)
+    state = json.loads(Path(a.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]
+    assert state["state"] == "NOT_RUN" and "ROSTERS_NOT_NINE_CELLS" in state["reason"]
+    assert "PARETO_REDEPLOY_NOT_RUN" in capsys.readouterr().err
+
+
+def test_a_pass_that_raises_never_costs_the_portfolio(tmp_path, monkeypatch, capsys):
+    swap = thesis._swap_module()
+
+    def boom(board, scores, assignments, *args, **kwargs):
+        first = next(iter(assignments))
+        assignments[first] = ["HALF_DONE"] * 9  # a pass that edited its rows before it died must leave no trace
+        raise RuntimeError("the pass blew up")
+
+    monkeypatch.setattr(swap, "redeploy", boom)
+    a, _scores = _pareto_args(tmp_path)
+    code = thesis.main(_thesis_argv(a), runner=FakeBuilder(LEGAL_POOL))
+    assert code == thesis.EXIT_OK
+    doc = json.loads(Path(a.out).read_text(encoding="utf-8"))
+    assert doc["construction"]["pareto_redeploy"]["state"] == "NOT_RUN"
+    assert "RuntimeError" in doc["construction"]["pareto_redeploy"]["reason"]
+    assert all(roster in LEGAL_POOL for roster in doc["assignments_by_entry_id"].values())  # untouched selection
+    assert "PARETO_REDEPLOY_NOT_RUN" in capsys.readouterr().err
+
+
+def test_protect_keeps_a_person_where_the_selection_put_him(tmp_path):
+    first_dir = tmp_path / "first"
+    first_dir.mkdir()
+    a, _scores = _pareto_args(first_dir)
+    thesis.main(_thesis_argv(a), runner=FakeBuilder(LEGAL_POOL))
+    taken = json.loads(Path(a.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]["accepted"]
+    leaving = sorted({swap_["out"] for swap_ in taken})
+    assert leaving
+    second_dir = tmp_path / "second"
+    second_dir.mkdir()
+    b, _scores = _pareto_args(second_dir)
+    protect = [part for dk_id in leaving for part in ("--protect", dk_id)]
+    thesis.main(_thesis_argv(b, *protect), runner=FakeBuilder(LEGAL_POOL))
+    report = json.loads(Path(b.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]
+    assert not {swap_["out"] for swap_ in report["accepted"]} & set(leaving)
+    assert {row["dk_id"] for row in report["protected"]} == set(leaving)
+    for row in report["protected"]:
+        assert row["rows_before"] == row["rows_after"]
+
+
+def test_an_officially_inactive_person_is_never_brought_in_by_the_pass(tmp_path):
+    first_dir = tmp_path / "first"
+    first_dir.mkdir()
+    a, _scores = _pareto_args(first_dir)
+    thesis.main(_thesis_argv(a), runner=FakeBuilder(LEGAL_POOL))
+    taken = json.loads(Path(a.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]["accepted"]
+    arriving = sorted({swap_["in"] for swap_ in taken})
+    assert arriving
+    second_dir = tmp_path / "second"
+    second_dir.mkdir()
+    b, _scores = _pareto_args(second_dir)
+    Path(b.status).write_text(
+        "TEAM,PLAYER_OR_GSIS_ID,STATUS,SOURCE_URL,OBSERVED_AT\n"
+        + "".join(f"XXX,{dk_id},INACTIVE,https://example.org/x,2026-09-28T15:00:00+00:00\n" for dk_id in arriving),
+        encoding="utf-8")
+    thesis.main(_thesis_argv(b), runner=FakeBuilder(LEGAL_POOL))
+    report = json.loads(Path(b.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]
+    assert not {swap_["in"] for swap_ in report["accepted"]} & set(arriving)
+
+
+def test_a_bad_protect_is_refused_before_any_builder_call(tmp_path, capsys):
+    a, _scores = _pareto_args(tmp_path)
+    fake = FakeBuilder(LEGAL_POOL)
+    code = thesis.main(_thesis_argv(a, "--protect", "Nobody Atall"), runner=fake)
+    assert code == thesis.EXIT_REFUSED and fake.calls == [] and not Path(a.out).exists()
+    assert "PROTECT_UNKNOWN" in capsys.readouterr().err
+
+
+def test_no_salary_floor_is_the_default_and_an_explicit_one_still_reaches_the_builder(tmp_path):
+    a, _scores = _pareto_args(tmp_path)
+    fake = FakeBuilder(LEGAL_POOL)
+    thesis.main(_thesis_argv(a), runner=fake)
+    command = fake.calls[0]
+    assert command[command.index("--min-salary") + 1] == "0"
+    b_dir = tmp_path / "explicit"
+    b_dir.mkdir()
+    b, _scores = _pareto_args(b_dir)
+    fake = FakeBuilder(LEGAL_POOL)
+    thesis.main(_thesis_argv(b, "--min-salary", "47000"), runner=fake)
+    command = fake.calls[0]
+    assert command[command.index("--min-salary") + 1] == "47000"
+
+
+def test_an_explicit_salary_floor_binds_the_pass_as_it_binds_the_builder(tmp_path):
+    a, _scores = _pareto_args(tmp_path)
+    thesis.main(_thesis_argv(a, "--min-salary", "47000"), runner=FakeBuilder(LEGAL_POOL))
+    report = json.loads(Path(a.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]
+    assert report["rule"] == "pareto_redeploy_v1"
+    assert report["accepted"] == [] and report["row_rejections"]["ILLEGAL"] > 0  # every row sits under 47,000
+
+
+def _first_run_swaps(tmp_path):
+    first_dir = tmp_path / "first"
+    first_dir.mkdir()
+    a, _scores = _pareto_args(first_dir)
+    thesis.main(_thesis_argv(a), runner=FakeBuilder(LEGAL_POOL))
+    taken = json.loads(Path(a.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]["accepted"]
+    second_dir = tmp_path / "second"
+    second_dir.mkdir()
+    b, _scores = _pareto_args(second_dir)
+    return taken, b
+
+
+def test_protect_from_a_runs_judgment_pass_reaches_the_thesis_pass(tmp_path):
+    taken, b = _first_run_swaps(tmp_path)
+    leaving = sorted({swap_["out"] for swap_ in taken})
+    run_json = tmp_path / "cowork_run.json"
+    people = [{"person": f"p{n}", "dk_id": dk_id, "name": dk_id, "min_rows": 1, "delivered_rows": [], "met": True}
+              for n, dk_id in enumerate(leaving)]
+    run_json.write_text(json.dumps({"prior_review_reports": {"selection": {"judgment_pass": {
+        "protected_people": people}}}}), encoding="utf-8")
+    thesis.main(_thesis_argv(b, "--protect-from", str(run_json)), runner=FakeBuilder(LEGAL_POOL))
+    report = json.loads(Path(b.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]
+    assert {row["dk_id"] for row in report["protected"]} == set(leaving)
+    assert not {swap_["out"] for swap_ in report["accepted"]} & set(leaving)
+
+
+def test_the_scores_files_own_exclusions_reach_the_thesis_pass(tmp_path):
+    taken, b = _first_run_swaps(tmp_path)
+    arriving = sorted({swap_["in"] for swap_ in taken})
+    doc = json.loads(Path(b.scores).read_text(encoding="utf-8"))
+    doc["excluded_dk_ids"] = arriving
+    Path(b.scores).write_text(json.dumps(doc), encoding="utf-8")
+    thesis.main(_thesis_argv(b), runner=FakeBuilder(LEGAL_POOL))
+    report = json.loads(Path(b.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]
+    assert report["gated_people"] == len(arriving)
+    assert not {swap_["in"] for swap_ in report["accepted"]} & set(arriving)
+
+
+def test_lineups_beyond_the_fillable_rows_ride_along_unchanged(tmp_path):
+    a, _scores = _pareto_args(tmp_path)
+    a.entries = str(make_entries(tmp_path, 2))  # four lineups selected, two rows to fill
+    code = thesis.main(_thesis_argv(a), runner=FakeBuilder(LEGAL_POOL))
+    assert code == thesis.EXIT_OK
+    doc = json.loads(Path(a.out).read_text(encoding="utf-8"))
+    assigned = list(doc["assignments_by_entry_id"].values())
+    assert len(assigned) == 2 and len(doc["lineups"]) == 4
+    assert [lineup["roster"] for lineup in doc["lineups"][:2]] == assigned
+    assert all(lineup["roster"] in LEGAL_POOL for lineup in doc["lineups"][2:])
+
+
+def test_the_priors_wrong_thesis_rows_are_left_alone_by_a_pass_that_ranks_by_the_prior(tmp_path):
+    def run(directory, *flags):
+        directory.mkdir()
+        a, _scores = _pareto_args(directory)
+        config = json.loads(Path(a.config).read_text(encoding="utf-8"))
+        config["theses"] = [{"name": "T1", "quota": 2, "team_totals": "market"}]
+        config["priors_wrong"] = {"quota": 2, "fade_count": 1}
+        Path(a.config).write_text(json.dumps(config), encoding="utf-8")
+        thesis.main(_thesis_argv(a, *flags), runner=FakeBuilder(LEGAL_POOL))
+        return json.loads(Path(a.out).read_text(encoding="utf-8"))
+
+    plain = run(tmp_path / "plain", "--no-pareto-redeploy")
+    redeployed = run(tmp_path / "redeployed")
+    assert thesis.PRIORS_WRONG_NAME in redeployed["construction"]["theses"]
+    tagged = [eid for eid, line in zip(redeployed["assignments_by_entry_id"], redeployed["lineups"])
+              if line["thesis"] == thesis.PRIORS_WRONG_NAME]
+    assert tagged
+    report = redeployed["construction"]["pareto_redeploy"]
+    assert report["left_alone"] == {thesis.PRIORS_WRONG_NAME: sorted(tagged)}
+    for eid in tagged:
+        assert redeployed["assignments_by_entry_id"][eid] == plain["assignments_by_entry_id"][eid]
+    assert report["accepted"]  # the other rows were still redeployed
