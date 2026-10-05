@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from .classic_judgment import ConstructionJudgment, judge_placements
 from .contracts import EngineMode, SlateContract
 from .classic_portfolio import (
     ENFORCEMENT_VERSION as CLASSIC_ENFORCEMENT_VERSION,
@@ -202,6 +203,30 @@ def write_pool_scores(
     return target
 
 
+def _prior_before_redistribution(model, pre_model, score_chain):
+    """(prior points by person before the injury-room move, note) for the people the move changed.
+
+    Scored by the same chain as the run, on the model before `redistribute_vacated_workload`. Nothing
+    here selects or gates: a model the move left alone, or a counterfactual that cannot run, gives
+    `None` and says which, so the judgment pass never reports a "before" it did not compute.
+    """
+
+    if pre_model is None:
+        return None, "NOT_REQUESTED"
+    if pre_model is model:
+        return None, "NOTHING_MOVED"
+    earlier = {player.underlying_id: player for player in pre_model.players}
+    moved = sorted(
+        player.underlying_id for player in model.players if earlier.get(player.underlying_id) != player)
+    if not moved:
+        return None, "NOTHING_MOVED"
+    try:
+        scored = score_chain(pre_model)[2]
+    except Exception as exc:  # noqa: BLE001 - a diagnostic counterfactual never stops a run
+        return None, f"COUNTERFACTUAL_COULD_NOT_RUN:{type(exc).__name__}:{' '.join(str(exc).split())[:160]}"
+    return {person: round(float(scored.by_person[person]), 6) for person in moved if person in scored.by_person}, "SCORED"
+
+
 def select_prior_lineups(
     slate: SlateContract,
     model: OpportunityModel,
@@ -227,6 +252,8 @@ def select_prior_lineups(
     fill_count: int = 0,
     fill_time_limit_seconds: float | None = None,
     classic_construction: str | None = None,
+    pre_redistribution_model: OpportunityModel | None = None,
+    construction_judgment: ConstructionJudgment | None = None,
 ) -> tuple[tuple[SelectedLineup, ...], PriorScores, dict[str, object]]:
     """Solve for `count` distinct legal lineups over the permitted pool.
 
@@ -256,6 +283,18 @@ def select_prior_lineups(
     and a run that runs out of distinct lineups or time at row k returns the k
     rows with `unfilled_rows` and `stopped`, like the fill, and raises only when
     it built none. `None` is C1 as it was.
+
+    `pre_redistribution_model` (Session 61) is the model as it stood before Session 60's
+    injury-room redistribution. When it differs from `model`, the pool is scored again from it by
+    the same pipeline and the report carries each affected person's prior points before the move
+    (`prior_points_before_redistribution`), a diagnostic the Classic judgment pass reads. It never
+    selects, and a failure to compute it is named in the report and stops nothing.
+
+    `construction_judgment` (Session 61) is a validated `nfl_classic_construction_judgment_v1`:
+    people the thesis build must roster in at least a minimum of rows. It applies only to the thesis
+    construction (no policy); each placement is accepted for a person in the scored pool and refused
+    by name otherwise (`classic_judgment.judge_placements`), and an accepted person is also kept in
+    when the backup-quarterback default would have removed him. It writes no number.
 
     `classic_person_overlap` (Session 39) is the most people a Classic C1 or
     fill row may share with an earlier row (default 6; `None` is no cap). It
@@ -309,25 +348,29 @@ def select_prior_lineups(
         evidence_path=role_evidence_json,
         as_of=as_of,
     )
-    # The depth chart moves quarterback attempts onto the named starter before
-    # anything reads a share, so a backup cannot carry his prior-season split
-    # into the projection and then be removed by a policy exclusion that lands
-    # after scoring. It touches `qb_attempt_share` and nothing else.
-    qb_depth = resolve_qb_depth_roles(
-        slate, model, contract, evidence_path=qb_depth_role_evidence_json, as_of=as_of,
-    )
-    # Session 54 (R36): the effective starters the depth evidence names are selectable even with no
-    # history. `starters_by_team` is already past R25's promotion over a DraftKings-unavailable starter.
-    offense = resolve_offensive_roles(
-        slate,
-        qb_depth.model,
-        contract,
-        evidence_path=offensive_role_evidence_json,
-        as_of=as_of,
-        declared_starters=frozenset((qb_depth.report.get("starters_by_team") or {}).values()),
-        depth_evidence_sha256=qb_depth.evidence_sha256,
-    )
-    scores = score_pool(slate, offense.model, splits, kicker_roles=kicker_roles, offensive_roles=offense)
+
+    def score_chain(scored_model: OpportunityModel):
+        # The depth chart moves quarterback attempts onto the named starter before
+        # anything reads a share, so a backup cannot carry his prior-season split
+        # into the projection and then be removed by a policy exclusion that lands
+        # after scoring. It touches `qb_attempt_share` and nothing else.
+        depth = resolve_qb_depth_roles(
+            slate, scored_model, contract, evidence_path=qb_depth_role_evidence_json, as_of=as_of,
+        )
+        # Session 54 (R36): the effective starters the depth evidence names are selectable even with no
+        # history. `starters_by_team` is already past R25's promotion over a DraftKings-unavailable starter.
+        roles = resolve_offensive_roles(
+            slate,
+            depth.model,
+            contract,
+            evidence_path=offensive_role_evidence_json,
+            as_of=as_of,
+            declared_starters=frozenset((depth.report.get("starters_by_team") or {}).values()),
+            depth_evidence_sha256=depth.evidence_sha256,
+        )
+        return depth, roles, score_pool(slate, roles.model, splits, kicker_roles=kicker_roles, offensive_roles=roles)
+
+    qb_depth, offense, scores = score_chain(model)
     # Scoring may leave out an unresolved role change (R28); its resolution is
     # the one every exclusion and report below reads.
     offense = scores.offensive_role_resolution
@@ -352,11 +395,35 @@ def select_prior_lineups(
     # 54 it selects a declared starter with no history, but a hash-bound fact that he is a backup, or an
     # allocation or participation rule, can still leave his team with no selectable quarterback.
     qb_depth_report = qb_depth.report
-    default_backups, default_unevaluated = (
-        backup_quarterbacks(slate, None, qb_depth_report)
-        if slate.mode is EngineMode.SHOWDOWN
-        else (frozenset(), ())
-    )
+    # Session 61 (R37). Classic gets the same default: a quarterback the depth evidence puts behind a
+    # declared starter is out of every Classic row (Week 4's first build rostered Nick Mullens, who was
+    # not on his team's depth chart). A Classic policy that names a person with a minimum is a choice
+    # made on purpose, so that person stays in; so does anyone a validated judgment names (Part B).
+    # Classic supplies its own depth package (`run-slate` auto-captures for Showdown only), so a team the
+    # evidence does not order is named and nobody is guessed out.
+    judgment_decision = None
+    if construction_judgment is not None:
+        if slate.mode is not EngineMode.CLASSIC:
+            raise SelectionError(f"MODE_NOT_SUPPORTED:{slate.mode.value}:a Classic construction judgment")
+        thesis_build = classic_construction == THESIS_CONSTRUCTION and portfolio_policy is None
+        judgment_decision = judge_placements(
+            construction_judgment, slate, contract=contract, offensive_report=offense.report,
+            offense_excluded_people=offense.excluded_people,
+            kicker_zero_share_people=kicker_roles.zero_share_people, scored_people=scores.by_person,
+            count=count, applies=thesis_build,
+            why_not_applied=(
+                "A_PORTFOLIO_POLICY_IS_IN_FORCE" if portfolio_policy is not None
+                else "THE_RUN_DOES_NOT_USE_THE_THESIS_CONSTRUCTION"),
+        )
+    named_backups = frozenset(
+        bound.entity_id
+        for bound in (
+            portfolio_policy.player_bounds if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy) else ()
+        )
+        if bound.minimum_entries > 0
+    ) | frozenset(judgment_decision.accepted if judgment_decision is not None else ())
+    default_backups, default_unevaluated = backup_quarterbacks(
+        slate, None, qb_depth_report, admitted_people=named_backups)
     default_backup_ids = {player.dk_id for player in slate.players if player.underlying_id in default_backups}
     # The run's own exclusions bind every row; a policy's own exclusions and zero
     # caps (below) bind only the rows it binds, so the unbound fill uses these. The default
@@ -381,14 +448,34 @@ def select_prior_lineups(
             if limit.maximum_entries == 0:
                 excluded_set.append(by_person[limit.entity_id].dk_id)
     excluded = tuple(sorted(set(excluded_set)))
+    showdown = slate.mode is EngineMode.SHOWDOWN
     backup_default_report = {
         "rule": "SHOWDOWN_BACKUP_QUARTERBACKS_OUT_OF_EVERY_ROW_R36",
-        "applies": slate.mode is EngineMode.SHOWDOWN,
-        "excluded_people": sorted(default_backups),
-        "unevaluated_teams": list(default_unevaluated),
+        "applies": showdown,
+        "excluded_people": sorted(default_backups) if showdown else [],
+        "unevaluated_teams": list(default_unevaluated) if showdown else [],
         "thesis_named_backups_readmitted_for_bound_rows": sorted(default_backups - backups) if thesis is not None else [],
         "does_not_establish": ["THAT_THE_DECLARED_STARTER_IS_PLAYING", "OFFICIAL_ACTIVE_STATUS"],
     }
+    classic_backup_default_report = {
+        "rule": "CLASSIC_BACKUP_QUARTERBACKS_OUT_OF_EVERY_ROW_R36_R37",
+        "applies": not showdown,
+        "excluded_people": [] if showdown else sorted(default_backups),
+        "unevaluated_teams": [] if showdown else list(default_unevaluated),
+        # Only a person the depth evidence would have removed counts as readmitted.
+        "readmitted_by_a_named_choice": [] if showdown else sorted(
+            named_backups & backup_quarterbacks(slate, None, qb_depth_report)[0]),
+        "does_not_establish": ["THAT_THE_DECLARED_STARTER_IS_PLAYING", "OFFICIAL_ACTIVE_STATUS"],
+    }
+    # Session 61: the prior of each person the injury-room redistribution moved, as it stood before it.
+    judgment_inputs: dict[str, object] = {}
+    if not showdown:
+        before_points, before_note = _prior_before_redistribution(model, pre_redistribution_model, score_chain)
+        judgment_inputs = {
+            "prior_points_before_redistribution": before_points,
+            "prior_points_before_redistribution_note": before_note,
+            **({"construction_judgment": judgment_decision.report} if judgment_decision is not None else {}),
+        }
     if pool_scores_target is not None:
         write_pool_scores(scores, pool_scores_target, excluded_dk_ids=excluded)
     objective = _objective(slate, scores, excluded)
@@ -506,6 +593,8 @@ def select_prior_lineups(
             "offensive_roles": offense.report,
             "qb_depth_roles": qb_depth_report,
             "showdown_backup_qb_default": backup_default_report,
+            "classic_backup_qb_default": classic_backup_default_report,
+            **judgment_inputs,
             "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
             "selectable_people": len(contract.selectable_people),
             "person_exposure": dict(sorted(exposure.items())),
@@ -660,6 +749,8 @@ def select_prior_lineups(
             "offensive_roles": offense.report,
             "qb_depth_roles": qb_depth_report,
             "showdown_backup_qb_default": backup_default_report,
+            "classic_backup_qb_default": classic_backup_default_report,
+            **judgment_inputs,
             "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
             "selectable_people": len(contract.selectable_people),
             "person_exposure": dict(sorted(exposure.items())),
@@ -696,7 +787,11 @@ def select_prior_lineups(
         run = select_thesis_lineups(
             slate, objective, excluded, contract, count=count, forbidden_rosters=forbidden_rosters,
             time_limit_seconds=time_limit_seconds, classic_person_overlap=classic_person_overlap,
+            protected=dict(judgment_decision.accepted) if judgment_decision is not None else None,
         )
+        if judgment_decision is not None:
+            # What the rows actually hold, recounted by the builder from the delivered rosters.
+            judgment_decision.report["delivery"] = (run.construction or {}).get("placements")
     else:
         run = _sequential_lineups(
             slate, objective, excluded, contract, count=count, first_index=1,
@@ -723,6 +818,8 @@ def select_prior_lineups(
         "offensive_roles": offense.report,
         "qb_depth_roles": qb_depth_report,
         "showdown_backup_qb_default": backup_default_report,
+        "classic_backup_qb_default": classic_backup_default_report,
+        **judgment_inputs,
         "salary_rank_divergence": scores.as_report()["salary_rank_divergence"],
         "selectable_people": len(contract.selectable_people),
         "person_exposure": run.person_exposure(slate),

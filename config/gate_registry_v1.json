@@ -35,7 +35,7 @@
     "policy_binding": {
       "class": "V", "stops": "FILE",
       "provenance": {"kind": "CLAUDE_MD_BOUNDARY", "ref": "Integrity gates (exact DraftKings IDs, hashes, entry mapping, blank-cell authority, locked cells, Classic/Showdown mode) still stop the file they protect."},
-      "covers": "A portfolio policy is bound to other salaries, entries, games or people than the run's, so it would be applied to the wrong ones."
+      "covers": "A portfolio policy is bound to other salaries, entries, games or people than the run's, so it would be applied to the wrong ones; or a policy or a construction judgment changed between the run reading it and publishing its report, so the report would name bytes the run did not use."
     },
     "operator_restriction": {
       "class": "V", "stops": "FILE",
@@ -136,6 +136,11 @@
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "Quarterback depth-chart role evidence (P1)"},
       "covers": "Quarterback or depth-chart role evidence is missing, stale, unbound, conflicted or unsupported."
+    },
+    "construction_judgment": {
+      "class": "P", "stops": "CERTIFICATION",
+      "provenance": {"kind": "RULING", "ref": "R37"},
+      "covers": "A Classic construction judgment placed a person by a named choice that writes no model value and clears no gate, refused or could not hold a placement, or was dropped; or the judgment pass failed. Travels with the file."
     },
     "weather": {
       "class": "P", "stops": "CERTIFICATION",
@@ -337,6 +342,7 @@
     "CLASSIC_AUDIT_STACK_BOUND": "portfolio_bounds",
     "CLASSIC_AUDIT_STRUCTURAL_BOUND_VIOLATED": "portfolio_bounds",
     "CLASSIC_AUDIT_TEAM_BOUND": "portfolio_bounds",
+    "CLASSIC_BACKUP_QB_UNEVALUATED": "qb_depth_roles",
     "CLASSIC_C1_EXPORT_ASSIGNMENT_SHA256_MISMATCH": "audited_selection",
     "CLASSIC_C1_EXPORT_AUDIT_FAILED": "delivered_bytes",
     "CLASSIC_C1_EXPORT_FAILED": "delivered_bytes",
@@ -545,6 +551,12 @@
     "CLASSIC_CANDIDATE_BANK_POST_WRITE_HASH_MISMATCH": "audited_selection",
     "CLASSIC_CANDIDATE_MODE_UNSUPPORTED": "slate_mode",
     "CLASSIC_GAME_COUNT": "slate_mode",
+    "CLASSIC_JUDGMENT_FILE_DROPPED": "construction_judgment",
+    "CLASSIC_JUDGMENT_NOT_APPLIED": "construction_judgment",
+    "CLASSIC_JUDGMENT_PASS_FAILED": "construction_judgment",
+    "CLASSIC_JUDGMENT_PLACEMENT_APPLIED": "construction_judgment",
+    "CLASSIC_JUDGMENT_PLACEMENT_REFUSED": "construction_judgment",
+    "CLASSIC_JUDGMENT_PLACEMENT_SHORTFALL": "construction_judgment",
     "CLASSIC_POLICY_ADVISORY_NOT_ENFORCED": "classic_policy_input",
     "CLASSIC_POLICY_BOUND_CONTRADICTORY": "portfolio_bounds",
     "CLASSIC_POLICY_BOUND_LIST_REQUIRED": "classic_policy_input",
@@ -632,6 +644,18 @@
     "CLASSIC_STACK_RULE_UNREGISTERED": "classic_policy_input",
     "CLASSIC_WEATHER_SCOPE_AMBIGUOUS": "weather",
     "CONFLICTED_EVIDENCE": "projection_package",
+    "CONSTRUCTION_JUDGMENT_CHANGED_BEFORE_ARTIFACT_PUBLISH": "policy_binding",
+    "CONSTRUCTION_JUDGMENT_CHANGED_DURING_READ": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_CLOCK_REQUIRES_TIMEZONE": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_EXPIRED_AT_LOCK": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_FROM_THE_FUTURE": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_ID_NOT_IN_THE_SALARY_FILE": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_INVALID": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_IS_CLASSIC_ONLY": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_NAME_IS_NOT_THE_ROW": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_SALARY_HASH_MISMATCH": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_SOURCE_FROM_THE_FUTURE": "construction_judgment",
+    "CONSTRUCTION_JUDGMENT_UNREADABLE": "construction_judgment",
     "CONTEST_ASSIGNMENT_DUPLICATE_ENTRY_ID": "contest_assignment",
     "CONTEST_ASSIGNMENT_FIXED_ROW_MOVED": "entry_authority",
     "CONTEST_ASSIGNMENT_MOVABLE_ROW_HAS_NO_ROSTER": "contest_assignment",

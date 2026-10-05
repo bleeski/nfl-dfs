@@ -43,7 +43,7 @@ from .readable_review import _render_html
 # v3 and v2 (Session 11c): each row's source, and the rows a subset policy
 # leaves to C1. v2 and v1 stay as written.
 AUDIT_VERSION = "prior_only_classic_export_audit_c3_v3"
-READABLE_VERSION = "prior_only_readable_review_classic_c3_v3"
+READABLE_VERSION = "prior_only_readable_review_classic_c3_v4"
 ROW_SOURCE_POLICY = "POLICY"
 ROW_SOURCE_C1 = "C1"
 SCORE_SNAPSHOT_VERSION = "nfl_classic_selected_prior_scores_c3_v1"
@@ -83,6 +83,9 @@ _IMMUTABLE_BINDING_ARTIFACTS = {
     # `_REQUIRED_ARTIFACTS` — a slate whose quarterbacks need no depth chart is
     # a normal slate, not an incomplete one.
     "qb_depth_role_evidence_sha256": "qb_depth_role_evidence_json",
+    # Session 61: optional the same way; a run with a portfolio policy never applies it, so this is the
+    # binding of a file the run read and named, not of a placement the rows carry.
+    "construction_judgment_sha256": "construction_judgment_json",
     "weather_evidence_sha256": "weather_evidence_json",
     "source_policy_sha256": "portfolio_policy_source",
     "normalized_policy_sha256": "portfolio_policy_normalized",
@@ -1620,6 +1623,10 @@ def create_classic_review_package(
                 "pairwise_overlap": pairwise,
             },
             "pool_coverage": coverage.get("pool_coverage"),
+            # Session 61 (R37): the judgment pass and the construction judgment's decision, display-only,
+            # read from the same hash-bound coverage artifact the pool coverage comes from.
+            "judgment_pass": coverage.get("judgment_pass"),
+            "construction_judgment": coverage.get("construction_judgment"),
             "evidence_observations": [
                 {
                     "category": "SELECTED_OFFICIAL_ACTIVITY",

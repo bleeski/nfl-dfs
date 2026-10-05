@@ -111,6 +111,13 @@ from .prelock_manifest import (
 from .review_export import export_review_entries, write_assignments_csv, write_run_record
 from .qb_depth_capture import QB_DEPTH_CAPTURE_REFUSED, capture_for_run, locate_frozen_depth_chart
 from .qb_depth_roles import QbDepthRoleError
+from .classic_judgment import (
+    CONSTRUCTION_JUDGMENT_VERSION,
+    JUDGMENT_PASS_VERSION,
+    ConstructionJudgmentError,
+    build_judgment_pass,
+    load_construction_judgment,
+)
 from .selection import SelectionError, assignments_for_entries, select_prior_lineups
 from .sources import SourcePolicyError, validate_source_reference_policy
 from .venues import home_team_of, resolve_blank_roof
@@ -1525,6 +1532,7 @@ def run_prior_review(
     role_evidence_json: str | Path | None = None,
     offensive_role_evidence_json: str | Path | None = None,
     qb_depth_role_evidence_json: str | Path | None = None,
+    construction_judgment_json: str | Path | None = None,
     portfolio_policy: NormalizedPortfolioPolicy | NormalizedClassicPortfolioPolicy | None = None,
     portfolio_policy_source_path: str | Path | None = None,
     portfolio_policy_source_sha256: str | None = None,
@@ -1549,6 +1557,10 @@ def run_prior_review(
     policy in force (rung 4, or a run that supplied none): C1's rows are built
     as several stack theses under one person share cap, and a run that cannot
     build every row delivers the ones it built and names the rest (R29).
+    `construction_judgment_json` (Session 61) is a Classic `nfl_classic_construction_judgment_v1`:
+    people the thesis build must roster in a minimum of rows. A file that cannot be used (malformed,
+    bound to another salary file, expired at lock, Showdown) is dropped by name in
+    `reports["construction_judgment"]` and the run goes on without it.
     """
 
     run_dir = Path(run_root).resolve()
@@ -2384,9 +2396,32 @@ def run_prior_review(
         # official INACTIVE row leave: a vacated share goes to his position room, by a registered,
         # reported transformation. Until Session 60 this call computed a reduced model, discarded it
         # and passed the unreduced one on, so every survivor was scored at his backup share.
+        model_before_redistribution = model
         model, redistribution = redistribute_vacated_workload(
             slate, model, contract, official_inactive_dk_ids=official_exclusions
         )
+        # Session 61 (R37): the construction judgment, validated against this slate's bytes before any
+        # solve. The minimum is a construction preference and the lock-clock ruling relaxes those, so a
+        # file that cannot be used is dropped by name and the run goes on (the worst outcome is no lineup).
+        construction_judgment = None
+        if construction_judgment_json is not None:
+            try:
+                if slate.mode is not EngineMode.CLASSIC:
+                    raise ConstructionJudgmentError(
+                        "CONSTRUCTION_JUDGMENT_IS_CLASSIC_ONLY", "a Classic judgment names Classic DraftKings rows")
+                construction_judgment = load_construction_judgment(construction_judgment_json, slate, as_of=as_of)
+                artifacts["construction_judgment_json"] = construction_judgment.path
+                hashes["construction_judgment_json"] = construction_judgment.sha256
+            except ConstructionJudgmentError as exc:
+                reports["construction_judgment"] = {
+                    "version": CONSTRUCTION_JUDGMENT_VERSION,
+                    "status": "DROPPED",
+                    "number_written": "NONE",
+                    "code": exc.code,
+                    "detail": exc.detail,
+                    "file_name": Path(str(construction_judgment_json)).name,
+                    "does_not_establish": ["THAT_ANY_PLACEMENT_WAS_MADE"],
+                }
         if sha256_file(package.identity_map) != package.hashes[IDENTITY_MAP_FILENAME]:
             raise PriorReviewError("TEAM_SPLIT_IDENTITY_MAP_CHANGED")
         identity_payload = json.loads(Path(package.identity_map).read_text(encoding="utf-8"))
@@ -2439,6 +2474,8 @@ def run_prior_review(
                 count=(portfolio_policy.entry_count if portfolio_policy is not None else requested_count),
                 fill_count=len(unbound_ids),
                 classic_construction=classic_construction,
+                pre_redistribution_model=model_before_redistribution,
+                construction_judgment=construction_judgment,
                 fill_time_limit_seconds=_fill_solve_seconds(
                     budget, len(unbound_ids),
                     declared_search_seconds=(
@@ -2464,6 +2501,8 @@ def run_prior_review(
                 auto_captured=auto_captured_depth,
                 reports=reports,
             )
+        if isinstance(selection.get("construction_judgment"), Mapping):
+            reports["construction_judgment"] = selection["construction_judgment"]
         policy_rosters = [lineup.roster for lineup in lineups[: len(bound_ids)]]
         if isinstance(portfolio_policy, NormalizedClassicPortfolioPolicy):
             bound_assignments = dict(
@@ -2849,6 +2888,26 @@ def run_prior_review(
         redistribution,
         dict(scores.offensive_role_resolution.report.get("declared_totals") or {}),
     )
+    official_status_rows = dict((reports.get("official_status") or {}).get("statuses") or {})
+    pool_coverage = pool_coverage_summary(
+        slate,
+        contract,
+        official_inactive_dk_ids=official_exclusions,
+        operator_excluded_dk_ids=tuple(operator_excluded_dk_ids),
+        offense_excluded_people=scores.offensive_role_resolution.excluded_people,
+        kicker_zero_share_people=scores.kicker_role_resolution.zero_share_people,
+        unallocated_by_team=dict(
+            scores.offensive_role_resolution.report.get("unallocated_by_team") or {}
+        ),
+        offense_excluded_by_finding=dict(
+            scores.offensive_role_resolution.report.get("excluded_by_finding") or {}
+        ),
+        offense_findings=tuple(
+            scores.offensive_role_resolution.report.get("findings") or ()
+        ),
+        official_statuses=official_status_rows,
+        workload_redistribution=redistribution,
+    )
     selection_report = {
         "status": "DO_NOT_UPLOAD",
         "MODEL_STATUS": "PRIOR_ONLY",
@@ -2874,27 +2933,7 @@ def run_prior_review(
             "status_by_person": dict(sorted(contract.status_by_person.items())),
         },
         "redistribution": redistribution,
-        "pool_coverage": pool_coverage_summary(
-            slate,
-            contract,
-            official_inactive_dk_ids=official_exclusions,
-            operator_excluded_dk_ids=tuple(operator_excluded_dk_ids),
-            offense_excluded_people=scores.offensive_role_resolution.excluded_people,
-            kicker_zero_share_people=scores.kicker_role_resolution.zero_share_people,
-            unallocated_by_team=dict(
-                scores.offensive_role_resolution.report.get("unallocated_by_team") or {}
-            ),
-            offense_excluded_by_finding=dict(
-                scores.offensive_role_resolution.report.get("excluded_by_finding") or {}
-            ),
-            offense_findings=tuple(
-                scores.offensive_role_resolution.report.get("findings") or ()
-            ),
-            official_statuses=dict(
-                (reports.get("official_status") or {}).get("statuses") or {}
-            ),
-            workload_redistribution=redistribution,
-        ),
+        "pool_coverage": pool_coverage,
         "official_status_coverage": activity_coverage,
         "assignment_summary": {
             "lineups_generated": len(lineups),
@@ -2929,6 +2968,21 @@ def run_prior_review(
     if "contest_assignment" in reports:
         selection_report["contest_assignment"] = reports["contest_assignment"]
     if slate.mode is EngineMode.CLASSIC:
+        # Session 61 (R37): the judgment pass, from what the run already holds. A diagnostic: a failure
+        # in it is named in the report and the run goes on, because the file is the deliverable.
+        try:
+            selection_report["judgment_pass"] = build_judgment_pass(
+                slate, lineups=lineups, selection=selection, prior_points=scores.by_person,
+                redistribution=redistribution, pool_coverage=pool_coverage, official_statuses=official_status_rows,
+                protected=(selection.get("construction_judgment") or {}).get("accepted"),
+            )
+        except Exception as exc:  # noqa: BLE001 - see above
+            selection_report["judgment_pass"] = {
+                "version": JUDGMENT_PASS_VERSION,
+                "status": "FAILED",
+                "error": f"{type(exc).__name__}: {' '.join(str(exc).split())[:240]}",
+            }
+    if slate.mode is EngineMode.CLASSIC:
         # Publish only after re-reading every immutable input and current-evidence
         # artifact.  The JSON is deliberately not a DraftKings-shaped template;
         # C3 owns review/export redesign and this C1 output cannot be uploaded.
@@ -2956,6 +3010,19 @@ def run_prior_review(
                     hashes=hashes,
                     reports=reports,
                 )
+        if construction_judgment is not None and sha256_file(construction_judgment.path) != construction_judgment.sha256:
+            return PriorReviewOutcome(
+                profile_version=profile_version,
+                stage="SELECT",
+                blocked=True,
+                blockers=("CONSTRUCTION_JUDGMENT_CHANGED_BEFORE_ARTIFACT_PUBLISH",),
+                stages=tuple(stages) + (
+                    _stage("SELECT", "BLOCKED_INPUT_MUTATION", input="CONSTRUCTION_JUDGMENT"),
+                ),
+                artifacts=artifacts,
+                hashes=hashes,
+                reports=reports,
+            )
         if weather_evidence_json is not None and sha256_file(weather_evidence_json) != hashes.get(
             "weather_evidence_json"
         ):
@@ -3136,6 +3203,7 @@ def run_prior_review(
             }
             for artifact_key, expected_hash in sorted(hashes.items()):
                 if artifact_key in {
+                    "construction_judgment_json",
                     "official_status_csv",
                     "offensive_role_evidence_json",
                     "qb_depth_role_evidence_json",
@@ -3215,6 +3283,7 @@ def run_prior_review(
             ]
             for artifact_key, expected_hash in sorted(hashes.items()):
                 if artifact_key in {
+                    "construction_judgment_json",
                     "official_status_csv",
                     "offensive_role_evidence_json",
                     "qb_depth_role_evidence_json",
@@ -3260,6 +3329,7 @@ def run_prior_review(
             "official_status_sha256": hashes.get("official_status_csv"),
             "offensive_role_evidence_sha256": hashes.get("offensive_role_evidence_json"),
             "qb_depth_role_evidence_sha256": hashes.get("qb_depth_role_evidence_json"),
+            "construction_judgment_sha256": hashes.get("construction_judgment_json"),
             "weather_evidence_sha256": hashes.get("weather_evidence_json"),
             "weather_source_sha256_by_game": {
                 key.removeprefix("weather_source:"): value
@@ -3343,6 +3413,10 @@ def run_prior_review(
             "official_status_coverage": activity_coverage,
             "selected_evidence_gate": reports.get("selected_evidence_gate"),
             "pool_coverage": selection_report["pool_coverage"],
+            # Session 61 (R37): the Classic judgment pass rides in the hash-bound coverage artifact, so
+            # the review reads the exact bytes the run froze. Additive: a reader that does not know it ignores it.
+            "judgment_pass": selection_report.get("judgment_pass"),
+            "construction_judgment": reports.get("construction_judgment"),
             "conservation": {
                 "declared_totals_by_team": offensive_resolution.report.get(
                     "declared_totals", {}

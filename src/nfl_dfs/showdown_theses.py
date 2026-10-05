@@ -26,7 +26,7 @@ is named instead.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Protocol, Sequence
+from typing import Collection, Mapping, Protocol, Sequence
 
 from .contracts import SlateContract
 
@@ -130,7 +130,11 @@ def admitted_quarterbacks(slate: SlateContract, thesis: ShowdownThesis) -> froze
 
 
 def backup_quarterbacks(
-    slate: SlateContract, thesis: ShowdownThesis | None, qb_depth_report: Mapping[str, object] | None
+    slate: SlateContract,
+    thesis: ShowdownThesis | None,
+    qb_depth_report: Mapping[str, object] | None,
+    *,
+    admitted_people: Collection[str] = (),
 ) -> tuple[frozenset[str], tuple[str, ...]]:
     """(people out of the pool, teams with quarterbacks the evidence does not declare).
 
@@ -148,12 +152,16 @@ def backup_quarterbacks(
     (`MISSING_HISTORY`), but a hash-bound fact that he is a backup or has an
     unresolved role change keeps him out, and with his backups out too that team
     has no selectable quarterback.
+
+    `admitted_people` (Session 61, Classic) are people a named choice keeps in: a Classic policy's
+    minimum, a validated construction judgment. Like a thesis's Captain set, each stays out of the
+    returned set even when the evidence lists him behind a starter.
     """
 
     report = qb_depth_report if isinstance(qb_depth_report, Mapping) else {}
     starters = report.get("starters_by_team")  # empty when no evidence was supplied
     starters = starters if isinstance(starters, Mapping) else {}
-    admitted = admitted_quarterbacks(slate, thesis) if thesis is not None else frozenset()
+    admitted = (admitted_quarterbacks(slate, thesis) if thesis is not None else frozenset()) | frozenset(admitted_people)
     by_team: dict[str, set[str]] = {}
     for row in slate.players:
         if row.position == "QB":

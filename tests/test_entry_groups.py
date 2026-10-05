@@ -1046,7 +1046,7 @@ def test_a_classic_subset_policy_fills_its_rows_by_c2_and_the_rest_by_c1(tmp_pat
     assert not _keys(slate, filled) & _keys(slate, [prefilled])
 
     readable = _readable(report)
-    assert readable["schema_version"] == "prior_only_readable_review_classic_c3_v3"
+    assert readable["schema_version"] == "prior_only_readable_review_classic_c3_v4"
     assert {entry["entry_id"]: entry["source"] for entry in readable["entries"]} == sources
     assert readable["exposure"]["entry_count_denominator"] == 2
     assert readable["reconciliation"]["entry_count"] == 4

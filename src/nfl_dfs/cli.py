@@ -3011,6 +3011,63 @@ def _qb_depth_limitations(reports: Mapping[str, object]) -> list[str]:
     return limitations
 
 
+def _classic_judgment_limitations(reports: Mapping[str, object]) -> list[str]:
+    """The named `P` limitations of the Classic judgment pass and construction judgment (Session 61, R37).
+
+    A placement is a construction choice that writes no model value and clears no gate, so it travels
+    with the file as a limitation, never as evidence: applied people, each refusal by name, every shortfall,
+    a judgment the run could not apply, and a judgment pass that failed (a diagnostic, never a stop).
+    """
+
+    limitations: list[str] = []
+    selection_view = reports.get("selection")
+    selector_view = selection_view.get("selection") if isinstance(selection_view, Mapping) else None
+    # The backup-quarterback default applies to every Classic row, with its gap named like Showdown's.
+    # Classic builds no depth package of its own, so a run that supplied none names every quarterback team.
+    default_view = selector_view.get("classic_backup_qb_default") if isinstance(selector_view, Mapping) else None
+    if isinstance(default_view, Mapping) and default_view.get("applies") and default_view.get("unevaluated_teams"):
+        limitations.append(
+            "CLASSIC_BACKUP_QB_UNEVALUATED:no quarterback depth evidence orders "
+            + ", ".join(map(str, default_view["unevaluated_teams"]))
+            + ", so no backup quarterback of those teams was excluded (the default needs the evidence;"
+            " none was guessed; supply the depth package with --qb-depth-role-evidence-json)"
+        )
+    block = reports.get("construction_judgment")
+    if isinstance(block, Mapping):
+        status = block.get("status")
+        if status == "DROPPED":
+            limitations.append(
+                f"CLASSIC_JUDGMENT_FILE_DROPPED:{block.get('code')}:{block.get('detail') or 'no detail'}; the run went on"
+                " without the judgment file (a construction preference gives way, nothing else does)")
+        else:
+            for row in block.get("placements") or ():
+                if row.get("decision") == "REFUSED":
+                    limitations.append(
+                        f"CLASSIC_JUDGMENT_PLACEMENT_REFUSED:{row['name']} ({row['dk_id']}) was named for"
+                        f" {row['min_rows']} rows and refused: {row['refusal']}")
+            if status == "NOT_APPLIED":
+                limitations.append(
+                    f"CLASSIC_JUDGMENT_NOT_APPLIED:{block.get('not_applied_reason')}; the judgment's"
+                    f" {len(block.get('placements') or ())} placements were not applied to this file")
+            accepted = [row for row in block.get("placements") or () if row.get("decision") == "ACCEPTED"]
+            if accepted:
+                named = ", ".join(f"{row['name']} (at least {row['min_rows']} rows)" for row in accepted)
+                author = (block.get("file") or {}).get("author")
+                limitations.append(
+                    f"CLASSIC_JUDGMENT_PLACEMENT_APPLIED:{named} placed by a construction judgment by {author};"
+                    " it writes no model value, is not a current-role fact and clears no gate")
+            delivery = block.get("delivery") if isinstance(block.get("delivery"), Mapping) else {}
+            for person, short in sorted((delivery.get("shortfall") or {}).items()):
+                limitations.append(
+                    f"CLASSIC_JUDGMENT_PLACEMENT_SHORTFALL:{person} is {short} rows short of the minimum the"
+                    " judgment named; no lineup was repeated to close it (R29)")
+    pass_view = selection_view.get("judgment_pass") if isinstance(selection_view, Mapping) else None
+    if isinstance(pass_view, Mapping) and pass_view.get("status") == "FAILED":
+        limitations.append(
+            f"CLASSIC_JUDGMENT_PASS_FAILED:{pass_view.get('error')}; the report is absent, the file is not affected")
+    return limitations
+
+
 def _policy_exclusion_inputs(request, slate) -> tuple[tuple[str, ...], list[str]]:
     """The people this run's own inputs exclude, for a policy's capacity checks, and the blockers reading them raised.
 
@@ -3309,6 +3366,7 @@ def _run_prior_review_profile(
                 role_evidence_json=request.role_evidence_json,
                 offensive_role_evidence_json=request.offensive_role_evidence_json,
                 qb_depth_role_evidence_json=request.qb_depth_role_evidence_json,
+                construction_judgment_json=request.construction_judgment_json,
                 portfolio_policy=portfolio_policy,
                 portfolio_policy_source_path=portfolio_policy_source_path,
                 portfolio_policy_source_sha256=portfolio_policy_source_sha256,
@@ -3549,6 +3607,9 @@ def _run_prior_review_profile(
     if outcome.file_valid:
         for limitation in reversed(_qb_depth_limitations(outcome.reports)):
             blockers.insert(0, limitation)
+        # Session 61 (R37): the Classic backup-quarterback default's gap, the construction judgment and the
+        # judgment pass, by name (`P`, never a stop). Appended, so a blocker that withholds a file stays first.
+        blockers.extend(_classic_judgment_limitations(outcome.reports))
     # Session 50: a failed contest-assignment step left the solver's order in the
     # file; it ships with the gap named (`P`, never a stop).
     contest_step_report = outcome.reports.get("contest_assignment")
@@ -3951,6 +4012,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         request_roots.append(Path(args.offensive_role_evidence_json).resolve().parent)
     if getattr(args, "qb_depth_role_evidence_json", None):
         request_roots.append(Path(args.qb_depth_role_evidence_json).resolve().parent)
+    if getattr(args, "construction_judgment_json", None):
+        request_roots.append(Path(args.construction_judgment_json).resolve().parent)
     if getattr(args, "portfolio_policy_json", None):
         request_roots.append(Path(args.portfolio_policy_json).resolve().parent)
     if getattr(args, "official_status_csv", None):
@@ -3990,6 +4053,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         ("role_evidence_json", "role_evidence_json"),
         ("offensive_role_evidence_json", "offensive_role_evidence_json"),
         ("qb_depth_role_evidence_json", "qb_depth_role_evidence_json"),
+        ("construction_judgment_json", "construction_judgment_json"),
         ("portfolio_policy_json", "portfolio_policy_json"),
         ("official_status_csv", "official_status_csv"),
         ("lineup_count", "lineup_count"),
@@ -4971,6 +5035,13 @@ def build_parser() -> argparse.ArgumentParser:
     cowork.add_argument("--role-evidence-json")
     cowork.add_argument("--offensive-role-evidence-json")
     cowork.add_argument("--qb-depth-role-evidence-json")
+    cowork.add_argument(
+        "--construction-judgment-json",
+        help=(
+            "Classic construction judgment (nfl_classic_construction_judgment_v1): people the thesis build must"
+            " roster in a minimum of rows, bound to this salary file's SHA-256; writes no model value"
+        ),
+    )
     cowork.add_argument("--portfolio-policy-json")
     cowork.add_argument("--official-status-csv")
     cowork.add_argument("--lineup-count", type=int)

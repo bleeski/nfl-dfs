@@ -528,7 +528,8 @@ def test_a_workbook_lock_after_certification_never_deletes_the_certified_file(
 
 
 def test_a_v3_request_carries_an_aware_deadline_in_utc() -> None:
-    from nfl_dfs.cowork import COWORK_REQUEST_VERSION
+    # Session 61 moved the emitted version to v4; this test is about v3's field, so it names v3.
+    from nfl_dfs.cowork import COWORK_REQUEST_VERSION_V3 as COWORK_REQUEST_VERSION
 
     request = CoworkRunRequest.from_mapping(
         {"schema_version": COWORK_REQUEST_VERSION, "delivery_deadline_utc": "2026-09-27T12:55:00-04:00"}
@@ -595,3 +596,56 @@ def test_a_deadline_flag_on_a_reloaded_v2_request_makes_a_v3_run_request(
     assert request_path.read_text(encoding="utf-8") == original  # the v2 file is untouched
     report = json.loads((tmp_path / "outputs" / "reloaded" / "cowork_run.json").read_text(encoding="utf-8"))
     assert report["deadline"]["deadline_source"] == "REQUEST"
+
+
+# --- Session 61: request v4 and the construction judgment ---------------------
+
+
+def test_a_v4_request_carries_and_confines_the_construction_judgment(tmp_path: Path) -> None:
+    from nfl_dfs.cowork import COWORK_REQUEST_VERSION
+
+    assert COWORK_REQUEST_VERSION == "nfl_cowork_run_request_v4"
+    judgment = tmp_path / "judgment.json"
+    judgment.write_text("{}", encoding="utf-8")
+    request = CoworkRunRequest.from_mapping(
+        {"schema_version": COWORK_REQUEST_VERSION, "construction_judgment_json": str(judgment)},
+        base_dir=tmp_path, allowed_roots=[tmp_path],
+    )
+    assert request.schema_version == "nfl_cowork_run_request_v4"
+    assert request.construction_judgment_json == str(judgment.resolve())
+    assert CoworkRunRequest().construction_judgment_json is None
+    outside = tmp_path.parent / "elsewhere_judgment.json"
+    outside.write_text("{}", encoding="utf-8")
+    with pytest.raises(CoworkInputError, match="outside the supplied"):
+        CoworkRunRequest.from_mapping(
+            {"schema_version": COWORK_REQUEST_VERSION, "construction_judgment_json": str(outside)},
+            base_dir=tmp_path, allowed_roots=[tmp_path],
+        )
+
+
+def test_older_requests_stay_accepted_and_may_not_carry_the_construction_judgment(tmp_path: Path) -> None:
+    from nfl_dfs.cowork import (
+        COWORK_REQUEST_VERSION_V1,
+        COWORK_REQUEST_VERSION_V2,
+        COWORK_REQUEST_VERSION_V3,
+        request_version_for,
+    )
+
+    judgment = tmp_path / "judgment.json"
+    judgment.write_text("{}", encoding="utf-8")
+    for version in (COWORK_REQUEST_VERSION_V1, COWORK_REQUEST_VERSION_V2, COWORK_REQUEST_VERSION_V3):
+        request = CoworkRunRequest.from_mapping({"schema_version": version, "label": "archived"})
+        assert request.schema_version == version and request.construction_judgment_json is None
+        with pytest.raises(CoworkInputError, match="introduced in 'nfl_cowork_run_request_v4'"):
+            CoworkRunRequest.from_mapping(
+                {"schema_version": version, "construction_judgment_json": str(judgment)},
+                base_dir=tmp_path, allowed_roots=[tmp_path],
+            )
+    # a v4 request may still carry every earlier field, and a flag on a reloaded v3 request raises it to v4
+    request = CoworkRunRequest.from_mapping(
+        {"schema_version": "nfl_cowork_run_request_v4", "delivery_deadline_utc": "2026-09-27T16:55:00Z"})
+    assert request.delivery_deadline_utc == "2026-09-27T16:55:00+00:00"
+    assert request_version_for("nfl_cowork_run_request_v3", ["construction_judgment_json"]) == (
+        "nfl_cowork_run_request_v4")
+    assert request_version_for("nfl_cowork_run_request_v3", ["delivery_deadline_utc"]) == (
+        "nfl_cowork_run_request_v3")

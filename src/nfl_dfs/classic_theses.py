@@ -36,6 +36,20 @@ all it raises `SOLVER_RETURNED_NO_LINEUP`, as C1 does.
 bet than another, that a stacked lineup is worth more, or that the cap improves
 any payout: the ranking is the prior's central estimate and the structure is a
 construction preference.
+
+Protected placements (Session 61, R37; `classic_thesis_sequential_v2`, used only when a
+validated construction judgment names someone). A named person must sit in at least
+`minimum` of the rows. The schedule owes him a row whenever his count falls behind
+`ceil(index * minimum / count)` or the rows left equal what he still needs; a row that owes
+someone is solved on a throwaway model of the chosen thesis with his DraftKings row required,
+trying the theses that share his game first. A forced attempt that fails changes nothing shared:
+the thesis keeps its bring-back, no thesis is dropped and the one overlap cap stays where it was
+(an urgent debt may try a looser cap for that one row alone, and says so); the row is then built
+as it always was and the debt carries to the next row. His person cap is `max(cap, minimum)`.
+A minimum the rows could not hold is reported as a shortfall by name and never closed by
+repeating a lineup (R29). The delivered rosters are recounted, not trusted. The attempts are
+budgeted (`PLACEMENT_SOLVES_PER_ROW`, `PLACEMENT_MISS_LIMIT`, `PLACEMENT_TIME_SHARE`): a person no
+thesis could hold is abandoned by name, so a preference that cannot be met never costs the file its rows.
 """
 
 from __future__ import annotations
@@ -50,6 +64,7 @@ from .lineups import validate_lineup
 from .optimizer import LineupOptimizer, SolverResult
 
 THESIS_CONSTRUCTION_VERSION = "classic_thesis_sequential_v1"
+THESIS_CONSTRUCTION_VERSION_V2 = "classic_thesis_sequential_v2"
 DEFAULT_PERSON_SHARE = 0.40
 SHARE_STEP = 0.10
 # Past this share the stack requirement goes before the cap moves further: a stacked file at
@@ -57,12 +72,24 @@ SHARE_STEP = 0.10
 STACK_HOLD_SHARE = 0.60
 MIN_THESES = 4
 ROWS_PER_EXTRA_THESIS = 15
+# A forced placement is a construction preference, so it gives way before the clock does: at most this many
+# throwaway solves a row, a person is given up on after this many rows no thesis could hold him, and all
+# forced solves together may spend this share of the build's window. Each forced solve also runs under a
+# quarter of the per-row solve limit. The shortfall is named; nothing is repeated to close it (R29).
+PLACEMENT_SOLVES_PER_ROW = 8
+PLACEMENT_MISS_LIMIT = 3
+PLACEMENT_TIME_SHARE = 0.25
 FREE_THESIS = "FREE_NO_STACK"
 DOES_NOT_ESTABLISH = (
     "THAT_ANY_THESIS_IS_A_BETTER_BET_THAN_ANOTHER",
     "THAT_A_STACKED_LINEUP_IS_WORTH_MORE",
     "ANY_EXPECTED_VALUE_PAYOUT_OR_WIN_PROBABILITY",
     "THAT_THE_EXPOSURE_CAP_IMPROVES_ANY_OUTCOME",
+)
+PLACEMENT_DOES_NOT_ESTABLISH = (
+    "THAT_A_PROTECTED_PERSON_IS_PLAYING_OR_HAS_THE_ROLE_THE_JUDGMENT_NAMES",
+    "A_CURRENT_ROLE_OR_ANY_NUMBER_FOR_HIM",
+    "THAT_PLACING_HIM_RAISES_ANY_PAYOUT",
 )
 
 
@@ -167,12 +194,16 @@ def select_thesis_lineups(
     time_limit_seconds: float = 10.0,
     classic_person_overlap: int | None,
     max_person_share: float = DEFAULT_PERSON_SHARE,
+    protected: Mapping[str, int] | None = None,
     clock: Callable[[], float] = time.monotonic,
 ):
     """`count` distinct Classic lineups from several stack theses under one person cap.
 
     `classic_person_overlap` is the most people a row may share with an earlier one
     (`None`: exact rosters only), required so the caller's default is the only one.
+
+    `protected` (Session 61) is `{person: minimum rows}` for the people a validated construction
+    judgment names; the module docstring says how they are placed. Empty or `None`: v1, as before.
 
     Returns the `_Sequential` run the C1 path returns, with `.construction` (the
     report block). Fewer than `count` rows come back with `.stopped` set; none at
@@ -199,8 +230,20 @@ def select_thesis_lineups(
     def binds(cap: int | None) -> bool:
         return cap is not None and cap < CLASSIC_MAX_USEFUL_OVERLAP
 
+    asked = {person: int(minimum) for person, minimum in sorted(dict(protected or {}).items()) if int(minimum) > 0}
+    # A person the builder cannot place at all is named, never dropped silently: the caller refuses
+    # these before it gets here, so this is the backstop.
+    ignored = {person: "NOT_IN_THE_SLATE" if person not in by_person else "EXCLUDED_ROW"
+               for person in asked if person not in by_person or set(by_person[person]) & blocked}
+    protected_min = {person: min(minimum, count) for person, minimum in asked.items() if person not in ignored}
     ranked = rank_stack_teams(slate, objective, excluded)
     chosen = _choose_teams(ranked, thesis_count(len(ranked), count))
+    # A protected quarterback needs his own team's thesis: every row of a thesis has that team's QB.
+    protected_qb_teams = {rows[by_person[person][0]].team for person in protected_min
+                          if rows[by_person[person][0]].position == "QB"}
+    have = {team for team, _value, _game in chosen}
+    chosen = sorted([*chosen, *(item for item in ranked if item[0] in protected_qb_teams and item[0] not in have)],
+                    key=lambda item: (-item[1], item[0]))
     share = float(max_person_share)
     theses = [
         _Thesis(f"STACK_{team}", team, rank, value, share=share, qb_people=frozenset(
@@ -238,13 +281,22 @@ def select_thesis_lineups(
     def cap_now() -> int:
         return person_cap(count, share)
 
+    def limit_for(person: str) -> int:
+        """Rows `person` may be in: the shared cap, or his own minimum when that is more (Session 61)."""
+
+        return max(cap_now(), protected_min.get(person, 0))
+
     def relax(constraint: str, original: object, final: object, *, index: int, thesis: str, status: str,
               cause: str) -> None:
         relaxations.append({"constraint": constraint, "from": original, "used": final, "index": index,
                             "thesis": thesis, "trigger_status": status, "reason": cause})
 
-    def build(thesis: _Thesis) -> None:
-        model = LineupOptimizer(slate, excluded_ids=excluded, time_limit_seconds=time_limit_seconds)
+    def new_model(thesis: _Thesis, *, cap: int | None, require: Sequence[str] = (),
+                  limit: float | None = None) -> LineupOptimizer:
+        """A model of `thesis` under every row built so far, with `cap` as the overlap cap and `require` pinned."""
+
+        model = LineupOptimizer(slate, excluded_ids=excluded,
+                                time_limit_seconds=time_limit_seconds if limit is None else limit)
         for roster in forbidden:
             model.add_no_good(roster)
         if thesis.team is not None:
@@ -257,12 +309,17 @@ def select_thesis_lineups(
                 model.add_classic_qb_correlation_bounds(kind="BRINGBACK", minimum=1, maximum=7)
         for earlier in selected:
             model.add_no_good(earlier.roster)
-            if binds(overlap):
-                model.add_person_overlap_limit(earlier.roster, overlap)
+            if binds(cap):
+                model.add_person_overlap_limit(earlier.roster, cap)
         held = sorted(dk_id for person in capped for dk_id in by_person[person])
         if held:
             model.add_selected_count_bounds(held, maximum=0)
-        thesis.optimizer = model
+        for dk_id in require:
+            model.add_required_row(dk_id)
+        return model
+
+    def build(thesis: _Thesis) -> None:
+        thesis.optimizer = new_model(thesis, cap=overlap)
         thesis.synced_rows = len(selected)
         thesis.synced_capped = frozenset(capped)
 
@@ -340,11 +397,106 @@ def select_thesis_lineups(
             return False
         # The cap moved, so who is at it moves too; the models restart from these.
         capped.clear()
-        capped.update(person for person, rows_held in exposure.items() if rows_held >= cap_now())
+        capped.update(person for person, rows_held in exposure.items() if rows_held >= limit_for(person))
         for item in theses:
             item.optimizer, item.share = None, share
         active, cursor = list(theses), 0
         return True
+
+    forced_rows: dict[int, list[str]] = {}  # row index -> the protected people its row was solved to hold
+    misses: list[dict[str, object]] = []  # a row that owed someone and could not hold him, for the report
+    miss_count: Counter[str] = Counter()  # rows in a row that no thesis could hold him
+    abandoned: dict[str, str] = {}  # given up on, by name, so the preference never costs the file its rows
+    forced_seconds = 0.0  # what every forced solve together has spent of the window
+
+    def due_people(index: int) -> list[str]:
+        """The protected people the schedule owes this row, most urgent first.
+
+        Owed when his count is behind `ceil(index * minimum / count)` or the rows left are no more
+        than he still needs. Urgency is need over rows left; ties break on the person ID.
+        """
+
+        rows_left = count - index + 1
+        owed: list[tuple[float, str]] = []
+        for person, minimum in protected_min.items():
+            need = minimum - exposure[person]
+            if person not in abandoned and need > 0 and (exposure[person] < -(-index * minimum // count) or need >= rows_left):
+                owed.append((-(need / rows_left), person))
+        return [person for _urgency, person in sorted(owed)]
+
+    def place(index: int, owed: Sequence[str]):
+        """`(thesis, position, result, people, cap, trigger_status)` for a row that holds what the schedule owes, or None.
+
+        Every attempt is a throwaway model: nothing here sets `overlap`, a thesis's bring-back or
+        `active`, so a failed attempt leaves the shared relaxations exactly where they were. An urgent
+        debt (the rows left equal what he still needs) may try a looser overlap cap for this row only.
+        """
+
+        nonlocal forced_seconds
+        rows_left = count - index + 1
+        solves = 0
+        failed = "INFEASIBLE"
+        for size in range(len(owed), 0, -1):
+            targets = list(owed[:size])
+            target_rows = [by_person[person][0] for person in targets]
+            qb_teams = {rows[dk_id].team for dk_id in target_rows if rows[dk_id].position == "QB"}
+            if len(qb_teams) > 1:
+                continue
+            lead = rows[target_rows[0]]
+            urgent = any(protected_min[person] - exposure[person] >= rows_left for person in targets)
+            loosest = CLASSIC_MAX_USEFUL_OVERLAP
+            caps = [overlap, *(range(overlap + 1, loosest + 1) if urgent and binds(overlap) else ())]
+
+            def affinity(thesis: _Thesis) -> int:
+                if thesis.team is None:
+                    return 2
+                return 0 if thesis.team == lead.team else 1 if thesis.team == lead.opponent else 2
+
+            order = sorted(range(len(active)),
+                           key=lambda at: (affinity(active[at]), (at - cursor) % len(active)))
+            for at in order:
+                thesis = active[at]
+                if qb_teams and thesis.team is not None and thesis.team not in qb_teams:
+                    continue
+                if thesis.team is not None and thesis.qb_people <= capped:
+                    continue
+                for cap in caps:
+                    if clock() - started > window:
+                        raise _OutOfTime
+                    if solves >= PLACEMENT_SOLVES_PER_ROW:
+                        return None
+                    if forced_seconds > PLACEMENT_TIME_SHARE * window:
+                        for person in protected_min:
+                            if person not in abandoned and exposure[person] < protected_min[person]:
+                                abandoned[person] = "THE_PLACEMENT_TIME_SHARE_OF_THE_WINDOW_IS_SPENT"
+                        return None
+                    solves += 1
+                    before = clock()
+                    result = new_model(thesis, cap=cap, require=target_rows,
+                                       limit=max(0.5, time_limit_seconds / 4)).solve(objective)
+                    forced_seconds += max(0.0, clock() - before)
+                    if result.roster is not None:
+                        return thesis, at, result, targets, cap, failed
+                    failed = result.status
+        return None
+
+    def commit(thesis: _Thesis, index: int, result: SolverResult, cap: int | None) -> None:
+        roster = tuple(result.roster)
+        validation = validate_lineup(slate, roster)
+        if validation.lineup is None:
+            raise SelectionError(f"SOLVER_PRODUCED_ILLEGAL_LINEUP:index={index}:{validation.errors}")
+        if set(roster) & blocked:
+            raise SelectionError(f"SOLVER_SELECTED_AN_EXCLUDED_ROW:index={index}:{sorted(set(roster) & blocked)}")
+        selected.append(SelectedLineup(
+            index=index, roster=roster, captain_dk_id="", salary=validation.lineup.salary,
+            prior_points=sum(objective[dk_id] for dk_id in roster), canonical_key=validation.lineup.canonical_key,
+            solver_status=result.status, solver_seconds=result.elapsed_seconds))
+        tags.append(thesis.name)
+        row_caps.append(cap)
+        thesis.rows.append(index)
+        people = {rows[dk_id].underlying_id for dk_id in roster}
+        exposure.update(people)
+        capped.update(person for person in people if exposure[person] >= limit_for(person))
 
     while len(selected) < count:
         index = len(selected) + 1
@@ -356,6 +508,29 @@ def select_thesis_lineups(
                 stopped = {"index": index, "status": last_status, "proved_exhausted": last_status == "INFEASIBLE"}
                 break
             continue
+        owed = due_people(index) if protected_min else []
+        if owed:
+            try:
+                placed = place(index, owed)
+            except _OutOfTime:
+                stopped = {"index": index, "status": "TIME_BUDGET", "proved_exhausted": False}
+                break
+            if placed is not None:
+                thesis, at, result, targets, cap, tripped = placed
+                if cap != overlap:
+                    relax("classic_placement_overlap", overlap, cap, index=index, thesis=thesis.name,
+                          status=tripped, cause="THE_PROTECTED_PLACEMENT_HAD_NO_DISTINCT_ROW_UNDER_THE_OVERLAP_CAP")
+                commit(thesis, index, result, cap)
+                forced_rows[index] = list(targets)
+                for person in targets:
+                    miss_count[person] = 0
+                cursor = at + 1
+                continue
+            misses.append({"index": index, "people": list(owed), "reason": "NO_THESIS_HAD_A_DISTINCT_ROW_HOLDING_THEM"})
+            for person in owed:
+                miss_count[person] += 1
+                if miss_count[person] >= PLACEMENT_MISS_LIMIT and person not in abandoned:
+                    abandoned[person] = f"NO_THESIS_COULD_HOLD_HIM_IN_{PLACEMENT_MISS_LIMIT}_ROWS_IN_A_ROW"
         thesis = active[cursor % len(active)]
         try:
             result = solve_row(thesis, index)
@@ -373,22 +548,7 @@ def select_thesis_lineups(
             active.remove(thesis)
             cursor = position  # the next live thesis now sits at this position
             continue
-        roster = tuple(result.roster)
-        validation = validate_lineup(slate, roster)
-        if validation.lineup is None:
-            raise SelectionError(f"SOLVER_PRODUCED_ILLEGAL_LINEUP:index={index}:{validation.errors}")
-        if set(roster) & blocked:
-            raise SelectionError(f"SOLVER_SELECTED_AN_EXCLUDED_ROW:index={index}:{sorted(set(roster) & blocked)}")
-        selected.append(SelectedLineup(
-            index=index, roster=roster, captain_dk_id="", salary=validation.lineup.salary,
-            prior_points=sum(objective[dk_id] for dk_id in roster), canonical_key=validation.lineup.canonical_key,
-            solver_status=result.status, solver_seconds=result.elapsed_seconds))
-        tags.append(thesis.name)
-        row_caps.append(overlap)
-        thesis.rows.append(index)
-        people = {rows[dk_id].underlying_id for dk_id in roster}
-        exposure.update(people)
-        capped.update(person for person in people if exposure[person] >= cap_now())
+        commit(thesis, index, result, overlap)
         cursor += 1
 
     if not selected:
@@ -417,8 +577,14 @@ def select_thesis_lineups(
     final_cap = cap_now()
     totals = Counter(person for people in people_by_row for person in people)
     top_person, top_count = max(totals.items(), key=lambda item: (item[1], item[0]))
-    if top_count > final_cap:
-        raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:person_share:{top_person}:{top_count}>{final_cap}")
+    over = [(rows_held, person) for person, rows_held in totals.items() if rows_held > limit_for(person)]
+    if over:
+        rows_held, person = max(over)
+        raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:person_share:{person}:{rows_held}>{limit_for(person)}")
+    for forced_index, held in sorted(forced_rows.items()):
+        for person in held:
+            if person not in people_by_row[forced_index - 1]:
+                raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:placement:{person}:row={forced_index}")
     stacked = sum(1 for lineup in selected if _stacked(rows, lineup.roster))
     if stack_required and stacked != len(selected):
         raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:stack:{stacked}/{len(selected)}")
@@ -446,6 +612,26 @@ def select_thesis_lineups(
         "unfilled_rows": count - len(selected),
         "stopped": stopped,
     }
+    if protected_min or ignored:
+        # Recounted from the delivered rosters, so the report cannot say what the rows do not.
+        delivered = {person: [at + 1 for at, people in enumerate(people_by_row) if person in people]
+                     for person in protected_min}
+        construction["version"] = THESIS_CONSTRUCTION_VERSION_V2
+        construction["does_not_establish"] = [*DOES_NOT_ESTABLISH, *PLACEMENT_DOES_NOT_ESTABLISH]
+        construction["placements"] = {
+            "requested": dict(protected_min),
+            "delivered_rows": delivered,
+            "met": {person: len(held) >= protected_min[person] for person, held in delivered.items()},
+            "shortfall": {person: protected_min[person] - len(held) for person, held in delivered.items()
+                          if len(held) < protected_min[person]},
+            "forced_rows": {str(at): list(held) for at, held in sorted(forced_rows.items())},
+            "misses": misses,
+            "ignored": ignored,
+            "abandoned": dict(sorted(abandoned.items())),
+            "person_cap_override": {person: limit_for(person) for person in protected_min
+                                    if limit_for(person) > final_cap},
+            "rows_delivered": len(selected),
+        }
     return _Sequential(
         selected=selected,
         forbidden_captains=[],

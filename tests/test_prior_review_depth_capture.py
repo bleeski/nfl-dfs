@@ -236,14 +236,27 @@ def test_a_clean_capture_and_a_fully_evaluated_slate_name_nothing():
     assert cli._qb_depth_limitations({}) == []
 
 
-def test_classic_names_no_depth_limitation_and_reports_the_default_as_not_applying(tmp_path):
+def test_classic_captures_no_package_and_names_the_classic_default_gap_by_team(tmp_path):
+    """Edited by Session 61 (R37), named in the changelog.
+
+    Until then Classic had no backup-quarterback default, so a Classic run named no depth limitation at
+    all. The default now applies to every Classic row, and Classic still builds no package of its own,
+    so a run that supplies none names every quarterback team as unevaluated (`P`, nobody guessed out).
+    The Showdown block is unchanged: it still reports that it does not apply.
+    """
+
     from . import test_classic_prior_review as classic
 
     outcome, _slate, _inactive = classic._run(tmp_path)
     assert "qb_depth_capture" not in outcome.reports
     block = outcome.reports["selection"]["selection"]["showdown_backup_qb_default"]
     assert block["applies"] is False and block["excluded_people"] == [] and block["unevaluated_teams"] == []
-    assert cli._qb_depth_limitations(outcome.reports) == []
+    default = outcome.reports["selection"]["selection"]["classic_backup_qb_default"]
+    assert default["applies"] is True and default["excluded_people"] == []
+    assert default["unevaluated_teams"] == ["DAL", "NE", "PHI", "SEA"]
+    assert cli._qb_depth_limitations(outcome.reports) == []  # the Showdown helper stays silent for Classic
+    (limitation,) = cli._classic_judgment_limitations(outcome.reports)
+    assert limitation.startswith("CLASSIC_BACKUP_QB_UNEVALUATED:no quarterback depth evidence orders DAL, NE, PHI, SEA")
 
 
 def test_a_package_damaged_after_capture_is_dropped_named_and_the_run_selects_without_it(tmp_path, den_backup):

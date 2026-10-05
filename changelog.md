@@ -4,6 +4,126 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-05: Session 61 -- the Classic judgment pass inside the run (R37, P9 part 2)
+
+Branch `claude/s61-classic-judgment-pass`, from `main` at `bee8a45`; claim commit `3114a55`. Class S. R29 is untouched (a minimum the rows
+cannot hold is a named shortfall, never a repeated lineup), no evidence gate is touched or cleared, no number is written for anyone, and every
+path still ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+**Found before any code.** `nfl_construction_judgment_v1` does not exist in the code: Session 52 was counted and `Deferred` on 2026-10-02 and
+never built. The card's "Classic schema version" is therefore the first and only schema, named `nfl_classic_construction_judgment_v1` (Session
+52's card says Classic needs its own); Session 52 stays `Deferred` for Showdown. The Week 4 frozen priors are not on this host (nothing under
+`data/runs` or `outputs` is dated 2026-10-04), and a replay is refused by design: `priors` raises `FETCH_CLOCK_AHEAD_OF_AS_OF` for a fetch after
+the pinned clock, and the lock has passed. So "on the Week 4 frozen inputs" could not be run end to end. What ran on the committed Week 4 inputs
+(salary file, QB depth package, recorded score dump; schema-level only) is `data/inbox/slates/wk4-classic-2026-10-04/construction/
+s61_starters_check_record.py`: 23 starting quarterbacks named, all scored (Tyson Bagent for CHI and Jalon Daniels for TB are the promoted
+backups); LAR unevaluated (the depth chart listed no LAR quarterback); the default excludes 53 backups, Nick Mullens among them; none is
+rostered in the delivered v6 file. Allen, Wilson, Ertz and Jennings are proved by shape on the Classic fixture, not by name.
+
+**Added**
+- `src/nfl_dfs/classic_judgment.py`: the judgment pass `classic_judgment_pass_v1` (`starters_check`, `injury_rooms`, `candidates`,
+  `late_swap_watch`, `protected_people`, `does_not_establish`), `render_judgment_pass_text`, and the construction judgment
+  (`nfl_classic_construction_judgment_v1`: `load_construction_judgment`, `judge_placements`). Candidates are ranked by source tier
+  (`UNRESOLVED_ROLE_IN_VACATED_ROOM`, `UNRESOLVED_TRANSFER_PRIOR`, `ABSORBER_OF_A_VACATED_SHARE`), then the room's vacated carry-plus-target
+  share, the salary-versus-prior rank gap, salary, name: shares and ranks the model already holds. `SALARY_RANK_ABOVE_PRIOR_RANK` is a tag, and
+  an offensive person priced far above his prior with no other signal is a short list of his own (`priced_above_prior_only`, at most ten): on a
+  real slate the divergence list names dozens, every expensive defense among them. `DEPTH_RANK_ONE_AT_POSITION` is named unevaluated: the frozen
+  depth chart is read for quarterbacks only, and matching a name to a DraftKings row is a fuzzy join the engine never uses.
+- `classic_theses.select_thesis_lineups(protected=...)`, `classic_thesis_sequential_v2` (v1 byte for byte when nobody is protected): a debt
+  schedule (`ceil(index * minimum / rows)`, or rows left equal need), a throwaway model per forced row (his DraftKings row pinned), theses by
+  affinity (his team, the opponent, the rest, from the cursor), a protected quarterback's own team always has a thesis, two protected quarterbacks
+  of different teams never share a row, his person cap is `max(cap, minimum)`, an urgent debt may try a looser overlap cap for that row alone
+  (`classic_placement_overlap`), and the report is recounted from the delivered rosters.
+- `scripts/judgment_pass_report.py <cowork_run.json | coverage.json>`: the handoff text, a pure view.
+- Request v4 (`construction_judgment_json`, `--construction-judgment-json`), confined and snapshotted; the file's hash is `artifacts` and `hashes`
+  `construction_judgment_json`, `immutable_bindings.construction_judgment_sha256` (C3 checks it as optional), re-verified before publication
+  (`CONSTRUCTION_JUDGMENT_CHANGED_BEFORE_ARTIFACT_PUBLISH`, `V`).
+- Registry: family `construction_judgment` (`P`, R37) with `CLASSIC_JUDGMENT_PLACEMENT_APPLIED`, `_PLACEMENT_REFUSED`, `_PLACEMENT_SHORTFALL`,
+  `_NOT_APPLIED`, `_FILE_DROPPED`, `_PASS_FAILED` and the ten `CONSTRUCTION_JUDGMENT_*` loader codes; `CLASSIC_BACKUP_QB_UNEVALUATED` in
+  `qb_depth_roles`; `policy_binding`'s `covers` now includes a judgment that changed between the read and the publish; `REGISTRY_SHA256` re-pinned
+  from `98f5db6b…` to `939a1bda…` in the test and the contract.
+- A placement budget (`PLACEMENT_SOLVES_PER_ROW` 8, `PLACEMENT_MISS_LIMIT` 3, `PLACEMENT_TIME_SHARE` a quarter of the window, each forced solve under a
+  quarter of the per-row limit): a person no thesis can hold is abandoned by name (`placements.abandoned`) instead of being retried on every row. With a stub that
+  proves every pinned row infeasible the build made 120 forced solves for 20 rows before the budget (found by the review) and 24 after. Wall time is not
+  in the report (it is hash-bound; the first version of the field made two identical builds differ, caught by the determinism test).
+- Free text in a judgment is bounded and plain (author 80 characters, reason 600, name 120, URI 500, no control characters, whitespace collapsed), because
+  it reaches a limitation string and hash-bound artifacts; a source on a prohibited host or any subdomain of one (`api.draftkings.com`, `static.nfl.com`) is
+  refused (the first version matched the exact host only).
+- `docs/DATA_CONTRACTS.md` § Classic judgment pass and construction judgment; `docs/OPERATOR_GUIDE.md` and `docs/RUNBOOK.md`;
+  `docs/claude/working.md` § Classic judgment pass (the engine does steps 1, 2 and 4 and the placement; Session 62 reads `protected_people`);
+  `.claude/rules/slate-operation.md` (the two Week 4 holes are closed on the `run-slate` path).
+- `tests/test_classic_judgment.py` and `tests/test_classic_thesis_placements.py`.
+
+**Changed**
+- `selection.select_prior_lineups`: the scoring chain is one local function so the counterfactual "before" runs the identical pipeline
+  (`pre_redistribution_model`; `prior_points_before_redistribution` with a note, `null` where it was not computed); the R36 backup-quarterback default
+  covers every Classic row (`classic_backup_qb_default`, readmitting a Classic policy minimum and a judgment-named person; `showdown_backup_qb_default`
+  unchanged, `applies: false` on Classic); `construction_judgment` is decided and its recount attached. `showdown_theses.backup_quarterbacks` takes
+  `admitted_people`.
+- `prior_review`: the judgment is loaded and validated before selection (a file the run cannot use is dropped by name and the run goes on); `judgment_pass`
+  and `construction_judgment` ride in the hash-bound Classic coverage artifact; `pool_coverage` is built once before the selection report.
+- `cli._classic_judgment_limitations`: the `P` limitations above, appended after the blockers that withhold a file (inserting them first displaced
+  `CLASSIC_C3_READABLE_REVIEW_FAILED`, which a test reads at index 0).
+- Readable review `prior_only_readable_review_classic_c3_v4`: the section **Classic judgment pass** (display-only). Showdown `sd5_v3` unchanged.
+
+**Narrowings of the card, named**
+- A person the role gate left out of the scored pool is refused by name (`NOT_IN_THE_SCORED_POOL:<finding>`), not readmitted. He has no score, a rostered
+  person the pool coverage calls excluded would disagree with the review, and a source that can still clear the gate comes first; that is Session 52's design.
+  Week 4's four were all in the pool.
+- A malformed or mis-bound judgment file is dropped by name and the run goes on (the minimum is a construction preference, and the worst outcome is no
+  lineup); a single placement the run cannot honour is refused by name and the rest apply.
+- With a portfolio policy in force every placement is `NOT_APPLIED` (the thesis build does not run); rung 4 of the ladder applies it.
+- The late-swap watch list is additive: no `OFFICIAL_STATUS_*` code is edited, so `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED` still names later-window people
+  for certification. The handoff treats them as a watch list; the engine's limitation text is unchanged.
+- Classic captures no depth package (`_auto_capture_depth` is Showdown only), so without a supplied package every team is unevaluated and the default excludes
+  nobody; the gap is `CLASSIC_BACKUP_QB_UNEVALUATED`.
+
+**Existing tests edited, each its own visible change**
+- `tests/test_prior_review_depth_capture.py::test_classic_names_no_depth_limitation_and_reports_the_default_as_not_applying`, renamed
+  `test_classic_captures_no_package_and_names_the_classic_default_gap_by_team`: it asserted a Classic run names no depth limitation (Session 53, when Classic had no
+  backup default). The default now applies, so it asserts `classic_backup_qb_default` (applies, all four teams unevaluated) and the one
+  `CLASSIC_BACKUP_QB_UNEVALUATED` limitation; the Showdown assertions are unchanged.
+- Request version pins: `tests/test_cowork.py::test_a_v3_request_carries_an_aware_deadline_in_utc` names v3 explicitly (it read the emitted version);
+  `tests/test_deadline_controller.py` (renamed `..._its_request_v4_...`) and `tests/test_qb_depth_roles.py::test_a_v1_request_still_loads_unchanged` assert v4
+  and the four accepted versions. Two new tests pin v4 and refuse the field on v1, v2 and v3.
+- Readable review version pins: `tests/test_entry_groups.py` and `tests/test_injury_room_redistribution.py` move from `classic_c3_v3` to `classic_c3_v4`.
+- `tests/test_relaxation_controller.py::_classic` takes an `extra` callable (a helper, additive).
+
+**Verification**
+- Suite: `2530 passed, 2 skipped in 759.34s (0:12:39)` on Windows (baseline `2436 passed, 2 skipped in 854.86s (0:14:14)`, Session 60's final run; no `src`, `tests` or `config` change between it and this
+  branch's base). 94 new tests: 92 in `tests/test_classic_judgment.py` and `tests/test_classic_thesis_placements.py` (the judgment pass, the schema and its refusals, the
+  eligibility decisions, the run-through, the thesis placements) and two in `tests/test_cowork.py`. A first full run before the review's fixes read `2514 passed, 2 skipped in 748.09s`.
+  `doctor` `pass_status: true`; `git diff --check` clean; `check_protected_paths.py` clean.
+- Mutation pass on a copy of the tree (the repository untouched): 28 mutations, each breaking one new guard (the judge's five refusals, the loader's hash binding, name echo,
+  expiry and prohibited host, `protected` not reaching the build, a judgment-named backup not readmitted, the Classic default off, the policy check, a failed forced attempt
+  dropping the bring-back or stepping the shared overlap, the person limit ignoring the minimum, the schedule never owing a row, the urgent loosening, the recount, the
+  quarterback's own thesis, the watch list's window, the candidate tiers, an unplaceable person listed, a before replaced by the after, the file-mutation check, the v3 request
+  carrying the field, the limitations not appended). 27 failed on the intended assertion. The recount mutant first survived: a test with a stub that ignores the pinned row now
+  catches it. The 28th (skip a forced subset that names two quarterbacks of different teams) changes only how many solves are wasted, not any output: an equivalent mutant.
+- Adversarial review by a fresh-context `reviewer` of the whole diff against the card and the brief. Three blocking findings, each reproduced or traced before acting:
+  (1) the hash-bound coverage artifact carried the judgment file's snapshot path, so two runs on identical bytes differed (fixed: the report names the base name and the
+  hash; a determinism test runs the same inputs under two roots with a judgment and with a dropped one); (2) the Classic backup default is inert on a default run because
+  Classic builds no depth package: not enabled here. Enabling the capture was tried on a copy: six existing tests move (the limitation ordering) and `capture_for_run`
+  refuses a whole Classic slate over one team's chart gap, which is what Week 4 hit with LAR, so it needs per-team degradation first. It is Session 63, and the card's
+  acceptance deviation is written down; (3) forced placement attempts had no budget (120 forced solves for 20 rows with a stub that proves every pinned row infeasible):
+  fixed with a per-row cap, a miss limit and a time share (24 solves), and wall time kept out of the report after the determinism test caught it. The open items it listed
+  are fixed or named: the absorption sentence in the contract, the readable-review table row, prohibited hosts matched on the host and every subdomain, free text bounded,
+  `classic_placement_overlap` in the constraint enumerations and recorded with the solver's own status, the registry family text for the changed-file code.
+
+**Found, left open**
+- **The Classic backup-quarterback default needs the depth package supplied** (Session 63). Without it every team is `unevaluated`, nobody is excluded and
+  `CLASSIC_BACKUP_QB_UNEVALUATED` names the teams. A supplied package that R25 refuses (an operator or official exclusion on a rank-1 starter DraftKings still lists as
+  available) raises, `run-slate`'s outer handler finishes with the baseline, and the improvement is lost, not the file; the operator docs now say to rebuild it with `--teams`.
+- **Week 4's frozen priors are not committed**, so the engine cannot be replayed on them, and a replay is refused by design. What would have made this verifiable: commit the
+  engine's small hash-bound artifacts (`team_prior.json`, `player_prior.json`, `identity_map.json`, the role evidence) beside the slate inputs, as the QB depth package already is.
+- **`OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED` still names later-window people**, because the watch list is additive and certification keeps seeing them. R37 asks that the
+  handoff treat them as a watch list, not an open gap; splitting that limitation's detail text into early (gap) and later (watch) is a one-line follow-up Session 63 can take.
+- **A role-gate exclusion cannot be placed** (`NOT_IN_THE_SCORED_POOL`); Session 52 (Deferred) owns readmission. `DEPTH_RANK_ONE_AT_POSITION` is unevaluated for RB, WR and TE.
+- `certify` and governed late swap do not read a `run-slate` file's limitations, and no path certifies a `run-slate` output, so a judgment-using file needs no extra refusal there;
+  the `CLASSIC_JUDGMENT_*` limitations stop certification as class `P` like every other.
+- The relaxation record that names the rung-4 construction still says `classic_thesis_sequential_v1`; the delivered `construction.version` is v2 when a judgment named someone.
+- Untracked, not Claude's, left alone: `data/standings/standings_pulls_2026-09-28.html` and `docs/critiques/ADJUDICATION_PROMPT.md`.
+
 ### 2026-10-04: DET@CAR Sunday night Showdown (28 entries, 6 contests)
 
 Inputs, committed under `data/inbox/slates/det-car-sd-2026-10-04/input/`:

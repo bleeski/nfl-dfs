@@ -318,6 +318,42 @@ list. It derives replaceable cells from exact DraftKings IDs, the certified
 prior assignment, game lock times, the current prefilled template, and the
 timezone-aware `--as-of` value.
 
+## Classic judgment pass and construction judgment
+
+Since Session 61 a Classic `run-slate` does the parts of Ben's judgment rule (R37) that need no judgment and hands over the rest.
+Print it with `scripts/judgment_pass_report.py` on the run's `cowork_run.json` (or the Classic coverage artifact):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\judgment_pass_report.py 'C:\full\path\cowork_run.json'
+```
+
+The report names each team's starting quarterback and whether the pool scored him; each injury room (who vacated, who inherits,
+the inheritors' prior points before and after Session 60, salaries); a ranked **candidate list to research, never a selection**;
+and a **late-swap watch list** of rostered later-window people with no official row. Supply the QB depth package
+(`--qb-depth-role-evidence-json`, with a request base or a full path): Classic captures none, and without it every team is named
+unevaluated and no backup quarterback is excluded. With it, a backup behind a declared starter is out of every Classic row. A package
+R25 refuses (an operator or official exclusion on a rank-1 starter DraftKings still lists as available) stops the improvement and
+leaves the baseline: rebuild it with `--teams` naming the other teams and rerun.
+
+To place a person the research supports, write a **construction judgment** and rerun with `--construction-judgment-json`:
+
+```json
+{"schema_version": "nfl_classic_construction_judgment_v1", "salary_sha256": "<the salary file's SHA-256>",
+ "author": "claude", "authored_at": "2026-10-04T15:30:00+00:00",
+ "placements": [{"dk_id": "44312345", "name": "Braelon Allen", "min_rows": 6,
+                 "reason": "Breece Hall is out and Allen is the reported starter; the prior still prices his old role.",
+                 "sources": [{"uri": "https://www.example.org/report", "observed_at": "2026-10-04T15:10:00+00:00"}]}]}
+```
+
+- It applies to the thesis construction (rung 4, or a Classic run with no policy). The build rosters him in at least `min_rows`
+  rows, distinct and stacked, and writes no number: he keeps the prior he has. A person DraftKings marks `OUT`, an official or
+  operator exclusion, a role-gate `BLOCK` or an unresolved material role change, and anyone outside the scored pool, is **refused by
+  name** and the rest still apply. A file for other salary bytes, unreadable or expired at lock is dropped by name and the run goes
+  on. Every one of these travels with the file as a `CLASSIC_JUDGMENT_*` limitation.
+- `judgment_pass.protected_people` lists who was placed: the people a redeploy must never remove (Session 62's `--protect`).
+- The file stays `PRIOR_ONLY / DO_NOT_UPLOAD`. A placement is a construction choice, not a current-role fact. Contract:
+  `docs/DATA_CONTRACTS.md` § Classic judgment pass and construction judgment.
+
 ## Showdown value-add swap
 
 `scripts/showdown_value_add.py` (Session 55) works one person the engine left out, such as a depth-chart starter with no
