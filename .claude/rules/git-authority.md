@@ -142,5 +142,5 @@ and a red pull request costs a full CI cycle.
     sh ./nfl.sh test 2>&1 | tee /tmp/pytest.log
     python3 scripts/record_verify.py --from-log /tmp/pytest.log
     sh ./nfl.sh doctor
-    git diff --check
+    git diff --check $(git merge-base origin/main HEAD) HEAD
     python3 scripts/check_protected_paths.py

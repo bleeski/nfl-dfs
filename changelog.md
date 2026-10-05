@@ -84,6 +84,10 @@ Clock: request at 22:55Z, lock 00:15Z, delivery deadline 00:10Z; file delivered 
     Dollar unchanged. Captains: Johnson, Olave, London 7; Bijan 5; Shough, Folk, Kamara, B. Robinson 2; K. Austin, Saints DST 1. People:
     Johnson, London, Shough, Kamara, Bijan 24 each; Folk 15; Penix and Austin 13; Olave 12. `PRIOR_ONLY / DO_NOT_UPLOAD`; leverage
     against real ownership unmeasured.
+- CI red once on this branch (`0c26fd6`): the `suite` job's `git diff --check` over the branch found trailing whitespace in the
+  copied `qa_iter3/search_record_qa3.py`, which the local `git diff --check` (unstaged changes only, run before staging) never saw.
+  Fixed in `087e507`; `.claude/rules/git-authority.md`'s before-push list now runs CI's own command,
+  `git diff --check $(git merge-base origin/main HEAD) HEAD`.
 
 ### 2026-10-05: Session 62 -- Pareto-only salary redeploy (R37, P9 part 3)
 
