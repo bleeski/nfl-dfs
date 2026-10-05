@@ -1,0 +1,34 @@
+{
+  "lineups": 36,
+  "defects": 0,
+  "DEFECTS": [],
+  "limit_breaches": 0,
+  "LIMIT_BREACHES": [],
+  "unfilled_entry_ids": [],
+  "prefilled_entry_ids": [],
+  "observations": 10,
+  "OBSERVATIONS": [
+    "5284811761 DST_WITH_OWN_OFFENSE ATL:['ATL|QB|Michael Penix Jr.', 'ATL|K|Nick Folk', 'ATL|WR|Drake London']",
+    "5284789239 DST_WITH_OWN_OFFENSE ATL:['ATL|RB|Brian Robinson Jr.', 'ATL|K|Nick Folk', 'ATL|WR|Drake London']",
+    "5284789375 DST_WITH_OWN_OFFENSE ATL:['ATL|RB|Bijan Robinson', 'ATL|RB|Brian Robinson Jr.', 'ATL|WR|Drake London']",
+    "5284789380 ZERO_QB",
+    "5284789385 DST_WITH_OWN_OFFENSE ATL:['ATL|QB|Michael Penix Jr.', 'ATL|K|Nick Folk']",
+    "5284789389 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|RB|Bijan Robinson']",
+    "5284816959 ZERO_QB",
+    "5284816959 DST_WITH_OWN_OFFENSE ATL:['ATL|RB|Bijan Robinson', 'ATL|K|Nick Folk', 'ATL|TE|Kyle Pitts Sr.', 'ATL|WR|Drake London']",
+    "5284821080 DST_WITH_OWN_OFFENSE ATL:['ATL|RB|Brian Robinson Jr.']",
+    "5284828438 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|QB|Michael Penix Jr.', 'ATL|WR|Drake London']"
+  ],
+  "observation_note": "strategy observations never change the exit code; DraftKings accepts each of them",
+  "exit_codes": "1 validity failure; 3 blank authorized rows unfilled; 2 an operator limit only; 0 none of these, which does not clear an upload",
+  "max_pairwise_overlap": 5,
+  "salary_min": 45900,
+  "salary_max": 49900,
+  "distinct_captains": 10,
+  "qb_count_histogram": {
+    "2": 14,
+    "1": 20,
+    "0": 2
+  },
+  "VERDICT": "PASS"
+}

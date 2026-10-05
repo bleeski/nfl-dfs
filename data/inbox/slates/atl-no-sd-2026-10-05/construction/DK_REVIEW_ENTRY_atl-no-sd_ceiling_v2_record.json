@@ -1,0 +1,211 @@
+{
+ "rules": "Whole-lineup swaps between Entry IDs (Showdown judgment pass, last step). The 36 lineups never change; only which Entry ID carries\nwhich lineup. A swap is taken only when no contest measure worsens and at least one improves, then repeated to a fixed point.\nPer contest with 2+ entries: distinct Captains (higher), same-Captain pairs, max people shared, mean people shared, pairs sharing 4+,\npairs sharing 3+ (all lower). Single-entry contests have no internal measure.",
+ "before": {
+  "196285160": {
+   "distinct_captains": 2,
+   "same_captain_pairs": 0,
+   "max_shared": 2,
+   "mean_shared": 2.0,
+   "pairs_shared_4": 0,
+   "pairs_shared_3": 0
+  },
+  "196285161": {
+   "distinct_captains": 8,
+   "same_captain_pairs": 23,
+   "max_shared": 5,
+   "mean_shared": 3.3789,
+   "pairs_shared_4": 87,
+   "pairs_shared_3": 156
+  },
+  "196287745": {
+   "distinct_captains": 2,
+   "same_captain_pairs": 0,
+   "max_shared": 3,
+   "mean_shared": 3.0,
+   "pairs_shared_4": 0,
+   "pairs_shared_3": 1
+  },
+  "196430106": {
+   "distinct_captains": 2,
+   "same_captain_pairs": 0,
+   "max_shared": 2,
+   "mean_shared": 2.0,
+   "pairs_shared_4": 0,
+   "pairs_shared_3": 0
+  },
+  "196432194": {
+   "distinct_captains": 7,
+   "same_captain_pairs": 0,
+   "max_shared": 4,
+   "mean_shared": 2.6667,
+   "pairs_shared_4": 3,
+   "pairs_shared_3": 13
+  }
+ },
+ "after": {
+  "196285160": {
+   "distinct_captains": 2,
+   "same_captain_pairs": 0,
+   "max_shared": 2,
+   "mean_shared": 2.0,
+   "pairs_shared_4": 0,
+   "pairs_shared_3": 0
+  },
+  "196285161": {
+   "distinct_captains": 9,
+   "same_captain_pairs": 18,
+   "max_shared": 5,
+   "mean_shared": 3.1105,
+   "pairs_shared_4": 67,
+   "pairs_shared_3": 140
+  },
+  "196287745": {
+   "distinct_captains": 2,
+   "same_captain_pairs": 0,
+   "max_shared": 3,
+   "mean_shared": 3.0,
+   "pairs_shared_4": 0,
+   "pairs_shared_3": 1
+  },
+  "196430106": {
+   "distinct_captains": 2,
+   "same_captain_pairs": 0,
+   "max_shared": 2,
+   "mean_shared": 2.0,
+   "pairs_shared_4": 0,
+   "pairs_shared_3": 0
+  },
+  "196432194": {
+   "distinct_captains": 7,
+   "same_captain_pairs": 0,
+   "max_shared": 4,
+   "mean_shared": 2.619,
+   "pairs_shared_4": 2,
+   "pairs_shared_3": 13
+  }
+ },
+ "swaps": [
+  {
+   "swap": [
+    "5284789239",
+    "5284804067"
+   ],
+   "contests": [
+    "196285161",
+    "196285178"
+   ]
+  },
+  {
+   "swap": [
+    "5284789239",
+    "5284816959"
+   ],
+   "contests": [
+    "196285161",
+    "196430106"
+   ]
+  },
+  {
+   "swap": [
+    "5284789375",
+    "5284812269"
+   ],
+   "contests": [
+    "196285161",
+    "196285159"
+   ]
+  },
+  {
+   "swap": [
+    "5284789375",
+    "5284828441"
+   ],
+   "contests": [
+    "196285161",
+    "196432194"
+   ]
+  },
+  {
+   "swap": [
+    "5284789378",
+    "5284804067"
+   ],
+   "contests": [
+    "196285161",
+    "196285178"
+   ]
+  },
+  {
+   "swap": [
+    "5284789376",
+    "5284816560"
+   ],
+   "contests": [
+    "196285161",
+    "196287745"
+   ]
+  },
+  {
+   "swap": [
+    "5284789376",
+    "5284796317"
+   ],
+   "contests": [
+    "196285161",
+    "196285160"
+   ]
+  },
+  {
+   "swap": [
+    "5284789388",
+    "5284796763"
+   ],
+   "contests": [
+    "196285161",
+    "196429904"
+   ]
+  },
+  {
+   "swap": [
+    "5284789383",
+    "5284804067"
+   ],
+   "contests": [
+    "196285161",
+    "196285178"
+   ]
+  },
+  {
+   "swap": [
+    "5284789388",
+    "5284811761"
+   ],
+   "contests": [
+    "196285161",
+    "196285160"
+   ]
+  },
+  {
+   "swap": [
+    "5284789377",
+    "5284804067"
+   ],
+   "contests": [
+    "196285161",
+    "196285178"
+   ]
+  },
+  {
+   "swap": [
+    "5284789390",
+    "5284828440"
+   ],
+   "contests": [
+    "196285161",
+    "196432194"
+   ]
+  }
+ ],
+ "source_sha256": "e055e13ac461ced67fde598fad42cb8c7fdb52d050225938c5ac855aee25f681",
+ "out_sha256": "f0b4d76808f8f2ac2d32459ecfa2c645838f13e8f04c8f3ba813ef3f3bb44ef7"
+}
