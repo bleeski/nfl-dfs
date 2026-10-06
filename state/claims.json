@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "43ede121-6559-4dde-9782-5286d8702ef1",
-      "branch": "claude/s64-engine-pareto-redeploy",
-      "chunk": "S64",
-      "claimed_at": "2026-10-06T15:11:35Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

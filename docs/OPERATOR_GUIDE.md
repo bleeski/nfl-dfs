@@ -381,7 +381,8 @@ note, never a defect). **Since Session 64 the rule is engine code** (`src/nfl_df
 - It scans every row (`--changed-entry-id` restricts it) until a whole pass takes nothing, so a rerun on its own output changes
   nothing (`fixed_point=True`; `PASS_BOUND_REACHED` means its 25-pass bound stopped it first, so rerun it). **`--now <ISO 8601 with an
   offset>`** (Session 64) gives it the lock clock: a person whose game kicked off at or before it is never outgoing and never
-  incoming, so a redeploy after the first window touches only cells that can still change on DraftKings; without `--now` there
+  incoming, so a redeploy after the first window touches only cells that can still change on DraftKings (and a person whose kickoff the file
+  does not state, a postponed or TBD game, is never brought in, as late swap never brings one in); without `--now` there
   is no lock filter, so run it before the earliest lock. The thesis build leaves the priors-wrong thesis's rows
   alone (that thesis bets against the prior this ranks by). `--protect NAME_OR_ID` (repeatable) and `--protect-from <cowork_run.json | coverage.json>` name who never moves; an
   unknown or ambiguous name, an ID the salary file does not hold, a portfolio person the salary file does not hold, or a run with
