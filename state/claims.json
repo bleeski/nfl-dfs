@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "979cad11-1532-4247-8ff0-0b0057dcfeba",
-      "branch": "claude/s63-classic-depth-capture",
-      "chunk": "S63",
-      "claimed_at": "2026-10-06T13:11:37Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
