@@ -1,0 +1,135 @@
+{
+ "rules": "ATL@NO game-script coherence (large-prize rule: every row needs one script where all six hit together).\nA DST is never in a row with the opposing starting QB: the Falcons DST beside Shough (often with Olave, Johnson or Kamara, sometimes as\nCaptain) roots against its own row. Each such DST is replaced by the best-prior legal FLEX that is not a kicker (no second kicker), not\nPitts (the ceiling pass's research cap) and not the row's opposing DST; person cap 27 of 36, overlap 5, distinct lineups (R29).\nPrior points only order the choice; nothing is written as a projection.",
+ "before": {
+  "prior_total": 2903.82,
+  "prior_min": 69.43,
+  "max_exposure": 27,
+  "max_captain": 7,
+  "distinct_captains": 10,
+  "distinct_people": 14,
+  "mean_pair_overlap": 3.1968,
+  "max_pair_overlap": 5,
+  "pairs_overlap_5": 38,
+  "dst_with_opposing_qb": 6,
+  "two_kicker_rows": 0,
+  "salary_min": 45900,
+  "exposure": {
+   "Tyler Shough": 27,
+   "Juwan Johnson": 26,
+   "Nick Folk": 22,
+   "Drake London": 21,
+   "Michael Penix Jr.": 21,
+   "Bijan Robinson": 21,
+   "Alvin Kamara": 20,
+   "Brian Robinson Jr.": 17,
+   "Kevin Austin Jr.": 12,
+   "Falcons": 8,
+   "Chris Olave": 7,
+   "Daniel Carlson": 7,
+   "Kyle Pitts Sr.": 6,
+   "Oscar Delp": 1
+  },
+  "captains": {
+   "Juwan Johnson": 7,
+   "Tyler Shough": 7,
+   "Bijan Robinson": 6,
+   "Drake London": 5,
+   "Chris Olave": 3,
+   "Michael Penix Jr.": 2,
+   "Alvin Kamara": 2,
+   "Nick Folk": 2,
+   "Kyle Pitts Sr.": 1,
+   "Daniel Carlson": 1
+  }
+ },
+ "after": {
+  "prior_total": 2896.17,
+  "prior_min": 68.91,
+  "max_exposure": 27,
+  "max_captain": 7,
+  "distinct_captains": 10,
+  "distinct_people": 16,
+  "mean_pair_overlap": 3.1968,
+  "max_pair_overlap": 5,
+  "pairs_overlap_5": 39,
+  "dst_with_opposing_qb": 0,
+  "two_kicker_rows": 0,
+  "salary_min": 45900,
+  "exposure": {
+   "Tyler Shough": 27,
+   "Juwan Johnson": 26,
+   "Nick Folk": 22,
+   "Drake London": 21,
+   "Michael Penix Jr.": 21,
+   "Bijan Robinson": 21,
+   "Alvin Kamara": 20,
+   "Brian Robinson Jr.": 17,
+   "Kevin Austin Jr.": 14,
+   "Chris Olave": 7,
+   "Daniel Carlson": 7,
+   "Kyle Pitts Sr.": 6,
+   "Austin Hooper": 2,
+   "Kendre Miller": 2,
+   "Falcons": 2,
+   "Oscar Delp": 1
+  },
+  "captains": {
+   "Juwan Johnson": 7,
+   "Tyler Shough": 7,
+   "Bijan Robinson": 6,
+   "Drake London": 5,
+   "Chris Olave": 3,
+   "Michael Penix Jr.": 2,
+   "Alvin Kamara": 2,
+   "Nick Folk": 2,
+   "Kyle Pitts Sr.": 1,
+   "Daniel Carlson": 1
+  }
+ },
+ "moves": [
+  {
+   "entry_id": "5284811761",
+   "captain": "Tyler Shough",
+   "out": "Falcons",
+   "incoming": "Austin Hooper",
+   "prior_change": -2.17
+  },
+  {
+   "entry_id": "5284789239",
+   "captain": "Chris Olave",
+   "out": "Falcons",
+   "incoming": "Kendre Miller",
+   "prior_change": -0.52
+  },
+  {
+   "entry_id": "5284789375",
+   "captain": "Juwan Johnson",
+   "out": "Falcons",
+   "incoming": "Kevin Austin Jr.",
+   "prior_change": -1.14
+  },
+  {
+   "entry_id": "5284789385",
+   "captain": "Michael Penix Jr.",
+   "out": "Falcons",
+   "incoming": "Kevin Austin Jr.",
+   "prior_change": -1.14
+  },
+  {
+   "entry_id": "5284789389",
+   "captain": "Tyler Shough",
+   "out": "Falcons",
+   "incoming": "Austin Hooper",
+   "prior_change": -2.17
+  },
+  {
+   "entry_id": "5284821080",
+   "captain": "Chris Olave",
+   "out": "Falcons",
+   "incoming": "Kendre Miller",
+   "prior_change": -0.52
+  }
+ ],
+ "source_sha256": "f0b4d76808f8f2ac2d32459ecfa2c645838f13e8f04c8f3ba813ef3f3bb44ef7",
+ "out_sha256": "30ff0a86cc51dbe0977f17feeaa2508f08a6405dbbad42e805446526067d4cfb"
+}

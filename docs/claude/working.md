@@ -91,6 +91,11 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   names him, so a blank DraftKings status and an old-team prior keep him selectable. Check every rostered player under about $1,000
   against the team's elevations for the game (the club's Saturday transaction post); exclude any who was not elevated with
   `--exclude <CPT id> --exclude <FLEX id>` on a `--request` rerun. Casey Washington ($200) was in 7 of 28 rows before this check.
+  Since ATL@NO (2026-10-05) run it first, right after the `--build-priors` run: `scripts/practice_squad_check.py --salaries <csv>
+  --run-dir data/runs/<run_id>` lists everyone the run's own nflverse roster file marks not `ACT` (practice squad `DEV`, reserve
+  `RES`) with both IDs and the `--exclude` arguments. Confirm against the elevation post (a Monday game's comes Monday afternoon),
+  then rerun. It found 13 of 54 that night, and it settles a two-kicker `KICKER_ROLE_UNRESOLVED` stop too: the second kicker was
+  one of them.
 - **Order.** Do all three before the first handoff message, with the clock measured. A lock inside five minutes ships what is
   built and names the gaps.
 

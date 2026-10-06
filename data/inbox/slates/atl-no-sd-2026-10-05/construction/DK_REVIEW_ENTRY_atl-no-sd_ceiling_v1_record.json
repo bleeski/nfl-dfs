@@ -1,0 +1,401 @@
+{
+ "ruling": "Ben 2026-10-04: err on the side of large prizes when at odds with minimizing washouts",
+ "rules": "ATL@NO large-prize pass (Ben 2026-10-04: err toward large prizes when they conflict with washouts).\nPhase 0 (research judgment, no number written): Kyle Pitts Sr. to at most 6 rows. His prior (10.32) is the prior season's per-game\nrate; PFF has him at 2 catches in 3 games under the new staff's 13 personnel (Woerner 43 snaps, Pitts 42 in Week 3). His one Captain\nrow stays (a low-owned ceiling bet); FLEX rows lose him where the best legal replacement costs the least prior. He is never incoming.\nPhase 1: every WR/TE Captain row holds its own team's starting QB (Penix ATL, Shough NO; depth package + official depth charts).\nPhase 2: greedy FLEX swaps that raise the row prior by >= 1.0; person <= 27/36 (0.75), pair overlap <= 5, Captains untouched,\nphase-1 QBs kept, distinct lineups (R29). Prior points order swaps only.\nPhase 3: retry phase 1 after phase 2.\nKickers: no swap may raise a row's kicker count above one; phase 4 replaces the lower-prior FLEX kicker in every two-kicker row with\nthe best legal non-kicker (any prior change), because a second kicker adds little ceiling. Olave: never outgoing in phases 2 and 4\n(research: 27 catches, 375 yards in four games; his prior of 11.66 is the prior season's rate and understates the current role).",
+ "before": {
+  "prior_total": 2847.54,
+  "prior_min": 54.59,
+  "max_exposure": 21,
+  "max_captain": 7,
+  "distinct_captains": 10,
+  "distinct_people": 17,
+  "mean_pair_overlap": 2.8429,
+  "max_pair_overlap": 4,
+  "pairs_overlap_5": 0,
+  "top3_union": 32,
+  "passcatcher_cpt_without_own_qb": 7,
+  "zero_qb_rows": 6,
+  "two_kicker_rows": 8,
+  "salary_min": 40800,
+  "pitts_rows": 18,
+  "exposure": {
+   "Bijan Robinson": 21,
+   "Juwan Johnson": 21,
+   "Alvin Kamara": 21,
+   "Tyler Shough": 21,
+   "Drake London": 21,
+   "Michael Penix Jr.": 20,
+   "Kyle Pitts Sr.": 18,
+   "Nick Folk": 18,
+   "Daniel Carlson": 14,
+   "Brian Robinson Jr.": 12,
+   "Kevin Austin Jr.": 10,
+   "Chris Olave": 7,
+   "Falcons": 7,
+   "Devaughn Vele": 2,
+   "Oscar Delp": 1,
+   "Charlie Woerner": 1,
+   "Kendre Miller": 1
+  },
+  "captains": {
+   "Juwan Johnson": 7,
+   "Tyler Shough": 7,
+   "Bijan Robinson": 6,
+   "Drake London": 5,
+   "Chris Olave": 3,
+   "Michael Penix Jr.": 2,
+   "Alvin Kamara": 2,
+   "Nick Folk": 2,
+   "Daniel Carlson": 1,
+   "Kyle Pitts Sr.": 1
+  }
+ },
+ "after": {
+  "prior_total": 2903.82,
+  "prior_min": 69.43,
+  "max_exposure": 27,
+  "max_captain": 7,
+  "distinct_captains": 10,
+  "distinct_people": 14,
+  "mean_pair_overlap": 3.1968,
+  "max_pair_overlap": 5,
+  "pairs_overlap_5": 38,
+  "top3_union": 36,
+  "passcatcher_cpt_without_own_qb": 0,
+  "zero_qb_rows": 2,
+  "two_kicker_rows": 0,
+  "salary_min": 45900,
+  "pitts_rows": 6,
+  "exposure": {
+   "Tyler Shough": 27,
+   "Juwan Johnson": 26,
+   "Nick Folk": 22,
+   "Michael Penix Jr.": 21,
+   "Bijan Robinson": 21,
+   "Drake London": 21,
+   "Alvin Kamara": 20,
+   "Brian Robinson Jr.": 17,
+   "Kevin Austin Jr.": 12,
+   "Falcons": 8,
+   "Daniel Carlson": 7,
+   "Chris Olave": 7,
+   "Kyle Pitts Sr.": 6,
+   "Oscar Delp": 1
+  },
+  "captains": {
+   "Juwan Johnson": 7,
+   "Tyler Shough": 7,
+   "Bijan Robinson": 6,
+   "Drake London": 5,
+   "Chris Olave": 3,
+   "Michael Penix Jr.": 2,
+   "Alvin Kamara": 2,
+   "Nick Folk": 2,
+   "Daniel Carlson": 1,
+   "Kyle Pitts Sr.": 1
+  }
+ },
+ "moves": [
+  {
+   "phase": 0,
+   "entry_id": "5284816560",
+   "captain": "Chris Olave",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Bijan Robinson",
+   "prior_change": 7.47
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284816959",
+   "captain": "Chris Olave",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Bijan Robinson",
+   "prior_change": 7.47
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284821080",
+   "captain": "Chris Olave",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Bijan Robinson",
+   "prior_change": 7.47
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284796317",
+   "captain": "Michael Penix Jr.",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Tyler Shough",
+   "prior_change": 5.21
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284789385",
+   "captain": "Michael Penix Jr.",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Tyler Shough",
+   "prior_change": 5.21
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284789383",
+   "captain": "Bijan Robinson",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Juwan Johnson",
+   "prior_change": 4.31
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284789375",
+   "captain": "Juwan Johnson",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Nick Folk",
+   "prior_change": -1.15
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284789377",
+   "captain": "Juwan Johnson",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Nick Folk",
+   "prior_change": -1.15
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284789378",
+   "captain": "Bijan Robinson",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Nick Folk",
+   "prior_change": -1.15
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284789392",
+   "captain": "Alvin Kamara",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Nick Folk",
+   "prior_change": -1.15
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284796763",
+   "captain": "Tyler Shough",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Nick Folk",
+   "prior_change": -1.15
+  },
+  {
+   "phase": 0,
+   "entry_id": "5284828437",
+   "captain": "Drake London",
+   "out": "Kyle Pitts Sr.",
+   "incoming": "Nick Folk",
+   "prior_change": -1.15
+  },
+  {
+   "phase": 1,
+   "entry_id": "5284812269",
+   "captain": "Juwan Johnson",
+   "out": "Bijan Robinson",
+   "incoming": "Tyler Shough",
+   "prior_change": -2.26
+  },
+  {
+   "phase": 1,
+   "entry_id": "5284789377",
+   "captain": "Juwan Johnson",
+   "out": "Drake London",
+   "incoming": "Tyler Shough",
+   "prior_change": 0.8
+  },
+  {
+   "phase": 1,
+   "entry_id": "5284789391",
+   "captain": "Drake London",
+   "out": "Tyler Shough",
+   "incoming": "Michael Penix Jr.",
+   "prior_change": -1.45
+  },
+  {
+   "phase": 1,
+   "entry_id": "5284816560",
+   "captain": "Chris Olave",
+   "out": "Devaughn Vele",
+   "incoming": "Tyler Shough",
+   "prior_change": 10.42
+  },
+  {
+   "phase": 1,
+   "entry_id": "5284828093",
+   "captain": "Juwan Johnson",
+   "out": "Drake London",
+   "incoming": "Tyler Shough",
+   "prior_change": 0.8
+  },
+  {
+   "phase": 1,
+   "entry_id": "5284816959",
+   "captain": "Chris Olave",
+   "out": "Bijan Robinson",
+   "incoming": "Tyler Shough",
+   "prior_change": -2.26
+  },
+  {
+   "phase": 1,
+   "entry_id": "5284821080",
+   "captain": "Chris Olave",
+   "result": "NO_FEASIBLE_SWAP"
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284816959",
+   "captain": "Chris Olave",
+   "out": "Kendre Miller",
+   "incoming": "Drake London",
+   "prior_change": 9.55
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284821080",
+   "captain": "Chris Olave",
+   "out": "Devaughn Vele",
+   "incoming": "Juwan Johnson",
+   "prior_change": 9.52
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284796317",
+   "captain": "Michael Penix Jr.",
+   "out": "Nick Folk",
+   "incoming": "Juwan Johnson",
+   "prior_change": 5.46
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284821080",
+   "captain": "Chris Olave",
+   "out": "Nick Folk",
+   "incoming": "Alvin Kamara",
+   "prior_change": 3.29
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284828093",
+   "captain": "Juwan Johnson",
+   "out": "Charlie Woerner",
+   "incoming": "Kevin Austin Jr.",
+   "prior_change": 3.03
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284789376",
+   "captain": "Drake London",
+   "out": "Alvin Kamara",
+   "incoming": "Juwan Johnson",
+   "prior_change": 2.17
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284796763",
+   "captain": "Tyler Shough",
+   "out": "Alvin Kamara",
+   "incoming": "Juwan Johnson",
+   "prior_change": 2.17
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284812269",
+   "captain": "Juwan Johnson",
+   "out": "Daniel Carlson",
+   "incoming": "Nick Folk",
+   "prior_change": 1.11
+  },
+  {
+   "phase": 2,
+   "entry_id": "5284816959",
+   "captain": "Chris Olave",
+   "out": "Falcons",
+   "incoming": "Brian Robinson Jr.",
+   "prior_change": 1.1
+  },
+  {
+   "phase": 3,
+   "entry_id": "5284821080",
+   "captain": "Chris Olave",
+   "result": "NO_FEASIBLE_SWAP"
+  },
+  {
+   "phase": "3b",
+   "entry_id": "5284789239",
+   "captain": "Bijan Robinson",
+   "out": "Tyler Shough",
+   "incoming": "Drake London",
+   "prior_change": -0.8
+  },
+  {
+   "phase": "3b",
+   "entry_id": "5284821080",
+   "captain": "Chris Olave",
+   "out": "Bijan Robinson",
+   "incoming": "Tyler Shough",
+   "prior_change": -2.26
+  },
+  {
+   "phase": 4,
+   "entry_id": "5284789380",
+   "captain": "Alvin Kamara",
+   "out": "Daniel Carlson",
+   "incoming": "Brian Robinson Jr.",
+   "prior_change": -1.26
+  },
+  {
+   "phase": 4,
+   "entry_id": "5284789390",
+   "captain": "Daniel Carlson",
+   "out": "Nick Folk",
+   "incoming": "Brian Robinson Jr.",
+   "prior_change": -2.36
+  },
+  {
+   "phase": 4,
+   "entry_id": "5284789393",
+   "captain": "Juwan Johnson",
+   "out": "Daniel Carlson",
+   "incoming": "Kevin Austin Jr.",
+   "prior_change": -3.49
+  },
+  {
+   "phase": 4,
+   "entry_id": "5284816560",
+   "captain": "Chris Olave",
+   "out": "Daniel Carlson",
+   "incoming": "Brian Robinson Jr.",
+   "prior_change": -1.26
+  },
+  {
+   "phase": 4,
+   "entry_id": "5284816959",
+   "captain": "Chris Olave",
+   "out": "Daniel Carlson",
+   "incoming": "Falcons",
+   "prior_change": -2.35
+  },
+  {
+   "phase": 4,
+   "entry_id": "5284828438",
+   "captain": "Nick Folk",
+   "out": "Daniel Carlson",
+   "incoming": "Falcons",
+   "prior_change": -2.35
+  },
+  {
+   "phase": 4,
+   "entry_id": "5284828439",
+   "captain": "Tyler Shough",
+   "out": "Daniel Carlson",
+   "incoming": "Brian Robinson Jr.",
+   "prior_change": -1.26
+  }
+ ],
+ "source_sha256": "501bb0251a5dee3f2a7715ec1a6c5ed755db007c7ada44839a2a34c4fc225891",
+ "out_sha256": "e055e13ac461ced67fde598fad42cb8c7fdb52d050225938c5ac855aee25f681"
+}

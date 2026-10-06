@@ -1,0 +1,117 @@
+{
+  "allocation_version": "qb_depth_chart_attempt_share_allocation_v2",
+  "declarations": [
+    {
+      "backups": [
+        {
+          "cpt_dk_id": "44358613",
+          "flex_dk_id": "44358557",
+          "player_name": "Tua Tagovailoa",
+          "pos_rank": 2,
+          "provider_player_id": "00-0036212",
+          "underlying_id": "ATL|QB|Tua Tagovailoa"
+        },
+        {
+          "cpt_dk_id": "44358615",
+          "flex_dk_id": "44358559",
+          "player_name": "Cooper Rush",
+          "pos_rank": 3,
+          "provider_player_id": "00-0033662",
+          "underlying_id": "ATL|QB|Cooper Rush"
+        },
+        {
+          "cpt_dk_id": "44358614",
+          "flex_dk_id": "44358558",
+          "player_name": "Jack Strand",
+          "pos_rank": 4,
+          "provider_player_id": "00-0041194",
+          "underlying_id": "ATL|QB|Jack Strand"
+        }
+      ],
+      "declared_observed_at": "2026-10-05T15:53:14+00:00",
+      "game_id": "ATL@NO",
+      "source_sha256": "3e17da5efe9244892c18e0755bce91db843410f9ba49719f3997bf4d4d303660",
+      "starter": {
+        "cpt_dk_id": "44358607",
+        "flex_dk_id": "44358551",
+        "player_name": "Michael Penix Jr.",
+        "pos_rank": 1,
+        "provider_player_id": "00-0039917",
+        "underlying_id": "ATL|QB|Michael Penix Jr."
+      },
+      "team": "ATL",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "cpt_dk_id": "44358616",
+          "flex_dk_id": "44358560",
+          "player_name": "Spencer Rattler",
+          "pos_rank": 2,
+          "provider_player_id": "00-0039376",
+          "underlying_id": "NO|QB|Spencer Rattler"
+        },
+        {
+          "cpt_dk_id": "44358612",
+          "flex_dk_id": "44358556",
+          "player_name": "Zach Wilson",
+          "pos_rank": 3,
+          "provider_player_id": "00-0037013",
+          "underlying_id": "NO|QB|Zach Wilson"
+        }
+      ],
+      "declared_observed_at": "2026-10-05T15:53:14+00:00",
+      "game_id": "ATL@NO",
+      "source_sha256": "e82efd51c4a8f5ce6dbd2ba3c707d3bc94b0ae9a48890ff0c3db01f9b228a12b",
+      "starter": {
+        "cpt_dk_id": "44358606",
+        "flex_dk_id": "44358550",
+        "player_name": "Tyler Shough",
+        "pos_rank": 1,
+        "provider_player_id": "00-0040743",
+        "underlying_id": "NO|QB|Tyler Shough"
+      },
+      "team": "NO",
+      "unlisted": []
+    }
+  ],
+  "game_ids": [
+    "ATL@NO"
+  ],
+  "salary_sha256": "ffcadf5fa7d3751b5525c9b7f5ab441117e4577068ec2c20dfc51dbaf1cb3d83",
+  "schema_version": "nfl_qb_depth_role_evidence_v1",
+  "sources": [
+    {
+      "captured_at": "2026-10-05T22:56:33.390415+00:00",
+      "expires_at": "2026-10-07T03:53:14+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-05T15:53:14+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/3e17da5efe9244892c18e0755bce91db843410f9ba49719f3997bf4d4d303660.csv",
+      "sha256": "3e17da5efe9244892c18e0755bce91db843410f9ba49719f3997bf4d4d303660",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-05T15:53:14Z,ATL,Michael Penix Jr.,4360423,00-0039917,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-05T15:53:14Z,ATL,Tua Tagovailoa,4241479,00-0036212,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-05T15:53:14Z,ATL,Cooper Rush,2972515,00-0033662,21,3WR 1TE,8,Quarterback,QB,9,3\n2026-10-05T15:53:14Z,ATL,Jack Strand,5344782,00-0041194,21,3WR 1TE,8,Quarterback,QB,9,4\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "1e6aa6437a6ae01b158f4a47502b37cf5b7468dfc0cd971a1f5537f993e72a63"
+    },
+    {
+      "captured_at": "2026-10-05T22:56:33.390415+00:00",
+      "expires_at": "2026-10-07T03:53:14+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-05T15:53:14+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/e82efd51c4a8f5ce6dbd2ba3c707d3bc94b0ae9a48890ff0c3db01f9b228a12b.csv",
+      "sha256": "e82efd51c4a8f5ce6dbd2ba3c707d3bc94b0ae9a48890ff0c3db01f9b228a12b",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-05T15:53:14Z,NO,Tyler Shough,4360689,00-0040743,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-05T15:53:14Z,NO,Spencer Rattler,4426339,00-0039376,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-05T15:53:14Z,NO,Zach Wilson,4361259,00-0037013,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "1e6aa6437a6ae01b158f4a47502b37cf5b7468dfc0cd971a1f5537f993e72a63"
+    }
+  ],
+  "transformation_version": "qb_depth_chart_order_v2"
+}

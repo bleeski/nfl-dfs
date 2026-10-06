@@ -4,6 +4,91 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-05: ATL@NO Monday night Showdown (36 entries, 8 contests)
+
+Inputs, committed under `data/inbox/slates/atl-no-sd-2026-10-05/input/`:
+
+    salary  ffcadf5fa7d3751b5525c9b7f5ab441117e4577068ec2c20dfc51dbaf1cb3d83
+    entries c4e8bb2babf8f27410bf4cb0817037ecaa4c4dcb32dd0a9da4273ce63d6cc177
+
+Clock: request at 22:55Z, lock 00:15Z, delivery deadline 00:10Z; file delivered 23:05Z.
+
+- `.venv-linux` absent; `setup` ran in the background. Probe: every allowlisted host reachable, `CAN_COMPLETE_A_RUN`.
+- QB depth package (`roles/qb_depth_roles.json`, nflverse `dt` 2026-10-05T15:53:14Z): starters Penix (ATL) and Shough (NO); backups
+  Tagovailoa, Rush, Strand (ATL), Rattler, Wilson (NO).
+- Run `20261005T225652Z-atl-no-sd` (`--build-priors`, depth package): baseline published (36 rows), then `PRIOR_REVIEW_IDENTITY_BLOCKED` on
+  Jalen Moreno-Cropper (`44358594`, NO WR, $200): nflverse's only candidate is `00-0038740` "Jalen Cropper", NO, WR, practice squad.
+  Reviewed crosswalk `roles/identity_reviewed_atl_no.csv` (`63990dbf…dcce`, ACCEPT), then `priors-freeze` to
+  `data/runs/atl-no-sd-1005-frozen` (weather `INDOOR` from the schedule roof).
+- Run `20261005T225814Z-atl-no-sd-r2` (frozen priors): SELECT failed, `KICKER_ROLE_UNRESOLVED` (NO: Carlson and Smyth). The run's own
+  nflverse bytes settle it: the depth chart lists Carlson as NO's only place kicker, and the weekly roster marks Smyth `DEV` (practice
+  squad). The same roster file marks 12 more listed players `DEV`, every one with a blank DraftKings status.
+- Run `20261005T225913Z-atl-no-sd-r3` (`--exclude` the 13, 26 IDs): EXPORT, rung `DEFAULT`, concentration `AS_REQUESTED`, 36 of 36,
+  `501bb025…5891`. QA PASS: 0 defects, overlap 4, 10 Captains; 6 zero-QB rows, 8 two-kicker rows, 7 WR/TE Captains without their QB,
+  Olave's three Captain rows at $40,800 to $42,600.
+- Research (team sites, read 22:56Z to 23:08Z): ATL inactives Rush, Strand, Dewalt, Longerbeam, Ivey, Onianwa; NO inactives Z. Wilson,
+  D. Richardson, A. Jennings, C. Miller, Elliss, Fant, Granderson. Elevations: ATL Jammie Robinson; NO Diggs, Sirmon; no offensive
+  player, so all 13 excluded people stay out. Carlson kicks. Penix and Shough start; Tagovailoa and Rattler are the active backups.
+- Judgment pass. Left-out starters: none (both starting QBs scored). The role gate also left out Donaldson (RB3), Muse, Welch (backup
+  TEs) and Adomitis (long snapper); none starts. Session 60 moved Etienne's carries to Kamara (carry share 0.27 to 0.47) and Miller
+  (0.15 to 0.27), and Fant's touchdowns to Juwan Johnson (receiving TD share 0.08 to 0.50).
+- Ceiling pass (`construction/ceiling_pass_record.py`, record `DK_REVIEW_ENTRY_atl-no-sd_ceiling_v1_record.json`). Two research
+  judgments, no number written: Kyle Pitts to at most 6 rows (prior 10.32 is last season's rate; PFF: 2 catches in 3 games under the new
+  staff's 13 personnel), never incoming; Olave never removed (27 catches, 375 yards in four games against a prior of 11.66). Then QB with
+  every WR/TE Captain (a donor row frees Shough when he is at the cap), FLEX swaps raising a row's prior by 1.0 or more (person cap 27 of
+  36, overlap 5), no swap creating a second kicker, and the lower kicker in every two-kicker row replaced. Before to after: prior total
+  2,847.54 to 2,903.82, lowest row 54.59 to 69.43, WR/TE Captains without their QB 7 to 0, zero-QB rows 6 to 2, two-kicker rows 8 to 0,
+  Pitts 18 to 6, max exposure 21 to 27 (Shough; Johnson 26), people 17 to 14, mean pair overlap 2.8429 to 3.1968, max overlap 4 to 5
+  (38 pairs), lowest salary $40,800 to $45,900. Captains unchanged (10, max 7: Johnson and Shough).
+- Contest pass (`construction/contest_reassignment_record.py`): 12 whole-lineup swaps between Entry IDs, none worsening any contest
+  measure. Dime Package (20): Captains 8 to 9, same-Captain pairs 23 to 18, mean shared 3.3789 to 3.1105, pairs sharing 4+ 87 to 67,
+  3+ 156 to 140. The 7-entry satellite: pairs sharing 4+ 3 to 2, mean 2.6667 to 2.6190. The 2-entry contests unchanged.
+- Sent `ceiling_v2.csv` (`f0b4d768…4ef7`, QA PASS) at 23:05Z, then found on rereading it that 6 of its 8 Falcons DST rows also held
+  Shough, several with Olave, Johnson or Kamara: a DST rooting against its own row. Coherence pass (`construction/dst_coherence_record.py`):
+  no DST beside the opposing starting QB; each replaced by the best legal non-kicker, never Pitts. Hooper 2 rows, Miller 2, Austin 2:
+  prior total 2,903.82 to 2,896.17, lowest row 69.43 to 68.91, people 14 to 16, overlap unchanged, Falcons DST 8 to 2 (both ATL-win
+  stacks). The contest pass on v3 finds no further swap (Dime Package: Captains 9, same-Captain pairs 18, mean shared 3.1579, pairs
+  sharing 4+ 71).
+- Delivered `construction/DK_REVIEW_ENTRY_atl-no-sd_ceiling_v3.csv`, `30ff0a86…4cfb`, CRLF, at 23:09Z; QA PASS at `--max-overlap 5`
+  (0 defects, 0 limit breaches, salary $45,900 to $50,000, 10 Captains, QB count 2:14 rows, 1:20, 0:2). `PRIOR_ONLY / DO_NOT_UPLOAD`.
+  Not supplied: official activity as evidence (`OFFICIAL_STATUS_REQUIRED`), ownership (leverage unmeasured). Washout exposure: Shough 27
+  of 36, Johnson 26, Folk 22, Penix, London and Bijan 21, Kamara 20.
+- What would have made it better: the practice-squad check, done by hand twice now, as a command. Added
+  `scripts/practice_squad_check.py` (`tests/test_practice_squad_check.py`, 3 tests): it reads the roster file the run already captured
+  and lists every person not `ACT` with both IDs and the `--exclude` arguments. On this slate it returns the same 13 people and 26 IDs
+  as the hand check. Named in `docs/claude/working.md` § Showdown judgment pass. Next: the ceiling pass has now been hand-written for
+  two slates; it should be a script with tests (candidate card, not filed tonight).
+- Verification: focused `129 passed in 3.08s` (the new test and `tests/test_repo_boundaries.py`); full suite (Linux)
+  `2588 passed, 1 skipped in 691.97s (0:11:31)`, the one skip the junction test.
+- QA pass (Ben asked, 23:10Z: a data-driven adversarial agent, three iterations; goals: per-contest top-1% finish, portfolio washout).
+  Harness `construction/scenario_harness.py`: the engine's own `simulate_factor_bank` on run r3's model with Session 60's workload
+  move, SELECT bank (seed 20261005) for search and REFEREE (20261006) report-only, against a seeded 20,000-lineup legal field weighted
+  by projected total (beta 1.5 "sharp", 3.0 "very_sharp"). The engine's cold-start field was rejected: about 2.5% of Captains each,
+  practice-squad players included, so its 99th percentile measured nothing. Every rate is a prior-only diagnostic. Measures: per
+  contest, the share of scenarios where any entry reaches the field's q99; washout, the share where no entry reaches q75.
+  - Iteration 1 (`qa_iter1/`): rejected. The search drifted to QB-less chalk (24 zero-QB rows, four people at 27 of 36) because a
+    random field is easy to beat with the highest means. Diagnosis kept: v3's washouts were ATL flopping while NO scored through
+    Olave, and v3 over-used Shough and Johnson as Captain relative to the field.
+  - Iteration 2 (`qa_iter2/`): from v3 with thesis rules as hard constraints (WR/TE Captain with his own QB; one DST, never beside the
+    opposing QB; one kicker; at most 3 zero-QB rows, RB/K/DST Captain only; 10+ Captains) and the beta-3 field. Washout (very_sharp,
+    SELECT) 0.1462 to 0.0055, no contest worse on either bank.
+  - Iteration 3 (`qa_iter3/`): model-risk caps the simulator cannot see (Johnson and Kamara, whose priors are largely Session 60's
+    redistribution, and every non-QB at most 24 of 36), Penix at least 10 rows, at least 4 two-QB rows; then the Pareto search;
+    gate: no worse than v3 on every contest and washout on all four bank/field pairs. Daily Dollar: no move passed (every swap costs
+    the partner contest). Run caveat: the agent's search order depended on Python's per-process hash seed; set `PYTHONHASHSEED`.
+  - Delivered `construction/qa_iter3/DK_REVIEW_ENTRY_atl-no-sd_qa_iter3.csv`, `bcebb64c…23b7`, at 23:39Z. Independently re-scored by
+    `construction/verify_candidate.py` (identical numbers) and QA PASS at `--max-overlap 5` (0 defects, 0 limit breaches, salary
+    $47,100 to $50,000, 10 Captains, QB count 1:29 rows, 2:4, 0:3). v3 to final, SELECT very_sharp (REFEREE very_sharp): Dime Package
+    0.1225 to 0.2557 (0.1180 to 0.2427), 7-entry satellite 0.0438 to 0.1000 (0.0427 to 0.0948), First Down 0.0035 to 0.0530, Quarter
+    Jukebox 0.0067 to 0.0293, any entry 0.2145 to 0.3777 (0.2197 to 0.3728), washout q75 0.1462 to 0.0032 (0.1592 to 0.0053); Daily
+    Dollar unchanged. Captains: Johnson, Olave, London 7; Bijan 5; Shough, Folk, Kamara, B. Robinson 2; K. Austin, Saints DST 1. People:
+    Johnson, London, Shough, Kamara, Bijan 24 each; Folk 15; Penix and Austin 13; Olave 12. `PRIOR_ONLY / DO_NOT_UPLOAD`; leverage
+    against real ownership unmeasured.
+- CI red once on this branch (`0c26fd6`): the `suite` job's `git diff --check` over the branch found trailing whitespace in the
+  copied `qa_iter3/search_record_qa3.py`, which the local `git diff --check` (unstaged changes only, run before staging) never saw.
+  Fixed in `087e507`; `.claude/rules/git-authority.md`'s before-push list now runs CI's own command,
+  `git diff --check $(git merge-base origin/main HEAD) HEAD`.
+
 ### 2026-10-05: Session 62 -- Pareto-only salary redeploy (R37, P9 part 3)
 
 Branch `claude/s62-pareto-redeploy`, from `main` at `912708d` (PR #111's merge: Session 61 was already merged, so the session fast-forwarded

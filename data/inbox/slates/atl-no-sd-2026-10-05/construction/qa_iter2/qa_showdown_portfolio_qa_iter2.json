@@ -1,0 +1,41 @@
+{
+  "lineups": 36,
+  "defects": 0,
+  "DEFECTS": [],
+  "limit_breaches": 0,
+  "LIMIT_BREACHES": [],
+  "unfilled_entry_ids": [],
+  "prefilled_entry_ids": [],
+  "observations": 17,
+  "OBSERVATIONS": [
+    "5284789378 DST_WITH_OWN_OFFENSE NO:['NO|WR|Chris Olave', 'NO|QB|Tyler Shough', 'NO|RB|Alvin Kamara']",
+    "5284789380 ZERO_QB",
+    "5284789380 DST_WITH_OWN_OFFENSE ATL:['ATL|RB|Bijan Robinson', 'ATL|WR|Drake London', 'ATL|RB|Brian Robinson Jr.']",
+    "5284789385 DST_WITH_OWN_OFFENSE NO:['NO|WR|Chris Olave', 'NO|QB|Tyler Shough', 'NO|RB|Alvin Kamara', 'NO|WR|Kevin Austin Jr.']",
+    "5284789386 DST_WITH_OWN_OFFENSE ATL:['ATL|TE|Austin Hooper', 'ATL|WR|Drake London', 'ATL|QB|Michael Penix Jr.', 'ATL|RB|Bijan Robinson']",
+    "5284789388 DST_WITH_OWN_OFFENSE NO:['NO|TE|Juwan Johnson', 'NO|QB|Tyler Shough', 'NO|WR|Devaughn Vele', 'NO|RB|Alvin Kamara']",
+    "5284789391 ZERO_QB",
+    "5284789391 DST_WITH_OWN_OFFENSE NO:['NO|RB|Alvin Kamara', 'NO|TE|Juwan Johnson']",
+    "5284789393 DST_WITH_OWN_OFFENSE NO:['NO|TE|Juwan Johnson', 'NO|QB|Tyler Shough', 'NO|RB|Alvin Kamara', 'NO|RB|Kendre Miller']",
+    "5284816560 DST_WITH_OWN_OFFENSE NO:['NO|WR|Chris Olave', 'NO|QB|Tyler Shough', 'NO|TE|Juwan Johnson', 'NO|WR|Kevin Austin Jr.']",
+    "5284796763 DST_WITH_OWN_OFFENSE NO:['NO|WR|Chris Olave', 'NO|QB|Tyler Shough', 'NO|TE|Juwan Johnson', 'NO|WR|Kevin Austin Jr.']",
+    "5284816868 DST_WITH_OWN_OFFENSE NO:['NO|WR|Chris Olave', 'NO|QB|Tyler Shough', 'NO|TE|Juwan Johnson', 'NO|RB|Alvin Kamara']",
+    "5284816959 ZERO_QB",
+    "5284816959 DST_WITH_OWN_OFFENSE ATL:['ATL|RB|Bijan Robinson', 'ATL|K|Nick Folk', 'ATL|TE|Kyle Pitts Sr.', 'ATL|WR|Drake London']",
+    "5284828438 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|QB|Michael Penix Jr.', 'ATL|WR|Drake London']",
+    "5284828440 DST_WITH_OWN_OFFENSE NO:['NO|WR|Chris Olave', 'NO|QB|Tyler Shough', 'NO|RB|Alvin Kamara', 'NO|RB|Kendre Miller']",
+    "5284828441 DST_WITH_OWN_OFFENSE NO:['NO|TE|Juwan Johnson', 'NO|QB|Tyler Shough', 'NO|RB|Alvin Kamara']"
+  ],
+  "observation_note": "strategy observations never change the exit code; DraftKings accepts each of them",
+  "exit_codes": "1 validity failure; 3 blank authorized rows unfilled; 2 an operator limit only; 0 none of these, which does not clear an upload",
+  "max_pairwise_overlap": 5,
+  "salary_min": 47100,
+  "salary_max": 50000,
+  "distinct_captains": 10,
+  "qb_count_histogram": {
+    "1": 32,
+    "2": 1,
+    "0": 3
+  },
+  "VERDICT": "PASS"
+}

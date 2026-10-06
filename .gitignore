@@ -76,3 +76,7 @@ CLAUDE.local.md
 state/*
 !state/.gitkeep
 !state/claims.json
+
+# make_offensive_role_evidence.py --fetch caches the whole nflverse depth chart (58 MB on 2026-10-05) here;
+# the package keeps hashed per-team slices under roles/sources/, which stay tracked.
+data/inbox/slates/*/roles/_upstream/
