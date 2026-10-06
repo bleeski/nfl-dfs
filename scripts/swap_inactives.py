@@ -35,7 +35,12 @@ Modes (`--mode`):
               rerun on its own output changes nothing (`fixed_point` in
               the report; the 25-pass bound is reported if it is hit);
               `--changed-entry-id`
-              restricts it. `--protect NAME_OR_ID` and
+              restricts it. The rule is the engine's
+              (`nfl_dfs.classic_redeploy`, Session 64: legality by
+              `lineups.validate_lineup`, report `pareto_redeploy_v2`), the
+              same code `run-slate`'s rung-4 build runs; with `--now` a
+              person whose game has locked is never outgoing and never
+              incoming. `--protect NAME_OR_ID` and
               `--protect-from <run json>` (a Classic run's
               `judgment_pass.protected_people`) name who never moves;
               `--status <official_status.csv>` names who is never added
@@ -69,6 +74,19 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from nfl_dfs import classic_redeploy
+from nfl_dfs.classic_redeploy import (  # the Pareto rule lives in the engine since Session 64; one rule, not two
+    DOES_NOT_ESTABLISH as PARETO_DOES_NOT_ESTABLISH,
+    MAX_PASSES as PARETO_MAX_PASSES,
+    REDEPLOY_RULE as PARETO_RULE,
+    ROW_REJECTION_REASONS,
+    WASHOUT_GOALS,
+    proxies_hurt,
+    render_report as render_pareto_report,
+    washout_proxies,
+)
+from nfl_dfs.contracts import EngineMode, GameContract, SalaryPlayer, SlateContract
 
 SALARY_COLUMNS = ("ID", "Name", "Position", "Roster Position", "Salary", "Game Info",
                   "TeamAbbrev", "Status")
@@ -161,18 +179,58 @@ def lock_at(row) -> datetime | None:
     return naive.replace(tzinfo=EASTERN)
 
 
+# A kickoff the file does not state (TBD, postponed): the sentinel is never at or before a lock clock, so such a cell is never
+# a locked outgoing cell, which is how late-swap treats it; `redeploy` below also keeps such a person out as an incoming one
+# once a lock clock is given, which is how late-swap treats a candidate.
+NEVER_LOCKED = datetime(9999, 12, 31, tzinfo=timezone.utc)
+
+
+def slate_from_rows(sal, cap) -> SlateContract:
+    """The engine's `SlateContract` for the salary rows this script already loaded (Session 64).
+
+    `nfl_dfs.dk.parse_salaries` is the engine's file parser and refuses a file whose IDs are not numeric
+    DraftKings IDs, which is every fixture this script's tests build, so the redeploy cannot start from the
+    file. This is data plumbing, not a second legality: the legality that runs on the result is
+    `lineups.validate_lineup`. A person's identity here is his DraftKings ID (this script counts exposure by ID),
+    where the engine's file parser uses `TEAM|POS|Name`; they are one to one on a real Classic file."""
+
+    players, games = [], {}
+    for dk_id, row in sal.items():
+        game_id = (row.get("Game Info") or "").split()[0] if (row.get("Game Info") or "").split() else ""
+        away, home = game_id.split("@", 1) if "@" in game_id else ("", "")
+        team = row["TeamAbbrev"]
+        kickoff = lock_at(row) or NEVER_LOCKED
+        players.append(SalaryPlayer(
+            dk_id=dk_id, name=row["Name"], position=row["Position"],
+            roster_positions=tuple(part for part in row["Roster Position"].split("/") if part),
+            salary=int(row["Salary"]), team=team, opponent=home if team == away else away if away else "",
+            game_id=game_id, lock_at=kickoff, status_raw=row.get("Status") or "", underlying_id=dk_id))
+        games.setdefault(game_id, GameContract(game_id=game_id, away_team=away, home_team=home, lock_at=kickoff))
+    return SlateContract(
+        mode=EngineMode.CLASSIC, draft_group="swap_inactives", games=tuple(games.values()),
+        scoring_version="draftkings_nfl_scoring_2026_fixture_v1", salary_hash="swap_inactives", players=tuple(players),
+        salary_cap=int(cap))
+
+
 # --------------------------------------------------------------------------- #
 # Shared legality, matching build_classic_portfolio.py's own definitions.
 # --------------------------------------------------------------------------- #
 
 
 class Board:
-    """Salary-row accessors and the legality rules every mode shares."""
+    """Salary-row accessors and the legality rules the inactive, late-swap and value-add modes share. The redeploy
+    does not use this mirror: it runs the engine's own legality on `engine_slate()`."""
 
     def __init__(self, sal, cap, floor):
         self.sal = sal
         self.cap = cap
         self.floor = floor
+        self._slate = None
+
+    def engine_slate(self) -> SlateContract:
+        if self._slate is None:
+            self._slate = slate_from_rows(self.sal, self.cap)
+        return self._slate
 
     def P(self, i):
         return self.sal[i]["Position"]
@@ -472,67 +530,10 @@ def value_add(board, scores, assignments, names, target_count, *, max_exposure, 
 # Mode: redeploy (Session 62, R37): a swap happens only as a Pareto gain
 # --------------------------------------------------------------------------- #
 #
-# Ben (R37, 2026-10-04): unused salary is never a defect, and a redeploy is not a way to spend it. A swap is
-# taken only when it raises the row's prior AND leaves every washout proxy no worse. Both goals are R34's: the
-# prior is the large-prize proxy (a prior, never an expected value), the four proxies below are the washout
-# proxies QA's Tier 2 prints. A swap that helps one goal and hurts the other is a trade, which this never takes
-# and always reports. Where no gain exists the portfolio stays as it is, and the report says so.
-
-PARETO_RULE = "pareto_redeploy_v1"
-PARETO_MAX_PASSES = 25
-WASHOUT_GOALS = ("max_exposure", "top3_union", "mean_overlap", "distinct_people")
-ROW_REJECTION_REASONS = ("ILLEGAL", "SHAPE", "CAPS_OR_DISTINCT")
-PARETO_DOES_NOT_ESTABLISH = (
-    "THAT_A_PRIOR_GAIN_IS_EXPECTED_VALUE_OR_A_WIN_PROBABILITY",
-    "THAT_THE_FOUR_WASHOUT_PROXIES_MEASURE_LEVERAGE_OR_FIELD_DUPLICATION",
-    "THAT_A_BLANK_DRAFTKINGS_STATUS_IS_OFFICIAL_ACTIVITY_EVIDENCE",
-    "THAT_ANY_REDEPLOYED_PERSON_IS_PLAYING_OR_HAS_THE_ROLE_HIS_PRIOR_ASSUMES",
-)
-
-
-def washout_proxies(rosters) -> dict:
-    """The portfolio's washout proxies, counted exactly as `qa_classic_portfolio.py` Tier 2 prints them: max
-    single-person exposure, the rows the three most-used people cover between them (`most_common(3)`, ties
-    broken by first appearance, which is why the rosters must arrive in assignment order), mean pairwise
-    overlap and distinct people. Mean pairwise overlap is the sum over people of C(rows held, 2) divided by the
-    pairs, which is the same number as averaging the pairs and is an integer until the last step, so two
-    portfolios compare exactly."""
-
-    rosters = [list(roster) for roster in rosters]
-    exposure = collections.Counter(i for roster in rosters for i in roster)
-    rows = len(rosters)
-    if not exposure:
-        return {"rows": rows, "max_exposure": 0, "max_exposure_person": None, "top3_union": 0,
-                "pair_overlap_sum": 0, "mean_overlap": 0.0, "distinct_people": 0}
-    top3 = [i for i, _n in exposure.most_common(3)]
-    most_used, most_rows = exposure.most_common(1)[0]
-    pair_overlap_sum = sum(n * (n - 1) // 2 for n in exposure.values())
-    pairs = rows * (rows - 1) // 2
-    return {
-        "rows": rows,
-        "max_exposure": most_rows,
-        "max_exposure_person": most_used,
-        "top3_union": sum(1 for roster in rosters if any(i in roster for i in top3)),
-        "pair_overlap_sum": pair_overlap_sum,
-        "mean_overlap": pair_overlap_sum / pairs if pairs else 0.0,
-        "distinct_people": len(exposure),
-    }
-
-
-def proxies_hurt(before: dict, after: dict) -> list[str]:
-    """Every washout goal `after` is worse on than `before`, in `WASHOUT_GOALS` order. Empty means no proxy is
-    worse: max exposure, top-3 union and mean overlap no higher, distinct people no fewer."""
-
-    hurt = []
-    if after["max_exposure"] > before["max_exposure"]:
-        hurt.append("max_exposure")
-    if after["top3_union"] > before["top3_union"]:
-        hurt.append("top3_union")
-    if after["pair_overlap_sum"] > before["pair_overlap_sum"]:
-        hurt.append("mean_overlap")
-    if after["distinct_people"] < before["distinct_people"]:
-        hurt.append("distinct_people")
-    return hurt
+# The rule itself, its proxies and its report moved into `src/nfl_dfs/classic_redeploy.py` in Session 64, so that
+# `run-slate`'s rung-4 thesis build runs the very same code; this script imports it back (see the imports) and keeps
+# what is the operator layer's: reading a scores file, an official status file, a run's protected people, and writing
+# the portfolio. `redeploy` below is the adapter.
 
 
 def load_gated(path, sal) -> set:
@@ -622,210 +623,36 @@ def resolve_protect(sal, tokens, from_ids) -> dict:
     return protected
 
 
-def _snapshot(board, scores, assignments) -> dict:
-    proxies = washout_proxies(assignments.values())
-    person = proxies["max_exposure_person"]
-    return {
-        "rows": proxies["rows"],
-        "prior_sum": round(sum(scores.get(i, 0.0) for roster in assignments.values() for i in roster), 3),
-        "max_exposure": proxies["max_exposure"],
-        "max_exposure_person": board.NM(person) if person else None,
-        "top3_union": proxies["top3_union"],
-        "mean_overlap": round(proxies["mean_overlap"], 6),
-        "pair_overlap_sum": proxies["pair_overlap_sum"],
-        "distinct_people": proxies["distinct_people"],
-    }
-
-
 def redeploy(board, scores, assignments, entry_ids, *, protect=frozenset(), gated=frozenset(),
-             max_exposure, max_overlap):
-    """Take salary-driven upgrades only as Pareto gains, to a fixed point. Mutates `assignments`.
+             max_exposure, max_overlap, now=None):
+    """Take salary-driven upgrades only as Pareto gains, to a fixed point. Mutates `assignments`. Returns `(log, report)`.
 
-    A swap (row, outgoing, incoming) is taken only when ALL hold:
-      1. the incoming person's prior is higher than the outgoing person's (the row's prior rises);
-      2. the row still fits the cap (`Board.is_legal`; the salary floor is the operator's, never inherited);
-      3. the row stays legal, keeps a stack or bring-back it had, stays distinct from every other row (R29) and
-         inside the portfolio's own overlap and exposure caps;
-      4. the QB, the DST, his team and his opponent (the stack and the bring-back) and every protected person
-         are never outgoing, a protected person is never incoming, and an incoming person has a blank
-         DraftKings status and is not one the scores file excludes;
-      5. recomputed on the whole portfolio, no washout proxy is worse (`proxies_hurt`).
-    The local rule "the incoming person is used at least two fewer times" is a sufficient condition, not the
-    proof: rule 5 is the proof, and it also takes a swap whose incoming person is used one fewer time.
+    The rule is `nfl_dfs.classic_redeploy.redeploy` (Session 64; this was its first home, Session 62): the row's prior
+    rises, the row is a legal lineup by the engine's own `validate_lineup` (the board's rows are put in the engine's
+    `SlateContract` by `slate_from_rows`), it keeps the stack or bring-back it had and stays distinct (R29) inside the
+    portfolio's caps, the QB, the DST, his team and his opponent and every protected person are never outgoing, a
+    protected person is never incoming, an incoming person has a blank DraftKings status and is not gated, and no
+    washout proxy is worse on the whole portfolio. `now` is the lock clock: a cell whose game kicked off at or before
+    it is never outgoing and never incoming. The script's rows are not in slot order, so a changed row keeps its
+    cell order and the incoming person takes the outgoing person's cell; the whole report is stored."""
 
-    Rows are visited in assignment order, each takes its best swap (prior gain, then the less-used incoming
-    person, then ids) until it has none, and whole passes repeat until one takes nothing: every swap raises the
-    total prior, so it ends, and at that fixed point a rerun on the output changes nothing (`fixed_point` in the
-    report; if the pass bound stops it first the report says `PASS_BOUND_REACHED` and a rerun continues). The
-    report names
-    every swap taken and, at the fixed point, every swap that raises a row's prior, is legal and fits, and was
-    refused for a goal, with each goal it would have hurt. Returns `(log, report)`."""
-
-    protect, gated = frozenset(protect), frozenset(gated)
-    wanted = set(entry_ids)
-    order = [entry_id for entry_id in assignments if entry_id in wanted]
-    pool = sorted(
-        i for i, score in scores.items()
-        if i in board.sal and score > 0 and i not in protect and i not in gated and not board.status(i)
-    )
-    held_before = {i: sorted(e for e, roster in assignments.items() if i in roster) for i in protect}
-    before = _snapshot(board, scores, assignments)
-
-    def candidates(entry_id, exposure):
-        roster = assignments[entry_id]
-        core = board.core(roster)
-        headroom = board.cap - sum(board.S(i) for i in roster)
-        found = []
-        for outgoing in roster:
-            if outgoing in core or outgoing in protect or board.P(outgoing) in ("QB", "DST"):
-                continue
-            group = FLEX_POSITIONS if board.P(outgoing) in FLEX_POSITIONS else (board.P(outgoing),)
-            for incoming in pool:
-                if incoming in roster or board.P(incoming) not in group:
-                    continue
-                if board.S(incoming) - board.S(outgoing) > headroom:
-                    continue
-                gain = scores[incoming] - scores.get(outgoing, 0.0)
-                if gain > 1e-9:
-                    found.append((round(-gain, 9), exposure[incoming], incoming, outgoing))
-        found.sort()
-        return found
-
-    def trial_for(entry_id, outgoing, incoming):
-        roster = assignments[entry_id]
-        trial = [incoming if i == outgoing else i for i in roster]
-        if not board.is_legal(trial):
-            return trial, "ILLEGAL"
-        if not board.preserves_shape(roster, trial):
-            return trial, "SHAPE"
-        if not fits(board, assignments, entry_id, trial, max_exposure=max_exposure, max_overlap=max_overlap):
-            return trial, "CAPS_OR_DISTINCT"
-        return trial, None
-
-    def proxies_with(entry_id, trial):
-        return washout_proxies([trial if e == entry_id else r for e, r in assignments.items()])
-
-    def exposure_now():
-        return collections.Counter(i for roster in assignments.values() for i in roster)
-
-    current = washout_proxies(assignments.values())
-    accepted, log = [], []
-    passes, fixed_point = 0, False
-    while passes < PARETO_MAX_PASSES:
-        passes += 1
-        taken = 0
-        for entry_id in order:
-            while True:
-                take = None
-                for neg_gain, _used, incoming, outgoing in candidates(entry_id, exposure_now()):
-                    trial, refused = trial_for(entry_id, outgoing, incoming)
-                    if refused:
-                        continue
-                    after = proxies_with(entry_id, trial)
-                    if proxies_hurt(current, after):
-                        continue
-                    take = (-neg_gain, incoming, outgoing, trial, after)
-                    break
-                if take is None:
-                    break
-                gain, incoming, outgoing, trial, current = take
-                assignments[entry_id] = trial
-                taken += 1
-                accepted.append({
-                    "entry_id": entry_id, "out": outgoing, "out_name": board.NM(outgoing),
-                    "in": incoming, "in_name": board.NM(incoming), "prior_gain": round(gain, 3),
-                    "salary_delta": board.S(incoming) - board.S(outgoing), "pass": passes,
-                })
-                log.append(f"REDEPLOY {entry_id}: {board.NM(outgoing)} -> {board.NM(incoming)} (+{gain:.2f})")
-        if not taken:
-            fixed_point = True
-            break
-
-    rejected, available = [], 0
-    by_goal = {goal: 0 for goal in WASHOUT_GOALS}
-    row_rejections = {reason: 0 for reason in ROW_REJECTION_REASONS}
-    exposure = exposure_now()
-    for entry_id in order:
-        for neg_gain, _used, incoming, outgoing in candidates(entry_id, exposure):
-            trial, refused = trial_for(entry_id, outgoing, incoming)
-            if refused:
-                row_rejections[refused] += 1
-                continue
-            hurts = proxies_hurt(current, proxies_with(entry_id, trial))
-            if not hurts:
-                available += 1  # only when the pass bound was reached before a fixed point
-                continue
-            for goal in hurts:
-                by_goal[goal] += 1
-            rejected.append({
-                "entry_id": entry_id, "out": outgoing, "out_name": board.NM(outgoing),
-                "in": incoming, "in_name": board.NM(incoming), "prior_gain": round(-neg_gain, 3), "hurts": hurts,
-            })
-    rejected.sort(key=lambda record: -record["prior_gain"])  # stable: ties keep row order
-
-    report = {
-        "rule": PARETO_RULE,
-        "does_not_establish": list(PARETO_DOES_NOT_ESTABLISH),
-        "rows_considered": len(order),
-        "gated_people": len(gated),
-        "passes": passes,
-        "fixed_point": fixed_point,
-        "protected": [
-            {"dk_id": i, "name": board.NM(i), "rows_before": len(held_before[i]),
-             "rows_after": sum(1 for roster in assignments.values() if i in roster)}
-            for i in sorted(protect)
-        ],
-        "before": before,
-        "after": _snapshot(board, scores, assignments),
-        "accepted": accepted,
-        "rejected": rejected,
-        "rejected_by_goal": by_goal,
-        "row_rejections": row_rejections,
-        "available_at_stop": available,
-    }
-    return log, report
-
-
-def render_pareto_report(report: dict, limit: int = 10) -> list[str]:
-    """The report as handoff text: both goals before and after, and the rejected swaps by the goal they would hurt."""
-
-    lines = [
-        f"PARETO_REDEPLOY rows_considered={report['rows_considered']} passes={report['passes']} "
-        f"fixed_point={report['fixed_point']} accepted={len(report['accepted'])}"
-    ]
-    for label, snap in (("before:", report["before"]), ("after :", report["after"])):
-        lines.append(
-            f"  {label} prior_sum={snap['prior_sum']} max_exposure={snap['max_exposure']}/{snap['rows']} "
-            f"({snap['max_exposure_person']}) top3_union={snap['top3_union']}/{snap['rows']} "
-            f"mean_overlap={snap['mean_overlap']:.4f} distinct_people={snap['distinct_people']}"
-        )
-    if not report["fixed_point"]:
-        lines.append(
-            f"  PASS_BOUND_REACHED: stopped after {report['passes']} passes with {report['available_at_stop']} further "
-            "Pareto swaps available; rerun on this output to continue (a rerun changes nothing only at a fixed point)"
-        )
-    if report["protected"]:
-        lines.append("  protected (rows before -> after): " + ", ".join(
-            f"{person['name']} ({person['rows_before']} -> {person['rows_after']})" for person in report["protected"]))
-    goals = report["rejected_by_goal"]
-    lines.append(
-        f"  rejected (prior-raising, legal, would hurt a goal): {len(report['rejected'])} swaps; by goal: "
-        + " ".join(f"{goal}={goals[goal]}" for goal in WASHOUT_GOALS)
-    )
-    for record in report["rejected"][:limit]:
-        lines.append(
-            f"  REJECTED {record['entry_id']}: {record['out_name']} -> {record['in_name']} "
-            f"(+{record['prior_gain']:.2f}) would hurt: {', '.join(record['hurts'])}"
-        )
-    lines.append(
-        "  row-level rejections (not goal trades): "
-        + " ".join(f"{reason}={report['row_rejections'][reason]}" for reason in ROW_REJECTION_REASONS)
-    )
-    if not report["accepted"]:
-        lines.append(
-            "NO_PARETO_GAIN: no swap raises a row's prior without hurting a washout proxy; the portfolio is unchanged"
-        )
-    return lines
+    slate = board.engine_slate()
+    gated = set(gated)
+    if now is not None:  # late-swap refuses an incoming person whose kickoff the file does not state; so does this
+        gated |= {dk_id for dk_id, row in board.sal.items() if lock_at(row) is None}
+    try:
+        result = classic_redeploy.redeploy(
+            slate, scores, assignments, row_ids=list(entry_ids), protect=protect, gated=gated,
+            exposure_limit=max_exposure, overlap_cap=max_overlap, min_salary=board.floor,
+            locked=classic_redeploy.locked_dk_ids(slate, now) if now is not None else (),
+            slot_ordered=False, stored_limit=None, max_passes=PARETO_MAX_PASSES)
+    except ValueError as exc:
+        if str(exc).startswith("REDEPLOY_DK_ID_NOT_IN_POOL"):
+            raise Refused("PORTFOLIO_PERSON_NOT_IN_SALARY_FILE", str(exc))
+        raise
+    for entry_id in result.changed:
+        assignments[entry_id] = list(result.rosters[entry_id])
+    return result.log, result.report
 
 
 # --------------------------------------------------------------------------- #
@@ -911,7 +738,7 @@ def run(a) -> dict:
             Board(sal, cap, floor), scores, assignments, a.changed_entry_id or list(assignments),
             protect=protect,
             gated=load_gated(a.scores, sal) | (load_inactive_ids(a.status) if a.status else set()),
-            max_exposure=max_exposure, max_overlap=max_overlap,
+            max_exposure=max_exposure, max_overlap=max_overlap, now=a.now,
         )
         changed = {eid for eid, roster in assignments.items()
                    if roster != portfolio["assignments_by_entry_id"][eid]}
@@ -984,7 +811,9 @@ def main(argv=None) -> int:
                     help="mode redeploy: an official_status.csv; a person it marks INACTIVE is never added")
     ap.add_argument(
         "--now", type=lambda s: datetime.fromisoformat(s).astimezone(timezone.utc) if s else None,
-        default=None, help="mode late-swap: ISO 8601; a cell whose game locked at or before this is never touched",
+        default=None, help="ISO 8601 with an offset. Mode late-swap (required): a cell whose game locked at or before this "
+                           "is never touched. Mode redeploy (optional, Session 64): a person whose game locked at or "
+                           "before this is never outgoing and never incoming; omitted, no lock filter",
     )
     a = ap.parse_args(argv)
     try:

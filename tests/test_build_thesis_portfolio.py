@@ -367,7 +367,7 @@ def test_real_builder_end_to_end(tmp_path):
     for lineup in doc["lineups"]:
         assert len(set(lineup["roster"])) == 9
     # Session 62: real nine-cell rosters, so the fill-step pass RAN (a NOT_RUN here would hide a dead feature).
-    assert doc["construction"]["pareto_redeploy"]["rule"] == "pareto_redeploy_v1"
+    assert doc["construction"]["pareto_redeploy"]["rule"] == "pareto_redeploy_v2"
 
 
 # --------------------------------------------------------------------------- #
@@ -416,7 +416,7 @@ def test_the_fill_step_runs_the_pareto_pass_and_reports_it(tmp_path):
     assert code == thesis.EXIT_OK
     doc = json.loads(Path(a.out).read_text(encoding="utf-8"))
     report = doc["construction"]["pareto_redeploy"]
-    assert report.get("state") is None and report["rule"] == "pareto_redeploy_v1"  # it RAN
+    assert report["state"] == "COMPLETED" and report["rule"] == "pareto_redeploy_v2"  # it RAN
     assert report["fixed_point"] is True and report["accepted"]
     assert report["after"]["prior_sum"] > report["before"]["prior_sum"]
     plain = _selection_without_the_pass(tmp_path)
@@ -534,7 +534,7 @@ def test_an_explicit_salary_floor_binds_the_pass_as_it_binds_the_builder(tmp_pat
     a, _scores = _pareto_args(tmp_path)
     thesis.main(_thesis_argv(a, "--min-salary", "47000"), runner=FakeBuilder(LEGAL_POOL))
     report = json.loads(Path(a.out).read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]
-    assert report["rule"] == "pareto_redeploy_v1"
+    assert report["rule"] == "pareto_redeploy_v2"
     assert report["accepted"] == [] and report["row_rejections"]["ILLEGAL"] > 0  # every row sits under 47,000
 
 

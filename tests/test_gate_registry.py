@@ -590,6 +590,10 @@ NOT_BLOCKERS = {
         ("OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY", "DIAGNOSTIC"),
     )
 }
+# Session 64: `classic_redeploy.py` names a swap's row-level refusal (`ROW_REJECTION_REASONS`, counted in the report) the
+# way the scan reads a `*REASON*` constant. It is a label on a refused swap, never a blocker or a limitation.
+NOT_BLOCKERS["CAPS_OR_DISTINCT"] = (
+    "classic_redeploy.py", 'ROW_REJECTION_REASONS = ("ILLEGAL", "SHAPE", "CAPS_OR_DISTINCT")')
 
 # Emitted codes no registry can hold: the Entry ID is inside the token, so the
 # code differs per row. Each is a defect for the session that next touches its
@@ -976,7 +980,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "fc1176c27af8cffc05c344a2a3f362ed6b5ad356bde77accde43a1b911aa027a"
+REGISTRY_SHA256 = "26d6deac47ff20c39a1604922b0563c477973f430723445300506aa9c3145367"
 
 
 def test_the_registry_is_the_pinned_bytes():

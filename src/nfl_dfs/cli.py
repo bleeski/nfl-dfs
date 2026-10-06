@@ -23,6 +23,7 @@ from .baseline import OUTPUT_CONTRACT as BASELINE_OUTPUT_CONTRACT
 from .baseline import BaselineOutcome, audit_baseline_bytes
 from .baseline import summary as baseline_summary
 from .certification import certify_upload
+from .classic_redeploy import INCOMPLETE_STATES as INCOMPLETE_REDEPLOY_STATES
 from .classic_review import ClassicReviewError
 from .classic_portfolio_policy import (
     validate_classic_portfolio_policy_file,
@@ -3079,6 +3080,17 @@ def _classic_judgment_limitations(reports: Mapping[str, object]) -> list[str]:
     if isinstance(pass_view, Mapping) and pass_view.get("status") == "FAILED":
         limitations.append(
             f"CLASSIC_JUDGMENT_PASS_FAILED:{pass_view.get('error')}; the report is absent, the file is not affected")
+    # Session 64 (R37): the Pareto redeploy is a construction improvement that never stops a file, so a stage that did
+    # not run to its own end is named, never silent: the rows are the thesis build's own, or a valid no-worse partial.
+    construction_view = selector_view.get("construction") if isinstance(selector_view, Mapping) else None
+    redeploy = construction_view.get("pareto_redeploy") if isinstance(construction_view, Mapping) else None
+    if isinstance(redeploy, Mapping) and redeploy.get("state") in INCOMPLETE_REDEPLOY_STATES:
+        reason = f"{redeploy.get('reason')}; " if redeploy.get("reason") else ""
+        limitations.append(
+            f"CLASSIC_PARETO_REDEPLOY_INCOMPLETE:{redeploy.get('state')}: {reason}"
+            f"the salary redeploy (pareto_redeploy_v2) did not run to its own end, so the delivered rows"
+            f" may not include every Pareto swap the rule would take; every swap it did take left no washout proxy worse,"
+            f" and the file is not affected")
     return limitations
 
 

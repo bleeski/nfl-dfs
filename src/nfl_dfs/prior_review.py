@@ -3420,6 +3420,9 @@ def run_prior_review(
             # the review reads the exact bytes the run froze. Additive: a reader that does not know it ignores it.
             "judgment_pass": selection_report.get("judgment_pass"),
             "construction_judgment": reports.get("construction_judgment"),
+            # Session 64 (R37): the Pareto redeploy's report (`pareto_redeploy_v2`) rides in the same hash-bound artifact,
+            # additive like the judgment pass; `null` when the run did not build by theses.
+            "pareto_redeploy": (selection.get("construction") or {}).get("pareto_redeploy"),
             "conservation": {
                 "declared_totals_by_team": offensive_resolution.report.get(
                     "declared_totals", {}

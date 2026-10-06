@@ -148,8 +148,14 @@ or none supplied) builds the thesis portfolio, which is where a judgment applies
   anyone you placed by hand, and `build_thesis_portfolio.py` runs the same rule at its fill step. It checks the proxies on the whole
   portfolio after each swap (the incoming person used 2 fewer times, Week 4's `construction/pareto_redeploy_record.py`, is a quick
   screen, not the proof), scans to a fixed point (`PASS_BOUND_REACHED` means rerun it), and prints both goals before and after and
-  every rejected swap with the goal it would have hurt. Run it before the earliest lock (no lock awareness). Compare QA Tier 2 before and after, show both in the handoff, and keep the earlier file when nothing passes.
-  It works on an operator-layer portfolio JSON; `run-slate`'s own rung-4 build does not run it yet (Session 64).
+  every rejected swap with the goal it would have hurt. Compare QA Tier 2 before and after, show both in the handoff, and keep the earlier file when nothing passes.
+  **Since Session 64 the rule is engine code** (`src/nfl_dfs/classic_redeploy.py`, `pareto_redeploy_v2`), and `run-slate`'s own rung-4 thesis
+  build runs it at the end of the build with no hand step: protected people are the accepted placements, the report is
+  `construction.pareto_redeploy` (and `pareto_redeploy` in the coverage artifact; `scripts/judgment_pass_report.py` prints it), and a
+  stage that did not run to its end (`DEADLINE_STOP`, `NOT_RUN_WINDOW_SPENT`, `FAILED`) travels as `CLASSIC_PARETO_REDEPLOY_INCOMPLETE`.
+  Read the block first: on the engine's own rows the rule usually takes nothing (the solver already spends the cap; Week 4: 0 swaps),
+  and "0 swaps, no worse" is the guarantee and the report, not a gain. The script imports the same rule and adds `--now`: with it a
+  person whose game has locked is never outgoing and never incoming, so it is also safe after the first window.
 - **Late windows need no active list at the early lock (engine).** Ben: late swap covers it. `late_swap_watch` lists every rostered
   later-window person with no official row and his DraftKings status (`Q`, illness, a depth-chart call); put that list in the handoff,
   not under Needs Ben as an open gap. Confirm the early-window players (`early_window_without_official_row`) against the posted

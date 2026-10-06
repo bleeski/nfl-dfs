@@ -142,6 +142,11 @@
       "provenance": {"kind": "RULING", "ref": "R37"},
       "covers": "A Classic construction judgment placed a person by a named choice that writes no model value and clears no gate, refused or could not hold a placement, or was dropped; or the judgment pass failed. Travels with the file."
     },
+    "pareto_redeploy": {
+      "class": "P", "stops": "CERTIFICATION",
+      "provenance": {"kind": "RULING", "ref": "R37"},
+      "covers": "The Classic Pareto salary redeploy at the end of the rung-4 thesis build did not run to its own end: the delivery window left it no time, its window ended in the pass loop (every swap it took is a whole Pareto step and left no washout proxy worse), or it failed, including by refusing an input by name (a roster that is not nine cells, an ID outside the pool, an unknown row, a clock with no timezone). The rows are the thesis build's own or a valid no-worse partial; the file ships and the state is named."
+    },
     "weather": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "RULING", "ref": "R28"},
@@ -557,6 +562,7 @@
     "CLASSIC_JUDGMENT_PLACEMENT_APPLIED": "construction_judgment",
     "CLASSIC_JUDGMENT_PLACEMENT_REFUSED": "construction_judgment",
     "CLASSIC_JUDGMENT_PLACEMENT_SHORTFALL": "construction_judgment",
+    "CLASSIC_PARETO_REDEPLOY_INCOMPLETE": "pareto_redeploy",
     "CLASSIC_POLICY_ADVISORY_NOT_ENFORCED": "classic_policy_input",
     "CLASSIC_POLICY_BOUND_CONTRADICTORY": "portfolio_bounds",
     "CLASSIC_POLICY_BOUND_LIST_REQUIRED": "classic_policy_input",
@@ -1368,6 +1374,10 @@
     "READABLE_REVIEW_UNBOUND_ROW_EXCLUDED_PERSON": "operator_restriction",
     "READABLE_REVIEW_UNBOUND_ROW_NOT_ACTIVE": "official_activity",
     "READABLE_REVIEW_UNKNOWN_DK_ID": "dk_identity",
+    "REDEPLOY_DK_ID_NOT_IN_POOL": "pareto_redeploy",
+    "REDEPLOY_NOW_NOT_TIMEZONE_AWARE": "pareto_redeploy",
+    "REDEPLOY_ROSTERS_NOT_NINE_CELLS": "pareto_redeploy",
+    "REDEPLOY_ROW_UNKNOWN": "pareto_redeploy",
     "REFEREE_PASSING_RECEIVING_ACCOUNTING_FAILED": "qa_evidence",
     "REFEREE_SAFETY_OR_HARD_CONSTRAINT_FAILURE": "qa_evidence",
     "REFEREE_SHARE_CONSERVATION_FAILED": "qa_evidence",

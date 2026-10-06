@@ -26,6 +26,7 @@ from typing import Iterable, Mapping, Sequence
 
 from .classic_judgment import ConstructionJudgment, judge_placements
 from .contracts import EngineMode, SlateContract
+from .deadline import active_budget
 from .classic_portfolio import (
     ENFORCEMENT_VERSION as CLASSIC_ENFORCEMENT_VERSION,
     build_classic_candidate_bank,
@@ -838,10 +839,16 @@ def select_prior_lineups(
         else CLASSIC_PROFILE_VERSION
     )
     if classic_construction == THESIS_CONSTRUCTION:
+        redeploy_budget = active_budget()
         run = select_thesis_lineups(
             slate, objective, excluded, contract, count=count, forbidden_rosters=forbidden_rosters,
             time_limit_seconds=time_limit_seconds, classic_person_overlap=classic_person_overlap,
             protected=dict(judgment_decision.accepted) if judgment_decision is not None else None,
+            # Session 64 (R37): the Pareto redeploy runs at the end of the build, on the clock the deadline already uses
+            # (a pinned `--as-of` advanced by the elapsed time, else the wall clock), so a live run between windows
+            # cannot redeploy into a game that has locked.
+            pareto_redeploy=True,
+            now=redeploy_budget.now() if redeploy_budget is not None else (as_of or datetime.now(timezone.utc)),
         )
         if judgment_decision is not None:
             # What the rows actually hold, recounted by the builder from the delivered rosters.
@@ -878,9 +885,7 @@ def select_prior_lineups(
         "selectable_people": len(contract.selectable_people),
         "person_exposure": run.person_exposure(slate),
         "forbidden_captain_rows": run.forbidden_captains,
-        "non_optimal_lineups": [
-            lineup.index for lineup in selected if lineup.solver_status != "OPTIMAL"
-        ],
+        "non_optimal_lineups": _non_optimal_indexes(selected),
         "threshold_sensitive": list(scores.threshold_sensitive),
         "score_omissions": list(scores.omissions),
         "never_calls": ["field.py", "economics.py", "portfolio economics"],
@@ -893,6 +898,16 @@ def select_prior_lineups(
     verify_qb_depth_resolution(qb_depth, at=as_of or datetime.now(timezone.utc))
     _refuse_prefilled_repeats(selected, forbidden_keys)
     return tuple(selected), scores, report
+
+
+def _non_optimal_indexes(lineups: Iterable[SelectedLineup]) -> list[int]:
+    """The rows built from a solve a limit stopped, which `SOLVER_TIME_LIMIT_ACCEPTED_LINEUPS` names.
+
+    A row the Pareto redeploy changed (Session 64) is no solver's output, but its base solve's status stands: it carries
+    `PARETO_REDEPLOY_OF_<status>` and stays listed unless that solve was proven optimal, so a time-limited row is never
+    laundered by a redeploy and an optimal one is never called time-limited for being redeployed."""
+
+    return [lineup.index for lineup in lineups if lineup.solver_status not in ("OPTIMAL", "PARETO_REDEPLOY_OF_OPTIMAL")]
 
 
 def _refuse_unbuildable_thesis(
