@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -46,6 +47,7 @@ from .portfolio_enforcement import (
     DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
     ENFORCEMENT_VERSION,
     build_policy_candidate_bank,
+    probe_thesis_rows,
     scaled_candidate_limit,
     scaled_candidate_seconds,
     scaled_selection_seconds,
@@ -56,7 +58,9 @@ from .prior_score import PriorScores, TeamSplits, score_pool
 from .showdown_theses import (
     DOES_NOT_ESTABLISH as THESIS_DOES_NOT_ESTABLISH,
     THESIS_BUILD_VERSION,
+    THESIS_PORTFOLIO_VERSION,
     ShowdownThesis,
+    admitted_quarterbacks,
     apply_thesis_rows,
     backup_quarterbacks,
     thesis_excluded_dk_ids,
@@ -84,6 +88,10 @@ CLASSIC_MAX_USEFUL_OVERLAP = 8
 
 # Session 49: Classic rung 4 built as several stack theses under one person share cap.
 THESIS_CONSTRUCTION = "THESES"
+
+# Session 23c: the least a bank is given after the thesis probe took its share of the window (a bank that is given
+# none cannot run at all, and the probe is bounded by the window it shares).
+MINIMUM_BANK_SECONDS = 1.0
 
 
 class SelectionError(ValueError):
@@ -114,9 +122,14 @@ class SelectedLineup:
     canonical_key: str
     solver_status: str
     solver_seconds: float
+    # Session 23c: the thesis this lineup was picked to fill (a portfolio of theses), carried with the lineup so
+    # it survives a later reassignment of lineups to Entry IDs. `None` for every other lineup, and then absent
+    # from the payload, so a run without theses writes the bytes it always wrote.
+    thesis: str | None = None
 
     def as_payload(self, names: Mapping[str, str]) -> dict[str, object]:
         return {
+            **({"thesis": self.thesis} if self.thesis is not None else {}),
             "index": self.index,
             "roster": list(self.roster),
             "captain": (
@@ -489,6 +502,15 @@ def select_prior_lineups(
     thesis = portfolio_policy.active_thesis if isinstance(portfolio_policy, NormalizedPortfolioPolicy) else None
     backups, unevaluated_teams = (
         backup_quarterbacks(slate, thesis, qb_depth_report) if thesis is not None else (frozenset(), ()))
+    # Session 23c (v4): each thesis admits its own named quarterbacks, so each has its own backup set, and a
+    # quarterback is out of the run's own pool (every bound row's) unless some thesis admits him. The theses that
+    # do not admit him keep him out through their own exclusions (`thesis_backups`, applied in the bank).
+    thesis_backups: dict[str, frozenset[str]] = {}
+    if thesis is not None and portfolio_policy.thesis_schema == "v4":
+        thesis_backups = {
+            item.name: backup_quarterbacks(slate, item, qb_depth_report)[0] for item in portfolio_policy.active_theses}
+        admitted = frozenset().union(*(admitted_quarterbacks(slate, item) for item in portfolio_policy.active_theses))
+        backups, unevaluated_teams = backup_quarterbacks(slate, None, qb_depth_report, admitted_people=admitted)
     row_backups = backups if thesis is not None else default_backups
     excluded_set.extend(player.dk_id for player in slate.players if player.underlying_id in row_backups)
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
@@ -689,8 +711,6 @@ def select_prior_lineups(
         return tuple(selected), scores, report
 
     if isinstance(portfolio_policy, NormalizedPortfolioPolicy):
-        if thesis is not None:
-            _refuse_unbuildable_thesis(slate, objective, excluded, thesis, backups, time_limit_seconds)
         entry_count = portfolio_policy.entry_count
         candidate_limit = (
             scaled_candidate_limit(entry_count)
@@ -707,6 +727,20 @@ def select_prior_lineups(
             if policy_selection_seconds is None
             else policy_selection_seconds
         )
+        thesis_probe = None
+        if thesis is not None and portfolio_policy.thesis_schema == "v4":
+            # The probe is charged to the bank's window, not added to it (R31: the lock clock bounds the search stage,
+            # which the deadline controller sized as this window plus the joint solve). It may take at most that
+            # window, and the bank gets what it left, so probe plus bank never exceed `candidate_seconds`. A probe a
+            # limit stopped proves nothing: the thesis stays and `unproven` says so.
+            probe_started = time.perf_counter()
+            thesis_probe = _refuse_unbuildable_theses(
+                slate, objective, excluded, portfolio_policy, thesis_backups, forbidden_rosters,
+                per_solve_seconds=min(time_limit_seconds, policy_candidate_per_solve_seconds),
+                total_seconds=min(time_limit_seconds * (entry_count + 1), candidate_seconds))
+            candidate_seconds = max(MINIMUM_BANK_SECONDS, candidate_seconds - (time.perf_counter() - probe_started))
+        elif thesis is not None:
+            _refuse_unbuildable_thesis(slate, objective, excluded, thesis, backups, time_limit_seconds)
         bank = build_policy_candidate_bank(
             slate,
             objective,
@@ -716,6 +750,7 @@ def select_prior_lineups(
             per_solve_time_limit_seconds=policy_candidate_per_solve_seconds,
             policy=portfolio_policy,
             forbidden_rosters=forbidden_rosters,
+            thesis_backups=thesis_backups,
         )
         if bank.blocking:
             raise SelectionError(
@@ -761,6 +796,7 @@ def select_prior_lineups(
                     canonical_key=validation.lineup.canonical_key,
                     solver_status=portfolio_solve.status,
                     solver_seconds=portfolio_solve.elapsed_seconds,
+                    thesis=(portfolio_solve.selected_theses[index - 1] if portfolio_solve.selected_theses else None),
                 )
             )
         exposure: dict[str, int] = {}
@@ -821,7 +857,7 @@ def select_prior_lineups(
                 "entry_ids": list(portfolio_policy.entry_ids),
                 "candidate_bank": bank.as_report(),
                 "solve": portfolio_solve.as_report(),
-                **({"theses": _thesis_report(portfolio_policy, len(selected), backups, unevaluated_teams)}
+                **({"theses": _thesis_report(portfolio_policy, selected, backups, unevaluated_teams, thesis_probe)}
                    if portfolio_policy.theses else {}),
             },
             "never_calls": ["field.py", "economics.py", "portfolio economics"],
@@ -943,11 +979,83 @@ def _refuse_unbuildable_thesis(
     )
 
 
-def _thesis_report(
-    policy: NormalizedPortfolioPolicy, rows: int, backups: frozenset[str], unevaluated: Sequence[str]
-) -> dict[str, object]:
-    """Each bound row's thesis and every declared thesis's state; a name is a label, not a number."""
+def _refuse_unbuildable_theses(
+    slate: SlateContract,
+    objective: Mapping[str, float],
+    excluded: Sequence[str],
+    policy: NormalizedPortfolioPolicy,
+    thesis_backups: Mapping[str, frozenset[str]],
+    forbidden_rosters: Sequence[tuple[str, ...]],
+    *,
+    per_solve_seconds: float,
+    total_seconds: float,
+):
+    """Raise `THESIS_UNBUILDABLE` naming every thesis that cannot get its rows (Session 23c); else the probe.
 
+    Before any bank, the joint structural probe: each thesis must get its allotted rows with lineups
+    distinct from the other theses' and from prefilled rosters, under its own rules and this run's
+    exclusions alone (no cap, overlap or structural bound, since those loosen and a thesis does not).
+    Declared order is the priority. Only a proved shortage drops a thesis; a solve a limit stopped proves
+    nothing, so that thesis stays and the probe's `unproven` names it in the report. The ladder drops exactly
+    the named theses and gives their rows to the others.
+    """
+
+    probe = probe_thesis_rows(
+        slate, objective, policy, excluded_ids=excluded, forbidden_rosters=forbidden_rosters,
+        thesis_backups=thesis_backups, per_solve_seconds=per_solve_seconds, total_seconds=total_seconds)
+    if not probe.short:
+        return probe
+    by_name = {thesis.name: thesis for thesis in policy.active_theses}
+    reasons: dict[str, str] = {}
+    for item in probe.short:
+        thesis = by_name[item.name]
+        gone = set(excluded) | set(thesis_excluded_dk_ids(slate, thesis, thesis_backups.get(item.name, frozenset())))
+        captains = sorted(person.underlying_id for person in thesis.captain_set if person.cpt_dk_id in gone)
+        reasons[item.name] = (
+            "every required Captain is out of this run's pool: " + ", ".join(captains)
+            if len(captains) == len(thesis.captain_set)
+            else f"it was allotted {item.wanted} rows and only {item.found} lineups follow it that are distinct from"
+                 " the other theses' and from prefilled rosters (declared order is the priority)")
+    names = [item.name for item in probe.short]
+    reason = "; ".join(f"{name}: {reasons[name]}" for name in names)
+    raise SelectionError(
+        f"THESIS_UNBUILDABLE:thesis={names[0]}:{reason}",
+        status="THESIS_UNBUILDABLE",
+        facts={"stage": "THESIS", "thesis": names[0], "theses": names, "reason": reasons[names[0]],
+               "reasons": reasons},
+    )
+
+
+def _thesis_report(
+    policy: NormalizedPortfolioPolicy,
+    selected: Sequence[SelectedLineup],
+    backups: frozenset[str],
+    unevaluated: Sequence[str],
+    probe=None,
+) -> dict[str, object]:
+    """Each bound row's thesis and every declared thesis's state; a name is a label, not a number.
+
+    A v4 portfolio also names each thesis's weight and allotment and, keyed by canonical lineup, the thesis
+    each lineup fills (`by_lineup`): the claim of record, because the contest step moves lineups between
+    Entry IDs after the solve. `entries` is the solver's order and is relabelled once the assignment is final.
+    """
+
+    rows = len(selected)
+    if policy.thesis_schema == "v4":
+        return {
+            "build_version": THESIS_PORTFOLIO_VERSION,
+            "theses": [{"name": thesis.name, "teams": list(thesis.teams), "status": thesis.status,
+                        "dropped_reason": thesis.dropped_reason, "captain_set": sorted(thesis.captain_people),
+                        "row_weight": thesis.row_weight, "rows": thesis.rows} for thesis in policy.theses],
+            "entries": {entry: lineup.thesis for entry, lineup in zip(policy.entry_ids, selected)},
+            "by_lineup": {lineup.canonical_key: lineup.thesis for lineup in selected},
+            # What the structural probe found before any bank: lineups per thesis, and any thesis a solver limit
+            # stopped before it could prove either way (it stayed). No seconds, so the block stays comparable.
+            **({"probe": {"found": dict(probe.found), "unproven": list(probe.unproven)}} if probe is not None else {}),
+            "backup_quarterbacks_excluded": sorted(backups),
+            "backup_quarterbacks_unevaluated_teams": list(unevaluated),
+            "does_not_establish": list(THESIS_DOES_NOT_ESTABLISH),
+        }
     active = policy.active_thesis
     return {
         "build_version": THESIS_BUILD_VERSION,

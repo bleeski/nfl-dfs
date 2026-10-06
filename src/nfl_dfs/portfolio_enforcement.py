@@ -13,7 +13,7 @@ import json
 import math
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Callable, Mapping, Sequence
 
@@ -38,16 +38,23 @@ from .portfolio_policy import (
     StructuralBounds,
     canonical_decimal_json_bytes,
     structural_bound_violations,
+    thesis_roster_violations,
+    thesis_widened_bounds,
 )
 from .showdown_theses import (
     ACTIVE,
     DROPPED,
+    MAX_ROW_WEIGHT,
     THESIS_BUILD_VERSION,
+    THESIS_PORTFOLIO_VERSION,
     CountBound,
     ShowdownThesis,
+    admitted_quarterbacks,
+    allot_rows,
     apply_thesis_rows,
     backup_quarterbacks,
     thesis_excluded_dk_ids,
+    thesis_portfolio_measures,
     thesis_violations,
 )
 
@@ -95,6 +102,58 @@ class PolicyCandidate:
     prior_points: float
     source_solver_status: str
     source_solver_seconds: float
+    # Session 23c: the active theses this roster follows (recomputed with `thesis_roster_violations`, never
+    # inherited from the stratum that found it), in declared order. Empty when the policy has no thesis.
+    serves: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ThesisContext:
+    """One active thesis as the bank and the probe apply it (Session 23c).
+
+    `rows` is its allotment (a v3 thesis owns every entry), `backups` the quarterbacks out of its own pool,
+    `bounds` the structural bounds its rows obey (a v4 thesis's own `effective_bounds`, a v3 policy's
+    widened `structural_bounds`) and `excluded_dk_ids` the rows it keeps out of every lineup built under it.
+    """
+
+    thesis: ShowdownThesis
+    rows: int
+    backups: frozenset[str] = frozenset()
+    bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS
+    excluded_dk_ids: tuple[str, ...] = ()
+
+    @property
+    def name(self) -> str:
+        return self.thesis.name
+
+
+def thesis_contexts(
+    slate: SlateContract,
+    policy: NormalizedPortfolioPolicy | None,
+    thesis_backups: Mapping[str, frozenset[str]] | None = None,
+) -> tuple[ThesisContext, ...]:
+    """The policy's active theses in declared order, each with the rows and bounds its lineups obey.
+
+    `thesis_backups` maps a thesis name to the quarterbacks the depth evidence puts out of that thesis's
+    pool (v4: they differ by thesis, because a thesis may name one). A v3 thesis gets none here: its
+    backups arrive in the run's exclusions, as in Session 23b.
+    """
+
+    if policy is None or not policy.active_theses:
+        return ()
+    v4 = policy.thesis_schema == "v4"
+    backups = thesis_backups or {}
+    contexts = []
+    for thesis in policy.active_theses:
+        gone = frozenset(backups.get(thesis.name, ())) if v4 else frozenset()
+        contexts.append(ThesisContext(
+            thesis=thesis,
+            rows=thesis.rows if v4 else policy.entry_count,
+            backups=gone,
+            bounds=thesis.effective_bounds if v4 and thesis.effective_bounds is not None else policy.structural_bounds,
+            excluded_dk_ids=thesis_excluded_dk_ids(slate, thesis, gone),
+        ))
+    return tuple(contexts)
 
 
 @dataclass(frozen=True)
@@ -143,6 +202,8 @@ class CandidateBank:
     terminal_model_status: str | None
     policy_aware: bool = False
     strata: tuple[CandidateStratum, ...] = ()
+    # Session 23c: each active thesis with its allotment and how many bank candidates follow it.
+    theses: tuple[tuple[str, int, int], ...] = ()
 
     @property
     def limit_incumbent_candidates(self) -> int:
@@ -208,6 +269,8 @@ class CandidateBank:
             "strata": self.strata_summary(),
             "strata_detail": [stratum.as_report() for stratum in self.strata],
             "search_scope": "BOUNDED_STRATIFIED_ENUMERATION_NOT_A_FULL_SLATE_SEARCH",
+            **({"theses": {name: {"rows": rows, "serving": serving} for name, rows, serving in self.theses}}
+               if self.theses else {}),
         }
 
 
@@ -222,6 +285,8 @@ class PolicySelection:
     node_count: int | None
     model_status: str
     infeasibility_scope: str | None
+    # Session 23c: the thesis each pick fills, aligned with `selected_candidate_indexes` (empty without theses).
+    selected_theses: tuple[str, ...] = ()
 
     @property
     def passed(self) -> bool:
@@ -230,6 +295,7 @@ class PolicySelection:
 
     def as_report(self) -> dict[str, object]:
         return {
+            **({"selected_theses": list(self.selected_theses)} if self.selected_theses else {}),
             "status": self.status,
             "selected_candidate_indexes": list(self.selected_candidate_indexes),
             "selected_lineup_count": len(self.selected_candidate_indexes),
@@ -357,6 +423,245 @@ def _apply_structural_bounds(
         optimizer.add_no_offense_with_dst()
 
 
+@dataclass(frozen=True)
+class LockstepResult:
+    """What `run_lockstep` found: the lineups in the order they were taken, and why each thesis stopped.
+
+    `exhausted` are theses whose model was proved to hold no further lineup; `unproven` are theses a solver
+    limit stopped before either its target or a proof, which proves nothing about them. `blocking` is the
+    bank's own blocking status when a limit stopped a solve with no roster.
+    """
+
+    rosters: tuple[tuple[str, tuple[str, ...]], ...]
+    found: Mapping[str, int]
+    wanted: Mapping[str, int]
+    exhausted: tuple[str, ...]
+    unproven: tuple[str, ...]
+    solve_count: int
+    blocking: str | None = None
+    terminal: str | None = None
+
+
+def _blocking_status(model_status: str) -> str:
+    """The bank's blocking status for a solve a limit or an error stopped with no roster."""
+
+    if model_status == "kTimeLimit":
+        return "CANDIDATE_BANK_TIME_LIMIT"
+    if model_status in {"kIterationLimit", "kSolutionLimit"}:
+        return "CANDIDATE_BANK_SEARCH_LIMIT"
+    return "CANDIDATE_BANK_SOLVER_ERROR"
+
+
+def run_lockstep(
+    slate: SlateContract,
+    objective: Mapping[str, float],
+    contexts: Sequence[ThesisContext],
+    *,
+    excluded_ids: Sequence[str],
+    forbidden_rosters: Sequence[tuple[str, ...]] = (),
+    chain_policy: NormalizedPortfolioPolicy | None,
+    targets: Mapping[str, int],
+    per_solve_seconds: float,
+    total_seconds: float,
+    on_roster: Callable[[str, tuple[str, ...], object], None] | None = None,
+    perturbation_offset: int = 0,
+    sequential: bool = False,
+) -> LockstepResult:
+    """One optimizer per thesis, taking rows round-robin in declared order (Session 23c).
+
+    With `sequential`, a thesis takes all its rows before the next one starts: declared order as a
+    strict priority, which is what the structural probe means by "an earlier thesis wins".
+
+    Each thesis's model carries that thesis's rows, bounds and exclusions; every lineup any of them finds is
+    a no-good in all of them, so no two theses ever take the same roster, and every prefilled roster is a
+    no-good from the start (R29). With `chain_policy` the chain also keeps itself a legal portfolio under the
+    policy's own caps: a person or Captain that reaches its maximum leaves every model, and every later lineup
+    shares at most the overlap limit with every earlier one. That is the bank's chain stratum, whose lineups
+    are a portfolio already legal under every cap whenever greedy succeeds. With none, it is the structural
+    probe (`probe_thesis_rows`): thesis rules and the run's exclusions only.
+
+    Declared order is the priority: an earlier thesis takes its lineups first. A solve a limit stopped
+    proves nothing and is `unproven`, never `exhausted`.
+    """
+
+    started = time.perf_counter()
+    names = [context.name for context in contexts]
+    wanted = {name: max(0, int(targets.get(name, 0))) for name in names}
+    optimizers: dict[str, LineupOptimizer] = {}
+    for context in contexts:
+        optimizer = LineupOptimizer(
+            slate,
+            excluded_ids=tuple(sorted({*(str(item) for item in excluded_ids), *context.excluded_dk_ids})),
+            time_limit_seconds=min(total_seconds, per_solve_seconds),
+        )
+        _apply_structural_bounds(optimizer, slate, context.bounds)
+        apply_thesis_rows(optimizer, slate, context.thesis)
+        for roster in forbidden_rosters:
+            optimizer.add_no_good(roster)
+        optimizers[context.name] = optimizer
+    by_id = {row.dk_id: row for row in slate.players}
+    limits = {item.person.underlying_id: item for item in chain_policy.effective_limits} if chain_policy else {}
+    overlap = chain_policy.effective_pairwise_person_overlap if chain_policy is not None else 6
+    chain_people: Counter[str] = Counter()
+    chain_captains: Counter[str] = Counter()
+    closed: set[str] = set()
+    found = {name: 0 for name in names}
+    exhausted: list[str] = []
+    unproven: list[str] = []
+    taken: list[tuple[str, tuple[str, ...]]] = []
+    solves = 0
+    blocking: str | None = None
+    live = [name for name in names if wanted[name] > 0]
+    while live and blocking is None:
+        for name in (live[:1] if sequential else list(live)):
+            remaining = total_seconds - (time.perf_counter() - started)
+            if remaining <= 0:
+                blocking = "CANDIDATE_BANK_TIME_LIMIT"
+                unproven.extend(item for item in live if item not in unproven)
+                live = []
+                break
+            optimizer = optimizers[name]
+            optimizer.set_time_limit(min(per_solve_seconds, remaining))
+            cycle = perturbation_offset + solves
+            perturbed = {
+                row.dk_id: float(objective.get(row.dk_id, 0.0)) + 1e-9 * (((cycle + 1) * (index + 17)) % 997)
+                for index, row in enumerate(slate.players)
+            }
+            result = optimizer.solve(perturbed)
+            solves += 1
+            if result.status == "INFEASIBLE":
+                exhausted.append(name)
+                live.remove(name)
+                continue
+            kept_at_limit = (
+                result.status == "FEASIBLE_LIMIT"
+                and result.roster is not None
+                and result.model_status in {"kTimeLimit", "kIterationLimit", "kSolutionLimit"}
+            )
+            if not kept_at_limit and (result.status != "OPTIMAL" or result.roster is None):
+                blocking = _blocking_status(result.model_status)
+                unproven.append(name)
+                live.remove(name)
+                break
+            roster = tuple(result.roster)
+            if validate_lineup(slate, roster).lineup is None:
+                blocking = "CANDIDATE_BANK_SOLVER_ERROR"
+                unproven.append(name)
+                live.remove(name)
+                break
+            found[name] += 1
+            taken.append((name, roster))
+            if on_roster is not None:
+                on_roster(name, roster, result)
+            people = frozenset(by_id[dk_id].underlying_id for dk_id in roster)
+            captain = by_id[roster[0]].underlying_id
+            for other in optimizers.values():
+                other.add_no_good(roster)
+                if chain_policy is not None and overlap < 6:
+                    other.add_person_overlap_limit(roster, overlap)
+            if chain_policy is not None:
+                for member in people:
+                    chain_people[member] += 1
+                    limit = limits.get(member)
+                    if limit is None or chain_people[member] < limit.combined_max_entries:
+                        continue
+                    for dk_id in (limit.person.cpt_dk_id, limit.person.flex_dk_id):
+                        if dk_id not in closed:
+                            closed.add(dk_id)
+                            for other in optimizers.values():
+                                other.add_no_good([dk_id])
+                chain_captains[captain] += 1
+                limit = limits.get(captain)
+                if (limit is not None and chain_captains[captain] >= limit.captain_max_entries
+                        and limit.person.cpt_dk_id not in closed):
+                    closed.add(limit.person.cpt_dk_id)
+                    for other in optimizers.values():
+                        other.add_no_good([limit.person.cpt_dk_id])
+                # A thesis keeps room for the rows it still has to take. Its Captain room is what its Captain set
+                # may still captain (each person's Captain and combined room, the smaller); once that is no more
+                # than the rows it has left, the set's members leave every model's FLEX slots (their Captain rows
+                # stay open). Without it greedy spends a star's cap on the first theses's FLEX slots and leaves
+                # his own thesis unbuildable: a chain that is no witness at all.
+                for context in contexts:
+                    left = wanted[context.name] - found[context.name]
+                    if left <= 0:
+                        continue
+                    members = [limits[person] for person in sorted(context.thesis.captain_people) if person in limits]
+                    room = sum(
+                        max(0, min(item.captain_max_entries - chain_captains[item.person.underlying_id],
+                                   item.combined_max_entries - chain_people[item.person.underlying_id]))
+                        for item in members)
+                    if room > left:
+                        continue
+                    for item in members:
+                        if item.person.flex_dk_id not in closed:
+                            closed.add(item.person.flex_dk_id)
+                            for other in optimizers.values():
+                                other.add_no_good([item.person.flex_dk_id])
+            if found[name] >= wanted[name]:
+                live.remove(name)
+    if blocking is not None:
+        unproven.extend(item for item in live if item not in unproven)
+    return LockstepResult(
+        rosters=tuple(taken), found=dict(found), wanted=wanted, exhausted=tuple(exhausted),
+        unproven=tuple(unproven), solve_count=solves, blocking=blocking,
+        terminal=blocking or ("MODEL_INFEASIBLE" if exhausted else "TARGET_REACHED"),
+    )
+
+
+@dataclass(frozen=True)
+class ShortThesis:
+    name: str
+    found: int
+    wanted: int
+
+
+@dataclass(frozen=True)
+class ThesisProbe:
+    """`probe_thesis_rows`: which theses cannot fill their rows with lineups distinct from the others'."""
+
+    short: tuple[ShortThesis, ...]
+    unproven: tuple[str, ...]
+    found: Mapping[str, int]
+    solve_count: int
+
+
+def probe_thesis_rows(
+    slate: SlateContract,
+    objective: Mapping[str, float],
+    policy: NormalizedPortfolioPolicy,
+    *,
+    excluded_ids: Sequence[str] = (),
+    forbidden_rosters: Sequence[tuple[str, ...]] = (),
+    thesis_backups: Mapping[str, frozenset[str]] | None = None,
+    per_solve_seconds: float,
+    total_seconds: float,
+) -> ThesisProbe:
+    """Can every active thesis get its allotted rows, distinct from one another and from prefilled rosters?
+
+    Before any bank (Session 23c): the lockstep run with the caps off, under each thesis's own rules and the
+    run's exclusions alone, because those never loosen. A thesis that cannot is "structurally short" and the
+    ladder drops it by name, its rows going to the others. An independent per-thesis check would pass two
+    theses that each have room and collide; this one does not. It is greedy in declared order, which is the
+    priority, so a near-duplicate thesis can be named short; the reason says how many it found. A solve a
+    limit stopped proves nothing, so that thesis is `unproven`, not short.
+    """
+
+    # The policy's structural bounds (a salary band, a quarterback count) are preferences the ladder loosens, so
+    # the probe leaves them open: a thesis that cannot spend a salary band is a bank the ladder repairs by
+    # dropping the band, not a thesis to drop. A thesis's own team and position counts are its rows and stay.
+    contexts = tuple(replace(context, bounds=OPEN_STRUCTURAL_BOUNDS) for context in thesis_contexts(
+        slate, policy, thesis_backups))
+    result = run_lockstep(
+        slate, objective, contexts, excluded_ids=excluded_ids, forbidden_rosters=forbidden_rosters,
+        chain_policy=None, targets={context.name: context.rows for context in contexts},
+        per_solve_seconds=per_solve_seconds, total_seconds=total_seconds, sequential=True)
+    short = tuple(
+        ShortThesis(name, result.found[name], result.wanted[name])
+        for name in result.exhausted if result.found[name] < result.wanted[name])
+    return ThesisProbe(short=short, unproven=result.unproven, found=result.found, solve_count=result.solve_count)
+
+
 class _StratifiedEnumerator:
     """Deterministic bounded enumeration shared by every candidate stratum.
 
@@ -380,7 +685,8 @@ class _StratifiedEnumerator:
         per_solve_budget: float,
         forbidden_rosters: Sequence[tuple[str, ...]] = (),
         structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS,
-        thesis: ShowdownThesis | None = None,
+        contexts: Sequence[ThesisContext] = (),
+        report_theses: bool = False,
     ) -> None:
         self.slate = slate
         self.objective = objective
@@ -394,7 +700,12 @@ class _StratifiedEnumerator:
         self.structural_bounds = structural_bounds
         # Session 23b: an active thesis's team and position counts are rows on every
         # stratum's model too; its Captain set and exclusions arrive as excluded rows.
-        self.thesis = thesis
+        # Session 23c: with several theses each stratum is run under one of them (`context`), and every
+        # candidate records which of them it follows. One thesis is the default context of every stratum.
+        self.contexts = tuple(contexts)
+        self.default_context = self.contexts[0] if len(self.contexts) == 1 else None
+        # A v3 bank's report is exactly what Session 23b wrote; only a v4 bank names its theses.
+        self.report_theses = report_theses
         self.candidate_limit = candidate_limit
         self.total_budget = total_budget
         self.per_solve_budget = per_solve_budget
@@ -419,6 +730,76 @@ class _StratifiedEnumerator:
         self.strata.append(stratum)
         return stratum
 
+    def excluded_for(self, context: ThesisContext | None) -> tuple[str, ...]:
+        """The rows every stratum run under `context` keeps out: the run's own and the thesis's."""
+
+        if context is None:
+            return self.excluded_ids
+        return tuple(sorted({*self.excluded_ids, *context.excluded_dk_ids}))
+
+    def serves(self, roster: Sequence[str]) -> tuple[str, ...]:
+        """The active theses `roster` follows, recomputed (rules, its own bounds and its backup rule)."""
+
+        return tuple(
+            context.name for context in self.contexts
+            if not thesis_roster_violations(self.slate, roster, context.thesis, context.backups))
+
+    def _add(self, roster: tuple[str, ...], canonical: str, result) -> bool:
+        """Add `roster` as a new canonical candidate; False when it was already seen."""
+
+        if canonical in self.canonical_seen:
+            return False
+        self.candidates.append(
+            PolicyCandidate(
+                roster=roster,
+                canonical_key=canonical,
+                people=frozenset(self.by_id[dk_id].underlying_id for dk_id in roster),
+                captain_person=self.by_id[roster[0]].underlying_id,
+                prior_points=sum(float(self.objective.get(dk_id, 0.0)) for dk_id in roster),
+                source_solver_status=result.status,
+                source_solver_seconds=result.elapsed_seconds,
+                serves=self.serves(roster),
+            )
+        )
+        self.canonical_seen.add(canonical)
+        self.rosters.append(roster)
+        return True
+
+    def lockstep_chain(
+        self, policy: NormalizedPortfolioPolicy, targets: Mapping[str, int]
+    ) -> CandidateStratum:
+        """The chain stratum for several theses: one lockstep run under the policy's own caps (Session 23c)."""
+
+        wanted = sum(targets.values())
+        if self.blocking_status is not None:
+            return self.record(CandidateStratum("chain", None, wanted, 0, 0, 0, "NOT_RUN_AFTER_BLOCKER"))
+        remaining = self.total_budget - self.elapsed()
+        if remaining <= 0:
+            self.blocking_status = "CANDIDATE_BANK_TIME_LIMIT"
+            self.terminal = "TOTAL_TIME_LIMIT"
+            return self.record(CandidateStratum("chain", None, wanted, 0, 0, 0, "TIME_LIMIT"))
+        added = [0]
+
+        def on_roster(_name: str, roster: tuple[str, ...], result) -> None:
+            canonical = validate_lineup(self.slate, roster).lineup.canonical_key
+            added[0] += int(self._add(roster, canonical, result))
+
+        result = run_lockstep(
+            self.slate, self.objective, self.contexts, excluded_ids=self.excluded_ids,
+            forbidden_rosters=self.forbidden, chain_policy=policy, targets=targets,
+            per_solve_seconds=self.per_solve_budget, total_seconds=remaining, on_roster=on_roster,
+            perturbation_offset=self.solve_count)
+        self.solve_count += result.solve_count
+        if result.blocking is not None:
+            self.blocking_status = result.blocking
+            self.terminal = result.blocking
+        terminal = {"CANDIDATE_BANK_TIME_LIMIT": "TIME_LIMIT", "CANDIDATE_BANK_SEARCH_LIMIT": "SEARCH_LIMIT",
+                    "CANDIDATE_BANK_SOLVER_ERROR": "SOLVER_ERROR"}.get(result.blocking or "", None) or (
+            "TARGET_REACHED" if all(result.found[name] >= result.wanted[name] for name in result.wanted)
+            else "MODEL_INFEASIBLE")
+        return self.record(CandidateStratum(
+            "chain", None, wanted, len(result.rosters), added[0], result.solve_count, terminal))
+
     def enumerate(
         self,
         *,
@@ -430,9 +811,15 @@ class _StratifiedEnumerator:
         seed_no_goods: bool = False,
         chain_policy: NormalizedPortfolioPolicy | None = None,
         reserve: int = 0,
+        context: ThesisContext | None = None,
     ) -> CandidateStratum:
-        """Run one stratum; `reserve` keeps that many bank slots for later strata."""
+        """Run one stratum; `reserve` keeps that many bank slots for later strata.
 
+        `context` (Session 23c) is the thesis the stratum runs under: its rows and bounds are on the model,
+        its exclusions are excluded rows. With none, the one thesis of a single-thesis bank is the context.
+        """
+
+        context = context if context is not None else self.default_context
         reserve = max(0, int(reserve))
         capacity = self.remaining_capacity - reserve
         requested = max(0, int(target))
@@ -444,12 +831,13 @@ class _StratifiedEnumerator:
             return self.record(CandidateStratum(kind, person, requested, 0, 0, 0, limit_terminal))
         optimizer = LineupOptimizer(
             self.slate,
-            excluded_ids=tuple(sorted(set(self.excluded_ids) | {str(x) for x in extra_excluded_ids})),
+            excluded_ids=tuple(sorted(set(self.excluded_for(context)) | {str(x) for x in extra_excluded_ids})),
             time_limit_seconds=min(self.total_budget, self.per_solve_budget),
         )
-        _apply_structural_bounds(optimizer, self.slate, self.structural_bounds)
-        if self.thesis is not None:
-            apply_thesis_rows(optimizer, self.slate, self.thesis)
+        _apply_structural_bounds(
+            optimizer, self.slate, context.bounds if context is not None else self.structural_bounds)
+        if context is not None:
+            apply_thesis_rows(optimizer, self.slate, context.thesis)
         for dk_id in required_ids:
             optimizer.add_required_row(dk_id)
         if seed_no_goods:
@@ -529,22 +917,7 @@ class _StratifiedEnumerator:
             captain = self.by_id[roster[0]].underlying_id
             canonical = validation.lineup.canonical_key
             enumerated += 1
-            if canonical not in self.canonical_seen:
-                self.candidates.append(
-                    PolicyCandidate(
-                        roster=roster,
-                        canonical_key=canonical,
-                        people=people,
-                        captain_person=captain,
-                        prior_points=sum(
-                            float(self.objective.get(dk_id, 0.0)) for dk_id in roster
-                        ),
-                        source_solver_status=result.status,
-                        source_solver_seconds=result.elapsed_seconds,
-                    )
-                )
-                self.canonical_seen.add(canonical)
-                self.rosters.append(roster)
+            if self._add(roster, canonical, result):
                 added += 1
             optimizer.add_no_good(roster)
             if chain_policy is not None:
@@ -585,7 +958,11 @@ class _StratifiedEnumerator:
             complete = False
         else:
             fills = [stratum for stratum in self.strata if stratum.kind == "fill"]
-            complete = bool(fills) and fills[-1].terminal == "MODEL_INFEASIBLE"
+            # One fill per thesis when several theses are active: the bank is complete only when every thesis's
+            # own enumeration ran out of lineups (a single thesis, or none, is the last fill as before).
+            last = fills[-max(1, len(self.contexts)):] if len(self.contexts) > 1 else fills[-1:]
+            complete = bool(fills) and len(last) == max(1, len(self.contexts)) and all(
+                stratum.terminal == "MODEL_INFEASIBLE" for stratum in last)
             status = (
                 "COMPLETE_MODELED_BANK" if complete else "CANDIDATE_LIMIT_REACHED_INCOMPLETE"
             )
@@ -601,6 +978,9 @@ class _StratifiedEnumerator:
             terminal_model_status=self.terminal,
             policy_aware=policy_aware,
             strata=tuple(self.strata),
+            theses=tuple(
+                (context.name, context.rows, sum(1 for candidate in self.candidates if context.name in candidate.serves))
+                for context in self.contexts) if self.report_theses else (),
         )
 
 
@@ -617,6 +997,7 @@ def plan_captain_strata(
     objective: Mapping[str, float],
     *,
     excluded_ids: Sequence[str] = (),
+    entries: int | None = None,
 ) -> tuple[tuple[SeededCaptain, ...], int]:
     """Choose the seeded Captains and the per-Captain depth `k`.
 
@@ -626,6 +1007,9 @@ def plan_captain_strata(
     effective Captain maxima cover the entry count plus `STRATUM_ENTRY_MARGIN`
     slots, and `k = ceil(entries / seeded) + 1` so the joint MILP can spread
     the entries across them without running out of choices.
+
+    `entries` (Session 23c) is how many rows the strata must serve: the policy's whole entry count by
+    default, one thesis's allotment when a portfolio of theses seeds each thesis for its own rows.
     """
 
     excluded = {str(dk_id) for dk_id in excluded_ids}
@@ -645,13 +1029,14 @@ def plan_captain_strata(
     eligible.sort(key=lambda item: (-item.objective, item.person))
     seeded: list[SeededCaptain] = []
     covered = 0
-    needed = policy.entry_count + STRATUM_ENTRY_MARGIN
+    rows = policy.entry_count if entries is None else int(entries)
+    needed = rows + STRATUM_ENTRY_MARGIN
     for item in eligible:
         seeded.append(item)
         covered += item.captain_max_entries
         if covered >= needed:
             break
-    depth = math.ceil(policy.entry_count / len(seeded)) + 1 if seeded else 0
+    depth = math.ceil(rows / len(seeded)) + 1 if seeded else 0
     return tuple(seeded), depth
 
 
@@ -665,11 +1050,16 @@ def build_policy_candidate_bank(
     per_solve_time_limit_seconds: float = DEFAULT_CANDIDATE_PER_SOLVE_SECONDS,
     policy: NormalizedPortfolioPolicy | None = None,
     forbidden_rosters: Sequence[tuple[str, ...]] = (),
+    thesis_backups: Mapping[str, frozenset[str]] | None = None,
 ) -> CandidateBank:
     """Enumerate a deterministic bounded bank of legal policy candidates.
 
     `forbidden_rosters` (Session 11) are the template's prefilled rosters; no
     candidate equals one, so the joint solve never sees one.
+
+    `thesis_backups` (Session 23c, v4) maps a thesis name to the quarterbacks out of its own pool. With
+    two or more active theses the strata run once per thesis, each for its own allotment of rows, and
+    every candidate records the theses it follows (`serves`); the joint solve then picks every row at once.
 
     Without a policy this is the plain top-K enumeration by prior points. With
     a policy the same machinery runs in strata so the joint MILP has something
@@ -694,9 +1084,7 @@ def build_policy_candidate_bank(
     # Session 23b: an active thesis keeps every other Captain row and its own exclusions
     # out of every stratum, so the Captain strata seed only the thesis's Captains. The
     # run's backup quarterbacks arrive in `excluded_ids` from the selector.
-    thesis = policy.active_thesis if policy is not None else None
-    if thesis is not None:
-        excluded_ids = (*excluded_ids, *thesis_excluded_dk_ids(slate, thesis))
+    contexts = thesis_contexts(slate, policy, thesis_backups)
     enumerator = _StratifiedEnumerator(
         slate,
         objective,
@@ -706,13 +1094,16 @@ def build_policy_candidate_bank(
         per_solve_budget=per_solve_budget,
         forbidden_rosters=forbidden_rosters,
         structural_bounds=policy.structural_bounds if policy is not None else OPEN_STRUCTURAL_BOUNDS,
-        thesis=thesis,
+        contexts=contexts,
+        report_theses=policy is not None and policy.thesis_schema == "v4",
     )
     if policy is None:
         enumerator.enumerate(kind="fill", target=candidate_limit)
         return enumerator.bank(policy_aware=False)
 
     entry_count = policy.entry_count
+    if len(contexts) > 1:
+        return _multi_thesis_bank(enumerator, policy, objective, contexts, candidate_limit)
     # The chain is the stratum that hands the joint MILP a portfolio already
     # legal under every cap and the overlap limit, so its slots are reserved
     # while the Captain and exclusion strata run. Every stratum uses its own
@@ -729,7 +1120,8 @@ def build_policy_candidate_bank(
     chain_target = entry_count + STRATUM_ENTRY_MARGIN if constrained else 0
     reserve = min(chain_target, candidate_limit)
 
-    seeded, depth = plan_captain_strata(policy, objective, excluded_ids=enumerator.excluded_ids)
+    seeded, depth = plan_captain_strata(
+        policy, objective, excluded_ids=enumerator.excluded_for(enumerator.default_context))
     for captain in seeded:
         enumerator.enumerate(
             kind="captain",
@@ -780,6 +1172,77 @@ def build_policy_candidate_bank(
     return enumerator.bank(policy_aware=True)
 
 
+def _multi_thesis_bank(
+    enumerator: _StratifiedEnumerator,
+    policy: NormalizedPortfolioPolicy,
+    objective: Mapping[str, float],
+    contexts: Sequence[ThesisContext],
+    candidate_limit: int,
+) -> CandidateBank:
+    """The bank for two or more active theses (Session 23c): each stratum kind, per thesis, kind-major.
+
+    Every thesis is seeded (captain strata, then exclusion strata, each sized to that thesis's own rows)
+    before the chain and before any thesis's fill, so a search that runs out of time still holds candidates
+    for every thesis. The chain is one lockstep run across all of them under the policy's own caps: the
+    portfolio already legal under every cap that the joint solve is handed. Each thesis's fill then tops
+    it up to a share of the bank proportional to its rows, holding back slots for the theses still to come.
+    """
+
+    entry_count = policy.entry_count
+    constrained = policy.effective_pairwise_person_overlap < 6 or any(
+        not limit.excluded
+        and (0 < limit.combined_max_entries < entry_count or 0 < limit.captain_max_entries < entry_count)
+        for limit in policy.effective_limits
+    )
+    total_rows = sum(context.rows for context in contexts)
+    reserve = min(total_rows, candidate_limit) if constrained else 0
+    for context in contexts:
+        seeded, depth = plan_captain_strata(
+            policy, objective, excluded_ids=enumerator.excluded_for(context), entries=context.rows)
+        for captain in seeded:
+            enumerator.enumerate(
+                kind="captain", person=captain.person, target=depth, required_ids=(captain.cpt_dk_id,),
+                reserve=reserve, context=context)
+    capped = sorted(
+        (limit for limit in policy.effective_limits
+         if not limit.excluded and 0 < limit.combined_max_entries < entry_count),
+        key=lambda limit: (-float(objective.get(limit.person.flex_dk_id, 0.0)), limit.person.underlying_id),
+    )
+
+    def serving(context: ThesisContext) -> int:
+        return sum(1 for candidate in enumerator.candidates if context.name in candidate.serves)
+
+    for context in contexts:
+        gone = set(enumerator.excluded_for(context))
+        for limit in capped:
+            person = limit.person.underlying_id
+            # The person may sit in at most `combined_max_entries` of the portfolio's rows, so at least
+            # `entries - cap` of them are without him, and any thesis may have to supply all of its own rows
+            # among those: it needs `min(rows, entries - cap) + 1` candidates without him (the spare is the
+            # single-thesis bank's own).
+            depth_without = min(context.rows, entry_count - limit.combined_max_entries) + 1
+            already = sum(1 for candidate in enumerator.candidates
+                          if context.name in candidate.serves and person not in candidate.people)
+            if already >= depth_without or limit.person.flex_dk_id in gone:
+                enumerator.record(CandidateStratum("exclusion", person, depth_without, 0, 0, 0, "ALREADY_COVERED"))
+                continue
+            enumerator.enumerate(
+                kind="exclusion", person=person, target=depth_without,
+                extra_excluded_ids=(limit.person.cpt_dk_id, limit.person.flex_dk_id), reserve=reserve,
+                context=context)
+    if constrained:
+        enumerator.lockstep_chain(policy, {context.name: context.rows for context in contexts})
+    else:
+        enumerator.record(CandidateStratum("chain", None, 0, 0, 0, 0, "NOT_REQUIRED_UNCONSTRAINED"))
+    for index, context in enumerate(contexts):
+        floor = context.rows + STRATUM_ENTRY_MARGIN
+        share = max(floor, math.ceil(candidate_limit * context.rows / entry_count))
+        later = sum(max(0, other.rows + STRATUM_ENTRY_MARGIN - serving(other)) for other in contexts[index + 1:])
+        enumerator.enumerate(
+            kind="fill", target=max(0, share - serving(context)), seed_no_goods=True, reserve=later, context=context)
+    return enumerator.bank(policy_aware=True)
+
+
 def _add_row(
     model: highspy.Highs,
     lower: float,
@@ -824,11 +1287,23 @@ def solve_policy_portfolio(
     candidate_count = len(candidates)
     count_offset = 0
     used_offset = candidate_count
-    variable_count = candidate_count * 2
+    # Session 23c: with a portfolio of theses, `y[i, t]` says candidate i fills thesis t (only for a thesis it
+    # follows). A pick fills exactly one thesis, each thesis gets exactly its allotment, and a candidate that
+    # follows none of the active theses is never picked: no row is filler (brief principle 1).
+    quota = {thesis.name: thesis.rows for thesis in policy.active_theses} if policy.thesis_schema == "v4" else {}
+    thesis_pairs: list[tuple[int, str]] = [
+        (index, name) for index, candidate in enumerate(candidates) for name in candidate.serves if name in quota]
+    thesis_offset = candidate_count * 2
+    variable_count = candidate_count * 2 + len(thesis_pairs)
     lower = np.zeros(variable_count, dtype=np.float64)
     upper = np.ones(variable_count, dtype=np.float64)
     # R29: a lineup fills at most one entry, whatever the policy says.
     upper[count_offset:used_offset] = 1.0
+    if quota:
+        followed = {index for index, _name in thesis_pairs}
+        for index in range(candidate_count):
+            if index not in followed:
+                upper[count_offset + index] = 0.0
 
     model = solver_factory()
     model.setOptionValue("output_flag", False)
@@ -856,6 +1331,20 @@ def solve_policy_portfolio(
         used_index = used_offset + index
         _add_row(model, -highspy.kHighsInf, 0.0, {count_index: 1.0, used_index: -float(count)})
         _add_row(model, -highspy.kHighsInf, 0.0, {count_index: -1.0, used_index: 1.0})
+    if quota:
+        by_candidate: dict[int, dict[int, float]] = {}
+        by_thesis: dict[str, dict[int, float]] = {name: {} for name in quota}
+        for offset, (index, name) in enumerate(thesis_pairs):
+            by_candidate.setdefault(index, {})[thesis_offset + offset] = 1.0
+            by_thesis[name][thesis_offset + offset] = 1.0
+        for index, coefficients in by_candidate.items():
+            _add_row(model, 0.0, 0.0, {**coefficients, count_offset + index: -1.0})
+        for name, coefficients in by_thesis.items():
+            if coefficients:
+                _add_row(model, float(quota[name]), float(quota[name]), coefficients)
+            else:
+                # A thesis no candidate follows can never get its rows: the empty row is an honest infeasibility.
+                _add_row(model, float(quota[name]), float(quota[name]), {used_offset: 0.0})
 
     limits = {item.person.underlying_id: item for item in policy.effective_limits}
     for person, limit in limits.items():
@@ -999,6 +1488,26 @@ def solve_policy_portfolio(
             ),
         )
     )
+    selected_theses: tuple[str, ...] = ()
+    if quota:
+        raw_pairs = np.asarray(solution.col_value[thesis_offset:thesis_offset + len(thesis_pairs)])
+        filled = {
+            index: name for (index, name), value in zip(thesis_pairs, raw_pairs) if value > 0.5}
+        # Each pick fills exactly one thesis and each thesis exactly its allotment, or the solve is wrong.
+        if (any(index not in filled for index in selected)
+                or {name: sum(1 for pick in selected if filled[pick] == name) for name in quota} != quota):
+            return PolicySelection(
+                status="PORTFOLIO_SELECTION_SOLVER_ERROR",
+                selected_candidate_indexes=(),
+                elapsed_seconds=elapsed,
+                time_limit_seconds=budget,
+                objective_prior_points=None,
+                mip_gap=gap,
+                node_count=nodes,
+                model_status="INVALID_THESIS_ASSIGNMENT",
+                infeasibility_scope=None,
+            )
+        selected_theses = tuple(filled[index] for index in selected)
     return PolicySelection(
         status=status,
         selected_candidate_indexes=selected,
@@ -1009,6 +1518,7 @@ def solve_policy_portfolio(
         node_count=nodes,
         model_status=model_status_name,
         infeasibility_scope=None,
+        selected_theses=selected_theses,
     )
 
 
@@ -1102,6 +1612,8 @@ class _AuditedPolicyControls:
     person_limits: tuple[tuple[str, int, int], ...]
     structural_bounds: StructuralBounds = OPEN_STRUCTURAL_BOUNDS
     theses: tuple[ShowdownThesis, ...] = ()
+    # "v3" (one thesis), "v4" (a portfolio) or None, from the normalized schema the bytes declare.
+    thesis_schema: str | None = None
 
 
 def _strict_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -1189,17 +1701,24 @@ def _count_bounds_at(value: object, label: str, key: str) -> tuple[CountBound, .
     return tuple(bounds)
 
 
-def _theses_at(value: object, label: str) -> tuple[ShowdownThesis, ...]:
-    """Strictly reparse `controls.theses` (Session 23b, normalized_v3): one thesis."""
+def _theses_at(value: object, label: str, *, v4: bool = False) -> tuple[ShowdownThesis, ...]:
+    """Strictly reparse `controls.theses`: one thesis (Session 23b, normalized_v3), or one or more with
+    `row_weight`, `rows` and `effective_bounds` (Session 23c, normalized_v4).
 
-    if not isinstance(value, list) or len(value) != 1:
-        raise ValueError(f"{label} must hold exactly one thesis")
+    A v4 thesis's `rows` and `effective_bounds` are read here and checked against what the bytes imply by
+    `_parse_audited_policy_controls`: the audit never trusts a number the policy merely states.
+    """
+
+    if not isinstance(value, list) or not value or (not v4 and len(value) != 1):
+        raise ValueError(f"{label} must hold {'at least one thesis' if v4 else 'exactly one thesis'}")
     theses = []
     for index, raw in enumerate(value):
         where = f"{label}[{index}]"
         item = _mapping_at(raw, where)
         expected = {"name", "teams", "captain_set", "team_bounds", "position_bounds", "excluded_people",
                     "named_backup_quarterbacks", "status", "dropped_reason", "unavailable_captains"}
+        if v4:
+            expected = expected | {"row_weight", "rows", "effective_bounds"}
         if set(item) != expected:
             raise ValueError(f"{where} fields are not the normalized thesis fields")
         name, teams, status = item["name"], item["teams"], item["status"]
@@ -1217,6 +1736,13 @@ def _theses_at(value: object, label: str) -> tuple[ShowdownThesis, ...]:
         reason = item["dropped_reason"]
         if (status == DROPPED) != isinstance(reason, str) or (reason is not None and not isinstance(reason, str)):
             raise ValueError(f"{where}.dropped_reason must be text exactly when the thesis is dropped")
+        extra: dict[str, object] = {}
+        if v4:
+            weight = _integer_at(item["row_weight"], f"{where}.row_weight", minimum=1)
+            if weight > MAX_ROW_WEIGHT:
+                raise ValueError(f"{where}.row_weight must be at most {MAX_ROW_WEIGHT}")
+            extra = {"row_weight": weight, "rows": _integer_at(item["rows"], f"{where}.rows"),
+                     "effective_bounds": _structural_bounds_at(item["effective_bounds"], f"{where}.effective_bounds")}
         theses.append(ShowdownThesis(
             name=name, teams=tuple(teams),
             captain_set=_people_at(item["captain_set"], f"{where}.captain_set", nonempty=True),
@@ -1225,7 +1751,9 @@ def _theses_at(value: object, label: str) -> tuple[ShowdownThesis, ...]:
             excluded_people=_people_at(item["excluded_people"], f"{where}.excluded_people"),
             named_backup_quarterbacks=_people_at(item["named_backup_quarterbacks"],
                                                  f"{where}.named_backup_quarterbacks"),
-            status=status, dropped_reason=reason, unavailable_captains=tuple(unavailable)))
+            status=status, dropped_reason=reason, unavailable_captains=tuple(unavailable), **extra))
+    if len({item.name for item in theses}) != len(theses):
+        raise ValueError(f"{label} repeats a thesis name")
     return tuple(theses)
 
 
@@ -1300,10 +1828,28 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
     ):
         raise ValueError("effective.people contains duplicate underlying IDs")
     structural_bounds = _structural_bounds_at(controls.get("structural_bounds"), "controls.structural_bounds")
-    # normalized_v3 carries theses and normalized_v2 never does (Session 23b).
-    if (schema_version == NORMALIZED_POLICY_SCHEMA_VERSIONS[1]) != ("theses" in controls):
-        raise ValueError("controls.theses must be present exactly in a normalized_v3 policy")
-    theses = _theses_at(controls["theses"], "controls.theses") if "theses" in controls else ()
+    # normalized_v3 and v4 carry theses and normalized_v2 never does (Sessions 23b and 23c).
+    thesis_schema = {NORMALIZED_POLICY_SCHEMA_VERSIONS[1]: "v3", NORMALIZED_POLICY_SCHEMA_VERSIONS[2]: "v4"}.get(
+        schema_version)
+    if (thesis_schema is not None) != ("theses" in controls):
+        raise ValueError("controls.theses must be present exactly in a normalized_v3 or normalized_v4 policy")
+    theses = (_theses_at(controls["theses"], "controls.theses", v4=thesis_schema == "v4")
+              if "theses" in controls else ())
+    if thesis_schema == "v4":
+        # A number the policy states is checked against what its own bytes imply: the allotment of the entries
+        # across the active theses by weight, and each thesis's own widening of the declared bounds.
+        active = [item for item in theses if item.active]
+        expected_rows = (allot_rows([(item.name, int(item.row_weight)) for item in active], len(entry_ids))
+                         if active else {})
+        for item in theses:
+            if item.rows != expected_rows.get(item.name, 0):
+                raise ValueError(
+                    f"thesis {item.name!r} rows {item.rows} are not the allotment {expected_rows.get(item.name, 0)}"
+                    " of the entries by weight")
+            expected_bounds = thesis_widened_bounds(structural_bounds, item)[0] if item.active else structural_bounds
+            if item.effective_bounds != expected_bounds:
+                raise ValueError(
+                    f"thesis {item.name!r} effective bounds are not the declared bounds widened for its rows alone")
     return _AuditedPolicyControls(
         salary_sha256=salary_sha256,
         entry_ids=entry_ids,
@@ -1312,6 +1858,7 @@ def _parse_audited_policy_controls(raw: bytes) -> _AuditedPolicyControls:
         person_limits=tuple(person_limits),
         structural_bounds=structural_bounds,
         theses=theses,
+        thesis_schema=thesis_schema,
     )
 
 
@@ -1518,11 +2065,21 @@ def audit_policy_assignments(
     # backup quarterbacks come from the depth evidence's own report (`starters_by_team`),
     # never from the selector's list of whom it excluded.
     audited_theses = audited_policy.theses if audited_policy is not None else policy.theses
+    thesis_schema = audited_policy.thesis_schema if audited_policy is not None else policy.thesis_schema
     thesis = next((item for item in audited_theses if item.active), None)
+    portfolio = thesis_schema == "v4" and thesis is not None
+    depth_report = (selector_summary or {}).get("qb_depth_roles")
     backups, unevaluated = (
-        backup_quarterbacks(slate, thesis, (selector_summary or {}).get("qb_depth_roles"))
-        if thesis is not None else (frozenset(), ()))
+        backup_quarterbacks(slate, thesis, depth_report) if thesis is not None and not portfolio
+        else (frozenset(), ()))
     thesis_entries: dict[str, list[str]] = {}
+    # Session 23c (v4): every roster is recomputed against every active thesis, each with its own backup
+    # rule and its own bounds. `followed_by` is every thesis a roster follows; `rules_by` what it breaks
+    # under each, kept so the thesis it is claimed for can name the rules when it does not follow it.
+    active_theses = [item for item in audited_theses if item.active] if portfolio else []
+    thesis_backups = {item.name: backup_quarterbacks(slate, item, depth_report)[0] for item in active_theses}
+    followed_by: dict[str, list[str]] = {}
+    rules_by: dict[str, dict[str, tuple[str, ...]]] = {}
     for entry, roster in normalized_pairs:
         validation = validate_lineup(slate, roster)
         if not validation.valid or validation.lineup is None:
@@ -1532,14 +2089,21 @@ def audit_policy_assignments(
             )
             continue
         # Session 23: every structural hygiene bound recomputed from the exact
-        # roster IDs, never trusted from the generator's own claims.
-        for violation in structural_bound_violations(slate, roster, structural_bounds):
-            problems.append(
-                _audit_problem(
-                    "PORTFOLIO_AUDIT_STRUCTURAL_BOUND_VIOLATED", f"entry={entry}:bound={violation}"
+        # roster IDs, never trusted from the generator's own claims. In a v4 portfolio each thesis owns the
+        # bounds its rows obey (its `effective_bounds`), checked below against the thesis the row fills.
+        if not portfolio:
+            for violation in structural_bound_violations(slate, roster, structural_bounds):
+                problems.append(
+                    _audit_problem(
+                        "PORTFOLIO_AUDIT_STRUCTURAL_BOUND_VIOLATED", f"entry={entry}:bound={violation}"
+                    )
                 )
-            )
-        if thesis is not None:
+        if portfolio:
+            rules_by[entry] = {
+                item.name: thesis_roster_violations(slate, roster, item, thesis_backups[item.name])
+                for item in active_theses}
+            followed_by[entry] = [name for name, rules in rules_by[entry].items() if not rules]
+        elif thesis is not None:
             thesis_entries[entry] = list(thesis_violations(slate, roster, thesis, backups))
             problems.extend(
                 _audit_problem("PORTFOLIO_AUDIT_THESIS_VIOLATED", f"entry={entry}:thesis={thesis.name}:rule={rule}")
@@ -1550,6 +2114,11 @@ def audit_policy_assignments(
         people_by_entry[entry] = people
         combined.update(people)
         captains[captain] += 1
+    portfolio_report: dict[str, object] = {}
+    if portfolio:
+        portfolio_report = _audit_thesis_portfolio(
+            slate, normalized_pairs, canonical, active_theses, followed_by, rules_by, selector_summary,
+            audited_theses, thesis_backups, depth_report, problems)
 
     if audited_policy is not None:
         limits = {
@@ -1662,8 +2231,118 @@ def audit_policy_assignments(
         hashes=tuple(sorted(actual_hashes.items())),
         max_person_share=max_person_share,
         contest_assignment=contest_reading,
-        theses=_audited_theses_report(audited_theses, thesis_entries, backups, unevaluated),
+        theses=portfolio_report or _audited_theses_report(audited_theses, thesis_entries, backups, unevaluated),
     )
+
+
+def _quota_assignment(followed: Mapping[str, Sequence[str]], rows: Mapping[str, int]) -> dict[str, str] | None:
+    """One way to give each entry a thesis it follows with every thesis holding exactly its allotment, or None.
+
+    A bipartite assignment by augmenting paths over entries and thesis slots: small (entries by theses),
+    exact, and independent of whatever the selector claimed.
+    """
+
+    slots = [name for name, count in rows.items() for _ in range(count)]
+    entries = list(followed)
+    if len(entries) != len(slots):
+        return None
+    owner: dict[int, int] = {}
+
+    def augment(entry_index: int, seen: set[int]) -> bool:
+        for slot_index, name in enumerate(slots):
+            if slot_index in seen or name not in followed[entries[entry_index]]:
+                continue
+            seen.add(slot_index)
+            if slot_index not in owner or augment(owner[slot_index], seen):
+                owner[slot_index] = entry_index
+                return True
+        return False
+
+    if not all(augment(index, set()) for index in range(len(entries))):
+        return None
+    return {entries[entry_index]: slots[slot_index] for slot_index, entry_index in owner.items()}
+
+
+def _audit_thesis_portfolio(
+    slate: SlateContract,
+    pairs: Sequence[tuple[str, tuple[str, ...]]],
+    canonical: Sequence[tuple[str, str]],
+    active: Sequence[ShowdownThesis],
+    followed_by: Mapping[str, Sequence[str]],
+    rules_by: Mapping[str, Mapping[str, tuple[str, ...]]],
+    selector_summary: Mapping[str, object] | None,
+    all_theses: Sequence[ShowdownThesis],
+    backups_by_thesis: Mapping[str, frozenset[str]],
+    depth_report: object,
+    problems: list[str],
+) -> dict[str, object]:
+    """The v4 thesis checks and the report (Session 23c).
+
+    Each Entry ID's thesis is read from the selector's claim, keyed by canonical lineup (so it survives the
+    contest step moving lineups between Entry IDs), and must be an active thesis the roster follows under that
+    thesis's own rules, bounds and backup rule; each thesis must hold exactly its allotment; and an assignment
+    that meets every quota must exist whatever the claim says. With no claim the audit derives one.
+    """
+
+    names = {item.name for item in active}
+    rows = {item.name: item.rows for item in active}
+    claims = None
+    if selector_summary is not None:
+        block = (selector_summary.get("portfolio_policy") or {}).get("theses")
+        if isinstance(block, Mapping) and isinstance(block.get("by_lineup"), Mapping):
+            claims = block["by_lineup"]
+    key_of = dict(canonical)
+    roster_of = dict(pairs)
+    assigned: dict[str, str | None] = {}
+    broken: dict[str, list[str]] = {}
+    for entry, followed in followed_by.items():
+        if claims is not None:
+            claimed = claims.get(key_of.get(entry, ""))
+            if claimed not in names:
+                problems.append(_audit_problem(
+                    "PORTFOLIO_AUDIT_THESIS_CLAIM_INVALID", f"entry={entry}:claimed={claimed!r}"))
+                assigned[entry] = None
+                continue
+            assigned[entry] = claimed
+            if claimed not in followed:
+                broken[entry] = list(rules_by[entry][claimed])
+                problems.extend(
+                    _audit_problem("PORTFOLIO_AUDIT_THESIS_VIOLATED", f"entry={entry}:thesis={claimed}:rule={rule}")
+                    for rule in broken[entry])
+    witness = _quota_assignment(followed_by, rows)
+    if claims is None:
+        # No claim to check: the matching's own assignment is the report, and a roster that follows no
+        # thesis is named.
+        assigned = dict(witness) if witness is not None else {entry: None for entry in followed_by}
+        problems.extend(
+            _audit_problem("PORTFOLIO_AUDIT_THESIS_VIOLATED", f"entry={entry}:thesis=NONE:rule=no_thesis_followed")
+            for entry, followed in followed_by.items() if not followed)
+    claimed_rows = Counter(name for name in assigned.values() if name is not None)
+    if claims is not None:
+        for name in sorted(rows):
+            if claimed_rows.get(name, 0) != rows[name]:
+                problems.append(_audit_problem(
+                    "PORTFOLIO_AUDIT_THESIS_ROWS_MISMATCH",
+                    f"thesis={name}:actual={claimed_rows.get(name, 0)}:rows={rows[name]}"))
+    if witness is None:
+        problems.append(_audit_problem(
+            "PORTFOLIO_AUDIT_THESIS_ROWS_MISMATCH",
+            "no assignment of lineups to theses gives every thesis exactly its allotment"))
+    measures = thesis_portfolio_measures(
+        slate, [(entry, roster_of[entry], assigned.get(entry)) for entry in followed_by],
+        allotment={item.name: item.rows for item in all_theses}, followed=followed_by, broken=broken)
+    admitted = frozenset().union(*(admitted_quarterbacks(slate, item) for item in active)) if active else frozenset()
+    global_backups, unevaluated = backup_quarterbacks(slate, None, depth_report, admitted_people=admitted)
+    return {
+        "build_version": THESIS_PORTFOLIO_VERSION,
+        "theses": [{"name": item.name, "status": item.status, "dropped_reason": item.dropped_reason,
+                    "row_weight": item.row_weight, "rows": item.rows} for item in all_theses],
+        "entries": measures["entries"],
+        "measures": {key: value for key, value in measures.items() if key != "entries"},
+        "backup_quarterbacks_excluded": sorted(global_backups),
+        "backup_quarterbacks_unevaluated_teams": list(unevaluated),
+        "assignment_source": "SELECTOR_CLAIM_RECOMPUTED" if claims is not None else "DERIVED_BY_THE_AUDIT",
+    }
 
 
 def _audited_theses_report(

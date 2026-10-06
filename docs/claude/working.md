@@ -87,6 +87,13 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   hand (replace the most shared row, check distinctness and overlap with `qa_showdown_portfolio.py`) before the handoff, unless the
   selectable pool cannot meet them, and then say so with the pool size. The defaults are mine to set under the lock-clock ruling and
   Ben's to overturn.
+- **Theses stay (Session 23c).** When the run built the file from a portfolio of theses (policy v4: `theses` in the selection report
+  and `portfolio_policy_audit.theses`, which names each Entry ID's thesis and whether the lineup follows it), every swap in this
+  pass keeps its row's thesis: the team counts, position counts and Captain set of the thesis that row fills. A Captain swap, a
+  quarterback given to a WR or TE Captain, a FLEX swap or a `showdown_value_add.py` row that breaks one turns the row into a
+  different bet under the old name (P8 principle 6), so refuse it, or move the row to a thesis it follows and say so. Re-read the
+  audit's per-Entry-ID `follows` after the pass. `qa_showdown_portfolio.py` and `showdown_value_add.py` do not check a thesis yet
+  (a follow-up row), so the check is yours.
 - **Tie-break: large prizes win (Ben, 2026-10-04).** "Err on side of trying to win large prizes if at odds with minimizing the
   washout factor." After the engine's file, run a ceiling pass: every WR or TE Captain gets his own team's starting quarterback,
   then take FLEX swaps that raise a row's prior by a point or more, Captains untouched. That pass may exceed the person default up

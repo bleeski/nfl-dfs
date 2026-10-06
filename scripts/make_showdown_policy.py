@@ -69,6 +69,28 @@ writes v3 with it as `controls.theses`. Its Captains are exempt from
 `--captain-zero-pos`, so a kicker or DST Captain the thesis requires stays
 possible. Every rung carries the thesis unchanged; a policy count bound that
 contradicts it gives way at validation, named (`docs/DATA_CONTRACTS.md` § SD3 v3).
+
+A PORTFOLIO OF THESES (Session 23c). `--thesis` is repeatable: the order of the
+flags is the order Ben declared, which is the priority (it breaks allotment ties
+and decides which of two colliding theses is kept). Each file may carry
+`row_weight`, a positive integer share of the entries (default 1; a higher
+weight is more rows and nothing more: it is not a probability). More than one
+thesis, or any `row_weight`, writes `nfl_showdown_portfolio_policy_v4`; exactly
+one thesis without a weight still writes v3, byte for byte as before. The
+entries are allotted across the theses by largest remainder, one joint solve
+assembles every row (distinct across theses and against prefilled rows, R29),
+and every Captain any thesis requires is exempt from `--captain-zero-pos`
+(`docs/DATA_CONTRACTS.md` § SD3 v4).
+
+THESES AND THE SALARY BAND (Session 23c). The default $1 to $500 band cannot hold a
+thesis built from a kicker, a defense and backs, and `run-slate`'s ladder gives the
+caps way before a band (Session 56), so with a band on, a portfolio of such theses
+loses its 0.60 person cap and 0.20 Captain cap before the band is dropped. A
+portfolio (more than one thesis, or any `row_weight`) is therefore written with the
+band open ($0 to $50,000 left) unless `--salary-left-min` or `--salary-left-max` is
+passed, and then it is yours. A policy with no thesis, and one thesis without a
+weight (the Session 23b output), keep $1 to $500, so v3 is written exactly as
+before. Claude's default under the lock-clock ruling, Ben's to overturn.
 """
 import argparse, csv, hashlib, json, os, sys
 from collections import defaultdict
@@ -173,8 +195,10 @@ def main(argv=None):
     ap.add_argument('--pass-catchers-min', type=int, default=1,
                     help='minimum WR/TE on the rostered QB\'s team (0 QBs rostered is unaffected)')
     ap.add_argument('--pass-catchers-max', type=int, default=2)
-    ap.add_argument('--salary-left-min', type=int, default=1)
-    ap.add_argument('--salary-left-max', type=int, default=500)
+    ap.add_argument('--salary-left-min', type=int, default=None,
+                    help='fewest dollars a lineup leaves (default 1; 0 for a portfolio of theses: see the docstring)')
+    ap.add_argument('--salary-left-max', type=int, default=None,
+                    help='most dollars a lineup leaves (default 500; 50000 for a portfolio of theses)')
     ap.add_argument('--kicker-count-max', type=int, default=1)
     ap.add_argument('--dst-count-max', type=int, default=1)
     ap.add_argument('--offense-against-own-dst', dest='offense_against_own_dst',
@@ -187,7 +211,9 @@ def main(argv=None):
                     help='relax the policy the flags describe to this rung (nfl_dfs.relaxation)')
     ap.add_argument('--entry-id', action='append', default=[],
                     help='bind only this fillable Entry ID (repeatable); the rest are filled sequentially')
-    ap.add_argument('--thesis', help='JSON file holding one game thesis (Session 23b); writes v3')
+    ap.add_argument('--thesis', action='append', default=[],
+                    help='JSON file holding one game thesis (Session 23b), repeatable (Session 23c: the flag order is'
+                         ' the declared priority; a file may carry row_weight); one thesis writes v3, more write v4')
     a = ap.parse_args(argv)
     if a.rung == 4:
         print("rung 4 emits no policy by design: run run-slate without --portfolio-policy-json, so"
@@ -211,8 +237,19 @@ def main(argv=None):
     comb_ovr = parse_ovr(a.combined_override)
     capt_ovr = parse_ovr(a.captain_override)
 
-    thesis = read_thesis(a.thesis, people) if a.thesis else None
-    thesis_captains = {item['underlying_id'] for item in thesis['captain_set']} if thesis else set()
+    theses = [read_thesis(path, people) for path in a.thesis]
+    # One thesis without a weight is the Session 23b contract (v3) exactly; anything more is a portfolio (v4).
+    portfolio = len(theses) > 1 or any('row_weight' in item for item in theses)
+    # The $1 to $500 band is Session 23's hygiene default, and a thesis that opens only a kicker, a defense and backs cannot
+    # spend $49,500 (measured on NE@SEA: the bank held no candidate for those theses). The ladder gives the caps way before
+    # a band (Session 56), so leaving the band on would cost a portfolio its 0.60 and 0.20 caps first and the theses nothing
+    # but time. A portfolio's band therefore defaults open; either flag, given, is the operator's and wins. A single thesis
+    # without a weight is the Session 23b output and keeps the band it always had, so v3 is byte for byte as before.
+    if a.salary_left_min is None:
+        a.salary_left_min = 0 if portfolio else 1
+    if a.salary_left_max is None:
+        a.salary_left_max = 50000 if portfolio else 500
+    thesis_captains = {person['underlying_id'] for item in theses for person in item['captain_set']}
     zero_pos = {p.strip() for p in a.captain_zero_pos.split(',') if p.strip()}
     for uid, e in people.items():
         if uid in capt_ovr or uid in thesis_captains:
@@ -227,7 +264,9 @@ def main(argv=None):
         excl.append(ident(people[uid]))
 
     pol = {
-        'schema_version': 'nfl_showdown_portfolio_policy_v3' if thesis else 'nfl_showdown_portfolio_policy_v2',
+        'schema_version': ('nfl_showdown_portfolio_policy_v4' if portfolio
+                           else 'nfl_showdown_portfolio_policy_v3' if theses
+                           else 'nfl_showdown_portfolio_policy_v2'),
         'bindings': {
             'salary_sha256': sha256(sal),
             'game_id': game_id(sal),
@@ -257,7 +296,7 @@ def main(argv=None):
                 'dst_count': a.dst_count_max,
                 'offense_against_own_dst': a.offense_against_own_dst,
             },
-            **({'theses': [thesis]} if thesis else {}),
+            **({'theses': theses} if theses else {}),
         },
     }
     out = os.path.abspath(a.out)

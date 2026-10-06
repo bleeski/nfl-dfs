@@ -44,7 +44,9 @@ def _sequential_exit(monkeypatch):
 
 
 def _run(tmp_path, monkeypatch, *, run_id, contests, cells=None, policy_controls=None, bound=None,
-         entry_ids=SIX, wrap_step=None, cowork=None):
+         entry_ids=SIX, wrap_step=None, cowork=None, policy_schema=None):
+    # Session 23c: `policy_schema` writes the policy in that schema (a portfolio of theses is v4), and
+    # `policy_controls` may be a function of the parsed slate, because a thesis names people by exact identity.
     from nfl_dfs import cli
     from nfl_dfs import prior_review as prior_review_module
     from nfl_dfs.portfolio_policy import portfolio_policy_template
@@ -66,8 +68,10 @@ def _run(tmp_path, monkeypatch, *, run_id, contests, cells=None, policy_controls
         plan = plan_entries(parse_entries(entry_path), slate)
         policy_path = tmp_path / "policy" / "portfolio.json"
         policy_path.parent.mkdir()
+        controls = policy_controls(slate) if callable(policy_controls) else policy_controls
         policy_path.write_text(json.dumps(portfolio_policy_template(
-            slate, list(plan.fillable if bound is None else bound), controls=policy_controls)),
+            slate, list(plan.fillable if bound is None else bound), controls=controls,
+            **({"schema_version": policy_schema} if policy_schema else {}))),
             encoding="utf-8")
         values["portfolio_policy_json"] = str(policy_path)
     if wrap_step is not None:

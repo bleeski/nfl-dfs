@@ -1841,7 +1841,7 @@ Ben's to overturn.
 ### SD3 v3: one game thesis (Session 23b, chunk P8, R33 and R34)
 
 `nfl_showdown_portfolio_policy_v3` is v2 plus `controls.theses`: an array holding
-exactly one thesis (a portfolio of theses is Session 23c; two are refused by
+exactly one thesis (a portfolio of theses is v4, next section; two are refused by
 name). v1 and v2 are unchanged; `controls.theses` on a v2 policy is refused. A
 thesis is a construction preference Ben chooses: its name is a label, never a
 model value, and it moves no projection. It is never loosened.
@@ -1952,6 +1952,136 @@ and leaves the thesis's Captains out of `--captain-zero-pos`.
 Does not establish: that the thesis will happen, any EV, ROI, win or cash
 probability, leverage (no ownership input), calibration, or upload clearance.
 Every path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+### SD3 v4: a portfolio of game theses (Session 23c, chunk P8, R33 and R34)
+
+`nfl_showdown_portfolio_policy_v4` is v3 with one or more theses and a `row_weight` on
+each; v3 is unchanged (exactly one thesis, no weight, the same normalized bytes) and a
+v3 policy with two theses is refused by name, pointing here. A thesis is as in v3 (the
+fields above) plus an optional `row_weight`, an integer from 1 through 100, default 1.
+`name`s must be unique. The normalized form is
+`nfl_showdown_portfolio_policy_normalized_v4`: each thesis as declared plus `row_weight`,
+`rows` and `effective_bounds`.
+
+**Row weight and allotment.** The policy's entries (the rows it binds) are allotted
+across the **active** theses by largest remainder over their weights: each thesis gets
+the floor of its proportional share, the rows left go to the largest remainders, and a
+tie goes to the earlier thesis, because the order Ben declared is the priority
+(`showdown_theses.allot_rows`, integer-only and deterministic). A weight is an
+allotment preference, a higher weight being more rows and nothing more: it is not a
+probability, and nothing calls a thesis likely. The engine never infers a favourite, so
+equal weights are the default. A thesis the entries cannot give one row (more theses
+than rows, at its weight) is `DROPPED` at validation and named (`THESIS_DROPPED`), and
+the allotment is run again over the rest, so no entry is left without a thesis; a
+thesis dropped for an unavailable Captain or a minimum the pool cannot meet is
+`DROPPED` as in v3, and its rows go to the others the same way. The audit recomputes the
+allotment from the normalized weights and statuses and refuses a `rows` that is not
+that (`PORTFOLIO_AUDIT_NORMALIZED_POLICY_INVALID`).
+
+**Effective bounds, per thesis.** In v3 a thesis widens the policy's `qb_count`,
+`kicker_count` or `dst_count` for its rows by the least step, and the widening is written
+into the policy's own bounds. With several theses that would let one thesis's second
+kicker into every other thesis's rows, so in v4 the policy's `structural_bounds` stay
+exactly as declared and each thesis carries `effective_bounds`: the declared bounds
+widened by the least step for that thesis alone (`PORTFOLIO_POLICY_THESIS_OVERRIDES_BOUND`
+names the thesis and its scope). A row built for a thesis is checked against that
+thesis's own bounds and no other's, by the bank, the joint solve's candidate rules and the
+audit, which recomputes the widening and refuses `effective_bounds` that are not it.
+
+**One joint assembly (`showdown_thesis_portfolio_sd3_v1`).** The bank is built under each
+thesis in turn, kind by kind (every thesis's Captain strata, then its exclusion strata,
+then one chain across all of them, then each thesis's fill), so a search that runs out
+of time still holds candidates for every thesis. Strata are sized to the thesis's own
+rows, not the portfolio's. The chain runs one model per thesis in lockstep under the
+policy's own caps and overlap, round-robin in declared order, and keeps a thesis's
+Captain room for the rows it still has to take (a reactive heuristic: it can cost the
+bank candidates and never correctness, because the joint solve decides), so the bank
+holds a portfolio legal under every cap whenever greedy succeeds. Every candidate records the theses it follows
+(`serves`), recomputed with each thesis's own rules, bounds and backup-quarterback rule,
+so a roster found under one thesis that also follows another may fill either. One joint
+solve then picks every row at once: each pick fills exactly one thesis, each thesis
+exactly its allotment, each lineup is used once (R29: distinct across theses and against
+the template's prefilled rosters), no person exceeds the policy's one combined cap
+(the Session 23 and 56 share limit, 0.60 by default) whichever thesis he serves, and no
+Captain exceeds the Captain cap (0.20 by default). A lineup that follows no active
+thesis is never picked (no row is filler). Backup quarterbacks (R33) are per thesis: a
+quarterback is out of the run's pool unless some thesis names him, and a thesis that
+does not name him keeps him out of its own rows.
+
+**A thesis that cannot be built is dropped, never bent.** Before any bank, the joint
+structural probe (`portfolio_enforcement.probe_thesis_rows`) asks whether each thesis can
+get its allotted rows with lineups distinct from the other theses' and from prefilled
+rosters, under its own rules and the run's exclusions alone. Declared order is the
+priority: an earlier thesis takes its rows first. The probe is charged to the bank's
+window, not added to it (R31: the lock clock bounds the search stage): it takes the
+smaller of the per-solve limit and the bank's own, at most the bank's whole window, and
+the bank is then given what the probe left, so probe plus bank never exceed it. A thesis
+whose solve a limit stopped is `unproven`: it stays, and the selection report's
+`theses.probe` names it beside the lineups found per thesis. The policy's structural
+bounds are left open, because a salary band or a quarterback count is a preference the
+ladder loosens, not a reason to drop a thesis. Measured: a kicker, a defense and backs
+cannot spend a $49,500 band (the bank held no candidate for them), and the ladder gives
+the caps way BEFORE a band (Session 56: 0.80 and 0.40, then none, then rung 1), so a
+portfolio left on the default $1 to $500 band loses its 0.60 person cap and 0.20 Captain
+cap on the way to dropping it. The generator therefore writes the band open ($0 to $50,000
+left) for a portfolio (more than one thesis, or any `row_weight`), unless `--salary-left-min`
+or `--salary-left-max` is passed (then it is the operator's); a policy with no thesis, and one
+thesis without a weight (the Session 23b output, v3), keep $1 to $500. A thesis proved short
+raises `THESIS_UNBUILDABLE` (`S`) naming it, its reason (how many lineups follow it that
+are distinct from the others', or that every required Captain is out of the pool),
+`facts.theses` (every thesis named) and `facts.thesis` (the first, as in v3). A solve a
+limit stopped proves nothing and drops nothing. The ladder drops exactly the named
+theses, rebuilds the same policy with the rest byte for byte (`row_weight` included,
+so their rows flow to the others), records one `THESIS_DROPPED` per thesis saying where
+its rows went, and builds the policy without theses (v2) when none is left. The probe is
+greedy in declared order, so a near-duplicate thesis can be named short; its reason says
+how many lineups it found, and Ben can reorder or reweight. Caps give way as in v3
+(the concentration steps, rungs 1 to 3, the bank deepening) and never a thesis; rung 4
+drops every thesis with the policy, each named. Not built: dropping one thesis for a joint
+infeasibility the probe cannot see; that walks the caps and ends at rung 4's named drop of
+every thesis, so the handoff says so. The policy is rebuilt from what Ben declared, so a thesis
+the allotment dropped for want of a row can be given one again when the ladder drops another
+and makes room; both events are in the ledger, in order. A multi-thesis bank is seldom
+`complete` (a thesis already at its share records `CANDIDATE_LIMIT`, not exhaustion), so a joint
+infeasibility reads `CANDIDATE_BANK_EXHAUSTED_INCOMPLETE` and the ladder deepens the bank first;
+completeness is never overclaimed.
+
+**Reports.** The selection report's `portfolio_policy.theses` names each thesis (weight,
+rows, status), `by_lineup` (canonical lineup to the thesis it fills: the claim of record,
+because the contest step moves lineups between Entry IDs after the solve) and `entries`
+(Entry ID to thesis, relabelled from the final assignment by `prior_review`);
+`candidate_bank.theses` names each thesis's allotment and how many candidates follow it,
+and `solve.selected_theses` the thesis of each pick. A lineup's payload carries `thesis`
+only when it fills one, so a run without theses writes the bytes it always wrote. The
+assignment CSV is unchanged.
+
+**The audit.** SD4 reparses the normalized v4 policy strictly, recomputes each roster
+against every active thesis (rules, its own bounds, its backup rule), reads each Entry ID's
+thesis through the final assignment by the canonical lineup it computes itself, and checks
+that the claimed thesis is active (`PORTFOLIO_AUDIT_THESIS_CLAIM_INVALID`), that the
+roster follows it (`PORTFOLIO_AUDIT_THESIS_VIOLATED`, naming the rule, including
+`structural_bounds.*` under that thesis's bounds), that each thesis holds exactly its
+allotment, and that an assignment meeting every quota exists whatever the claim says
+(`PORTFOLIO_AUDIT_THESIS_ROWS_MISMATCH`). With no claim it derives one. Its `theses` block
+holds, per Entry ID, the thesis, whether it follows, every thesis it follows and the rules
+it breaks, and `measures`, the review's numbers (R34), recomputed from the rosters:
+each Captain's count, share and the theses it serves; the distinct Captains and the
+largest Captain share; every person in more than half the rows; the most rows one
+player's bad night sinks; the most rows one thesis sinks (each thesis is a bet that loses
+when its game does not happen); and the pairs of rows that share five or more people
+(a pair of six is one core with a rotating Captain, the same bet placed twice, which the
+overlap cap refuses at its default of 4). The readable review accepts the v4 policy; its
+own thesis section is Session 23f's.
+
+The generator's `--thesis` is repeatable: the flag order is the declared priority, a
+file may carry `row_weight`, more than one thesis (or any weight) writes v4 and exactly
+one thesis without a weight writes v3 as before, and every Captain any thesis requires
+stays out of `--captain-zero-pos`. Nothing here is a model value, an evidence claim or a
+forecast.
+
+Does not establish: that any thesis will happen, any EV, ROI, win or cash probability,
+leverage (no ownership input: it is unmeasured), calibration, or upload clearance. Every
+path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
 ## SD5 prior-only readable review
 
@@ -3334,7 +3464,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `26d6deac47ff20c39a1604922b0563c477973f430723445300506aa9c3145367`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `79304904c50459309943d33ed525586453406446e395d39b00a7b9c14009e51c`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

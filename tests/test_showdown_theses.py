@@ -365,14 +365,16 @@ def test_a_malformed_thesis_is_refused_by_name(tmp_path, mutate, schema, code):
     assert [issue.code for issue in validation.problems] == code.split(",")
 
 
-def test_two_theses_wait_for_session_23c(tmp_path):
+def test_two_theses_need_schema_v4(tmp_path):
+    # Session 23c renamed this from `test_two_theses_wait_for_session_23c` (a named test change): v3 still
+    # refuses two theses, now by pointing at v4, which carries a portfolio of them.
     slate, *_rest = _prepared(tmp_path)
     thesis = _thesis(slate, ["NE Kicker"])
     document = portfolio_policy_template(slate, ("1",), schema_version=POLICY_SCHEMA_VERSION_V3,
                                          controls={"theses": [thesis, {**thesis, "name": "OTHER"}]})
     validation = validate_portfolio_policy_bytes(canonical_decimal_json_bytes(document), slate=slate, entry_ids=("1",))
     assert [issue.code for issue in validation.problems] == ["PORTFOLIO_POLICY_THESIS_INVALID"]
-    assert "23c" in validation.problems[0].message
+    assert "v4" in validation.problems[0].message
 
 
 def test_a_policy_without_a_thesis_keeps_its_v2_normalized_bytes(tmp_path):
