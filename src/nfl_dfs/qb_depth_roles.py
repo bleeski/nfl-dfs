@@ -114,8 +114,10 @@ class QbDepthRoleError(ValueError):
     ):
         super().__init__(message)
         self.report = dict(report or {"evidence_state": "UNKNOWN", "blocker": message})
-        # Set only by a refusal that is about one team's declaration (R25's promotion refusals), so
-        # a caller that built the package itself can drop that team and keep the others.
+        # Set only by a refusal that is about one team's declaration (R25's promotion refusals, and since
+        # Session 63 the model-side ones: a prior row missing, a pool that is not the unit, a share that is
+        # invalid or not conserved), so a caller that built the package itself can drop that team and keep
+        # the others. A refusal about the package as a whole (hash, coverage, a damaged file) names none.
         self.team = team
 
 
@@ -535,14 +537,15 @@ def resolve_qb_depth_roles(
             raise QbDepthRoleError(
                 f"QB_DEPTH_PRIOR_ROW_MISSING:{','.join(missing)}:"
                 "rebuild the complete prior package; the depth chart places"
-                " quarterbacks this model has no row for"
+                " quarterbacks this model has no row for",
+                team=team,
             )
         team_people = [
             person for person in by_team[team] if players[person].position == "QB"
         ]
         pooled = sum(players[person].qb_attempt_share for person in team_people)
         if not math.isfinite(pooled) or pooled < 0:
-            raise QbDepthRoleError(f"QB_DEPTH_POOLED_SHARE_INVALID:{team}")
+            raise QbDepthRoleError(f"QB_DEPTH_POOLED_SHARE_INVALID:{team}", team=team)
         pool_empty = pooled <= SHARE_TOLERANCE
         if v2:
             # The model conserves a team's quarterback group at the unit or
@@ -555,7 +558,8 @@ def resolve_qb_depth_roles(
                 raise QbDepthRoleError(
                     f"QB_DEPTH_POOL_NOT_UNIT:team={team}:pooled={pooled:.12g}:"
                     "the model's quarterback attempt shares for this team are"
-                    " neither empty nor conserved at 1.0"
+                    " neither empty nor conserved at 1.0",
+                    team=team,
                 )
             starter_share = TEAM_QB_POOL_UNIT
             basis = (
@@ -607,7 +611,8 @@ def resolve_qb_depth_roles(
         if not math.isclose(allocated, starter_share, rel_tol=0, abs_tol=SHARE_TOLERANCE):
             raise QbDepthRoleError(
                 f"QB_DEPTH_NOT_CONSERVED:team={team}:"
-                f"allocated={allocated:.12g}:expected={starter_share:.12g}"
+                f"allocated={allocated:.12g}:expected={starter_share:.12g}",
+                team=team,
             )
 
     expiry = min(source.expires_at for source in sources.values())

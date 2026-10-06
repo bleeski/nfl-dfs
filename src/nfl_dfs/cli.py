@@ -125,6 +125,7 @@ from .projection import SOURCES_DIRNAME as PROJECTION_SOURCES_DIRNAME
 from .projection import build_projection_package
 from .prior_review import PROFILE_VERSION as PRIOR_REVIEW_PROFILE_VERSION
 from .prior_review import run_prior_review, team_projections_csv_version
+from .qb_depth_capture import team_undeclared_limitations
 from .readable_review import (
     ReadableReviewArtifacts,
     ReadableReviewError,
@@ -2990,14 +2991,25 @@ def _export_classic_c1_csv(
     ), ()
 
 
-def _qb_depth_limitations(reports: Mapping[str, object]) -> list[str]:
-    """The named `P` limitations of the run-time QB depth capture and the backup default (Session 53)."""
+def _qb_depth_capture_limitations(reports: Mapping[str, object]) -> list[str]:
+    """The named `P` limitations of the run-time QB depth capture, in either mode (Sessions 53 and 63).
+
+    The whole-capture status when it is not `CAPTURED`, then one line per team a built package leaves out.
+    """
 
     limitations: list[str] = []
     capture_report = reports.get("qb_depth_capture")
     if isinstance(capture_report, Mapping) and capture_report.get("status") not in (None, "CAPTURED"):
         detail = str(capture_report.get("detail") or "")
         limitations.append(f"{capture_report['status']}:{detail}" if detail else str(capture_report["status"]))
+    limitations.extend(team_undeclared_limitations(capture_report))
+    return limitations
+
+
+def _qb_depth_limitations(reports: Mapping[str, object]) -> list[str]:
+    """Showdown's `P` limitations: the capture's, then the backup default's gap (Session 53)."""
+
+    limitations = _qb_depth_capture_limitations(reports)
     selection_view = reports.get("selection")
     selector_view = selection_view.get("selection") if isinstance(selection_view, Mapping) else None
     default_view = selector_view.get("showdown_backup_qb_default") if isinstance(selector_view, Mapping) else None
@@ -3023,14 +3035,16 @@ def _classic_judgment_limitations(reports: Mapping[str, object]) -> list[str]:
     selection_view = reports.get("selection")
     selector_view = selection_view.get("selection") if isinstance(selection_view, Mapping) else None
     # The backup-quarterback default applies to every Classic row, with its gap named like Showdown's.
-    # Classic builds no depth package of its own, so a run that supplied none names every quarterback team.
+    # A team the run's depth package does not declare (the chart could not build it, or no package exists)
+    # is named here, and nobody of his is guessed out.
     default_view = selector_view.get("classic_backup_qb_default") if isinstance(selector_view, Mapping) else None
     if isinstance(default_view, Mapping) and default_view.get("applies") and default_view.get("unevaluated_teams"):
         limitations.append(
             "CLASSIC_BACKUP_QB_UNEVALUATED:no quarterback depth evidence orders "
             + ", ".join(map(str, default_view["unevaluated_teams"]))
             + ", so no backup quarterback of those teams was excluded (the default needs the evidence;"
-            " none was guessed; supply the depth package with --qb-depth-role-evidence-json)"
+            " none was guessed; the run captures it from the frozen depth chart when it can, named by"
+            " QB_DEPTH_CAPTURE_* when it cannot, or supply it with --qb-depth-role-evidence-json)"
         )
     block = reports.get("construction_judgment")
     if isinstance(block, Mapping):
@@ -3605,8 +3619,14 @@ def _run_prior_review_profile(
     # Session 53 (R36): a depth package `run-slate` could not capture or use, and the Showdown
     # backup-quarterback default's gap, travel with the file by name (`P`, never a stop).
     if outcome.file_valid:
-        for limitation in reversed(_qb_depth_limitations(outcome.reports)):
-            blockers.insert(0, limitation)
+        if slate.mode is EngineMode.CLASSIC:
+            # Session 63: Classic captures too. Appended, like the judgment limitations below, because
+            # inserting them first displaced a blocker that withholds a file (six existing tests read it
+            # at index 0); Showdown's stay at the front as they always were.
+            blockers.extend(_qb_depth_capture_limitations(outcome.reports))
+        else:
+            for limitation in reversed(_qb_depth_limitations(outcome.reports)):
+                blockers.insert(0, limitation)
         # Session 61 (R37): the Classic backup-quarterback default's gap, the construction judgment and the
         # judgment pass, by name (`P`, never a stop). Appended, so a blocker that withholds a file stays first.
         blockers.extend(_classic_judgment_limitations(outcome.reports))

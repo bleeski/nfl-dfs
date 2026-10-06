@@ -23,6 +23,12 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 - CI runs the pinned suite and `tests/test_repo_boundaries.py` on every push,
   and the protected-path check on every pull request event, labels included.
   Green CI replaced Ben reading each diff, so never push speculatively.
+- Three traps that cost Sessions 61 and 62 time (added by Session 63). **Delete the old suite log before any Monitor is armed on it:**
+  a Monitor on a log an earlier run left reports that run's result (it did in Session 62). **PowerShell 5.1 cannot pipe
+  `git commit -F -`:** write the message with the Write tool to a file and commit from Bash with `git commit -F <file>`. **Edit
+  scripts, commit messages and PR bodies go through the Write tool, never a Bash heredoc:** the shell layer rewrites backslashes (a
+  `\f` became a form feed) and a script heavy with apostrophes fails to parse. Run the script with `.venv\Scripts\python.exe`, and
+  write the ledgers with `write_bytes` so their LF endings survive.
 
 ## Session protocol: `docs/ROADMAP.md` §2.1, plus these
 
@@ -116,12 +122,13 @@ or none supplied) builds the thesis portfolio, which is where a judgment applies
 - **Starting quarterbacks first (engine, then you).** `starters_check` names each team's effective starter (the promoted backup of a
   DraftKings-`OUT` starter included) with whether the pool scored him and why not. Every other quarterback the depth evidence lists
   is out of every Classic row by default (`classic_backup_qb_default`), so Week 4's Mullens case no longer needs a by-hand drop.
-  **Supply the QB depth package** (`--qb-depth-role-evidence-json`; Classic captures none): without it every team is
-  `unevaluated`, nobody is excluded, and `CLASSIC_BACKUP_QB_UNEVALUATED` travels with the file: the card's "no backup
-  quarterback rostered" holds only with the package. A supplied package that R25 refuses (an operator or official exclusion on a
-  rank-1 starter DraftKings still lists as available) raises, `run-slate`'s outer handler finishes with the baseline, and the
-  improvement is lost, not the file: rebuild the package with `--teams` naming the other teams (Week 4 did it for LAR) and rerun. A
-  starter in `missing_from_scored_pool` is yours: roster him by judgment or write why not.
+  **The run captures the QB depth package itself** (Session 63) from the depth chart the prior package froze: read
+  `reports["qb_depth_capture"]` (`declared_teams`, `undeclared_teams` with each reason) and the `QB_DEPTH_CAPTURE_*` limitations. A team
+  the chart cannot build is named and left `unevaluated` (`CLASSIC_BACKUP_QB_UNEVALUATED`), nobody of his is guessed out, and the
+  other teams are declared; an operator or official exclusion on a rank-1 starter DraftKings still lists as available drops that team
+  (R25), not the package. Supply `--qb-depth-role-evidence-json` only to override; a supplied package R25 refuses raises,
+  `run-slate`'s outer handler finishes with the baseline, and the improvement is lost, not the file: rebuild it with `--teams` naming
+  the other teams and rerun. A starter in `missing_from_scored_pool` is yours: roster him by judgment or write why not.
 - **Then the injury rooms (engine lists, you research).** `injury_rooms` shows who vacated, who inherits and each inheritor's prior
   before and after Session 60. `candidates` is the ranked list to research, never a selection: people the engine could not reprice
   (a transfer in a room with a vacancy, whose prior is still the old role's), the absorbers, and anyone DraftKings prices far

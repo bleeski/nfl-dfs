@@ -1248,6 +1248,7 @@
     "QB_DEPTH_ARTIFACT_MISSING_DURING_SELECTION": "qb_depth_roles",
     "QB_DEPTH_CAPTURE_REFUSED": "qb_depth_roles",
     "QB_DEPTH_CAPTURE_STALE": "qb_depth_roles",
+    "QB_DEPTH_CAPTURE_TEAM_UNDECLARED": "qb_depth_roles",
     "QB_DEPTH_CAPTURE_UNAVAILABLE": "qb_depth_roles",
     "QB_DEPTH_CLOCK_REQUIRES_TIMEZONE": "qb_depth_roles",
     "QB_DEPTH_CPT_FLEX_INCOMPLETE": "qb_depth_roles",

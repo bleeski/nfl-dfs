@@ -329,11 +329,12 @@ Print it with `scripts/judgment_pass_report.py` on the run's `cowork_run.json` (
 
 The report names each team's starting quarterback and whether the pool scored him; each injury room (who vacated, who inherits,
 the inheritors' prior points before and after Session 60, salaries); a ranked **candidate list to research, never a selection**;
-and a **late-swap watch list** of rostered later-window people with no official row. Supply the QB depth package
-(`--qb-depth-role-evidence-json`, with a request base or a full path): Classic captures none, and without it every team is named
-unevaluated and no backup quarterback is excluded. With it, a backup behind a declared starter is out of every Classic row. A package
-R25 refuses (an operator or official exclusion on a rank-1 starter DraftKings still lists as available) stops the improvement and
-leaves the baseline: rebuild it with `--teams` naming the other teams and rerun.
+and a **late-swap watch list** of rostered later-window people with no official row. Since Session 63 the run captures the QB
+depth package itself from the depth chart the prior package froze: a backup behind a declared starter is out of every Classic row,
+a team the chart cannot build is named (`QB_DEPTH_CAPTURE_TEAM_UNDECLARED:<TEAM>:<reason>`) and left unevaluated while the others are
+declared, and an operator or official exclusion on a rank-1 starter DraftKings still lists as available drops that one team (R25) instead
+of the package. Supply your own (`--qb-depth-role-evidence-json`, with a request base or a full path) only to override the capture; a
+supplied package R25 refuses still stops the improvement and leaves the baseline: rebuild it with `--teams` naming the other teams and rerun.
 
 To place a person the research supports, write a **construction judgment** and rerun with `--construction-judgment-json`:
 

@@ -227,6 +227,58 @@ def _prior_before_redistribution(model, pre_model, score_chain):
     return {person: round(float(scored.by_person[person]), 6) for person in moved if person in scored.by_person}, "SCORED"
 
 
+DEPTH_ORDER_EFFECT_VERSION = "classic_depth_order_effect_v1"
+_DEPTH_EFFECT_TOLERANCE = 1e-9
+_DEPTH_EFFECT_LARGEST = 10
+_DEPTH_EFFECT_LISTED = 20
+
+
+def _depth_order_effect(score_chain, model, scores, qb_depth_report):
+    """What the quarterback depth order did to this run's scores (Session 63, R36 for Classic).
+
+    A declared starter holds his team's whole quarterback attempt pool and a backup holds none, so a
+    Classic run that captured a depth package scores its quarterbacks differently from one that did not.
+    The "before" is the identical chain on the identical model with the package withheld, so the
+    difference is exactly the depth order's. It selects nothing and gates nothing: with no depth evidence,
+    or a counterfactual that cannot run, the report says which and reports no before it did not compute.
+    No wall time, because the report is hash-bound and a replay must be byte-identical.
+    """
+
+    base = {
+        "version": DEPTH_ORDER_EFFECT_VERSION,
+        "does_not_establish": ["THAT_THE_DECLARED_STARTER_IS_PLAYING", "THAT_ANY_PRIOR_IS_VALIDATED"],
+    }
+    report = qb_depth_report if isinstance(qb_depth_report, Mapping) else {}
+    if not report.get("evidence_path"):
+        return {**base, "status": "NO_DEPTH_EVIDENCE"}
+    try:
+        before = score_chain(model, with_depth=False)[2].by_person
+    except Exception as exc:  # noqa: BLE001 - a diagnostic counterfactual never stops a run
+        return {**base, "status": f"COUNTERFACTUAL_COULD_NOT_RUN:{type(exc).__name__}:{' '.join(str(exc).split())[:160]}"}
+    after = scores.by_person
+    moves = []
+    for person in sorted(set(before) & set(after)):
+        delta = float(after[person]) - float(before[person])
+        if abs(delta) > _DEPTH_EFFECT_TOLERANCE:
+            moves.append({"person": person, "before": round(float(before[person]), 6),
+                          "after": round(float(after[person]), 6), "delta": round(delta, 6)})
+    moves.sort(key=lambda row: (-abs(row["delta"]), row["person"]))
+    shares = [
+        row for row in (report.get("changed_people") or ())
+        if isinstance(row, Mapping) and row.get("qb_attempt_share_before") != row.get("qb_attempt_share_after")
+    ]
+    return {
+        **base,
+        "status": "SCORED",
+        "declared_teams": sorted((report.get("starters_by_team") or {})),
+        "attempt_shares_moved": len(shares),
+        "scores_moved": len(moves),
+        "scored_only_with_depth": sorted(set(after) - set(before))[:_DEPTH_EFFECT_LISTED],
+        "scored_only_without_depth": sorted(set(before) - set(after))[:_DEPTH_EFFECT_LISTED],
+        "largest_moves": moves[:_DEPTH_EFFECT_LARGEST],
+    }
+
+
 def select_prior_lineups(
     slate: SlateContract,
     model: OpportunityModel,
@@ -349,13 +401,13 @@ def select_prior_lineups(
         as_of=as_of,
     )
 
-    def score_chain(scored_model: OpportunityModel):
+    def score_chain(scored_model: OpportunityModel, *, with_depth: bool = True):
         # The depth chart moves quarterback attempts onto the named starter before
         # anything reads a share, so a backup cannot carry his prior-season split
         # into the projection and then be removed by a policy exclusion that lands
         # after scoring. It touches `qb_attempt_share` and nothing else.
         depth = resolve_qb_depth_roles(
-            slate, scored_model, contract, evidence_path=qb_depth_role_evidence_json, as_of=as_of,
+            slate, scored_model, contract, evidence_path=qb_depth_role_evidence_json if with_depth else None, as_of=as_of,
         )
         # Session 54 (R36): the effective starters the depth evidence names are selectable even with no
         # history. `starters_by_team` is already past R25's promotion over a DraftKings-unavailable starter.
@@ -399,8 +451,8 @@ def select_prior_lineups(
     # declared starter is out of every Classic row (Week 4's first build rostered Nick Mullens, who was
     # not on his team's depth chart). A Classic policy that names a person with a minimum is a choice
     # made on purpose, so that person stays in; so does anyone a validated judgment names (Part B).
-    # Classic supplies its own depth package (`run-slate` auto-captures for Showdown only), so a team the
-    # evidence does not order is named and nobody is guessed out.
+    # `run-slate` captures the depth package for Classic too (Session 63), or the operator supplies one; a team
+    # the evidence does not order is named and nobody is guessed out.
     judgment_decision = None
     if construction_judgment is not None:
         if slate.mode is not EngineMode.CLASSIC:
@@ -474,6 +526,8 @@ def select_prior_lineups(
         judgment_inputs = {
             "prior_points_before_redistribution": before_points,
             "prior_points_before_redistribution_note": before_note,
+            # Session 63: how many Classic scores the depth order moved (the package this run captured or was given).
+            "depth_order_effect": _depth_order_effect(score_chain, model, scores, qb_depth_report),
             **({"construction_judgment": judgment_decision.report} if judgment_decision is not None else {}),
         }
     if pool_scores_target is not None:
