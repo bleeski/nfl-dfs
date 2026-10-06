@@ -3,9 +3,10 @@
     python scripts/judgment_pass_report.py <cowork_run.json | classic_complete_slate_coverage.json>
 
 Reads the pass the run already wrote (`prior_review_reports.selection.judgment_pass`, or the
-coverage artifact's `judgment_pass`) and the construction judgment's decision beside it. A pure
-view: nothing is recomputed, no file is written, and no number is invented. `--json` prints the
-pass block itself.
+coverage artifact's `judgment_pass`) and the construction judgment's decision beside it, then the
+Pareto salary redeploy's block when the run built by theses (`construction.pareto_redeploy`, or the
+coverage artifact's `pareto_redeploy`; Session 64). A pure view: nothing is recomputed, no file is
+written, and no number is invented. `--json` prints the blocks themselves.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from nfl_dfs.classic_judgment import render_judgment_pass_text  # noqa: E402
+from nfl_dfs.classic_redeploy import render_report as render_redeploy_report  # noqa: E402
 
 
 def _blocks(document: dict) -> tuple[dict | None, dict | None]:
@@ -31,6 +33,17 @@ def _blocks(document: dict) -> tuple[dict | None, dict | None]:
     return None, None
 
 
+def _redeploy_block(document: dict) -> dict | None:
+    reports = document.get("prior_review_reports")
+    selection = reports.get("selection") if isinstance(reports, dict) else None
+    selector = selection.get("selection") if isinstance(selection, dict) else None
+    construction = selector.get("construction") if isinstance(selector, dict) else None
+    block = construction.get("pareto_redeploy") if isinstance(construction, dict) else None
+    if not isinstance(block, dict):
+        block = document.get("pareto_redeploy")
+    return block if isinstance(block, dict) else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("path", help="a run-slate cowork_run.json, or a Classic complete-slate coverage JSON")
@@ -38,13 +51,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     document = json.loads(Path(args.path).read_text(encoding="utf-8"))
     block, decision = _blocks(document)
+    redeploy = _redeploy_block(document)
     if block is None:
         print("no judgment_pass in this file: it is not a Classic run from Session 61 on", file=sys.stderr)
         return 2
     if args.json:
-        print(json.dumps({"judgment_pass": block, "construction_judgment": decision}, indent=2, sort_keys=True))
+        print(json.dumps({"judgment_pass": block, "construction_judgment": decision, "pareto_redeploy": redeploy},
+                         indent=2, sort_keys=True))
     else:
         sys.stdout.write(render_judgment_pass_text(block, decision))
+        if redeploy is not None:
+            lines = render_redeploy_report(redeploy)
+            sys.stdout.write("\n## Salary redeploy (a Pareto swap only; not a selection)\n" + "\n".join(lines) + "\n")
     return 0
 
 

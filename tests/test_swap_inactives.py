@@ -876,3 +876,103 @@ def test_hitting_the_pass_bound_is_reported_and_a_rerun_continues(tmp_path, monk
     assert swap.main(argv(first, second)) == swap.EXIT_OK
     again = json.loads(second.read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]
     assert again["fixed_point"] is True and again["accepted"]  # the rerun had work left, and finished it
+
+
+# ---- Session 64: the rule is the engine's, and the redeploy knows the clock ------------------------------------ #
+
+
+def test_the_script_imports_the_engines_rule_and_does_not_keep_its_own():
+    from nfl_dfs import classic_redeploy as engine
+
+    assert swap.washout_proxies is engine.washout_proxies and swap.proxies_hurt is engine.proxies_hurt
+    assert swap.PARETO_RULE == engine.REDEPLOY_RULE == "pareto_redeploy_v2"
+    assert swap.WASHOUT_GOALS is engine.WASHOUT_GOALS and swap.render_pareto_report is engine.render_report
+    assert swap.PARETO_DOES_NOT_ESTABLISH is engine.DOES_NOT_ESTABLISH
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert "def washout_proxies" not in source and "def proxies_hurt" not in source  # one rule, not two
+
+
+def test_the_boards_engine_slate_is_the_engines_own_parse_of_the_same_file():
+    from nfl_dfs.dk import parse_salaries
+
+    parsed = parse_salaries(WEEK4 / "DKSalaries.csv")
+    built = swap.Board(swap.load_salaries(WEEK4 / "DKSalaries.csv"), 50000, 0).engine_slate()
+
+    def view(player):  # everything but the identity, which is the DraftKings ID here and TEAM|POS|Name there
+        return (player.dk_id, player.name, player.position, player.roster_positions, player.salary, player.team,
+                player.opponent, player.game_id, player.lock_at, player.status_raw)
+
+    assert [view(p) for p in built.players] == [view(p) for p in parsed.players]
+    assert {(g.game_id, g.away_team, g.home_team, g.lock_at) for g in built.games} == {
+        (g.game_id, g.away_team, g.home_team, g.lock_at) for g in parsed.games}
+    assert built.salary_cap == parsed.salary_cap and built.mode is parsed.mode
+    assert all(p.underlying_id == p.dk_id for p in built.players)
+
+
+def test_week4_redeploy_with_now_never_touches_a_locked_cell(tmp_path):
+    construction = WEEK4 / "construction"
+    protect = ("Braelon Allen", "Zach Ertz", "Jauan Jennings", "Emanuel Wilson")
+    flags = [part for name in protect for part in ("--protect", name)]
+
+    def argv(out_path, *extra):
+        return ["--portfolio", str(construction / "portfolio_final_v4.json"), "--scores", str(construction / "scores_qbclean.json"),
+                "--salaries", str(WEEK4 / "DKSalaries.csv"), "--mode", "redeploy", *flags, "--out", str(out_path), *extra]
+
+    sal = swap.load_salaries(WEEK4 / "DKSalaries.csv")
+    now = "2026-10-04T14:30:00-04:00"  # after the 1:00 games, before the 4:05 and 4:25 kickoffs
+    moment = datetime.fromisoformat(now)
+    locked = {i for i, row in sal.items() if swap.lock_at(row) is not None and swap.lock_at(row) <= moment}
+    assert 0 < len(locked) < len(sal)
+
+    out = tmp_path / "now.json"
+    assert swap.main(argv(out, "--now", now)) == swap.EXIT_OK
+    before = json.loads((construction / "portfolio_final_v4.json").read_text(encoding="utf-8"))["assignments_by_entry_id"]
+    doc = json.loads(out.read_text(encoding="utf-8"))
+    after, report = doc["assignments_by_entry_id"], doc["construction"]["pareto_redeploy"]
+    assert report["state"] == "COMPLETED" and report["locked_people"] > 0 and report["accepted"]
+    for entry_id, roster in after.items():  # every cell holding a locked person is exactly where it was
+        assert [i for i in roster if i in locked] == [i for i in before[entry_id] if i in locked]
+        assert [k for k, i in enumerate(roster) if i in locked] == [k for k, i in enumerate(before[entry_id]) if i in locked]
+    for taken in report["accepted"]:
+        assert taken["out"] not in locked and taken["in"] not in locked
+    plain = tmp_path / "plain.json"  # without --now there is no lock filter at all (the Session 62 behaviour)
+    assert swap.main(argv(plain)) == swap.EXIT_OK
+    assert json.loads(plain.read_text(encoding="utf-8"))["construction"]["pareto_redeploy"]["locked_people"] == 0
+
+
+def test_a_person_whose_kickoff_the_file_does_not_state_is_never_brought_in_under_a_lock_clock(tmp_path):
+    """Late-swap refuses an incoming person whose kickoff the file does not state (a postponed or TBD game). So does the
+    redeploy once it has a lock clock; without one there is no lock filter and he is as eligible as ever."""
+
+    sal_path, scores_path, portfolio_path = _pareto_fixture(tmp_path, other=E2_WITHOUT_X)
+    moment = datetime(2026, 9, 27, 12, 0, tzinfo=timezone(timedelta(hours=-4)))  # before every kickoff in the fixture
+
+    def run(*, tbd, now):
+        sal = swap.load_salaries(sal_path)
+        if tbd:
+            sal[X]["Game Info"] = "TBD"
+        assignments = {e: list(r) for e, r in swap.load_portfolio(portfolio_path)["assignments_by_entry_id"].items()}
+        _log, report = swap.redeploy(
+            swap.Board(sal, 50000, 0), swap.load_scores(scores_path), assignments, list(assignments),
+            max_exposure=9, max_overlap=9, now=now)
+        return assignments, report
+
+    known, report = run(tbd=False, now=moment)
+    assert any(taken["in"] == X for taken in report["accepted"]) and report["locked_people"] == 0  # the case is real
+    unknown, report = run(tbd=True, now=moment)
+    assert not any(X in roster for roster in unknown.values()) and not any(t["in"] == X for t in report["accepted"])
+    no_clock, report = run(tbd=True, now=None)
+    assert any(t["in"] == X for t in report["accepted"])  # no lock clock, no lock filter
+    assert known != unknown
+
+
+def test_a_portfolio_person_the_salary_file_does_not_hold_is_refused_by_name(tmp_path, capsys):
+    sal_path, scores_path, portfolio_path = _pareto_fixture(tmp_path, other=E2_WITHOUT_X)
+    portfolio = json.loads(Path(portfolio_path).read_text(encoding="utf-8"))
+    portfolio["assignments_by_entry_id"]["E1"][0] = "NOT_A_DK_ID"
+    Path(portfolio_path).write_text(json.dumps(portfolio), encoding="utf-8")
+    out = tmp_path / "refused.json"
+    code = swap.main(["--portfolio", str(portfolio_path), "--scores", str(scores_path), "--salaries", str(sal_path),
+                      "--mode", "redeploy", "--out", str(out)])
+    assert code == swap.EXIT_REFUSED and not out.exists()
+    assert "PORTFOLIO_PERSON_NOT_IN_SALARY_FILE" in capsys.readouterr().err

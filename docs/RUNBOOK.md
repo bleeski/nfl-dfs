@@ -1272,9 +1272,21 @@ pairwise overlap no higher, distinct people no fewer). It scans every row to a
 fixed point, so a rerun on its own output changes nothing (the report says
 `fixed_point`, and `PASS_BOUND_REACHED` if its 25-pass bound stops it first), and
 it prints both goals before and after and every rejected swap with the goal it
-would have hurt. It has no lock awareness: run it before the earliest lock.
-Where no gain exists the portfolio stays and the report says so. After a
-Classic `run-slate`, protect whoever its construction judgment placed:
+would have hurt. Where no gain exists the portfolio stays and the report says
+so. **Since Session 64 the rule is engine code** (`src/nfl_dfs/classic_redeploy.py`),
+and a Classic `run-slate` that builds by theses (rung 4, or no policy) runs it at
+the end of the build with no hand step, protecting whoever its construction
+judgment placed, and reports it in the result's selection report
+(`construction.pareto_redeploy`) and the Classic coverage artifact: read its
+`state` first. On the engine's own rows it usually takes nothing (the solver
+already spends the cap), and `COMPLETED` with no swaps is the guarantee, not a
+gain; a state that did not run to its end (`DEADLINE_STOP`,
+`NOT_RUN_WINDOW_SPENT`, `FAILED`) travels with the file as
+`CLASSIC_PARETO_REDEPLOY_INCOMPLETE`, and the rows are then the build's own. The
+script has the same rule and, with `--now <ISO 8601 with an offset>`, lock
+awareness: a person whose game has locked is never outgoing and never incoming.
+For a portfolio you built or edited by hand, after a Classic `run-slate`, protect
+whoever its construction judgment placed:
 
 ```
 python scripts/swap_inactives.py --portfolio <portfolio.json> --scores <scores.json> \

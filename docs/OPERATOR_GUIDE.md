@@ -361,8 +361,11 @@ To place a person the research supports, write a **construction judgment** and r
 Since Session 62 (R37) `scripts/swap_inactives.py --mode redeploy` takes a salary-driven swap **only as a Pareto gain**, and
 `scripts/build_thesis_portfolio.py` runs the same rule at its fill step. Ben: unused salary is never a defect, so nothing chases
 the cap and no tool in the chain has a salary floor by default (`--min-salary` is an opt-in; QA reports a lineup under it as a Tier 2
-note, never a defect). The rule works on an operator-layer portfolio JSON (what `build_thesis_portfolio.py` or
-`build_classic_portfolio.py` writes), not on `run-slate`'s own file: wiring it into the run's rung-4 thesis build is Session 64.
+note, never a defect). **Since Session 64 the rule is engine code** (`src/nfl_dfs/classic_redeploy.py`, report `pareto_redeploy_v2`):
+`run-slate`'s own rung-4 thesis build runs it at the end of the build with no hand step and reports it in the selection report
+(`construction.pareto_redeploy`) and the Classic coverage artifact (`pareto_redeploy`); `python scripts/judgment_pass_report.py
+<cowork_run.json>` prints it under the judgment pass. This script imports the same rule and works on an operator-layer portfolio JSON
+(what `build_thesis_portfolio.py` or `build_classic_portfolio.py` writes), so use it for a portfolio you built or edited by hand.
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\swap_inactives.py --portfolio 'C:\path\portfolio.json' --scores 'C:\path\scores.json' `
@@ -376,14 +379,20 @@ note, never a defect). The rule works on an operator-layer portfolio JSON (what 
   person out too; the thesis build always does). "Used at least two fewer times" is a quick screen, not the proof; the
   portfolio-level recount is, and it also takes a swap whose incoming person is used one fewer time.
 - It scans every row (`--changed-entry-id` restricts it) until a whole pass takes nothing, so a rerun on its own output changes
-  nothing (`fixed_point=True`; `PASS_BOUND_REACHED` means its 25-pass bound stopped it first, so rerun it). Run it **before the
-  earliest lock**: it has no lock awareness, so after a lock use late swap. The thesis build leaves the priors-wrong thesis's rows
+  nothing (`fixed_point=True`; `PASS_BOUND_REACHED` means its 25-pass bound stopped it first, so rerun it). **`--now <ISO 8601 with an
+  offset>`** (Session 64) gives it the lock clock: a person whose game kicked off at or before it is never outgoing and never
+  incoming, so a redeploy after the first window touches only cells that can still change on DraftKings (and a person whose kickoff the file
+  does not state, a postponed or TBD game, is never brought in, as late swap never brings one in); without `--now` there
+  is no lock filter, so run it before the earliest lock. The thesis build leaves the priors-wrong thesis's rows
   alone (that thesis bets against the prior this ranks by). `--protect NAME_OR_ID` (repeatable) and `--protect-from <cowork_run.json | coverage.json>` name who never moves; an
-  unknown or ambiguous name, an ID the salary file does not hold, or a run with no `judgment_pass` is refused, nothing written.
+  unknown or ambiguous name, an ID the salary file does not hold, a portfolio person the salary file does not hold, or a run with
+  no `judgment_pass` is refused, nothing written.
 - Read the printed report (also `construction.pareto_redeploy` in the new file): **both goals before and after** (prior sum;
   max exposure, top-3 union, mean overlap, distinct people), every swap taken, and **every swap it refused**, each with the goal it
   would have hurt (`REJECTED entry: A -> B (+gain) would hurt: mean_overlap, ...`). A swap refused for concentration is information,
-  not a failure. Where no gain exists the report says `NO_PARETO_GAIN` and the portfolio is the same.
+  not a failure. Where no gain exists the report says `NO_PARETO_GAIN` and the portfolio is the same. Inside `run-slate` the report
+  stores at most 100 swaps of each kind with the exact totals beside them (a hash-bound artifact is bounded by counts, never
+  seconds); this script writes every one.
 - It is construction only: it writes no number, calls nothing EV or a win probability, and clears no gate. Re-run
   `qa_classic_portfolio.py` on the new file and keep the earlier file when nothing passes.
 

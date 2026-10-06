@@ -50,17 +50,33 @@ A minimum the rows could not hold is reported as a shortfall by name and never c
 repeating a lineup (R29). The delivered rosters are recounted, not trusted. The attempts are
 budgeted (`PLACEMENT_SOLVES_PER_ROW`, `PLACEMENT_MISS_LIMIT`, `PLACEMENT_TIME_SHARE`): a person no
 thesis could hold is abandoned by name, so a preference that cannot be met never costs the file its rows.
+
+Pareto redeploy (Session 64, R37; `pareto_redeploy=True`, which `selection.select_prior_lineups` passes). After the rows are
+built, `classic_redeploy.redeploy` takes salary-driven swaps only as Pareto gains (the row's prior rises and no washout
+proxy is worse), with the placed people (`protected`) never moving, nobody in a game the clock says has locked, and every
+row still distinct (R29) inside the caps the build itself used: each person against `limit_for(person)`, each pair against the
+cap of the later row's own build. It is a post-pass with its own versioned report, `construction["pareto_redeploy"]`
+(`pareto_redeploy_v2`), so the thesis construction's own version and meaning are unchanged; the rows it changed are named
+there and carry `solver_status="PARETO_REDEPLOY_OF_<their solve's status>"`. The one backstop below runs on the redeployed
+rows before they replace the built ones, and again on the final rows, so a redeploy can never produce a state the
+build would reject. The stage is bounded by the run's deadline (`deadline.Budget.allowance("pareto_redeploy")`, or the
+build's own window outside `run-slate`), never fatal, and a state that did not run to its end is named
+(`DEADLINE_STOP`, `NOT_RUN_WINDOW_SPENT`, `FAILED`): the rows stay as built and the file ships.
 """
 
 from __future__ import annotations
 
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from contextlib import nullcontext
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import Callable, Mapping, Sequence
 
+from . import classic_redeploy
 from .contracts import SlateContract
-from .lineups import validate_lineup
+from .deadline import active_budget
+from .lineups import roster_canonical_key, validate_lineup
 from .optimizer import LineupOptimizer, SolverResult
 
 THESIS_CONSTRUCTION_VERSION = "classic_thesis_sequential_v1"
@@ -118,6 +134,15 @@ class _Thesis:
                 "stack_value": round(self.value, 6), "person_share": round(self.share, 4),
                 "rows": list(self.rows), "bringback_required": self.bringback,
                 "drops": [dict(item) for item in self.drops]}
+
+
+def _later_row_cap(row_caps: Sequence[int | None], first: str, second: str, binds: Callable[[int | None], bool]) -> int | None:
+    """The most people two rows may share: the cap the LATER of them was built under (`None`: uncapped, or a cap too loose to
+    bind). It is the cap the build's own backstop holds the pair to, so a redeploy held to anything else could pass a swap the
+    backstop then rejects. Entry IDs are the 1-based row indexes."""
+
+    cap = row_caps[max(int(first), int(second)) - 1]
+    return cap if binds(cap) else None
 
 
 def person_cap(count: int, share: float) -> int:
@@ -195,6 +220,9 @@ def select_thesis_lineups(
     classic_person_overlap: int | None,
     max_person_share: float = DEFAULT_PERSON_SHARE,
     protected: Mapping[str, int] | None = None,
+    pareto_redeploy: bool = False,
+    now: datetime | None = None,
+    redeploy_seconds: float | None = None,
     clock: Callable[[], float] = time.monotonic,
 ):
     """`count` distinct Classic lineups from several stack theses under one person cap.
@@ -204,6 +232,10 @@ def select_thesis_lineups(
 
     `protected` (Session 61) is `{person: minimum rows}` for the people a validated construction
     judgment names; the module docstring says how they are placed. Empty or `None`: v1, as before.
+
+    `pareto_redeploy` (Session 64) runs the redeploy stage the module docstring describes; `now` is the lock clock (an aware
+    moment; `None` applies no lock filter) and `redeploy_seconds` pins the stage's allowance (a test hook; `None` asks the
+    run's deadline budget, or takes the build's own window outside `run-slate`).
 
     Returns the `_Sequential` run the C1 path returns, with `.construction` (the
     report block). Fewer than `count` rows come back with `.stopped` set; none at
@@ -560,35 +592,120 @@ def select_thesis_lineups(
                    "selectable_people": len(contract.selectable_people)},
         )
 
-    # The backstop, recomputed from the rosters alone: distinct (R29), no excluded row, every row
-    # under the overlap cap it was solved under, nobody above the held person share, every
-    # lineup stacked while the stack requirement held.
-    keys = [lineup.canonical_key for lineup in selected]
-    if len(set(keys)) != len(keys):
-        raise SelectionError("DUPLICATE_LINEUP_SELECTED")
-    people_by_row = [{rows[dk_id].underlying_id for dk_id in lineup.roster} for lineup in selected]
-    for later, cap in enumerate(row_caps):
-        if not binds(cap):
-            continue
-        for earlier in range(later):
-            shared = len(people_by_row[earlier] & people_by_row[later])
-            if shared > cap:
-                raise SelectionError(f"OVERLAP_LIMIT_BREACHED:{earlier + 1}v{later + 1}:{shared}>{cap}")
+    def recount(lineups: Sequence) -> dict[str, object]:
+        """The one backstop, recomputed from the rosters alone: every row a legal lineup with no excluded row,
+        distinct (R29), every row under the overlap cap it was solved under, nobody above his person limit, every
+        placement still held, every lineup stacked while the stack requirement held. Raises `SelectionError`;
+        the build runs it on its final rows and the redeploy stage on its trial rows before they replace the built ones."""
+
+        for lineup in lineups:
+            if set(lineup.roster) & blocked:
+                raise SelectionError(f"SOLVER_SELECTED_AN_EXCLUDED_ROW:index={lineup.index}:{sorted(set(lineup.roster) & blocked)}")
+        keys = [lineup.canonical_key for lineup in lineups]
+        if len(set(keys)) != len(keys):
+            raise SelectionError("DUPLICATE_LINEUP_SELECTED")
+        people_by_row = [{rows[dk_id].underlying_id for dk_id in lineup.roster} for lineup in lineups]
+        for later, cap in enumerate(row_caps):
+            if not binds(cap):
+                continue
+            for earlier in range(later):
+                shared = len(people_by_row[earlier] & people_by_row[later])
+                if shared > cap:
+                    raise SelectionError(f"OVERLAP_LIMIT_BREACHED:{earlier + 1}v{later + 1}:{shared}>{cap}")
+        totals = Counter(person for people in people_by_row for person in people)
+        top_person, top_count = max(totals.items(), key=lambda item: (item[1], item[0]))
+        over = [(rows_held, person) for person, rows_held in totals.items() if rows_held > limit_for(person)]
+        if over:
+            rows_held, person = max(over)
+            raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:person_share:{person}:{rows_held}>{limit_for(person)}")
+        for forced_index, held in sorted(forced_rows.items()):
+            for person in held:
+                if person not in people_by_row[forced_index - 1]:
+                    raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:placement:{person}:row={forced_index}")
+        stacked = sum(1 for lineup in lineups if _stacked(rows, lineup.roster))
+        if stack_required and stacked != len(lineups):
+            raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:stack:{stacked}/{len(lineups)}")
+        return {"people_by_row": people_by_row, "top_person": top_person, "top_count": top_count, "stacked": stacked,
+                "bringbacks": sum(1 for lineup in lineups if _bringback(rows, lineup.roster))}
+
+    def delivered_proxies(lineups: Sequence) -> dict:
+        """The washout proxies of the rows as they will be DELIVERED (entry order, cell order), the way QA Tier 2 counts them;
+        the top-3 tie breaks by first appearance, so the order of the cells is part of the number."""
+
+        return classic_redeploy.washout_proxies([[rows[dk_id].underlying_id for dk_id in lineup.roster] for lineup in lineups])
+
+    def redeploy_stage() -> tuple[list, dict[str, object]]:
+        """`(rows, block)`: the rows after a Pareto redeploy and its report, or the rows as built and the reason it
+        did not run. Never raises: a construction preference gives way before the file does."""
+
+        budget = active_budget()
+        left = window - (clock() - started)
+        granted = None
+        if budget is not None:
+            granted = budget.allowance(
+                classic_redeploy.STAGE_NAME, default=classic_redeploy.STAGE_SECONDS,
+                share=classic_redeploy.STAGE_WINDOW_SHARE, minimum=classic_redeploy.STAGE_MINIMUM_SECONDS,
+                name_skip=False)
+            seconds = granted
+        else:
+            seconds = min(classic_redeploy.STAGE_SECONDS, classic_redeploy.STAGE_WINDOW_SHARE * window)
+        if seconds is not None:
+            seconds = min(seconds, left)  # never past what is left of the build's own window
+        if redeploy_seconds is not None:
+            seconds = float(redeploy_seconds)
+        if seconds is None or seconds <= 0:
+            if granted is not None:  # the allowance left its record open; a refused one already closed it as SKIPPED
+                with budget.stage(classic_redeploy.STAGE_NAME) as record:
+                    record.outcome = "SKIPPED"
+            return selected, classic_redeploy.incomplete_report(
+                "NOT_RUN_WINDOW_SPENT", "NO_TIME_WAS_LEFT_IN_THE_DELIVERY_WINDOW_FOR_THE_REDEPLOY")
+        began = clock()
+        try:
+            with (budget.stage(classic_redeploy.STAGE_NAME) if budget is not None else nullcontext()) as record:
+                result = classic_redeploy.redeploy(
+                    slate, objective, {str(lineup.index): lineup.roster for lineup in selected},
+                    protect={dk_id for person in protected_min for dk_id in by_person[person]},
+                    gated=blocked,
+                    forbidden_keys={roster_canonical_key(slate, roster) for roster in forbidden},
+                    exposure_limit=limit_for,
+                    overlap_cap=lambda first, second: _later_row_cap(row_caps, first, second, binds),
+                    locked=classic_redeploy.locked_dk_ids(slate, now) if now is not None else (),
+                    slot_ordered=True, stored_limit=classic_redeploy.STORED_LIMIT,
+                    stop=lambda: clock() - began > seconds)
+                if record is not None and result.report["state"] != "COMPLETED":
+                    record.outcome = str(result.report["state"])
+                changed = set(result.changed)
+                trial = []
+                for lineup in selected:
+                    roster = result.rosters[str(lineup.index)]
+                    if str(lineup.index) not in changed:
+                        trial.append(lineup)
+                        continue
+                    validation = validate_lineup(slate, roster)
+                    trial.append(replace(
+                        lineup, roster=tuple(roster), salary=validation.lineup.salary,
+                        prior_points=sum(objective[dk_id] for dk_id in roster),
+                        canonical_key=validation.lineup.canonical_key,
+                        solver_status=f"PARETO_REDEPLOY_OF_{lineup.solver_status}"))
+                # Inside the recorded stage, so a trial the checks reject marks the deadline record RAISED as well as the
+                # block FAILED. The backstop, then the one thing it does not read: the proxies of the delivered rows,
+                # counted again from the cells as delivered, which is what QA Tier 2 will count.
+                recount(trial)
+                hurt = classic_redeploy.proxies_hurt(delivered_proxies(selected), delivered_proxies(trial))
+                if hurt:
+                    raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:washout_proxy:{','.join(hurt)}")
+        except Exception as exc:  # noqa: BLE001 - never fatal; the rows stay as built and the reason is named
+            return selected, classic_redeploy.incomplete_report(
+                "FAILED", f"{type(exc).__name__}: {' '.join(str(exc).split())[:200]}")
+        return trial, result.report
+
+    redeploy_block = None
+    if pareto_redeploy:
+        selected, redeploy_block = redeploy_stage()
+    counted = recount(selected)
+    people_by_row, top_person, top_count = counted["people_by_row"], counted["top_person"], counted["top_count"]
+    stacked, bringbacks = counted["stacked"], counted["bringbacks"]
     final_cap = cap_now()
-    totals = Counter(person for people in people_by_row for person in people)
-    top_person, top_count = max(totals.items(), key=lambda item: (item[1], item[0]))
-    over = [(rows_held, person) for person, rows_held in totals.items() if rows_held > limit_for(person)]
-    if over:
-        rows_held, person = max(over)
-        raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:person_share:{person}:{rows_held}>{limit_for(person)}")
-    for forced_index, held in sorted(forced_rows.items()):
-        for person in held:
-            if person not in people_by_row[forced_index - 1]:
-                raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:placement:{person}:row={forced_index}")
-    stacked = sum(1 for lineup in selected if _stacked(rows, lineup.roster))
-    if stack_required and stacked != len(selected):
-        raise SelectionError(f"THESIS_CONSTRUCTION_BREACHED:stack:{stacked}/{len(selected)}")
-    bringbacks = sum(1 for lineup in selected if _bringback(rows, lineup.roster))
 
     used = [cap for cap in row_caps if cap is not None]
     construction = {
@@ -612,6 +729,8 @@ def select_thesis_lineups(
         "unfilled_rows": count - len(selected),
         "stopped": stopped,
     }
+    if redeploy_block is not None:
+        construction["pareto_redeploy"] = redeploy_block
     if protected_min or ignored:
         # Recounted from the delivered rosters, so the report cannot say what the rows do not.
         delivered = {person: [at + 1 for at, people in enumerate(people_by_row) if person in people]

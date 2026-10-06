@@ -1361,6 +1361,69 @@ means what it meant. The Showdown review (`sd5_v3`) is unchanged.
 evidence, no projection and no selection, and a judgment is the agent's research written down, hash-bound to the bytes it was written
 for and reported person by person.
 
+### The Pareto salary redeploy, `pareto_redeploy_v2` (Session 64, R37)
+
+The salary rule Session 62 built in `scripts/swap_inactives.py` (as `pareto_redeploy_v1`) is engine code in
+`src/nfl_dfs/classic_redeploy.py`, and the script imports it back (one rule, not two). `run-slate`'s rung-4 thesis build
+(`classic_theses.select_thesis_lineups(pareto_redeploy=True)`, which `selection.select_prior_lineups` passes) runs it as a final stage, with
+the accepted placements' people (`judgment_pass.protected_people`) as its protected set, and reports it in
+`construction["pareto_redeploy"]` of the selection report and, additive and hash-bound, as the key `pareto_redeploy` of the Classic
+complete-slate coverage artifact (`nfl_classic_slate_coverage_c1_v1` and `_c2_v1`; a reader that does not know the key ignores it; `null`
+when the run did not build by theses). The thesis construction versions (`classic_thesis_sequential_v1/v2`) name the row-generating
+algorithm and are unchanged; the redeploy is a post-pass with its own version, and the rows it changed are named in its block and carry
+`solver_status = PARETO_REDEPLOY_OF_<the status of the solve that built them>`.
+
+A swap (row, outgoing, incoming) is taken only when: the incoming person's prior is higher; the row, in DraftKings slot order, is a legal
+Classic lineup by `lineups.validate_lineup` (slots, cap, two games, no repeated person) at or above an operator's explicit floor (none
+is inherited) and adds no DST-against-own-skill or DST-against-own-QB clash (the engine's thesis build does not enforce that
+preference, so a row that already clashes can still be redeployed, never made worse; Session 62's script refused every swap on such a
+row, and this is the one deliberate change in what the script will do); the row keeps a stack or bring-back it had and stays
+distinct from every other row and every prefilled roster (R29) inside the build's own caps (each person against his own limit, each pair
+against the cap of the later row's build); the QB, the DST, his team and his opponent and every protected or locked person are never
+outgoing; a protected, locked or excluded person, or one with a DraftKings status, is never incoming; and, recomputed on the whole
+portfolio, no washout proxy is worse (max exposure, top-3 union and mean pairwise overlap no higher, distinct people no fewer). Rows are
+visited in order, each takes its best swap (prior gain, then the less-used incoming person, then IDs) until it has none, and passes repeat
+to a fixed point (25-pass bound, and at most one swap per cell per pass). A locked person is one whose game kicked off at or before the
+lock clock (`SalaryPlayer.lock_at`); a locked **cell** never moves either: a row put in slot order never moves a locked person to
+another slot (a swap that would is refused as `SHAPE`), and the script, which replaces a cell in place, cannot. Inside a run the
+clock is the deadline controller's (`Budget.now()`: a pinned `--as-of` advanced by the elapsed time, else the wall clock), read once
+when the thesis build starts, so **byte-identical replay is a property of pinned runs**. The script's lock clock is `--now`; with it,
+a person whose kickoff the file does not state (a postponed or TBD game) is never brought in, as late swap never brings one in.
+Every row of an engine build is redeployed by the one prior that built it (the engine's theses are stack theses and the free thesis, all
+ranked by that prior, so no engine row bets against it and none is exempt); the module takes `row_ids`, so a later thesis that does
+bet against the prior (the script's priors-wrong thesis; Session 23c's bust and flip) can exempt its rows without touching the rule. The
+engine never reads `operator_construction_exclusions` (an operator-built scores file's key, which has no contract): its excluded set is
+the run's own (DraftKings-unavailable, official inactive, role-gated, the default backup quarterbacks, request and policy exclusions).
+The people are counted in the order the rows are delivered in, because the top-3 tie breaks by first appearance and QA Tier 2 counts
+the delivered cells.
+
+| Key | Meaning |
+|---|---|
+| `rule`, `state`, `does_not_establish` | `pareto_redeploy_v2`; `COMPLETED` (at the fixed point), `PASS_BOUND_REACHED`, `DEADLINE_STOP` (the window ended in the pass loop, so the portfolio may be short of its fixed point), `NOT_RUN_WINDOW_SPENT`, `NOT_APPLICABLE` or `FAILED`; the five texts below. A block that did not run to its end (`NOT_RUN_WINDOW_SPENT`, `NOT_APPLICABLE`, `FAILED`) carries `reason` and `accepted_total: 0` and no computed number. |
+| `rows_considered`, `passes`, `fixed_point`, `gated_people`, `locked_people` | Counts; `locked_people` is how many people the lock clock kept out of both directions (0 before the first kickoff). |
+| `before`, `after` | Both goals: `prior_sum`, `max_exposure` and its person, `top3_union`, `mean_overlap`, `pair_overlap_sum`, `distinct_people`, `rows`. |
+| `protected` | Each protected person's rows before and after (equal, always). |
+| `accepted_total`, `accepted`, `changed_entry_ids` | Every swap taken; the list stores at most `stored_limit` (100 in a run, none in the script) and the total is exact. |
+| `refusal_scan`, `rejected_total`, `rejected_by_goal`, `rejected`, `row_rejections`, `available_at_stop` | After the last swap, every prior-raising swap that was refused: a legal one by the goals it would have hurt (counted exactly over all of them; the `stored_limit` largest gains are listed with their goals), an illegal one by row-level reason (`ILLEGAL`, `SHAPE`, `CAPS_OR_DISTINCT`). `refusal_scan` is `COMPLETE`, `PARTIAL` or `NOT_RUN`; the counts are `null` when not run. A window that ends only in this scan leaves the portfolio at its fixed point and the state as the swaps made it: `COMPLETED` with `refusal_scan: PARTIAL`. |
+| `stored_limit` | The bound on the two lists. |
+
+The report is bounded by counts, never seconds, and carries no clock value: `DEADLINE_STOP` is a state, not a duration. The stage asks the
+run's deadline controller (`Budget.allowance("pareto_redeploy")`, at most 20 s and 10% of the improvement window, never started under 1 s;
+`nfl_deadline_budget_v1` records the stage and its measured seconds, which are not hash-bound), is never fatal, and leaves the rows as the
+thesis build made them when it does not run to its end; a state in `DEADLINE_STOP`, `NOT_RUN_WINDOW_SPENT` or `FAILED` travels with the
+file as the class `P` limitation `CLASSIC_PARETO_REDEPLOY_INCOMPLETE` (registry family `pareto_redeploy`, appended after the blockers that
+withhold a file). Before the redeployed rows replace the built ones the stage runs the build's one backstop on them (distinct rows, no
+excluded row, every person under his limit, every pair under its cap, every placement held, every lineup stacked while required) and
+counts the washout proxies again from the delivered cells; a trial either check rejects is discarded (`FAILED`, and the deadline record
+says `RAISED`). The rule's own per-swap proxy count and this recount are the same arithmetic, so a disagreement is a defect, not a
+state.
+
+**Does not establish:** that a prior gain is an expected value or a win probability; that the four proxies measure leverage or field
+duplication; that a blank DraftKings status is official activity evidence; that a redeployed person is playing or has the role his prior
+assumes; that a game the clock says is open is open on DraftKings. A redeploy writes no number and clears no gate, and the file stays
+`PRIOR_ONLY / DO_NOT_UPLOAD`. On the engine's own rows it usually takes nothing (the solver already spends the cap), and a block that says
+`COMPLETED` with `accepted_total: 0` is the guarantee and the report, not a gain.
+
 ## SD3 Showdown portfolio policy
 
 `portfolio_policy_json` is an optional `nfl_showdown_portfolio_policy_v1`
@@ -3271,7 +3334,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `fc1176c27af8cffc05c344a2a3f362ed6b5ad356bde77accde43a1b911aa027a`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `26d6deac47ff20c39a1604922b0563c477973f430723445300506aa9c3145367`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
