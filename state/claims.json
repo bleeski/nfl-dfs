@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "8b8aba50-ec12-4efa-9c34-62eb5faf41ce",
-      "branch": "claude/s23c-thesis-portfolio",
-      "chunk": "S23c",
-      "claimed_at": "2026-10-06T20:14:20Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
