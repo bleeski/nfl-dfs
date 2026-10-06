@@ -13,7 +13,8 @@ import csv
 import hashlib
 import io
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -26,6 +27,10 @@ from .qb_depth_roles import (
     PARSER_VERSION,
     QUARTERBACK_ABBREVIATION,
     SCHEMA_VERSION,
+    QbDepthDeclaration,
+    QbDepthRoleError,
+    _derived_order,
+    parse_depth_chart_excerpt,
 )
 
 NFLVERSE_RELEASE = "https://github.com/nflverse/nflverse-data/releases/download"
@@ -171,6 +176,229 @@ def _binding(rows_by_role: dict[str, object], mode: EngineMode) -> dict[str, obj
     return {"dk_id": only.dk_id}
 
 
+# One team's refusal is a sentence on one line in a limitation, never a traceback or a paragraph.
+REASON_LIMIT = 200
+
+
+def team_reason(exc: BaseException) -> str:
+    """One line naming why one team could not be declared. A producer's own refusal reads as written."""
+
+    text = " ".join(str(exc).split())
+    if not isinstance(exc, (ProducerError, QbDepthRoleError)):
+        text = f"{type(exc).__name__}: {text}"
+    return text[:REASON_LIMIT]
+
+
+@dataclass(frozen=True)
+class PackageBuild:
+    """What a build produced: the manifest (None when no team could be declared), who is in it, who is not and why."""
+
+    path: Path | None
+    declared: tuple[str, ...]
+    undeclared: dict[str, str]
+
+
+@dataclass(frozen=True)
+class _TeamBuild:
+    team: str
+    digest: str
+    excerpt: str
+    source: dict[str, object]
+    declaration: dict[str, object]
+
+
+def _slate_quarterbacks(slate) -> dict[str, dict[str, object]]:
+    quarterbacks: dict[str, dict[str, object]] = {}
+    for player in slate.players:
+        if player.position != "QB":
+            continue
+        bucket = quarterbacks.setdefault(
+            player.underlying_id,
+            {"team": player.team, "game_id": player.game_id, "name": player.name, "rows": {}},
+        )
+        bucket["rows"][player.role or "FLEX"] = player
+    return quarterbacks
+
+
+def _resolver_team_check(
+    declaration: dict[str, object], excerpt: str, *, team: str, observed_at: datetime
+) -> None:
+    """The resolver's own team-level checks, run over the declaration just built (Session 63).
+
+    A chart the resolver would refuse for a reason that is about this team's rows (two rank-1
+    quarterbacks, a repeated or unreadable rank, one person at two ranks, a declaration its own
+    excerpt does not support) is named here, for this team, instead of surviving to selection, where
+    the refusal names no team and the whole package is lost. These are the resolver's own functions,
+    not a copy of its rules.
+    """
+
+    derived = _derived_order(parse_depth_chart_excerpt(excerpt), team=team, observed_at=observed_at)
+    checked = QbDepthDeclaration.model_validate(declaration)
+    claimed = tuple(
+        sorted(
+            (entry.pos_rank, entry.provider_player_id, entry.player_name)
+            for entry in (checked.starter, *checked.backups)
+        )
+    )
+    if derived != claimed:
+        raise ProducerError(
+            f"{team}'s declaration is not the order its own excerpt carries: {derived} against {claimed}"
+        )
+
+
+def _build_team(
+    team: str,
+    rows: tuple[dict[str, str], ...],
+    quarterbacks: dict[str, dict[str, object]],
+    mode: EngineMode,
+    *,
+    upstream_sha256: str,
+    source_uri: str,
+    observed_at: datetime,
+    as_of: datetime,
+    expires_after: timedelta,
+) -> _TeamBuild:
+    """One team's capture, source entry and declaration, in memory. Writes nothing; raises for this team alone."""
+
+    excerpt = slice_for_team(rows, team=team, observed_at=observed_at)
+    digest = hashlib.sha256(excerpt.encode("utf-8")).hexdigest()
+    source = {
+        "path": f"sources/{digest}.csv",
+        "sha256": digest,
+        "source_uri": source_uri,
+        # The snapshot's own timestamp, never the time this ran. A
+        # depth chart observed on Thursday is Thursday's evidence
+        # whenever it happens to be formatted.
+        "observed_at": observed_at.isoformat(),
+        "captured_at": as_of.isoformat(),
+        "expires_at": (observed_at + expires_after).isoformat(),
+        "license_decision": LICENSE_DECISION,
+        "parser_version": PARSER_VERSION,
+        "transformation_version": CURRENT_TRANSFORMATION_VERSION,
+        "support_kind": "DEPTH_CHART_ORDER",
+        "supporting_excerpt": excerpt,
+        "synthetic": False,
+        "upstream_sha256": upstream_sha256,
+    }
+
+    ordered = []
+    for row in csv.DictReader(io.StringIO(excerpt)):
+        person = _match_person(row, team, quarterbacks)
+        ordered.append(
+            {
+                **_binding(quarterbacks[person]["rows"], mode),
+                "underlying_id": person,
+                "provider_player_id": row["gsis_id"].strip(),
+                "player_name": row["player_name"].strip(),
+                "pos_rank": int(row["pos_rank"]),
+            }
+        )
+    ordered.sort(key=lambda entry: entry["pos_rank"])
+    if ordered[0]["pos_rank"] != 1:
+        raise ProducerError(
+            f"{team}'s depth chart has no rank-1 quarterback at"
+            f" {observed_at.isoformat()}; it does not establish a starter"
+        )
+    # DraftKings routinely sells a third-string quarterback the published
+    # depth chart does not name. Measured on the 2026-09-17 DET@BUF slate:
+    # three Buffalo quarterbacks priced, two on the chart. He is declared
+    # explicitly as unlisted rather than silently dropped or called a
+    # backup, because "no source places him" and "the chart ranks him third"
+    # are different claims and only one of them is true.
+    ranked = {entry["underlying_id"] for entry in ordered}
+    unlisted = [
+        {
+            **_binding(detail["rows"], mode),
+            "underlying_id": person,
+            "player_name": str(detail["name"]),
+        }
+        for person, detail in sorted(quarterbacks.items())
+        if detail["team"] == team and person not in ranked
+    ]
+    declaration = {
+        "team": team,
+        "game_id": str(quarterbacks[ordered[0]["underlying_id"]]["game_id"]),
+        "declared_observed_at": observed_at.isoformat(),
+        "starter": ordered[0],
+        "backups": ordered[1:],
+        "unlisted": unlisted,
+        "source_sha256": digest,
+    }
+    _resolver_team_check(declaration, excerpt, team=team, observed_at=observed_at)
+    return _TeamBuild(team=team, digest=digest, excerpt=excerpt, source=source, declaration=declaration)
+
+
+def _build(
+    salaries: Path,
+    rows: tuple[dict[str, str], ...],
+    *,
+    upstream_sha256: str,
+    source_uri: str,
+    observed_at: datetime,
+    as_of: datetime,
+    out_dir: Path,
+    expires_after: timedelta,
+    teams: tuple[str, ...] | None,
+    strict: bool,
+) -> PackageBuild:
+    slate = parse_salaries(salaries)
+    quarterbacks = _slate_quarterbacks(slate)
+
+    wanted = sorted({str(detail["team"]) for detail in quarterbacks.values()})
+    if teams:
+        missing = sorted(set(teams) - set(wanted))
+        if missing:
+            raise ProducerError(
+                f"--teams names teams with no quarterback on this slate: {missing}"
+            )
+        wanted = sorted(teams)
+
+    # Every requested team is built in memory first. A strict build (the producer script) raises on the
+    # first one that fails; the run-time build (Session 63) drops that team, names it and builds the rest,
+    # so one team's gap in the chart never costs the other 31. Nothing is written until the teams are known.
+    built: list[_TeamBuild] = []
+    undeclared: dict[str, str] = {}
+    for team in wanted:
+        try:
+            built.append(
+                _build_team(
+                    team, rows, quarterbacks, slate.mode,
+                    upstream_sha256=upstream_sha256, source_uri=source_uri,
+                    observed_at=observed_at, as_of=as_of, expires_after=expires_after,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - this team's refusal, named; the others are unaffected
+            if strict:
+                if isinstance(exc, ProducerError):
+                    raise
+                raise ProducerError(f"{team}: {team_reason(exc)}") from exc
+            undeclared[team] = team_reason(exc)
+    if not built:
+        return PackageBuild(None, (), dict(sorted(undeclared.items())))
+
+    sources_dir = out_dir / "sources"
+    sources_dir.mkdir(parents=True, exist_ok=True)
+    for item in built:
+        # Bytes, never text. `write_text` translates "\n" to os.linesep, so on
+        # Windows the file would not hash to the digest just taken over these
+        # exact bytes, and every consumer would refuse the package it just
+        # wrote. Measured 2026-09-22: 24 failures on Windows, none on Linux.
+        (sources_dir / f"{item.digest}.csv").write_bytes(item.excerpt.encode("utf-8"))
+
+    package = {
+        "schema_version": SCHEMA_VERSION,
+        "allocation_version": CURRENT_ALLOCATION_VERSION,
+        "transformation_version": CURRENT_TRANSFORMATION_VERSION,
+        "salary_sha256": slate.salary_hash,
+        "game_ids": sorted(game.game_id for game in slate.games),
+        "sources": [item.source for item in built],
+        "declarations": [item.declaration for item in built],
+    }
+    target = out_dir / "qb_depth_roles.json"
+    target.write_text(json.dumps(package, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return PackageBuild(target, tuple(item.team for item in built), dict(sorted(undeclared.items())))
+
+
 def build_package(
     salaries: Path,
     rows: tuple[dict[str, str], ...],
@@ -183,119 +411,46 @@ def build_package(
     expires_after: timedelta = DEFAULT_EXPIRY,
     teams: tuple[str, ...] | None = None,
 ) -> Path:
-    slate = parse_salaries(salaries)
-    quarterbacks: dict[str, dict[str, object]] = {}
-    for player in slate.players:
-        if player.position != "QB":
-            continue
-        bucket = quarterbacks.setdefault(
-            player.underlying_id,
-            {"team": player.team, "game_id": player.game_id, "name": player.name, "rows": {}},
-        )
-        bucket["rows"][player.role or "FLEX"] = player
+    """The package for every requested team, or a `ProducerError` naming the first team that cannot be built.
 
-    wanted = sorted({str(detail["team"]) for detail in quarterbacks.values()})
-    if teams:
-        missing = sorted(set(teams) - set(wanted))
-        if missing:
-            raise ProducerError(
-                f"--teams names teams with no quarterback on this slate: {missing}"
-            )
-        wanted = sorted(teams)
+    The producer script's behavior, unchanged in what it accepts and refuses for a clean chart; it now
+    also refuses a conflicted chart here (the resolver's own team-level checks) and writes nothing when it
+    refuses. `capture_for_run` uses `build_package_by_team`.
+    """
 
-    sources_dir = out_dir / "sources"
-    sources_dir.mkdir(parents=True, exist_ok=True)
-    sources: list[dict[str, object]] = []
-    declarations: list[dict[str, object]] = []
+    build = _build(
+        salaries, rows, upstream_sha256=upstream_sha256, source_uri=source_uri, observed_at=observed_at,
+        as_of=as_of, out_dir=out_dir, expires_after=expires_after, teams=teams, strict=True,
+    )
+    if build.path is None:
+        # Only reachable when the slate lists no quarterback team at all: a strict build raises for any team that fails.
+        raise ProducerError("the slate lists no quarterback team to declare")
+    return build.path
 
-    for team in wanted:
-        excerpt = slice_for_team(rows, team=team, observed_at=observed_at)
-        digest = hashlib.sha256(excerpt.encode("utf-8")).hexdigest()
-        capture = sources_dir / f"{digest}.csv"
-        # Bytes, never text. `write_text` translates "\n" to os.linesep, so on
-        # Windows the file would not hash to the digest just taken over these
-        # exact bytes, and every consumer would refuse the package it just
-        # wrote. Measured 2026-09-22: 24 failures on Windows, none on Linux.
-        capture.write_bytes(excerpt.encode("utf-8"))
-        sources.append(
-            {
-                "path": f"sources/{capture.name}",
-                "sha256": digest,
-                "source_uri": source_uri,
-                # The snapshot's own timestamp, never the time this ran. A
-                # depth chart observed on Thursday is Thursday's evidence
-                # whenever it happens to be formatted.
-                "observed_at": observed_at.isoformat(),
-                "captured_at": as_of.isoformat(),
-                "expires_at": (observed_at + expires_after).isoformat(),
-                "license_decision": LICENSE_DECISION,
-                "parser_version": PARSER_VERSION,
-                "transformation_version": CURRENT_TRANSFORMATION_VERSION,
-                "support_kind": "DEPTH_CHART_ORDER",
-                "supporting_excerpt": excerpt,
-                "synthetic": False,
-                "upstream_sha256": upstream_sha256,
-            }
-        )
 
-        ordered = []
-        for row in csv.DictReader(io.StringIO(excerpt)):
-            person = _match_person(row, team, quarterbacks)
-            ordered.append(
-                {
-                    **_binding(quarterbacks[person]["rows"], slate.mode),
-                    "underlying_id": person,
-                    "provider_player_id": row["gsis_id"].strip(),
-                    "player_name": row["player_name"].strip(),
-                    "pos_rank": int(row["pos_rank"]),
-                }
-            )
-        ordered.sort(key=lambda entry: entry["pos_rank"])
-        if ordered[0]["pos_rank"] != 1:
-            raise ProducerError(
-                f"{team}'s depth chart has no rank-1 quarterback at"
-                f" {observed_at.isoformat()}; it does not establish a starter"
-            )
-        # DraftKings routinely sells a third-string quarterback the published
-        # depth chart does not name. Measured on the 2026-09-17 DET@BUF slate:
-        # three Buffalo quarterbacks priced, two on the chart. He is declared
-        # explicitly as unlisted rather than silently dropped or called a
-        # backup, because "no source places him" and "the chart ranks him third"
-        # are different claims and only one of them is true.
-        ranked = {entry["underlying_id"] for entry in ordered}
-        unlisted = [
-            {
-                **_binding(detail["rows"], slate.mode),
-                "underlying_id": person,
-                "player_name": str(detail["name"]),
-            }
-            for person, detail in sorted(quarterbacks.items())
-            if detail["team"] == team and person not in ranked
-        ]
-        declarations.append(
-            {
-                "team": team,
-                "game_id": str(quarterbacks[ordered[0]["underlying_id"]]["game_id"]),
-                "declared_observed_at": observed_at.isoformat(),
-                "starter": ordered[0],
-                "backups": ordered[1:],
-                "unlisted": unlisted,
-                "source_sha256": digest,
-            }
-        )
+def build_package_by_team(
+    salaries: Path,
+    rows: tuple[dict[str, str], ...],
+    *,
+    upstream_sha256: str,
+    source_uri: str,
+    observed_at: datetime,
+    as_of: datetime,
+    out_dir: Path,
+    expires_after: timedelta = DEFAULT_EXPIRY,
+    teams: tuple[str, ...] | None = None,
+) -> PackageBuild:
+    """The package for every team the chart can declare, and each team it cannot with the reason (Session 63).
 
-    package = {
-        "schema_version": SCHEMA_VERSION,
-        "allocation_version": CURRENT_ALLOCATION_VERSION,
-        "transformation_version": CURRENT_TRANSFORMATION_VERSION,
-        "salary_sha256": slate.salary_hash,
-        "game_ids": sorted(game.game_id for game in slate.games),
-        "sources": sources,
-        "declarations": declarations,
-    }
-    target = out_dir / "qb_depth_roles.json"
-    target.write_text(json.dumps(package, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return target
+    A team is left out, named and never guessed when the chart lists no quarterback for it, names one
+    DraftKings does not list (or two it cannot tell apart), has no single rank-1 quarterback, or conflicts
+    with itself. Every other team is declared exactly as `build_package` would declare it.
+    """
+
+    return _build(
+        salaries, rows, upstream_sha256=upstream_sha256, source_uri=source_uri, observed_at=observed_at,
+        as_of=as_of, out_dir=out_dir, expires_after=expires_after, teams=teams, strict=False,
+    )
 
 
 def _match_person(
@@ -345,6 +500,8 @@ def _match_person(
 QB_DEPTH_CAPTURE_STALE = "QB_DEPTH_CAPTURE_STALE"
 QB_DEPTH_CAPTURE_REFUSED = "QB_DEPTH_CAPTURE_REFUSED"
 QB_DEPTH_CAPTURE_UNAVAILABLE = "QB_DEPTH_CAPTURE_UNAVAILABLE"
+# A package that declares some teams and leaves one out (Session 63): a limitation per team, class P.
+QB_DEPTH_CAPTURE_TEAM_UNDECLARED = "QB_DEPTH_CAPTURE_TEAM_UNDECLARED"
 # Hash the file in blocks, never materialize it: 51 MB and 545,184 rows.
 _BLOCK = 1 << 20
 
@@ -430,13 +587,20 @@ def locate_frozen_depth_chart(
 
 @dataclass(frozen=True)
 class CaptureOutcome:
-    """What a run-time capture produced. It never raises; a failure is a named limitation."""
+    """What a run-time capture produced. It never raises; a failure is a named limitation.
+
+    Since Session 63 a package can be partial: `declared_teams` are in it and `undeclared_teams` (team to
+    reason) are the teams the chart could not build, left out and named. `status` still describes the
+    package (`CAPTURED` when the resolver can read it); each undeclared team travels as its own limitation.
+    """
 
     status: str  # CAPTURED, or the code of the refusal
     package: Path | None = None
     observed_at: datetime | None = None
     upstream_sha256: str | None = None
     detail: str = ""
+    declared_teams: tuple[str, ...] = ()
+    undeclared_teams: dict[str, str] = field(default_factory=dict)
 
     @property
     def captured(self) -> bool:
@@ -449,6 +613,8 @@ class CaptureOutcome:
             "depth_chart_observed_at": self.observed_at.isoformat() if self.observed_at else None,
             "upstream_sha256": self.upstream_sha256,
             "detail": self.detail,
+            "declared_teams": list(self.declared_teams),
+            "undeclared_teams": dict(sorted(self.undeclared_teams.items())),
             "does_not_establish": [
                 "TARGET_SHARE",
                 "CARRY_SHARE",
@@ -484,9 +650,12 @@ def capture_for_run(
     `depth_chart` is `(path, sha256, source_uri)`; when it is None the chart is located from
     `proposal_dir` or `package_dir` (`locate_frozen_depth_chart`), inside this function's guard.
     The snapshot is the latest at or before `as_of`, so a run can never read a chart from its
-    own future. One older than its window, one that names a quarterback DraftKings does not
-    list, one with no rank-1 quarterback and an absent file are each a named refusal. `teams`
-    declares only those teams (the others stay unevaluated, and the run names them).
+    own future. One older than its window, an absent file and a changed file are each a named
+    refusal of the whole capture. A team the chart cannot declare (it lists no quarterback for
+    him, names one DraftKings does not list, has no single rank-1 quarterback, conflicts with
+    itself) is left out and named in `undeclared_teams` while every other team is declared
+    (Session 63); only when no team can be declared is the capture refused. `teams` declares only
+    those teams (the others stay unevaluated, and the run names them).
 
     It never raises: this runs on the path that must finish before a lock (R28), so anything
     unforeseen is a `QB_DEPTH_CAPTURE_REFUSED` naming the exception, and the run goes on
@@ -522,7 +691,7 @@ def capture_for_run(
                         f" older than its {int(expires_after.total_seconds() // 3600)}-hour window"
                     ),
                 )
-            target = build_package(
+            build = build_package_by_team(
                 salaries,
                 rows,
                 upstream_sha256=upstream,
@@ -542,4 +711,39 @@ def capture_for_run(
             QB_DEPTH_CAPTURE_REFUSED,
             detail=f"{type(exc).__name__}: {' '.join(str(exc).split())[:200]}",
         )
-    return CaptureOutcome("CAPTURED", package=target, observed_at=snapshot, upstream_sha256=upstream)
+    if build.path is None:
+        # No team could be declared. The map still names each one; the detail counts them and quotes
+        # the first few so one line never has to carry 32 reasons.
+        count = len(build.undeclared)
+        first = "; ".join(f"{name}: {why}" for name, why in list(build.undeclared.items())[:3])
+        return CaptureOutcome(
+            QB_DEPTH_CAPTURE_REFUSED,
+            observed_at=snapshot,
+            upstream_sha256=upstream,
+            detail=f"the chart declares none of its {count} team{'s' if count != 1 else ''}: {first}"[:300],
+            undeclared_teams=build.undeclared,
+        )
+    return CaptureOutcome(
+        "CAPTURED",
+        package=build.path,
+        observed_at=snapshot,
+        upstream_sha256=upstream,
+        declared_teams=build.declared,
+        undeclared_teams=build.undeclared,
+    )
+
+
+def team_undeclared_limitations(capture_report: object) -> list[str]:
+    """One `QB_DEPTH_CAPTURE_TEAM_UNDECLARED:<TEAM>:<reason>` for each team a built package leaves out (`P`).
+
+    Read from `reports["qb_depth_capture"]`, which is where both a capture-time and a selection-time
+    degradation are recorded. Only when a package was built: with none, the whole-capture limitation
+    already says so and the full map stays in the report, so 32 lines never bury the file's real ones.
+    """
+
+    if not isinstance(capture_report, Mapping) or not capture_report.get("package"):
+        return []
+    undeclared = capture_report.get("undeclared_teams")
+    if not isinstance(undeclared, Mapping):
+        return []
+    return [f"{QB_DEPTH_CAPTURE_TEAM_UNDECLARED}:{team}:{reason}" for team, reason in sorted(undeclared.items())]

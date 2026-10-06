@@ -158,7 +158,7 @@ the same as any other relaxation.
 ## Two holes the thesis build does not close by itself
 
 Added 2026-10-04 from the Week 4 Classic slate. **Since Session 61 the engine closes both on the `run-slate` path**: a supplied QB
-depth package keeps every backup out of every Classic row (`classic_backup_qb_default`), Session 60 moves a vacated workload to its
+depth package (captured by the run since Session 63, or supplied) keeps every backup out of every Classic row (`classic_backup_qb_default`), Session 60 moves a vacated workload to its
 room, and a construction judgment (`--construction-judgment-json`, `docs/claude/working.md` § Classic judgment pass) places a
 person by construction. What follows is the by-hand route for the operator-layer scripts (`build_thesis_portfolio.py`), which do
 not read either.

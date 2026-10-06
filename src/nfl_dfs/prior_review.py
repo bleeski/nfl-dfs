@@ -1442,14 +1442,15 @@ def _emit_prelock_manifest(
     )
 
 
-def _auto_capture_depth(*, supplied, showdown, capture_depth, reports):
-    """(package path, whether this run built it). A supplied package always wins; Classic builds none.
+def _auto_capture_depth(*, supplied, capture_depth, reports):
+    """(package path, whether this run built it). A supplied package always wins.
 
-    Session 53 (R36). A capture failure is a named limitation in `reports["qb_depth_capture"]` and
-    the run goes on without a package (R28); nothing here raises.
+    Session 53 (R36) built it for Showdown; Session 63 builds it for Classic too, so the backup-quarterback
+    default has the evidence it needs on a default run. A capture failure is a named limitation in
+    `reports["qb_depth_capture"]` and the run goes on without a package (R28); nothing here raises.
     """
 
-    if supplied is not None or not showdown:
+    if supplied is not None:
         return supplied, False
     capture = capture_depth(None, "qb_depth")
     reports["qb_depth_capture"] = capture.as_report()
@@ -1500,6 +1501,8 @@ def _select_under_depth_package(*, select, capture_depth, qb_teams, depth_path, 
                 **reports["qb_depth_capture"],
                 "status": QB_DEPTH_CAPTURE_REFUSED,
                 "package": None,
+                # No package is in use, so no team is declared (the chart-level `undeclared_teams` stay named).
+                "declared_teams": [],
                 "detail": "the captured package was refused at selection: " + reason,
             }
             lineups, scores, selection = select(None)
@@ -2440,10 +2443,11 @@ def run_prior_review(
             teams=sorted({player.team for player in slate.players}),
             provider_team_by_team=team_binding or None,
         )
-        # Session 53 (R36). A Showdown slate with no quarterback depth package supplied gets one
-        # built from the depth-chart bytes the prior package already froze, so the backup-quarterback
-        # default has the evidence it needs. A stale, unmatched or absent chart is named and the run
-        # goes on without it (R28): nothing here can stop a run, and a supplied package always wins.
+        # Session 53 (R36), Classic from Session 63. A slate with no quarterback depth package supplied
+        # gets one built from the depth-chart bytes the prior package already froze, so the
+        # backup-quarterback default has the evidence it needs. A stale or absent chart is named and the
+        # run goes on without it (R28); a team the chart cannot declare is named and left out while the
+        # others are declared. Nothing here can stop a run, and a supplied package always wins.
         qb_teams = tuple(sorted({player.team for player in slate.players if player.position == "QB"}))
 
         def _capture_depth(teams, directory):
@@ -2459,7 +2463,6 @@ def run_prior_review(
 
         qb_depth_role_evidence_json, auto_captured_depth = _auto_capture_depth(
             supplied=qb_depth_role_evidence_json,
-            showdown=slate.mode is EngineMode.SHOWDOWN,
             capture_depth=_capture_depth,
             reports=reports,
         )

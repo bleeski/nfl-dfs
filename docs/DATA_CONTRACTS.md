@@ -1267,11 +1267,13 @@ inputs give the same JSON, and the functions mutate nothing they read.
 Classic row: a quarterback the depth evidence puts behind a declared starter is out of the pool, the unbound fill included, unless a
 named choice keeps him in (a Classic policy's `minimum_entries > 0` for him, or a validated construction judgment naming him: the
 same-day promotion case). The effective starter is the resolver's (R25 has promoted over an unavailable one), so a promoted backup
-stays in and the unavailable published starter is out on his DraftKings status. Classic builds no depth package of its own
-(`run-slate` captures for Showdown only), so a run that supplied none names every quarterback team `unevaluated` and excludes
-nobody: the limitation `CLASSIC_BACKUP_QB_UNEVALUATED:<teams>` (class `P`, family `qb_depth_roles`) travels with the file, appended
-after any blocker that withholds it. Supply `--qb-depth-role-evidence-json`. `showdown_backup_qb_default` is unchanged and reports
-`applies: false` on a Classic run.
+stays in and the unavailable published starter is out on his DraftKings status. Since Session 63 `run-slate` captures the
+depth package for Classic as it does for Showdown (below), so a default Classic run declares every team its frozen chart can build. A
+team the package does not declare (the chart could not build it, or no package exists) is `unevaluated` and excludes nobody: the
+limitation `CLASSIC_BACKUP_QB_UNEVALUATED:<teams>` (class `P`, family `qb_depth_roles`) travels with the file, appended after any
+blocker that withholds it, beside the capture's own limitations (`QB_DEPTH_CAPTURE_*`, also appended on a Classic run). A package the
+operator supplies with `--qb-depth-role-evidence-json` still wins and still raises when the resolver refuses it. `showdown_backup_qb_default`
+is unchanged and reports `applies: false` on a Classic run.
 
 ### The construction judgment, `nfl_classic_construction_judgment_v1`
 
@@ -2289,26 +2291,31 @@ Registered by Session 53 on Ben's ruling of 2026-10-01 (R36): R33's backup-quart
 rule applies to every Showdown run, not only under a thesis, and `run-slate`
 builds the evidence it needs. No schema changes: the package is the existing
 `nfl_qb_depth_role_evidence_v1`, byte for byte what
-`scripts/make_offensive_role_evidence.py` writes (the script and the run call the same
-`nfl_dfs.qb_depth_capture.build_package`; a test holds the two equal).
+`scripts/make_offensive_role_evidence.py` writes (the script calls `nfl_dfs.qb_depth_capture.build_package` and the run
+calls `build_package_by_team`, both over one shared builder `_build`; a test holds the two equal on a clean chart).
 
-**Capture.** For a Showdown run with no supplied `qb_depth_role_evidence_json`,
+**Capture.** For a run (Showdown since Session 53, Classic since Session 63) with no supplied `qb_depth_role_evidence_json`,
 `prior_review` locates the `depth_charts` bytes the prior package already froze (the
 proposal's `raw/` or a reused frozen package's `raw/`; no extra fetch), reads only the
 quarterback rows (the file is about 545,000 rows; the reader streams), selects the
 latest snapshot at or before `as_of` and builds the package under
-`<run>/prior_review/qb_depth/`. A supplied package always wins. Classic is unchanged.
+`<run>/prior_review/qb_depth/`. A supplied package always wins.
 `reports["qb_depth_capture"]` carries `status`, `package`, `depth_chart_observed_at`,
-`upstream_sha256`, `detail` and `does_not_establish` (`TARGET_SHARE`, `CARRY_SHARE`,
+`upstream_sha256`, `detail`, `declared_teams`, `undeclared_teams` (team to reason, Session 63) and
+`does_not_establish` (`TARGET_SHARE`, `CARRY_SHARE`,
 `OFFICIAL_ACTIVE_STATUS`, `THAT_THE_RANK_ONE_QUARTERBACK_IS_PLAYING`,
 `MODEL_VALIDATION`).
 
 | `status` | Meaning | Limitation on the file |
 |---|---|---|
-| `CAPTURED` | Package built and accepted by the resolver | none |
+| `CAPTURED` | Package built and accepted by the resolver; it may leave teams out (`undeclared_teams`, below) | none for the package; one `QB_DEPTH_CAPTURE_TEAM_UNDECLARED:<TEAM>:<reason>` for each team left out |
 | `QB_DEPTH_CAPTURE_STALE` | The snapshot at or before `as_of` is older than 36 hours | `QB_DEPTH_CAPTURE_STALE:<detail>` |
-| `QB_DEPTH_CAPTURE_REFUSED` | The chart names a quarterback DraftKings does not list, has no rank-1 quarterback, was changed while it was read, or any unforeseen exception was raised during capture; or the resolver refused the package at selection (whole package, or one team: see below) | `QB_DEPTH_CAPTURE_REFUSED:<reason>` |
+| `QB_DEPTH_CAPTURE_REFUSED` | No team could be declared, the chart was changed while it was read, or any unforeseen exception was raised during capture; or the resolver refused the package at selection (whole package, or one team: see below), in which case `package` is still set when the others were rebuilt | `QB_DEPTH_CAPTURE_REFUSED:<reason>` |
 | `QB_DEPTH_CAPTURE_UNAVAILABLE` | No frozen chart exists for the run | `QB_DEPTH_CAPTURE_UNAVAILABLE` |
+
+A package that left a team out is used either way: a degradation at capture time reports `CAPTURED` with
+`undeclared_teams`, one at selection reports `QB_DEPTH_CAPTURE_REFUSED` with `refused_teams` and the rebuilt `package`. Read
+`package` and the two team maps, not the status alone.
 
 A non-`CAPTURED` status never stops a run (R28): the run goes on as if no package were
 supplied and the limitation travels with the file in `blockers`, class `P` in
@@ -2327,7 +2334,45 @@ operator exclusion or official inactive removed him; the refusal carries its tea
 `refused_teams` (team to reason). The dropped team is undeclared, so its backups stay in the
 pool and it is named `SHOWDOWN_BACKUP_QB_UNEVALUATED`. A refusal naming no team (a damaged
 package, a hash mismatch) drops the whole package. A package the operator supplied still
-raises, as before.
+raises, as before. Since Session 63 the resolver's model-side per-team refusals carry their team as well
+(`QB_DEPTH_PRIOR_ROW_MISSING`, `QB_DEPTH_POOLED_SHARE_INVALID`, `QB_DEPTH_POOL_NOT_UNIT`, `QB_DEPTH_NOT_CONSERVED`), so
+one team's model defect on a Classic slate of up to 32 teams costs that team and not the other 31; the resolver runs at
+the top of scoring, before any bank or solve, so each pass of the retry is cheap.
+
+**A team the chart cannot declare (Session 63).** `capture_for_run` builds each team's declaration on its own and writes
+files only for the teams that built. A team is left out, named in `undeclared_teams` with a one-line reason of at most 200
+characters, and never guessed when: the chart lists no quarterback for it at the snapshot; a chart quarterback is not on the
+DraftKings slate or matches more than one DraftKings person (the depth chart's and DraftKings' quarterback sets must agree for a
+team, because the resolver requires the declaration to cover every DraftKings quarterback and to equal its verbatim excerpt, so
+omitting a chart row would be a different contract, not a degradation); it has no single rank-1 quarterback or conflicts with
+itself (two rank-1 rows, a repeated or unreadable rank, one person at two ranks), which the capture finds by running the
+resolver's own team-level checks over the declaration it just built, so such a chart is named for its team here and does not
+reach selection, where the refusal names no team and the whole package would be lost; or anything unforeseen in that team's
+build. Each team left out travels as `QB_DEPTH_CAPTURE_TEAM_UNDECLARED:<TEAM>:<reason>` (class `P`, family `qb_depth_roles`,
+one line per team, only when a package was built; with none, the single `QB_DEPTH_CAPTURE_REFUSED` line counts the teams and
+quotes the first three, and the map stays in the report) and is `unevaluated` in the selection report, so its backups stay in
+the pool. Only when no team can be declared is the capture refused. `build_package` (the producer script) is strict: its first
+failing team raises `ProducerError`, it refuses a conflicted chart as the resolver would, and it now writes nothing when it
+refuses. A Classic slate has up to 32 teams: Week 4 (24 teams, the chart listing no LAR quarterback) declares the 23 Ben's
+session built by hand with `--teams`, declaration for declaration and source for source (the whole-chart digest
+`upstream_sha256` differs, because the chart is rebuilt from the committed excerpts), and names LAR
+(`tests/test_qb_depth_capture.py`).
+
+**Classic (Session 63).** The capture runs for a Classic slate with the same locator, snapshot rule, window and
+refusal-retry (`prior_review._auto_capture_depth`, `_select_under_depth_package`). The package binding after selection
+(`artifacts` and `hashes["qb_depth_role_evidence_json"]`, the C3 immutable bindings) was already mode-agnostic, so Classic C1,
+C2 and C3 need no other wiring. A Classic run's capture limitations are appended to `blockers` after the blockers that withhold
+a file (Showdown's stay at the front), because inserting them first displaced a blocker six existing tests read at index 0. A
+supplied package still wins and still raises when refused. Because a declared starter holds his team's whole quarterback
+attempt pool, a default Classic run's quarterback scores change, and the Classic selector report says by how much:
+`depth_order_effect` (`classic_depth_order_effect_v1`, `status` `SCORED`, `NO_DEPTH_EVIDENCE` or
+`COUNTERFACTUAL_COULD_NOT_RUN:<reason>`, never a stop). It scores the identical chain on the identical model with the depth
+package withheld and reports `declared_teams`, `attempt_shares_moved` (the resolver's own `changed_people`), `scores_moved`,
+`scored_only_with_depth` and `scored_only_without_depth` (people the evidence made selectable or left unscored, at most 20 each),
+and the ten `largest_moves` (person, before, after, delta; sorted by size then person), with `does_not_establish`
+(`THAT_THE_DECLARED_STARTER_IS_PLAYING`, `THAT_ANY_PRIOR_IS_VALIDATED`). It holds no wall time (the report is hash-bound), costs one
+extra scoring pass on a run that has depth evidence and none otherwise, and selects and gates nothing. Showdown's report has no
+such block. The fixture measurement is in the changelog.
 
 **The default.** `selection.select_prior_lineups` computes the backups with
 `showdown_theses.backup_quarterbacks(slate, None, qb_depth_report)` for every Showdown
@@ -3226,7 +3271,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `939a1bda2840919cdb8882b61a8cf5810166ecdc3564e9438e530112693cc5bd`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `fc1176c27af8cffc05c344a2a3f362ed6b5ad356bde77accde43a1b911aa027a`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

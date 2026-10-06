@@ -568,6 +568,9 @@ UNSCANNED_CODES = {
     "QB_DEPTH_CAPTURE_UNAVAILABLE": ("qb_depth_capture.py",
                                      'QB_DEPTH_CAPTURE_UNAVAILABLE = "QB_DEPTH_CAPTURE_UNAVAILABLE"',
                                      "a CaptureOutcome status held in a module constant; run-slate names it as a P limitation"),
+    "QB_DEPTH_CAPTURE_TEAM_UNDECLARED": ("qb_depth_capture.py",
+                                         'QB_DEPTH_CAPTURE_TEAM_UNDECLARED = "QB_DEPTH_CAPTURE_TEAM_UNDECLARED"',
+                                         "a per-team limitation built from a module constant (Session 63); run-slate names it as a P limitation"),
 }
 
 # Strings the scan reads that block nothing. The scan is flow-insensitive: in
@@ -973,7 +976,7 @@ def _held(part: str, constants: set[str], rendered: set[str], depth: int = 1) ->
 
 # The registry's bytes, pinned. A reclassification is a deliberate change, so
 # it moves this line too; `docs/DATA_CONTRACTS.md` names the same hash.
-REGISTRY_SHA256 = "939a1bda2840919cdb8882b61a8cf5810166ecdc3564e9438e530112693cc5bd"
+REGISTRY_SHA256 = "fc1176c27af8cffc05c344a2a3f362ed6b5ad356bde77accde43a1b911aa027a"
 
 
 def test_the_registry_is_the_pinned_bytes():

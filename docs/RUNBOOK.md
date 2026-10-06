@@ -187,7 +187,8 @@ pool cannot meet.
 (`judgment_pass` in the result and the coverage artifact; `scripts/judgment_pass_report.py` prints it): the starting quarterbacks
 scored or not, each injury room with its inheritors' prior before and after, a ranked list of candidates to research (never a
 selection), and a late-swap watch list. A quarterback the depth evidence puts behind a declared starter is out of every Classic row
-when the depth package is supplied (`CLASSIC_BACKUP_QB_UNEVALUATED` names the teams when it is not). After researching the
+when the depth package declares his team (the run captures it from the frozen depth chart; `CLASSIC_BACKUP_QB_UNEVALUATED` names the
+teams it does not, and `QB_DEPTH_CAPTURE_TEAM_UNDECLARED:<TEAM>:<reason>` says why a chart could not build one). After researching the
 candidates, a construction judgment (`--construction-judgment-json`, `nfl_classic_construction_judgment_v1`) places the people to
 roster in the thesis build; it writes no number, refuses a DraftKings `OUT`, an official inactive, a `BLOCK` and an unresolved
 material role change by name, and never moves a release truth. `docs/OPERATOR_GUIDE.md` § Classic judgment pass has the commands.
