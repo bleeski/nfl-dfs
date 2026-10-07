@@ -25,9 +25,35 @@ from .dk import EntryTemplate, parse_entries, parse_entry_bytes, parse_salaries
 from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
 from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup
+# The audit's own strict reparse of the normalized policy (a private name, as `classic_review` takes `_render_html`
+# from this module): the review reads the theses, their rows and their effective bounds exactly as the audit does.
+from .portfolio_enforcement import _parse_audited_policy_controls
+from .portfolio_policy import NORMALIZED_POLICY_SCHEMA_VERSION_V4, thesis_roster_violations
+from .showdown_theses import (
+    THESIS_PORTFOLIO_VERSION,
+    ShowdownThesis,
+    backup_quarterbacks,
+    thesis_portfolio_measures,
+)
 
 
 READABLE_REVIEW_VERSION = "prior_only_readable_review_sd5_v3"
+# Session 23f: `READABLE_REVIEW_THESIS_MISMATCH` is a presentation mismatch between the review's own thesis figures and
+# the audit's or the selector's (family `presentation`, class P): the file is intact, so the CSV ships and the gap is
+# named. It is spelled as a literal where it is raised, as every registered code is, so the registry's scan finds it.
+THESES_BASIS = "RECOMPUTED_FROM_THE_BYTE_REPARSED_ROSTERS_AND_THE_NORMALIZED_POLICY"
+THESES_RECONCILED_AGAINST = (
+    "PORTFOLIO_AUDIT_THESES_BLOCK",
+    "SELECTOR_BY_LINEUP_CLAIM",
+    "SELECTOR_THESES_ENTRIES",
+)
+THESES_STATEMENT = (
+    "A thesis is a choice about how a game might go, not a forecast of it. A lineup that follows its thesis is "
+    "consistent with that choice and says nothing about whether the choice will happen. Leverage is unmeasured: "
+    "there is no ownership input, so no figure here is a claim about the field. The figures count this "
+    "portfolio's own rows, recomputed from the delivered file; MODEL_STATUS stays PRIOR_ONLY and RELEASE_DECISION "
+    "stays DO_NOT_UPLOAD."
+)
 # Each row's source (Session 11b, the reason for v2): the policy's joint solve, or
 # sequential Showdown filling the rows a subset policy leaves unbound (every row
 # when there is no policy).
@@ -180,7 +206,7 @@ def _parse_normalized_policy(
         return {}
     root = _mapping(payload, "normalized_policy", problems)
     # normalized_v3 is v2 plus a thesis (Session 23b) and normalized_v4 plus several, each with its allotment
-    # (Session 23c); the controls read here are the same. The review's own thesis section is Session 23f's.
+    # (Session 23c); the controls read here are the same. The thesis section (Session 23f) is built from v4 alone.
     if root.get("schema_version") not in {"nfl_showdown_portfolio_policy_normalized_v2",
                                           "nfl_showdown_portfolio_policy_normalized_v3",
                                           "nfl_showdown_portfolio_policy_normalized_v4"}:
@@ -251,6 +277,7 @@ def _parse_normalized_policy(
         for dk_id in (row.get("cpt_dk_id"), row.get("flex_dk_id")) if dk_id
     )
     return {
+        "schema_version": root.get("schema_version"),
         "entry_ids": policy_entries,
         "own_excluded_dk_ids": removed,
         "limits": limit_rows,
@@ -295,6 +322,213 @@ def _contest_assignment_html(block: Mapping[str, object]) -> list[str]:
     ]
     if block.get("single_entry_contest_count"):
         sections.append(f'<p>{_escape(block.get("single_entry_contest_count"))} contests hold one entry and are left as they were.</p>')
+    return sections
+
+
+def _safe_detail(value: object) -> str:
+    """Free text for a problem's detail, with the one character the delivery layer splits a failure on removed.
+
+    `delivery.discrepancy_limitations` splits on ";" and classifies each fragment by its leading code, and a fragment
+    with no registered code is class V, which withholds the file. So a detail never carries a ";" (a strict-parser
+    message can), and never a thesis name (a free label that can).
+    """
+
+    return str(value).replace(";", ",").replace("\n", " ")
+
+
+def _thesis_review(
+    *,
+    slate: SlateContract,
+    theses: Sequence[ShowdownThesis],
+    entries: Sequence[str],
+    rosters: Mapping[str, Sequence[str]],
+    canonical: Mapping[str, str],
+    by_lineup: object,
+    selector_entries: object,
+    depth_report: object,
+    audit_theses: object,
+) -> tuple[dict[str, object] | None, list[str]]:
+    """Each Entry ID's thesis and the R34 figures, recomputed here and reconciled (Session 23f).
+
+    A pure function of the byte-reparsed rosters, the normalized policy's theses and the selector's claim. It reads
+    each Entry ID's thesis through the lineup it holds (`by_lineup`, keyed by canonical lineup, so it survives the
+    contest step moving lineups between Entry IDs), decides whether the roster follows it with the one rule every
+    layer uses (`thesis_roster_violations`, each thesis with its own backup-quarterback set), and counts with the
+    function the audit counts with (`thesis_portfolio_measures`), in the audit's own order: the bound Entry IDs, the
+    theses as declared, the allotment over every thesis. It then reconciles against the audit's `theses` block, the
+    selector's `entries` block and each thesis's allotment. That proves the claims agree and the two layers saw the
+    same bytes; the arithmetic itself is proved by an independent recompute in the tests. Returns the block (or None
+    when there is no claim to read) and the `READABLE_REVIEW_THESIS_MISMATCH` problems; a detail names an Entry ID or a
+    figure, never a thesis name.
+    """
+
+    problems: list[str] = []
+
+    def mismatch(where: str) -> None:
+        problems.append(_problem("READABLE_REVIEW_THESIS_MISMATCH", _safe_detail(where)))
+
+    if not isinstance(by_lineup, Mapping):
+        mismatch("selector.by_lineup_missing")
+        return None, problems
+    active = [item for item in theses if item.active]
+    names = {item.name for item in active}
+    backups = {item.name: backup_quarterbacks(slate, item, depth_report)[0] for item in active}
+    followed_by: dict[str, list[str]] = {}
+    broken: dict[str, list[str]] = {}
+    assigned: dict[str, str | None] = {}
+    for entry in entries:
+        found = {
+            item.name: thesis_roster_violations(slate, rosters[entry], item, backups[item.name]) for item in active
+        }
+        followed_by[entry] = [name for name, rules in found.items() if not rules]
+        claimed = by_lineup.get(canonical[entry])
+        if not isinstance(claimed, str) or claimed not in names:
+            mismatch(f"entry={entry}:claim_not_an_active_thesis")
+            assigned[entry] = None
+            continue
+        assigned[entry] = claimed
+        if claimed not in followed_by[entry]:
+            broken[entry] = list(found[claimed])
+    # The same JSON round trip the audit's bytes took, so a tuple, a list and a float compare as they were written.
+    measures = json.loads(json.dumps(thesis_portfolio_measures(
+        slate, [(entry, rosters[entry], assigned[entry]) for entry in entries],
+        allotment={item.name: item.rows for item in theses}, followed=followed_by, broken=broken)))
+    per_entry = measures.pop("entries")
+
+    expected_theses = [
+        {"name": item.name, "status": item.status, "dropped_reason": item.dropped_reason,
+         "row_weight": item.row_weight, "rows": item.rows}
+        for item in theses
+    ]
+    if not isinstance(audit_theses, Mapping):
+        mismatch("audit.theses_missing")
+    else:
+        if audit_theses.get("theses") != expected_theses:
+            mismatch("audit.theses")
+        if audit_theses.get("entries") != per_entry:
+            mismatch("audit.entries")
+        audit_measures = audit_theses.get("measures")
+        if not isinstance(audit_measures, Mapping):
+            mismatch("audit.measures_missing")
+        else:
+            for key in sorted(set(measures) | set(audit_measures)):
+                if audit_measures.get(key) != measures.get(key):
+                    mismatch(f"audit.measures.{key}")
+        if audit_theses.get("assignment_source") != "SELECTOR_CLAIM_RECOMPUTED":
+            mismatch("audit.assignment_source")
+    if not isinstance(selector_entries, Mapping):
+        mismatch("selector.entries_missing")
+    elif dict(selector_entries) != assigned:  # the policy's own rows exactly: an extra or missing Entry ID is a mismatch
+        mismatch("selector.entries")
+    delivered = Counter(name for name in assigned.values() if name is not None)
+    for index, item in enumerate(theses):
+        if delivered.get(item.name, 0) != item.rows:
+            mismatch(f"rows.thesis[{index}]")
+
+    by_id = {row.dk_id: row for row in slate.players}
+    display: dict[str, dict[str, str]] = {}
+    for row in slate.players:
+        display.setdefault(row.underlying_id, {"name": row.name, "team": row.team})
+    present = {by_id[dk_id].underlying_id for entry in entries for dk_id in rosters[entry]}
+    block: dict[str, object] = {
+        "build_version": THESIS_PORTFOLIO_VERSION,
+        "basis": THESES_BASIS,
+        "statement": THESES_STATEMENT,
+        "reconciliation": {"status": "PASS", "against": list(THESES_RECONCILED_AGAINST)},
+        "theses": [
+            {"name": item.name, "status": item.status, "row_weight": item.row_weight,
+             "dropped_reason": item.dropped_reason, "rows_allotted": item.rows,
+             "rows_delivered": delivered.get(item.name, 0),
+             "entry_ids": [entry for entry in entries if assigned[entry] == item.name]}
+            for item in theses
+        ],
+        "entries": [
+            {"entry_id": entry, **per_entry[entry], "captain": by_id[rosters[entry][0]].underlying_id}
+            for entry in entries
+        ],
+        "measures": measures,
+        "people": {person: display[person] for person in sorted(present)},
+    }
+    return block, problems
+
+
+def _theses_html(block: Mapping[str, object]) -> list[str]:
+    """The "Game theses" section: what each row follows, and the R34 figures, with no forecast in it."""
+
+    people = _mapping(block.get("people"), "theses.people", [])
+    measures = _mapping(block.get("measures"), "theses.measures", [])
+
+    def who(person: object) -> str:
+        item = people.get(str(person))
+        if isinstance(item, Mapping):
+            return f'{item.get("name")} ({item.get("team")})'
+        return str(person)
+
+    def share(item: Mapping[str, object]) -> str:
+        return f'{item.get("rows")} of the rows ({item.get("share_percentage")}%)'
+
+    theses_rows = [
+        (row.get("name"), row.get("status"), row.get("row_weight"), row.get("rows_allotted"),
+         row.get("rows_delivered"), ", ".join(str(entry) for entry in _sequence(row.get("entry_ids"), "theses.entry_ids", [])))
+        for row in _sequence(block.get("theses"), "theses.theses", []) if isinstance(row, Mapping)
+    ]
+    entry_rows = [
+        (row.get("entry_id"), row.get("thesis"), "YES" if row.get("follows") else "NO", who(row.get("captain")),
+         ", ".join(str(rule) for rule in _sequence(row.get("broken_rules"), "theses.broken_rules", [])) or "none")
+        for row in _sequence(block.get("entries"), "theses.entries", []) if isinstance(row, Mapping)
+    ]
+    captain_rows = [
+        (who(person), item.get("count"), item.get("share_percentage"),
+         ", ".join(f"{name} x{count}" for name, count in _mapping(item.get("theses"), "theses.captain", []).items()))
+        for person, item in _mapping(measures.get("captains"), "theses.captains", []).items()
+        if isinstance(item, Mapping)
+    ]
+    over_half = [
+        item for item in _sequence(measures.get("people_in_more_than_half"), "theses.over_half", [])
+        if isinstance(item, Mapping)
+    ]
+    pairs = [item for item in _sequence(measures.get("same_core_pairs"), "theses.pairs", []) if isinstance(item, Mapping)]
+    one_player = _mapping(measures.get("most_rows_one_player_sinks"), "theses.one_player", [])
+    one_thesis = _mapping(measures.get("most_rows_one_thesis_sinks"), "theses.one_thesis", [])
+    tokens = ", ".join(str(token) for token in _sequence(measures.get("does_not_establish"), "theses.tokens", []))
+    reconciled = ", ".join(
+        str(item) for item in _sequence(_mapping(block.get("reconciliation"), "theses.reconciliation", []).get("against"),
+                                        "theses.against", []))
+    sections = [
+        "<h2>Game theses</h2>",
+        f'<p>{_escape(block.get("statement"))}</p>',
+        _html_table(("Thesis", "Status", "Weight", "Rows allotted", "Rows delivered", "Entry IDs"), theses_rows),
+        "<h3>Each Entry ID's thesis, and whether its lineup follows it</h3>",
+        _html_table(("Entry ID", "Thesis", "Follows it", "Captain", "Rules broken"), entry_rows),
+        "<h3>Captains, and the theses each serves</h3>",
+        _html_table(("Captain", "Count", "Share %", "Theses served"), captain_rows),
+        f'<p>{_escape(measures.get("distinct_captains"))} distinct Captains; the largest Captain share is '
+        f'{_escape(measures.get("max_captain_share_percentage"))}%.</p>',
+        "<h3>People in more than half the rows</h3>",
+    ]
+    sections.append(
+        _html_table(("Player", "Rows", "Share %"), [(who(i.get("person")), i.get("rows"), i.get("share_percentage")) for i in over_half])
+        if over_half else "<p>none</p>"
+    )
+    sections.extend([
+        "<h3>Most rows one player's bad night sinks</h3>",
+        f'<p>{_escape(share(one_player))}: {_escape(", ".join(who(p) for p in _sequence(one_player.get("people"), "theses.sink_people", [])))}.</p>',
+        "<h3>Most rows one thesis sinks</h3>",
+        f'<p>{_escape(one_thesis.get("rows"))} rows: '
+        f'{_escape(", ".join(str(name) for name in _sequence(one_thesis.get("theses"), "theses.sink_theses", [])))}. '
+        "A thesis is a bet that loses when its game does not happen.</p>",
+        "<h3>Pairs of rows sharing 5 or more people</h3>",
+    ])
+    sections.append(
+        _html_table(
+            ("Entry A", "Entry B", "Shared people", "One core with a rotating Captain"),
+            [(p.get("entry_id_a"), p.get("entry_id_b"), p.get("shared_people"), "YES" if p.get("captain_rotation") else "NO")
+             for p in pairs],
+        ) if pairs else "<p>none</p>"
+    )
+    sections.append(
+        f'<p class="small">Reconciled against: {_escape(reconciled)}. Does not establish: {_escape(tokens)}.</p>'
+    )
     return sections
 
 
@@ -1183,6 +1417,9 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
     contest_block = data.get("contest_assignment")
     if isinstance(contest_block, Mapping):
         sections.extend(_contest_assignment_html(contest_block))
+    theses_block = data.get("theses")
+    if isinstance(theses_block, Mapping):
+        sections.extend(_theses_html(theses_block))
     coverage = data.get("pool_coverage")
     if isinstance(coverage, Mapping):
         sections.append("<h2>Pool coverage: who could not be selected, and why</h2>")
@@ -1730,6 +1967,7 @@ def create_readable_review(
     )
     problems.extend(contest_problems)
 
+    theses_block: dict[str, object] | None = None
     if policy_view is not None:
         audit_path_raw = artifacts.get("portfolio_policy_audit")
         audit_record = (
@@ -1777,6 +2015,35 @@ def create_readable_review(
         for label, expected in expected_audit_hashes.items():
             if audit_hashes.get(label) != expected:
                 problems.append(_problem("READABLE_REVIEW_AUDIT_HASH_MISMATCH", label))
+
+        # Session 23f: a v4 policy with active theses gets the "Game theses" section, recomputed from the rosters
+        # above and the normalized bytes, then reconciled. Nothing else is wrong yet (an earlier problem raises
+        # anyway, and an unknown DraftKings ID would stop the recompute); v2 and v3 policies, and a run with no
+        # policy, never reach this and write the review bytes they always wrote.
+        if (
+            not problems
+            and policy_view.get("schema_version") == NORMALIZED_POLICY_SCHEMA_VERSION_V4
+            and all(entry in canonical_by_entry for entry in bound_entries)
+        ):
+            try:
+                audited_controls = _parse_audited_policy_controls(
+                    Path(artifacts["portfolio_policy_normalized"]).read_bytes())
+            except (OSError, ValueError) as exc:
+                problems.append(_problem(
+                    "READABLE_REVIEW_THESIS_MISMATCH",
+                    f"normalized_policy_theses_unreadable:{_safe_detail(f'{type(exc).__name__}:{exc}')}"))
+            else:
+                if any(item.active for item in audited_controls.theses):
+                    claim_report = selection_payload.get("portfolio_policy")
+                    claims = claim_report.get("theses") if isinstance(claim_report, Mapping) else None
+                    claims = claims if isinstance(claims, Mapping) else {}
+                    theses_block, thesis_problems = _thesis_review(
+                        slate=reparsed_slate, theses=audited_controls.theses, entries=bound_entries,
+                        rosters={entry: tuple(output_rosters[entry]) for entry in bound_entries},
+                        canonical={entry: canonical_by_entry[entry] for entry in bound_entries},
+                        by_lineup=claims.get("by_lineup"), selector_entries=claims.get("entries"),
+                        depth_report=selection_payload.get("qb_depth_roles"), audit_theses=audit_record.get("theses"))
+                    problems.extend(thesis_problems)
 
     artifact_rows: list[dict[str, object]] = []
     for name, raw_path in sorted(artifacts.items()):
@@ -1855,6 +2122,8 @@ def create_readable_review(
         "artifacts": artifact_rows,
         "hashes": dict(sorted((str(key), str(value)) for key, value in expected_hashes.items())),
     }
+    if theses_block is not None:
+        data["theses"] = theses_block  # an optional key: a run with no active theses has none, and no byte moves
     json_payload = _canonical_json_bytes(data)
     json_sha = sha256_bytes(json_payload)
     html_payload = _render_html(data, data_sha256=json_sha)
