@@ -87,7 +87,8 @@ class _Run:
         return Path(self.report["prior_review_artifacts"]["readable_review_html"]).read_text(encoding="utf-8")
 
     def claim_by_roster(self) -> dict[tuple[str, ...], str]:
-        return {tuple(row["roster"]): row["thesis"] for row in self.reports["selection"]["lineups"]}
+        # A lineup the sequential fill wrote (a row the policy does not bind) follows no thesis and carries none.
+        return {tuple(row["roster"]): row.get("thesis") for row in self.reports["selection"]["lineups"]}
 
     def delivered(self) -> dict[str, tuple[str, ...]]:
         return _assignment_rosters(self.report)
@@ -219,6 +220,27 @@ def test_the_review_lists_every_entry_ids_thesis_and_every_figure_and_they_equal
     assert "<h2>Game theses</h2>" in html
     for entry in SIX:
         assert entry in html
+
+
+def test_a_policy_binding_a_subset_of_the_rows_shows_theses_for_those_rows_only(tmp_path_factory):
+    """Four rows bound by the policy, two filled by sequential Showdown after it: the section is the policy's rows.
+
+    The selector's relabelled `entries` block is compared whole, so this is the layout in which an Entry ID the policy
+    does not bind could have made a correct run disagree with itself.
+    """
+
+    bound = (SIX[0], SIX[2], SIX[4], SIX[5])
+    run = _finished(tmp_path_factory, "th-subset", policy_controls=_controls(4), bound=bound)
+    data = run.readable()
+    assert data["reconciliation"]["status"] == "PASS" and data["theses"]["reconciliation"]["status"] == "PASS"
+    assert [row["entry_id"] for row in data["theses"]["entries"]] == list(bound)
+    assert all(row["follows"] for row in data["theses"]["entries"])
+    assert sum(len(item["entries"]) for item in data["theses"]["measures"]["by_thesis"].values()) == len(bound)
+    assert data["unbound_rows"]["entry_ids"] == [entry for entry in SIX if entry not in bound]  # those follow no thesis
+    claim, delivered = run.claim_by_roster(), run.delivered()
+    assert {row["entry_id"]: row["thesis"] for row in data["theses"]["entries"]} == {
+        entry: claim[delivered[entry]] for entry in bound}
+    assert data["theses"]["measures"] == run.reports["portfolio_policy_audit"]["theses"]["measures"]
 
 
 def test_a_thesis_dropped_at_validation_stays_in_the_review_and_reconciles_with_zero_rows(tmp_path_factory):
