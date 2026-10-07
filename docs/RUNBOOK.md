@@ -488,29 +488,38 @@ evidence's backup quarterbacks are out unless the thesis names them; with no
 depth evidence for a team nobody is guessed out and the run says so
 (`THESIS_BACKUP_QB_UNEVALUATED`). Supply the QB depth package on any thesis run.
 
-Until Session 23c lands, a multi-thesis Showdown portfolio is built in
-prefilled rounds (PHI@CHI, 2026-09-28; `changelog.md` has the run). Allot the
-rows to theses, interleaved across contests. Round 1 binds thesis 1's rows with
-its own policy (`--entry-id` for its rows and `--thesis` for its structure;
-before Session 23b, exclusions and caps shaped the thesis: fade a team's pass
-game, zero every Captain but K and DST). Copy only those rows' lines from the review
-CSV into a new copy of the template, verified to differ from the previous
-template in the six roster cells alone, and run round 2 on that copy: the
-earlier rows are now prefilled, preserved byte for byte and never repeated
-(R29). The last round binds every remaining row, so its review CSV is the whole
-portfolio. Before each run, check the policy against the bank's own chain
-stratum (`build_policy_candidate_bank`; its `chain` stratum must reach the
-bound row count), and after each, read `final_rung`: a sleeve that fell to
-rung 1 lost its salary band and usually carries a junk tail row. Three limits
-the method does not cover, all measured that night. The overlap cap binds only
-within one policy's rows, so run `qa_showdown_portfolio.py` against the
-original template and repair any cross-sleeve overlap-6 pair by blanking one
-row and refilling it with a one-row policy that excludes a shared person. The
-Captain strata take each Captain's top lineups regardless of other caps, so a
-K or DST Captain sleeve is infeasible while its only candidates all carry
-capped stars; exclude those stars from that sleeve. And a salary floor
-together with tight exposure caps across 30 or more rows makes the chain
-infeasible; bind fewer rows per policy instead.
+Since Session 23c one Showdown policy carries a **portfolio** of theses
+(`make_showdown_policy.py --thesis <file>` once per thesis, policy v4,
+`docs/DATA_CONTRACTS.md` § SD3 v4). The order of the flags is the order you
+declare them, which is their priority; a file may carry `row_weight` (a share of
+the entries, equal by default, never a probability). The policy's entries are
+allotted across the theses by largest remainder, and one joint solve assembles
+every row at once: distinct across theses and against prefilled rows (R29), no
+person over the policy's one combined cap and no Captain over the Captain cap,
+whichever thesis he serves. A thesis no lineup can follow, or that cannot get
+its rows distinct from the earlier theses', is dropped by name and its rows go to
+the others (`THESIS_DROPPED`); a salary band or a cap gives way before a thesis
+ever does, and nothing relaxes a thesis. For a portfolio (more than one `--thesis`, or
+any `row_weight`) the generator writes the salary band open ($0 to $50,000 left), because
+a kicker, a defense and backs cannot spend the default $1 to $500 band and the ladder
+would loosen your 0.60 and 0.20 caps before it dropped the band; pass `--salary-left-min`
+or `--salary-left-max` only if you mean to hold a band. One thesis without a weight keeps
+the band it always had. A portfolio no cap loosening can assemble ends at rung 4
+(sequential Showdown), which drops every thesis by name: say so in the handoff. Before
+the handoff read the audit's
+`theses` block (`portfolio_policy_audit` in the run result): per Entry ID the
+thesis and whether the lineup follows it, each Captain's count and the theses it
+serves, every person in more than half the rows, the most rows one player's bad
+night sinks, the most rows one thesis sinks, and any pair of rows that share five
+or more people. A judgment pass that swaps people after the engine (the ceiling
+pass, `showdown_value_add.py`) keeps each row's thesis: its teams, position counts
+and Captain set (`docs/claude/working.md` § Showdown judgment pass).
+
+The hand-built prefilled rounds (ATL@GB 2026-09-24, PHI@CHI 2026-09-28) are
+retired. They bound one thesis per policy, so the overlap cap held only within a
+round and lineups repeated across sleeves, and a Captain sleeve died when its
+only candidates carried capped stars. Do not run them again; a slate that seems to
+need them is a defect to name in the handoff.
 
 When several rows share a contest, `run-slate` now diversifies inside each
 contest itself (Sessions 50 and 50c, `within_contest_diversity_v1`, every exit:
@@ -519,10 +528,9 @@ keeps every lineup, reassigns them to Entry IDs (never moving a row the
 template already filled) and reports the per-contest block in the readable
 review (C1 has none: its block is in the selection report and the run result).
 A multi-contest baseline is therefore no longer in salary order row by row, only
-as a set. A file built outside `run-slate`, or one whose sleeves you assembled
-in prefilled rounds, still needs `scripts/diversify_showdown_contests.py` on
-the finished file before the handoff (Showdown or Classic; it is a thin
-wrapper over the same module). Within each contest a pair costs shared people
+as a set. A file built outside `run-slate` still needs
+`scripts/diversify_showdown_contests.py` on the finished file before the handoff
+(Showdown or Classic; it is a thin wrapper over the same module). Within each contest a pair costs shared people
 squared plus a penalty for the same Captain (Classic: QB), the same Classic
 stack team and the same thesis, and a contest scores its worst pair plus its
 mean pair. Then run `qa_showdown_portfolio.py` on its output. On PHI@CHI the

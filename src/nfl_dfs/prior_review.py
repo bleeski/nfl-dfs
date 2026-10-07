@@ -101,6 +101,7 @@ from .portfolio_enforcement import (
     scaled_candidate_seconds,
     scaled_selection_seconds,
 )
+from .lineups import roster_canonical_key
 from .portfolio_policy import NormalizedPortfolioPolicy
 from .prelock_manifest import (
     PredictionArtifact,
@@ -896,6 +897,34 @@ def _fill_solve_seconds(
     else:
         left = max(0.0, window - declared_search_seconds)
     return max(SOLVE_MINIMUM_SECONDS, min(SEQUENTIAL_PER_SOLVE_SECONDS, left / (rows + 1)))
+
+
+def _relabel_thesis_entries(
+    selection: Mapping[str, object],
+    slate: SlateContract,
+    portfolio_policy: object,
+    assignments: Mapping[str, Sequence[str]],
+) -> Mapping[str, object]:
+    """A portfolio's `theses.entries`, read through the final assignment (Session 23c).
+
+    The selector names each Entry ID's thesis in the order it sorted the lineups; the contest step then moves
+    lineups between Entry IDs. The claim of record is `by_lineup` (canonical lineup to thesis), which the audit
+    reads, so it never goes stale; this block is the readable form of it, rebuilt here from the assignment that
+    will be written, the way the overlap pairs above follow their lineups. A selection with no portfolio is
+    returned as it was.
+    """
+
+    if not isinstance(portfolio_policy, NormalizedPortfolioPolicy) or portfolio_policy.thesis_schema != "v4":
+        return selection
+    policy_block = selection.get("portfolio_policy")
+    block = policy_block.get("theses") if isinstance(policy_block, Mapping) else None
+    by_lineup = block.get("by_lineup") if isinstance(block, Mapping) else None
+    if not isinstance(by_lineup, Mapping):
+        return selection
+    entries = {
+        entry_id: by_lineup.get(roster_canonical_key(slate, assignments[entry_id]))
+        for entry_id in portfolio_policy.entry_ids if entry_id in assignments}
+    return {**selection, "portfolio_policy": {**policy_block, "theses": {**block, "entries": entries}}}
 
 
 def row_sources(
@@ -2613,6 +2642,7 @@ def run_prior_review(
             "pairwise_person_overlap": contest_assignment.relabel_overlaps(
                 list(portfolio_policy.entry_ids), assignments, contest_step.claim.people),
         }
+    selection = _relabel_thesis_entries(selection, slate, portfolio_policy, assignments)
 
     names = {
         player.dk_id: f"{player.name} ({player.position}, {player.team})"
