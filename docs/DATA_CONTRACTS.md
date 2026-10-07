@@ -2070,8 +2070,9 @@ largest Captain share; every person in more than half the rows; the most rows on
 player's bad night sinks; the most rows one thesis sinks (each thesis is a bet that loses
 when its game does not happen); and the pairs of rows that share five or more people
 (a pair of six is one core with a rotating Captain, the same bet placed twice, which the
-overlap cap refuses at its default of 4). The readable review accepts the v4 policy; its
-own thesis section is Session 23f's.
+overlap cap refuses at its default of 4). The readable review accepts the v4 policy and,
+since Session 23f, shows these figures in its own Game theses section (§ SD5), recomputed
+from its own reparse and reconciled against this block.
 
 The generator's `--thesis` is repeatable: the flag order is the declared priority, a
 file may carry `row_weight`, more than one thesis (or any weight) writes v4 and exactly
@@ -2151,6 +2152,43 @@ does-not-establish text. The unallocated-volume heading then reads "Volume left 
 the injury-room redistribution", and the `unallocated_volume` observation and the workbook header
 stop saying a vacated share is not reassigned. A reader of v1 or v2 sees none of it; every other
 field means what it meant, and v2 files stay readable as written.
+
+**Game theses (Session 23f; an optional key of `prior_only_readable_review_sd5_v3`, no new version).** A
+policy bound as `nfl_showdown_portfolio_policy_normalized_v4` with at least one ACTIVE thesis adds a top-level
+`theses` key and an HTML section **Game theses**; every other policy (v2, v3, none) and every Classic review
+carries neither, so a run with no theses writes the review bytes it always wrote (checked byte for byte, JSON
+and HTML, by a script over saved no-policy, v2 and v3 runs; the tests pin the review's top-level key set).
+`theses`: `build_version` (`showdown_thesis_portfolio_sd3_v1`), `basis`
+(`RECOMPUTED_FROM_THE_BYTE_REPARSED_ROSTERS_AND_THE_NORMALIZED_POLICY`), `statement`, `reconciliation`
+(`status` `PASS`, `against`), `theses` (each declared thesis: `name`, `status`, `row_weight`, `dropped_reason`,
+`rows_allotted`, `rows_delivered`, `entry_ids`), `entries` (each bound Entry ID in order: `thesis`, `follows`,
+`followed_by`, `broken_rules`, `captain`), `measures` and `people` (name and team for each person the rosters
+hold). `measures` is the output of `showdown_theses.thesis_portfolio_measures` and equals the audit's
+`theses.measures`: `by_thesis`; each Captain's `count`, `share_percentage` and the `theses` it serves;
+`distinct_captains`; `max_captain_share_percentage`; `people_in_more_than_half` (strictly more than half the
+rows; the HTML says "none" for an empty list); `most_rows_one_player_sinks`; `most_rows_one_thesis_sinks`;
+`same_core_pairs` (pairs of rows sharing five or more people, a pair of six flagged as one core with a rotating
+Captain); `does_not_establish`. The statement says in words that a thesis is a choice and not a forecast and that
+leverage is unmeasured because there is no ownership input; nothing in the section is a projection, a probability
+or upload clearance.
+
+The review reads each Entry ID's thesis through the lineup that Entry ID holds (the selector's
+`selection.portfolio_policy.theses.by_lineup`, keyed by canonical lineup, never by Entry ID, because the contest
+step moves lineups between Entry IDs), decides whether the roster follows it with `thesis_roster_violations`
+(each thesis with its own backup-quarterback set, from the selector's `qb_depth_roles`), counts with the function
+the audit counts with, in the audit's own order, and reconciles against the audit's `theses` block
+(`theses`, `entries`, `measures` key by key, `assignment_source`), the selector's relabelled `theses.entries` and
+each thesis's allotment. A disagreement is `READABLE_REVIEW_THESIS_MISMATCH:<where>` (registry family
+`presentation`, class `P`: the delivered file is intact, so the CSV ships and the gap is named); `<where>` names an
+Entry ID, a thesis by position or a figure, never a thesis name, and carries no `;`, because the delivery layer
+splits a failure on `;` and an unregistered fragment is class `V` and would withhold the file. **What this proves:**
+the review and the audit saw the same bytes and the selector's claims agree with them. It shares the audit's strict
+reparse of the normalized policy and its measures function, so it does not prove the arithmetic independently. The
+tests recompute in plain Python, from the delivered roster IDs and the selector's per-lineup claim, each Captain's
+count, share and theses served, the distinct Captains and the largest share, the people in more than half the rows,
+the two sink counts and the pairs; the other figures (`followed_by`, `by_thesis`, the sink people and thesis names,
+`captain_rotation`) are the audit's own, reconciled but not recomputed independently. A v3 policy (one thesis, Session 23b) has
+no `measures` to reconcile against and gets no section.
 
 Canonical JSON and HTML are written atomically and reported with independent
 SHA-256 values. HTML markup is escaped. Every user/provider-controlled workbook
@@ -3464,7 +3502,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `79304904c50459309943d33ed525586453406446e395d39b00a7b9c14009e51c`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `60eac7853d58a4589ca73da99f0c0277bba94fd3ff32c2e452c2cf9b88837a33`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
