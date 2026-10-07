@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "b21def1c-e02f-4607-8497-8477ca581683",
-      "branch": "claude/s23f-readable-review-theses",
-      "chunk": "S23f",
-      "claimed_at": "2026-10-07T14:51:52Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
