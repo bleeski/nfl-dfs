@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "BenBook/141880",
+      "branch": "claude/s66-thesis-adherence-tools",
+      "chunk": "S66",
+      "claimed_at": "2026-10-07T19:45:54Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
