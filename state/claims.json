@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "cd247574-a5a3-4723-903d-24737f9692bb",
+      "branch": "claude/s67-thesis-expander-placement",
+      "chunk": "S67",
+      "claimed_at": "2026-10-07T21:00:00Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
