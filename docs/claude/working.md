@@ -28,11 +28,19 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
   `git commit -F -`:** write the message with the Write tool to a file and commit from Bash with `git commit -F <file>`. **Edit
   scripts, commit messages and PR bodies go through the Write tool, never a Bash heredoc:** the shell layer rewrites backslashes (a
   `\f` became a form feed) and a script heavy with apostrophes fails to parse. Run the script with `.venv\Scripts\python.exe`, and
-  write the ledgers with `write_bytes` so their LF endings survive.
+  write the ledgers with `write_bytes` so their LF endings survive. Two more (Session 23d): Bash rewrites `$'\r'`, so
+  `grep -c $'\r' <file>` counts every line (count CR bytes with a Python one-liner), and the auto-mode classifier denied
+  `rm -rf` plus `git archive origin/main src | tar` into the scratchpad. A denial is final for that command and its
+  rewordings: hand Ben the exact commands (the before and after comparison's second tree is the one that needs them) and
+  ask for the output.
 
 ## Session protocol: `docs/ROADMAP.md` §2.1, plus these
 
 - Never reset, clean, stash or reformat a dirty tree; it is often user-owned work.
+- **A named seam must be a real fraction of the estimate (Session 23d, 2026-10-08).** The plan named two seams of about 65 lines each
+  (the workbook rows, the fee cross-check) against an estimate of 1,150 lines that became 1,925, so the 1,000 and 1,500 triggers could not
+  bind. Name the seam as the part that is separable in the code (here the review layer, about 400 lines with its tests), and estimate a
+  parser that must name every bad row at about 1.3 lines of test for each line of source, with a module of 400 lines, not 220.
 - The claim commit (row `In Progress`) turns `tests/test_roadmap_queue.py::test_the_quick_start_names_the_first_startable_session`
   red, because §1 still names the row just claimed and an `In Progress` row is not startable (Session 17's claim
   commit, 2026-09-29: `suite` red on that one test). Either rewrite §1 to the next startable row in the claim

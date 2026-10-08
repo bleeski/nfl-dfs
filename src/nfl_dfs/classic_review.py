@@ -21,7 +21,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from . import contest_assignment
+from . import contest_assignment, contest_facts
 from .byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 from .classic_portfolio import _classic_assignment_pairs_from_csv_bytes
 from .classic_portfolio_policy import (
@@ -632,8 +632,15 @@ def create_classic_review_package(
         "Review every exact Entry ID, roster ID, policy limit, evidence fact, and limitation. "
         "Do not upload this prior-only review CSV."
     ),
+    contest_facts_path: str | Path | None = None,
+    contest_facts_sha256: str | None = None,
 ) -> ClassicReviewArtifacts:
-    """Publish the C3 package only after independent byte/semantic reconciliation."""
+    """Publish the C3 package only after independent byte/semantic reconciliation.
+
+    `contest_facts_path` and `contest_facts_sha256` (Session 23d) name the run's contest facts artifact. They are
+    deliberately not in `artifacts` and `expected_hashes`: C3's hash checkpoints stop an export on any tracked
+    mismatch, and a label must never stop one. The review reads the artifact through its own guarded path.
+    """
 
     if audit_at.tzinfo is None:
         raise ClassicReviewError("CLASSIC_C3_AUDIT_CLOCK_REQUIRES_TIMEZONE")
@@ -1547,6 +1554,18 @@ def create_classic_review_package(
             selection_order=list(selection_lineups), reported=step_report)
         if contest_problems:
             raise ClassicReviewError(";".join(contest_problems))
+        # Session 23d: the paid fraction and `FIRST_PLACE_OBJECTIVE` label of every entry, from the run's own
+        # artifact, recomputed from this template's Contest IDs and fees. A label is a fact and never a gate: a
+        # record that cannot be read or does not rebuild to itself is one registered `P` code, which keeps the export.
+        facts_payload: dict[str, object] | None = None
+        if contest_facts_path is not None:
+            facts_record, facts_unread = contest_facts.load_record(contest_facts_path, contest_facts_sha256)
+            facts_payload, facts_mismatch = contest_facts.review_block(
+                facts_record,
+                tuple((row.entry_id, row.contest_id, row.entry_fee) for row in template.authorizations),
+            )
+            if facts_unread or facts_mismatch:
+                raise ClassicReviewError(";".join([*facts_unread, *facts_mismatch]))
         # The policy's rows are its exposure denominator; every filled row is reconciled.
         denominator = len(bound_ids)
         display_by_person = {row.underlying_id: row for row in slate.players}
@@ -1681,6 +1700,8 @@ def create_classic_review_package(
                 "before_review_rendering": pre_render_hashes,
             },
         }
+        if facts_payload is not None:
+            data["contest_facts"] = facts_payload  # an optional key: a run with no facts file has none
         json_payload = _canonical_json_bytes(data)
         json_sha = sha256_bytes(json_payload)
         html_payload = _render_html(data, data_sha256=json_sha)

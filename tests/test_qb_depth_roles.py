@@ -926,12 +926,14 @@ def test_a_v1_request_still_loads_unchanged():
         COWORK_REQUEST_VERSION_V1,
         COWORK_REQUEST_VERSION_V2,
         COWORK_REQUEST_VERSION_V3,
+        COWORK_REQUEST_VERSION_V4,
         SUPPORTED_REQUEST_VERSIONS,
         CoworkRunRequest,
     )
 
-    # Session 61 emits v4 (`construction_judgment_json`); v1, v2 and v3 stay accepted.
-    assert COWORK_REQUEST_VERSION == "nfl_cowork_run_request_v4"
+    # Session 23d emits v5 (`contest_facts_csv`); v1 to v4 stay accepted.
+    assert COWORK_REQUEST_VERSION == "nfl_cowork_run_request_v5"
+    assert COWORK_REQUEST_VERSION_V4 == "nfl_cowork_run_request_v4"
     assert COWORK_REQUEST_VERSION_V3 == "nfl_cowork_run_request_v3"
     assert COWORK_REQUEST_VERSION_V2 == "nfl_cowork_run_request_v2"
     assert COWORK_REQUEST_VERSION_V1 == "nfl_cowork_run_request_v1"
@@ -939,6 +941,7 @@ def test_a_v1_request_still_loads_unchanged():
         COWORK_REQUEST_VERSION_V1,
         COWORK_REQUEST_VERSION_V2,
         COWORK_REQUEST_VERSION_V3,
+        COWORK_REQUEST_VERSION_V4,
         COWORK_REQUEST_VERSION,
     )
     request = CoworkRunRequest.from_mapping(

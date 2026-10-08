@@ -5,8 +5,14 @@ DraftKings input is CP1252. Times must be timezone-aware ISO 8601 values.
 
 ## Cowork run request
 
-`cowork-run` (aliased `run-slate`) emits `nfl_cowork_run_request_v4` and accepts
-`v1`, `v2`, `v3` and `v4`. Unknown keys are rejected.
+`cowork-run` (aliased `run-slate`) emits `nfl_cowork_run_request_v5` and accepts
+`v1`, `v2`, `v3`, `v4` and `v5`. Unknown keys are rejected.
+
+**v5, added 2026-10-08 (Session 23d), adds exactly one field:** `contest_facts_csv`, the operator's four-column contest
+facts file documented under *Contest facts, nfl_contest_facts_v1*. The CLI flag is `--contest-facts-csv`, and a file whose
+first row is exactly that header is discovered in `--input-dir` by schema like the others. A `v1` to `v4` request carrying
+it is refused, naming `v5`; when discovery attaches the file to a reloaded older request, this run's `run_request.json` is
+`v5`. Every `run_request.json` now also carries `"contest_facts_csv": null` when none was supplied.
 
 **v4, added 2026-10-05 (Session 61), adds exactly one field:** `construction_judgment_json`, the
 Classic construction judgment documented under *Classic judgment pass and construction judgment*
@@ -3502,7 +3508,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `60eac7853d58a4589ca73da99f0c0277bba94fd3ff32c2e452c2cf9b88837a33`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `840ac5dc37ec04152e3de14179018cc1f91830d5ef723097d23f962c3a66efef`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4259,6 +4265,79 @@ override the weights for an offline experiment and the record says so
 Does not establish: expected points or value, win or cash likelihood, ownership or
 duplication, a payout or contest worth, upload clearance, or that a different
 assignment would score better than the search found.
+
+## Contest facts, nfl_contest_facts_v1 (Session 23d)
+
+Registered 2026-10-08. `src/nfl_dfs/contest_facts.py`. `contest_facts_label_version =
+paid_fraction_under_five_percent_v1`; the run's record is `nfl_contest_facts_labels_v1`. The operator copies four numbers
+per contest from the DraftKings lobby by hand into a CSV; nothing in this repository fetches them. The engine divides
+places paid by field size per Contest ID, tags each reserved entry with that fraction through its Contest ID, and labels
+an entry `FIRST_PLACE_OBJECTIVE` when its contest pays strictly under 5%. The label is a fact about a contest, computed from
+supplied numbers only (the function takes no contest name: a "satellite" paying 3% is labelled and a "single entry"
+paying 40% is not). It moves no lineup, no assignment and no gate, and no release truth changes.
+
+**The file.** The header row names `contest_id,field_size,places_paid,entry_fee` in that order (the parser trims each
+cell; discovery needs the first row to be exactly this, with no spaces); UTF-8 or UTF-8 with a BOM, LF or CRLF, at most
+1,000,000 bytes, no cell over 131,072 characters (the csv module's own limit, named `ROW_MISSHAPEN`). Cells are trimmed.
+`contest_id` is 1 to 18 ASCII digits; `field_size` and `places_paid` are plain integers of at most 12 digits (no
+separators, no `1e3`, no `1000.0`); `entry_fee` is a plain decimal with up to two places and an optional leading `$` (zero
+is a freeroll). A fully blank line is skipped. It is classified by its first row like every other input
+(`classify_csv`), never by its name, a header that is not exactly this one is an unclassified CSV, and two facts files in
+one `--input-dir` are the existing ambiguity refusal at command start, as for two entry files. It enters a run as
+`contest_facts_csv` (request schema `nfl_cowork_run_request_v5`, `--contest-facts-csv`), is snapshotted under the run's
+`inputs/` and hashed with the others. Only a `prior_review` run (`--profile prior_review`, the operating path) reads it;
+on the default `diagnostic` profile it is snapshotted and hashed and nothing else.
+
+**Refusals.** The whole file is refused, never repaired and never used in part, and every bad row is named in file order
+with its row number (the header is row 1): `CONTEST_FACTS_FILE_EMPTY`, `_FILE_TOO_LARGE`, `_NOT_TEXT` (not UTF-8, or a
+NUL byte), `_HEADER_INVALID` (a missing, extra, reordered or renamed column), `_NO_ROWS`, `_ROW_MISSHAPEN` (a truncated
+or overlong row, or an unterminated quote), `_CONTEST_ID_INVALID`, `_CONTEST_ID_DUPLICATE`, `_FIELD_SIZE_INVALID`,
+`_FIELD_SIZE_NOT_POSITIVE` (zero or negative), `_PLACES_PAID_INVALID`, `_PLACES_PAID_NOT_POSITIVE`,
+`_PLACES_PAID_EXCEEDS_FIELD_SIZE`, `_ENTRY_FEE_INVALID` (non-numeric or negative); the run adds `_UNREADABLE` (the bytes
+could not be read) and `_STEP_FAILED` (anything unexpected, named by its exception class and never its message). All are
+registry family `contest_facts` (`P`).
+
+**Label.** Paid fraction is `Fraction(places_paid, field_size)`, reported as `"<n>/<d>"` and as a decimal rounded
+half-even to six places; the label is `places_paid * 20 < field_size`, exact integer arithmetic, so exactly 5% is not
+labelled. No float appears in the record. The entry fee is cross-checked in whole cents against the entry file's own
+`Entry Fee` for that contest: a row that names another fee drops only that contest (`FEE_DISAGREES`, no label), because
+neither source is known to be the wrong one.
+
+**The record** (`reports["contest_facts"]` and the hash-bound artifact `selection/contest_facts.json`, canonical JSON with
+sorted keys, compact separators and one trailing LF, written whenever a file was supplied). `status`: `NOT_SUPPLIED` (no
+artifact; the run result says so and nothing else changes), `APPLIED` (every entry's contest has a usable row), `PARTIAL`
+(some entries carry `NO_FACTS_ROW` or `FEE_DISAGREES`; a facts row for a contest with no reserved entry is ignored and
+listed in `unused_contest_ids`) or `REFUSED` (`problems` lists every refusal and no entry is labelled). Also `facts_sha256`
+and `facts_file_name` (the bound bytes), `contests` (per Contest ID: entry count, state, the supplied numbers, the paid
+fraction, the label), `entries` (per Entry ID in template order: state, paid fraction, label), `entries_labelled`,
+`contests_without_row`, `contests_fee_disagree`, `contest_facts_label_version`, `threshold_paid_fraction` (`1/20`) and
+`does_not_establish`.
+
+**It never stops a run (R28, the lock-clock ruling).** A file that is not supplied changes no byte of any review. A file
+that is supplied and unusable is named by the limitations `CONTEST_FACTS_REFUSED`, `CONTEST_FACTS_INCOMPLETE` and
+`CONTEST_FACTS_FEE_DISAGREES_WITH_ENTRIES` (each `P`) and the run goes on with the same lineups and the same CSV. A path
+that does not exist stops at command start, as every other input path does, before anything is written. Supplying facts
+never clears `CONTEST_PAYOUT_REQUIRED`, `FIELD_SIZE_REQUIRED` or any other certification-only blocker: a facts row is not a
+payout table.
+
+**Exits.** `prior_review` builds the record once, before its three exits split: the Showdown readable review (JSON and
+HTML), the Classic C3 readable review (JSON and HTML) and the Classic C1 and C2 runs (the artifact and the run result;
+neither writes a readable review) all carry it, and the baseline, which is not a review, does not. The two readable
+reviews read the artifact, recompute every entry's label from the delivered entry file and the record's own numbers, and
+reconcile; Classic C3 does not put the artifact in its hash checkpoint, so a label can never stop an export. A record that
+cannot be read or does not rebuild to itself is `CONTEST_FACTS_REVIEW_MISMATCH:<kind>` (family `presentation`, `P`, like
+`CONTEST_ASSIGNMENT_STATS_MISMATCH`: the review CSV is kept and delivered, the run exits 2 and that run's readable JSON and
+HTML are not written; Showdown's review also names a missing or changed artifact through its own
+`READABLE_REVIEW_ARTIFACT_*` codes, also `presentation`), and the recompute validates the record's types and ranges
+before any arithmetic, so it cannot raise. **What the review proves, named:** that the record is internally consistent,
+rebuilds from the delivered entry file's Contest IDs and fees and its own numbers, and is the artifact `prior_review`
+hashed (a changed byte is `sha256`, a deleted file `missing`, JSON that is not an object `invalid`). It does not re-read
+the facts CSV: that file's bytes are bound by the record's `facts_sha256` and the run's input hash, and a block built from
+another file would pass if it carried a consistent `facts_sha256`, which only an engine defect could produce.
+
+Does not establish: expected value or ROI, win or cash probability, payout shape or top prize, overlay or rake, ownership
+or duplication, that a contest is worth entering, that any lineup suits a contest, or upload clearance. The numbers are the
+operator's, not DraftKings's, and are never inferred from a contest name.
 
 ## Standings corpus transport (Session 17, X2)
 
