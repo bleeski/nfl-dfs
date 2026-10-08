@@ -46,6 +46,25 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def mask_out_path(stdout: str, target) -> str:
+    """`stdout` with the report's `out` path replaced by `<OUT>`, as the JSON text spells it.
+
+    The tool prints the report through `json.dumps`, which escapes a Windows path's backslashes, so the needle is the
+    path as JSON writes it, not `str(target)`: the first CI run on Windows leaked its temp directory into the hash.
+    """
+
+    return stdout.replace(json.dumps(str(target))[1:-1], "<OUT>")
+
+
+def test_the_output_mask_finds_a_windows_path_as_json_escapes_it():
+    from pathlib import PureWindowsPath
+
+    target = PureWindowsPath(r"C:\Users\runneradmin\AppData\Local\Temp\pytest-0\test_x\out.csv")
+    stdout = json.dumps({"out": str(target), "out_sha256": "0" * 64}, indent=2)
+    assert str(target) not in stdout  # the raw spelling is not in the JSON text, which is why the first mask missed
+    assert mask_out_path(stdout, target) == json.dumps({"out": "<OUT>", "out_sha256": "0" * 64}, indent=2)
+
+
 def no_flag_runs(tmp_path: Path) -> dict[str, tuple]:
     """Three runs with no thesis flag on the synthetic fixtures: exit code and hashes of every byte the tool emits."""
 
@@ -65,7 +84,7 @@ def no_flag_runs(tmp_path: Path) -> dict[str, tuple]:
             code = tool.main(["--salaries", str(w["sal"]), "--template", str(w["tpl"]), "--review", str(w["rev"]),
                               "--out", str(target), *args])
         written = hashlib.sha256(target.read_bytes()).hexdigest() if target.exists() else None
-        results[name] = (code, _sha(stdout.getvalue().replace(str(target), "<OUT>")), _sha(stderr.getvalue()), written)
+        results[name] = (code, _sha(mask_out_path(stdout.getvalue(), target)), _sha(stderr.getvalue()), written)
     return results
 
 
