@@ -1,0 +1,235 @@
+{
+ "schema": "tb_dal_sd_review_swaps_record_v1",
+ "status": "PRIOR_ONLY / DO_NOT_UPLOAD",
+ "source_review": "data/inbox/slates/tb-dal-sd-2026-10-08/construction/DK_REVIEW_ENTRY_tb-dal-sd_iter2.csv",
+ "swaps_file": "data/inbox/slates/tb-dal-sd-2026-10-08/construction/review_swaps_iter3.txt",
+ "before": {
+  "large_prizes": {
+   "total_prior": 2417.36,
+   "min_row_prior": 73.9,
+   "wr_te_captain_rows_without_own_qb": 0
+  },
+  "washouts": {
+   "max_person": 21,
+   "top3_person_slots": 60,
+   "mean_pairwise_overlap": 2.873,
+   "max_pairwise_overlap": 5,
+   "distinct_people": 17,
+   "max_captain": 5
+  },
+  "exposure": {
+   "DAL|QB|Dak Prescott": 21,
+   "TB|QB|Jalon Daniels": 20,
+   "DAL|K|Brandon Aubrey": 19,
+   "DAL|RB|Javonte Williams": 18,
+   "DAL|WR|George Pickens": 13,
+   "DAL|WR|CeeDee Lamb": 12,
+   "DAL|WR|KaVontae Turpin": 11,
+   "TB|WR|Ted Hurst III": 10,
+   "DAL|TE|Jake Ferguson": 9,
+   "TB|RB|Bucky Irving": 8,
+   "TB|WR|Tez Johnson": 7,
+   "TB|K|Chase McLaughlin": 6,
+   "TB|WR|Emeka Egbuka": 5,
+   "DAL|WR|Ryan Flournoy": 4,
+   "TB|TE|Cade Otton": 2,
+   "TB|WR|Chris Godwin Jr.": 2,
+   "DAL|DST|Cowboys": 1
+  },
+  "captains": {
+   "DAL|QB|Dak Prescott": 5,
+   "DAL|RB|Javonte Williams": 5,
+   "DAL|WR|George Pickens": 5,
+   "DAL|WR|CeeDee Lamb": 5,
+   "TB|QB|Jalon Daniels": 5,
+   "TB|RB|Bucky Irving": 2,
+   "DAL|K|Brandon Aubrey": 1
+  }
+ },
+ "after": {
+  "large_prizes": {
+   "total_prior": 2412.77,
+   "min_row_prior": 73.9,
+   "wr_te_captain_rows_without_own_qb": 0
+  },
+  "washouts": {
+   "max_person": 21,
+   "top3_person_slots": 60,
+   "mean_pairwise_overlap": 2.8016,
+   "max_pairwise_overlap": 5,
+   "distinct_people": 17,
+   "max_captain": 5
+  },
+  "exposure": {
+   "DAL|QB|Dak Prescott": 21,
+   "DAL|RB|Javonte Williams": 20,
+   "DAL|K|Brandon Aubrey": 19,
+   "DAL|WR|George Pickens": 16,
+   "TB|QB|Jalon Daniels": 14,
+   "DAL|WR|CeeDee Lamb": 12,
+   "DAL|WR|KaVontae Turpin": 11,
+   "TB|WR|Ted Hurst III": 9,
+   "TB|RB|Bucky Irving": 8,
+   "TB|TE|Cade Otton": 7,
+   "TB|WR|Tez Johnson": 7,
+   "DAL|TE|Jake Ferguson": 7,
+   "TB|WR|Emeka Egbuka": 6,
+   "TB|K|Chase McLaughlin": 5,
+   "DAL|WR|Ryan Flournoy": 3,
+   "TB|WR|Chris Godwin Jr.": 2,
+   "DAL|DST|Cowboys": 1
+  },
+  "captains": {
+   "DAL|QB|Dak Prescott": 5,
+   "DAL|RB|Javonte Williams": 5,
+   "DAL|WR|George Pickens": 5,
+   "DAL|WR|CeeDee Lamb": 5,
+   "TB|QB|Jalon Daniels": 5,
+   "TB|RB|Bucky Irving": 2,
+   "DAL|K|Brandon Aubrey": 1
+  }
+ },
+ "pareto_overall": false,
+ "log": [
+  {
+   "swap": "5287501448|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior --0.59) + 5287501448|FLEX|44395132|44395117|iter3: DAL|WR|Ryan Flournoy->DAL|WR|George Pickens (row prior --0.59)",
+   "result": "APPLIED",
+   "out": "TB|QB|Jalon Daniels",
+   "in": "TB|TE|Cade Otton",
+   "salary": 50000,
+   "row_prior_delta": 0.59,
+   "pareto_vs_previous": true,
+   "large_prizes": {
+    "total_prior": 2417.95,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 59,
+    "mean_pairwise_overlap": 2.8545,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287491172|FLEX|44395118|44395120|iter3: TB|QB|Jalon Daniels->TB|WR|Emeka Egbuka (row prior -0.52) + 5287491172|FLEX|44395134|44395128|iter3: TB|WR|Ted Hurst III->TB|K|Chase McLaughlin (row prior -0.52)",
+   "result": "APPLIED",
+   "out": "TB|QB|Jalon Daniels",
+   "in": "TB|WR|Emeka Egbuka",
+   "salary": 49700,
+   "row_prior_delta": -0.52,
+   "pareto_vs_previous": false,
+   "large_prizes": {
+    "total_prior": 2417.44,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 58,
+    "mean_pairwise_overlap": 2.8122,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287501770|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior -0.56) + 5287501770|FLEX|44395122|44395114|iter3: DAL|TE|Jake Ferguson->DAL|RB|Javonte Williams (row prior -0.56)",
+   "result": "APPLIED",
+   "out": "TB|QB|Jalon Daniels",
+   "in": "TB|TE|Cade Otton",
+   "salary": 49800,
+   "row_prior_delta": -0.56,
+   "pareto_vs_previous": false,
+   "large_prizes": {
+    "total_prior": 2416.88,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 59,
+    "mean_pairwise_overlap": 2.8016,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287501784|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior -0.56) + 5287501784|FLEX|44395122|44395114|iter3: DAL|TE|Jake Ferguson->DAL|RB|Javonte Williams (row prior -0.56)",
+   "result": "APPLIED",
+   "out": "TB|QB|Jalon Daniels",
+   "in": "TB|TE|Cade Otton",
+   "salary": 49900,
+   "row_prior_delta": -0.56,
+   "pareto_vs_previous": false,
+   "large_prizes": {
+    "total_prior": 2416.31,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 60,
+    "mean_pairwise_overlap": 2.8016,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287501767|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior -1.77) + 5287501767|FLEX|44395128|44395117|iter3: TB|K|Chase McLaughlin->DAL|WR|George Pickens (row prior -1.77)",
+   "result": "APPLIED",
+   "out": "TB|QB|Jalon Daniels",
+   "in": "TB|TE|Cade Otton",
+   "salary": 49400,
+   "row_prior_delta": -1.77,
+   "pareto_vs_previous": false,
+   "large_prizes": {
+    "total_prior": 2414.54,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 60,
+    "mean_pairwise_overlap": 2.7963,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287501783|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior -1.77) + 5287501783|FLEX|44395128|44395117|iter3: TB|K|Chase McLaughlin->DAL|WR|George Pickens (row prior -1.77)",
+   "result": "APPLIED",
+   "out": "TB|QB|Jalon Daniels",
+   "in": "TB|TE|Cade Otton",
+   "salary": 49500,
+   "row_prior_delta": -1.77,
+   "pareto_vs_previous": false,
+   "large_prizes": {
+    "total_prior": 2412.77,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 60,
+    "mean_pairwise_overlap": 2.8016,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  }
+ ],
+ "changed_entry_ids": [
+  "5287491172",
+  "5287501448",
+  "5287501767",
+  "5287501770",
+  "5287501783",
+  "5287501784"
+ ]
+}

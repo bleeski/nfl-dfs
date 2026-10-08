@@ -1,0 +1,211 @@
+{
+ "schema": "tb_dal_sd_review_swaps_record_v1",
+ "status": "PRIOR_ONLY / DO_NOT_UPLOAD",
+ "source_review": "data/inbox/slates/tb-dal-sd-2026-10-08/construction/DK_REVIEW_ENTRY_tb-dal-sd_final_v2.csv",
+ "swaps_file": "data/inbox/slates/tb-dal-sd-2026-10-08/construction/review_swaps_iter1.txt",
+ "before": {
+  "large_prizes": {
+   "total_prior": 2448.7,
+   "min_row_prior": 79.84,
+   "wr_te_captain_rows_without_own_qb": 0
+  },
+  "washouts": {
+   "max_person": 21,
+   "top3_person_slots": 62,
+   "mean_pairwise_overlap": 3.0661,
+   "max_pairwise_overlap": 5,
+   "distinct_people": 16,
+   "max_captain": 5
+  },
+  "exposure": {
+   "DAL|K|Brandon Aubrey": 21,
+   "DAL|QB|Dak Prescott": 21,
+   "TB|QB|Jalon Daniels": 20,
+   "DAL|WR|George Pickens": 20,
+   "DAL|RB|Javonte Williams": 16,
+   "TB|RB|Bucky Irving": 11,
+   "DAL|TE|Jake Ferguson": 11,
+   "TB|WR|Ted Hurst III": 8,
+   "TB|WR|Tez Johnson": 8,
+   "DAL|WR|KaVontae Turpin": 7,
+   "TB|K|Chase McLaughlin": 7,
+   "DAL|WR|CeeDee Lamb": 5,
+   "DAL|WR|Ryan Flournoy": 5,
+   "TB|WR|Emeka Egbuka": 5,
+   "TB|WR|Chris Godwin Jr.": 2,
+   "TB|TE|Cade Otton": 1
+  },
+  "captains": {
+   "DAL|QB|Dak Prescott": 5,
+   "DAL|RB|Javonte Williams": 5,
+   "DAL|WR|George Pickens": 5,
+   "DAL|WR|CeeDee Lamb": 5,
+   "TB|QB|Jalon Daniels": 5,
+   "TB|RB|Bucky Irving": 2,
+   "DAL|K|Brandon Aubrey": 1
+  }
+ },
+ "after": {
+  "large_prizes": {
+   "total_prior": 2437.01,
+   "min_row_prior": 73.9,
+   "wr_te_captain_rows_without_own_qb": 0
+  },
+  "washouts": {
+   "max_person": 21,
+   "top3_person_slots": 60,
+   "mean_pairwise_overlap": 2.8995,
+   "max_pairwise_overlap": 5,
+   "distinct_people": 17,
+   "max_captain": 5
+  },
+  "exposure": {
+   "DAL|QB|Dak Prescott": 21,
+   "TB|QB|Jalon Daniels": 20,
+   "DAL|WR|George Pickens": 19,
+   "DAL|RB|Javonte Williams": 18,
+   "DAL|K|Brandon Aubrey": 17,
+   "TB|RB|Bucky Irving": 10,
+   "TB|WR|Ted Hurst III": 9,
+   "DAL|TE|Jake Ferguson": 9,
+   "DAL|WR|KaVontae Turpin": 8,
+   "TB|WR|Tez Johnson": 8,
+   "TB|K|Chase McLaughlin": 7,
+   "DAL|WR|CeeDee Lamb": 6,
+   "DAL|WR|Ryan Flournoy": 6,
+   "TB|WR|Emeka Egbuka": 5,
+   "TB|TE|Cade Otton": 2,
+   "TB|WR|Chris Godwin Jr.": 2,
+   "DAL|DST|Cowboys": 1
+  },
+  "captains": {
+   "DAL|QB|Dak Prescott": 5,
+   "DAL|RB|Javonte Williams": 5,
+   "DAL|WR|George Pickens": 5,
+   "DAL|WR|CeeDee Lamb": 5,
+   "TB|QB|Jalon Daniels": 5,
+   "TB|RB|Bucky Irving": 2,
+   "DAL|K|Brandon Aubrey": 1
+  }
+ },
+ "pareto_overall": false,
+ "log": [
+  {
+   "swap": "5287501781|FLEX|44395127|44395129|A: Aubrey->Cowboys DST; the only DST row (DAL blowout + defense, Lamb CPT)",
+   "result": "APPLIED",
+   "out": "DAL|K|Brandon Aubrey",
+   "in": "DAL|DST|Cowboys",
+   "salary": 48100,
+   "row_prior_delta": -5.94,
+   "pareto_vs_previous": false,
+   "large_prizes": {
+    "total_prior": 2442.76,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 61,
+    "mean_pairwise_overlap": 3.0132,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287501779|FLEX|44395127|44395114|B: Aubrey->Javonte; TB comeback with DAL run bring-back + 5287501779|FLEX|44395122|44395140|B: Ferguson->Turpin",
+   "result": "APPLIED",
+   "out": "DAL|K|Brandon Aubrey",
+   "in": "DAL|RB|Javonte Williams",
+   "salary": 49900,
+   "row_prior_delta": 2.15,
+   "pareto_vs_previous": true,
+   "large_prizes": {
+    "total_prior": 2444.92,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 61,
+    "mean_pairwise_overlap": 2.9974,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287501448|FLEX|44395117|44395113|C: Pickens->Lamb FLEX (2026: Lamb 32% target share, Pickens 19%) + 5287501448|FLEX|44395122|44395132|C: Ferguson->Flournoy (16% target share; pays for Lamb)",
+   "result": "APPLIED",
+   "out": "DAL|WR|George Pickens",
+   "in": "DAL|WR|CeeDee Lamb",
+   "salary": 48600,
+   "row_prior_delta": -5.0,
+   "pareto_vs_previous": false,
+   "large_prizes": {
+    "total_prior": 2439.91,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 60,
+    "mean_pairwise_overlap": 2.9497,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287501773|FLEX|44395127|44395130|D: Aubrey->Otton; TB passing upset vs a DAL secondary missing 2 CBs",
+   "result": "APPLIED",
+   "out": "DAL|K|Brandon Aubrey",
+   "in": "TB|TE|Cade Otton",
+   "salary": 48100,
+   "row_prior_delta": -4.49,
+   "pareto_vs_previous": false,
+   "large_prizes": {
+    "total_prior": 2435.42,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 60,
+    "mean_pairwise_overlap": 2.9048,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  },
+  {
+   "swap": "5287491172|FLEX|44395127|44395114|E: Aubrey->Javonte + 5287491172|FLEX|44395119|44395134|E: Irving->Hurst",
+   "result": "APPLIED",
+   "out": "DAL|K|Brandon Aubrey",
+   "in": "DAL|RB|Javonte Williams",
+   "salary": 47900,
+   "row_prior_delta": 1.59,
+   "pareto_vs_previous": true,
+   "large_prizes": {
+    "total_prior": 2437.01,
+    "min_row_prior": 73.9,
+    "wr_te_captain_rows_without_own_qb": 0
+   },
+   "washouts": {
+    "max_person": 21,
+    "top3_person_slots": 60,
+    "mean_pairwise_overlap": 2.8995,
+    "max_pairwise_overlap": 5,
+    "distinct_people": 17,
+    "max_captain": 5
+   }
+  }
+ ],
+ "changed_entry_ids": [
+  "5287491172",
+  "5287501448",
+  "5287501773",
+  "5287501779",
+  "5287501781"
+ ]
+}

@@ -113,28 +113,44 @@ def pareto(b, a):
 state = {k: list(v) for k, v in rows.items()}
 start = measures(state)
 log = []
+# Consecutive lines naming the same Entry ID are one atomic change (a paired swap that only fits the
+# cap together); the first version applied them one at a time and refused the first half.
+groups = []
 for line in open(swaps_path):
     line = line.strip()
     if not line or line.startswith("#"):
         continue
-    eid, slot, out_id, in_id, *why = line.split("|")
+    if groups and groups[-1][0].split("|")[0] == line.split("|")[0]:
+        groups[-1].append(line)
+    else:
+        groups.append([line])
+for group in groups:
+    line = " + ".join(group)
+    eid = group[0].split("|")[0]
     if eid not in state:
         log.append({"swap": line, "result": "UNKNOWN_ENTRY_ID"})
         continue
     ids = state[eid]
-    if out_id not in ids:
-        log.append({"swap": line, "result": "OUT_ID_NOT_IN_ROW", "row": ppl(ids)})
-        continue
-    j = ids.index(out_id)
-    if (slot == "CPT") != (j == 0):
-        log.append({"swap": line, "result": "SLOT_MISMATCH"})
-        continue
     new = list(ids)
-    new[j] = in_id
+    problem = None
+    for part in group:
+        _, slot, out_id, in_id, *why = part.split("|")
+        if out_id not in new:
+            problem = "OUT_ID_NOT_IN_ROW"
+            break
+        j = new.index(out_id)
+        if (slot == "CPT") != (j == 0):
+            problem = "SLOT_MISMATCH"
+            break
+        new[j] = in_id
+    if problem:
+        log.append({"swap": line, "result": problem, "row": ppl(ids)})
+        continue
     why_not = refuse(state, eid, new)
     if why_not:
         log.append({"swap": line, "result": why_not})
         continue
+    out_id, in_id = group[0].split("|")[2], group[0].split("|")[3]
     before = measures(state)
     state[eid] = new
     after = measures(state)
