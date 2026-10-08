@@ -143,7 +143,7 @@ def run(a) -> dict:
         raise Refused("ENTRY_ID_CONFLICT", "--entry-id names the rows; --count and --thesis choose them, so not together")
     if bool(a.thesis) != bool(a.theses):
         raise Refused("THESIS_FILTER_INCOMPLETE", "--thesis and --theses go together")
-    if bool(a.policy) != bool(a.claim):
+    if (a.policy is None) != (a.claim is None):
         raise Refused("THESIS_INPUT_INCOMPLETE", "--policy and --claim go together")
     limit_count = 3 if a.count is None else a.count
     if limit_count < 1:
@@ -197,7 +197,7 @@ def run(a) -> dict:
     if bad:
         raise Refused("INPUT_FILE_NOT_VALID", "; ".join(bad[:5]) + " (nothing is swapped into a file that is not valid)")
     book = None
-    if a.policy:
+    if a.policy is not None:
         check = _thesis_check()
         try:
             book = check.load_thesis_book(slate, [e.entry_id for e in template.authorizations], rows, a.policy, a.claim)
@@ -273,7 +273,7 @@ def run(a) -> dict:
     if explicit and skipped:
         if thesis_skips:
             raise Refused("SWAP_BREAKS_THESIS", "; ".join(
-                f"entry {e} fills {thesis_skips[e][0]}: every legal swap breaks {', '.join(thesis_skips[e][1])}"
+                f"entry {e} fills {thesis_skips[e][0]}: no legal swap leaves it following ({', '.join(thesis_skips[e][1])})"
                 if e in thesis_skips else f"entry {e}: {skipped[e]}" for e in sorted(skipped, key=int))
                 + "; nothing is written")
         raise Refused("NO_VALID_SWAP", f"no legal, distinct swap for {sorted(skipped)}; nothing is written")

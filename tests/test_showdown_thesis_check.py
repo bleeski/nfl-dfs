@@ -201,6 +201,16 @@ CASES = {
                          lambda tmp, run: {"claim": (tmp / "c.json").write_bytes(b"not json") and tmp / "c.json"}),
     "claim_entry_ids": ("THESIS_CLAIM_ENTRY_IDS_MISMATCH", lambda tmp, run: {"claim": doctored_claim(
         tmp, run, lambda rec: rec["selection"]["portfolio_policy"]["entry_ids"].reverse())}),
+    "claim_names_no_row": ("THESIS_CLAIM_NAMES_NO_ROW", lambda tmp, run: {"claim": doctored_claim(
+        tmp, run, lambda rec: rec["selection"]["portfolio_policy"]["theses"]["entries"].update(
+            {entry: None for entry in rec["selection"]["portfolio_policy"]["theses"]["entries"]}))}),
+    "claim_entries_empty": ("THESIS_CLAIM_NAMES_NO_ROW", lambda tmp, run: {"claim": doctored_claim(
+        tmp, run, lambda rec: rec["selection"]["portfolio_policy"]["theses"].update(entries={}))}),
+    "claim_name_not_text": ("THESIS_CLAIM_UNKNOWN_THESIS", lambda tmp, run: {"claim": doctored_claim(
+        tmp, run, lambda rec: rec["selection"]["portfolio_policy"]["theses"]["entries"].update(
+            {"900000001": ["NE_WIN_BIG"]}))}),
+    "empty_policy_path": ("THESIS_POLICY_UNREADABLE", lambda tmp, run: {"policy": ""}),
+    "empty_claim_path": ("THESIS_CLAIM_UNREADABLE", lambda tmp, run: {"claim": ""}),
 }
 
 
@@ -219,6 +229,17 @@ def test_lineups_moved_between_entry_ids_by_hand_are_refused_naming_the_entry_id
         load(acceptance, rosters=rost)
     assert caught.value.code == "THESIS_CLAIM_DISAGREES_WITH_ROWS"
     assert first in caught.value.detail and other in caught.value.detail  # every disagreeing row is named
+
+
+def test_lineups_swapped_between_two_entry_ids_of_one_thesis_still_load(acceptance):
+    book = load(acceptance)
+    rost = rosters(acceptance)
+    first, other = next((a, b) for a in sorted(book.entries) for b in sorted(book.entries)
+                        if a < b and book.entries[a] == book.entries[b])
+    rost[first], rost[other] = rost[other], rost[first]  # the same bet under either Entry ID
+    moved = load(acceptance, rosters=rost)
+    assert moved.check(first, rost[first]) == (book.entries[first], ())
+    assert moved.check(other, rost[other]) == (book.entries[other], ())
 
 
 @pytest.mark.parametrize("version", ["v3", "v2"])

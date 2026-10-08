@@ -172,7 +172,7 @@ def thesis_pass(a, sal, filled, D, L):
         D.append(f"THESIS_INPUT_REFUSED:{code}:{detail}")
         return {"status": "REFUSED", "refusal": {"code": code, "detail": detail}}
 
-    if not (a.policy and a.claim):
+    if a.policy is None or a.claim is None:
         return refused("THESIS_INPUT_INCOMPLETE", "--policy and --claim go together")
     from nfl_dfs.contracts import EngineMode
     from nfl_dfs.dk import DraftKingsParseError, parse_salaries
@@ -222,9 +222,9 @@ def main(argv=None):
     a.add_argument('--backup-pairs', default='',
                    help='semicolon list of STARTER>BACKUP pairs, each side a DraftKings ID or a name, '
                         'to flag if co-rostered')
-    a.add_argument('--policy', default='',
+    a.add_argument('--policy', default=None,
                    help="the run's normalized v4 policy; with --claim, holds each row to the thesis its Entry ID fills")
-    a.add_argument('--claim', default='',
+    a.add_argument('--claim', default=None,
                    help="the same run's selection_report.json, whose theses.entries names each Entry ID's thesis")
     a = a.parse_args(argv)
 
@@ -300,7 +300,7 @@ def main(argv=None):
             o = len(lus[i][2] & lus[j][2]); mx = max(mx, o)
             if o > a.max_overlap:
                 L.append(f"OVERLAP_{o}_EXCEEDS_{a.max_overlap} {lus[i][0]}/{lus[j][0]}")
-    thesis_block = thesis_pass(a, sal, filled, D, L) if (a.policy or a.claim) else None
+    thesis_block = thesis_pass(a, sal, filled, D, L) if (a.policy is not None or a.claim is not None) else None
 
     verdict = "FAIL" if D else "PARTIAL" if unfilled else "DEFECT" if L else "PASS"
     print(json.dumps({

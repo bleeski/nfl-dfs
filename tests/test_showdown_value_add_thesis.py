@@ -23,7 +23,7 @@ from nfl_dfs.lineups import validate_lineup
 from nfl_dfs.portfolio_policy import PersonBinding, StructuralBoundRange, StructuralBounds
 from nfl_dfs.showdown_theses import CountBound, ShowdownThesis
 
-from .test_qa_showdown_thesis import acceptance, deliverable, flags, qa_argv, run_json  # noqa: F401 (the shared run fixture)
+from .test_qa_showdown_thesis import acceptance, bounded, deliverable, flags, qa_argv, run_json  # noqa: F401 (the run fixtures)
 from .test_showdown_thesis_check import check_module, claim_path, load, rosters
 from .test_showdown_value_add import BASE, CPT, FLEX, L0, L3, NAME, T, build, entry_id, go, refused, scores, tool
 
@@ -116,6 +116,7 @@ def test_a_position_count_break_is_refused_by_name_and_nothing_is_written(tmp_pa
     code, _report, err, out = go(tmp_path, capsys, w, "--dk-id", FLEX[T], "--entry-id", FIRST, *FLAGS)
     refused(code, err, out, "SWAP_BREAKS_THESIS")
     assert FIRST in err and "fills TH_QB" in err and "position_bounds.QB" in err
+    assert "no legal swap leaves it following" in err
 
 
 def test_a_team_count_break_is_refused_by_name(tmp_path, capsys, monkeypatch):
@@ -249,6 +250,13 @@ def test_one_flag_without_the_other_is_refused_and_nothing_is_written(flag, tmp_
     refused(code, err, out, "THESIS_INPUT_INCOMPLETE")
 
 
+def test_an_empty_flag_value_refuses_the_run_and_nothing_is_written(tmp_path, capsys):
+    # An unset shell variable arrives as "": it must never read as "no thesis check was asked for".
+    w = build(tmp_path, BASE)
+    code, _report, err, out = go(tmp_path, capsys, w, "--dk-id", FLEX[T], "--policy", "", "--claim", "")
+    refused(code, err, out, "THESIS_POLICY_UNREADABLE")
+
+
 def test_a_refused_thesis_input_is_named_and_nothing_is_written(tmp_path, capsys, monkeypatch):
     w = build(tmp_path, BASE)
     check = check_module()
@@ -311,7 +319,9 @@ def _value_add(run, out: Path, *args: str) -> int:
                       "--out", str(out), *args, *flags(run)])
 
 
-def test_a_flex_swap_in_a_real_run_keeps_every_thesis_and_qa_then_agrees(acceptance, tmp_path, capsys):
+def test_a_real_run_swap_is_accepted_and_qa_with_the_same_flags_agrees(acceptance, tmp_path, capsys):
+    # The 23c theses name Captains only, so no FLEX swap can break them: this is the tool and QA agreeing end to end on
+    # real bytes, not a test of the filter (the bounded run below and the rule-kind cases above are).
     run = acceptance
     held = _held(run)
     candidates = [row for row in sorted(run.slate.players, key=lambda p: p.dk_id)
@@ -334,6 +344,40 @@ def test_a_flex_swap_in_a_real_run_keeps_every_thesis_and_qa_then_agrees(accepta
     # push a pair past the policy's cap of four, which is not what is under test.
     qa_code, qa_out = run_json([*qa_argv(run, out, "--max-overlap", "6"), *flags(run)], capsys)
     assert qa_out["theses"]["rows_not_following"] == 0 and qa_code == 0, qa_out["LIMIT_BREACHES"]
+
+
+def test_a_real_run_with_bounds_never_takes_the_swap_that_breaks_them(bounded, tmp_path, capsys):
+    """NE_WIN_BIG carries a team bound and the policy a one-quarterback bound: a second quarterback must come in only
+    where the first goes out. The oracle lists each legal slot and whether the thesis keeps it, independent of the tool."""
+
+    run = bounded
+    book = load(run)
+    delivered, held = rosters(run), _held(run)
+    sea_qb = next(row for row in run.slate.players if row.name == "Sea QB" and row.role == "FLEX")
+    for entry in sorted(e for e, name in book.entries.items() if name == "NE_WIN_BIG" and sea_qb.underlying_id not in held[e]):
+        roster = delivered[entry]
+        trials = {slot: [*roster[:slot], sea_qb.dk_id, *roster[slot + 1:]] for slot in range(1, 6)}
+        legal = [slot for slot, trial in trials.items() if validate_lineup(run.slate, trial).valid]
+        kept = [slot for slot in legal if not book.check(entry, trials[slot])[1]]
+        if len(legal) > len(kept):  # at least one legal swap breaks a bound, so the filter has work to do
+            break
+    else:
+        raise AssertionError("no NE_WIN_BIG row on this fixture has a legal swap that breaks a bound")
+    out = tmp_path / "bounded.csv"
+    code = _value_add(run, out, "--dk-id", sea_qb.dk_id, "--entry-id", entry)
+    captured = capsys.readouterr()
+    if kept:
+        assert code == tool.EXIT_OK, captured.err
+        taken = json.loads(captured.out)["swaps"][0]["removed_dk_id"]
+        assert taken in {roster[slot] for slot in kept}  # never a cell whose swap breaks the bounds
+        qa_code, qa_out = run_json([*qa_argv(run, out, "--max-overlap", "6"), *flags(run)], capsys)
+        assert qa_out["theses"]["rows_not_following"] == 0 and qa_code == 0, qa_out["LIMIT_BREACHES"]
+    else:
+        assert code == tool.EXIT_REFUSED and not out.exists()
+        assert "REFUSED SWAP_BREAKS_THESIS" in captured.err and f"entry {entry} fills NE_WIN_BIG" in captured.err
+        # Every rule the oracle finds broken across the legal slots is named (here a team bound and the quarterback bound).
+        for rule in set().union(*(book.check(entry, trials[slot])[1] for slot in legal)):
+            assert rule in captured.err
 
 
 def test_a_captain_swap_outside_the_rows_captain_set_is_refused_in_a_real_run(acceptance, tmp_path, capsys):

@@ -260,6 +260,19 @@ def test_a_claim_that_does_not_bind_to_the_policy_is_refused_and_never_passes(ac
     _refusal(code, out, "THESIS_CLAIM_POLICY_MISMATCH")
 
 
+def test_an_empty_flag_value_is_a_refused_input_not_a_skipped_check(acceptance, capsys):
+    # An unset shell variable arrives as "": it must read as a path that cannot be read, never as "no check asked".
+    code, out = run_json([*qa_argv(acceptance), "--policy", "", "--claim", ""], capsys)
+    _refusal(code, out, "THESIS_POLICY_UNREADABLE")
+
+
+def test_a_claim_that_names_no_row_is_refused_rather_than_passing_vacuously(acceptance, tmp_path, capsys):
+    claim = doctored_claim(tmp_path, acceptance, lambda rec: rec["selection"]["portfolio_policy"]["theses"]["entries"].update(
+        {entry: None for entry in rosters(acceptance)}))
+    code, out = run_json([*qa_argv(acceptance), "--policy", str(policy_path(acceptance)), "--claim", str(claim)], capsys)
+    _refusal(code, out, "THESIS_CLAIM_NAMES_NO_ROW")
+
+
 @pytest.mark.parametrize("flag", ["--policy", "--claim"])
 def test_one_flag_without_the_other_is_refused(flag, acceptance, capsys):
     value = str(policy_path(acceptance) if flag == "--policy" else claim_path(acceptance))

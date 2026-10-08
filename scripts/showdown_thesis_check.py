@@ -21,11 +21,16 @@ Refusals, each a named code and never a PASS:
 * `THESIS_POLICY_UNREADABLE`, `THESIS_POLICY_NOT_A_PORTFOLIO` (a v2, v3 or no-thesis policy), `THESIS_POLICY_SALARY_MISMATCH`
   (the policy's salary SHA-256 is not the salary file's), `THESIS_POLICY_ENTRY_IDS_NOT_IN_TEMPLATE`;
 * `THESIS_CLAIM_UNREADABLE`, `THESIS_CLAIM_MISSING`, `THESIS_CLAIM_POLICY_MISMATCH` (the claim's `normalized_policy_sha256` is
-  not the policy file's), `THESIS_CLAIM_ENTRY_IDS_MISMATCH`, `THESIS_CLAIM_UNKNOWN_THESIS`, `THESIS_CLAIM_DISAGREES_WITH_ROWS`.
+  not the policy file's), `THESIS_CLAIM_ENTRY_IDS_MISMATCH`, `THESIS_CLAIM_UNKNOWN_THESIS` (also a claim value that is not
+  text), `THESIS_CLAIM_NAMES_NO_ROW` (a claim that gives no Entry ID a thesis would check nothing), and
+  `THESIS_CLAIM_DISAGREES_WITH_ROWS`.
+
+An empty `--policy` or `--claim` is a path like any other and refuses as unreadable; only an absent flag skips the check.
 
 Not established: the claim file is bound to the policy and to the rows it names, but not to the run itself (the run's
-`cowork_run.json` hashes it). A doctored `entries` could change only which rules a row is held to, never a number or a
-gate. A thesis is a choice, not a forecast; nothing here reads or writes a projection.
+`cowork_run.json` hashes it), and the template is bound only by its Entry IDs (the policy carries no template hash). A
+doctored `entries` could change only which rules a row is held to, never a number or a gate. A thesis is a choice, not a
+forecast; nothing here reads or writes a projection.
 """
 from __future__ import annotations
 
@@ -140,9 +145,12 @@ def load_thesis_book(
     names = {item.name for item in active}
     entries: dict[str, str | None] = {}
     for entry, name in claim["entries"].items():
-        if name is not None and name not in names:
+        if name is not None and (not isinstance(name, str) or name not in names):
             raise ThesisInputRefused("THESIS_CLAIM_UNKNOWN_THESIS", f"entry {entry} claims {name!r}, which the policy does not hold active")
         entries[str(entry)] = name
+    if not any(name is not None for name in entries.values()):
+        raise ThesisInputRefused(
+            "THESIS_CLAIM_NAMES_NO_ROW", "the claim gives no Entry ID a thesis, so nothing would be checked")
 
     # A lineup that is still where the run left it carries its own thesis; if that is not the Entry ID's claim, the
     # lineups were moved between Entry IDs and the Entry ID's thesis is ambiguous, so the check refuses.
