@@ -255,7 +255,7 @@ def test_the_filled_prompt_has_the_golden_sections_in_order(repo, capsys):
 
 def test_the_golden_handoff_still_passes_the_standing_checks():
     golden = GOLDEN.read_text(encoding="utf-8")
-    assert "—" not in golden
+    assert "\u2014" not in golden
     assert not _MARKER.findall(golden)
 
 
@@ -275,7 +275,7 @@ def test_the_template_has_the_standing_content_a_handoff_needs():
 
 
 def test_the_template_has_no_em_dash():
-    assert "—" not in TEMPLATE.read_text(encoding="utf-8")
+    assert "\u2014" not in TEMPLATE.read_text(encoding="utf-8")
 
 
 def test_every_token_and_slot_in_the_template_is_one_the_script_knows():
@@ -337,7 +337,7 @@ def test_the_unfilled_prompt_fails_check_and_names_each_slot(repo, capsys):
         (lambda t: t + "\nSession {{SESSION}}\n", "PLACEHOLDER_LEFT"),
         (lambda t: t.replace("## 3. How to verify", "## 3. Verification"), "SECTION_MISSING"),
         (lambda t: t + "\nsee `docs/does_not_exist.md`\n", "PATH_MISSING"),
-        (lambda t: t + "\nthe plan — as before\n", "EM_DASH"),
+        (lambda t: t + "\nthe plan \u2014 as before\n", "EM_DASH"),
         (lambda t: t.replace("suite green.", "suite passes."), "ACCEPTANCE_MISSING"),
         (lambda t: t.replace("/plan\n", "", 1), "NOT_PLAN_FIRST"),
     ],
@@ -367,3 +367,9 @@ def test_paths_under_state_and_data_are_exempt_from_the_existence_check(repo, ca
 def test_paths_in_ignores_placeholders_and_globs():
     text = "see docs/chunks/<ID>-slug.md, tests/test_contest*.py and `docs/RUNBOOK.md`."
     assert next_prompt.paths_in(text) == ["docs/RUNBOOK.md"]
+
+
+def test_a_template_token_the_script_does_not_know_is_refused_not_left_in_the_prompt():
+    with pytest.raises(next_prompt.Refusal) as caught:
+        next_prompt.fill("hello {{NOT_A_TOKEN}}", {"SESSION": "Session 01"})
+    assert caught.value.code == "TEMPLATE_TOKEN_UNKNOWN"

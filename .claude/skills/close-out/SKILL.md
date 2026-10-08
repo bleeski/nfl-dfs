@@ -41,11 +41,11 @@ Close out the current roadmap session.
 8. Commit and ship, per `.claude/rules/git-authority.md`:
    - `git add` an explicit path list, grouped as source / tests / docs / ledger.
      Never `git add .` or `-A`. Say in one line what you deliberately left out.
-   - Commit, push, open the pull request. End its body with the line
+   - Commit, push, open the pull request. Put the line
      `Session close: post-merge routine runs when this merges (docs/claude/post_merge.md).`
-     (this is what tells the routine the session's work is finished; a
-     mid-session pull request never carries it), then `subscribe_pr_activity`
-     for it.
+     in its body, above any footer the harness adds (this is what tells the
+     routine the session's work is finished; a mid-session pull request never
+     carries it), then `subscribe_pr_activity` for it.
    - `python3 scripts/check_protected_paths.py`. If it flags anything, add the
      `ben-review` label, say so, and stop: that pull request is Ben's to merge.
      The routine then runs when his merge arrives as a wake event.

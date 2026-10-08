@@ -72,7 +72,7 @@ def test_the_procedure_names_each_step_the_scripts_serve():
         "never runs a mutating git command",
     ):
         assert needle in text, needle
-    assert "—" not in text
+    assert "\u2014" not in text
 
 
 def test_the_prompt_generator_keeps_the_retired_prompt_files_retired():

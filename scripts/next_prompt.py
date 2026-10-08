@@ -302,7 +302,7 @@ def check_prompt(text: str, repo: Path, ref: str = "origin/main", template_text:
         problems.append("STRAY_ANGLE_BRACKETS: a << or >> is left that is not a marker")
     if "{{" in text:
         problems.append("PLACEHOLDER_LEFT: a {{TOKEN}} was never filled")
-    if "—" in text:
+    if "\u2014" in text:
         problems.append("EM_DASH: Ben edits em dashes out; use a comma, colon or parentheses")
 
     required = headings(template_text if template_text is not None else DEFAULT_TEMPLATE.read_text(encoding="utf-8"))
