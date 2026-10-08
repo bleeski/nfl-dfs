@@ -459,6 +459,48 @@ points, no projection is written, his evidence gate stays unmet, and the file st
 - The output is rebuilt, reparsed and audited against the template before it is created, and created exclusively. Any
   invalid row in the file, including one this tool never touched, exits 2 and writes nothing. Exit 3 means the file was
   written with fewer than N rows. Run `scripts/qa_showdown_portfolio.py` on the result next, then the concentration check.
+- On a run built from a portfolio of theses, add `--policy` and `--claim` (below) so no swap turns a row into a different bet.
+  `--theses` with `--thesis` stays a label filter for choosing rows; it checks nothing.
+
+## Showdown thesis adherence
+
+Since Session 66, `scripts/qa_showdown_portfolio.py` and `scripts/showdown_value_add.py` hold each row to the thesis its Entry
+ID fills (P8 principle 6: a row that breaks its thesis is a different bet under the old name). Give both the same two files
+from the run, and both flags or neither:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\qa_showdown_portfolio.py `
+  --salaries 'C:\full\path\DKSalaries.csv' --template 'C:\full\path\DKEntries.csv' `
+  --export 'C:\full\path\DK_REVIEW_ENTRY_v5.csv' `
+  --policy 'C:\full\path\runs\<run_id>\portfolio_policy.normalized.json' `
+  --claim 'C:\full\path\runs\<run_id>\prior_review\selection\selection_report.json'
+```
+
+- Both paths are in the run's `cowork_run.json`: `prior_review_artifacts.portfolio_policy_normalized` and
+  `prior_review_artifacts.selection_report`. After a thesis was dropped, the policy is the ladder's rebuild under
+  `relaxation/`, which is the file the claim hashes.
+- The thesis is each Entry ID's, from the claim, so it holds through a Captain swap or a value-add swap that changes the
+  roster. The rules are recomputed from the file's bytes with the one function the audit uses: Captain set, team counts,
+  position counts, the thesis's own structural bounds, excluded people, and backup quarterbacks. A thesis is a choice, not a
+  forecast; nothing is written for anyone.
+- **QA** adds a `theses` block (per Entry ID: thesis, whether the row follows, the rules it breaks; rows the claim does not
+  name; claimed rows not filled) and one line per broken rule, `<EntryID> THESIS_BROKEN thesis=<NAME> rule=<rule>`. A break is
+  an operator limit: exit 2, verdict DEFECT (DraftKings accepts the file).
+- **Value-add** never takes a swap whose rebuilt roster breaks the row's thesis. `--count` takes the next swap that keeps it, or
+  skips the row and names it (`skipped`: `SWAP_BREAKS_THESIS:<thesis>:<rules>`); `--entry-id` on such a row refuses the run
+  (`SWAP_BREAKS_THESIS`, exit 2) and writes nothing. A row the claim does not name is unconstrained; a row that already breaks
+  its thesis can only be swapped to a roster that follows. The report's `theses` block lists the hashes and the rows not
+  following before and after.
+- **A binding that does not hold refuses by name, never a PASS** (QA exit 1, FAIL; value-add exit 2): the policy's salary
+  SHA-256 is not the salary file's (`THESIS_POLICY_SALARY_MISMATCH`), the claim names another policy
+  (`THESIS_CLAIM_POLICY_MISMATCH`) or other Entry IDs (`THESIS_CLAIM_ENTRY_IDS_MISMATCH`), a policy that is not a v4 portfolio
+  (v2, v3 or none: `THESIS_POLICY_NOT_A_PORTFOLIO`), a claim that names no row (`THESIS_CLAIM_NAMES_NO_ROW`) or an unknown
+  thesis, and lineups moved between Entry IDs by hand after the run (`THESIS_CLAIM_DISAGREES_WITH_ROWS`: run the check on
+  the run's own file, or rerun). An empty flag value is a path that cannot be read, not "no check".
+- `backup_quarterback: NOT_EVALUATED` in the output means the run had no quarterback depth evidence, so that one rule did not
+  run (the run said so as `THESIS_BACKUP_QB_UNEVALUATED`). Not established: the claim file is bound to the policy and the rows
+  it names but not to the run itself, and the template only by its Entry IDs.
+- Without the two flags neither script checks a thesis, so pass them on every v4 run.
 
 ## Settlement capture and replay
 

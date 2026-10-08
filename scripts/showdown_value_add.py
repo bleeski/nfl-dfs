@@ -23,6 +23,12 @@ Order: rows by their lowest removable score, then Entry ID; within a row the low
 salary breaks the tie. Inputs are read once and their hashes reported.
 
 Exit codes: 0 every requested row swapped; 3 file written with a shortfall; 2 refused, nothing written.
+
+Session 66 (P8 principle 6): `--policy` and `--claim`, both from one `run-slate` run, hold every swap to the thesis its Entry ID
+fills (`scripts/showdown_thesis_check.py`). A swap whose rebuilt roster breaks that thesis is never taken: `--count` takes the
+next swap that keeps it, or skips the row and names it (`SWAP_BREAKS_THESIS:<thesis>:<rules>` under `skipped`), and `--entry-id`
+on such a row refuses the run by name and writes nothing. A row the claim does not name is unconstrained. A thesis input that
+cannot be used refuses the run by its own code. Without the two flags none of this runs and the tool behaves as before.
 """
 from __future__ import annotations
 
@@ -102,6 +108,15 @@ def file_defects(slate, rows: dict[str, list[str]]) -> list[str]:
     return defects + [f"DUPLICATE_LINEUP: entries {es} hold one roster" for es in seen.values() if len(es) > 1]
 
 
+def _thesis_check():
+    """The shared thesis module, imported only when the thesis flags are used, so a run without them executes none of it."""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import showdown_thesis_check
+    return showdown_thesis_check
+
+
 def finite(value) -> float:
     if isinstance(value, bool) or not math.isfinite(number := float(value)):
         raise ValueError(f"not a finite number: {value!r}")
@@ -128,6 +143,8 @@ def run(a) -> dict:
         raise Refused("ENTRY_ID_CONFLICT", "--entry-id names the rows; --count and --thesis choose them, so not together")
     if bool(a.thesis) != bool(a.theses):
         raise Refused("THESIS_FILTER_INCOMPLETE", "--thesis and --theses go together")
+    if (a.policy is None) != (a.claim is None):
+        raise Refused("THESIS_INPUT_INCOMPLETE", "--policy and --claim go together")
     limit_count = 3 if a.count is None else a.count
     if limit_count < 1:
         raise Refused("COUNT_INVALID", f"--count must be at least 1, got {limit_count}")
@@ -179,6 +196,13 @@ def run(a) -> dict:
     bad = file_defects(slate, rows)
     if bad:
         raise Refused("INPUT_FILE_NOT_VALID", "; ".join(bad[:5]) + " (nothing is swapped into a file that is not valid)")
+    book = None
+    if a.policy is not None:
+        check = _thesis_check()
+        try:
+            book = check.load_thesis_book(slate, [e.entry_id for e in template.authorizations], rows, a.policy, a.claim)
+        except check.ThesisInputRefused as exc:
+            raise Refused(exc.code, exc.detail)
 
     def holds(ids):
         return next((("CPT" if i == 0 else "FLEX") for i, c in enumerate(ids)
@@ -191,19 +215,30 @@ def run(a) -> dict:
     keys = {e: roster_canonical_key(slate, v) for e, v in cur.items()}
     people = {e: frozenset(by_id[c].underlying_id for c in v) for e, v in cur.items()}
 
+    blocked: dict[str, set[str]] = {}
+
     def options(entry_id):
-        """Swaps legal on the file as it stands now, lowest removed score first."""
+        """Swaps legal on the file as it stands now, lowest removed score first.
+
+        With a thesis book, a legal swap whose rebuilt roster breaks the thesis its Entry ID fills is not an option; the
+        rules it breaks are kept in `blocked` so a row left with no option can say why (Session 66).
+        """
         taken = {k for e, k in keys.items() if e != entry_id}
         taken_people = {s for e, s in people.items() if e != entry_id}
-        found = []
+        found, broken = [], set()
         for i in slots:
             trial = cur[entry_id][:i] + [new_id] + cur[entry_id][i + 1:]
             result = validate_lineup(slate, trial)
             # R29 allows the same six people under another Captain; like keenum_swap.py, this tool does not create one.
             if (result.valid and result.lineup.canonical_key not in taken
                     and frozenset(by_id[c].underlying_id for c in trial) not in taken_people):
+                verdict = book.check(entry_id, trial) if book is not None else None
+                if verdict is not None and verdict[1]:
+                    broken.update(verdict[1])
+                    continue
                 found.append((score(cur[entry_id][i]), by_id[cur[entry_id][i]].salary, i, trial,
                               result.lineup.canonical_key))
+        blocked[entry_id] = broken
         return sorted(found, key=lambda o: o[:3])
 
     explicit = list(dict.fromkeys(a.entry_id))
@@ -218,13 +253,17 @@ def run(a) -> dict:
                         and (not a.thesis or theses.get(e) in a.thesis)]
     first = {e: options(e) for e in pool}
     limit = len(explicit) or limit_count
-    swaps, skipped = [], {}
+    swaps, skipped, thesis_skips = [], {}, {}
     for e in sorted(pool, key=lambda e: (first[e][0][:2] if first[e] else (float("inf"), 0), int(e))):
         if len(swaps) >= limit:
             break
         found = options(e)
         if not found:
-            skipped[e] = "NO_VALID_SWAP"
+            if blocked.get(e):
+                thesis_skips[e] = (book.entries[e], sorted(blocked[e]))
+                skipped[e] = f"SWAP_BREAKS_THESIS:{book.entries[e]}:{','.join(sorted(blocked[e]))}"
+            else:
+                skipped[e] = "NO_VALID_SWAP"
             continue
         loss, _, slot, trial, key = found[0]
         swaps.append({"entry_id": e, "slot": "CPT" if slot == 0 else f"FLEX {slot}", "slot_index": slot,
@@ -232,10 +271,16 @@ def run(a) -> dict:
         cur[e], keys[e] = trial, key
         people[e] = frozenset(by_id[c].underlying_id for c in trial)
     if explicit and skipped:
+        if thesis_skips:
+            raise Refused("SWAP_BREAKS_THESIS", "; ".join(
+                f"entry {e} fills {thesis_skips[e][0]}: no legal swap leaves it following ({', '.join(thesis_skips[e][1])})"
+                if e in thesis_skips else f"entry {e}: {skipped[e]}" for e in sorted(skipped, key=int))
+                + "; nothing is written")
         raise Refused("NO_VALID_SWAP", f"no legal, distinct swap for {sorted(skipped)}; nothing is written")
     if not swaps:
+        broke = f" ({len(thesis_skips)} break their thesis)" if thesis_skips else ""
         raise Refused("NO_ROW_CHANGED", f"no row could take {person.name}: {len(already)} already hold him, "
-                      f"{len(skipped)} have no legal distinct swap, {len(pool)} were eligible")
+                      f"{len(skipped)} have no legal distinct swap{broke}, {len(pool)} were eligible")
 
     lines = list(split_byte_lines(r_raw))
     by_entry = {s["entry_id"]: s for s in swaps}
@@ -294,6 +339,18 @@ def run(a) -> dict:
     people = collections.Counter(by_id[c].underlying_id for ids in out_rows.values() for c in ids)
     captains = collections.Counter(by_id[ids[0]].underlying_id for ids in out_rows.values())
     top, cap = people.most_common(1)[0], captains.most_common(1)[0]
+    thesis_block = {}
+    if book is not None:
+        def not_following(table):
+            return [e for e in sorted(table, key=int) if (found := book.check(e, table[e])) is not None and found[1]]
+
+        thesis_block = {"theses": {
+            **book.describe(),
+            "rows_with_thesis": sum(1 for e in out_rows if book.entries.get(e) is not None),
+            "rows_without_thesis": sorted((e for e in out_rows if book.entries.get(e) is None), key=int),
+            "not_following_before": not_following(rows),
+            "not_following_after": not_following(out_rows),
+        }}
     return {
         "tool": "showdown_value_add_v1",
         "person": {"dk_id": person.dk_id, "name": person.name, "team": person.team, "position": person.position,
@@ -307,6 +364,7 @@ def run(a) -> dict:
         "salary_sha256": slate.salary_hash, "template_sha256": hashlib.sha256(t_raw).hexdigest(),
         "review_sha256": hashlib.sha256(r_raw).hexdigest(), "scores_sha256": scores_sha, "theses_sha256": theses_sha,
         "out": str(out), "out_sha256": hashlib.sha256(out_raw).hexdigest(),
+        **thesis_block,
         "LIMITATION": LIMITATION.format(name=person.name),
         "MODEL_STATUS": "PRIOR_ONLY", "RELEASE_DECISION": "DO_NOT_UPLOAD",
     }
@@ -325,6 +383,8 @@ def main(argv=None) -> int:
     ap.add_argument("--scores", help="JSON with by_dk_id; read only to order the swaps")
     ap.add_argument("--theses", help="JSON {entry_id: thesis}; with --thesis restricts automatic selection")
     ap.add_argument("--thesis", action="append", default=[], help="an allowed thesis label; repeatable")
+    ap.add_argument("--policy", help="the run's normalized v4 policy; with --claim, a swap that breaks its row's thesis is refused")
+    ap.add_argument("--claim", help="the same run's selection_report.json, whose theses.entries names each Entry ID's thesis")
     try:
         report = run(ap.parse_args(argv))
     except Refused as exc:

@@ -33,6 +33,17 @@ bytes. It now mirrors `qa_classic_portfolio.py`:
   player); 3 valid, but blank authorized rows are unfilled (a sanctioned R29
   shortfall), each named; 2 only an operator limit (`--max-overlap`,
   `--backup-pairs`); else 0. Exit 0 still does not clear an upload.
+
+2026-10-08 (Session 66, P8 principle 6): `--policy` and `--claim`, both from one
+`run-slate` run, hold each row to the thesis its Entry ID fills. A row that breaks its
+thesis is an operator limit, one line per rule (`<EntryID> THESIS_BROKEN thesis=<NAME>
+rule=<rule>`), exit 2 and verdict DEFECT: DraftKings accepts the file, but it is a
+different bet under the old name. A thesis input that cannot be used (a binding that
+does not hold, a v2 or v3 policy, one flag without the other) is a validity failure,
+exit 1: a check that was asked for and could not run never reads PASS. The rules are
+recomputed from the exported bytes with the one function every layer uses
+(`scripts/showdown_thesis_check.py`); the claim only names which bet each Entry ID is.
+Without the two flags nothing here runs and the output is what it was.
 """
 from __future__ import annotations
 import argparse, csv, collections, json, re, sys
@@ -139,6 +150,68 @@ def lineup_key(ids):
     return (ids[0], tuple(sorted(ids[1:])))
 
 
+THESIS_DOES_NOT_ESTABLISH = (
+    "a structure check of each row against the thesis it fills: a thesis is a choice, not a forecast, "
+    "and this establishes no projection, no ownership and no upload clearance")
+
+
+def _thesis_check():
+    """The shared thesis module, imported only when a thesis flag is given, so a run without one executes none of it."""
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import showdown_thesis_check
+    return showdown_thesis_check
+
+
+def thesis_pass(a, sal, filled, D, L):
+    """The `theses` block. A break goes to L (an operator limit); an input that cannot be used goes to D."""
+
+    def refused(code, detail):
+        D.append(f"THESIS_INPUT_REFUSED:{code}:{detail}")
+        return {"status": "REFUSED", "refusal": {"code": code, "detail": detail}}
+
+    if a.policy is None or a.claim is None:
+        return refused("THESIS_INPUT_INCOMPLETE", "--policy and --claim go together")
+    from nfl_dfs.contracts import EngineMode
+    from nfl_dfs.dk import DraftKingsParseError, parse_salaries
+    check = _thesis_check()
+    try:
+        slate = parse_salaries(a.salaries)
+        with open(a.template, "rb") as fh:
+            template_lines = split_byte_lines(fh.read())
+    except (DraftKingsParseError, OSError) as exc:
+        return refused("THESIS_SALARY_UNREADABLE", str(exc))
+    if slate.mode is not EngineMode.SHOWDOWN:
+        return refused("THESIS_NOT_SHOWDOWN", "the thesis check reads Showdown salary files only")
+    template_ids = [cells[0].strip() for cells in map(cells_of, template_lines[1:]) if cells and cells[0].strip().isdigit()]
+    try:
+        book = check.load_thesis_book(slate, template_ids, filled, a.policy, a.claim)
+    except check.ThesisInputRefused as exc:
+        return refused(exc.code, exc.detail)
+    entries, without = {}, []
+    for eid, ids in filled.items():
+        if any(i not in sal for i in ids):
+            continue  # UNKNOWN_DK_ID is already a defect
+        found = book.check(eid, ids)
+        if found is None:
+            without.append(eid)
+            continue
+        name, rules = found
+        entries[eid] = {"thesis": name, "follows": not rules, "broken_rules": list(rules)}
+        L.extend(f"{eid} THESIS_BROKEN thesis={name} rule={rule}" for rule in rules)
+    following = sum(1 for item in entries.values() if item["follows"])
+    return {
+        "status": "CHECKED", **book.describe(), "entries": entries,
+        "rows_following": following, "rows_not_following": len(entries) - following,
+        "entry_ids_without_thesis": without,
+        "claimed_entry_ids_not_filled": sorted((e for e, name in book.entries.items() if name is not None and e not in filled),
+                                               key=lambda e: (len(e), e)),
+        "does_not_establish": THESIS_DOES_NOT_ESTABLISH,
+    }
+
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument('--salaries', required=True)
@@ -149,6 +222,10 @@ def main(argv=None):
     a.add_argument('--backup-pairs', default='',
                    help='semicolon list of STARTER>BACKUP pairs, each side a DraftKings ID or a name, '
                         'to flag if co-rostered')
+    a.add_argument('--policy', default=None,
+                   help="the run's normalized v4 policy; with --claim, holds each row to the thesis its Entry ID fills")
+    a.add_argument('--claim', default=None,
+                   help="the same run's selection_report.json, whose theses.entries names each Entry ID's thesis")
     a = a.parse_args(argv)
 
     sal = load_salary(a.salaries)
@@ -223,6 +300,7 @@ def main(argv=None):
             o = len(lus[i][2] & lus[j][2]); mx = max(mx, o)
             if o > a.max_overlap:
                 L.append(f"OVERLAP_{o}_EXCEEDS_{a.max_overlap} {lus[i][0]}/{lus[j][0]}")
+    thesis_block = thesis_pass(a, sal, filled, D, L) if (a.policy is not None or a.claim is not None) else None
 
     verdict = "FAIL" if D else "PARTIAL" if unfilled else "DEFECT" if L else "PASS"
     print(json.dumps({
@@ -240,6 +318,7 @@ def main(argv=None):
         'salary_max': max((l[3] for l in lus), default=0),
         'distinct_captains': len({l[1] for l in lus}),
         'qb_count_histogram': dict(collections.Counter(l[4] for l in lus)),
+        **({'theses': thesis_block} if thesis_block is not None else {}),
         'VERDICT': verdict,
     }, indent=2))
     if D:

@@ -92,8 +92,15 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   pass keeps its row's thesis: the team counts, position counts and Captain set of the thesis that row fills. A Captain swap, a
   quarterback given to a WR or TE Captain, a FLEX swap or a `showdown_value_add.py` row that breaks one turns the row into a
   different bet under the old name (P8 principle 6), so refuse it, or move the row to a thesis it follows and say so. Re-read the
-  audit's per-Entry-ID `follows` after the pass. `qa_showdown_portfolio.py` and `showdown_value_add.py` do not check a thesis yet
-  (a follow-up row), so the check is yours.
+  audit's per-Entry-ID `follows` after the pass. **Since Session 66 the two scripts do that check when you pass `--policy` (the
+  run's normalized policy) and `--claim` (the run's `selection_report.json`).** `showdown_value_add.py` never takes a swap that
+  breaks its row's thesis (`--count` takes the next swap that keeps it or skips the row and names it; `--entry-id` refuses the run,
+  `SWAP_BREAKS_THESIS`, and writes nothing). `qa_showdown_portfolio.py` names each broken row's Entry ID, thesis and rule (exit 2),
+  so run it after any hand edit (a ceiling-pass Captain swap, a quarterback given to a WR or TE Captain) and move a row it flags to
+  a thesis it follows. Both read each Entry ID's thesis from the claim, never from the edited roster, and refuse by name when the
+  files do not bind (a salary, policy or Entry ID mismatch, a v2 or v3 policy, lineups moved between Entry IDs by hand); a refusal
+  is never a PASS. `backup_quarterback: NOT_EVALUATED` in their output means the run had no depth evidence, so that one rule did
+  not run. Without the flags neither script checks a thesis, so pass them on every v4 run.
 - **Tie-break: large prizes win (Ben, 2026-10-04).** "Err on side of trying to win large prizes if at odds with minimizing the
   washout factor." After the engine's file, run a ceiling pass: every WR or TE Captain gets his own team's starting quarterback,
   then take FLEX swaps that raise a row's prior by a point or more, Captains untouched. That pass may exceed the person default up
