@@ -1958,12 +1958,23 @@ def create_readable_review(
             pool, roster = None, (tuple(prefilled.roster) if prefilled is not None and prefilled.resolved else ())
         if roster and all(dk_id in by_id for dk_id in roster):
             contest_rows.append((entry_id, authorization.contest_id, roster, pool))
+    # Session 67: a v4 portfolio's step scored each lineup with its thesis. The labels are read here from the
+    # hash-bound selection record's own lineups (each roster and the thesis the selector picked it for), never taken
+    # from the step, so a step that scored with other labels does not reconcile. `theses.by_lineup` carries the same
+    # claim keyed by canonical lineup and is the Game theses section's input below; reading the per-lineup form here
+    # keeps the two sections on separate fields, so one doctored field is one named finding.
+    contest_labels = None
+    if policy_view is not None and policy_view.get("schema_version") == NORMALIZED_POLICY_SCHEMA_VERSION_V4:
+        contest_labels = {
+            roster: row["thesis"] for roster, row in selection_lineups.items() if isinstance(row.get("thesis"), str)
+        } or None
     contest_payload, contest_problems = contest_assignment.review_block(
         mode=contest_assignment.MODE_SHOWDOWN,
         people=contest_assignment.people_from_slate(reparsed_slate.players),
         rows=contest_rows,
         selected_in_solver_order=list(selection_lineups),
         reported=selection_record.get("contest_assignment"),
+        thesis_by_roster=contest_labels,
     )
     problems.extend(contest_problems)
 

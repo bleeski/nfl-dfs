@@ -490,7 +490,13 @@ depth evidence for a team nobody is guessed out and the run says so
 
 Since Session 23c one Showdown policy carries a **portfolio** of theses
 (`make_showdown_policy.py --thesis <file>` once per thesis, policy v4,
-`docs/DATA_CONTRACTS.md` § SD3 v4). The order of the flags is the order you
+`docs/DATA_CONTRACTS.md` § SD3 v4). Since Session 67 the thesis files are not
+hand-written: `scripts/make_showdown_theses.py --salaries <csv> --teams <A> <B>
+--out-dir <dir>` writes Ben's R33 list (each team wins big, each wins close, a
+defensive battle, a shootout; `--variants` for the close game's high and low
+scoring halves) by salary structure alone and prints the `--thesis` flags in
+order; pass only the theses Ben chose (`docs/OPERATOR_GUIDE.md` § Showdown theses
+from R33). The order of the flags is the order you
 declare them, which is their priority; a file may carry `row_weight` (a share of
 the entries, equal by default, never a probability). The policy's entries are
 allotted across the theses by largest remainder, and one joint solve assembles
@@ -513,7 +519,13 @@ serves, every person in more than half the rows, the most rows one player's bad
 night sinks, the most rows one thesis sinks, and any pair of rows that share five
 or more people. A judgment pass that swaps people after the engine (the ceiling
 pass, `showdown_value_add.py`) keeps each row's thesis: its teams, position counts
-and Captain set (`docs/claude/working.md` § Showdown judgment pass).
+and Captain set (`docs/claude/working.md` § Showdown judgment pass). Since
+Session 67 the contest step knows each lineup's thesis (`distinct_theses` per
+contest in the review): two lineups of one thesis sharing a contest cost 3 a pair.
+That outweighs a pair of rows going from 0 to 1 shared person, ties one going from
+1 to 2, and loses to anything from 2 to 3 up, so the theses are kept apart unless
+that would raise a pair's overlap by more than that. On the Session 23c fixture
+the theses were already apart before the label counted.
 
 The hand-built prefilled rounds (ATL@GB 2026-09-24, PHI@CHI 2026-09-28) are
 retired. They bound one thesis per policy, so the overlap cap held only within a

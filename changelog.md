@@ -4,6 +4,88 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-07: Session 67 -- the R33 thesis expander and thesis-aware contest placement (P8 follow-up)
+
+Branch `claude/s67-thesis-expander-placement`, from `main` at `7f12432` (PR #117's merge); claim commit `2eae2b0`. Class S. No protected path touched. No evidence gate is touched, no number is written for anyone, nothing is called EV or a win probability, R29 is untouched (the step only changes which entry holds which lineup), and every path still ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`. Ben approved the plan before any code. Session 66 stayed In Progress on its own branch the whole session (claim `cbdb353`, not merged; `origin/main` still `7f12432` at close-out), so this branch's board shows it Pending and section 1 still names it.
+
+**Measured before any code (unchanged code, the Session 23c `run-slate` fixture: three theses, six rows)**
+- Four contest groupings (two interleaved contests of three, two blocks of three, three pairs, three interleaved pairs) at overlap caps 4 and 6. In every one the unlabelled step already left no contest with two lineups of one thesis, and the labelled step placed every lineup exactly where the unlabelled one did. Interleaved, cap 4: the solver's order held 2 same-thesis pairs, and both steps moved 2 rows and left 0. Lineups of one thesis share more people, so the overlap term separates them before the label counts.
+- On this fixture the label therefore changes no placement. It changes the figures: `distinct_theses`, and the solver order's before-score, 93.667 to 101.667, because its two same-thesis pairs now cost 3 each. The placement effect is proven on a tie-built fixture through `apply_step` instead. `moved_rows > 0` in the 23c and 23f tests still holds, so the plan's contingency never triggered.
+- NE@SEA (the acceptance's bytes): 126 rows, 63 people. Statuses: 102 blank, 12 IR, 8 Q, 4 OUT, no D. Salary ties only at $200. SEA's top-salary back is OUT, so the expander's OUT exclusion is live on the real fixture.
+
+**Added**
+- **`scripts/make_showdown_theses.py`.** Ben's R33 list for the slate's two teams, written as thesis files by structure alone:
+  - FLEX rows, OUT and IR out, salary descending then the lower DraftKings ID.
+  - Files are named `NN_<NAME>.json` in the declared order, written exclusive-create, and the `--thesis` flags are printed in order.
+  - `--variants` writes the close game's high and low halves (eight files).
+  - Refusals by name, leaving nothing behind: `THESES_SALARY_UNREADABLE`, `THESES_NOT_SHOWDOWN`, `THESES_TEAMS_NOT_TWO`, `THESES_TEAM_NOT_ON_SLATE`, `THESES_EMPTY_CAPTAIN_SET:<NAME>`, `THESES_OUTPUT_EXISTS:<path>` and `THESES_WRITE_FAILED:<path>`. A failed write removes only the files this run wrote. The codes live in the script, not `src/`, so the gate registry is unchanged.
+  - Decisions, Ben's to overturn:
+    - D1: the order of `--teams` is the priority. `NE SEA` reproduces `r33_theses`, which sorts.
+    - D2: a `D` player is not left out, exactly as the acceptance does. There are none on NE@SEA; `run-slate` treats `D` as unavailable by default, so the script prints every Captain set.
+- **`contest_assignment.apply_step(thesis_by_roster=)`.** The labels reach `diversify` and the step's `Claim`, so the audit (`Claim.audit`) recomputes with the labels the step scored with. `review_block(thesis_by_roster=)` feeds both of its readings. `thesis_labels(by_lineup, keyed_rosters)` builds the roster-keyed map and returns None, never `{}`, when nothing is labelled.
+- **`prior_review._thesis_by_roster` (the bridge).**
+  - For a v4 policy it reads each assigned roster's thesis from the selection's `theses.by_lineup` through `roster_canonical_key`.
+  - It is built from the pre-step assignment and keyed by the exact roster, so it cannot go stale when the step moves rosters between Entry IDs.
+  - It returns None for no policy, v2, v3, Classic and the baseline.
+  - `_by_lineup_claim` is now the one guard for it and for Session 23c's `_relabel_thesis_entries`.
+- **`readable_review`.** The Showdown contest block reads its labels from the hash-bound selection record's own lineups (roster and `thesis`), never from the step.
+- **Docs.**
+  - `docs/DATA_CONTRACTS.md` § Contest assignment: the label is live for a v4 portfolio, and the trade is stated. The version stays `within_contest_diversity_v1` (decision D4: the term, its weight and the score were already this contract's; only their input became live). No report key is added (decision D3), after checking that nothing rebuilds a review from an older run directory (`create_readable_review` is called only in-run, `cli.py`). So an archived 23c or 23f v4 step report and a new one share a version string, and only `distinct_theses` (0 against more) tells them apart.
+  - `docs/RUNBOOK.md`: the thesis-portfolio paragraph.
+  - `docs/OPERATOR_GUIDE.md`: § Showdown theses from R33.
+  - `IMPLEMENTATION_STATUS.md`.
+- **Files outside the card's list, and why.**
+  - `src/nfl_dfs/readable_review.py`: without it every v4 Showdown review would have reported `CONTEST_ASSIGNMENT_STATS_MISMATCH`.
+  - `docs/DATA_CONTRACTS.md`: the contract said no label existed in `run-slate`.
+  - `docs/OPERATOR_GUIDE.md`: the command reference for the new script, as Ben asked.
+
+**Acceptance, clause by clause**
+- **Clause 1 holds.** The expander's six NE and SEA files equal `r33_theses(variants=False)`, and the eight equal `variants=True`, in order and key order. Passed to `make_showdown_policy.py --thesis` in the printed order, they give the same **normalized** policy bytes (`canonical_bytes()`, not the source policy file, which embeds paths) as the acceptance's own build. The bank stopped on its candidate limit, not the clock, so the comparison is fair. The 20 picks (canonical key and thesis) are identical, and the audit's measures equal the 23c "R33's six" column: 9 distinct Captains, 20%, 3 people in more than half the rows, 11, 4, and no pair of five. `tests/test_showdown_thesis_acceptance.py` passes unedited.
+- **Clause 2 holds where separating two theses costs less than the label's 3 a pair, and does not hold literally.**
+  - A tie-built fixture through `apply_step` separates the theses only with labels.
+  - Where every mixed pair would share 3 people against the same-thesis pairs' 2, the same-thesis pairs stay (`test_the_registered_weight_loses_to_a_step_from_two_to_three_shared_people`). From 1 to 2 is a tie, and nothing moves.
+  - Where a mixed pair shares 1 against 0, the label separates them, and a contest's worst shared-people pair rises from 0 to 1 against the solver's order (`test_the_registered_weight_against_one_more_shared_person[0-1-True]`). That is the registered trade. **Ben's requested check, "no overlap or score measure got worse", holds for the score only.** The score rule holds against the solver's order; an overlap measure can rise, which before this session it could not on a v4 run.
+  - The weight is unchanged and flagged for Ben in the card.
+- **Clause 3 holds.** A before/after against `7f12432`'s code (`git archive`, run with `PYTHONPATH`; the import path checked in both trees) captured every contest-step call of a `run-slate` over the pinned fixture for sequential, default (the concentration-defaults policy), v2 with SD3 controls, v2 without theses and v3 with one thesis. Input assignments, output assignments and the step report minus `seconds` were identical, and the branch passed no label. v4 differed only in `contests_before`, `contests_after` and `total_score_before`; its assignments matched. The existing contest tests pass unedited.
+
+**Deviation from the approved plan (mine to make, Ben's to overturn).**
+- The plan had the readable review read `theses.by_lineup` through its canonical keys. That made 23f's `tests/test_readable_review_theses.py::test_a_doctored_selector_claim_is_refused_by_name` red. A doctored `by_lineup` now also failed the contest block, and the contest block's `P` finding hides the Game theses section (the section runs only when nothing else is wrong), so the review named `CONTEST_ASSIGNMENT_STATS_MISMATCH` instead of the thesis findings the test pins.
+- The test was right, and it is unedited.
+- The contest block now reads the same claim from the selection record's per-lineup `thesis`. Both come from the same `SelectedLineup.thesis`, and fill rows carry none on either side. So the two sections read separate fields, and one doctored field gives one named finding:
+  - A doctored `by_lineup` stays the thesis section's finding; a new test pins that the contest block still reconciles.
+  - A doctored per-lineup `thesis` is the contest block's finding; a new test pins that it hides the section.
+
+**Existing tests edited.** None.
+
+**Verification**
+- **Tests first, run red before any code:** 27 failed, 4 errors. The first failure was `FileNotFoundError: ...scripts\make_showdown_theses.py`, and the placement tests failed with `TypeError: apply_step() got an unexpected keyword argument 'thesis_by_roster'`.
+- **New tests:** 36. `tests/test_make_showdown_theses.py` has 18 and `tests/test_contest_assignment_theses.py` has 18.
+- **Focused runs:**
+  - The card's files with the acceptance and the new files: 67 passed.
+  - Neighbors: 474 passed (`test_contest_assignment*.py`, `test_readable_review.py`, `test_gate_registry.py`, `test_roadmap_queue.py`, `test_showdown_theses.py`, `test_repo_boundaries.py` with the card's and the new files), and 46 passed (`test_readable_review_theses.py`, `test_showdown_thesis_run_slate.py` with the placement file).
+- **First full suite:** `2844 passed, 2 skipped in 22629.18s (6:17:09)`. That is 2812 plus 32 new. The host was in modern standby from about 17:36 to 21:31 (Kernel-Power 506 and 507), so the wall time is not a run time.
+- **Second full suite**, after the review's wording-only `src/` change: `2848 passed, 2 skipped in 2522.18s (0:42:02)`. That is 2844 plus the 4 test cases the review fixes added. Another repository's suite (`nhl-dfs`) was running on the host at the same time, which explains the wall time. Two skipped, the same count as the baseline (the log does not name them), and no test failed.
+- **Mutation pass on a copy of the tree (the repository untouched): 20 mutations, 20 killed.**
+  - M01 to M11 cover the step, the claim, both review readings, a stale Entry-ID label in the review, the guard and the call site.
+  - M12 to M20 cover the expander's team checks, OUT/IR, the tie-break, the variant names, both overwrite guards, the empty Captain set and the failed-write cleanup.
+  - Three placement mutations (M03, M04, M10) were killed through the end-to-end fixture: the run exits 2 when the readable review does not reconcile (`READABLE_REVIEW_FAILED`).
+  - M11, an Entry-ID-keyed engine map built before the step, was killed only because the unit fixture's selection has no `entries` block. In a real run it is equivalent by construction, since before the step solver-order entries and assignments agree.
+- **Fresh-context `reviewer`.**
+  - One blocking finding, real and fixed: the contract, the runbook, the module docstring and the test text said the label "never outranks a larger overlap", false for 0 to 1. The wording now says what the rule does, and a parametrized test pins 0 to 1 and 1 to 2.
+  - One should-fix: clause 2 is met only in the narrower reading. Recorded above and flagged for Ben.
+  - One note fixed: a failed write other than an existing file left a partial set.
+  - Notes kept: every recompute site uses the same labels or needs none; `by_lineup` and the per-lineup `thesis` cannot legitimately disagree; `_thesis_by_roster` adds no new way to raise.
+- **`/advisor` twice:**
+  - before the plan: measure first, a mutation that can actually go stale, the doctored-claim interaction, a replay check before D3, clause 1 through the operator path;
+  - before close-out: merge-freshness, the clause 2 wording, mutating the new cleanup guard.
+- `git diff --check` clean, `.\nfl.ps1 doctor` `pass_status: true`, `scripts/check_protected_paths.py` "No protected path touched", every edited module compiles and imports, zero CR bytes in the four ledgers.
+
+**Found, left open**
+- **[BEN: ruling]** on the same-thesis weight (card): 3 a pair can raise a contest's worst pair from 0 to 1 shared person to keep two theses apart, and gives way to 2-to-3 steps. Claude's recommendation is to keep it until standings say otherwise.
+- **Any contest-stats mismatch hides the Game theses section** in the same review (23f's gate is "nothing else is wrong"). Both are `P`, so the CSV is kept, but Ben then reads the contest finding and not the thesis figures. Left as designed.
+- **`run-slate` treats `D` as unavailable and the expander does not exclude `D`** (D2), so a doubtful player can sit in a thesis's Captain set that the run will not let him captain. The printed Captain sets are the check.
+- Not measured: a slate whose theses share few people across teams (the case where the label actually moves lineups in a real run), and anything against standings.
+
 ### 2026-10-07: Session 23f -- the readable review's game-theses section (P8 part 3: each thesis, and the figures R34 asks for, in the review Ben reads)
 
 Branch `claude/s23f-readable-review-theses`, from `main` at `3b25603` (PR #116's merge); claim commit `52e76f4`, work commits `2c8d918` and `4cbf950`. Class S. No protected path touched. No evidence gate is touched, no number is written for anyone, nothing is called EV, a win probability or calibrated, a thesis is called a choice and not a forecast, and every path still ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`. Ben approved the plan before any code.

@@ -318,6 +318,43 @@ list. It derives replaceable cells from exact DraftKings IDs, the certified
 prior assignment, game lock times, the current prefilled template, and the
 timezone-aware `--as-of` value.
 
+## Showdown theses from R33
+
+`scripts/make_showdown_theses.py` (Session 67) writes Ben's R33 game theses for
+one Showdown as thesis files, so a portfolio of theses does not start from six
+hand-written JSON files:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\make_showdown_theses.py `
+  --salaries 'C:\full\path\DKSalaries.csv' `
+  --teams NE SEA `
+  --out-dir 'C:\full\path\theses'
+```
+
+- It writes `01_NE_WINS_BIG.json` through `06_OFFENSIVE_SHOOTOUT.json`: each team
+  wins big, each team wins close (a kicker or defense Captain), a defensive battle,
+  an offensive shootout. `--variants` writes the close game's high and low scoring
+  halves for each team instead (eight files).
+- Structure only: each Captain set is a team's best players by salary at a
+  position (FLEX rows, `OUT` and `IR` left out, the lower DraftKings ID on a tie).
+  No model value, spread, total or contest name is read. A `D` player is not left
+  out; `run-slate` treats `D` as unavailable by default, so read the Captain sets
+  it prints.
+- The teams and their order are Ben's: the first team named comes first in every
+  pair, and the files are numbered in the declared order, which the policy
+  generator reads as the priority. Which theses go in is his too: it prints the
+  `--thesis` flags in order; keep only the ones he chose and pass them to
+  `scripts/make_showdown_policy.py`. No file carries a `row_weight`; add one to a
+  file to give that thesis more rows.
+- It refuses by name and leaves nothing behind: `THESES_SALARY_UNREADABLE`,
+  `THESES_NOT_SHOWDOWN`, `THESES_TEAMS_NOT_TWO`, `THESES_TEAM_NOT_ON_SLATE`,
+  `THESES_EMPTY_CAPTAIN_SET:<NAME>`, `THESES_OUTPUT_EXISTS:<path>` (it never
+  overwrites a file), `THESES_WRITE_FAILED:<path>` (a write failed part way; the
+  files this run wrote are removed).
+
+A thesis is a choice, not a forecast; with no ownership input leverage is
+unmeasured.
+
 ## Classic judgment pass and construction judgment
 
 Since Session 61 a Classic `run-slate` does the parts of Ben's judgment rule (R37) that need no judgment and hands over the rest.
