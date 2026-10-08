@@ -346,10 +346,11 @@ hand-written JSON files:
   `--thesis` flags in order; keep only the ones he chose and pass them to
   `scripts/make_showdown_policy.py`. No file carries a `row_weight`; add one to a
   file to give that thesis more rows.
-- It refuses by name and writes nothing: `THESES_SALARY_UNREADABLE`,
+- It refuses by name and leaves nothing behind: `THESES_SALARY_UNREADABLE`,
   `THESES_NOT_SHOWDOWN`, `THESES_TEAMS_NOT_TWO`, `THESES_TEAM_NOT_ON_SLATE`,
   `THESES_EMPTY_CAPTAIN_SET:<NAME>`, `THESES_OUTPUT_EXISTS:<path>` (it never
-  overwrites a file).
+  overwrites a file), `THESES_WRITE_FAILED:<path>` (a write failed part way; the
+  files this run wrote are removed).
 
 A thesis is a choice, not a forecast; with no ownership input leverage is
 unmeasured.

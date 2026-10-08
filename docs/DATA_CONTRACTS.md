@@ -4139,8 +4139,10 @@ keyed by the exact roster, so it follows the lineup wherever the step moves it.
 Every other run (no policy, v2, v3, Classic, the baseline) carries no label and
 the term is zero, placing lineups exactly as before. The version is unchanged:
 the term, its weight and the score were already this contract's; only their input
-became live. The label breaks ties: going from 2 to 3 shared people costs 5, more
-than its 3, so it never outranks a larger overlap. A person is the underlying
+became live. Against shared people the label's 3 outweighs a pair going from 0
+to 1 shared person (cost 1), so separating two theses may raise a contest's worst
+pair from 0 to 1; it ties a pair going from 1 to 2 (cost 3, nothing moves) and
+loses to 2 to 3 or more (cost 5 and up). A person is the underlying
 person, so a Captain and a FLEX ID of one person are one person. The Classic
 primary stack team is the team with the most
 rostered QB, RB, WR and TE players (a DST or kicker never counts), ties to the

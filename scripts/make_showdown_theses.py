@@ -20,9 +20,10 @@ No file carries a `row_weight` (equal shares); add one to a file to give a thesi
 not left out, exactly as the acceptance does; `run-slate` treats `D` as unavailable by default, so read the Captain
 sets this prints.
 
-REFUSALS, by name, writing nothing: THESES_SALARY_UNREADABLE, THESES_NOT_SHOWDOWN, THESES_TEAMS_NOT_TWO,
+REFUSALS, by name, leaving nothing behind: THESES_SALARY_UNREADABLE, THESES_NOT_SHOWDOWN, THESES_TEAMS_NOT_TWO,
 THESES_TEAM_NOT_ON_SLATE, THESES_EMPTY_CAPTAIN_SET:<NAME>, THESES_OUTPUT_EXISTS:<path> (every target is checked before
-the first is written; nothing is ever overwritten).
+the first is written; nothing is ever overwritten), THESES_WRITE_FAILED:<path> (a write failed part way; the files this
+run wrote are removed).
 
 A thesis is a choice, not a forecast: nothing here calls one likely, and with no ownership input leverage is unmeasured.
 """
@@ -144,17 +145,24 @@ def main(argv=None) -> int:
     parser.add_argument("--variants", action="store_true",
                         help="the close game's high and low scoring sub-variants for each team (eight files)")
     args = parser.parse_args(argv)
+    written: list[Path] = []
     try:
         slate, targets, digest = plan(args.salaries, args.teams, args.out_dir, variants=args.variants)
         args.out_dir.mkdir(parents=True, exist_ok=True)
         for path, item in targets:
             with path.open("x", encoding="utf-8", newline="\n") as handle:  # exclusive: never overwrite
+                written.append(path)
                 handle.write(json.dumps(item, indent=2) + "\n")
     except Refusal as refusal:
         print(str(refusal), file=sys.stderr)
         return 1
-    except FileExistsError as exc:
-        print(f"THESES_OUTPUT_EXISTS:{exc.filename}: never overwritten", file=sys.stderr)
+    except OSError as exc:
+        # A file that appeared after the check, a full disk, a permission: remove only what this run wrote, so a
+        # failed run leaves no partial set behind.
+        for path in written:
+            path.unlink(missing_ok=True)
+        code = "THESES_OUTPUT_EXISTS" if isinstance(exc, FileExistsError) else "THESES_WRITE_FAILED"
+        print(f"{code}:{exc.filename}: {type(exc).__name__}: nothing kept from this run", file=sys.stderr)
         return 1
     names = {row.underlying_id: f"{row.name} ({row.position}, {row.team})" for row in slate.players}
     print(f"salaries {args.salaries} sha256 {digest}")

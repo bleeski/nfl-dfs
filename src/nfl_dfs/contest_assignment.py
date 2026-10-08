@@ -26,8 +26,10 @@ Labels (Session 67). Inside `run-slate` a lineup's label is the thesis a v4
 portfolio's selection names for it (`theses.by_lineup`, canonical lineup to
 thesis), held as `thesis_by_roster` keyed by the exact roster, so it follows the
 lineup wherever the step moves it; every site that recomputes the step's figures
-uses the same labels. Every other run has none and the term is zero. The label
-breaks ties: going from 2 to 3 shared people costs 5, more than its 3.
+uses the same labels. Every other run has none and the term is zero. Against
+shared people the label's 3 outweighs a pair going from 0 to 1 shared person
+(cost 1), ties one going from 1 to 2 (cost 3, so nothing moves) and loses to
+2 to 3 or more (cost 5 and up).
 
 Contest size. A raw sum of pair costs lets a contest of seven entries (21 pairs)
 outweigh one of two (1 pair): on PHI@CHI v4 the three seven-entry contests kept

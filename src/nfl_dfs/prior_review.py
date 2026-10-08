@@ -2647,8 +2647,9 @@ def run_prior_review(
     # audit and review below sees this assignment. Classic pools are the policy's
     # rows (`bound`), the rows C1 fills beside it (`fill`), or every row (`all`).
     # It never raises: a failure leaves the solver's order and names it (R28).
-    # Session 67: a portfolio of theses labels each roster with the thesis it fills, so two lineups of one thesis
-    # are kept apart where nothing else separates them; every other run has no label and is placed as before.
+    # Session 67: a portfolio of theses labels each roster with the thesis it fills, so the registered same-thesis
+    # term (3 a pair) counts against two lineups of one thesis sharing a contest; every other run has no label and is
+    # placed as before.
     contest_step = contest_assignment.apply_step(
         mode=(
             contest_assignment.MODE_SHOWDOWN

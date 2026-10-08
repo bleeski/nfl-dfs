@@ -264,6 +264,35 @@ def test_an_existing_file_is_never_overwritten_and_nothing_else_is_written(tmp_p
     assert files == [existing] and existing.read_bytes() == b"Ben's own file\n"
 
 
+@pytest.mark.parametrize("failure", ["disk", "race"])
+def test_a_write_that_fails_part_way_leaves_nothing_of_this_run_behind(tmp_path, capsys, monkeypatch, failure):
+    # The third file fails: a full disk, or a file of that name appearing after the up-front check (a race). The two
+    # files this run already wrote are removed; a file this run did not write is never touched.
+    out = tmp_path / "out"
+    real_open = Path.open
+    opened = []
+
+    def failing_open(self, mode="r", *args, **kwargs):
+        if mode == "x":
+            opened.append(self)
+            if len(opened) == 3:
+                if failure == "disk":
+                    raise OSError(28, "No space left on device", str(self))
+                self.write_bytes(b"someone else's file\n")
+        return real_open(self, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", failing_open)
+    code, files = _expand(out)
+    monkeypatch.setattr(Path, "open", real_open)
+    err = capsys.readouterr().err
+    assert code == 1
+    if failure == "disk":
+        assert "THESES_WRITE_FAILED" in err and files == []
+    else:
+        assert "THESES_OUTPUT_EXISTS" in err
+        assert files == [opened[2]] and opened[2].read_bytes() == b"someone else's file\n"
+
+
 # ------------------------------------------------------------------ what it reads, and what it says
 
 

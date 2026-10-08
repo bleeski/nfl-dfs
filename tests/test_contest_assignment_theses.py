@@ -7,8 +7,9 @@ the delivered bytes uses the same labels: the audit through the step's claim, th
 of the selection record's lineups (each roster and its thesis). A run with no theses carries no label and places
 lineups as it did.
 
-The label breaks ties and near-ties; it never outranks a larger overlap (going from 2 to 3 shared people costs 5, the
-label 3). The weight is not changed here. A thesis is a choice, not a forecast; none of this is EV or a payout claim.
+Against shared people the label's 3 outweighs a pair going from 0 to 1 shared person (cost 1), ties one going from 1 to
+2 (cost 3: nothing moves) and loses to 2 to 3 or more (cost 5 and up); the tests below pin all three. The weight is not
+changed here. A thesis is a choice, not a forecast; none of this is EV or a payout claim.
 """
 
 from __future__ import annotations
@@ -148,7 +149,42 @@ def test_a_label_never_moves_a_lineup_out_of_its_pool():
     assert labelled.report["pools"] == {"bound": 2, "fill": 2}
 
 
-def test_the_registered_weight_breaks_ties_and_never_outranks_a_larger_overlap():
+def _uniform(same: int, mixed: int):
+    """Four lineups: T1 holds L1 and L2, T2 holds L3 and L4; each same-thesis pair shares `same` people and every mixed
+    pair `mixed`, each through people only that pair holds, and every Captain is its own."""
+
+    shared = {pair: [f"{pair[0]}{pair[1]}-{k}" for k in range(same if pair in {(1, 2), (3, 4)} else mixed)]
+              for pair in itertools.combinations((1, 2, 3, 4), 2)}
+    lineups = []
+    for index in (1, 2, 3, 4):
+        members = [person for pair, people in shared.items() if index in pair for person in people]
+        lineups.append(_lineup(f"L{index}", members))
+    return lineups
+
+
+@pytest.mark.parametrize(("same", "mixed", "separates"), [(0, 1, True), (1, 2, False)])
+def test_the_registered_weight_against_one_more_shared_person(same, mixed, separates):
+    # Separating two theses here turns two same-thesis pairs into two mixed pairs. From 0 to 1 shared person costs 1 a
+    # pair against the label's 3, so the theses are separated and the worst pair rises from 0 to 1 (the registered
+    # trade, not a regression against the solver's order, which scores the labels too). From 1 to 2 costs 3, a tie,
+    # and the step moves only on a strict gain.
+    l1, l2, l3, l4 = _uniform(same, mixed)
+    assignments = {"e1": l1, "e2": l2, "e3": l3, "e4": l4}
+    labels = {l1: "T1", l2: "T1", l3: "T2", l4: "T2"}
+    plain = _step(FOUR, assignments, None)
+    assert plain.report["status"] == ca.STATUS_UNCHANGED
+    labelled = _step(FOUR, assignments, labels)
+    worst = {c: s["worst_pair_shared_people"] for c, s in labelled.report["contests_after"].items()}
+    if separates:
+        assert labelled.report["status"] == ca.STATUS_IMPROVED
+        assert _same_thesis_pairs(labelled.assignments, FOUR, labels) == 0
+        assert worst == {"A": mixed, "B": mixed}
+    else:
+        assert labelled.report["status"] == ca.STATUS_UNCHANGED and labelled.assignments == assignments
+        assert worst == {"A": same, "B": same}
+
+
+def test_the_registered_weight_loses_to_a_step_from_two_to_three_shared_people():
     # Same-thesis pairs share 2 people; every mixed pair would share 3. Separating the theses costs 3**2 - 2**2 = 5 per
     # pair, more than the label's 3, so with the registered weights the same-thesis pairs stay. A heavier weight (an
     # offline override, not the registered rule) would separate them, which shows it is the weight that decides.
