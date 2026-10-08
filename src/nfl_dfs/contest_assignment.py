@@ -22,6 +22,13 @@ every pair of its lineups, a pair costs
 The weights came from PHI@CHI: at 6 a seven-entry contest still repeated a
 Captain, at 25 a two-entry contest paired two lineups of one thesis.
 
+Labels (Session 67). Inside `run-slate` a lineup's label is the thesis a v4
+portfolio's selection names for it (`theses.by_lineup`, canonical lineup to
+thesis), held as `thesis_by_roster` keyed by the exact roster, so it follows the
+lineup wherever the step moves it; every site that recomputes the step's figures
+uses the same labels. Every other run has none and the term is zero. The label
+breaks ties: going from 2 to 3 shared people costs 5, more than its 3.
+
 Contest size. A raw sum of pair costs lets a contest of seven entries (21 pairs)
 outweigh one of two (1 pair): on PHI@CHI v4 the three seven-entry contests kept
 one two-entry pair at three shared people. A contest's score is therefore its
@@ -469,6 +476,25 @@ def _thesis(thesis_by_roster: Mapping[tuple[str, ...], str] | None, roster: tupl
     return None if not thesis_by_roster else thesis_by_roster.get(tuple(roster))
 
 
+def thesis_labels(
+    by_lineup: object,
+    keyed_rosters: Sequence[tuple[Sequence[str], str]],
+) -> dict[tuple[str, ...], str] | None:
+    """Each roster's thesis label from a selection's `by_lineup` (canonical lineup to thesis), keyed by the roster.
+
+    `keyed_rosters` pairs each roster with its canonical key, computed by the caller (`prior_review`, from the exact
+    salary IDs). A roster whose key names no thesis carries none, and a map with no label at all is None, never `{}`,
+    so a run without theses reaches the step exactly as before.
+    """
+
+    if not isinstance(by_lineup, Mapping):
+        return None
+    labels = {
+        tuple(roster): by_lineup[key] for roster, key in keyed_rosters if isinstance(by_lineup.get(key), str)
+    }
+    return labels or None
+
+
 def diversify(
     rows: Sequence[EntryRow],
     *,
@@ -660,6 +686,7 @@ def apply_step(
     entry_plan,
     assignments: Mapping[str, Sequence[str]],
     bound_ids: Sequence[str] = (),
+    thesis_by_roster: Mapping[tuple[str, ...], str] | None = None,
     time_limit_seconds: float | None = DEFAULT_TIME_LIMIT_SECONDS,
     seed: int = DEFAULT_SEED,
     restarts: int | None = None,
@@ -668,7 +695,9 @@ def apply_step(
     """Diversify `assignments` (fillable entry -> roster, solver order), never raising.
 
     `restarts` None sizes the restarts from the entries (`restarts_for`); the
-    baseline passes 0, the single climb from its own order.
+    baseline passes 0, the single climb from its own order. `thesis_by_roster`
+    (Session 67) labels each roster with its thesis; the claim carries the same
+    labels so the audit recomputes with them. None (or empty) is no label.
 
     Any failure leaves the solver's order standing and names it, so the file still
     ships (R28): the caller carries `failure` as a P-class limitation.
@@ -682,14 +711,15 @@ def apply_step(
         selected: dict[str, list[tuple[str, ...]]] = {}
         for entry_id, roster in original.items():
             selected.setdefault(pool_of[entry_id], []).append(roster)
-        outcome = diversify(rows, mode=mode, people=people, time_limit_seconds=time_limit_seconds,
-                            seed=seed, restarts=restarts, clock=clock)
+        labels = {tuple(roster): thesis for roster, thesis in thesis_by_roster.items()} if thesis_by_roster else None
+        outcome = diversify(rows, mode=mode, people=people, thesis_by_roster=labels,
+                            time_limit_seconds=time_limit_seconds, seed=seed, restarts=restarts, clock=clock)
         # Key order is the template's, exactly as it came in: only the values move.
         permuted = {entry_id: outcome.assignments[entry_id] for entry_id in original}
         claim = Claim(
             rows=tuple(rows),
             selected_by_pool={pool: tuple(rosters) for pool, rosters in selected.items()},
-            mode=mode, people=people, reported_after=outcome.report["contests_after"])
+            mode=mode, people=people, thesis_by_roster=labels, reported_after=outcome.report["contests_after"])
         return StepOutcome(permuted, dict(outcome.report), claim, None)
     except Exception as exc:  # noqa: BLE001 - named, never swallowed: the solver's order stands
         problems: list[str] = []
@@ -729,6 +759,7 @@ def review_block(
     rows: Sequence[tuple[str, str, tuple[str, ...], str | None]],
     selected_in_solver_order: Sequence[tuple[str, ...]],
     reported: Mapping[str, object] | None,
+    thesis_by_roster: Mapping[tuple[str, ...], str] | None = None,
 ) -> tuple[dict[str, object] | None, list[str]]:
     """The per-contest review block, and the problems reconciling it found.
 
@@ -737,7 +768,9 @@ def review_block(
     row the template filled). `selected_in_solver_order` is the selection's own
     lineup order (bound pool first, then fill). Both the after and the before
     readings are recomputed here; `reported` (the step's own report) is only
-    compared to them. Returns `(None, [])` for a record from before Session 50.
+    compared to them. `thesis_by_roster` is the caller's own reading of the
+    labels (Session 67), keyed by roster, so both readings carry them. Returns
+    `(None, [])` for a record from before Session 50.
     """
 
     if not isinstance(reported, Mapping):
@@ -745,7 +778,8 @@ def review_block(
     problems: list[str] = []
     movable = [row for row in rows if row[3] is not None]
     ordered = [row for pool in (POOL_BOUND, POOL_FILL, POOL_ALL) for row in movable if row[3] == pool]
-    after = statistics_from_rosters([(e, c, r) for e, c, r, _pool in rows], mode=mode, people=people)
+    after = statistics_from_rosters(
+        [(e, c, r) for e, c, r, _pool in rows], mode=mode, people=people, thesis_by_roster=thesis_by_roster)
     before = after
     # Sequential Showdown may select more lineups than there are entries; the
     # entries take the first N, exactly as the assignment does.
@@ -757,7 +791,8 @@ def review_block(
             problems.append("CONTEST_ASSIGNMENT_MULTISET_CHANGED:delivered_rosters")
         solver_order = {row[0]: tuple(roster) for row, roster in zip(ordered, selected)}
         before = statistics_from_rosters(
-            [(e, c, solver_order.get(e, r)) for e, c, r, _pool in rows], mode=mode, people=people)
+            [(e, c, solver_order.get(e, r)) for e, c, r, _pool in rows], mode=mode, people=people,
+            thesis_by_roster=thesis_by_roster)
     failed = reported.get("status") == STATUS_FAILED
     if not failed and (
         {k: dict(v) for k, v in (reported.get("contests_after") or {}).items()} != after

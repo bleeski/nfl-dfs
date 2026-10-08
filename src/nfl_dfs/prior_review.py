@@ -914,17 +914,50 @@ def _relabel_thesis_entries(
     returned as it was.
     """
 
-    if not isinstance(portfolio_policy, NormalizedPortfolioPolicy) or portfolio_policy.thesis_schema != "v4":
+    by_lineup = _by_lineup_claim(selection, portfolio_policy)
+    if by_lineup is None:
         return selection
-    policy_block = selection.get("portfolio_policy")
-    block = policy_block.get("theses") if isinstance(policy_block, Mapping) else None
-    by_lineup = block.get("by_lineup") if isinstance(block, Mapping) else None
-    if not isinstance(by_lineup, Mapping):
-        return selection
+    policy_block = selection["portfolio_policy"]
+    block = policy_block["theses"]
     entries = {
         entry_id: by_lineup.get(roster_canonical_key(slate, assignments[entry_id]))
         for entry_id in portfolio_policy.entry_ids if entry_id in assignments}
     return {**selection, "portfolio_policy": {**policy_block, "theses": {**block, "entries": entries}}}
+
+
+def _by_lineup_claim(selection: Mapping[str, object], portfolio_policy: object) -> Mapping[str, object] | None:
+    """The selector's `theses.by_lineup` (canonical lineup to thesis) for a v4 portfolio, else None (Session 67).
+
+    One guard for both readers of the claim of record: the relabelled `theses.entries` above and the contest step's
+    labels below.
+    """
+
+    if not isinstance(portfolio_policy, NormalizedPortfolioPolicy) or portfolio_policy.thesis_schema != "v4":
+        return None
+    policy_block = selection.get("portfolio_policy")
+    block = policy_block.get("theses") if isinstance(policy_block, Mapping) else None
+    by_lineup = block.get("by_lineup") if isinstance(block, Mapping) else None
+    return by_lineup if isinstance(by_lineup, Mapping) else None
+
+
+def _thesis_by_roster(
+    selection: Mapping[str, object],
+    slate: SlateContract,
+    portfolio_policy: object,
+    assignments: Mapping[str, Sequence[str]],
+) -> dict[tuple[str, ...], str] | None:
+    """Each assigned roster's thesis, for the contest step's same-thesis term (Session 67); None without theses.
+
+    Keyed by the exact roster, never by Entry ID: the step moves whole rosters between Entry IDs, so a roster's label
+    holds wherever it lands, as `by_lineup` does. A roster the claim does not name (a row the unbound fill wrote)
+    carries no label. A run with no portfolio of theses (no policy, v2, v3, Classic) gets None and is placed as before.
+    """
+
+    by_lineup = _by_lineup_claim(selection, portfolio_policy)
+    if by_lineup is None:
+        return None
+    return contest_assignment.thesis_labels(
+        by_lineup, [(roster, roster_canonical_key(slate, roster)) for roster in assignments.values()])
 
 
 def row_sources(
@@ -2614,6 +2647,8 @@ def run_prior_review(
     # audit and review below sees this assignment. Classic pools are the policy's
     # rows (`bound`), the rows C1 fills beside it (`fill`), or every row (`all`).
     # It never raises: a failure leaves the solver's order and names it (R28).
+    # Session 67: a portfolio of theses labels each roster with the thesis it fills, so two lineups of one thesis
+    # are kept apart where nothing else separates them; every other run has no label and is placed as before.
     contest_step = contest_assignment.apply_step(
         mode=(
             contest_assignment.MODE_SHOWDOWN
@@ -2624,6 +2659,7 @@ def run_prior_review(
         entry_plan=entry_plan,
         assignments=assignments,
         bound_ids=bound_ids,
+        thesis_by_roster=_thesis_by_roster(selection, slate, portfolio_policy, assignments),
         time_limit_seconds=_contest_assignment_allowance(budget),
     )
     assignments = contest_step.assignments

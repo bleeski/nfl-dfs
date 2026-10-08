@@ -4132,9 +4132,17 @@ holds one Contest ID reports `NOT_APPLICABLE`.
 lineups a pair costs `shared_people ** 2`, plus 12 when both have the same key
 person (the Showdown Captain, the Classic QB), plus 6 when both have the same
 Classic primary stack team, plus 3 when both carry the same thesis label
-(Showdown sleeves; no label exists inside `run-slate` yet, so the term is zero
-there). A person is the underlying person, so a Captain and a FLEX ID of one
-person are one person. The Classic primary stack team is the team with the most
+(Showdown). Since Session 67 a label exists inside `run-slate` for a v4
+portfolio of theses: each lineup's label is the thesis the selection names for
+it (`theses.by_lineup`, canonical lineup to thesis), held as `thesis_by_roster`
+keyed by the exact roster, so it follows the lineup wherever the step moves it.
+Every other run (no policy, v2, v3, Classic, the baseline) carries no label and
+the term is zero, placing lineups exactly as before. The version is unchanged:
+the term, its weight and the score were already this contract's; only their input
+became live. The label breaks ties: going from 2 to 3 shared people costs 5, more
+than its 3, so it never outranks a larger overlap. A person is the underlying
+person, so a Captain and a FLEX ID of one person are one person. The Classic
+primary stack team is the team with the most
 rostered QB, RB, WR and TE players (a DST or kicker never counts), ties to the
 QB's team and then the lower team abbreviation, and is undefined below two
 players. The weights came from PHI@CHI (2026-09-28): 6 left a repeated Captain in
@@ -4174,7 +4182,12 @@ never blocks delivery and never moves a filled row.
 `worst_pair_shared_people`, `mean_shared_people`, `distinct_key_people`,
 `distinct_stack_teams`, `distinct_theses`, `people_in_every_lineup`,
 `worst_pair_cost`, `score`. When the step moves anything, the selector's
-`pairwise_person_overlap` labels follow the lineups to their new entries.
+`pairwise_person_overlap` labels follow the lineups to their new entries. With
+thesis labels (Session 67) `distinct_theses` and every cost carry them; no key is
+added. Every recompute uses the same labels: the audit through the step's claim,
+and the Showdown readable review from its own reading of the hash-bound selection
+record's lineups (each roster and its `thesis`), never from the step, so a step
+that scored with other labels is `CONTEST_ASSIGNMENT_STATS_MISMATCH` (`P`).
 
 **Classic wiring** (Session 50c). `prior_review` applies the step right after selection
 and before any artifact, for `CLASSIC` as for `SHOWDOWN`, and the Classic primary
