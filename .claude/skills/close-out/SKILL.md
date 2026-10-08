@@ -41,14 +41,24 @@ Close out the current roadmap session.
 8. Commit and ship, per `.claude/rules/git-authority.md`:
    - `git add` an explicit path list, grouped as source / tests / docs / ledger.
      Never `git add .` or `-A`. Say in one line what you deliberately left out.
-   - Commit, push, open the pull request.
+   - Commit, push, open the pull request. Put the line
+     `Session close: post-merge routine runs when this merges (docs/claude/post_merge.md).`
+     in its body, above any footer the harness adds (this is what tells the
+     routine the session's work is finished; a mid-session pull request never
+     carries it), then `subscribe_pr_activity` for it.
    - `python3 scripts/check_protected_paths.py`. If it flags anything, add the
      `ben-review` label, say so, and stop: that pull request is Ben's to merge.
+     The routine then runs when his merge arrives as a wake event.
    - Otherwise wait for `suite`, `boundaries` and `protected-paths` to go green,
      then merge and delete the branch. A red check is work, not a reason to stop.
-9. Report to Ben in a few lines, in the order
+9. After the merge, run the post-merge routine, `docs/claude/post_merge.md`:
+   branch cleanup and the sync check, the next session's handoff prompt, the
+   PowerShell blocks for Ben, and the archive. Its report is this step's
+   report, so do not write two.
+10. Report to Ben in a few lines, in the order
    `.claude/rules/stops-and-reports.md` sets. **Needs Ben** first: a
    `ben-review` label, any open `[BEN: ...]` flag, anything else he owes, or
    "nothing". Then **Changed**: what landed, the exact suite result, the pull
    request link and whether it merged. Then **Found**: anything relaxed or
-   left open, and the next session.
+   left open, and the next session. The next prompt and the PowerShell blocks
+   go in the same message, before the archive.

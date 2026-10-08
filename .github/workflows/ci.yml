@@ -47,6 +47,21 @@ jobs:
         run: uv sync --all-groups --locked --python 3.13.7
       - name: Permanent boundaries
         run: uv run pytest tests/test_repo_boundaries.py -q --no-header
+      - name: sync.ps1 parses
+        # The one script of Ben's that cannot run in a cloud container, so a
+        # syntax slip would first show up in his console. pwsh is preinstalled on
+        # the runner. This is a parse, not a run; tests/test_sync_ps1.py adds the
+        # static rules (no PowerShell 7 syntax, no destructive command).
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD/sync.ps1", [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Host "line $($_.Extent.StartLineNumber): $($_.Message)" }
+            exit 1
+          }
+          Write-Host "sync.ps1 parses clean"
 
   suite:
     name: suite
