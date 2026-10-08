@@ -29,7 +29,11 @@ paths:
   and why in §2.8 and §4. A dependency still points only at an earlier row.
 - At close-out rewrite §1's Quick-Start to the next startable session; the test
   fails if it names anything else. Session prompt files are retired
-  (`docs/session-prompts/archive/`); the card in §2.3 is the prompt.
+  (`docs/session-prompts/archive/`); the card in §2.3 is the prompt. Since
+  2026-10-08 the post-merge routine hands Ben a longer handoff for the next
+  session, derived from that card by `scripts/next_prompt.py` and
+  `docs/claude/next_session_prompt.md`. It is generated, delivered in chat and
+  never stored, so no per-session prompt file comes back.
 - `backlog.md` is a pointer stub. Its history is
   `docs/backlog-archive/backlog-through-2026-09-22.md`; never add work to it.
 - Read by section, never whole: `docs/ROADMAP.md` §1, §2.1 and the one card;

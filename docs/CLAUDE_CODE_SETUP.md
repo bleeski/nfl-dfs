@@ -198,8 +198,10 @@ ends with nothing changed.
 Three things it stops on, and what each means:
 
 - **"On '<branch>', not main."** You are on a feature branch. If it holds work
-  you want, `git add -A` and `git commit` first, then `git checkout main` and
-  run it again. Measured 2026-09-22: a Windows checkout was sitting on
+  you want, `git add` the files by name and `git commit` first, then
+  `git checkout main` and run it again. (Under `-Clean`, a clean tree on a
+  `claude/*` branch that is already merged switches to `main` by itself.)
+  Measured 2026-09-22: a Windows checkout was sitting on
   `codex/p1-salary-divergence-role-evidence` with 13 modified files, 59 commits
   behind. Committing them to that branch and switching cost nothing and lost
   nothing.
@@ -211,6 +213,20 @@ Three things it stops on, and what each means:
   `.\nfl.ps1 setup`. Worth the check because `uv sync --locked` fails outright
   in that case and the error does not say why. Rare: as of 2026-09-22 only the
   initial commit has ever touched either file.
+
+**`Sync-NflDfs -Clean`, added 2026-10-08.** After a pull request that closes a
+session merges, Claude's reply ends with this one command in a PowerShell block.
+It does everything above, then: switches to `main` if you were on a merged,
+clean `claude/*` branch; deletes each local `claude/*` branch that
+`scripts/post_merge.py` reports as merged, with `git branch -d` (git itself
+refuses an unmerged one); and prints `IN SYNC` or what is left. It never touches
+`codex/*` branches, stashes, worktrees or an unmerged branch of any name: those
+are listed for you to decide. It uses `.venv\Scripts\python.exe` when present,
+because `python` can resolve to the Microsoft Store stub. The procedure and the
+cloud half of the cleanup are in `docs/claude/post_merge.md`. The `boundaries`
+CI job parses `sync.ps1`, and `tests/test_sync_ps1.py` pins its rules (no
+PowerShell 7 syntax, no destructive command), but nothing runs it for you: the
+first `-Clean` on your machine is the real test.
 
 Do not put this on a schedule. A background job pulling into a tree you are
 mid-edit in is how the dirty-tree rule gets broken by accident. Run it when you

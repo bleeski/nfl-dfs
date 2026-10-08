@@ -47,6 +47,15 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 - Fixtures whose freshness matters pin their clock (`now`). Verify with
   evidence, compile/import included; never summarize a run you did not see end.
 
+## After a merge (Ben, 2026-10-08)
+
+When the pull request that closes the session's work merges (its body ends with the `Session close:` line, or Ben types
+`/post-merge`), run `docs/claude/post_merge.md` before ending the turn: branch cleanup and a sync check (`scripts/post_merge.py`,
+read-only, so each command it prints is its own Bash call), the next session's handoff prompt in the Session 23d format
+(`scripts/next_prompt.py`, then `--check`), PowerShell for Ben in copy-paste blocks, the report, and `archive_session` last. A
+merge that does not close the session gets one line saying so and nothing else. Whether Ben has allowed the archive call without a
+prompt is the one open item in that file.
+
 ## Token discipline
 
 - Ledgers by section, never whole: `docs/ROADMAP.md` §1, §2.1 and the one card;
