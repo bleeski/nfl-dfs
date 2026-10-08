@@ -65,8 +65,13 @@ def test_the_output_mask_finds_a_windows_path_as_json_escapes_it():
     assert mask_out_path(stdout, target) == json.dumps({"out": "<OUT>", "out_sha256": "0" * 64}, indent=2)
 
 
-def no_flag_runs(tmp_path: Path) -> dict[str, tuple]:
-    """Three runs with no thesis flag on the synthetic fixtures: exit code and hashes of every byte the tool emits."""
+def no_flag_runs(tmp_path: Path, runner_newline: bytes = b"\n") -> dict[str, tuple]:
+    """Three runs with no thesis flag on the synthetic fixtures: exit code and hashes of every byte the tool emits.
+
+    `salary_csv` writes text, so a Windows runner writes the salary fixture with CRLF, and the report prints that file's
+    SHA-256. The fixture is given LF endings so the pinned hashes hold on every platform; `runner_newline` lets a test
+    stand in for the Windows runner's write.
+    """
 
     results = {}
     scenarios = (
@@ -78,6 +83,8 @@ def no_flag_runs(tmp_path: Path) -> dict[str, tuple]:
         folder = tmp_path / name
         folder.mkdir()
         w = build(folder, BASE)
+        w["sal"].write_bytes(w["sal"].read_bytes().replace(b"\r\n", b"\n").replace(b"\n", runner_newline))  # the runner's write
+        w["sal"].write_bytes(w["sal"].read_bytes().replace(b"\r\n", b"\n"))  # the fixture the golden hashes were taken on
         target = folder / "out.csv"
         stdout, stderr = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
@@ -90,6 +97,11 @@ def no_flag_runs(tmp_path: Path) -> dict[str, tuple]:
 
 def test_without_the_thesis_flags_the_output_is_the_pinned_c997395_output(tmp_path):
     assert no_flag_runs(tmp_path) == GOLDEN
+
+
+def test_the_pinned_output_does_not_depend_on_the_runners_line_endings(tmp_path):
+    # What the Windows CI job did: the salary fixture came out CRLF and `salary_sha256` in the report differed.
+    assert no_flag_runs(tmp_path, runner_newline=b"\r\n") == GOLDEN
 
 
 # ----- a hand-built thesis book on the synthetic slate --------------------------------------------------------------
