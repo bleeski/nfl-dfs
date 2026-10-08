@@ -520,6 +520,9 @@ night sinks, the most rows one thesis sinks, and any pair of rows that share fiv
 or more people. A judgment pass that swaps people after the engine (the ceiling
 pass, `showdown_value_add.py`) keeps each row's thesis: its teams, position counts
 and Captain set (`docs/claude/working.md` § Showdown judgment pass). Since
+Session 66 both scripts check that when given `--policy` and `--claim` from the run
+(`docs/OPERATOR_GUIDE.md` § Showdown thesis adherence): value-add never takes a swap
+that breaks its row's thesis, and QA names each row that does. Since
 Session 67 the contest step knows each lineup's thesis (`distinct_theses` per
 contest in the review): two lineups of one thesis sharing a contest cost 3 a pair.
 That outweighs a pair of rows going from 0 to 1 shared person, ties one going from
