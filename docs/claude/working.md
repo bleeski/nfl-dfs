@@ -54,7 +54,7 @@ When the pull request that closes the session's work merges (its body carries th
 read-only, so each command it prints is its own Bash call), the next session's handoff prompt in the Session 23d format
 (`scripts/next_prompt.py`, then `--check`), PowerShell for Ben in copy-paste blocks, the report, and `archive_session` last. A
 merge that does not close the session gets one line saying so and nothing else. Whether Ben has allowed the archive call without a
-prompt is the one open item in that file.
+prompt, and the other unverified items, are listed at the end of that file.
 
 ## Token discipline
 

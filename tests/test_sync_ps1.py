@@ -78,6 +78,13 @@ def test_the_only_branch_deletion_is_git_branch_d_on_names_from_post_merge():
     assert "post_merge.py --no-fetch --no-open-prs --format local-merged-names" in code
 
 
+def test_in_sync_is_only_printed_after_a_strict_check_that_found_nothing_left():
+    code = _code()
+    assert "post_merge.py --no-fetch --no-open-prs --strict --format text" in code
+    assert code.index("--strict --format text") < code.index('Write-Host "IN SYNC."')
+    assert "if ($verdict -eq 0)" in code
+
+
 def test_the_venv_interpreter_comes_first_and_the_store_stub_is_refused():
     code = _code()
     assert code.index(r".venv\Scripts\python.exe") < code.index("Get-Command python")

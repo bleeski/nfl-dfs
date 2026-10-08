@@ -64,6 +64,8 @@ SLOTS = (
     "lessons",
     "acceptance",
     "quick-start",
+    "not-startable",
+    "card",
 )
 # Paths the prompt tells the next session to create or to read from a run.
 PATH_EXEMPT_PREFIXES = ("state/", "data/", "outputs/")
@@ -87,8 +89,25 @@ class Refusal(RuntimeError):
         self.code = code
 
 
-def _ascii(text: str) -> str:
-    return text.encode("ascii", "replace").decode("ascii")
+_EM_DASH = chr(0x2014)  # a code point, so no source file carries the character
+_CARD_HEADING = re.compile(r"^#### Sessions? (?P<first>[0-9]{2})(?P<suffix>[a-z]?)(?: to (?P<last>[0-9]{2}))?(?=[:\s]|$)")
+_SESSION_PARTS = re.compile(r"^Session (?P<number>[0-9]{2})(?P<suffix>[a-z]?)$")
+
+
+def _plain(text: str) -> str:
+    """Card and git text as the prompt prints it: whitespace joined, and Ben's no-em-dash rule applied
+    the way the changelog does (' -- '), so a card that uses one still passes --check."""
+    return " ".join(text.replace(_EM_DASH, " -- ").split())
+
+
+def _covers(heading: str, session: str) -> bool:
+    """Does this `#### Session 02: ...` or `#### Sessions 31 to 36: ...` heading hold the session's card?"""
+    found, wanted = _CARD_HEADING.match(heading), _SESSION_PARTS.match(session)
+    if not found or not wanted:
+        return False
+    if found.group("last") is None:
+        return (found.group("first"), found.group("suffix")) == (wanted.group("number"), wanted.group("suffix"))
+    return int(found.group("first")) <= int(wanted.group("number")) <= int(found.group("last"))
 
 
 def _git(repo: Path, *args: str) -> tuple[int, str]:
@@ -130,6 +149,8 @@ def resolve_session(rows: list[dict], wanted: str | None) -> dict:
     key = wanted.strip().lower()
     for row in rows:
         if key in (row["short"].lower(), row["session"].lower()):
+            if row["status"] in ("Complete", "Deferred"):
+                raise Refusal("SESSION_NOT_STARTABLE", f"{row['session']} is {row['status']}, so it needs no handoff")
             return row
     raise Refusal("SESSION_NOT_FOUND", f"{wanted!r} is not on the status board")
 
@@ -137,7 +158,7 @@ def resolve_session(rows: list[dict], wanted: str | None) -> dict:
 def card(roadmap_text: str, session: str) -> dict:
     """The card's title and its `- **Label.** text` bullets, wrapped lines joined."""
     lines = roadmap_text.splitlines()
-    start = next((i for i, line in enumerate(lines) if re.match(rf"^#### {re.escape(session)}(?::|\s|$)", line)), None)
+    start = next((i for i, line in enumerate(lines) if _covers(line, session)), None)
     if start is None:
         return {"found": False, "title": session, "fields": {}, "text": ""}
     end = next((j for j in range(start + 1, len(lines)) if re.match(r"^#{1,4} ", lines[j])), len(lines))
@@ -168,7 +189,7 @@ def _sentence(text: str) -> str:
 
 def _last_merge(repo: Path, ref: str) -> str:
     code, out = _git(repo, "log", "-1", "--format=%h %s", ref)
-    return _ascii(out.strip()) if code == 0 and out.strip() else "unknown"
+    return _plain(out.strip()) if code == 0 and out.strip() else "unknown"
 
 
 def _last_entry(repo: Path, ref: str) -> str:
@@ -178,7 +199,7 @@ def _last_entry(repo: Path, ref: str) -> str:
         if line.startswith("## Unreleased"):
             inside = True
         elif inside and line.startswith("### "):
-            return _ascii(line[4:].strip())
+            return _plain(line[4:].strip())
         elif inside and line.startswith("## "):
             break
     return "no changelog entry found"
@@ -189,7 +210,7 @@ def _last_suite(repo: Path) -> str:
         recorded = json.loads((repo / "state" / "last-verify.json").read_text(encoding="utf-8"))
         line = str(recorded.get("result_line") or "").strip()
         if line:
-            return _ascii(line)
+            return _plain(line)
     except (OSError, ValueError):
         pass
     return "suite count unknown (state/last-verify.json is not in this container; take it from the first full run and record it)"
@@ -206,7 +227,7 @@ def _housekeeping(repo: Path, ref: str) -> str:
     ]
     if not rows:
         return "none"
-    shown = "; ".join(_ascii(" ".join(row.split())[:240]) for row in rows)
+    shown = "; ".join(_plain(" ".join(row.split())[:240]) for row in rows)
     return (
         'ledger rows the last merge added that still say "recorded by the next session": '
         f"{shown}. Fill each row's commit cell with that pull request's merge SHA (git log --first-parent origin/main)."
@@ -252,17 +273,30 @@ def build_values(repo: Path, ref: str, wanted: str | None) -> dict[str, str]:
             f" <<CLAUDE:quick-start: ROADMAP section 1 names {named or 'no session'} but the board's first startable "
             f"row is {session}; say which is right and fix section 1 first.>>"
         )
+    elif not row.get("startable"):
+        waiting = ", ".join(row["depends_on"]) or "its status"
+        note += (
+            f" <<CLAUDE:not-startable: {session} is not startable yet ({row['status']}; depends on {waiting}); "
+            "say what has to land first and whether this handoff should wait.>>"
+        )
+    size = fields.get("Size") or fields.get("Size and breakpoint")
+    breakpoint_text = fields.get("Breakpoint") or fields.get("Size and breakpoint")
+    if not info["found"]:
+        note += (
+            f" <<CLAUDE:card: no card heading was found for {session} in ROADMAP section 2.3, so read its status-board "
+            "row and brief instead and say so in the plan.>>"
+        )
     return {
         "SESSION": session,
         "SHORT": short,
         "SHORT_LOWER": short.lower(),
-        "TITLE": _ascii(info["title"]),
-        "ACCEPTANCE_LINE": _ascii(acceptance),
-        "BREAKPOINT_LINE": _ascii(
-            f"Breakpoint, from the card: {fields['Breakpoint']}" if "Breakpoint" in fields else "The card names no breakpoint."
+        "TITLE": _plain(info["title"]),
+        "ACCEPTANCE_LINE": _plain(acceptance),
+        "BREAKPOINT_LINE": _plain(
+            f"Breakpoint, from the card: {breakpoint_text}" if breakpoint_text else "The card names no breakpoint."
         ),
         "BRIEFS_CLAUSE": briefs_clause,
-        "SIZE": _ascii(_sentence(fields["Size"]) if "Size" in fields else "the card states no size."),
+        "SIZE": _plain(_sentence(size) if size else "the card states no size."),
         "LAST_MERGE": _last_merge(repo, ref),
         "LAST_ENTRY": _last_entry(repo, ref),
         "LAST_SUITE": _last_suite(repo),
@@ -291,7 +325,15 @@ def _words(text: str) -> int:
     return len(text.split())
 
 
-def check_prompt(text: str, repo: Path, ref: str = "origin/main", template_text: str | None = None) -> list[str]:
+def check_prompt(
+    text: str,
+    repo: Path,
+    ref: str = "origin/main",
+    template_text: str | None = None,
+    allow_paths: tuple[str, ...] = (),
+) -> list[str]:
+    """Why this prompt is not ready, one code per problem; empty means it is. `allow_paths` names files the
+    session will create, which cannot exist yet."""
     problems: list[str] = []
     if not text.startswith("/plan\n"):
         problems.append("NOT_PLAN_FIRST: the prompt must open with /plan")
@@ -314,14 +356,22 @@ def check_prompt(text: str, repo: Path, ref: str = "origin/main", template_text:
         problems.append("SECTION_ORDER: the numbered sections are out of order")
 
     for path in paths_in(text):
-        if not path.startswith(PATH_EXEMPT_PREFIXES) and not (repo / path).exists():
+        if path.startswith(PATH_EXEMPT_PREFIXES) or path in allow_paths:
+            continue
+        if not (repo / path).exists():
             problems.append(f"PATH_MISSING:{path}")
 
+    # The acceptance is the one claim the prompt makes about the card, so a check that cannot read
+    # the card says so instead of passing.
     named = re.search(r"starting (Session [0-9]{2}[a-z]?)", text)
     roadmap_text = read_at(repo, ref, "docs/ROADMAP.md")
-    if named and roadmap_text:
+    if roadmap_text is None:
+        problems.append(f"ROADMAP_NOT_AT_REF:{ref}: cannot compare the acceptance with the card")
+    elif named is None:
+        problems.append("SESSION_NOT_NAMED: the opening line no longer says 'starting Session NN'")
+    else:
         accepted = card(roadmap_text, named.group(1))["fields"].get("Acceptance")
-        if accepted and " ".join(accepted.split()) not in " ".join(text.split()):
+        if accepted and _plain(accepted) not in " ".join(text.split()):
             problems.append("ACCEPTANCE_MISSING: the card's acceptance is not in the prompt verbatim")
 
     lessons = next((line for line in text.splitlines() if line.startswith("- Lessons:")), None)
@@ -330,6 +380,13 @@ def check_prompt(text: str, repo: Path, ref: str = "origin/main", template_text:
     elif _words(lessons.split(":", 1)[1]) < MIN_LESSON_WORDS:
         problems.append(f"LESSONS_TOO_SHORT: fewer than {MIN_LESSON_WORDS} words after '- Lessons:'")
     return problems
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise Refusal("FILE_NOT_READABLE", f"{path}: {error.strerror or error}") from error
 
 
 def _fetch(repo: Path) -> None:
@@ -347,14 +404,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", help="write the prompt here (LF bytes) instead of stdout")
     parser.add_argument("--no-fetch", action="store_true", help="do not run git fetch origin main first (tests, offline)")
     parser.add_argument("--check", metavar="FILE", help="check a filled prompt instead of building one")
+    parser.add_argument("--allow-path", action="append", default=[], metavar="PATH", help="a file the session will create, so --check does not need it to exist (repeatable)")
     args = parser.parse_args(argv)
     repo = Path(args.repo)
 
     try:
+        if not repo.is_dir():
+            raise Refusal("REPO_NOT_FOUND", f"{repo} is not a directory")
         if args.check:
-            template_text = Path(args.template).read_text(encoding="utf-8")
-            prompt = Path(args.check).read_text(encoding="utf-8")
-            problems = check_prompt(prompt, repo, args.ref, template_text)
+            template_text = _read_text(Path(args.template))
+            prompt = _read_text(Path(args.check))
+            problems = check_prompt(prompt, repo, args.ref, template_text, tuple(args.allow_path))
             for problem in problems:
                 print(problem)
             if problems:
@@ -364,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_fetch:
             _fetch(repo)
         values = build_values(repo, args.ref, args.session)
-        text = fill(Path(args.template).read_text(encoding="utf-8"), values)
+        text = fill(_read_text(Path(args.template)), values)
     except Refusal as refusal:
         print(str(refusal), file=sys.stderr)
         return 2

@@ -58,7 +58,12 @@ def roadmap(status_02: str = "Pending", extra_ledger: str = "") -> str:
         "|---|---|---|---|---|---|---|---|---|\n"
         "| Session 01 | Standalone | First | Chunk P1 | a.py | V | none | `pytest tests/test_a.py` | Complete |\n"
         f"| Session 02 | Standalone | Second | Chunk P1 | b.py | S | Session 01 | `pytest tests/test_b.py -x` | {status_02} |\n"
+        "| Session 02b | Standalone | Second b | Chunk P1 | b2.py | S | Session 02 | `pytest tests/test_b2.py` | Pending |\n"
         "| Session 03 | Standalone | Third | none | c.py | P | Session 02 | `pytest tests/test_c.py` | Pending |\n"
+        "| Session 04 | Standalone | Fourth | none | d.py | S | Session 03 | `pytest tests/test_d.py` | Pending |\n"
+        "| Session 05 | Standalone | Fifth | none | e.py | S | Session 01 | `pytest tests/test_e.py` | Complete |\n"
+        "| Session 06 | Standalone | Sixth | none | f.py | S | Session 01 | `pytest tests/test_f.py` | Pending |\n"
+        "| Session 07 | Standalone | Seventh | none | g.py | S | Session 01 | `pytest tests/test_g.py` | Pending |\n"
         "<!-- roadmap-table:end -->\n\n"
         "<!-- operator-table:start -->\n"
         "| ID | Item | Unblocks | Status |\n"
@@ -72,10 +77,19 @@ def roadmap(status_02: str = "Pending", extra_ledger: str = "") -> str:
         "- **Breakpoint.** Stop after the parser if the diff passes 1,000 lines.\n"
         "- **Acceptance.** A bad row is refused by name; the fixture's entries\n"
         "  are labelled from supplied numbers only; suite green.\n\n"
+        "#### Session 02b: P1 part 2b, the second thing again\n\n"
+        "- **Depends on.** Session 02.\n"
+        "- **Acceptance.** The b card's own acceptance; suite green.\n\n"
         "#### Session 03: P1 part 3, the third thing\n\n"
         "- **Depends on.** Session 02.\n"
         "- **Scope.** Do the third thing.\n"
         "- **Size.** One file.\n\n"
+        "#### Sessions 04 to 05: the batch\n\n"
+        "- **Depends on.** Session 03.\n"
+        "- **Acceptance.** The batch's acceptance for both sessions.\n\n"
+        "#### Session 06: the sixth thing\n\n"
+        "- **Size and breakpoint.** One file; stop at the parser.\n"
+        f"- **Acceptance.** A row with a dash {chr(0x2014)} and a section sign § is refused; suite green.\n\n"
         "## 4. Ledger\n\n"
         "| Date | Session ID | Status Change | Commit SHA | Operator Notes |\n"
         "|---|---|---|---|---|\n"
@@ -373,3 +387,98 @@ def test_a_template_token_the_script_does_not_know_is_refused_not_left_in_the_pr
     with pytest.raises(next_prompt.Refusal) as caught:
         next_prompt.fill("hello {{NOT_A_TOKEN}}", {"SESSION": "Session 01"})
     assert caught.value.code == "TEMPLATE_TOKEN_UNKNOWN"
+
+
+# --- what the first review found ----------------------------------------------
+
+
+def _write_prompt(repo: Path, text: str, name: str = "prompt.md") -> Path:
+    target = repo.parent / name
+    target.write_bytes(text.encode("utf-8"))
+    return target
+
+
+def test_check_cannot_pass_when_it_cannot_read_the_card(repo, capsys, filled):
+    """A bad ref used to skip the acceptance comparison and print OK."""
+    changed = filled.replace("suite green.", "suite is whatever.")
+    target = _write_prompt(repo, changed)
+    code = next_prompt.main(["--repo", str(repo), "--check", str(target), "--ref", "origin/nonexistent"])
+    out = capsys.readouterr().out
+    assert code == 1 and "ROADMAP_NOT_AT_REF" in out and "OK:" not in out
+
+
+def test_check_says_so_when_the_opening_line_no_longer_names_the_session(repo, capsys, filled):
+    changed = filled.replace("You are starting Session 02", "You are beginning Session 02")
+    problems = next_prompt.check_prompt(changed, repo, "origin/main")
+    assert any(p.startswith("SESSION_NOT_NAMED") for p in problems)
+
+
+def test_a_repository_that_does_not_exist_is_a_refusal_not_a_traceback(tmp_path, capsys):
+    code = next_prompt.main(["--repo", str(tmp_path / "nowhere"), "--no-fetch"])
+    captured = capsys.readouterr()
+    assert code == 2 and "REPO_NOT_FOUND" in captured.err and "Traceback" not in captured.err
+    code = next_prompt.main(["--repo", str(tmp_path / "nowhere"), "--check", str(tmp_path / "x.md")])
+    assert code == 2
+
+
+def test_a_prompt_file_that_does_not_exist_is_a_refusal_not_a_failed_check(repo, capsys):
+    code = next_prompt.main(["--repo", str(repo), "--check", str(repo.parent / "absent.md")])
+    assert code == 2 and "FILE_NOT_READABLE" in capsys.readouterr().err
+
+
+def test_a_refusal_writes_no_output_file(repo, tmp_path, capsys):
+    target = tmp_path / "never.md"
+    code = next_prompt.main(["--repo", str(repo), "--no-fetch", "--out", str(target), "S99"])
+    assert code == 2 and not target.exists()
+
+
+def test_a_file_the_session_will_create_can_be_allowed(repo, capsys, filled):
+    text = filled + "\nwrite `tests/test_contest_facts.py` first\n"
+    assert any(p.startswith("PATH_MISSING:tests/test_contest_facts.py") for p in _checked(repo, capsys, text))
+    problems = next_prompt.check_prompt(text, repo, "origin/main", allow_paths=("tests/test_contest_facts.py",))
+    assert problems == []
+    target = _write_prompt(repo, text)
+    code = next_prompt.main(["--repo", str(repo), "--check", str(target), "--allow-path", "tests/test_contest_facts.py"])
+    assert code == 0
+
+
+def test_a_card_that_uses_a_dash_and_a_section_sign_still_passes_check(repo, capsys):
+    """The acceptance is printed with the dash as ' -- ' (Ben's rule), and check compares the same way."""
+    code, out = run_fill(repo, capsys, "S06")
+    assert code == 0
+    assert "A row with a dash -- and a section sign § is refused; suite green." in out
+    assert chr(0x2014) not in out
+    filled_text = fill_in(out)
+    materialize_paths(repo, filled_text)
+    assert next_prompt.check_prompt(filled_text, repo, "origin/main") == []
+
+
+def test_size_and_breakpoint_on_one_card_line_fills_both(repo, capsys):
+    code, out = run_fill(repo, capsys, "S06")
+    assert "The card says: One file; stop at the parser." in out
+    assert "Breakpoint, from the card: One file; stop at the parser." in out
+
+
+def test_a_batched_card_heading_serves_each_session_it_covers(repo, capsys):
+    code, out = run_fill(repo, capsys, "S04")
+    assert code == 0 and "the batch" in out.split("## 0.")[0]
+    assert 'Acceptance, verbatim: "The batch\'s acceptance for both sessions."' in out
+
+
+def test_a_card_for_02_is_not_taken_from_the_02b_card(repo, capsys):
+    code, out = run_fill(repo, capsys, "S02")
+    assert "The b card's own acceptance" not in out and "A bad row is refused by name" in out
+    code, out = run_fill(repo, capsys, "S02b")
+    assert 'Acceptance, verbatim: "The b card\'s own acceptance; suite green."' in out
+
+
+def test_a_session_with_no_card_says_so_instead_of_naming_the_id_as_a_title(repo, capsys):
+    code, out = run_fill(repo, capsys, "S07")
+    assert code == 0 and "<<CLAUDE:card:" in out and "<<CLAUDE:acceptance:" in out
+
+
+def test_a_session_that_is_not_startable_yet_gets_a_marker_and_a_complete_one_is_refused(repo, capsys):
+    code, out = run_fill(repo, capsys, "S04")
+    assert "<<CLAUDE:not-startable:" in out
+    code = next_prompt.main(["--repo", str(repo), "--no-fetch", "S05"])
+    assert code == 2 and "SESSION_NOT_STARTABLE" in capsys.readouterr().err

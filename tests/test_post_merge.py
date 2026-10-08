@@ -40,6 +40,7 @@ READ_ONLY_SUBCOMMANDS = {
     "stash",
     "worktree",
     "show",
+    "diff",
 }
 
 
@@ -390,12 +391,15 @@ def test_the_script_refuses_to_run_a_mutating_git_command(world, args):
 
 # --- output for people and for the shell -----------------------------------
 
+_CHECKOUT = r"C:\\Users\\benja\\Documents\\Claude\\nfl-dfs"
 _POWERSHELL_COMMANDS = (
+    re.compile(r"^Sync-NflDfs$"),
     re.compile(r"^Sync-NflDfs -Clean$"),
-    re.compile(r"^& 'C:\\Users\\benja\\Documents\\Claude\\nfl-dfs\\sync\.ps1' -Clean$"),
-    re.compile(r"^git log origin/main\.\.origin/claude/[A-Za-z0-9._/-]+ --oneline$"),
-    re.compile(r"^git log main\.\.claude/[A-Za-z0-9._/-]+ --oneline$"),
-    re.compile(r"^git push origin --delete claude/[A-Za-z0-9._/-]+$"),
+    re.compile(r"^& '" + _CHECKOUT + r"\\sync\.ps1' -Clean$"),
+    # git -C, so the block works from whatever folder Ben's PowerShell opened in.
+    re.compile(r"^git -C '" + _CHECKOUT + r"' log origin/main\.\.origin/claude/[A-Za-z0-9._/-]+ --oneline$"),
+    re.compile(r"^git -C '" + _CHECKOUT + r"' log main\.\.claude/[A-Za-z0-9._/-]+ --oneline$"),
+    re.compile(r"^git -C '" + _CHECKOUT + r"' push origin --delete claude/[A-Za-z0-9._/-]+$"),
 )
 
 
@@ -416,12 +420,20 @@ def test_powershell_output_is_copy_paste_blocks_of_whitelisted_commands(world, c
 
 
 def test_a_branch_name_with_shell_characters_never_reaches_a_command(world, capsys):
-    world.branch("claude/odd;name", push=False)
+    """Merged on both sides, so each of the three outputs that carry names is really exercised."""
+    sha = world.branch("claude/odd;name")
+    world.merge("claude/odd;name")
+    world.branch("claude/unmerged$(x)", push=False)
     code, text = world.check(capsys, "--no-open-prs", fmt="powershell")
-    assert "odd;name" not in "".join(re.findall(r"```powershell\n(.*?)\n```", text, re.DOTALL))
+    blocks = "".join(re.findall(r"```powershell\n(.*?)\n```", text, re.DOTALL))
+    assert "odd;name" not in blocks and "$(x)" not in blocks
     assert "UNSAFE_BRANCH_NAME" in text
     code, names = world.check(capsys, "--no-open-prs", fmt="local-merged-names")
-    assert "odd;name" not in names
+    assert "odd;name" not in names and "$(x)" not in names
+    code, report = world.check(capsys, "--no-open-prs", "--merged-pr-head", f"claude/odd;name={sha}")
+    assert report["claude_commands"] == []
+    assert "UNSAFE_BRANCH_NAME" in _codes(report["for_ben"])
+    assert _by_name(report, "claude/odd;name", "remote")["state"] == "MERGED"
 
 
 def test_commands_output_passes_the_bash_guard(world, capsys):
@@ -464,3 +476,148 @@ def test_the_report_is_deterministic(world, capsys):
     second = world.check(capsys, "--no-open-prs")
     assert first == second
     assert json.dumps(first[1], sort_keys=True) == json.dumps(second[1], sort_keys=True)
+
+
+# --- what the first review found: states that read IN_SYNC and were not ---------
+
+
+def test_a_local_only_claude_branch_with_commits_blocks_even_when_head_is_on_main(world, capsys):
+    """Archiving would lose its commits: they exist only in this container."""
+    world.branch("claude/side", push=False)
+    code, report = world.check(capsys, "--no-open-prs")
+    assert code == 2 and "LOCAL_ONLY_COMMITS" in _codes(report["blockers"])
+    assert any(b.get("branch") == "claude/side" for b in report["blockers"])
+
+
+def test_a_local_claude_branch_ahead_of_its_remote_blocks(world, capsys):
+    world.branch("claude/x")
+    git(world.work, "switch", "claude/x")
+    world.commit("more.txt", "more", "only here")
+    git(world.work, "switch", "main")
+    code, report = world.check(capsys, "--no-open-prs")
+    assert code == 2 and "LOCAL_ONLY_COMMITS" in _codes(report["blockers"])
+
+
+def test_a_follow_up_pushed_after_the_merge_is_not_in_sync(world, capsys):
+    """The session branch merged, then more work landed on a re-created head: pushed, never merged."""
+    world.branch("claude/e")
+    world.merge("claude/e")
+    git(world.work, "switch", "claude/e")
+    world.commit("followup.txt", "follow-up", "after the merge")
+    git(world.work, "push", "origin", "claude/e")
+    code, report = world.check(capsys, "--no-open-prs")
+    assert code == 2 and "HEAD_NOT_IN_ORIGIN_MAIN" in _codes(report["blockers"])
+    assert "UNPUSHED_COMMITS" not in _codes(report["blockers"])
+
+
+def test_local_only_commits_on_a_branch_that_is_not_mine_are_ben_s_to_see_not_a_blocker(world, capsys):
+    world.branch("codex/mine-not", push=False)
+    code, report = world.check(capsys, "--no-open-prs")
+    assert code == 0
+    assert any(i["code"] == "LOCAL_ONLY_COMMITS" and i["branch"] == "codex/mine-not" for i in report["for_ben"])
+
+
+def test_local_main_with_commits_the_remote_lacks_blocks(world, capsys):
+    world.commit("local_only.txt", "x", "committed on main, never pushed")
+    code, report = world.check(capsys, "--no-open-prs")
+    assert code == 2 and "MAIN_HAS_LOCAL_COMMITS" in _codes(report["blockers"])
+
+
+def test_local_main_that_is_only_behind_is_not_a_blocker(world, tmp_path, capsys):
+    sibling = tmp_path / "sibling"
+    git(tmp_path, "clone", world.origin.as_uri(), str(sibling))
+    world.commit("ahead.txt", "x", "pushed by a sibling", cwd=sibling)
+    git(sibling, "push", "origin", "main")
+    code, report = world.check(capsys, "--no-open-prs", fetch=True)
+    assert code == 0 and report["blockers"] == []
+
+
+def test_a_stash_alone_leaves_the_default_exit_at_zero_and_strict_exit_at_one(world, capsys):
+    (world.work / "README.md").write_bytes(b"changed\n")
+    git(world.work, "stash", "push", "-m", "ben's work")
+    code, report = world.check(capsys, "--no-open-prs")
+    assert code == 0 and report["verdict"] == "IN_SYNC"
+    code, report = world.check(capsys, "--no-open-prs", "--strict")
+    assert code == 1 and report["verdict"] == "ITEMS_FOR_BEN"
+
+
+def test_strict_does_not_soften_a_block(world, capsys):
+    (world.work / "scratch.txt").write_bytes(b"x\n")
+    code, report = world.check(capsys, "--no-open-prs", "--strict")
+    assert code == 2 and report["verdict"] == "BLOCKED"
+
+
+def test_a_git_error_in_the_ancestry_test_is_unknown_never_merged(world, capsys, monkeypatch):
+    world.branch("claude/a")
+    real = post_merge.run
+
+    def fake(repo, *args):
+        if args[0] == "merge-base":
+            return subprocess.CompletedProcess(args, 128, "", "fatal: not a valid object name")
+        return real(repo, *args)
+
+    monkeypatch.setattr(post_merge, "run", fake)
+    code, report = world.check(capsys, "--no-open-prs")
+    assert _by_name(report, "claude/a", "remote")["state"] == "UNKNOWN"
+    assert report["claude_commands"] == []
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("rev-list", "--output=x", "HEAD"),
+        ("diff", "--output=x", "--name-only"),
+        ("diff", "--ext-diff", "--name-only", "a", "b"),
+        ("log", "--output=x"),
+        ("show", "HEAD"),
+        ("rev-parse", "-c", "core.pager=x", "HEAD"),
+    ],
+)
+def test_the_allowlist_refuses_options_that_write_and_verbs_the_script_does_not_use(world, args):
+    with pytest.raises(post_merge.ForbiddenGit):
+        post_merge.git(world.work, *args)
+
+
+def test_git_runs_with_prompts_and_index_refresh_switched_off(world, monkeypatch):
+    seen = {}
+    real = subprocess.run
+
+    def spy(command, *args, **kwargs):
+        seen.update(kwargs.get("env") or {})
+        return real(command, *args, **kwargs)
+
+    monkeypatch.setattr(post_merge.subprocess, "run", spy)
+    post_merge.git(world.work, "status", "--porcelain")
+    assert seen.get("GIT_TERMINAL_PROMPT") == "0" and seen.get("GIT_OPTIONAL_LOCKS") == "0"
+
+
+# --- PowerShell for a checkout whose sync.ps1 is about to change ------------------
+
+
+def test_the_first_powershell_block_is_plain_sync_when_the_last_merge_changed_sync_ps1(world, capsys):
+    """An old sync.ps1 has no -Clean parameter: the first run has to pull the new one."""
+    git(world.work, "switch", "-c", "claude/sync-change")
+    world.commit("sync.ps1", "# new\n", "change sync.ps1")
+    git(world.work, "push", "-u", "origin", "claude/sync-change")
+    world.merge("claude/sync-change")
+    code, text = world.check(capsys, "--no-open-prs", fmt="powershell")
+    blocks = re.findall(r"```powershell\n(.*?)\n```", text, re.DOTALL)
+    assert blocks[:2] == ["Sync-NflDfs", "Sync-NflDfs -Clean"]
+    assert "switch to main yourself" in text
+
+
+def test_the_first_powershell_block_is_the_clean_sync_when_sync_ps1_did_not_change(world, capsys):
+    world.branch("claude/other")
+    world.merge("claude/other")
+    code, text = world.check(capsys, "--no-open-prs", fmt="powershell")
+    assert re.findall(r"```powershell\n(.*?)\n```", text, re.DOTALL)[0] == "Sync-NflDfs -Clean"
+
+
+def test_a_delete_command_for_ben_needs_the_open_pr_list_to_have_been_read(world, capsys):
+    """Without it a live branch with an open pull request looks unmerged."""
+    world.branch("claude/looks-abandoned", message="work in progress")
+    code, text = world.check(capsys, fmt="powershell")
+    assert "push origin --delete" not in text
+    assert "log origin/main..origin/claude/looks-abandoned" in text
+    code, text = world.check(capsys, "--no-open-prs", fmt="powershell")
+    assert "push origin --delete claude/looks-abandoned" in text

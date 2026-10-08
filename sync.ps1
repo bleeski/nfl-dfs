@@ -69,7 +69,9 @@ function Invoke-Clean {
     }
 
     Write-Host ""
-    & $py scripts\post_merge.py --no-fetch --no-open-prs --format text
+    # --strict: anything left for you (an unmerged branch, a stash, a worktree) is exit 1, so IN SYNC
+    # below is never printed above a list of things that are not.
+    & $py scripts\post_merge.py --no-fetch --no-open-prs --strict --format text
     $verdict = $LASTEXITCODE
 
     $localMain = (git rev-parse main).Trim()
