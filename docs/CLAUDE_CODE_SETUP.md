@@ -215,7 +215,9 @@ Three things it stops on, and what each means:
   initial commit has ever touched either file.
 
 **`Sync-NflDfs -Clean`, added 2026-10-08.** After a pull request that closes a
-session merges, Claude's reply ends with this one command in a PowerShell block.
+roadmap dev session merges, Claude's reply ends with this one command in a PowerShell block.
+A lineup run never starts the post-merge routine, so none of this appears after one; run
+`Sync-NflDfs -Clean` yourself whenever you want the same cleanup.
 It does everything above, then: switches to `main` if you were on a merged,
 clean `claude/*` branch; deletes each local `claude/*` branch that
 `scripts/post_merge.py` reports as merged, with `git branch -d` (git itself

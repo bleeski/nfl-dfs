@@ -863,6 +863,10 @@ selects exact Entry-ID assignments, runs quantitative and REFEREE QA, and then
 attempts certification. One run supports exactly one Contest ID and one entry
 fee; split a multi-contest DraftKings export into separate immutable runs.
 
+A lineup run ends at its handoff (Ben, 2026-10-08). A lineup run never starts the
+post-merge routine: no next prompt, sync check, branch cleanup or archive, and no
+`Session close:` line in a pull request it opens. See `.claude/rules/slate-operation.md`.
+
 ## Governed late swap
 
 Late swap is a separate immutable release decision built on a prior `CERTIFIED`

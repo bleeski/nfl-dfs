@@ -180,6 +180,17 @@ not read either.
   `data/inbox/slates/wk4-classic-2026-10-04/construction/manual_add_record.py`),
   rerun QA on the written file, and never write him a number.
 
+## A lineup run ends at the handoff
+
+Ben, 2026-10-08: the next prompt, the repo sync, the branch cleanup and the
+archive are for roadmap dev sessions only. A lineup run never starts the
+post-merge routine (`docs/claude/post_merge.md`). It ends with the report that
+`stops-and-reports.md` sets, and the session stays open for late swap, a rerun
+or a question about the file. A pull request it opens (slate inputs, records, a
+procedure fix) never carries the `Session close:` line, so its merge is a
+mid-session merge and gets one line saying so. Ben typing `/post-merge` is the
+only way the routine runs here, and it does not archive.
+
 ## Decide what is yours to decide
 
 Ben's standing preference is that a menu of approaches is work handed back to
