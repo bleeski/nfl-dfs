@@ -4,7 +4,9 @@ description: Close a Claude Code development session in the nfl-dfs repo: verifi
 disable-model-invocation: true
 ---
 
-Close out the current roadmap session.
+Close out the current roadmap session. `/close-out` ends a roadmap dev session only:
+a lineup run never uses it. Never write the `Session close:` line in any other pull
+request.
 
 1. Verification, with output pasted, not summarized: the card's verification
    command; the complete pinned suite under an extended timeout; `doctor`;

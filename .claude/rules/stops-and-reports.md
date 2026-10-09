@@ -76,3 +76,8 @@ End every run, slate or development, with three parts in this order:
    the exact suite line.
 3. **Found.** What was relaxed, what is left open, and anything you could not
    confirm, with where you looked.
+
+A lineup run ends at the three parts above. A lineup run never starts the
+post-merge routine: no next prompt, no sync check, no branch cleanup, no
+PowerShell blocks, no archive (Ben, 2026-10-08). Only a roadmap dev session
+continues into `docs/claude/post_merge.md` after `/close-out`.

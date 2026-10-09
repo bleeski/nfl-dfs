@@ -57,12 +57,18 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 
 ## After a merge (Ben, 2026-10-08)
 
-When the pull request that closes the session's work merges (its body carries the `Session close:` line, or Ben types
+When the pull request that closes a roadmap dev session's work merges (its body carries the `Session close:` line, or Ben types
 `/post-merge`), run `docs/claude/post_merge.md` before ending the turn: branch cleanup and a sync check (`scripts/post_merge.py`,
 read-only, so each command it prints is its own Bash call), the next session's handoff prompt in the Session 23d format
-(`scripts/next_prompt.py`, then `--check`), PowerShell for Ben in copy-paste blocks, the report, and `archive_session` last. A
+(`scripts/next_prompt.py`, then `--check`), PowerShell for Ben in copy-paste blocks, the report, and `archive_session` last (only
+when this session's merged pull request carries the marker or Ben asks for it). A
 merge that does not close the session gets one line saying so and nothing else. Whether Ben has allowed the archive call without a
 prompt, and the other unverified items, are listed at the end of that file.
+
+**Dev sessions only (Ben, 2026-10-08, second ruling).** A lineup run never starts the post-merge routine: no next prompt, no sync
+check, no branch cleanup, no PowerShell blocks, no archive, and no `Session close:` line in any pull request it opens. A slate
+record or a procedure fix that merges mid-run is a mid-session merge. Ben typing `/post-merge` still runs it anywhere, and archives
+only when the merged pull request carries the marker or he asks.
 
 ## Token discipline
 
