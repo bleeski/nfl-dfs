@@ -1,0 +1,191 @@
+{
+ "contest_assignment": {
+  "contest_assignment_version": "within_contest_diversity_v1",
+  "contest_count": 6,
+  "does_not_establish": [
+   "EXPECTED_POINTS_OR_VALUE",
+   "WIN_OR_CASH_LIKELIHOOD",
+   "OWNERSHIP_OR_DUPLICATION",
+   "PAYOUT_OR_CONTEST_WORTH",
+   "UPLOAD_CLEARANCE"
+  ],
+  "fixed_entry_ids": [],
+  "moved_rows": 6,
+  "pools": {
+   "template": 28
+  },
+  "restarts_run": 300,
+  "score_definition": "WORST_PAIR_COST_PLUS_MEAN_PAIR_COST_EVERY_CONTEST_COUNTS_ONCE",
+  "seconds": 1.231,
+  "seed": 20260929,
+  "single_entry_contest_count": 2,
+  "status": "IMPROVED",
+  "timed_out": false,
+  "total_score_after": "82.405263",
+  "total_score_before": "96.447368",
+  "unscored_entry_ids": [],
+  "weights": {
+   "registered": true,
+   "same_key_person": 12,
+   "same_stack_team": 6,
+   "same_thesis": 3,
+   "shared_people_exponent": 2
+  }
+ },
+ "contests_after": {
+  "196438224": {
+   "distinct_captains": 2,
+   "distinct_theses": 0,
+   "entries": 2,
+   "in_every_lineup": [
+    "DAL|Brandon Aubrey",
+    "DAL|Javonte Williams",
+    "TB|Jalon Daniels"
+   ],
+   "max_shared_people": 3,
+   "mean_shared_people": 3.0,
+   "score": "18.000000",
+   "worst_pair_cost": 9
+  },
+  "196438352": {
+   "distinct_captains": 2,
+   "distinct_theses": 0,
+   "entries": 2,
+   "in_every_lineup": [
+    "DAL|Brandon Aubrey",
+    "DAL|Dak Prescott"
+   ],
+   "max_shared_people": 2,
+   "mean_shared_people": 2.0,
+   "score": "8.000000",
+   "worst_pair_cost": 4
+  },
+  "196438555": {
+   "distinct_captains": 2,
+   "distinct_theses": 0,
+   "entries": 2,
+   "in_every_lineup": [
+    "DAL|Brandon Aubrey",
+    "DAL|Dak Prescott",
+    "DAL|George Pickens"
+   ],
+   "max_shared_people": 3,
+   "mean_shared_people": 3.0,
+   "score": "18.000000",
+   "worst_pair_cost": 9
+  },
+  "196526006": {
+   "distinct_captains": 7,
+   "distinct_theses": 0,
+   "entries": 20,
+   "in_every_lineup": [],
+   "max_shared_people": 5,
+   "mean_shared_people": 2.858,
+   "score": "38.405263",
+   "worst_pair_cost": 28
+  }
+ },
+ "contests_before": {
+  "196438224": {
+   "distinct_captains": 2,
+   "distinct_theses": 0,
+   "entries": 2,
+   "in_every_lineup": [
+    "DAL|Brandon Aubrey",
+    "DAL|George Pickens",
+    "TB|Jalon Daniels",
+    "TB|Ted Hurst III"
+   ],
+   "max_shared_people": 4,
+   "mean_shared_people": 4.0,
+   "score": "32.000000",
+   "worst_pair_cost": 16
+  },
+  "196438352": {
+   "distinct_captains": 2,
+   "distinct_theses": 0,
+   "entries": 2,
+   "in_every_lineup": [
+    "DAL|Dak Prescott",
+    "DAL|George Pickens"
+   ],
+   "max_shared_people": 2,
+   "mean_shared_people": 2.0,
+   "score": "8.000000",
+   "worst_pair_cost": 4
+  },
+  "196438555": {
+   "distinct_captains": 2,
+   "distinct_theses": 0,
+   "entries": 2,
+   "in_every_lineup": [
+    "DAL|Brandon Aubrey",
+    "DAL|Dak Prescott",
+    "DAL|Javonte Williams"
+   ],
+   "max_shared_people": 3,
+   "mean_shared_people": 3.0,
+   "score": "18.000000",
+   "worst_pair_cost": 9
+  },
+  "196526006": {
+   "distinct_captains": 7,
+   "distinct_theses": 0,
+   "entries": 20,
+   "in_every_lineup": [],
+   "max_shared_people": 5,
+   "mean_shared_people": 2.847,
+   "score": "38.447368",
+   "worst_pair_cost": 28
+  }
+ },
+ "does_not_establish": [
+  "EXPECTED_POINTS_OR_VALUE",
+  "WIN_OR_CASH_LIKELIHOOD",
+  "OWNERSHIP_OR_DUPLICATION",
+  "PAYOUT_OR_CONTEST_WORTH",
+  "UPLOAD_CLEARANCE",
+  "LINEUP_LEGALITY"
+ ],
+ "mapping_entry_to_source_entry": {
+  "5287486080": "5287486080",
+  "5287487136": "5287487136",
+  "5287490411": "5287490411",
+  "5287490455": "5287501241",
+  "5287491172": "5287501778",
+  "5287500747": "5287500747",
+  "5287501110": "5287501777",
+  "5287501241": "5287490455",
+  "5287501448": "5287501448",
+  "5287501767": "5287501767",
+  "5287501768": "5287501768",
+  "5287501769": "5287501769",
+  "5287501770": "5287501770",
+  "5287501771": "5287501771",
+  "5287501772": "5287501772",
+  "5287501773": "5287501773",
+  "5287501774": "5287501774",
+  "5287501775": "5287501775",
+  "5287501776": "5287501776",
+  "5287501777": "5287501110",
+  "5287501778": "5287491172",
+  "5287501779": "5287501779",
+  "5287501780": "5287501780",
+  "5287501781": "5287501781",
+  "5287501782": "5287501782",
+  "5287501783": "5287501783",
+  "5287501784": "5287501784",
+  "5287501785": "5287501785"
+ },
+ "mode": "SHOWDOWN",
+ "schema_version": "nfl_contest_diversification_v2",
+ "score": {
+  "after": 82.405263,
+  "before": 96.447368,
+  "captain_penalty": 12,
+  "restarts": 300,
+  "seed": 20260929,
+  "stack_penalty": 6,
+  "thesis_penalty": 3
+ }
+}

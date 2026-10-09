@@ -1,0 +1,430 @@
+{
+ "schema": "tb_dal_sd_ceiling_pass_record_v1",
+ "status": "PRIOR_ONLY / DO_NOT_UPLOAD",
+ "source_review": "outputs/20261008T232430Z-tb-dal-sd-r2/review/DK_REVIEW_ENTRY_tb-dal-sd-r2.csv",
+ "scores": "data/inbox/slates/tb-dal-sd-2026-10-08/construction/pool_scores.json",
+ "rules": {
+  "person_max_rows": 21,
+  "overlap_max": 5,
+  "min_gain": 1.0,
+  "salary_cap": 50000
+ },
+ "before": {
+  "total_prior": 2385.52,
+  "min_row_prior": 69.67,
+  "max_person": [
+   "DAL|WR|George Pickens",
+   16
+  ],
+  "people_over_half": [
+   [
+    "DAL|WR|George Pickens",
+    16
+   ],
+   [
+    "TB|QB|Jalon Daniels",
+    16
+   ],
+   [
+    "DAL|K|Brandon Aubrey",
+    16
+   ],
+   [
+    "TB|RB|Bucky Irving",
+    16
+   ],
+   [
+    "DAL|RB|Javonte Williams",
+    16
+   ],
+   [
+    "DAL|QB|Dak Prescott",
+    16
+   ]
+  ],
+  "top3_person_slots": 48,
+  "distinct_people": 16,
+  "captains": [
+   [
+    "DAL|WR|George Pickens",
+    5
+   ],
+   [
+    "DAL|RB|Javonte Williams",
+    5
+   ],
+   [
+    "DAL|QB|Dak Prescott",
+    5
+   ],
+   [
+    "TB|QB|Jalon Daniels",
+    5
+   ],
+   [
+    "DAL|WR|CeeDee Lamb",
+    5
+   ],
+   [
+    "TB|RB|Bucky Irving",
+    2
+   ],
+   [
+    "DAL|K|Brandon Aubrey",
+    1
+   ]
+  ],
+  "max_captain_share": 0.1786,
+  "max_pairwise_overlap": 4,
+  "mean_pairwise_overlap": 2.5741,
+  "rows_wr_te_captain_without_own_qb": 8,
+  "distinct_lineups": 28
+ },
+ "after": {
+  "total_prior": 2448.7,
+  "min_row_prior": 79.84,
+  "max_person": [
+   "DAL|K|Brandon Aubrey",
+   21
+  ],
+  "people_over_half": [
+   [
+    "DAL|K|Brandon Aubrey",
+    21
+   ],
+   [
+    "DAL|QB|Dak Prescott",
+    21
+   ],
+   [
+    "DAL|WR|George Pickens",
+    20
+   ],
+   [
+    "TB|QB|Jalon Daniels",
+    20
+   ],
+   [
+    "DAL|RB|Javonte Williams",
+    16
+   ]
+  ],
+  "top3_person_slots": 62,
+  "distinct_people": 16,
+  "captains": [
+   [
+    "DAL|WR|George Pickens",
+    5
+   ],
+   [
+    "DAL|RB|Javonte Williams",
+    5
+   ],
+   [
+    "DAL|QB|Dak Prescott",
+    5
+   ],
+   [
+    "TB|QB|Jalon Daniels",
+    5
+   ],
+   [
+    "DAL|WR|CeeDee Lamb",
+    5
+   ],
+   [
+    "TB|RB|Bucky Irving",
+    2
+   ],
+   [
+    "DAL|K|Brandon Aubrey",
+    1
+   ]
+  ],
+  "max_captain_share": 0.1786,
+  "max_pairwise_overlap": 5,
+  "mean_pairwise_overlap": 3.0661,
+  "rows_wr_te_captain_without_own_qb": 0,
+  "distinct_lineups": 28
+ },
+ "log": [
+  {
+   "step": "own_qb",
+   "entry_id": "5287501241",
+   "swaps": [
+    [
+     "TB|K|Chase McLaughlin",
+     "DAL|QB|Dak Prescott"
+    ],
+    [
+     "TB|WR|Emeka Egbuka",
+     "TB|WR|Ted Hurst III"
+    ]
+   ],
+   "row_prior_before": 84.36,
+   "row_prior_after": 89.46
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5287491172",
+   "swaps": [
+    [
+     "DAL|RB|Javonte Williams",
+     "DAL|QB|Dak Prescott"
+    ]
+   ],
+   "row_prior_before": 87.73,
+   "row_prior_after": 88.82
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5287501775",
+   "swaps": [
+    [
+     "DAL|RB|Javonte Williams",
+     "DAL|QB|Dak Prescott"
+    ]
+   ],
+   "row_prior_before": 87.49,
+   "row_prior_after": 88.58
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5287501778",
+   "swaps": [
+    [
+     "DAL|WR|CeeDee Lamb",
+     "DAL|QB|Dak Prescott"
+    ]
+   ],
+   "row_prior_before": 82.97,
+   "row_prior_after": 87.91
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5287501781",
+   "swaps": [
+    [
+     "TB|RB|Bucky Irving",
+     "DAL|QB|Dak Prescott"
+    ],
+    [
+     "TB|WR|Emeka Egbuka",
+     "DAL|K|Brandon Aubrey"
+    ]
+   ],
+   "row_prior_before": 73.8,
+   "row_prior_after": 79.84
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5287501783",
+   "swaps": [
+    [
+     "TB|WR|Chris Godwin Jr.",
+     "DAL|QB|Dak Prescott"
+    ],
+    [
+     "TB|WR|Emeka Egbuka",
+     "DAL|K|Brandon Aubrey"
+    ]
+   ],
+   "row_prior_before": 71.74,
+   "row_prior_after": 81.07
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5287501784",
+   "swaps": [
+    [
+     "TB|TE|Cade Otton",
+     "DAL|QB|Dak Prescott"
+    ],
+    [
+     "TB|WR|Chris Godwin Jr.",
+     "DAL|WR|KaVontae Turpin"
+    ]
+   ],
+   "row_prior_before": 70.81,
+   "row_prior_after": 79.72
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5287501785",
+   "swaps": [
+    [
+     "TB|TE|Cade Otton",
+     "DAL|QB|Dak Prescott"
+    ],
+    [
+     "TB|WR|Chris Godwin Jr.",
+     "DAL|WR|KaVontae Turpin"
+    ]
+   ],
+   "row_prior_before": 69.67,
+   "row_prior_after": 78.58
+  },
+  {
+   "step": "qb_ceiling",
+   "entry_id": "5287501448",
+   "swaps": [
+    [
+     "DAL|QB|Dak Prescott",
+     "DAL|WR|George Pickens"
+    ]
+   ],
+   "row_prior_before": 90.82,
+   "row_prior_after": 87.42
+  },
+  {
+   "step": "qb_ceiling",
+   "entry_id": "5287501768",
+   "swaps": [
+    [
+     "DAL|QB|Dak Prescott",
+     "DAL|WR|George Pickens"
+    ]
+   ],
+   "row_prior_before": 89.37,
+   "row_prior_after": 85.97
+  },
+  {
+   "step": "qb_ceiling",
+   "entry_id": "5287501773",
+   "swaps": [
+    [
+     "DAL|QB|Dak Prescott",
+     "DAL|WR|George Pickens"
+    ]
+   ],
+   "row_prior_before": 89.01,
+   "row_prior_after": 85.6
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501780",
+   "swaps": [
+    [
+     "DAL|WR|CeeDee Lamb",
+     "DAL|RB|Javonte Williams"
+    ]
+   ],
+   "gain": 3.85
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501782",
+   "swaps": [
+    [
+     "DAL|WR|CeeDee Lamb",
+     "DAL|RB|Javonte Williams"
+    ]
+   ],
+   "gain": 3.85
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501782",
+   "swaps": [
+    [
+     "TB|WR|Chris Godwin Jr.",
+     "TB|QB|Jalon Daniels"
+    ]
+   ],
+   "gain": 5.53
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501780",
+   "swaps": [
+    [
+     "TB|RB|Bucky Irving",
+     "DAL|WR|George Pickens"
+    ]
+   ],
+   "gain": 3.42
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501783",
+   "swaps": [
+    [
+     "TB|RB|Bucky Irving",
+     "TB|QB|Jalon Daniels"
+    ]
+   ],
+   "gain": 2.24
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501785",
+   "swaps": [
+    [
+     "TB|RB|Bucky Irving",
+     "TB|QB|Jalon Daniels"
+    ]
+   ],
+   "gain": 2.24
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501784",
+   "swaps": [
+    [
+     "TB|RB|Bucky Irving",
+     "TB|QB|Jalon Daniels"
+    ]
+   ],
+   "gain": 2.24
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501772",
+   "swaps": [
+    [
+     "TB|K|Chase McLaughlin",
+     "DAL|K|Brandon Aubrey"
+    ]
+   ],
+   "gain": 1.54
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501784",
+   "swaps": [
+    [
+     "TB|K|Chase McLaughlin",
+     "DAL|K|Brandon Aubrey"
+    ]
+   ],
+   "gain": 1.54
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5287501773",
+   "swaps": [
+    [
+     "TB|K|Chase McLaughlin",
+     "DAL|K|Brandon Aubrey"
+    ]
+   ],
+   "gain": 1.54
+  }
+ ],
+ "changed_entry_ids": [
+  "5287491172",
+  "5287501241",
+  "5287501448",
+  "5287501768",
+  "5287501772",
+  "5287501773",
+  "5287501775",
+  "5287501778",
+  "5287501780",
+  "5287501781",
+  "5287501782",
+  "5287501783",
+  "5287501784",
+  "5287501785"
+ ]
+}
