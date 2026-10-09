@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from .contest_facts import HEADER as CONTEST_FACTS_HEADER  # `nfl_contest_facts_v1` (Session 23d): one definition
+
 # v2 adds exactly one field, `qb_depth_role_evidence_json`, so the quarterback
 # depth-chart package P1 landed can reach the operating path.
 #
@@ -27,7 +29,13 @@ from typing import Iterable, Mapping
 # v4 (Session 61) adds exactly one field, `construction_judgment_json`: the Classic construction
 # judgment (`nfl_classic_construction_judgment_v1`), the people the thesis build must roster in a
 # minimum of rows. v3, v2 and v1 stay accepted and unchanged by the same rule.
-COWORK_REQUEST_VERSION = "nfl_cowork_run_request_v4"
+#
+# v5 (Session 23d) adds exactly one field, `contest_facts_csv`: the operator's four-column contest facts file
+# (`nfl_contest_facts_v1`), which labels entries whose contest pays under 5%. v4 and earlier stay accepted and
+# unchanged by the same rule.
+COWORK_REQUEST_VERSION_V5 = "nfl_cowork_run_request_v5"
+COWORK_REQUEST_VERSION = COWORK_REQUEST_VERSION_V5
+COWORK_REQUEST_VERSION_V4 = "nfl_cowork_run_request_v4"
 COWORK_REQUEST_VERSION_V3 = "nfl_cowork_run_request_v3"
 COWORK_REQUEST_VERSION_V2 = "nfl_cowork_run_request_v2"
 COWORK_REQUEST_VERSION_V1 = "nfl_cowork_run_request_v1"
@@ -35,14 +43,16 @@ SUPPORTED_REQUEST_VERSIONS = (
     COWORK_REQUEST_VERSION_V1,
     COWORK_REQUEST_VERSION_V2,
     COWORK_REQUEST_VERSION_V3,
-    COWORK_REQUEST_VERSION,
+    COWORK_REQUEST_VERSION_V4,
+    COWORK_REQUEST_VERSION_V5,
 )
 # Fields introduced after v1, and the first version that may carry each. A
 # request may carry a field from its own version or an earlier one.
 REQUEST_FIELDS_ADDED_AFTER_V1 = {
     "qb_depth_role_evidence_json": COWORK_REQUEST_VERSION_V2,
     "delivery_deadline_utc": COWORK_REQUEST_VERSION_V3,
-    "construction_judgment_json": COWORK_REQUEST_VERSION,
+    "construction_judgment_json": COWORK_REQUEST_VERSION_V4,
+    "contest_facts_csv": COWORK_REQUEST_VERSION_V5,
 }
 
 
@@ -184,6 +194,7 @@ PATH_FIELDS = (
     "portfolio_policy_json",
     "ownership_brackets_csv",
     "source_ledger_json",
+    "contest_facts_csv",
 )
 # Request fields that hold operator lists. A command-line value for one of these
 # on a reloaded request is merged with what the request already carries.
@@ -244,6 +255,8 @@ class CoworkRunRequest:
     portfolio_policy_json: str | None = None
     ownership_brackets_csv: str | None = None
     source_ledger_json: str | None = None
+    # v5 (Session 23d): the operator's contest facts file; labels entries whose contest pays under 5%.
+    contest_facts_csv: str | None = None
     advertised_prize_value: float | None = None
     ticket_face_value: float | None = None
     field_size: int | None = None
@@ -462,6 +475,7 @@ def classify_csv(path: str | Path) -> str | None:
         TEAM_PROJECTION_HEADER: "team_projection_csv",
         PLAYER_OPPORTUNITY_HEADER: "player_opportunity_csv",
         OWNERSHIP_HEADER: "ownership_brackets_csv",
+        CONTEST_FACTS_HEADER: "contest_facts_csv",
         CLASSIC_ASSIGNMENT_HEADER: "assignment_csv",
         SHOWDOWN_ASSIGNMENT_HEADER: "assignment_csv",
     }
@@ -546,6 +560,7 @@ def resolve_request_inputs(
     # A request's own recorded `input_dir` (normally null after snapshotting)
     # keeps the old precedence so a deterministic rerun stays deterministic.
     fresh_attachments = input_dir not in (None, "")
+    attached: list[str] = []
     for name in PATH_FIELDS:
         explicit = overrides.get(name)
         if explicit not in (None, ""):
@@ -557,6 +572,10 @@ def resolve_request_inputs(
             payload.get(name) in (None, "") or fresh_attachments
         ):
             payload[name] = str(discovered.classified[name])
+            attached.append(name)
+    # A file discovery attaches for a field a later version added makes this run's request that version, the way a
+    # command-line value does (`request_version_for`); the request it was reloaded from is untouched.
+    payload["schema_version"] = request_version_for(str(payload.get("schema_version")), attached)
     # A slate run folder keeps its frozen prior package beside its inputs. Find
     # it when it is there and confinement allows it; when it is not, the
     # prior_review blocker names it rather than this silently proceeding.

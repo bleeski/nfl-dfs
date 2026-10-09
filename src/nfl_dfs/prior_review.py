@@ -64,7 +64,7 @@ from .dk import (
     parse_salaries,
     reconcile_template,
 )
-from . import contest_assignment
+from . import contest_assignment, contest_facts
 from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_bytes, sha256_file
@@ -1598,6 +1598,7 @@ def run_prior_review(
     offensive_role_evidence_json: str | Path | None = None,
     qb_depth_role_evidence_json: str | Path | None = None,
     construction_judgment_json: str | Path | None = None,
+    contest_facts_csv: str | Path | None = None,
     portfolio_policy: NormalizedPortfolioPolicy | NormalizedClassicPortfolioPolicy | None = None,
     portfolio_policy_source_path: str | Path | None = None,
     portfolio_policy_source_sha256: str | None = None,
@@ -1626,6 +1627,10 @@ def run_prior_review(
     people the thesis build must roster in a minimum of rows. A file that cannot be used (malformed,
     bound to another salary file, expired at lock, Showdown) is dropped by name in
     `reports["construction_judgment"]` and the run goes on without it.
+    `contest_facts_csv` (Session 23d) is the operator's `nfl_contest_facts_v1` file. Its block (`NOT_SUPPLIED`,
+    `APPLIED`, `PARTIAL` or `REFUSED`) is `reports["contest_facts"]`, and its own hash-bound artifact
+    `selection/contest_facts.json` is written whenever a file was supplied; nothing the file says changes a lineup,
+    an assignment or a gate, and a file that cannot be used is named and the run goes on without it.
     """
 
     run_dir = Path(run_root).resolve()
@@ -2686,6 +2691,20 @@ def run_prior_review(
         for player in slate.players
     }
     selection_dir = run_dir / "selection"
+    # Session 23d: each entry's paid fraction and the `FIRST_PLACE_OBJECTIVE` label, from the operator's contest facts
+    # file and the template's own Contest IDs and fees. A fact about a contest and never an input to selection: it
+    # follows the contest step, moves nothing, and never raises (a file that cannot be used is a named, refused block).
+    # Its artifact is hash-bound beside the step's so every exit reads the same bytes (Classic's selection record is an
+    # allowlist and carries no such key).
+    facts_block = contest_facts.build_block(
+        path=contest_facts_csv,
+        entries=tuple((row.entry_id, row.contest_id, row.entry_fee) for row in template.authorizations),
+    )
+    reports["contest_facts"] = facts_block
+    if facts_block["status"] != contest_facts.STATUS_NOT_SUPPLIED:
+        facts_artifact = selection_dir / contest_facts.ARTIFACT_NAME
+        hashes["contest_facts"] = _write_canonical_json(facts_artifact, facts_block)
+        artifacts["contest_facts"] = str(facts_artifact)
     role_resolution = scores.kicker_role_resolution
     offensive_resolution = scores.offensive_role_resolution
     selected_ids = {
@@ -3627,8 +3646,12 @@ def run_prior_review(
                 classic_review = create_classic_review_package(
                     salary_path=salary_path,
                     entry_path=entry_path,
-                    artifacts=artifacts,
-                    expected_hashes=hashes,
+                    # The label artifact is read by its own guarded path and kept out of C3's hash checkpoint, so a
+                    # label can never stop the export (a mismatch is one registered `P` code in the review).
+                    artifacts={key: value for key, value in artifacts.items() if key != "contest_facts"},
+                    expected_hashes={key: value for key, value in hashes.items() if key != "contest_facts"},
+                    contest_facts_path=artifacts.get("contest_facts"),
+                    contest_facts_sha256=hashes.get("contest_facts"),
                     audit_at=(datetime.now(timezone.utc) if live_run else as_of),
                     output_path=review_dir / f"DK_REVIEW_ENTRY_{_safe_label(label)}.csv",
                     output_dir=review_dir,

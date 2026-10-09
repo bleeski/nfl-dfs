@@ -30,6 +30,7 @@ from .classic_portfolio_policy import (
     write_classic_portfolio_policy_validation,
     write_normalized_classic_portfolio_policy,
 )
+from . import contest_facts
 from .preflight import historical_artifact_integrity, live_pre_upload_check
 from .candidate_families import coverage_report
 from .concentration import (
@@ -3393,6 +3394,7 @@ def _run_prior_review_profile(
                 offensive_role_evidence_json=request.offensive_role_evidence_json,
                 qb_depth_role_evidence_json=request.qb_depth_role_evidence_json,
                 construction_judgment_json=request.construction_judgment_json,
+                contest_facts_csv=request.contest_facts_csv,
                 portfolio_policy=portfolio_policy,
                 portfolio_policy_source_path=portfolio_policy_source_path,
                 portfolio_policy_source_sha256=portfolio_policy_source_sha256,
@@ -3642,6 +3644,11 @@ def _run_prior_review_profile(
         # Session 61 (R37): the Classic backup-quarterback default's gap, the construction judgment and the
         # judgment pass, by name (`P`, never a stop). Appended, so a blocker that withholds a file stays first.
         blockers.extend(_classic_judgment_limitations(outcome.reports))
+        # Session 23d: a contest facts file that was refused, left an entry's contest uncovered or named another
+        # fee travels with the file by name (`P`, never a stop). Appended, so a blocker that withholds stays first.
+        facts_block = outcome.reports.get("contest_facts")
+        if isinstance(facts_block, Mapping):
+            blockers.extend(contest_facts.limitations(facts_block))
     # Session 50: a failed contest-assignment step left the solver's order in the
     # file; it ships with the gap named (`P`, never a stop).
     contest_step_report = outcome.reports.get("contest_assignment")
@@ -4046,6 +4053,8 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         request_roots.append(Path(args.qb_depth_role_evidence_json).resolve().parent)
     if getattr(args, "construction_judgment_json", None):
         request_roots.append(Path(args.construction_judgment_json).resolve().parent)
+    if getattr(args, "contest_facts_csv", None):
+        request_roots.append(Path(args.contest_facts_csv).resolve().parent)
     if getattr(args, "portfolio_policy_json", None):
         request_roots.append(Path(args.portfolio_policy_json).resolve().parent)
     if getattr(args, "official_status_csv", None):
@@ -4086,6 +4095,7 @@ def _command_cowork_run(args: argparse.Namespace) -> int:
         ("offensive_role_evidence_json", "offensive_role_evidence_json"),
         ("qb_depth_role_evidence_json", "qb_depth_role_evidence_json"),
         ("construction_judgment_json", "construction_judgment_json"),
+        ("contest_facts_csv", "contest_facts_csv"),
         ("portfolio_policy_json", "portfolio_policy_json"),
         ("official_status_csv", "official_status_csv"),
         ("lineup_count", "lineup_count"),
@@ -5072,6 +5082,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Classic construction judgment (nfl_classic_construction_judgment_v1): people the thesis build must"
             " roster in a minimum of rows, bound to this salary file's SHA-256; writes no model value"
+        ),
+    )
+    cowork.add_argument(
+        "--contest-facts-csv",
+        help=(
+            "the contest facts file (nfl_contest_facts_v1: contest_id,field_size,places_paid,entry_fee per contest,"
+            " copied by hand from the lobby): labels entries whose contest pays under 5% FIRST_PLACE_OBJECTIVE;"
+            " a fact from the supplied numbers, never a forecast (request v5)"
         ),
     )
     cowork.add_argument("--portfolio-policy-json")

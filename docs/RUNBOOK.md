@@ -651,6 +651,46 @@ CSV files are reported and ignored. It then:
 An exit code of 2 means `DO_NOT_UPLOAD`; it is the expected result for a
 two-file-only first pass.
 
+## Contest screening checklist (manual; the engine reads none of it)
+
+The critique (`red-team-critique.md` V9, and the `plan.md` locked default that promised this checklist) argues that which
+contests to enter moves long-run results more than any lineup decision the engine makes. The engine does not choose them:
+the reserved entries arrive as given. Before a slate, for
+each contest holding reserved entries, read these off the DraftKings lobby by hand. Nothing here is fetched, inferred or
+used as a model number, and a contest name never supplies any of it: a contest called "satellite" or "single entry" may pay
+anything, so copy the numbers, never the name's implication.
+
+| Check | Read from the lobby | What it tells you |
+|---|---|---|
+| Field size and max entries | total entries the contest holds or allows; the per-user maximum | your share of the field is reserved entries ÷ field size; a per-user maximum below the reserved count is a reservation to fix before lock |
+| Places paid ÷ field size | places paid and field size | the number the facts file carries below; under 5% the engine labels the contest `FIRST_PLACE_OBJECTIVE`, a fact about the contest and never a forecast |
+| Payout shape | first-place prize as a share of the prize pool; the minimum-cash prize as a multiple of the fee | how steeply the contest pays the very top, which is the only finish a first-place objective can use |
+| Overlay and rake | guaranteed prize pool; entry fee | overlay = guaranteed pool − field size × fee, positive when the guarantee needs more entries than are in; rake = 1 − pool ÷ (field size × fee) for a contest that fills |
+| Ticket utility | for a satellite, the face value of the ticket awarded | tickets are worth their face value (`plan.md` locked default), not cash |
+
+**The facts file.** The numbers above that the engine can use are four per contest, copied by hand into a CSV with exactly
+this header (`nfl_contest_facts_v1`, `docs/DATA_CONTRACTS.md`):
+
+```
+contest_id,field_size,places_paid,entry_fee
+```
+
+`contest_id` is the DraftKings Contest ID from the entries file (digits only); `field_size` and `places_paid` are plain
+integers (no commas); `entry_fee` is a plain decimal such as `20` or `0.25` (a leading `$` is accepted). Pass it with
+`--contest-facts-csv <path>`, or drop it beside the two DraftKings files: it is classified by its header like they are,
+whatever it is named (two such files in one input directory are refused at command start, like two entry files). A row for
+a contest you hold no entries in is ignored and named. A `--profile prior_review` run (the operating profile) then adds a
+"Contest facts" section to the Showdown and Classic C3 reviews and the record `reports["contest_facts"]` (with a
+hash-bound `selection/contest_facts.json`) on every exit, including Classic C1 and C2, whose files carry no label because
+a DraftKings-shaped CSV cannot; on the default `diagnostic` profile the file is snapshotted and hashed and nothing reads
+it. It changes no lineup, no assignment and no gate. A file with any bad row is refused whole, with
+every bad row named, and the run goes on without labels (`CONTEST_FACTS_REFUSED`); a contest with no row, or a row whose
+fee differs from the entry file's, is named and unlabelled (`CONTEST_FACTS_INCOMPLETE`,
+`CONTEST_FACTS_FEE_DISAGREES_WITH_ENTRIES`). A run with no file says `NOT_SUPPLIED` in its result and writes the reviews it
+always wrote, so a review with no Contest facts section means no labels were computed, not that no contest pays under 5%.
+A path that does not exist stops at command start like any other input path. The file never clears
+`CONTEST_PAYOUT_REQUIRED` or `FIELD_SIZE_REQUIRED`: a facts row is not a payout table.
+
 ## Complete the run request
 
 The generated request uses schema `nfl_cowork_run_request_v1`. Paths written by
@@ -691,6 +731,8 @@ Populate only source-backed values:
 - `ticket_face_value`: required for a satellite.
 - `field_size`: exact total contest entries; required for manual and
   model-assisted certification.
+- `contest_facts_csv` (request v5): the optional four-column facts file of the screening checklist above; labels entries
+  whose contest pays under 5%, never changes a lineup.
 - `objective`: `LARGE_GPP`, `SMALL_GPP`, `CASH`, `WTA`, or `SATELLITE`.
 - `team_projection_csv` and `player_opportunity_csv`: both are required for a
   model-assisted build. They must be produced by validated deterministic

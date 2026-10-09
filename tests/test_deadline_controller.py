@@ -501,7 +501,7 @@ def test_a_c2_policy_whose_declared_search_does_not_fit_takes_rung_4(tmp_path, m
     assert report["RELEASE_DECISION"] == "DO_NOT_UPLOAD"
 
 
-def test_a_replay_records_its_stages_its_request_v4_and_the_hosts_candidate_rate(tmp_path, monkeypatch):
+def test_a_replay_records_its_stages_its_request_v5_and_the_hosts_candidate_rate(tmp_path, monkeypatch):
     code, report, root = _classic(tmp_path, monkeypatch, run_id="measured", policy=_template_policy,
                                   deadline="2099-01-01T00:00:00+00:00")
     assert code == 0 and report["stage"] == "PRIOR_ONLY_CLASSIC_C3_REVIEW_EXPORT"
@@ -514,7 +514,7 @@ def test_a_replay_records_its_stages_its_request_v4_and_the_hosts_candidate_rate
                for item in record["stages"] if item["outcome"] != "SKIPPED")
     assert _truth_codes(report)["DEADLINE_AFTER_EARLIEST_LOCK"] == "P"  # the replay says so
     request = json.loads((tmp_path / "runs" / "measured" / "run_request.json").read_text(encoding="utf-8"))
-    assert request["schema_version"] == "nfl_cowork_run_request_v4"
+    assert request["schema_version"] == "nfl_cowork_run_request_v5"
     assert request["delivery_deadline_utc"] == "2099-01-01T00:00:00+00:00"
     # The C2 bank's measured rate, for this host, where make_classic_policy reads it.
     rate = record["candidate_rate"]

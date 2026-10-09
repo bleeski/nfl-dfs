@@ -19,7 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from . import contest_assignment
+from . import contest_assignment, contest_facts
 from .contracts import EngineMode, SlateContract
 from .dk import EntryTemplate, parse_entries, parse_entry_bytes, parse_salaries
 from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
@@ -322,6 +322,56 @@ def _contest_assignment_html(block: Mapping[str, object]) -> list[str]:
     ]
     if block.get("single_entry_contest_count"):
         sections.append(f'<p>{_escape(block.get("single_entry_contest_count"))} contests hold one entry and are left as they were.</p>')
+    return sections
+
+
+def _dollars(cents: object) -> str:
+    return f"${cents // 100}.{cents % 100:02d}" if isinstance(cents, int) and not isinstance(cents, bool) else "none"
+
+
+def _contest_facts_html(block: Mapping[str, object]) -> list[str]:
+    """The Contest facts section (Session 23d): each entry's paid fraction and label, from the operator's numbers."""
+
+    paragraph = (
+        f'<p>{_escape(block.get("contest_facts_label_version"))}: status {_escape(block.get("status"))}. '
+        f'{_escape(block.get("meaning"))}. A label is places paid divided by field size from the numbers the operator '
+        f'supplied, strictly under {_escape(block.get("threshold_paid_fraction"))}; it is a fact about the contest, '
+        "never a forecast, and it moved no lineup. It does not establish "
+        f'{_escape(", ".join(str(x) for x in _sequence(block.get("does_not_establish"), "contest_facts.does_not_establish", [])))}.'
+        "</p>"
+    )
+    sections = ["<h2>Contest facts: places paid and the first-place label</h2>", paragraph]
+    problems = [str(item) for item in _sequence(block.get("problems"), "contest_facts.problems", [])]
+    if problems:
+        sections.append(f'<p>The file was refused whole: {_escape(", ".join(problems))}.</p>')
+    contests = [row for row in _sequence(block.get("contests"), "contest_facts.contests", []) if isinstance(row, Mapping)]
+    if contests:
+        sections.append(_html_table(
+            ("Contest ID", "Entries", "Facts", "Field size", "Places paid", "Paid fraction", "Label", "Fee (file, entries)"),
+            [
+                (
+                    row.get("contest_id"), row.get("entry_count"), row.get("facts_state"), row.get("field_size"),
+                    row.get("places_paid"),
+                    "none" if row.get("paid_fraction") is None
+                    else f'{row.get("paid_fraction")} ({row.get("paid_fraction_decimal")})',
+                    row.get("label") or "none",
+                    f'{_dollars(row.get("facts_fee_cents"))}, '
+                    + "/".join(_dollars(cents) for cents in _sequence(row.get("entry_file_fee_cents"), "fees", [])),
+                )
+                for row in contests
+            ],
+        ))
+        sections.append(_html_table(
+            ("Entry ID", "Contest ID", "Facts", "Paid fraction", "Label"),
+            [
+                (row.get("entry_id"), row.get("contest_id"), row.get("facts_state"),
+                 row.get("paid_fraction") or "none", row.get("label") or "none")
+                for row in _sequence(block.get("entries"), "contest_facts.entries", []) if isinstance(row, Mapping)
+            ],
+        ))
+    unused = [str(item) for item in _sequence(block.get("unused_contest_ids"), "contest_facts.unused", [])]
+    if unused:
+        sections.append(f'<p>Rows for contests with no reserved entry were ignored: {_escape(", ".join(unused))}.</p>')
     return sections
 
 
@@ -1249,6 +1299,9 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
     contest_block = data.get("contest_assignment")
     if isinstance(contest_block, Mapping):
         sections.extend(_contest_assignment_html(contest_block))
+    facts_block = data.get("contest_facts")
+    if isinstance(facts_block, Mapping):
+        sections.extend(_contest_facts_html(facts_block))
 
     coverage = data.get("pool_coverage")
     if isinstance(coverage, Mapping):
@@ -1417,6 +1470,9 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
     contest_block = data.get("contest_assignment")
     if isinstance(contest_block, Mapping):
         sections.extend(_contest_assignment_html(contest_block))
+    facts_block = data.get("contest_facts")
+    if isinstance(facts_block, Mapping):
+        sections.extend(_contest_facts_html(facts_block))
     theses_block = data.get("theses")
     if isinstance(theses_block, Mapping):
         sections.extend(_theses_html(theses_block))
@@ -1978,6 +2034,20 @@ def create_readable_review(
     )
     problems.extend(contest_problems)
 
+    # Session 23d: each entry's paid fraction and `FIRST_PLACE_OBJECTIVE` label, read from the run's own hash-bound
+    # artifact and recomputed from the delivered entry file's Contest IDs and fees and the artifact's supplied numbers.
+    # A label is a fact and never a gate: a record that cannot be read or does not rebuild to itself is one registered
+    # `P` code (`CONTEST_FACTS_REVIEW_MISMATCH:<kind>`), and a run that supplied no file has no section at all.
+    facts_payload: dict[str, object] | None = None
+    facts_artifact = artifacts.get("contest_facts")
+    if facts_artifact:
+        facts_record, facts_unread = contest_facts.load_record(facts_artifact, expected_hashes.get("contest_facts"))
+        facts_payload, facts_mismatch = contest_facts.review_block(
+            facts_record,
+            tuple((row.entry_id, row.contest_id, row.entry_fee) for row in reparsed_template.authorizations),
+        )
+        problems.extend([*facts_unread, *facts_mismatch])
+
     theses_block: dict[str, object] | None = None
     if policy_view is not None:
         audit_path_raw = artifacts.get("portfolio_policy_audit")
@@ -2135,6 +2205,8 @@ def create_readable_review(
     }
     if theses_block is not None:
         data["theses"] = theses_block  # an optional key: a run with no active theses has none, and no byte moves
+    if facts_payload is not None:
+        data["contest_facts"] = facts_payload  # likewise: a run with no facts file has none, and no byte moves
     json_payload = _canonical_json_bytes(data)
     json_sha = sha256_bytes(json_payload)
     html_payload = _render_html(data, data_sha256=json_sha)

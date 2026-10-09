@@ -602,7 +602,8 @@ def test_a_deadline_flag_on_a_reloaded_v2_request_makes_a_v3_run_request(
 
 
 def test_a_v4_request_carries_and_confines_the_construction_judgment(tmp_path: Path) -> None:
-    from nfl_dfs.cowork import COWORK_REQUEST_VERSION
+    # Session 23d moved the default to v5; this test is about v4, so it names v4 the way the v3 test above does.
+    from nfl_dfs.cowork import COWORK_REQUEST_VERSION_V4 as COWORK_REQUEST_VERSION
 
     assert COWORK_REQUEST_VERSION == "nfl_cowork_run_request_v4"
     judgment = tmp_path / "judgment.json"
