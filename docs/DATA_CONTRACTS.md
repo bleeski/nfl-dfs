@@ -1065,7 +1065,7 @@ The current-role report contains exactly one finding per offensive person:
 
 | State | Selection treatment |
 |---|---|
-| `OBSERVED_HISTORY_ZERO` | Exclude; historical zero does not establish current nonparticipation |
+| `OBSERVED_HISTORY_ZERO` | Exclude; historical zero does not establish current nonparticipation, except a quarterback the QB depth evidence makes his team's effective starter, who is selectable as a diagnostic (Session 58, below) |
 | `MISSING_HISTORY` | Exclude with zero share (2026-09-10), except a quarterback the QB depth evidence makes his team's effective starter, who is selectable as a diagnostic (Session 54, below); no prior-season row exists anywhere, so there is no source-bound number to carry. The person is named with FLEX/CPT salary in `pool_coverage` (`OFFENSIVE_ROLE_GATE_EXCLUDED:OFFENSIVE_MISSING_HISTORY`). A person with no prior record at all still blocks (`OFFENSIVE_PRIOR_ROW_MISSING`) |
 | `TRANSFER_PRIOR_UNVERIFIED` | Keep as a diagnostic (2026-09-10): the producer carried the person's own prior-team share (see below); `EVIDENCE_STATE=UNKNOWN`, never a role fact, cannot certify |
 | `TRANSFER_PRIOR_ZERO` | Exclude: the person's own prior-team share was zero in every column |
@@ -2642,10 +2642,10 @@ A person is selected under this rule only if **all** of these hold, tested in th
 participation precedence and after an explicit team allocation: he is in `declared_starters` (his team's
 effective starter: the published rank-1, or the backup R25 promotes over a DraftKings-unavailable one,
 named in the report's `effective_starter_promotions`); his history state is `MISSING_HISTORY` (no
-prior-season row, and no Session 51 current-season rate); he is a quarterback; his depth-resolved
+prior-season row, and no Session 51 current-season rate) or, since Session 58, `OBSERVED_HISTORY_ZERO` (below); he is a quarterback; his depth-resolved
 `qb_attempt_share` is positive; and no hash-bound role fact calls him a `NAMED_BACKUP` or says he has a
 `MATERIAL_ROLE_CHANGE` (two bound sources that disagree choose neither, so the old exclusion stands; a
-`NAMED_STARTER` fact agrees and changes nothing). Then the finding is `selection_action=DIAGNOSTIC`, `state=MISSING_HISTORY`,
+`NAMED_STARTER` fact agrees and changes nothing). Then the finding is `selection_action=DIAGNOSTIC`, `state` equal to his history state (`MISSING_HISTORY`, or `OBSERVED_HISTORY_ZERO` since Session 58),
 `finding=OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY`, and `after` holds the attempt share with every other
 share 0 (he has no history to carry). `next_evidence_action` names the depth package by SHA-256, gives the
 attempt, carry and target shares as scored, says the share is a depth-chart order, not a role fact and
@@ -2668,6 +2668,28 @@ resolver has not promoted; a non-quarterback; a quarterback a bound fact calls a
 material role change; a declared starter whose attempt share is zero. A declared starter with history is
 untouched. **Does not establish** that the quarterback is playing, that the chart is current, or any role.
 Every path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+**Session 58 (R36, 2026-10-09, review F-03): the same rule for an all-zero record.** No schema change and no new
+version. "No usable history" means no prior-season row (`MISSING_HISTORY`) **or** a record whose every share is zero
+(`OBSERVED_HISTORY_ZERO`); the finding code stays `OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY` for both, so the
+registry bytes do not move. Every guard above holds for both states, plus one for the all-zero state: the person's model row
+carries `evidence_state=PASS`, which is what the producer writes for that state, so a hand-built row marked `STALE`,
+`CONFLICTED` or `UNKNOWN` keeps the block it had. The finding keeps his own `state` and `history_state`, carry and target
+shares stay 0, and for an all-zero record `next_evidence_action` says the record exists and every share in it is zero, so
+there is nothing to carry (the `MISSING_HISTORY` text is unchanged). Only `selection.select_prior_lineups` passes
+`declared_starters`, so the Showdown, Classic C1/C2 and Classic C3 exits read the same finding.
+
+*Each state keeps its own outcome where the rule does not apply.* A bound `NAMED_BACKUP` or `MATERIAL_ROLE_CHANGE` fact
+on a `MISSING_HISTORY` quarterback excludes him (`OFFENSIVE_MISSING_HISTORY`); on an `OBSERVED_HISTORY_ZERO` quarterback it
+blocks him (`OFFENSIVE_CURRENT_ROLE_UNRESOLVED`), as any person with a history record and a qualitative fact blocks when no
+numerical allocation exists. A `NAMED_STARTER` fact agrees with the chart in both states and he is selectable; for an
+all-zero record that moves him from a block to a diagnostic, because the share comes from the depth package and the fact
+adds none. A declared all-zero starter with no attempt share (allocation v1, empty pool) stays excluded by name
+(`OFFENSIVE_OBSERVED_HISTORY_ZERO`) and the finding says why, as it does for missing history. A non-quarterback, a backup,
+participation precedence, an explicit team allocation and a `CURRENT_ROLE_UNKNOWN` person are unchanged. Pinned by
+`tests/test_declared_starter_observed_zero.py`, which runs the Session 54 world under both states and a Classic
+`run_prior_review`. **Does not establish** a role or activity for the person; the share is still a depth-chart order. Every
+path still ends `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD`.
 
 ## Ownership brackets
 
