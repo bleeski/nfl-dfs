@@ -31,6 +31,12 @@ POSITIONS = {
 }
 OFFENSE = {"QB", "RB", "WR", "TE"}
 TOLERANCE = 1e-6
+# Session 58: said of a declared starter the role gate still excludes because the depth resolution gave him no
+# attempt share, whichever history state excluded him.
+NO_DEPTH_SHARE_SENTENCE = (
+    " The depth evidence declares him the starter but gave him no attempt share"
+    " (allocation version 1 leaves an empty quarterback pool at zero)."
+)
 
 
 class OffensiveRoleError(ValueError):
@@ -256,9 +262,10 @@ def resolve_offensive_roles(
 
     `declared_starters` (Session 54, R36) is the set of quarterbacks the QB depth resolution names as
     the effective starter of their team: the published rank-1, or the backup R25 promotes over a
-    DraftKings-unavailable one. One whose history state is `MISSING_HISTORY` and whose depth-resolved
-    attempt share is positive is selectable as a `DIAGNOSTIC`, unless a hash-bound role fact says he is
-    a backup or has an unresolved role change; everyone else is exactly as before.
+    DraftKings-unavailable one. One whose history state is `MISSING_HISTORY` (no prior-season row), or
+    `OBSERVED_HISTORY_ZERO` (Session 58: a record whose every share is zero) with a `PASS` model row, and
+    whose depth-resolved attempt share is positive is selectable as a `DIAGNOSTIC`, unless a hash-bound
+    role fact says he is a backup or has an unresolved role change; everyone else is exactly as before.
     `depth_evidence_sha256` names the depth package in the finding.
     """
 
@@ -383,7 +390,12 @@ def resolve_offensive_roles(
             state, action, reason = "MISSING_HISTORY", "BLOCK", "OFFENSIVE_PRIOR_ROW_MISSING"
             next_action = "Rebuild the complete prior package; this person has no prior record at all."
         elif (
-            historical_state == "MISSING_HISTORY"
+            (
+                historical_state == "MISSING_HISTORY"
+                # Session 58: an all-zero record is the same case. The producer marks that row `PASS`, so a row
+                # marked otherwise (stale, conflicted, unknown) keeps the block it gets at the line below.
+                or (historical_state == "OBSERVED_HISTORY_ZERO" and original.evidence_state == "PASS")
+            )
             and person in declared_starters
             and rows["FLEX"].position == "QB"
             and player is not None
@@ -392,20 +404,27 @@ def resolve_offensive_roles(
         ):
             # Session 54 (R36, Ben 2026-10-01: "We can't over rely on history"). The hash-bound depth
             # evidence makes this quarterback his team's effective starter, so the depth resolution already
-            # gave him the team's attempt share. He has no history to carry, so carry and target shares stay
+            # gave him the team's attempt share. He has no usable history to carry (no prior-season row, or
+            # since Session 58 a record whose every share is zero), so carry and target shares stay
             # zero. The share is a depth-chart order, not a current-role fact: the finding says so and the
             # report's evidence state stays UNKNOWN. Participation precedence is the first branch above, so
             # DraftKings status, an official inactive and an operator exclusion still win, and a hash-bound
-            # fact that he is a backup or has an unresolved role change keeps the old exclusion (two bound
-            # sources disagree, so neither is chosen). A backup R25 promotes over a DraftKings-unavailable
-            # starter is the effective starter and is treated the same way.
-            state, action, reason = "MISSING_HISTORY", "DIAGNOSTIC", "OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY"
+            # fact that he is a backup or has an unresolved role change keeps the old outcome (two bound
+            # sources disagree, so neither is chosen: an exclusion for missing history, a block for a
+            # history record). A backup R25 promotes over a DraftKings-unavailable
+            # starter is the effective starter and is treated the same way. The finding keeps his own
+            # history state.
+            state, action, reason = historical_state, "DIAGNOSTIC", "OFFENSIVE_DEPTH_DECLARED_STARTER_NO_HISTORY"
             refused = history.get("gap_fill_refused")
             source = f" (sha256 {depth_evidence_sha256})" if depth_evidence_sha256 else ""
+            nothing_to_carry = (
+                "no history to carry" if historical_state == "MISSING_HISTORY"
+                else "the history record exists and every share in it is zero, so there is nothing to carry"
+            )
             next_action = (
                 f"Selectable on the quarterback depth evidence{source} alone: the effective starter for"
                 f" {rows['FLEX'].team}, attempt share {player.qb_attempt_share:g}, carry share"
-                f" {player.carry_share:g}, target share {player.target_share:g} (no history to carry)."
+                f" {player.carry_share:g}, target share {player.target_share:g} ({nothing_to_carry})."
                 " That share is a depth-chart order, not a role fact, and it is not confirmed activity."
                 " Capture an explicit numerical current-team allocation to replace it."
                 + (f" Current-season gap-fill was refused: {refused}." if refused else "")
@@ -424,10 +443,7 @@ def resolve_offensive_roles(
                 " current-team allocation, or a registered rookie prior, to select this person."
             )
             if person in declared_starters and rows["FLEX"].position == "QB":
-                next_action += (
-                    " The depth evidence declares him the starter but gave him no attempt share"
-                    " (allocation version 1 leaves an empty quarterback pool at zero)."
-                )
+                next_action += NO_DEPTH_SHARE_SENTENCE
         elif (
             historical_state == "CURRENT_ROLE_UNKNOWN"
             and history.get("incompatible_transfer")
@@ -458,6 +474,8 @@ def resolve_offensive_roles(
         elif historical_state == "OBSERVED_HISTORY_ZERO":
             state, action, reason = "OBSERVED_HISTORY_ZERO", "EXCLUDE", "OFFENSIVE_OBSERVED_HISTORY_ZERO"
             next_action = "Capture current opportunity evidence before selecting this historically zero person."
+            if person in declared_starters and rows["FLEX"].position == "QB":
+                next_action += NO_DEPTH_SHARE_SENTENCE
         elif not any(getattr(original, field) for field in FIELDS):
             action, reason, next_action = "BLOCK", "OFFENSIVE_ZERO_BASIS_UNRESOLVED", "Rebuild history coverage to distinguish missing from observed zero."
         # Session 51 (R35). A person rated from this season's rows before the

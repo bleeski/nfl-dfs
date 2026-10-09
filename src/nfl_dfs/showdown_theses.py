@@ -194,7 +194,8 @@ def backup_quarterbacks(
     cannot select for another reason is refused there. The resolver checks him
     against the participation contract only. The offensive role gate runs after
     it. Since Session 54 it selects a starter with no usable history
-    (`MISSING_HISTORY`), but a hash-bound fact that he is a backup or has an
+    (`MISSING_HISTORY`, and since Session 58 an all-zero record,
+    `OBSERVED_HISTORY_ZERO`), but a hash-bound fact that he is a backup or has an
     unresolved role change keeps him out, and with his backups out too that team
     has no selectable quarterback.
 
