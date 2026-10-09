@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "77b827dc-34e2-5179-bfb6-f7df2a6a04d3",
+      "branch": "claude/s58-observed-zero-starter",
+      "chunk": "S58",
+      "claimed_at": "2026-10-09T21:06:05Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
