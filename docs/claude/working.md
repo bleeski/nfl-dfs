@@ -38,7 +38,7 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 
 - Never reset, clean, stash or reformat a dirty tree; it is often user-owned work.
 - **A named seam must be a real fraction of the estimate (Session 23d, 2026-10-08).** The plan named two seams of about 65 lines each
-  (the workbook rows, the fee cross-check) against an estimate of 1,150 lines that became 1,925, so the 1,000 and 1,500 triggers could not
+  (the workbook rows, the fee cross-check) against an estimate of 1,150 lines that became 2,150, so the 1,000 and 1,500 triggers could not
   bind. Name the seam as the part that is separable in the code (here the review layer, about 400 lines with its tests), and estimate a
   parser that must name every bad row at about 1.3 lines of test for each line of source, with a module of 400 lines, not 220.
 - The claim commit (row `In Progress`) turns `tests/test_roadmap_queue.py::test_the_quick_start_names_the_first_startable_session`
