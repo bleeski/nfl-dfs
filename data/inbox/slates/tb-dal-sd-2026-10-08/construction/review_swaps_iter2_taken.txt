@@ -1,0 +1,13 @@
+# Iteration 2: Lamb at FLEX for Pickens (2026 usage), least prior loss first.
+5287501773|FLEX|44395117|44395113|iter2: DAL|WR|George Pickens->DAL|WR|CeeDee Lamb (row prior -2.44)
+5287501773|FLEX|44395136|44395140|iter2: TB|WR|Tez Johnson->DAL|WR|KaVontae Turpin (row prior -2.44)
+5287501767|FLEX|44395117|44395113|iter2: DAL|WR|George Pickens->DAL|WR|CeeDee Lamb (row prior -3.21)
+5287501767|FLEX|44395119|44395127|iter2: TB|RB|Bucky Irving->DAL|K|Brandon Aubrey (row prior -3.21)
+5287501779|FLEX|44395117|44395113|iter2: DAL|WR|George Pickens->DAL|WR|CeeDee Lamb (row prior -3.21)
+5287501779|FLEX|44395119|44395127|iter2: TB|RB|Bucky Irving->DAL|K|Brandon Aubrey (row prior -3.21)
+5287501774|FLEX|44395117|44395113|iter2: DAL|WR|George Pickens->DAL|WR|CeeDee Lamb (row prior -3.33)
+5287501774|FLEX|44395132|44395140|iter2: DAL|WR|Ryan Flournoy->DAL|WR|KaVontae Turpin (row prior -3.33)
+5287486080|FLEX|44395117|44395113|iter2: DAL|WR|George Pickens->DAL|WR|CeeDee Lamb (row prior -3.33)
+5287486080|FLEX|44395132|44395140|iter2: DAL|WR|Ryan Flournoy->DAL|WR|KaVontae Turpin (row prior -3.33)
+5287501768|FLEX|44395117|44395113|iter2: DAL|WR|George Pickens->DAL|WR|CeeDee Lamb (row prior -4.14)
+5287501768|FLEX|44395128|44395134|iter2: TB|K|Chase McLaughlin->TB|WR|Ted Hurst III (row prior -4.14)

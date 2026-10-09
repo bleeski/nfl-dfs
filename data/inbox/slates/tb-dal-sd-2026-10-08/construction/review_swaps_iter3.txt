@@ -1,0 +1,13 @@
+# Iteration 3: Daniels out of Dallas-Captain rows for a TB pass catcher, least prior loss first.
+5287501448|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior --0.59)
+5287501448|FLEX|44395132|44395117|iter3: DAL|WR|Ryan Flournoy->DAL|WR|George Pickens (row prior --0.59)
+5287491172|FLEX|44395118|44395120|iter3: TB|QB|Jalon Daniels->TB|WR|Emeka Egbuka (row prior -0.52)
+5287491172|FLEX|44395134|44395128|iter3: TB|WR|Ted Hurst III->TB|K|Chase McLaughlin (row prior -0.52)
+5287501770|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior -0.56)
+5287501770|FLEX|44395122|44395114|iter3: DAL|TE|Jake Ferguson->DAL|RB|Javonte Williams (row prior -0.56)
+5287501784|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior -0.56)
+5287501784|FLEX|44395122|44395114|iter3: DAL|TE|Jake Ferguson->DAL|RB|Javonte Williams (row prior -0.56)
+5287501767|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior -1.77)
+5287501767|FLEX|44395128|44395117|iter3: TB|K|Chase McLaughlin->DAL|WR|George Pickens (row prior -1.77)
+5287501783|FLEX|44395118|44395130|iter3: TB|QB|Jalon Daniels->TB|TE|Cade Otton (row prior -1.77)
+5287501783|FLEX|44395128|44395117|iter3: TB|K|Chase McLaughlin->DAL|WR|George Pickens (row prior -1.77)

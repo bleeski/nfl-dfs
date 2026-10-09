@@ -116,6 +116,11 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   to 75% of lineups and the overlap default up to 5; the Captain cap and R29 never move. Report every measure before and after.
   Then search whole-lineup swaps between Entry IDs that worsen no contest measure. Record: DET@CAR,
   `data/inbox/slates/det-car-sd-2026-10-04/construction/` (`DK_REVIEW_ENTRY_det-car-sd_final_v4_record.json`).
+  The fastest route (TB@DAL, 2026-10-08, about four minutes end to end): rerun with `--request` and
+  `NFL_DFS_DUMP_SCORES=<construction>/pool_scores.json` (the practice-squad `--exclude` list rides the same rerun), run
+  `data/inbox/slates/tb-dal-sd-2026-10-08/construction/ceiling_pass.py` on the rerun's file (edit its `STARTING_QB` map), then
+  `scripts/diversify_showdown_contests.py`, then QA. Every row keeps both teams: that pass's first version had no such check, one
+  FLEX upgrade made an all-Dallas row, and only `qa_showdown_portfolio.py` (`SINGLE_TEAM_LINEUP`) caught it.
 - **Practice-squad punts (DET@CAR, 2026-10-04).** A practice-squad player who was not elevated cannot play, and no inactive list
   names him, so a blank DraftKings status and an old-team prior keep him selectable. Check every rostered player under about $1,000
   against the team's elevations for the game (the club's Saturday transaction post); exclude any who was not elevated with

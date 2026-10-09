@@ -1,0 +1,10 @@
+# Iteration 1: the adversarial reviewer's rows A to E, 2026-10-08 19:37 ET. A is changed: Dak stays
+# (a Lamb Captain keeps his own quarterback); only Aubrey goes, for the Cowboys DST.
+5287501781|FLEX|44395127|44395129|A: Aubrey->Cowboys DST; the only DST row (DAL blowout + defense, Lamb CPT)
+5287501779|FLEX|44395127|44395114|B: Aubrey->Javonte; TB comeback with DAL run bring-back
+5287501779|FLEX|44395122|44395140|B: Ferguson->Turpin
+5287501448|FLEX|44395117|44395113|C: Pickens->Lamb FLEX (2026: Lamb 32% target share, Pickens 19%)
+5287501448|FLEX|44395122|44395132|C: Ferguson->Flournoy (16% target share; pays for Lamb)
+5287501773|FLEX|44395127|44395130|D: Aubrey->Otton; TB passing upset vs a DAL secondary missing 2 CBs
+5287491172|FLEX|44395127|44395114|E: Aubrey->Javonte
+5287491172|FLEX|44395119|44395134|E: Irving->Hurst
