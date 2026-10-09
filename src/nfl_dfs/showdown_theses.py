@@ -196,8 +196,9 @@ def backup_quarterbacks(
     it. Since Session 54 it selects a starter with no usable history
     (`MISSING_HISTORY`, and since Session 58 an all-zero record,
     `OBSERVED_HISTORY_ZERO`), but a hash-bound fact that he is a backup or has an
-    unresolved role change keeps him out, and with his backups out too that team
-    has no selectable quarterback.
+    unresolved role change keeps him out (an exclusion for missing history; for
+    an all-zero record the role gate blocks), and with his backups out too that
+    team has no selectable quarterback.
 
     `admitted_people` (Session 61, Classic) are people a named choice keeps in: a Classic policy's
     minimum, a validated construction judgment. Like a thesis's Captain set, each stays out of the

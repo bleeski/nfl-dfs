@@ -289,6 +289,35 @@ def test_allocation_v1_leaves_an_empty_pool_at_zero_so_the_starter_stays_exclude
     assert world[-1] not in scores.by_person
 
 
+@pytest.mark.parametrize("state", STATES)
+def test_an_empty_quarterback_pool_gives_the_declared_starter_the_unit_share_under_allocation_v2(tmp_path, state):
+    # Both Kansas City quarterbacks have nothing to conserve: the depth resolution gives the starter the unit share.
+    world = _world(tmp_path, state, backup_share=0.0)
+    lineups, scores, report = ds._select(world)
+    finding = ds._finding(report, world[-1])
+    assert finding["selection_action"] == "DIAGNOSTIC" and finding["state"] == state
+    assert finding["after"]["qb_attempt_share"] == 1.0
+    assert world[-1] in scores.by_person and lineups
+
+
+@pytest.mark.parametrize("state", STATES)
+def test_a_backup_the_resolver_promotes_over_an_out_starter_is_selectable_and_says_so(tmp_path, state):
+    # R25: a DraftKings-unavailable published starter is stepped over and his backup is the effective starter.
+    pool = tuple(
+        (team, position, name, "OUT" if name == ds.NO_HISTORY else status, salary)
+        for team, position, name, status, salary in depth._POOL
+    )
+    world = _world(tmp_path, state, pool=pool, no_history="KC Backup QB", qb_shares={ds.NO_HISTORY: 1.0})
+    person = world[-1]
+    _lineups, scores, report = ds._select(world)
+    assert report["qb_depth_roles"]["starters_by_team"]["KC"] == person
+    assert report["qb_depth_roles"]["effective_starter_promotions"]
+    finding = ds._finding(report, person)
+    assert finding["selection_action"] == "DIAGNOSTIC" and finding["finding"] == CODE and finding["state"] == state
+    assert "effective starter for KC" in finding["next_evidence_action"]
+    assert person in scores.by_person
+
+
 # --------------------------------------------------------------------------- #
 # The model row's own evidence state, and an explicit team allocation, still come first
 # --------------------------------------------------------------------------- #
