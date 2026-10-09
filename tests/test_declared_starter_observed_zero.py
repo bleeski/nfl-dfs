@@ -243,7 +243,11 @@ def test_a_declared_non_quarterback_with_an_all_zero_or_missing_record_stays_exc
     slate, model, *rest = _world(tmp_path, state)
     rb = depth._person(slate, "KC Committee RB")
     # Keep the starter's own entry: his row is `UNKNOWN` under missing history, and without an entry the gate blocks him.
-    model = replace(model, offensive_history_by_person={**model.offensive_history_by_person, rb: _history(state)})
+    # Give the back a quarterback share too, so only the position guard (not the positive-share guard) keeps him out.
+    players = tuple(replace(p, qb_attempt_share=1.0) if p.underlying_id == rb else p for p in model.players)
+    model = replace(
+        model, players=players, offensive_history_by_person={**model.offensive_history_by_person, rb: _history(state)}
+    )
     world = (slate, model, *rest[:-1], rb)
     action, code, _found = _outcome(world, {rb})
     assert (action, code) == ("EXCLUDE", EXCLUDE_CODE[state])
