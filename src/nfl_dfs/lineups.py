@@ -24,8 +24,9 @@ _TRAILING_ID = re.compile(r"\(([0-9]+)\)\s*$")
 def prefilled_cell_id(cell: str) -> str | None:
     """The DraftKings ID a prefilled roster cell names, or None when it names none exactly.
 
-    A bare ID or text ending `(ID)` resolves; a name alone, a stale ID or anything else does not, and
-    only the ID is ever identity. It lives here, a layer below `entry_groups` (Session 11, which
+    A bare numeric ID or text ending `(ID)` resolves to that ID, whether or not it is in the salary
+    pool (pool membership is checked downstream); a name alone or any other text resolves to nothing,
+    and only the ID is ever identity. It lives here, a layer below `entry_groups` (Session 11, which
     re-exports it), because the late-swap writer and the byte audit read the same forms (Session 12, V13).
     """
 

@@ -2816,9 +2816,12 @@ agree with the release clock within 120 seconds in either direction
 `govern_late_swap` refuses with `LATE_SWAP_AS_OF_CLOCK_MISMATCH` before it
 creates a run directory or reads any input, and the CLI exits 2 and names the
 rerun. A stale `--as-of` would otherwise make locked slots look replaceable, and
-the byte audit audits against the same authorization. The clock is a required
-argument of `govern_late_swap`; the CLI passes `evidence.release_clock`, and no
-flag turns the check off. No schema changes and no new version.
+the byte audit audits against the same authorization. The tolerance bounds that
+window and does not close it: lock state is `lock_at <= as_of`, so an `--as-of`
+up to 120 seconds behind the clock can still treat a game that just kicked off as
+unlocked. The clock is a required argument of `govern_late_swap`; the CLI passes
+`evidence.release_clock`, and no flag turns the check off. No schema changes and
+no new version.
 
 **Roster cell forms in the current template (Session 12, review V13).** A roster
 cell is read by the DraftKings ID it names: a bare ID, or text ending `(ID)`
@@ -2827,8 +2830,9 @@ no exact ID is refused by `CURRENT_TEMPLATE_CELL_UNRESOLVED`; text ending in an
 ID outside the salary pool is refused as missing from the pool; a blank cell
 stays `CURRENT_TEMPLATE_MUST_BE_FULLY_PREFILLED`. The name text is never
 identity. An unchanged slot keeps its bytes (a `Name (ID)` cell stays `Name (ID)`),
-a replaced slot is written as a bare ID, and the writer and the byte audit
-compare cells by ID, and by exact text for any slot no one authorized. The form
+a replaced slot is written as a bare ID, and the byte audit requires exactly that
+there; the writer compares a retained cell by ID, and the audit by ID for the
+roster and by exact text for any slot no one authorized. The form
 DraftKings itself writes is unconfirmed (the Session 12 card's open question), so
 nothing here widens the accepted forms.
 

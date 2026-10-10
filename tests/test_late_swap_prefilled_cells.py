@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import csv
 import io
+import itertools
 import re
 from pathlib import Path
 
@@ -30,10 +31,13 @@ from .test_governed_late_swap import AS_OF, _assert_blocked, _case, _govern
 UNRESOLVED = "CURRENT_TEMPLATE_CELL_UNRESOLVED"
 
 
-def _name_id(player) -> str:
+HOSTILE_NAMES = ("Smith, John Jr.", 'Bob "Buzz" Jones', "Name (WR)", "O'Brien-Smith III")
+
+
+def _name_id(player, name: str | None = None) -> str:
     """`Name (ID)` with an ASCII name, so the file's detected encoding never changes."""
 
-    name = re.sub(r"[^A-Za-z0-9 .'-]", "", player.name).strip() or "Player"
+    name = name or re.sub(r"[^A-Za-z0-9 .'-]", "", player.name).strip() or "Player"
     return f"{name} ({player.dk_id})"
 
 
@@ -86,14 +90,20 @@ def _reshape(raw: bytes, *, bom: bool, line_ending: bytes, final_newline: bool) 
     return (b"\xef\xbb\xbf" if bom else b"") + body
 
 
-def _wrapped_world(tmp_path: Path, slate, entries):
-    """The shared late-swap world with every current roster cell rewritten as `Name (ID)`."""
+def _wrapped_world(tmp_path: Path, slate, entries, names=None):
+    """The shared late-swap world with every current roster cell rewritten as `Name (ID)`.
+
+    `names`, an iterator of names, replaces each player's own name cell by cell.
+    """
 
     case = _case(tmp_path, slate, entries)
     by_id = {player.dk_id: player for player in slate.players}
     template = parse_entries(case["current"])
     case["current"].write_bytes(
-        _rewrite_roster(template, lambda _eid, _slot, cell: _name_id(by_id[cell]))
+        _rewrite_roster(
+            template,
+            lambda _eid, _slot, cell: _name_id(by_id[cell], next(names) if names is not None else None),
+        )
     )
     case["by_id"] = by_id
     return case
@@ -168,6 +178,24 @@ def test_a_name_id_cell_resolves_and_the_unchanged_slots_keep_their_bytes(
     assert sum("(" in cell for cell in cells) == len(cells) - 1
 
 
+def test_names_with_commas_quotes_and_parentheses_resolve_by_their_trailing_id(
+    tmp_path: Path, classic_slate, classic_entries
+) -> None:
+    """A name is never identity, so whatever it holds, only the trailing `(ID)` is read."""
+
+    case = _wrapped_world(tmp_path, classic_slate, classic_entries, names=itertools.cycle(HOSTILE_NAMES))
+    source = case["current"].read_bytes()
+    assert b'"Smith, John Jr. (' in source and b'""Buzz""' in source  # the cells really are quoted
+    manifest, _ = _govern(case, classic_slate, "hostile-names")
+    assert manifest.status == "CERTIFIED", manifest.blockers
+    changed = (case["changed_entry"], case["changed_slot"])
+    expected = _rewrite_roster(
+        parse_entries(case["current"]),
+        lambda eid, slot, _cell: case["replacement"] if (eid, slot) == changed else None,
+    )
+    assert Path(manifest.output_path or "").read_bytes() == expected
+
+
 def test_text_ending_in_an_id_outside_the_pool_is_refused(
     tmp_path: Path, classic_slate, classic_entries
 ) -> None:
@@ -187,12 +215,19 @@ def test_text_ending_in_an_id_outside_the_pool_is_refused(
     assert not any(blocker.startswith(UNRESOLVED) for blocker in manifest.blockers)
 
 
-def test_text_with_no_id_is_refused_by_the_named_code(tmp_path: Path, classic_slate, classic_entries) -> None:
+@pytest.mark.parametrize(
+    "text",
+    ["Not A Player", "Not A Player (12345) extra", "Not A Player (12a45)", "(12345) Not A Player"],
+    ids=["a-name-alone", "text-after-the-id", "a-non-numeric-id", "the-id-first"],
+)
+def test_text_with_no_id_is_refused_by_the_named_code(
+    tmp_path: Path, classic_slate, classic_entries, text: str
+) -> None:
     case = _wrapped_world(tmp_path, classic_slate, classic_entries)
     target = (case["changed_entry"], _unlocked_slot_other_than_the_change(case))
     template = parse_entries(case["current"])
     case["current"].write_bytes(
-        _rewrite_roster(template, lambda eid, slot, _c: "Not A Player" if (eid, slot) == target else None)
+        _rewrite_roster(template, lambda eid, slot, _c: text if (eid, slot) == target else None)
     )
     manifest, path = _govern(case, classic_slate, "no-id")
     _assert_blocked(manifest, path)
@@ -252,17 +287,31 @@ def test_the_byte_audit_reads_a_retained_name_id_cell_by_its_id(
     assert audit.valid, audit.problems
 
 
-def test_the_byte_audit_accepts_an_authorized_slot_written_in_the_name_id_form(
-    tmp_path: Path, classic_slate, classic_entries
+@pytest.mark.parametrize(
+    ("text", "valid"),
+    [
+        ("{id}", True),
+        ("Alias Name ({id})", False),
+        ("({id})", False),
+        ("Alias Name ({id}) extra", False),
+    ],
+    ids=["the-bare-assigned-id", "name-id-form", "parenthesized-id-only", "trailing-text"],
+)
+def test_the_byte_audit_holds_a_replaced_slot_to_the_bare_assigned_id(
+    tmp_path: Path, classic_slate, classic_entries, text: str, valid: bool
 ) -> None:
-    """Only the roster comparison is in play here: the slot is replaceable, so no byte guard applies."""
+    """The writer only ever writes a bare ID into a replaced slot, so the audit accepts nothing else there.
+
+    Only the roster comparison is in play: the slot is replaceable, so the locked-byte guard skips it.
+    Reading the slot by its ID alone would pass a writer that emitted `Wrong Name (ID)`.
+    """
 
     case = _wrapped_world(tmp_path, classic_slate, classic_entries)
     template = parse_entries(case["current"])
     changed = (case["changed_entry"], case["changed_slot"])
     output = _rewrite_roster(
         template,
-        lambda eid, slot, _c: f"Alias Name ({case['replacement']})" if (eid, slot) == changed else None,
+        lambda eid, slot, _c: text.format(id=case["replacement"]) if (eid, slot) == changed else None,
     )
     audit = audit_late_swap_output_bytes(
         case["current"],
@@ -271,7 +320,9 @@ def test_the_byte_audit_accepts_an_authorized_slot_written_in_the_name_id_form(
         case["proposed"],
         _authorization(template, case["original"], {case["changed_entry"]: (case["changed_slot"],)}),
     )
-    assert audit.valid, audit.problems
+    assert audit.valid is valid, audit.problems
+    if not valid:
+        assert any("roster bytes do not match assignment" in problem for problem in audit.problems)
 
 
 def test_the_byte_audit_rejects_a_locked_name_id_cell_whose_text_changed_but_not_its_id(

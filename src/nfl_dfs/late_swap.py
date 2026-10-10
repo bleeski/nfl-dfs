@@ -62,9 +62,12 @@ class LateSwapRunError(RuntimeError):
 # Session 12, review V12. `--as-of` and the release clock must agree within this much, in either
 # direction. A stale `--as-of` makes locked slots look replaceable, and the byte audit audits against
 # the same authorization, so it would pass a file that edits them; a future one corrupts every
-# freshness check that reads `as_of` (an observation "in the future" is judged against it). 120 seconds
-# is the late-swap deadline (`govern_late_swap(deadline_seconds=120.0)`): an operator types the time by
-# hand around the run. The threshold is Ben's to set (an open [BEN] flag on the Session 12 card).
+# freshness check that reads `as_of` (an observation "in the future" is judged against it). The
+# tolerance bounds that window and does not close it: lock state is `lock_at <= as_of`, so an `as_of`
+# this far behind the clock can still treat a game that just kicked off as unlocked. 120 seconds is the
+# late-swap deadline (`govern_late_swap(deadline_seconds=120.0)`): an operator types the time by hand
+# around the run. The threshold is Ben's to set (a [BEN] flag on the Session 12 card names the number
+# and this consequence).
 AS_OF_CLOCK_TOLERANCE = timedelta(seconds=120)
 
 

@@ -179,9 +179,15 @@ def audit_late_swap_output_bytes(
         if source_row[roster_end:] != output_row[roster_end:]:
             problems.append(f"line {line_number}: non-roster cells changed")
         output_cells = tuple(cell.strip() for cell in output_row[roster_start:roster_end])
-        # The roster matches the assignment by the ID each cell names (`Name (ID)` or a bare ID,
-        # Session 12, V13); a cell that names none stays text, so it can never equal an assignment.
-        output_roster = tuple(prefilled_cell_id(cell) or cell for cell in output_cells)
+        # The roster matches the assignment cell by cell. A slot the swap replaced must hold exactly
+        # the assigned bare ID, as the writer writes it (an audit that read it by ID alone would pass
+        # a writer that emitted `Wrong Name (ID)`). A retained slot is read by the ID it names
+        # (`Name (ID)` or a bare ID, Session 12, V13) and its text is held to the source's below;
+        # a retained cell that names none stays text, so it can never equal an assignment.
+        output_roster = tuple(
+            cell if slot in allowed else (prefilled_cell_id(cell) or cell)
+            for slot, cell in enumerate(output_cells)
+        )
         if output_roster != assignments[source_id]:
             problems.append(f"line {line_number}: roster bytes do not match assignment")
         source_roster = tuple(

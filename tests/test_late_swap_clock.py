@@ -165,7 +165,7 @@ def _cli_args(case, run_id: str, as_of: str) -> list[str]:
 def test_the_cli_refuses_a_stale_as_of_with_exit_2_and_the_rerun_hint(
     tmp_path: Path, classic_slate, classic_entries, capsys
 ) -> None:
-    """The real release clock is years past the fixture's `AS_OF`, so this is a stale timestamp."""
+    """The real release clock is weeks past the fixture's `AS_OF` (2026-09-13), so this is a stale timestamp."""
 
     case = _case(tmp_path, classic_slate, classic_entries)
     code = main(_cli_args(case, "cli-stale", AS_OF.isoformat()))
@@ -190,19 +190,26 @@ def test_the_cli_accepts_an_as_of_inside_the_tolerance(
     assert Path(payload["output_path"]).exists()
 
 
-def _callers_of(name: str):
-    """Every call of `name` under src/ and scripts/, with the file and function that holds it."""
+def _uses_of(name: str):
+    """Every use of `name` under src/ and scripts/ other than a plain import, with the function holding it.
 
-    found: list[tuple[str, str, ast.Call]] = []
+    A call, a `partial(name, ...)`, an attribute reference and an aliased import all count, so a second
+    way into `govern_late_swap` cannot hide behind a rename.
+    """
+
+    found: list[tuple[str, str, ast.AST]] = []
     for base in (REPO / "src" / "nfl_dfs", REPO / "scripts"):
         for path in sorted(base.glob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
             for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                callee = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", "")
-                if callee != name:
+                used = (isinstance(node, ast.Name) and node.id == name) or (
+                    isinstance(node, ast.Attribute) and node.attr == name
+                )
+                aliased = isinstance(node, ast.ImportFrom) and any(
+                    alias.name == name and alias.asname for alias in node.names
+                )
+                if not (used or aliased):
                     continue
                 holder = node
                 while holder in parents and not isinstance(holder, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -218,9 +225,15 @@ def test_the_cli_is_the_only_caller_and_always_passes_the_release_clock() -> Non
     patches `nfl_dfs.cli.release_clock`, and a caller that omitted the argument would not run at all.
     """
 
-    callers = _callers_of("govern_late_swap")
-    assert [(file, function) for file, function, _ in callers] == [("cli.py", "command_late_swap")]
-    call = callers[0][2]
+    uses = _uses_of("govern_late_swap")
+    assert [(file, function) for file, function, _ in uses] == [("cli.py", "command_late_swap")]
+    callers = [(file, function, node) for file, function, node in uses if isinstance(node, ast.Name)]
+    assert len(callers) == 1
+    call = next(
+        node
+        for node in ast.walk(ast.parse((REPO / "src" / "nfl_dfs" / "cli.py").read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "govern_late_swap"
+    )
     clock = [keyword.value for keyword in call.keywords if keyword.arg == "clock"]
     assert len(clock) == 1 and isinstance(clock[0], ast.Name) and clock[0].id == "release_clock"
     tree = ast.parse((REPO / "src" / "nfl_dfs" / "cli.py").read_text(encoding="utf-8"))
