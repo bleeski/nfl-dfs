@@ -176,7 +176,8 @@ Every session follows this protocol, and the cards only add to it:
 | Session 67 | Batched | Thesis tooling and placement (from Session 23c's close-out): `scripts/make_showdown_theses.py` writes R33's list for named teams as thesis files by structure alone (a team's best players by salary at a position, never a model value, spread or total), as `tests/test_showdown_thesis_acceptance.py::r33_theses` does, so a slate-day portfolio does not hand-write six JSON files; and `contest_assignment.apply_step` takes the `thesis_by_roster` the module already carries, fed from the selection's `by_lineup`, so the same-thesis pair penalty is live inside a contest | Session 23c close-out; chunk P8 ("which contest each thesis's rows land in"); Ben's R33 list | `scripts/make_showdown_theses.py`, `src/nfl_dfs/contest_assignment.py`, `src/nfl_dfs/prior_review.py`, `docs/RUNBOOK.md`, tests | S | Session 23c | `sh ./nfl.sh test tests/test_contest_assignment_run_slate.py tests/test_diversify_showdown_contests.py -x --tb=short`, plus the tests it adds; the expander's six theses for NE and SEA build the Session 23c acceptance portfolio unchanged, and with labels two lineups of one thesis are no longer placed together in a contest where a pair of different theses is available | Complete |
 | Session 23d | Batched | P2 part 2, contest facts and screening (narrowed 2026-09-29: the `round_robin_by_contest` default assignment order is superseded by Session 50's `within_contest_diversity_v1`, which needs no policy input); `contest_facts_csv` (contest id, field size, places paid, entry fee) tags each entry's paid fraction and labels entries under 5% `FIRST_PLACE_OBJECTIVE`, never from a contest name; a contest-screening checklist (rake, overlay, payout shape, field size, max entries) in the runbook | Chunk P2; debrief §4, §6; RUN_RECORD DEN@KC defect 5; `plan.md:395`; critique V9 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_policy.py`, `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/contracts.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md` | S | Session 23 | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_portfolio_policy.py -x --tb=short`; a `contest_facts_csv` with a bad row is refused by name and entries under 5% paid are labelled | Complete |
 | Session 58 | Standalone | Observed-zero history for a declared starter (R36): the Session 54 branch of `resolve_offensive_roles` extends to `OBSERVED_HISTORY_ZERO` under the same guards (declared starter, QB, positive depth attempt share, participation permits, no `NAMED_BACKUP` or `MATERIAL_ROLE_CHANGE` fact), carry and target shares zero, the finding keeping the actual history state, evidence state `UNKNOWN`; not extended to transfer, role-unknown or BLOCK cases | 2026-10-02 review F-03 (reproduced on the Session 54 fixture: `MISSING_HISTORY` gives DIAGNOSTIC at share 1.0, `OBSERVED_HISTORY_ZERO` gives EXCLUDE at 0) | `src/nfl_dfs/offensive_roles.py`, `docs/DATA_CONTRACTS.md`, `tests/test_declared_starter_selectable.py` | P | none | `sh ./nfl.sh test tests/test_offensive_roles.py tests/test_declared_starter_selectable.py -x --tb=short`; Session 54's acceptance parameterized over both history states, backups and DK-`OUT` starters unchanged, one bounded selection test proves the person reaches the pool | Complete |
-| Session 12 | Standalone | Late-swap bridge and C5: a hash-bound record of the entries actually submitted (Ben's post-upload DKEntries download) anchors governed late swap without claiming certification; multi-contest by group; locked cells byte-identical; later-lock players preferred in flexible slots; the `--as-of` clock is refused when it disagrees with the wall clock past a registered tolerance; current cells in the `Name (ID)` form resolve through `prefilled_cell_id`; a post-kickoff salary export parses | Audit D9, DD-6; archive § C5; code review V12, V13, E11 | `src/nfl_dfs/late_swap.py`, `src/nfl_dfs/lineups.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/entry_groups.py`, `src/nfl_dfs/referee.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | V | Session 11 | `sh ./nfl.sh test tests/test_governed_late_swap.py tests/test_late_swap_learning.py -x --tb=short`; seam: the clock bound and the `(ID)` form first, the submitted-state contract second | In Progress |
+| Session 12 | Standalone | Late-swap bridge and C5: a hash-bound record of the entries actually submitted (Ben's post-upload DKEntries download) anchors governed late swap without claiming certification; multi-contest by group; locked cells byte-identical; later-lock players preferred in flexible slots; the `--as-of` clock is refused when it disagrees with the wall clock past a registered tolerance; current cells in the `Name (ID)` form resolve through `prefilled_cell_id`; a post-kickoff salary export parses | Audit D9, DD-6; archive § C5; code review V12, V13, E11 | `src/nfl_dfs/late_swap.py`, `src/nfl_dfs/lineups.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/entry_groups.py`, `src/nfl_dfs/referee.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | V | Session 11 | `sh ./nfl.sh test tests/test_governed_late_swap.py tests/test_late_swap_learning.py -x --tb=short`; seam: the clock bound and the `(ID)` form first, the submitted-state contract second | Complete |
+| Session 12b | Standalone | Late-swap bridge, multi-contest and C5, split from Session 12 at its seam (Session 12 landed V12 and V13): the hash-bound record `nfl_submitted_entry_state_v1` of Ben's post-upload DKEntries download anchors governed late swap without claiming a certification (`_validate_prior_manifest` accepts a certified manifest or a verified record; both, or neither, is refused by name); multi-contest by group (a group without proven eligibility keeps every cell byte-identical and is named while the proven groups ship; one eligibility file per contest); the record may anchor a second swap on a late-swap file; locked cells byte-identical under the anchored path; later-lock players preferred in flexible slots; a post-kickoff salary export parses | Session 12 card; audit D9, DD-6; archive § C5; code review E11; Session 12's plan and review notes (changelog 2026-10-10) | `src/nfl_dfs/late_swap.py`, `src/nfl_dfs/submitted_state.py` (new), `src/nfl_dfs/lineups.py`, `src/nfl_dfs/cli.py`, `src/nfl_dfs/dk.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | V | Session 12, BEN ruling | `sh ./nfl.sh test tests/test_governed_late_swap.py tests/test_late_swap_learning.py tests/test_submitted_state.py tests/test_late_swap_groups.py -x --tb=short`; seam: the record and the anchor first, multi-contest and C5 second | Pending |
 | Session 41 | Batched | Weather and retrieval boundary: `fetch_weather_captures.py` obeys `sources.ALLOWED_HOSTS` on every resolved URL, refuses redirects, writes the response bytes verbatim and records the fetch time; weather expiry is `min(observed_at + 6h, lock)` in the formatter and re-derived in `prior_review`; one retractable-roof set, pinned by a test | Code review E1, E2, E3; `CLAUDE.md` retrieval boundary | `scripts/fetch_weather_captures.py`, `scripts/make_classic_weather_evidence.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/venues.py`, `tests/test_fetch_weather_captures.py` | V | none | `sh ./nfl.sh test tests/test_fetch_weather_captures.py tests/test_venues.py tests/test_prior_review_profile.py tests/test_repo_boundaries.py -x --tb=short`; a redirect to another host is refused in a test | Pending |
 | Session 44 | Standalone | `prior_review` decomposition part 1: the Classic publication block (`:2667-3157`) and the C3 export block (`:3159-3299`) move to `classic_publish.py` behind a frozen context dataclass; every blocker text and artifact byte unchanged; the early-return exits keep the INTAKE stage and the profile variable | Code review R1, R5 | new `src/nfl_dfs/classic_publish.py`, `src/nfl_dfs/prior_review.py` | P | Session 23c | `sh ./nfl.sh test tests/test_classic_prior_review.py tests/test_classic_review_c3.py tests/test_entry_groups.py tests/test_prior_review_profile.py -x --tb=short`, then the full suite; fixture artifact hashes byte-identical before and after | Pending |
 | Session 44b | Standalone | Decomposition part 2: intake and evidence binding (`:1439-1706`) to `review_intake.py`, priors and projection (`:1723-2121`) to `review_priors.py`; `EVIDENCE_STATE` computed once above the mode split; one truths builder replaces the five `FILE_VALID` literals; `review_common.py` holds hash-alias resolution, strict JSON loading and canonical bytes; the status workbook takes the run clock | Code review R1 to R4, R6 | new `src/nfl_dfs/review_intake.py`, new `src/nfl_dfs/review_priors.py`, new `src/nfl_dfs/review_common.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/review_export.py`, `src/nfl_dfs/readable_review.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/workbook.py`, `src/nfl_dfs/cli.py` | P | Session 44 | `sh ./nfl.sh test tests/test_prior_review_profile.py tests/test_readable_review.py tests/test_release_truths.py -x --tb=short`, then the full suite; `run_prior_review` under 600 lines | Pending |
@@ -208,7 +209,7 @@ Every session follows this protocol, and the cards only add to it:
 | Session 59 | Standalone | A compact console handoff for `run-slate`: opt-in `--console-summary` (full JSON stays the default) with one formatter for success, blocked and error exits, exit codes unchanged; top-level review validity kept distinct from `delivered_file_valid`, the latest deliverable with path, hash and row count named even when the improvement failed, every limitation and blocker code and the report path kept; the runbook and operator guide examples use the flag | 2026-10-02 review F-04 (40,950 and 36,521 bytes printed on the two replays against 1,516 for the fields the agent acts on) | `src/nfl_dfs/cli.py`, `docs/RUNBOOK.md`, `docs/OPERATOR_GUIDE.md`, `tests/test_run_slate_baseline_first.py` | P | none | `sh ./nfl.sh test tests/test_run_slate_baseline_first.py -x --tb=short`, plus the tests it adds; synthetic successful, baseline-only and partial-fill runs give identical persisted bytes and exit status in both modes, identical truths, counts and code sets in the summary, and the summary stays under 4 KiB | Pending |
 | Session 30 | Standalone | Standings contract v3: represent field members who never submitted a lineup and exact tie splits that are not whole cents, so a contest with ties can settle | Archive § 2026-09-14 close-out; Q1B | `src/nfl_dfs/settlement.py`, `scripts/file_standings.py`, `docs/DATA_CONTRACTS.md` | P | BEN ruling | `sh ./nfl.sh test tests/test_standings_normalizer.py tests/test_reference_settlement.py -x --tb=short` | Pending |
 | Session 31 | Standalone | QA1: adversarial QA whose findings are policy deltas, with a Pareto filter and at most three iterations | Archived QA1 prompt; archive § QA1 | new `src/nfl_dfs/adversarial_qa.py` | S | Session 25b | Reactivate when Session 25b is `Complete` | Deferred |
-| Session 32 | Standalone | Late-swap strategy aids: a swap QA gate, a salary reserve, swap-flexible entry tags, points per $1,000 of locked salary | C4 retro #5, #7, #8, #14 | `scripts/qa_classic_portfolio.py`, `src/nfl_dfs/late_swap.py` | S | Session 12, Session 25b | Reactivate when both are `Complete` | Deferred |
+| Session 32 | Standalone | Late-swap strategy aids: a swap QA gate, a salary reserve, swap-flexible entry tags, points per $1,000 of locked salary | C4 retro #5, #7, #8, #14 | `scripts/qa_classic_portfolio.py`, `src/nfl_dfs/late_swap.py` | S | Session 12b, Session 25b | Reactivate when both are `Complete` | Deferred |
 | Session 33 | Standalone | P4c: contest-conditioned field effects with shrinkage | Chunk P4c | `src/nfl_dfs/field.py` | P | Session 27, O10 | Reactivate at about 20 more Showdown games with standings | Deferred |
 | Session 34 | Standalone | X4: greenfield spec report and subagent cost contract | Chunk X4 | a new report in `docs/` | P | Session 17, Session 19, Session 20 | Re-scope first: the audit, the 2026-09-25 review and this roadmap now cover most of its report | Deferred |
 | Session 35 | Standalone | C3X: native Excel open, recalculate, save and reopen acceptance | R30 | `src/nfl_dfs/workbook.py` | P | none | Reactivate only on Ben's word | Deferred |
@@ -527,7 +528,7 @@ Every session follows this protocol, and the cards only add to it:
   emit `LINEUP_{entry_id}:...`, with the Entry ID inside the code, so no
   registry can hold it: write a fixed code with the ID in the detail when this
   session touches the shared validator (late swap's `{label}_{entry_id}:` is
-  Session 12's).
+  Session 12b's; Session 12 left it, see its Landed paragraph).
 - **2026-09-23, Complete (Classic and Showdown).** `nfl baseline` in
   `baseline.py`: schema binding, snapshots, exact IDs cross-checked against the
   entries player table, `unavailable_people`, `BASELINE_SALARY_RANK_V1` (salary
@@ -1619,6 +1620,77 @@ Every session follows this protocol, and the cards only add to it:
   `(ID)`, and treats anything else as unresolved; one real file confirms which
   form DraftKings writes, and the post-kickoff export shows what `Game Info`
   holds for a started game. Neither blocks Session 12.]
+  [BEN: the `--as-of` tolerance is 120 seconds, symmetric (`late_swap.AS_OF_CLOCK_TOLERANCE`, set by Session 12 under
+  your standing instruction to decide what you can). It bounds a stale `--as-of` and does not close the window: lock state
+  is `lock_at <= as_of`, so an `--as-of` 120 seconds behind the clock can still treat a game that kicked off 100 seconds ago
+  as unlocked. Set another value, or have lock state read the later of `as_of` and the clock (Session 12b's card). Does not
+  block anything.]
+
+#### Session 12b: late-swap bridge, multi-contest and C5 (split from Session 12)
+
+- **Depends on.** Session 12, BEN ruling (the first flag below). Runs on real data only after O9. Split from Session 12 on
+  2026-10-10 at the card's own seam: that session landed V12 and V13, and its plan measured the whole card bottom-up at about
+  1,700 changed lines against the 1,500 breakpoint.
+- **Scope.**
+  - The contract `nfl_submitted_entry_state_v1` (a new `docs/DATA_CONTRACTS.md` section; no version is mutated): JSON with
+    `schema_version`, `mode`, `salary_sha256`, `delivered_file` and its SHA-256, `download_file` and its SHA-256,
+    `prior_assignments_sha256`, the ordered `entry_ids`, and a timezone-aware `downloaded_at` not after `as_of`. The two file
+    names are plain names in the record's own folder (no separators, no `..`), so the run folder is portable between Windows
+    and Linux, and the CLI gains one flag, `--submitted-state`, with `--prior-manifest` optional.
+    `src/nfl_dfs/submitted_state.py` (it must not mention the upload file's name, `tests/test_repo_boundaries.py` pins which
+    modules do) is a strict parser and verifier that refuses the whole record by name and never repairs one (truncated,
+    duplicate Entry ID, missing column, blank lineup, wrong mode, delivered-hash mismatch, download-hash mismatch, Entry-ID
+    set mismatch, roster mismatch by Entry ID through `prefilled_cell_id`), plus a deterministic builder (a library function;
+    a CLI producer for Ben follows, because a hand-written hash-bound JSON is not an operator step). The record accepts a
+    late-swap output as its `delivered_file`: a second swap on the same slate has no certified prior, because
+    `CertificationManifest.model_validate_json` refuses a late-swap manifest.
+  - `govern_late_swap` anchor handling. No anchor: `PRIOR_ANCHOR_MISSING`. A present uncertified manifest:
+    `PRIOR_MANIFEST_NOT_CERTIFIED`, kept. Both supplied: `PRIOR_ANCHOR_AMBIGUOUS`. The prior manifest is assumed present at
+    nine sites in `late_swap.py` (the parse and `PRIOR_MANIFEST_INVALID`, `_validate_prior_manifest`, the prior output path
+    taken from `manifest.output_path`, `prior_state_ok`, the `prior_state_binding` record, the output-hash recheck, the
+    inherited `certification_basis` and `model_status`, and `prior_run_id`) and `cli.py` has `--prior-manifest required=True`.
+    The anchor is named by a `prior_anchor` evidence record and `input_hashes["submitted_state"]`, never a new
+    `LateSwapManifest` field (v1 is not mutated). The prior output read becomes a fifth `Name (ID)` site, because it is then
+    Ben's own download.
+  - Multi-contest by group replaces `CURRENT_TEMPLATE_MUST_CONTAIN_ONE_CONTEST_ID`: `--eligibility-evidence` repeatable, one
+    file per contest. A group whose evidence is missing or non-`PASS`, or with any unproven cell, has its proposed rows set to
+    the current ones with no replaceable cell and is named by a non-hard evidence record, while the proven groups ship; when
+    no group is proven the run blocks as today. `govern_late_swap` writes one output over every Entry ID through
+    `write_late_swap_bytes`, which needs `changed == allowed` per entry, so a frozen entry passes through byte-identical and
+    the byte audit audits against the same authorization. Holes found in Session 12's review, all in this item: the inactive
+    report scope (`unlocked_selected`) must cover proven groups only; retiring the one-contest code moves its registry line,
+    `AUDIT_SECTION_4` and the pin for `CURRENT_CONTEST_ID_DIFFERS_FROM_CERTIFIED_PRIOR` in `tests/test_gate_registry.py`
+    (existing-test edits beyond the hash); duplicate lineups are refused file-wide, so state whether R29's "within a given
+    portfolio" is per file or per contest; the evidence paths and hashes are keyed by the one name `eligibility_evidence`;
+    `LateSwapManifest.contest_id` is `None` for several groups with the per-group records in `evidence`.
+  - Lock state is already `lock_at <= as_of` from exact kickoff times, so there is no new lock code: prove locked cells stay
+    byte-identical under the anchored path with BOM, CRLF and final-newline variants. Consider deriving lock state at the
+    later of `as_of` and the clock (the tolerance flag on Session 12's card).
+  - C5: a pure `prefer_later_lock_in_flex(slate, roster, locked_slots)` in `lineups.py`, Classic only, permutes the same
+    player set among the unlocked RB, WR, TE and FLEX slots so the latest-`lock_at` person sits in FLEX (ties keep input
+    order), leaving the lineup's canonical key unchanged and every locked cell in place; it is applied to the proposal before
+    the authorization is derived, so the writer, the reparse and the audit see the reordered roster. Showdown has one
+    distinct slot (CPT), so none applies.
+  - E11: a post-kickoff salary export parses; needs one real export (Session 12's open question).
+  - The `f"{label}_{entry_id}:..."` emitters in `late_swap.py` (`UNREGISTRABLE_TEMPLATES` in `tests/test_gate_registry.py`
+    says they are this card's) write a fixed code with the Entry ID in the detail. `prior_state_ok` reads their `PRIOR_`
+    prefix, so it is a behavior change and needs its own test.
+- **Size.** About 1,200 changed lines with tests (bridge about 680, multi-contest about 380, C5 about 125). The seam is
+  after the bridge: if the diff passes 1,000 there, multi-contest and C5 become a `Session 12c` row.
+- **Out of scope.** Strategy aids (Session 32) and the conditional-EV reoptimizer (Session 36); certifying anything (a record
+  never yields a `CertificationManifest`); `prior_review` and its three exits (`late-swap` is its own command);
+  `scripts/swap_inactives.py --mode late-swap`, which takes an unchecked operator `--now`, writes a portfolio and no entries
+  file, and is not governed.
+- **Open question.** [BEN: for an anchored late swap, A or B? **A (recommended):** the run's own gates decide its
+  `RELEASE_DECISION`, as for a certified anchor. The anchor is never a certification and is named by `prior_anchor`;
+  `CERTIFIED` keeps meaning "this file's own evidence gates passed" under the manual-guardrail basis (`release.py`,
+  `derive_release_policy`), and every gate still stops the file. **B:** an anchored run stays `DO_NOT_UPLOAD` and ships a
+  review-grade file as the baseline does under R28, which needs a late-swap `DELIVERY_STATE`, a writer path for a non-`CERTIFIED`
+  file, a new manifest version `nfl_late_swap_manifest_v2` (`LateSwapManifest` forbids an output path on `DO_NOT_UPLOAD`) and a
+  new file name, about 400 more lines. Also: an anchored run has no prior manifest to inherit `certification_basis` from, so it
+  falls to `MANUAL_GUARDRAIL`, and CLAUDE.md says never send a generated prior assignment to manual-guardrail certification; may
+  a proposal the engine generated be certified under that basis, or must the run refuse one?] The real-file questions (one
+  post-upload DKEntries download, one post-kickoff salary export) stay open on Session 12's card and do not block the build.
 
 #### Session 41: weather and retrieval boundary
 
@@ -2720,7 +2792,7 @@ Things only Ben can do. A session that depends on one checks its status here.
 | O6 | Allow `api.weather.gov` in the cloud environment's egress policy (optionally `api.sleeper.app` and `api.the-odds-api.com`) | Model-path quality in cloud sessions; after Session 06 it no longer blocks delivery | Open |
 | O7 | Apply `ben-review` to the Session 01 pull request and merge it (merged as PR #42) | Session 03 onward | Done |
 | O8 | Current Classic and Showdown salary and entry files for a rehearsal slate, on Windows | Session 16 | Open |
-| O9 | From Session 12 on, save the post-upload DKEntries download into the run folder | Session 12 on real data | Open |
+| O9 | From Session 12 on, save the post-upload DKEntries download into the run folder | Session 12b on real data | Open |
 | O10 | About 20 more Showdown games of standings in the inbox | Session 33 | Open |
 <!-- operator-table:end -->
 
