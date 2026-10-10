@@ -2810,6 +2810,28 @@ the certified prior, exact current-slate IDs, game lock times, and a
 timezone-aware `as_of`. The ordinary pre-lock writer continues to reject every
 prefilled authorized row.
 
+**`--as-of` and the release clock (Session 12, review V12).** `--as-of` must
+agree with the release clock within 120 seconds in either direction
+(`late_swap.AS_OF_CLOCK_TOLERANCE`, a threshold Ben sets). Past that,
+`govern_late_swap` refuses with `LATE_SWAP_AS_OF_CLOCK_MISMATCH` before it
+creates a run directory or reads any input, and the CLI exits 2 and names the
+rerun. A stale `--as-of` would otherwise make locked slots look replaceable, and
+the byte audit audits against the same authorization. The clock is a required
+argument of `govern_late_swap`; the CLI passes `evidence.release_clock`, and no
+flag turns the check off. No schema changes and no new version.
+
+**Roster cell forms in the current template (Session 12, review V13).** A roster
+cell is read by the DraftKings ID it names: a bare ID, or text ending `(ID)`
+(`lineups.prefilled_cell_id`, which `entry_groups` re-exports). A cell that names
+no exact ID is refused by `CURRENT_TEMPLATE_CELL_UNRESOLVED`; text ending in an
+ID outside the salary pool is refused as missing from the pool; a blank cell
+stays `CURRENT_TEMPLATE_MUST_BE_FULLY_PREFILLED`. The name text is never
+identity. An unchanged slot keeps its bytes (a `Name (ID)` cell stays `Name (ID)`),
+a replaced slot is written as a bare ID, and the writer and the byte audit
+compare cells by ID, and by exact text for any slot no one authorized. The form
+DraftKings itself writes is unconfirmed (the Session 12 card's open question), so
+nothing here widens the accepted forms.
+
 ## Late-swap manifest
 
 Every new writable run records `nfl_late_swap_manifest_v1`, including hashes of
@@ -3530,7 +3552,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `840ac5dc37ec04152e3de14179018cc1f91830d5ef723097d23f962c3a66efef`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `ff56e1f9ea15d7463416afcb2ab955cce4d342a9d5700d951f17f5fd5d061372`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.

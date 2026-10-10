@@ -8,7 +8,7 @@ from typing import Mapping
 
 from .byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 from .dk import EntryTemplate
-from .lineups import LateSwapAuthorization
+from .lineups import LateSwapAuthorization, prefilled_cell_id
 
 
 @dataclass(frozen=True)
@@ -178,16 +178,18 @@ def audit_late_swap_output_bytes(
             problems.append(f"line {line_number}: entry metadata changed")
         if source_row[roster_end:] != output_row[roster_end:]:
             problems.append(f"line {line_number}: non-roster cells changed")
-        output_roster = tuple(
-            cell.strip() for cell in output_row[roster_start:roster_end]
-        )
+        output_cells = tuple(cell.strip() for cell in output_row[roster_start:roster_end])
+        # The roster matches the assignment by the ID each cell names (`Name (ID)` or a bare ID,
+        # Session 12, V13); a cell that names none stays text, so it can never equal an assignment.
+        output_roster = tuple(prefilled_cell_id(cell) or cell for cell in output_cells)
         if output_roster != assignments[source_id]:
             problems.append(f"line {line_number}: roster bytes do not match assignment")
         source_roster = tuple(
             cell.strip() for cell in source_row[roster_start:roster_end]
         )
         for slot in range(roster_width):
-            if slot not in allowed and output_roster[slot] != source_roster[slot]:
+            # A cell no one authorized stays the same text, not only the same ID.
+            if slot not in allowed and output_cells[slot] != source_roster[slot]:
                 problems.append(
                     f"line {line_number}: unauthorized roster slot {slot + 1} changed"
                 )

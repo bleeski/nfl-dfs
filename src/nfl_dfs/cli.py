@@ -99,10 +99,20 @@ from .delivery import (
 )
 from .economics import evaluate_candidates_against_field
 from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
-from .evidence import EvidenceError, parse_official_inactive_snapshot, source_ledger_evidence
+from .evidence import (
+    EvidenceError,
+    parse_official_inactive_snapshot,
+    release_clock,
+    source_ledger_evidence,
+)
 from .field import generate_opponent_field, scale_field_multiplicities
 from .hashing import content_hash, sha256_bytes, sha256_file
-from .late_swap import LateSwapRunError, govern_late_swap
+from .late_swap import (
+    AS_OF_CLOCK_TOLERANCE,
+    LateSwapClockError,
+    LateSwapRunError,
+    govern_late_swap,
+)
 from .learning import evaluate_challenger, should_rollback
 from .lineups import read_assignment_csv, validate_lineup, write_upload_bytes
 from .metric_registry import (
@@ -2152,6 +2162,7 @@ def command_late_swap(args: argparse.Namespace) -> int:
             inactive_reports_path=args.inactive_reports,
             output_directory=args.output_dir,
             as_of=now,
+            clock=release_clock,
         )
     except LateSwapRunError as exc:
         _print_json(
@@ -2163,7 +2174,12 @@ def command_late_swap(args: argparse.Namespace) -> int:
                 "manifest": None,
                 "output_path": None,
                 "output_sha256": None,
-                "next_action": "Use a new unique run ID after reviewing the existing run directory.",
+                "next_action": (
+                    "Rerun with --as-of set to the current time; it must be within "
+                    f"{int(AS_OF_CLOCK_TOLERANCE.total_seconds())} seconds of the release clock."
+                    if isinstance(exc, LateSwapClockError)
+                    else "Use a new unique run ID after reviewing the existing run directory."
+                ),
             }
         )
         return 2

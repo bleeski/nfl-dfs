@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -14,6 +15,25 @@ from .hashing import content_hash, sha256_bytes
 
 class LineupValidationError(ValueError):
     pass
+
+
+_BARE_ID = re.compile(r"[0-9]+")
+_TRAILING_ID = re.compile(r"\(([0-9]+)\)\s*$")
+
+
+def prefilled_cell_id(cell: str) -> str | None:
+    """The DraftKings ID a prefilled roster cell names, or None when it names none exactly.
+
+    A bare ID or text ending `(ID)` resolves; a name alone, a stale ID or anything else does not, and
+    only the ID is ever identity. It lives here, a layer below `entry_groups` (Session 11, which
+    re-exports it), because the late-swap writer and the byte audit read the same forms (Session 12, V13).
+    """
+
+    value = cell.strip()
+    if _BARE_ID.fullmatch(value):
+        return value
+    match = _TRAILING_ID.search(value)
+    return match.group(1) if match else None
 
 
 @dataclass(frozen=True)
@@ -320,10 +340,17 @@ def write_late_swap_bytes(
                 f"LATE_SWAP_AUTHORIZATION_INDEX_INVALID: Entry {entry_id} authorization contains "
                 "an invalid roster index"
             )
+        existing_ids = tuple(prefilled_cell_id(cell) for cell in auth.existing_cells)
+        unresolved = [slot + 1 for slot, value in enumerate(existing_ids) if value is None]
+        if unresolved:
+            raise LineupValidationError(
+                f"CURRENT_TEMPLATE_CELL_UNRESOLVED: Entry {entry_id} slots {unresolved} hold no exact "
+                "DraftKings ID (a bare ID or 'Name (ID)')"
+            )
         changed = {
             index
             for index, (existing, replacement) in enumerate(
-                zip(auth.existing_cells, proposed, strict=True)
+                zip(existing_ids, proposed, strict=True)
             )
             if existing != replacement
         }
