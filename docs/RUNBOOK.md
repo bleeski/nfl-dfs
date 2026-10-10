@@ -884,8 +884,14 @@ sh ./nfl.sh late-swap \
   --eligibility-evidence '/full/path/to/late-swap-eligibility.json' \
   --inactive-reports '/full/path/to/team-inactive-reports.json' \
   --output-dir '/full/path/to/outputs' \
-  --as-of '2026-09-13T15:00:00-04:00'
+  --as-of "$(date -Iseconds)"
 ```
+
+`--as-of` is the current time. The command refuses one more than 120 seconds from
+the release clock (`LATE_SWAP_AS_OF_CLOCK_MISMATCH`, exit code 2, no run
+directory), so a time copied from an earlier run is refused: rerun with the time
+now. A roster cell in the current template may be a bare DraftKings ID or text
+ending `(ID)`; any other text is refused by name.
 
 The prior manifest must be `CERTIFIED`, its referenced output must still exist
 and match its hash, and its salary, assignment, original-template, and evidence

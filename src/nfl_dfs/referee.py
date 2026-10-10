@@ -8,7 +8,7 @@ from typing import Mapping
 
 from .byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 from .dk import EntryTemplate
-from .lineups import LateSwapAuthorization
+from .lineups import LateSwapAuthorization, prefilled_cell_id
 
 
 @dataclass(frozen=True)
@@ -178,8 +178,15 @@ def audit_late_swap_output_bytes(
             problems.append(f"line {line_number}: entry metadata changed")
         if source_row[roster_end:] != output_row[roster_end:]:
             problems.append(f"line {line_number}: non-roster cells changed")
+        output_cells = tuple(cell.strip() for cell in output_row[roster_start:roster_end])
+        # The roster matches the assignment cell by cell. A slot the swap replaced must hold exactly
+        # the assigned bare ID, as the writer writes it (an audit that read it by ID alone would pass
+        # a writer that emitted `Wrong Name (ID)`). A retained slot is read by the ID it names
+        # (`Name (ID)` or a bare ID, Session 12, V13) and its text is held to the source's below;
+        # a retained cell that names none stays text, so it can never equal an assignment.
         output_roster = tuple(
-            cell.strip() for cell in output_row[roster_start:roster_end]
+            cell if slot in allowed else (prefilled_cell_id(cell) or cell)
+            for slot, cell in enumerate(output_cells)
         )
         if output_roster != assignments[source_id]:
             problems.append(f"line {line_number}: roster bytes do not match assignment")
@@ -187,7 +194,8 @@ def audit_late_swap_output_bytes(
             cell.strip() for cell in source_row[roster_start:roster_end]
         )
         for slot in range(roster_width):
-            if slot not in allowed and output_roster[slot] != source_roster[slot]:
+            # A cell no one authorized stays the same text, not only the same ID.
+            if slot not in allowed and output_cells[slot] != source_roster[slot]:
                 problems.append(
                     f"line {line_number}: unauthorized roster slot {slot + 1} changed"
                 )

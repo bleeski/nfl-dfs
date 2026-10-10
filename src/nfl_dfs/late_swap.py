@@ -6,9 +6,9 @@ import os
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Callable, Iterable, Mapping
 
 from pydantic import ValidationError
 
@@ -30,6 +30,7 @@ from .hashing import sha256_bytes, sha256_file
 from .lineups import (
     LateSwapAuthorization,
     assignment_hash,
+    prefilled_cell_id,
     read_assignment_csv,
     validate_lineup,
     write_late_swap_bytes,
@@ -58,8 +59,60 @@ class LateSwapRunError(RuntimeError):
     pass
 
 
+# Session 12, review V12. `--as-of` and the release clock must agree within this much, in either
+# direction. A stale `--as-of` makes locked slots look replaceable, and the byte audit audits against
+# the same authorization, so it would pass a file that edits them; a future one corrupts every
+# freshness check that reads `as_of` (an observation "in the future" is judged against it). The
+# tolerance bounds that window and does not close it: lock state is `lock_at <= as_of`, so an `as_of`
+# this far behind the clock can still treat a game that just kicked off as unlocked. 120 seconds is the
+# late-swap deadline (`govern_late_swap(deadline_seconds=120.0)`): an operator types the time by hand
+# around the run. The threshold is Ben's to set (a [BEN] flag on the Session 12 card names the number
+# and this consequence).
+AS_OF_CLOCK_TOLERANCE = timedelta(seconds=120)
+
+
+class LateSwapClockError(LateSwapRunError):
+    """`--as-of` disagrees with the release clock past `AS_OF_CLOCK_TOLERANCE` (V12)."""
+
+
+def require_as_of_matches_clock(as_of: datetime, now: datetime) -> None:
+    """Refuse an `as_of` that disagrees with `now`; there is no tolerance argument and no way to skip."""
+
+    if now.tzinfo is None:
+        raise LateSwapClockError(
+            "LATE_SWAP_AS_OF_CLOCK_MISMATCH: the release clock is not timezone-aware"
+        )
+    skew = abs(as_of - now)
+    if skew > AS_OF_CLOCK_TOLERANCE:
+        raise LateSwapClockError(
+            f"LATE_SWAP_AS_OF_CLOCK_MISMATCH: --as-of {as_of.isoformat()} is {skew} from the release "
+            f"clock {now.isoformat()}, past the {AS_OF_CLOCK_TOLERANCE} tolerance"
+        )
+
+
 def _unique(values: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
+
+
+def _resolved_cells(template: EntryTemplate) -> tuple[dict[str, tuple[str, ...]], list[str]]:
+    """Each entry's roster cells read as exact DraftKings IDs (V13), and the entries with a cell naming none.
+
+    A bare ID or text ending `(ID)` resolves to its ID. Any other non-blank text is kept as it is, so
+    the shared checks name it as missing from the pool too, and its entry is returned for the named
+    blocker. A blank cell stays blank (`CURRENT_TEMPLATE_MUST_BE_FULLY_PREFILLED` names those).
+    """
+
+    resolved: dict[str, tuple[str, ...]] = {}
+    unresolved: list[str] = []
+    for entry in template.authorizations:
+        ids = tuple(prefilled_cell_id(cell) for cell in entry.existing_cells)
+        if any(value is None and raw for value, raw in zip(ids, entry.existing_cells, strict=True)):
+            unresolved.append(entry.entry_id)
+        resolved[entry.entry_id] = tuple(
+            value if value is not None else raw
+            for value, raw in zip(ids, entry.existing_cells, strict=True)
+        )
+    return resolved, unresolved
 
 
 def _portfolio_problems(
@@ -333,10 +386,14 @@ def govern_late_swap(
     inactive_reports_path: str | Path,
     output_directory: str | Path,
     as_of: datetime,
+    clock: Callable[[], datetime],
     deadline_seconds: float = 120.0,
 ) -> tuple[LateSwapManifest, Path]:
     if as_of.tzinfo is None:
         raise LateSwapRunError("--as-of must include a timezone")
+    # V12: before the deadline clock starts, any path is resolved or any file is read or written.
+    # `clock` is required, so no caller can omit the check; the CLI passes `evidence.release_clock`.
+    require_as_of_matches_clock(as_of, clock())
     if not math.isfinite(deadline_seconds) or deadline_seconds <= 0:
         raise LateSwapRunError("late-swap deadline must be positive and finite")
     started = time.perf_counter()
@@ -394,10 +451,9 @@ def govern_late_swap(
         if "current_entries" in input_hashes:
             try:
                 current_template = parse_entries(paths["current_entries"])
-                current_assignments = {
-                    entry.entry_id: entry.existing_cells
-                    for entry in current_template.authorizations
-                }
+                current_assignments, unresolved_entries = _resolved_cells(current_template)
+                if unresolved_entries:
+                    blockers.append(f"CURRENT_TEMPLATE_CELL_UNRESOLVED:{unresolved_entries}")
                 if any(
                     not cell
                     for entry in current_template.authorizations
@@ -631,10 +687,7 @@ def govern_late_swap(
                     source_name=str(output_path),
                 )
                 reconcile_template(reparsed, slate)
-                reparsed_assignments = {
-                    entry.entry_id: entry.existing_cells
-                    for entry in reparsed.authorizations
-                }
+                reparsed_assignments, _ = _resolved_cells(reparsed)
                 if reparsed_assignments != proposed_assignments:
                     blockers.append("FINAL_REPARSE_ASSIGNMENT_MISMATCH")
                 output_hash = sha256_bytes(output_bytes)

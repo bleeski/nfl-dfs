@@ -257,6 +257,7 @@ def _govern(case, slate, run_id="late-valid"):
         inactive_reports_path=case["inactive"],
         output_directory=case["output_dir"],
         as_of=AS_OF,
+        clock=lambda: AS_OF,  # Session 12, V12: the clock is a required argument; the fixture pins it
     )
 
 
@@ -674,9 +675,12 @@ def test_midrun_input_mutation_and_existing_run_id_fail_safely(
 
 
 def test_cli_blocked_case_returns_nonzero_and_writes_no_upload(
-    tmp_path: Path, classic_slate, classic_entries
+    tmp_path: Path, classic_slate, classic_entries, monkeypatch
 ) -> None:
     case = _case(tmp_path, classic_slate, classic_entries)
+    # Session 12, V12: the fixture's `--as-of` is a past date, which the release clock now refuses.
+    # Pinned the way test_w6_live_preflight pins `preflight.release_clock`.
+    monkeypatch.setattr("nfl_dfs.cli.release_clock", lambda: AS_OF)
     eligibility = json.loads(case["eligibility"].read_text(encoding="utf-8"))
     eligibility["bulk_late_swap_eligible"] = False
     case["eligibility"].write_text(json.dumps(eligibility), encoding="utf-8")

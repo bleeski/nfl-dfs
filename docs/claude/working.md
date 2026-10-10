@@ -33,6 +33,11 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
   `rm -rf` plus `git archive origin/main src | tar` into the scratchpad. A denial is final for that command and its
   rewordings: hand Ben the exact commands (the before and after comparison's second tree is the one that needs them) and
   ask for the output.
+- Three more traps (Session 12, Linux). **Never `pkill -f '<pattern>'` when the pattern appears in your own command line:** it
+  kills the shell (exit 144); `kill <pid>` from `pgrep`. **Never pipe a ROADMAP table row through `rev`:** the rows are thousands of
+  characters, `rev` spins at full CPU and holds the shell; use `cut -c`, `grep -o` or the Read tool. **Start the full suite as the
+  background task itself** (`sh ./nfl.sh test 2>&1 | tee /tmp/pytest.log | tail -4` with `run_in_background`): one wrapped in a
+  subshell with `&` returns at once and sends no exit notification, and the exit code shown is `tail`'s, so read the log's summary line.
 
 ## Session protocol: `docs/ROADMAP.md` §2.1, plus these
 

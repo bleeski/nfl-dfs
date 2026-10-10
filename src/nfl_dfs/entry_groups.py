@@ -34,20 +34,17 @@ exact current-slate IDs ever does.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from .contracts import DeliveryLimitation, EntryAuthorization, SlateContract
 from .dk import EntryTemplate
 from .gate_registry import GateRegistry
-from .lineups import roster_canonical_key, validate_lineup
+from .lineups import prefilled_cell_id, roster_canonical_key, validate_lineup
 
 ROW_BLANK = "BLANK"
 ROW_PREFILLED = "PREFILLED"
 ROW_PARTIAL = "PARTLY_FILLED"
-_BARE_ID = re.compile(r"[0-9]+")
-_TRAILING_ID = re.compile(r"\(([0-9]+)\)\s*$")
 
 
 def row_kind(entry: EntryAuthorization) -> str:
@@ -67,14 +64,8 @@ def blank_entry_ids(template: EntryTemplate) -> tuple[str, ...]:
     return tuple(e.entry_id for e in template.authorizations if row_kind(e) == ROW_BLANK)
 
 
-def prefilled_cell_id(cell: str) -> str | None:
-    """The DraftKings ID a prefilled cell names, or None when it names none exactly."""
-
-    value = cell.strip()
-    if _BARE_ID.fullmatch(value):
-        return value
-    match = _TRAILING_ID.search(value)
-    return match.group(1) if match else None
+# `prefilled_cell_id` lives in `lineups` (Session 12, V13: the late-swap writer and the byte audit read
+# the same forms, and `lineups` cannot import this module) and is imported above under its own name.
 
 
 @dataclass(frozen=True)

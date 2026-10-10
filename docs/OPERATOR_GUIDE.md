@@ -301,8 +301,13 @@ roster cells are immutable. Paste this in PowerShell with full paths:
   --eligibility-evidence 'C:\full\path\late-swap-eligibility.json' `
   --inactive-reports 'C:\full\path\team-inactive-reports.json' `
   --output-dir 'C:\full\path\outputs' `
-  --as-of '2026-09-13T15:00:00-04:00'
+  --as-of (Get-Date -Format o)
 ```
+
+`--as-of` is the current time, which the command checks against the release
+clock: one more than 120 seconds off is refused (exit code 2, no run folder), so
+rerun with the time now. A roster cell in the template may be a bare DraftKings ID
+or text ending `(ID)`; any other text is refused by name.
 
 Expected result:
 
