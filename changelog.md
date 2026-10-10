@@ -4,6 +4,95 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-10: the DraftKings results review -- Sessions 69 to 74 added (planning, not a roadmap session)
+
+Ben asked for the first review of real DraftKings results (his upload `dk-findings-and-engine-requirements.md`, SHA-256
+`ec7c6ce789e40a9207af7c659131a3e0aa1f764ac1705d480f31d0a9fc518f4a`; its R1 to R6 are labels, not queue IDs) to become the top of this
+engine's queue: NFL only, planning only, the roadmap and this file the only edits. Input: his account entry-history export (10,095
+entries across every sport, October 2023 to October 2026, SHA-256 `5752c7f3a33b0e95c126b47b01e846b374a3c110f45b32ee618c14e056e807a3`),
+kept outside git because it carries account winnings. Branch `claude/dk-results-backlog`, committed locally and not pushed (Ben's
+instruction for this session). No code, test, fixture, config or protected path changed.
+
+**Recomputed for NFL.** Scratch scripts outside the repository. The review's definitions reproduce its all-sport figures exactly
+(9,960 paid entries outside Best Ball, $2,470.23 in fees, -$640.20, -25.9%, rake-implied -9.8%, percentile 52.5, 9.7% in the top 10%,
+13.6% in the bottom 10%, 106 blanks), so the NFL figures use the same definitions. A slate is the review's cluster: sport, Eastern date
+and game type.
+- NFL paid entries outside Best Ball: 396 over 55 slates, $306.92, -$145.96 realized (-47.6%; 90% slate-bootstrap interval -68.9% to
+  -20.5%), percentile 55.1 (50.0 to 60.3). Matches the review.
+- Engine era (Classic and Showdown Captain Mode from the first live run, NE@SEA on 2026-09-09): 348 entries over 17 slates (4 Classic,
+  13 Showdown), $223.20, -$92.14 realized; percentile 55.2, or 53.8 with blanks removed (47.9 to 59.0). With blanks removed, 9.2% in the
+  top 10% against 9.8% random and 12.5% in the bottom 10% against 10.2% random (excess +2.3 points, interval -1.6 to +6.8); with blanks,
+  8.9% and 15.2% (excess +5.1, interval -0.2 to +12.0): the review's shape, at the edge of the noise. Showdown 53.7 against Classic 54.1
+  with blanks removed. September 59.2, October 47.8.
+- Blanks: 11 paid entries and 1 free one, all on DET@BUF 2026-09-17. 12 of its 13 Entry IDs locked at zero and the 13th scored 110.95, on a
+  slate whose run built a file for all 13 before R28; none in the 11 engine-era slates since (9 since R28).
+- Field size and payout shape move together: 138 of 148 entries in fields of 500 or fewer were in contests paying under 5% of the field,
+  against 0 of 186 in fields above 2,000. Within each slate, top-heavy contests finished worse than flatter ones on 11 of 12 slates (mean
+  +11.0 percentile points, sign test p = 0.003); by field size alone 10 of 13 (p = 0.046); the 10 entries in small flatter fields (4 of 6
+  slates worse) are too few to separate the two, and about 20 slices were examined. Placement does not explain it: on the four slates with
+  priors, small-field and large-field entries got lineups of the same prior rank (about 0.5).
+- Fields above 2,000: one top-1% finish against 1.89 expected at random, none in the top 0.1% against 0.18; the best single return was
+  6.0x the fee. The 2026-09-13 Classic Millionaire and its feeders took 46% of the engine era's fees ($102.20 of $223.20).
+- A first predicted-against-realized look (each delivered lineup's prior against its DraftKings points, joined on Entry ID): -0.03
+  (DET@CAR), +0.38 (ATL@NO), +0.63 (TB@DAL), +0.06 (Week 4 Classic); descriptive, because the rows share most of their people.
+- Corrections to the review for this engine: `Place / Contest_Entries` is biased in small fields (random mean (n+1)/2n; no top-10% finish
+  below 10 entries) and DraftKings' tie rule flatters it, so each rate needs a per-entry random expectation; no NFL Showdown deficit; the
+  captain cap is enforced (`config/showdown_concentration_defaults_v1.json`); the operating path has no payout estimate to invert (it
+  maximizes prior points, `selection.py:654`; the legacy `nfl build` field and economics are not on it); the NFL blanks followed a finished
+  build, not an unfinished one; governed late swap exists (Session 12, 12b pending); R6 is MLB-only.
+- The export has two rows with `Places_Paid` above `Contest_Entries` (NFL 2024-09-22 and NBA 2024-02-22, both free contests that ran under
+  their guaranteed size), so Session 69 keeps and names them instead of refusing the file.
+
+**Research (two agents, abstracts and extracts; check each figure against its source before it enters a contract).** A 5-point percentile
+shift needs about 262 independent lineups and, at about 20 entries a slate sharing outcomes at a correlation near 0.3, about 88 slates; a
+top-1% rate moving from 1% to 2% needs about 979 lineups, about 328 slates (80% power; own arithmetic). Small pools reward conservative
+picks and large pools contrarian ones (Clair and Letscher, Operations Research 2007; Brill, Wyner and Barnett, Entropy 2024). Ownership
+and field: Dirichlet-regression ownership and whole-lineup field simulation (Haugh and Singal, Management Science 2021); captain and FLEX
+are separate markets. Paired same-slate comparison against random legal lineups (Easton and Newell 2019); few-cluster inference (Cameron,
+Gelbach and Miller 2008). No quantified value of late swap was found.
+
+**Added.** `docs/ROADMAP.md`: Sessions 69 (entry-history intake), 70 (player-level grading of the prior), 71 (results report), 72
+(per-Entry-ID build record), 73 (results join) and 74 (paired controls) as `Pending` rows directly above Session 17's row, with cards, a
+§2.8 placement note and a §4 row; §1 rewritten to Session 69; notes on the Session 18 card (it shares Session 71's metric definitions) and
+the Session 22 card (Session 72 takes its per-entry record). Two `[BEN: ...]` flags with safe defaults (cards 69 and 73), answered the same day (below).
+
+**Review, twice, before the edit landed.**
+- The `advisor` skill was blocked by a crash in the organization's skill-security hook (`/bin/sh: set: Illegal option -o pipefail`), so
+  its documented procedure, one fresh second-opinion agent, was run directly on the full proposal. Taken: player grading ahead of the
+  report; no upload-now row (the lock margin is Session 14's spec, the console line Session 59's, the rest a procedure line); no field-size
+  placement row (a pre-registered trigger instead); a within-contest dispersion claim dropped, because a below-median portfolio alone
+  produces the observed spread (independent Beta percentiles with mean 0.62 give a median SD of 0.227 against the observed 0.236 and 0.270
+  for uniform); no lineup-level p-values on the within-portfolio correlation; contest classes from numeric columns only; fees and winnings
+  out of tracked files; larger size estimates. Not taken: moving Session 18 up and editing the Session 23d and 59 cards (Ben asked for
+  existing rows to stay as they are; the Session 18 move stands as the recommendation); making the pool-scores dump the engine default
+  inside `selection.py`, because no caller passes the path (`selection.py:316`, `:443`) and only `prior_review.py` knows the run folder,
+  so Session 72 makes it a procedure step and Session 13 keeps the artifact.
+- A fresh-context review of the first diff found five blocking issues, all fixed before commit: the intake refused Ben's own file over
+  the two `Places_Paid` rows (now kept and named); player grading and the paired controls read the export without depending on the intake
+  (the intake is now Session 69 and first, and both depend on it); "16 slates since DET@BUF" was wrong (11, and 9 since R28); a
+  small-field comparison split by contest name (recomputed on the numeric label); unfilled verification lines. Also fixed: the Session 22
+  note no longer adds scope, the two cards agree on who defines the metrics, the slate is defined, the DET@BUF wording (one of 13 entries
+  scored), the tail rates labelled with and without blanks, a stronger reconciliation clause, the 1% to 2% basis of the power figure, and no
+  model named in the roadmap.
+
+**Ben's answers, same day (second commit).** Push: yes. The repository is public: the two flags are answered and their defaults stand
+(the export and every fee or winnings column stay gitignored; tracked results carry place, field size, points and percentile only).
+Keep entering top-heavy small contests: no change to contest selection, so Session 71's pre-registered test accrues with every slate
+(noted on its card). Move Session 18 up: done, directly below Session 74 (§2.8 and §4), and its card's stale `Depends on` line
+(Session 17b and O2) now matches the board's `none`.
+
+**Verification.**
+- `sh ./nfl.sh test tests/test_roadmap_queue.py -x --tb=short`: `24 passed in 0.68s` before any edit; on the final text, with `tests/test_harness_orientation.py`, `79 passed in 0.56s`; `tests/test_repo_boundaries.py` `126 passed in 2.81s`.
+- `python3 scripts/repo_state.py --stdout`: `sessions startable (docs/ROADMAP.md order): S69, S72, S41 (+12 more)`; open `[BEN:]` flags 9 to 11 (the two defaults above).
+- Full suite, Linux (`sh ./nfl.sh test`): `3280 passed, 1 skipped in 866.67s (0:14:26)`, recorded with `scripts/record_verify.py`; the skip is the junction test. It ran while the roadmap text was being revised, so the tests that read it were rerun on the final text (above).
+- Second commit (Ben's answers): `tests/test_roadmap_queue.py`, `tests/test_harness_orientation.py` and `tests/test_repo_boundaries.py`
+  `205 passed in 11.64s`; `repo_state.py`: startable `S69, S72, S18 (+12 more)`, open `[BEN:]` flags back to 9.
+- `git diff --check`: clean. `git diff --stat`: `changelog.md` and `docs/ROADMAP.md` only.
+
+**Found.** The Session 18 card said it depended on Session 17b and O2 while its board row said `none` (the 2026-10-02 review's local
+mode); corrected in the second commit once Ben approved the move. Ben confirmed the repository is public; `.claude/rules/git-authority.md`
+still calls it private, a one-line correction left for its own change.
+
 ### 2026-10-10: Session 12 -- the late-swap clock bound and `Name (ID)` cells (V12, V13); the rest cut as Session 12b
 
 Branch `claude/s12-late-swap-governance-6jnvcn`, from `origin/main` at `065e309` (PR #125's merge); claim commit `5fc0bd7`, code `e8bbe30`, review fixes `5651a18`, ROADMAP close-out `cfc351a` and the commit after it; pull request #126, whose body carries the `Session close:` line. Class V, cloud (Linux) surface. No protected path is touched (`scripts/check_protected_paths.py` reports none). No evidence gate is weakened, no number is written for anyone, and every path still ends `MODEL_STATUS=PRIOR_ONLY` / `RELEASE_DECISION=DO_NOT_UPLOAD` except governed late swap's own path, which both changes make stricter. Ben approved the plan before any code.

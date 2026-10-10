@@ -17,7 +17,7 @@ full code review and a sweep of every plan, brief, archive and ledger.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 41 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S41`, on the branch your session was assigned or a new `claude/s41-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 69 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S69`, on the branch your session was assigned or a new `claude/s69-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
 On 2026-09-25 a full code review (`docs/critiques/Code_Review_2026-09-25.md`)
 and a sweep of every plan, brief, retrospective, archive and ledger were
@@ -47,7 +47,8 @@ review's thesis section) closed on 2026-10-07, and Session 67 (the R33 thesis ex
 2026-10-07, with a ruling flag on its card. Session 66 (thesis adherence in the Showdown QA and value-add tools) closed on 2026-10-08. Session 23d (contest facts, the `FIRST_PLACE_OBJECTIVE` label and the
 screening checklist) closed on 2026-10-08 with its workbook rows split off as Session 68. Session 58 (observed-zero history for a declared starter) closed on 2026-10-09. Session 12 (the late-swap bridge and C5) closed on
 2026-10-10 at its V12 and V13 seam and added Session 12b (the bridge, multi-contest and C5), which waits on a BEN ruling. The
-first startable row by order is Session 41. Session 23b (Ben's game
+first startable row by order is Session 69: Sessions 69 to 74, added on 2026-10-10 from the first review of real DraftKings
+results (§2.8), lead the queue, and Session 41 follows them. Session 23b (Ben's game
 theses) shares `relaxation.py` and `docs/DATA_CONTRACTS.md` with Sessions 39 and
 39b; run them one at a time, or in separate worktrees, and merge `origin/main`
 before the final suite. Session 23c built on 23b's v3 thesis contract (its v4 adds several theses; v3 is not mutated).
@@ -148,6 +149,13 @@ Every session follows this protocol, and the cards only add to it:
 | Session 23e | Standalone | P2 part 1b, Classic structural bounds and the share cap: `salary_left` and `offense_against_own_dst` in a new `nfl_classic_portfolio_policy_c2_v2` (v1 unchanged); a new `max_person_share` default-fraction control for Classic (C2 has no existing default-fraction mechanism, unlike Showdown); generator defaults; the new bounds folded into the existing Classic rung table | Chunk P2; standings findings §5.4; Session 23 breakpoint | `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | S | Session 23 | `sh ./nfl.sh test tests/test_classic_policy_generator.py tests/test_relaxation_controller.py -x --tb=short`; acceptance on the supplied Classic fixture unless the DAL@NYG/DEN@KC bytes have arrived | Complete |
 | Session 21 | Batched | Prior-model triage: the season-sum share against per-game capacity mismatch, confirmed by the 2026-09-25 review at `priors.py:1541-1565` and `:1661-1680`, becomes per-game rates under a new transformation version; the transfer pseudo-count scales by the team's expected pool, not the incumbents'; F8 alternate-name identity proposals for review with auto-accept unchanged; `tests/test_priors_adapter.py:44`'s hardcoded `AS_OF` pins `now` | Showdown retro §9 #2; archive § F8; code review S1, S2 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_score.py`, `src/nfl_dfs/opportunity.py`, `docs/DATA_CONTRACTS.md`, `tests/test_priors_adapter.py` | P | none | `sh ./nfl.sh test tests/test_priors_adapter.py tests/test_offensive_roles.py tests/test_prior_selection.py -x --tb=short`; a fixture player who missed games projects at his per-game rate | Complete |
 | Session 48 | Standalone | Depth-chart QB transfer bug: a starter who arrived at his current team from elsewhere this offseason or in-season (2026-09-27 examples: Malik Willis, Geno Smith) gets zero attempt share under the current-role depth-chart rule, because the rule reads only this team's own prior-season depth history and a transferred starter has none there; he should get his new team's starter share the same as any other named starter, not zero | changelog 2026-09-27 (Week 3 slate run) | `src/nfl_dfs/qb_depth_roles.py`, `docs/DATA_CONTRACTS.md` | P | none | `sh ./nfl.sh test tests/test_qb_depth_roles.py -x --tb=short`; a fixture starter with no prior-season history at his current team gets the starter's share, not zero | Complete |
+| Session 69 | Standalone | DraftKings entry-history intake: `nfl_dk_entry_history_v1`, the account export's 14 columns (one row per entry; `Entry_Key` and `Contest_Key` are the DKEntries Entry ID and Contest ID), classified by schema, SHA-256 bound, copied once into a gitignored immutable snapshot (`data/results/inbox/`, the `data/standings/inbox/` rule); a strict parser that names every bad row (missing column, duplicate `Entry_Key`, `Place` outside 1 to `Contest_Entries`, unparseable money, number or date, an empty NFL subset) and keeps and names a `Places_Paid` above `Contest_Entries` rather than refusing it; a gate-registry family; `nfl results-intake`; the contest name carried opaque and never parsed; an operator download only, never fetched | DraftKings results review 2026-10-10 (R1); no code under `src/`, `scripts/` or `tests/` references `Entry_Key` or `Contest_Key` | new `src/nfl_dfs/entry_history.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md`, `config/gate_registry_v1.json`, `.gitignore`, new `tests/test_entry_history.py` | P | none | `sh ./nfl.sh test tests/test_entry_history.py tests/test_gate_registry.py -x --tb=short`; synthetic fixtures for every refusal; on Ben's 2026-10-10 export (outside git) 10,095 rows, 476 NFL rows and 396 paid NFL rows outside Best Ball, with its two `Places_Paid` rows above the field named | Pending |
+| Session 70 | Standalone | Realized player points and player-level grading of the prior (the direct test of the review's "projections that match consensus" diagnosis): realized stat lines from the nflverse weekly player file (`priors.py:240` already declares it, on a host `sources.py` allowlists) scored with the engine's own `scoring.py`; joined to each run's frozen per-person priors through the run's own identity, exact DraftKings IDs only; `player_points_mae` (registered in `config/metric_registry_q1_v1.json`, computed nowhere today), the Spearman correlation of prior against realized points and the same two for DraftKings salary rank as the consensus-price baseline, by position and salary tier; realized play rate by DraftKings status (`Q` against blank) as the participation evidence; realized lineup totals reconciled against DraftKings' own lineup points from Session 69's history; a grading input only, never a prior, candidate, selection or gate input | DraftKings results review 2026-10-10 (R1, R4, R6); this planning session's recomputation; registered but uncomputed Q1 metrics | new `src/nfl_dfs/player_grading.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md`, new `tests/test_player_grading.py` | P | Session 69 | `sh ./nfl.sh test tests/test_player_grading.py -x --tb=short`; on the committed DET@CAR, ATL@NO, TB@DAL and Week 4 Classic inputs every fully covered delivered lineup reconciles to DraftKings' lineup points within 0.01, except differences traced to a stat the source does not carry, each named by player and stat; none traces to `scoring.py` | Pending |
+| Session 71 | Standalone | The NFL results report: a registered `nfl_results_metrics_v1` with `does_not_establish` text (finishing percentile `Place / Contest_Entries`, top-10% and bottom-10% rates and blank entries, each beside its per-entry random expectation; DraftKings' tie rule declared; the slate defined); rollups by format, payout shape and field-size band from the numeric columns only (`contest_facts.first_place_label`, never the contest name), entry-fee band, month, slate and an engine-era parameter; a seeded slate-cluster bootstrap with the minimum detectable effect each slice's slate count supports; realized net and realized return on fees beside the rake-implied return, labelled realized; fee concentration by contest; the pre-registered within-slate test (top-heavy contests against flatter ones) on every run, with its trigger | DraftKings results review 2026-10-10 (R1); this session's recomputation and its `place / n` small-field correction | new `src/nfl_dfs/results_report.py`, new `config/results_metrics_v1.json`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md`, new `tests/test_results_report.py` | P | Session 69 | `sh ./nfl.sh test tests/test_results_report.py -x --tb=short`; on Ben's 2026-10-10 export the NFL rollup reproduces 396 entries, $306.92 in fees, -$145.96 realized and percentile 55.1, the engine era (from 2026-09-09) 348 entries, 17 slates and 11 paid blanks on one slate, the top-heavy-against-flatter test worse on 11 of 12 slates, and the all-sport check 9,960 entries at percentile 52.5; two runs byte-identical | Pending |
+| Session 72 | Standalone | The per-Entry-ID build record: `nfl_entry_build_record_v1` and `scripts/record_entries.py`, which records any delivered file (an engine file or a hand-edited one) from the file, the salary file and the run folder: Entry ID, Contest ID, run ID, file hashes, mode, method (exit and relaxation rung, or `OPERATOR_FILE`), policy hash, thesis, roster DK IDs, captain, prior points and score version, rank within the portfolio, salary left, structure counts from the Session 23 and 23e rule functions, DraftKings status flags, late-window count, and the stack game's market total and spread only from the sources ledger; written beside the slate's construction records; every run dumps its pool scores into the run folder (procedure, `selection.py:160`); committed slates backfilled where the bytes allow, the rest named | DraftKings results review 2026-10-10 (R1, R5); `selection.py:118-150` saves prior points by lineup index and `prior_review.py:917-925` maps Entry IDs to theses only | new `src/nfl_dfs/entry_record.py`, new `scripts/record_entries.py`, `docs/DATA_CONTRACTS.md`, `docs/RUNBOOK.md`, `docs/claude/working.md`, `data/inbox/slates/*/construction/`, new `tests/test_entry_record.py` | P | none | `sh ./nfl.sh test tests/test_entry_record.py -x --tb=short`; on the committed DET@CAR, ATL@NO, TB@DAL and Week 4 Classic files the record's prior points equal each run's own pool scores or portfolio record for all 131 Entry IDs; an Entry ID outside the template is refused by name | Pending |
+| Session 73 | Standalone | The results join: Session 69's history and Session 72's records joined on Entry ID; blanks classed `LOCKED_BLANK_WITH_FILE` or `LOCKED_BLANK_NO_RECORD`; the within-slate rank correlation of prior points against realized points, per slate and pooled, descriptive only; bottom-10% against top-10% entries compared on the record's descriptors (structure, thesis, captain position, salary left, method and rung, `Q` count, engine row or operator file) with slate-clustered intervals, labelled descriptive; tracked per-slate results carry place, field size, points and percentile only, money stays in the gitignored snapshot; `repo_state.py` counts entry-graded slates apart from player-week calibration | DraftKings results review 2026-10-10 (R1, R2's post-lock check, R5) | new `src/nfl_dfs/results_join.py`, `src/nfl_dfs/cli.py`, `scripts/repo_state.py`, `docs/DATA_CONTRACTS.md`, new `tests/test_results_join.py` | P | Session 71, Session 72 | `sh ./nfl.sh test tests/test_results_join.py tests/test_roadmap_queue.py -x --tb=short`; on the four committed slates the per-slate correlations reproduce -0.03, +0.38, +0.63 and +0.06; DET@BUF's 12 blank Entry IDs are classed | Pending |
+| Session 74 | Standalone | Paired control comparison: for every graded slate, the realized points of the delivered portfolio against stored controls on the same slate (the baseline file, the engine's own file before the hand passes where both are committed, the prior-best distinct lineups, a seeded sample of random legal lineups, and Session 25's control portfolio or Session 22's pre-registered control when they exist), with a player-level permutation null, each lineup also placed on its contest's points-to-place curve interpolated from our own entries inside their observed range (a named proxy until Session 18's thresholds exist); answers whether the theses, the ceiling pass and the judgment pass add realized points; report only, never retunes or reselects | DraftKings results review 2026-10-10 (R1, R5); research: a paired same-slate comparison is the measure with power at this volume | new `src/nfl_dfs/control_comparison.py`, `src/nfl_dfs/cli.py`, new `tests/test_control_comparison.py` | P | Session 69, Session 70, Session 72 | `sh ./nfl.sh test tests/test_control_comparison.py -x --tb=short`; on the committed TB@DAL (`iter1` against `final_v3`) and DET@CAR (`final` against `final_v5`) files the realized-point difference of each hand pass, and of the delivered file against the random-legal sample, is reported with its interval | Pending |
+| Session 18 | Standalone | P0 part 1: `nfl grade-standings` normalises the corpus, classifies mode from roster geometry, joins names to the same-slate salary file with zero tolerance, writes per-contest thresholds, our entries' rank, percentile and copy count, and tie-pooled prizes when a ladder exists; metric definitions in one registered module; the DAL@NYG and DEN@KC snapshots filed; local mode on the inbox corpus first (2026-10-02 review F-08): Session 17b stays the cloud-transport acceptance and the O2 downloads scope only the DAL@NYG and DEN@KC provenance and replay results | Chunk P0 | new `src/nfl_dfs/standings_grade.py`, new `src/nfl_dfs/standings_metrics.py`, `src/nfl_dfs/cli.py`, new `scripts/grade_standings.py`, new `tests/test_standings_grade.py` | P | none | `sh ./nfl.sh test tests/test_standings_grade.py -x --tb=short`; 71 entries with Rank equal to Place, the 206-way DEN@KC tie, $54,065.22 on NE@SEA; the 2026-10-02 review's corpus reproduces (56 nonempty contests, five empty placeholders, 139 owned entries, seven owned blanks, paid coverage on exactly 26) with the 26-file set as the regression subset, and its F-06 and F-07 counts come out of the grader | Pending |
 | Session 17 | Standalone | X2: the 26 standings exports become private GitHub release assets, fetched with authentication through `sources.py` and hash-bound on arrival | Chunk X2; archive § R27 | `src/nfl_dfs/sources.py`, a retrieval script, `docs/DATA_CONTRACTS.md` | P | Session 00 | `sh ./nfl.sh test tests/test_source_ledger.py tests/test_sources_tls.py tests/test_standings_transport.py -x --tb=short`; transport landed 2026-09-29 against a fixture transport; the real-corpus acceptance is Session 17b | Complete |
 | Session 17b | Standalone | X2 acceptance, split from Session 17 at its breakpoint: with the corpus published to a private repository (O1) and its manifest committed, a cloud session runs the documented fetch, every file hash-binds against the manifest, the inbox is untouched, and the changelog states whether `P0` can run in a cloud session | Chunk X2 acceptance; Session 17 | `config/standings_corpus_manifest_v1.json`, `docs/RUNBOOK.md`, `changelog.md` | P | Session 17, O1 | `python3 scripts/fetch_standings_corpus.py fetch` in a fresh cloud clone: exit 0, 26 files bound, hashes before and after on any pre-existing inbox file | Pending |
 | Session 50 | Standalone | Intra-contest diversification, Part A: a pure `contest_assignment.py` permutes the selected lineups over the movable Entry IDs so each Contest ID's entries differ (`within_contest_diversity_v1`: `shared_people**2`, plus 12 for the same Captain or QB, 6 for the same Classic primary stack team, 3 for the same thesis; per-contest worst pair plus mean pair, every contest weighted equally); deterministic swaps and seeded restarts inside the `Budget`; it reaches the Showdown policy, sequential and subset-fill rows in `prior_review` before `assignments.csv` is written (Classic C1, C2, C3 and the baseline split to Session 50c at the mode seam); the SD4 audit recomputes the multiset, the filled rows and each contest's statistics from the assignment bytes; a per-contest review block; `scripts/diversify_showdown_contests.py` becomes a wrapper and gains Classic. Supersedes Session 23d's `round_robin_by_contest` default order | PHI@CHI 2026-09-28 (changelog addendum v2 to v4); `scripts/diversify_showdown_contests.py`; `docs/chunks/P2-contest-aware-policy.md` | new `src/nfl_dfs/contest_assignment.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/classic_review.py`, `src/nfl_dfs/readable_review.py`, `scripts/diversify_showdown_contests.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md`, new `tests/test_contest_assignment.py` | S | Session 23, Session 23e | `sh ./nfl.sh test tests/test_contest_assignment.py tests/test_diversify_showdown_contests.py tests/test_gate_registry.py tests/test_entry_groups.py tests/test_readable_review.py tests/test_classic_review_c3.py tests/test_classic_portfolio_c2.py -x --tb=short`, then the full suite; PHI@CHI v1 rosters reach 7 distinct Captains of 7 per seven-entry contest with worst pair 4 or fewer and no two-entry pair over 2; seam: the module and Showdown first, Classic as Session 50c (taken: Part A passed 900 lines) | Complete |
@@ -187,7 +195,6 @@ Every session follows this protocol, and the cards only add to it:
 | Session 25 | Standalone | P3b part 1: `TAIL_QUANTILE_OF_DESIGN_BANK` registered as an objective version; tail-family strata (5-1, DST-inclusive, single-QB single-stack, QB+2, QB+3, RB bring-back, secondary-game stack); the expectation-only control portfolio written as `control_assignment.json`, never exported | Chunk P3b; C4 retro #6, #9, #16 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/candidate_families.py`, both policy contracts, `docs/DATA_CONTRACTS.md` | S | Session 23d, Session 24b | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_candidate_sources_store.py -x --tb=short`; a synthetic contest with a known tail optimum is recovered | Pending |
 | Session 25b | Standalone | P3b part 2: `tail_sleeve_entries = k` in the joint assignment under the Session 23 controls; captain strata on a ceiling statistic; the dart rules (short one named prior, a defined role, 2 to 12% ownership when an estimate exists); the REFEREE bank re-scores the assignment with a registered tolerance | Chunk P3b; Showdown retro §7b, §7e; C4 retro §16 to §20 | `src/nfl_dfs/selection.py`, `src/nfl_dfs/portfolio_enforcement.py`, `src/nfl_dfs/classic_portfolio.py`, `src/nfl_dfs/prior_review.py`, `docs/DATA_CONTRACTS.md` | S | Session 25 | `sh ./nfl.sh test tests/test_prior_selection.py tests/test_portfolio_enforcement.py -x --tb=short`; a k=6 sleeve on the DEN@KC fixture holds a DST lineup and a 5-1 on each side | Pending |
 | Session 28 | Standalone | P6: scenario-cluster coverage, bank-estimated P(zero paid), sleeve-size frontier | Chunk P6; R34 | `src/nfl_dfs/portfolio.py`, `src/nfl_dfs/prior_review.py`, `src/nfl_dfs/readable_review.py` | S | Session 25b | `sh ./nfl.sh test tests/test_readable_review.py -x --tb=short` | Pending |
-| Session 18 | Standalone | P0 part 1: `nfl grade-standings` normalises the corpus, classifies mode from roster geometry, joins names to the same-slate salary file with zero tolerance, writes per-contest thresholds, our entries' rank, percentile and copy count, and tie-pooled prizes when a ladder exists; metric definitions in one registered module; the DAL@NYG and DEN@KC snapshots filed; local mode on the inbox corpus first (2026-10-02 review F-08): Session 17b stays the cloud-transport acceptance and the O2 downloads scope only the DAL@NYG and DEN@KC provenance and replay results | Chunk P0 | new `src/nfl_dfs/standings_grade.py`, new `src/nfl_dfs/standings_metrics.py`, `src/nfl_dfs/cli.py`, new `scripts/grade_standings.py`, new `tests/test_standings_grade.py` | P | none | `sh ./nfl.sh test tests/test_standings_grade.py -x --tb=short`; 71 entries with Rank equal to Place, the 206-way DEN@KC tie, $54,065.22 on NE@SEA; the 2026-10-02 review's corpus reproduces (56 nonempty contests, five empty placeholders, 139 owned entries, seven owned blanks, paid coverage on exactly 26) with the 26-file set as the regression subset, and its F-06 and F-07 counts come out of the grader | Pending |
 | Session 18b | Standalone | P0 part 2: field feature lifts, duplication share of the top 1%, the concentration table, the seeded hygiene bootstrap, our exposure against the field; grades the Session 23 rerun on the archived fields (Session 24b's bank joins when 24b lands; 2026-10-02 review F-08) and replaces the proxy constant | Chunk P0; chunks P2 and P3a acceptance | `src/nfl_dfs/standings_grade.py`, `src/nfl_dfs/standings_metrics.py`, `tests/test_standings_grade.py` | P | Session 18, Session 23 | `sh ./nfl.sh test tests/test_standings_grade.py -x --tb=short`; the pass-catcher lifts 1.60/1.53/2.08/1.39, the Classic sub-5% rate 2.08%, 8,007 portfolios, under 3 minutes on 26 files | Pending |
 | Session 26 | Standalone | P4a: mass-conserving ownership challenger graded by slate, with projected against realized ownership logged | Chunk P4a; C4 retro #11, #12, #15 | `src/nfl_dfs/ownership.py`, `src/nfl_dfs/prior_review.py` | P | Session 18b | `sh ./nfl.sh test tests/test_ownership_field.py -x --tb=short` | Pending |
 | Session 27 | Standalone | P4b: exact-lineup copy-count predictor | Chunk P4b | `src/nfl_dfs/field.py`, `src/nfl_dfs/prior_review.py` | P | Session 26 | `sh ./nfl.sh test tests/test_ownership_field.py -x --tb=short` | Pending |
@@ -1192,6 +1199,188 @@ Every session follows this protocol, and the cards only add to it:
 - **Size.** Three source files, about 500 changed lines; read `priors.py`
   `:1300-1900` and `prior_score.py`. One session.
 
+#### Session 69: DraftKings entry-history intake
+
+- **Depends on.** none. Added 2026-10-10 from the first review of real DraftKings results (R1; Ben's upload `dk-findings-and-engine-requirements.md`, SHA-256 `ec7c6ce789e40a9207af7c659131a3e0aa1f764ac1705d480f31d0a9fc518f4a`; its R labels are not queue IDs) and this planning session's NFL recomputation from Ben's entry-history export (SHA-256 `5752c7f3a33b0e95c126b47b01e846b374a3c110f45b32ee618c14e056e807a3`, kept outside git). First of Sessions 69 to 74 (§2.8).
+- **Why.** No NFL build has been scored against a DraftKings result (`scripts/repo_state.py`: 0 of 0 slates graded), and the standings
+  route (Session 18 onward) covers only contests whose exports Ben pulled (61 tracked, 35 awaiting, `data/standings/`). The account's
+  entry-history export already holds every entry's place, points, field size, fee and winnings, keyed by the Entry ID and Contest ID
+  the engine fills. No code reads it. Every later session in this group reads it through this contract.
+- **Scope.** `nfl_dk_entry_history_v1` in `docs/DATA_CONTRACTS.md`: Sport, Game_Type, Entry_Key, Entry, Contest_Key, Contest_Date_EST,
+  Place, Points, Winnings_Non_Ticket, Winnings_Ticket, Contest_Entries, Entry_Fee, Prize_Pool, Places_Paid. `nfl results-intake
+  --history <csv>`: classified by schema, never by filename; SHA-256; copied once into `data/results/inbox/<sha256>.csv`, gitignored and
+  immutable like `data/standings/inbox/`; a strict parser that refuses the whole file and names every bad row (missing column, duplicate
+  `Entry_Key`, `Place` outside 1 to `Contest_Entries`, unparseable money, number or date, an empty NFL subset; a BOM and CRLF read, not
+  refused). A `Places_Paid` above `Contest_Entries` is kept and named, not refused: the export has two, both free contests that ran under
+  their guaranteed size (NFL 2024-09-22, 9,910 paid of 7,112; NBA 2024-02-22). A registry family in `config/gate_registry_v1.json` with
+  `REGISTRY_SHA256` re-pinned; a normalized per-entry artifact (NFL rows, money in integer cents, the contest time timezone-aware Eastern).
+  The contest name is carried as opaque text and never parsed.
+- **Acceptance.** Synthetic fixtures for each refusal (truncated file, duplicate identity, missing column, `Place` beyond the field, bad
+  money, another sport only) and for the kept `Places_Paid` case; determinism and mutation tests; on Ben's 2026-10-10 export, outside git,
+  10,095 rows, 476 NFL rows and 396 paid NFL rows outside Best Ball, the two `Places_Paid` rows named, recorded with the file's hash.
+- **Boundaries.** An operator download only; DraftKings is never fetched. Bytes preserved and hashed; the snapshot is never overwritten.
+  The file carries Ben's account winnings, and Ben confirmed on 2026-10-10 that `bleeski/nfl-dfs` is public, so the export and anything
+  with fee or winnings columns stay gitignored.
+- **Size and seam.** About 1,200 to 1,500 lines with tests: a parser that names every bad row runs about 1.3 lines of test per line of
+  source, and Session 23d's facts parser landed at 2,150 against a plan of 1,150. Seam: the CLI and the normalized artifact; the contract,
+  the parser and the registry family land first.
+- **Known conflicts.** `cli.py`, `docs/DATA_CONTRACTS.md` and the gate registry with Sessions 70, 71 and 73: run them one at a time, or
+  merge `origin/main` before the final suite.
+
+#### Session 70: realized player points and player-level grading of the prior
+
+- **Depends on.** Session 69 (the reconciliation reads its contract). Added 2026-10-10 (review R1, R4, R6).
+- **Why.** The review reads "projections that match consensus" off finishing patterns. The direct test is the projection itself: 20 to
+  60 player-weeks a slate, against one portfolio result. Lineup-level measures cannot be read this season: at Ben's volume a 5-point
+  shift in mean finishing percentile needs about 90 slates, and a top-1% rate moving from 1% to 2% about 330 (80% power on a uniform
+  percentile, about 20 entries a slate sharing outcomes at a correlation near 0.3; the 2026-10-10 changelog entry), against about 36 NFL
+  slates a season. `player_points_mae` and `participation_brier` are registered (`config/metric_registry_q1_v1.json`) and nothing computes
+  them. A first lineup-level look, in this session: the prior's rank of our own delivered lineups against their realized DraftKings points
+  was -0.03 (DET@CAR), +0.38 (ATL@NO), +0.63 (TB@DAL) and +0.06 (Week 4 Classic), descriptive only because the rows share most of their
+  people. TB@DAL's review found the prior rating George Pickens above CeeDee Lamb against Lamb's 32% target share (`changelog.md`,
+  2026-10-08 TB@DAL).
+- **Scope.** (1) Realized stat lines from the nflverse weekly player file through `sources.py` (raw bytes, hash, URL, observed time;
+  `priors.py:240` already declares `stats_player_week_{season}.csv`). (2) DraftKings points from the engine's own scoring (`scoring.py:45`,
+  `:69`, `:96`, the captain multiplier at `:112`), the functions `prior_score.py:578-630` applies to expected lines; a kicker or a DST is
+  graded only where the allowlisted file carries its columns, otherwise named. (3) Each run's frozen per-person priors (`pool_scores.json`
+  or the portfolio record) joined to realized points through the run's own identity resolution, exact DraftKings IDs only; an unbound
+  person is named, never matched by name. (4) Per slate, and pooled with the slate as the unit: `player_points_mae`, the Spearman
+  correlation of prior against realized points, the same two for DraftKings salary rank as the consensus-price baseline, by position and
+  salary tier; realized play rate by DraftKings status (`Q` against blank); `participation_brier` named not computable (the engine states
+  no playing probability, `participation.py:40-52`). (5) Realized lineup totals reconciled against DraftKings' own lineup points from
+  Session 69's history: the first end-to-end check of `scoring.py` against DraftKings.
+- **Acceptance.** On the committed DET@CAR, ATL@NO, TB@DAL and Week 4 Classic inputs, every delivered lineup whose players are all covered
+  reconciles to the entry-history `Points` within 0.01, except differences traced to a stat the source does not carry, each named by player
+  and stat; no difference traces to `scoring.py` (one that does is a defect fixed in the session). The grading report is produced for the
+  four slates; a determinism test and a mutation test. Fixtures in the repository are synthetic; the reconciliation against Ben's export
+  runs outside git and its numbers go in the changelog.
+- **Boundaries.** Realized points are a grading input only: never a prior, a candidate, a selection or a gate input, and never written
+  back into a frozen package. Exact DK IDs only; `AvgPointsPerGame` is not read (salary rank is the baseline). Diagnostics: no EV and no
+  calibration claim, sample size declared, `MODEL_STATUS` stays `PRIOR_ONLY`.
+- **Size and seam.** About 600 to 900 lines with tests (the fetch and the scoring exist). Seam: the report tables by position and tier;
+  the realized scoring, the join and the reconciliation land first.
+- **Known conflicts.** `cli.py` and `docs/DATA_CONTRACTS.md` with Sessions 69, 71, 73 and 74. The Showdown slates' frozen identity sits in
+  the Windows run folders, so the acceptance runs there or re-resolves through the engine's identity path with the committed reviewed
+  crosswalks.
+
+#### Session 71: the NFL results report
+
+- **Depends on.** Session 69. Added 2026-10-10 (review R1).
+- **Why.** The review's measures, recomputed for NFL in this session with its own definitions (which reproduce its all-sport figures
+  exactly: 9,960 paid entries outside Best Ball, -25.9%, percentile 52.5, 9.7% in the top 10%, 13.6% in the bottom 10%, 106 blanks).
+  NFL paid entries outside Best Ball: 396 entries over 55 slates, $306.92 in fees, -$145.96 realized (-47.6%, 90% slate-bootstrap
+  interval -68.9% to -20.5%), percentile 55.1 (50.0 to 60.3). The engine era, from the first live run (NE@SEA, 2026-09-09): 348 entries
+  over 17 slates (4 Classic, 13 Showdown), percentile 55.2, or 53.8 with blanks removed. With blanks removed, 9.2% finished in the top 10%
+  against 9.8% random and 12.5% in the bottom 10% against 10.2% random (excess +2.3 points, interval -1.6 to +6.8); with blanks, 8.9% and
+  15.2% (excess +5.1, interval -0.2 to +12.0): the review's shape, at the edge of the noise. Showdown 53.7 against Classic 54.1 with blanks
+  removed, so no NFL Showdown deficit; September 59.2 against October 47.8. Two corrections the review needs: `Place / Contest_Entries` is
+  biased in small fields (random mean (n+1)/2n; a top-10% finish is impossible below 10 entries; a bottom-10% finish is 20% likely at five
+  entries), so every rate is reported against each entry's random expectation; and DraftKings gives a tie group its best place, which
+  flatters percentiles in low-scoring fields. Field size and payout shape move together in our entries: 138 of the 148 in fields of 500 or
+  fewer were in contests paying under 5% of the field (`contest_facts.first_place_label`, `contest_facts.py:230`), against 0 of 186 in fields
+  above 2,000. Within each slate, top-heavy contests finished worse than flatter ones on 11 of 12 slates (mean +11.0 percentile points, sign
+  test p = 0.003; by field size alone 10 of 13, p = 0.046); the 10 entries in small flatter fields (4 of 6 slates worse) are too few to
+  separate the two, and about 20 slices were examined. Fee concentration: the 2026-09-13 Classic Millionaire and its feeder satellites took
+  46% of the engine era's fees ($102.20 of $223.20).
+- **Scope.** `config/results_metrics_v1.json`, a registered `nfl_results_metrics_v1` with `does_not_establish` text ("realized results of
+  past entries; not EV, an ROI forecast, a win probability, a calibration or a proven edge"), in one module later graders import. A slate
+  is the review's cluster (sport, Eastern date, game type), which merges same-day Showdown games, plus a finer cluster that adds the
+  contest start time (17 and 20 engine-era slates on the 2026-10-10 export). `nfl results-report`: rollups by format, payout shape (paid
+  fraction from `Places_Paid` and `Contest_Entries`, capped at 1 and the row named when `Places_Paid` exceeds the field), field-size band,
+  entry-fee band, month, slate and an engine-era parameter; each rate beside its per-entry random expectation; blanks (`Points` exactly
+  zero); a seeded slate-cluster bootstrap (wild cluster below 30 slates) and, per slice, the minimum detectable effect its slate count
+  supports; realized net and realized return on fees beside the rake-implied return; fee concentration by contest; the pre-registered
+  within-slate test, top-heavy against flatter, on every run. JSON plus a short readable table; the contest screening checklist
+  (`docs/RUNBOOK.md:654`) points at the payout-shape table.
+- **Pre-registered trigger.** When the top-heavy-against-flatter test holds at p < 0.05 over at least 20 slates, open a row for the
+  per-contest term Session 23d's card anticipates inside Session 50's placement objective. Until then the lever is Ben's contest selection; on 2026-10-10 he chose to keep entering these contests, so the test accrues with
+  every slate.
+- **Acceptance.** On Ben's 2026-10-10 export: the NFL rollup reproduces 396 entries, $306.92, -$145.96 and percentile 55.1; the engine era
+  348 entries, 17 slates and 11 paid blanks, all on 2026-09-17; the paired test 11 of 12 slates; the all-sport check 9,960 entries at
+  percentile 52.5; two runs give byte-identical artifacts.
+- **Boundaries.** Classes from numeric columns only; the contest name is never read (`CLAUDE.md`: never infer payout tiers or field size
+  from a contest name). "Realized return on fees" is a fact about past entries, never written as a model's ROI, an EV or a probability.
+  Report only; it tunes and selects nothing.
+- **Size and seam.** About 1,000 lines with tests. Seam: the readable table and the RUNBOOK pointer.
+- **Known conflicts.** `cli.py` and `docs/DATA_CONTRACTS.md` with Sessions 69, 70 and 73. This module defines the entry-level percentile
+  and tail rates and Session 18's `standings_metrics.py` imports them; if Session 18 lands first, this session imports its definitions
+  instead (noted on its card).
+
+#### Session 72: the per-Entry-ID build record
+
+- **Depends on.** none. Added 2026-10-10 (review R1, R5).
+- **Why.** Nothing joins an Entry ID to its lineup, run, method and prediction in one record. `selection.py:118-150` saves `prior_points`
+  by lineup index; `prior_review.py:917-925` maps Entry IDs to theses only. The files that ship are often hand-edited after the engine
+  (ceiling pass, value-add, late swap, redeploy), and their priors sit in one-off records or in a `pool_scores.json` written only under
+  `NFL_DFS_DUMP_SCORES` (`selection.py:160`). This session's rank check was assembled by hand from four slates' files. The review's R5
+  (which choices lead to busts) needs per-lineup structure, and nothing persists it.
+- **Scope.** `nfl_entry_build_record_v1` and `scripts/record_entries.py --salaries --file --run-dir`, one row per Entry ID of any
+  delivered file: Entry ID, Contest ID, run ID, salary, entries and file hashes, mode, method (the run's exit and relaxation rung, or
+  `OPERATOR_FILE` for a hand-edited file), policy hash, thesis, roster DK IDs, captain, prior points with their score version, rank within
+  the portfolio, salary left, structure counts from the Session 23 and 23e rule functions (pass catchers with the QB, bring-backs, RB with
+  his own DST, offense facing its own DST, team split, kicker and DST counts), DraftKings status flags (`Q`), the count of later-window
+  players, and the stack game's market total and spread only when the run's sources ledger carries them. Written beside the slate's
+  construction records (`data/inbox/slates/<slug>/construction/entry_build_record.jsonl`). Procedure: every run sets
+  `NFL_DFS_DUMP_SCORES` to its run folder (`docs/RUNBOOK.md`, `docs/claude/working.md`), so every slate keeps the per-person priors this
+  record and Session 70 read. Backfill every committed slate the bytes allow and name the rest (DET@BUF has no committed delivered file).
+- **Not in scope.** `run-slate` writing the record itself: no caller passes `pool_scores_path` (`selection.py:316`, `:443`) and only
+  `prior_review.py` knows the run folder, which Session 44 splits. Wiring the record at publish waits for a session cut after Session 44b;
+  Session 13 keeps the first-class `pool_scores` artifact.
+- **Acceptance.** On the committed DET@CAR (`final_v5`), ATL@NO (`qa_iter3`), TB@DAL (`final_v3`) and Week 4 Classic (`LATESWAP_v8`)
+  files the record's prior points equal each run's own pool scores or portfolio record for all 131 Entry IDs; an Entry ID outside the
+  template, a roster cell without an exact DK ID and a salary-file mismatch are refused by name; determinism and mutation tests.
+- **Boundaries.** Exact DK IDs from the delivered file; the template's Entry IDs only; market numbers only through the sources ledger,
+  never inferred; `AvgPointsPerGame` is not read. The record states what was built and predicted and certifies nothing.
+- **Size and seam.** About 900 lines with tests. Seam: the backfill.
+
+#### Session 73: the results join: blanks, the ranking check and bust attribution
+
+- **Depends on.** Session 71, Session 72. Added 2026-10-10 (review R1, R2's post-lock check, R5).
+- **Why.** The NFL blanks were 11 paid entries and 1 free one, all on DET@BUF 2026-09-17: 12 of its 13 Entry IDs locked at zero, and the
+  13th (in the $70K First Down) scored 110.95, so one lineup was entered. That slate's run built a file for all 13
+  (`20260917T232331Z-detbuf917c`, before R28); the record has no delivery time, so a late file and a missed upload cannot be told apart. No
+  NFL entry has locked blank in the 11 engine-era slates since (9 since R28). The engine side of R2 is built (the baseline first, Sessions
+  04 and 06; the R31 deadline, Session 07; the ladder, Session 10); what is left is to detect a recurrence. The review's R5 wants bust and
+  top lineups compared on what the engine chose.
+- **Scope.** Session 69's history joined to Session 72's records on Entry ID. Each Entry ID's blank class: `LOCKED_BLANK_WITH_FILE` (a
+  delivered record existed) or `LOCKED_BLANK_NO_RECORD`. The within-slate Spearman correlation of prior points against realized points,
+  per slate and pooled, descriptive: rows share most of their people (TB@DAL's 28 rows hold 24 people, one of them in 64%), so no
+  lineup-level p-value; Session 74 builds a player-level null. Bottom-10% against top-10% entries, and percentile as a continuous outcome,
+  on the record's descriptors (structure counts, thesis, captain position, salary left, method and rung, `Q` count, engine row or operator
+  file) with slate-clustered intervals and the sample size declared, labelled descriptive. Per-slate results written beside the build
+  record carry place, field size, points and percentile only; fees and winnings stay in the gitignored snapshot. `scripts/repo_state.py`
+  reports entry-graded slates as their own count, apart from P0's player-week calibration line.
+- **Acceptance.** On the four committed slates the per-slate correlations reproduce -0.03, +0.38, +0.63 and +0.06 (mean +0.26); DET@BUF's
+  12 blank Entry IDs are classed `LOCKED_BLANK_NO_RECORD` with the reason named; a determinism test; `repo_state.py --stdout` shows the new
+  count.
+- **Boundaries.** Descriptive diagnostics only: never a selection input, never retunes a policy, no win-probability or EV wording.
+  The repository is public (Ben, 2026-10-10), so tracked per-slate results carry place, field size, points and percentile only, never
+  fees or winnings.
+- **Size and seam.** About 800 lines with tests. Seam: the descriptor comparison.
+
+#### Session 74: paired control comparison
+
+- **Depends on.** Session 69, Session 70, Session 72. Added 2026-10-10 (review R1, R5; research).
+- **Why.** At this volume realized ROI and top-1% rates cannot be read for seasons; the measure with power is a paired comparison on the
+  same slates (Easton and Newell 2019, random legal teams against the field; Cameron, Gelbach and Miller 2008, inference with few
+  clusters). Realized player points (Session 70) score any lineup after the fact, so each slate can compare the delivered portfolio with
+  what the engine shipped before the hand passes, with the baseline, with prior-best lineups and with random legal lineups. The committed
+  slates already hold before-and-after pairs: TB@DAL `iter1` against `final_v3` (ceiling pass and three review iterations) and DET@CAR
+  `final` against `final_v5` (ceiling pass and contest diversification). Session 25's control portfolio and Session 22's pre-registration
+  store controls before lock; this session scores whatever controls exist after the fact, on realized points rather than fields.
+- **Scope.** For each graded slate: realized points for the delivered portfolio and for stored controls (the baseline file, the engine's
+  own pre-hand-pass file where committed, the prior-best distinct lineups, a seeded sample of random legal lineups built through
+  `lineups.validate_lineup`, and Session 25's or Session 22's controls when they exist); paired differences with a player-level permutation
+  null (realized player points resampled, not lineups); each lineup placed on its contest's points-to-place curve interpolated from our own
+  entries in Session 69's history, inside their observed range (16 engine-era contests hold 3 or more of our entries and points-to-place
+  is monotone in all of them), named a proxy until Session 18's thresholds exist; results by hand pass (ceiling pass, value-add, redeploy)
+  where the records name them.
+- **Acceptance.** On the committed TB@DAL and DET@CAR pairs, the realized-point difference of each hand pass, and of the delivered file
+  against the random-legal sample, is reported with its interval; seeded and byte-identical across runs.
+- **Boundaries.** REFEREE-like: report only; never retunes, reselects or gates. A realized difference over a few slates is evidence about
+  a past procedure, never an EV or a promise.
+- **Size and seam.** About 800 lines with tests. Seam: the points-to-place interpolation.
+
 #### Session 17: X2 standings corpus transport
 
 - **Depends on.** Session 00. Acceptance needs O1.
@@ -1861,8 +2050,10 @@ Every session follows this protocol, and the cards only add to it:
 
 #### Session 18: P0 part 1, the grading command
 
-- **Depends on.** Session 17b and O2 (O3 completes the NE@SEA era). Session 17b, not Session 17, because
-  the transport is built but the corpus is not yet published (O1).
+- **Depends on.** none, as its board row has said since the 2026-10-02 review's F-08: local mode on the inbox corpus first, on the
+  Windows checkout; Session 17b stays the cloud-transport acceptance, and the O2 downloads scope only the DAL@NYG and DEN@KC provenance
+  and replay results (O3 still completes the NE@SEA era). Moved directly below Session 74 on 2026-10-10 at Ben's request (§2.8); this
+  line was corrected then (it still named Session 17b and O2).
 - **Spec.** `docs/chunks/P0-standings-grading-harness.md`, the first half.
   `nfl grade-standings` reads zips and loose CSVs, classifies mode from roster
   geometry, joins names to the same-slate salary file with zero tolerance for
@@ -1877,6 +2068,9 @@ Every session follows this protocol, and the cards only add to it:
 - **Size.** Four new files, one CLI hook, about 900 lines. One session.
 - **Acceptance.** 71 owned entries with `Rank == Place`; DEN@KC 195526229
   rank-1 tie 206; NE@SEA 193391013's 23-way tie paying $54,065.22.
+- **Note (2026-10-10).** Session 71's registered `nfl_results_metrics_v1` defines the entry-level percentile, top-10% and
+  bottom-10% rates, and `standings_metrics.py` imports them rather than adding a second set; if this session lands first, Session 71
+  imports its definitions instead.
 
 #### Session 18b: P0 part 2, the field, and the graded reruns
 
@@ -2072,6 +2266,8 @@ Every session follows this protocol, and the cards only add to it:
   provenance completeness, `nfl record-manual-entries` for hand-built entries,
   a pre-registration record per slate (the findings' "control stored, not
   entered" protocol, §9). One session.
+- **Note (2026-10-10).** Session 72 takes the per-Entry-ID record (`nfl_entry_build_record_v1`) that this card's pre-lock record
+  would otherwise have carried; this session's scope is otherwise unchanged.
 
 #### Session 45: ledger and contract truth
 
@@ -3006,6 +3202,28 @@ candidate list is what redistribution leaves; Session 62 has no dependency and c
 
 **Sessions 23f, 66 and 67 (added 2026-10-06, from Session 23c's close-out).** Session 23c split at its engine and audit seam (the diff passed the 1,500-line breakpoint, section 2.1 step 5): the readable review's own thesis section is Session 23f, placed directly below 23c as a split row. Session 66 (the Showdown QA and value-add tools check each row against its thesis) and Session 67 (an R33 thesis expander and thesis-aware contest placement) follow it, in the order of what a wrong file costs. None needs Ben.
 
+**Sessions 69 to 74 (added 2026-10-10, from the first review of real DraftKings results).** Ben asked for them at the top of the
+queue, ahead of every open row, so they sit directly above Session 17's row, above which every row is `Complete`; no existing row moved
+or changed status. They measure before they change anything: no NFL build had been scored against a DraftKings result (0 of 0 slates
+graded), and at Ben's volume a lineup-level effect takes seasons to read (a 5-point percentile shift about 90 slates, a top-1% rate moving
+from 1% to 2% about 330, against about 36 a season), so the high-sample measures come first. Session 69 (the entry-history intake) leads
+because every later session reads the export through its contract. Session 70 (player-level grading) follows directly: 20 to 60
+observations a slate, and it decides whether the prior or the construction is the bottleneck, and so the projection spending question
+below. Sessions 71 (the report), 72 (the build record), 73 (the join) and 74 (paired controls) follow in dependency order. Three review
+requirements got no row. R2's engine work is done (Sessions 04, 06, 07 and 10; no NFL entry has locked blank in the 11 engine-era slates
+since DET@BUF, 9 since R28), and its handoff remainder is a procedure line plus the lock fields Session 14 already specifies. R3's premise
+does not hold for NFL (Showdown 53.7 against Classic 54.1 with blanks removed; the captain cap is enforced). R4's ownership and field model
+is Sessions 26, 27 and 29, behind Session 18 (startable now on the Windows inbox) and Session 24b. The review's field-size finding cannot
+be separated from payout shape in our entries and got a pre-registered trigger (Session 71's card) instead of a construction row. Two
+reviews preceded the edit: the advisor (a fresh second-opinion agent) moved player grading ahead of the report, removed an upload-now row
+and a field-size placement row, dropped a dispersion claim the data cannot support and raised the sizes; a fresh-context diff review then
+put the intake first (player grading's reconciliation reads its contract), corrected a slate count and a name-based comparison, and kept a
+`Places_Paid` above the field from refusing Ben's file. The advisor also recommended moving Session 18 up directly behind these rows,
+and Ben approved it the same day: Session 18 now sits directly below Session 74, its card's stale dependency line corrected to the
+board's `none`. Session 41 (the weather boundary) now sits behind seven rows; it shares no file with them and can run in a parallel
+worktree. Session 22's per-entry half moved to Session 72, and
+Session 18 shares Session 71's metric definitions (both noted on their cards).
+
 **Questions for Ben that block nothing.** Sleeve size and risk tolerance
 (findings §7); a paid ownership-capture source (Showdown retro §7d, a
 spending decision); Week-by-week stake sizing (retro §8 Q3); an odds-API
@@ -3182,3 +3400,6 @@ session, because a commit cannot contain its own merge.
 | 2026-10-10 | Session 12 | In Progress to Complete | `e8bbe30` (code, tests, registry, docs), `5651a18` (review fixes), `cfc351a` and the close-out commit (ledgers); the merge is recorded by the next session | Governed late swap's two review fixes. V12: `govern_late_swap` takes a required `clock` and refuses an `as_of` more than 120 seconds from it (`LATE_SWAP_AS_OF_CLOCK_MISMATCH`) before any run directory, hash or read; the CLI always passes `evidence.release_clock`. V13: a prefilled `Name (ID)` roster cell is read by its ID at four sites (`late_swap.py` twice, `write_late_swap_bytes`, the byte audit), `CURRENT_TEMPLATE_CELL_UNRESOLVED` names a cell with no ID, and `prefilled_cell_id` moved to `lineups.py`; the audit holds a replaced slot to the bare assigned ID. Registry: two codes, `REGISTRY_SHA256` re-pinned. Three existing-test edits, each named in the changelog (the `_govern` helper, the CLI blocked-case test, the registry pin). 36 new tests; 22 mutants, 21 killed, one equivalent; suite `3280 passed, 1 skipped in 1212.24s (0:20:12)` on Linux. Overrun: 997 changed lines against a plan of about 490. The bridge, multi-contest, C5 and E11 are Session 12b. Evidence: `changelog.md` 2026-10-10 (Session 12). |
 | 2026-10-10 | Session 12b | Added as Pending | Session 12 close-out | Split from Session 12 at the card's own seam (the whole card measured bottom-up is about 1,700 changed lines, past the 1,500 breakpoint): the submitted-state record `nfl_submitted_entry_state_v1` and its anchor handling, multi-contest by group, C5 slot ordering, E11, and the template emitters the registry test assigns to this card. Depends on Session 12 and a BEN ruling (the card's flag: whether an anchored late swap may carry `CERTIFIED_UPLOAD_PACKAGE`, or stays `DO_NOT_UPLOAD` and ships a review-grade file); the review found five holes in the multi-contest design, all recorded on the card. |
 | 2026-10-10 | Session 32 | Depends on re-cut | Session 12 close-out | Session 32 now depends on Session 12b and Session 25b, not on Session 12: the strategy aids build on the bridge, which 12b holds, and Session 12 closed with only V12 and V13 landed. |
+| 2026-10-10 | Sessions 69 to 74 | Added as Pending | planning commit on `claude/dk-results-backlog` (not pushed) | From the first review of real DraftKings results (Ben's 2026-10-10 upload; R1 to R6 are its labels) and this session's NFL recomputation from his entry-history export: entry-history intake (69), player-level grading of the prior (70), the results report (71), the per-Entry-ID build record (72), the results join (73) and paired controls (74). Placed above every open row at Ben's request (§2.8); §1 rewritten to Session 69; notes added to the Session 18 and 22 cards; an advisor review and a diff review before writing. Evidence: `changelog.md` 2026-10-10. |
+| 2026-10-10 | Session 18 | Moved up | second planning commit on `claude/dk-results-backlog` | Ben approved the advisor's recommendation: moved directly below Session 74, ahead of Session 17 and every other open row; still `Pending` and startable (Windows inbox); its card's stale `Depends on` line (Session 17b and O2) corrected to the board's `none`. |
+| 2026-10-10 | Sessions 69, 73 | Flags answered | second planning commit | Ben: the repository is public. The defaults stand as decisions: the entry-history export and every fee or winnings column stay gitignored; tracked per-slate results carry place, field size, points and percentile only. Ben also chose to keep entering top-heavy small contests (noted on Session 71's card). |
