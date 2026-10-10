@@ -54,7 +54,7 @@ Gelbach and Miller 2008). No quantified value of late swap was found.
 **Added.** `docs/ROADMAP.md`: Sessions 69 (entry-history intake), 70 (player-level grading of the prior), 71 (results report), 72
 (per-Entry-ID build record), 73 (results join) and 74 (paired controls) as `Pending` rows directly above Session 17's row, with cards, a
 §2.8 placement note and a §4 row; §1 rewritten to Session 69; notes on the Session 18 card (it shares Session 71's metric definitions) and
-the Session 22 card (Session 72 takes its per-entry record). Two non-blocking `[BEN: ...]` flags with safe defaults (cards 69 and 73).
+the Session 22 card (Session 72 takes its per-entry record). Two `[BEN: ...]` flags with safe defaults (cards 69 and 73), answered the same day (below).
 
 **Review, twice, before the edit landed.**
 - The `advisor` skill was blocked by a crash in the organization's skill-security hook (`/bin/sh: set: Illegal option -o pipefail`), so
@@ -75,15 +75,23 @@ the Session 22 card (Session 72 takes its per-entry record). Two non-blocking `[
   scored), the tail rates labelled with and without blanks, a stronger reconciliation clause, the 1% to 2% basis of the power figure, and no
   model named in the roadmap.
 
+**Ben's answers, same day (second commit).** Push: yes. The repository is public: the two flags are answered and their defaults stand
+(the export and every fee or winnings column stay gitignored; tracked results carry place, field size, points and percentile only).
+Keep entering top-heavy small contests: no change to contest selection, so Session 71's pre-registered test accrues with every slate
+(noted on its card). Move Session 18 up: done, directly below Session 74 (§2.8 and §4), and its card's stale `Depends on` line
+(Session 17b and O2) now matches the board's `none`.
+
 **Verification.**
 - `sh ./nfl.sh test tests/test_roadmap_queue.py -x --tb=short`: `24 passed in 0.68s` before any edit; on the final text, with `tests/test_harness_orientation.py`, `79 passed in 0.56s`; `tests/test_repo_boundaries.py` `126 passed in 2.81s`.
 - `python3 scripts/repo_state.py --stdout`: `sessions startable (docs/ROADMAP.md order): S69, S72, S41 (+12 more)`; open `[BEN:]` flags 9 to 11 (the two defaults above).
 - Full suite, Linux (`sh ./nfl.sh test`): `3280 passed, 1 skipped in 866.67s (0:14:26)`, recorded with `scripts/record_verify.py`; the skip is the junction test. It ran while the roadmap text was being revised, so the tests that read it were rerun on the final text (above).
+- Second commit (Ben's answers): `tests/test_roadmap_queue.py`, `tests/test_harness_orientation.py` and `tests/test_repo_boundaries.py`
+  `205 passed in 11.64s`; `repo_state.py`: startable `S69, S72, S18 (+12 more)`, open `[BEN:]` flags back to 9.
 - `git diff --check`: clean. `git diff --stat`: `changelog.md` and `docs/ROADMAP.md` only.
 
-**Found.** The Session 18 card still says it depends on Session 17b and O2, while its board row says `none` (the 2026-10-02 review's
-local mode); not edited here. The repository's visibility is stated two ways (the O1 card: public; `.claude/rules/git-authority.md`:
-private), and a research agent saw pull request #83 without authentication.
+**Found.** The Session 18 card said it depended on Session 17b and O2 while its board row said `none` (the 2026-10-02 review's local
+mode); corrected in the second commit once Ben approved the move. Ben confirmed the repository is public; `.claude/rules/git-authority.md`
+still calls it private, a one-line correction left for its own change.
 
 ### 2026-10-10: Session 12 -- the late-swap clock bound and `Name (ID)` cells (V12, V13); the rest cut as Session 12b
 
