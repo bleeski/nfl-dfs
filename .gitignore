@@ -29,6 +29,11 @@ data/standings/normalized/*
 !data/standings/normalized/.gitkeep
 # Transport records (Session 17): one per fetch, local provenance, not source.
 data/standings/transport/*
+# Entry-history intake (Session 69b): the account export's snapshot and the
+# artifacts derived from it carry Ben's fees and winnings, and this repository is
+# public. Ignored wholesale; a tracked record may only sit directly under
+# data/results/ and must be listed back in here.
+data/results/*
 outputs/*
 !outputs/.gitkeep
 operator_input.xlsx

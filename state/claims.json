@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "a909a20a-e6bd-51ff-b233-cedabb72473e",
+      "branch": "claude/s69b-entry-history-cli",
+      "chunk": "S69b",
+      "claimed_at": "2026-10-11T10:35:37Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
