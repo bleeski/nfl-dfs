@@ -74,7 +74,9 @@ delivers a file Tier 2 passes and the operator rebuilds every week: Week 4 and W
 quarterbacks. Each is a candidate roadmap card. Until then `docs/claude/working.md` § Classic judgment pass names
 the rebuild route and its settings, so next week's run goes straight to it.
 
-Verification: SUITE_LINE_PLACEHOLDER
+Verification: `tests/test_cli_help.py` 25 passed (3 failed on the original `cli.py`); full suite on Linux
+`3499 passed, 1 skipped in 969.52s (0:16:09)` (the one skip is the Windows junction test); `doctor` clean;
+`git diff --check` clean; no protected path touched.
 
 ### 2026-10-11: Session 70 -- `nfl grade-players`: realized player points, the reconciliation and the grade (Part A; back to Pending on O12, split to Session 70b)
 
