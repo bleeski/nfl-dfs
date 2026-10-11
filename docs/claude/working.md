@@ -227,6 +227,12 @@ or none supplied) builds the thesis portfolio, which is where a judgment applies
   per-thesis cap. Place research-backed role changes the build left at 0 rows with the whole-portfolio record
   (`data/inbox/slates/wk5-classic-2026-10-11/construction/manual_add_record.py`, which never pulls a row's best player and never
   displaces an earlier placement), then `--mode redeploy` with them protected. About ten minutes end to end.
+- **A late-swap file is DraftKings' current export, edited in place (Week 5, 2026-10-11).** Never re-export a swapped portfolio
+  with `write_dk_entries.py` for late swap: it fills the blank template and assigns slots itself, and on Week 5 it moved locked
+  players in 107 cells. Ask Ben for his current entries download (cells read `Name (ID) (LOCKED)`), then edit only the named
+  cells with `data/inbox/slates/wk5-classic-2026-10-11/construction/late_swap_cells_record.py`, which refuses a LOCKED cell and
+  a slot the incoming position cannot fill. So a swap must fit the outgoing player's slot: a TE can replace a FLEX, never a WR.
+  A mid-slate standings export hides every unlocked player, so late ownership is not observable; early ownership is.
 
 ## Repo etiquette and gotchas
 
