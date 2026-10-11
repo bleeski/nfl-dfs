@@ -3556,7 +3556,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `344f18fa1880c6611296c27b9d066215709dffffbb32aa1e3e80da6aca893c62`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `325e8dc03fc98530d5fb3062ea5317f746911d1748e4380fe9059c8bafd5355a`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4512,6 +4512,91 @@ does not parse on an NFL row refuses the file. Other sports are counted in the s
 `data/results/`, listed back in by name; nothing under `inbox/` or `normalized/` can be tracked. `CLAUDE.md`'s
 never-overwrite rule names `data/runs/` and `data/standings/inbox/`; this contract carries the same rule for
 `data/results/`. All four codes are registry family `entry_history` (`P`).
+
+## Player grading, nfl_player_grading_v1 (Session 70)
+
+Registered 2026-10-11. `src/nfl_dfs/player_grading.py`, `nfl grade-players`. A grading input only: realized points never
+become a prior, a candidate, a selection or a gate input, and nothing here reads or writes a run's outputs, a frozen
+package or a release truth. Every report carries `model_status: PRIOR_ONLY` and `status:
+DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION`.
+
+**The command.** `nfl grade-players --salaries <csv> --pool-scores <json> --identity-review <csv> --stats-package <dir>
+--season <yyyy> --week <n> --out <new folder> [--lineups <DK_REVIEW_ENTRY csv> --entries <nfl_entries.w1.json>]`. Exit 0
+wrote `<out>/player_grading.w1.json` and prints a summary; exit 2 refused (`status: REFUSED`, `code`, `detail`) and
+wrote no report, or could not write it (`WRITE_FAILED`). It never prints a lineup release truth.
+
+**The stats package.** `--stats-package` holds the season's nflverse weekly player file. With no `source_manifest.json`
+there, the command fetches the priors adapter's own `player_stats_current` entry (`priors.source_specifications`:
+`.../stats_player/stats_player_week_<season>.csv`, parser `nflverse_stats_player_week_csv_v1`) through
+`priors.freeze_sources`, with `optional` off so a failed fetch is never an empty grade, and writes the manifest
+(`nfl_prior_source_manifest_v1`, one artifact). Otherwise it loads the manifest with `priors.load_frozen_manifest`
+(hash-checked). One package serves every slate of a season, and a rerun on it is byte-identical. A failed fetch is
+`PLAYER_GRADING_STATS_UNAVAILABLE`; a damaged package, another season's, or bytes that do not match the entry are
+`PLAYER_GRADING_STATS_INVALID`.
+
+**The week.** Rows of the season and week with `season_type` `REG`. `player_id`, `season`, `week`, `season_type` and
+`game_id` are required; every cell of a column the scoring reads is blank, `NA` or a finite number (integral except
+the three yards columns); a player-week appears once. Each failure is `PLAYER_GRADING_STATS_INVALID`; no row at all is
+`PLAYER_GRADING_WEEK_ABSENT`. The bound players of each DraftKings game must share exactly one `game_id`, and no two
+games the same one, or `PLAYER_GRADING_GAME_UNBOUND` (a wrong `--week`, or a game not yet published).
+
+**`nfl_realized_dk_points_v1`.** `scoring.score_offense` or `score_kicker` on the line the row maps to; realized
+hundredths are `round(points * 100)`. A Showdown captain counts 3/2 of his hundredths, held exactly.
+
+| `scoring.py` field | nflverse columns (summed) |
+|---|---|
+| `passing_yards`, `passing_tds`, `rushing_yards`, `rushing_tds`, `receiving_yards`, `receiving_tds`, `receptions` | the same names |
+| `interceptions` | `passing_interceptions` |
+| `return_tds` | `special_teams_tds` |
+| `fumbles_lost` | `fumbles_lost_total` (a lost fumble on any play) |
+| `two_point_conversions` | `passing_2pt_conversions`, `rushing_2pt_conversions`, `receiving_2pt_conversions` |
+| `offensive_fumble_recovery_tds` | `fumble_recovery_tds` |
+| K `extra_points` | `pat_made` |
+| K `field_goals_0_39`, `_40_49`, `_50_plus` | `fg_made_0_19` + `fg_made_20_29` + `fg_made_30_39`; `fg_made_40_49`; `fg_made_50_59` + `fg_made_60_` |
+
+A row whose `fumbles_lost_total` differs from `sack_fumbles_lost` + `rushing_fumbles_lost` + `receiving_fumbles_lost`
+(a return fumble) carries `FUMBLES_LOST_SOURCES_DIFFER` in `notes`, for tracing a miss. The file has no DST rows.
+
+**The joins.** A person is the salary's `underlying_id` (one per person: the FLEX row in Showdown). The pool scores
+(`nfl_prior_pool_scores_v1`) give `prior_points` from `by_person`, keyed the same way; every `by_person` and `by_dk_id`
+key must be on the slate. The file carries no salary hash, so it binds by key membership only, and `inputs` says so. A
+graded person whose ID is not in `by_dk_id`, or is in `excluded_dk_ids`, is `out_of_selection: true` and still graded.
+Identity is the run's reviewed decision CSV (`priors.REVIEW_COLUMNS`, read with `read_reviewed_decisions`): each
+row's `DK_ID` must be a person's FLEX or Classic ID on the slate, with `DK_NAME`, `DK_TEAM` and `DK_POSITION` equal to the
+salary row's. `ACCEPT` with `REVIEWED_PROVIDER_PLAYER_ID`, else `PROPOSED_PROVIDER_PLAYER_ID`, binds; any other row
+leaves the person unbound, and an nflverse ID bound twice refuses. Stat rows join by that ID only, never by name. A
+failure in any of these is `PLAYER_GRADING_INPUT_INVALID:<input>:<why>`.
+
+**Gaps, never zeros.** Each person carries `gaps`, a list of `{"kind"}`: `DST_NOT_IN_PLAYER_FILE`, `IDENTITY_UNBOUND`,
+`NO_STAT_ROW`, `STAT_NOT_CARRIED:<column>` (the file lacks the column) or `STAT_CELL_BLANK:<column>`. A person with a gap
+has `realized_hundredths: null` and is left out of every measure; `grade.gaps_by_kind` counts them.
+
+**The reconciliation** (`--lineups` and `--entries`, both or neither). The delivered file is read with
+`dk.parse_entries` (its mode must be the salary's) and each cell with `lineups.prefilled_cell_id`; a cell that names no
+exact slate ID refuses. Each Entry ID is matched by `entry_key` to the entry-history artifact
+(`nfl_dk_entry_history_entries_v1`). `status` is `RECONCILED` (every player covered and the difference at most 1
+hundredth), `MISMATCH` (covered, outside it), `NOT_FULLY_COVERED` (the uncovered people named, the gap taken over the
+covered players), `ENTRY_NOT_IN_HISTORY`, `CONTEST_DISAGREES` (the history's `contest_key` against the file's Contest
+ID) or `BLANK_LINEUP`. Every player's points, stat line and gaps are listed. Hundredths are integers, written as text
+where a captain's half-hundredth needs it. **Residual groups:** for a lineup with exactly one uncovered person, the gap
+divided by his multiplier is his implied DraftKings points; `residual_groups` collects them by person, `AGREE` within 2
+hundredths, else `DISAGREE`, or `SINGLE`. Agreement checks `scoring.py` on the covered players around him; it cannot see
+an error in a person every lineup of the group holds (`residual_coverage` says so).
+
+**The grade.** Over graded people (`by_person`) with no gap, `prior` and `salary` each carry `player_points_mae` (mean
+absolute error in DraftKings points, `n`, `registered_metric: player_points_mae` and its `departures` from the registered
+definition) and `spearman` (tied ranks averaged; `null` with a `note`, `FEWER_THAN_3` or `ZERO_VARIANCE`). The salary
+baseline is `salary_scaled_points_v1`: salary times the sum of priors over the sum of salaries, over the same people,
+pre-lock information only. `sample` declares the people and `slates: 1`. `not_computed` names `participation_brier` (the
+engine states no playing probability) and the registered bootstrap interval. `does_not_establish` travels with every
+report. `AvgPointsPerGame` is never read.
+
+**The report.** `player_grading.w1.json`: JSON with sorted keys, a two-space indent, UTF-8 and one trailing LF. `--out`
+must be a new folder (`PLAYER_GRADING_OUTPUT_EXISTS`). Top-level keys: `schema_version`, `realized_points_version`,
+`model_status`, `status`, `slate` (mode, season, week, and each DraftKings game's `game_id`), `inputs` (each file's
+SHA-256, never a path), `stats_source` (the manifest entry: URL, SHA-256, observed time, parser version), `people` (every
+salary person), `grade`, `reconciliation` (null without lineups), `not_computed` and `does_not_establish`. The same bytes
+give the same report. All six codes are registry family `player_grading` (`P`).
 
 ## Standings corpus transport (Session 17, X2)
 

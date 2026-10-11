@@ -557,6 +557,36 @@ file it found in the way. Everything under `data/results/` is gitignored
 because it carries fees and winnings; the printed result carries no money, so
 it is safe to paste back to Claude. It grades nothing and clears no upload.
 
+## Player grading
+
+After a slate's games are played, grade its prior against what happened, and
+check its lineups against DraftKings' own points:
+
+```powershell
+.\nfl.ps1 grade-players --salaries 'data\inbox\slates\<slate>\input\DKSalaries.csv' `
+  --pool-scores 'data\inbox\slates\<slate>\construction\pool_scores.json' `
+  --identity-review 'data\runs\<the run that built the priors>\priors\identity_reviewed.csv' `
+  --stats-package 'data\results\stats-2026' --season 2026 --week 4 `
+  --out 'data\results\grades\<slate>' `
+  --lineups 'data\inbox\slates\<slate>\construction\<delivered DK_REVIEW_ENTRY file>.csv' `
+  --entries 'data\results\normalized\<sha256>\nfl_entries.w1.json'
+```
+
+The first run of a season fetches nflverse's weekly player file into the stats
+package; every later run reads that frozen copy, so one package serves every
+slate. Use the run that built the prior package for `--identity-review`: a
+`--request` rerun on frozen priors does not write that file. `--lineups` and
+`--entries` go together; leave both off to grade players only.
+
+`--out` must be a new folder. The report (`nfl_player_grading_v1`) lists every
+person's realized points and the stat line behind them, with a named gap
+instead of a zero for anyone the file cannot score (a DST, a player with no
+stat row, an unbound identity). It gives the prior's error and rank correlation
+beside the salary baseline's, and each delivered lineup's status against
+DraftKings (`RECONCILED` within 0.01, `MISMATCH` with every player's stat line,
+or not fully covered). Exit 2 is a refusal named by code; nothing is written.
+It is a grading input only: it changes no prior and clears no upload.
+
 ## Safe failure behavior
 
 - Excel open: readable stop message; no partial workbook.

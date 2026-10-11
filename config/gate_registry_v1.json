@@ -237,6 +237,11 @@
       "provenance": {"kind": "CONTRACT", "ref": "DraftKings entry history, nfl_dk_entry_history_v1 (Session 69)"},
       "covers": "The operator's DraftKings entry-history export was refused whole: a structural fault on any row, a value fault on an NFL row or in a contest with an NFL row, or no NFL row; or its intake could not read it, found another file holding the snapshot's or an artifact's name (never overwritten), or could not write. It stops a results record, never a lineup file."
     },
+    "player_grading": {
+      "class": "P", "stops": "CERTIFICATION",
+      "provenance": {"kind": "CONTRACT", "ref": "Player grading, nfl_player_grading_v1 (Session 70)"},
+      "covers": "A slate's player grading was refused whole: the nflverse weekly file could not be fetched, did not match its package or was malformed, held no row for the week, or bound a slate game to no single nflverse game; or a salary, pool-score, identity, lineup or entry-history input was unreadable or did not bind to the slate; or the report folder already existed (never overwritten). It stops a grading report, never a lineup file."
+    },
     "presentation": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "SD5 prior-only readable review"},
@@ -1097,6 +1102,12 @@
     "PARTICIPATION_REMOVES_EVERY_PERSON": "participation_shortfall",
     "PARTICIPATION_REMOVES_EVERY_PERSON_FOR_TEAM": "participation_shortfall",
     "PLAYER_EVIDENCE_NOT_PASS": "projection_package",
+    "PLAYER_GRADING_GAME_UNBOUND": "player_grading",
+    "PLAYER_GRADING_INPUT_INVALID": "player_grading",
+    "PLAYER_GRADING_OUTPUT_EXISTS": "player_grading",
+    "PLAYER_GRADING_STATS_INVALID": "player_grading",
+    "PLAYER_GRADING_STATS_UNAVAILABLE": "player_grading",
+    "PLAYER_GRADING_WEEK_ABSENT": "player_grading",
     "PLAYER_IDENTITY_COVERAGE_MISMATCH": "provider_identity",
     "PLAYER_OPPORTUNITIES_CHANGED_BEFORE_ARTIFACT_PUBLISH": "projection_package",
     "PLAYER_OPPORTUNITIES_CHANGED_BEFORE_SELECTION": "projection_package",
