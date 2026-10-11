@@ -63,6 +63,22 @@ deadline 16:55Z; file delivered 16:17Z.
   Kaleb Johnson beyond the build's own 3 rows (no lead back named), Isaiah Williams (one secondary summary),
   the cheap SF and MIN wide receivers (no source named an heir).
 
+- Final adversarial pass at Ben's request (16:41Z to 16:44Z), recorded in `construction/final_qa_record.py` and
+  `portfolio_v8_final.json`'s `final_qa`. A second news sweep (Yahoo and NBC through 11:56 AM ET) found no new inactive
+  and no starter change. Three changes:
+  - Contest assignment, a Pareto gain: the two $1 single-entry Daily Dollar Entry IDs held the two lowest-prior lineups
+    (107.4, 107.5). Whole lineups exchanged with the Dime contest (154.5, 138.5). The 32 lineups are unchanged, and the
+    Dime contest's own mean overlap fell 1.33 to 1.16, its distinct players rose 76 to 80.
+  - Judgment, not Pareto: row 5290502374 played TreVeyon Henderson with Rhamondre Stevenson (same backfield). Henderson
+    to RJ Harvey, row prior -0.62, every washout measure unchanged. No swap kept the prior and every measure.
+  - Judgment, not Pareto: Nick Underhill reported a major sickness in the Saints locker room (11:56 AM ET), with two Saints
+    DL already inactive. Saints DST moved to Jets DST in 3 of its 6 rows (the three Dime rows), row prior -0.12 each, +$100.
+  The redeploy rerun on the result found no Pareto gain (`NO_PARETO_GAIN`). Delivered `DK_REVIEW_ENTRY_wk5_classic_v8.csv`,
+  `594f71c4…6e4cf526`, replacing v5: 32 of 32, 0 bytes changed outside the roster cells, QA Tier 1 PASS, Tier 2 max
+  exposure 10/32, top-3 union 15/32, 95 distinct players, overlap max 5 mean 1.15, stacked and bring-back 32/32, DST
+  conflicts 0. `PRIOR_ONLY / DO_NOT_UPLOAD`. Left alone: rain and gusts at NYG@WAS (no WAS or NYG quarterback rostered;
+  Antonio Williams in 3 rows), and the low-salary rows ($47,200 to $48,400), which the redeploy found no Pareto use for.
+
 Fixed: `run-slate --help` (and `cowork-run --help`) raised `TypeError: must be real number, not dict`: the
 `--contest-facts-csv` help text carried a bare `5%`, which argparse reads as a format specifier. Escaped in
 `src/nfl_dfs/cli.py`; `tests/test_cli_help.py` renders every subcommand's help (3 failures on the original,

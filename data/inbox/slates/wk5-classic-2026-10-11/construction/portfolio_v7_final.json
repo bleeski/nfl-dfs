@@ -1,0 +1,2395 @@
+{
+ "lineups": [
+  {
+   "index": 1,
+   "entry_id": "5290501682",
+   "roster": [
+    "44391835",
+    "44392188",
+    "44392590",
+    "44391896",
+    "44391912",
+    "44392448",
+    "44392220",
+    "44392873",
+    "44391938"
+   ],
+   "salary": 49700,
+   "prior_points": 151.021,
+   "bringback": true
+  },
+  {
+   "index": 2,
+   "entry_id": "5290501757",
+   "roster": [
+    "44391845",
+    "44392262",
+    "44392184",
+    "44391896",
+    "44391938",
+    "44392168",
+    "44392628",
+    "44392855",
+    "44392592"
+   ],
+   "salary": 49700,
+   "prior_points": 141.319,
+   "bringback": true
+  },
+  {
+   "index": 3,
+   "entry_id": "5291568278",
+   "roster": [
+    "44391824",
+    "44392178",
+    "44391960",
+    "44391938",
+    "44392220",
+    "44392182",
+    "44392592",
+    "44392858",
+    "44391912"
+   ],
+   "salary": 50000,
+   "prior_points": 137.635,
+   "bringback": true
+  },
+  {
+   "index": 4,
+   "entry_id": "5291581053",
+   "roster": [
+    "44391827",
+    "44392618",
+    "44392224",
+    "44391896",
+    "44391906",
+    "44392290",
+    "44392208",
+    "44392852",
+    "44391912"
+   ],
+   "salary": 49900,
+   "prior_points": 154.821,
+   "bringback": true
+  },
+  {
+   "index": 5,
+   "entry_id": "5290502359",
+   "roster": [
+    "44391826",
+    "44392182",
+    "44391938",
+    "44391912",
+    "44392268",
+    "44392208",
+    "44392618",
+    "44392865",
+    "44391896"
+   ],
+   "salary": 49800,
+   "prior_points": 153.238,
+   "bringback": true
+  },
+  {
+   "index": 6,
+   "entry_id": "5290502360",
+   "roster": [
+    "44391834",
+    "44392190",
+    "44392636",
+    "44392416",
+    "44391896",
+    "44391912",
+    "44392188",
+    "44392861",
+    "44391906"
+   ],
+   "salary": 49200,
+   "prior_points": 139.005,
+   "bringback": true
+  },
+  {
+   "index": 7,
+   "entry_id": "5290502361",
+   "roster": [
+    "44391825",
+    "44392170",
+    "44391914",
+    "44392242",
+    "44392168",
+    "44391936",
+    "44392626",
+    "44392864",
+    "44391932"
+   ],
+   "salary": 49400,
+   "prior_points": 107.423,
+   "bringback": true
+  },
+  {
+   "index": 8,
+   "entry_id": "5290502362",
+   "roster": [
+    "44391836",
+    "44392302",
+    "44392618",
+    "44391914",
+    "44391932",
+    "44392168",
+    "44392170",
+    "44392856",
+    "44392588"
+   ],
+   "salary": 50000,
+   "prior_points": 107.498,
+   "bringback": true
+  },
+  {
+   "index": 9,
+   "entry_id": "5290502363",
+   "roster": [
+    "44391845",
+    "44392644",
+    "44392262",
+    "44392184",
+    "44391912",
+    "44391896",
+    "44392170",
+    "44392855",
+    "44392600"
+   ],
+   "salary": 49400,
+   "prior_points": 138.377,
+   "bringback": true
+  },
+  {
+   "index": 10,
+   "entry_id": "5290502364",
+   "roster": [
+    "44391846",
+    "44392228",
+    "44392570",
+    "44392168",
+    "44391896",
+    "44391912",
+    "44392632",
+    "44392860",
+    "44392170"
+   ],
+   "salary": 50000,
+   "prior_points": 135.271,
+   "bringback": true
+  },
+  {
+   "index": 11,
+   "entry_id": "5290502365",
+   "roster": [
+    "44391827",
+    "44392220",
+    "44392618",
+    "44392224",
+    "44391896",
+    "44391938",
+    "44392170",
+    "44392860",
+    "44392242"
+   ],
+   "salary": 49800,
+   "prior_points": 142.234,
+   "bringback": true
+  },
+  {
+   "index": 12,
+   "entry_id": "5290502366",
+   "roster": [
+    "44391826",
+    "44392202",
+    "44392592",
+    "44391938",
+    "44391906",
+    "44392168",
+    "44392570",
+    "44392858",
+    "44392590"
+   ],
+   "salary": 50000,
+   "prior_points": 138.217,
+   "bringback": true
+  },
+  {
+   "index": 13,
+   "entry_id": "5290502367",
+   "roster": [
+    "44391837",
+    "44392208",
+    "44392270",
+    "44392192",
+    "44391938",
+    "44391912",
+    "44392614",
+    "44392855",
+    "44391898"
+   ],
+   "salary": 47200,
+   "prior_points": 128.463,
+   "bringback": true
+  },
+  {
+   "index": 14,
+   "entry_id": "5290502368",
+   "roster": [
+    "44391827",
+    "44392618",
+    "44392220",
+    "44392224",
+    "44391898",
+    "44391906",
+    "44392182",
+    "44392855",
+    "44391932"
+   ],
+   "salary": 49800,
+   "prior_points": 132.244,
+   "bringback": true
+  },
+  {
+   "index": 15,
+   "entry_id": "5290502369",
+   "roster": [
+    "44391835",
+    "44392188",
+    "44392170",
+    "44391912",
+    "44391938",
+    "44391936",
+    "44392596",
+    "44392865",
+    "44392208"
+   ],
+   "salary": 49300,
+   "prior_points": 137.726,
+   "bringback": true
+  },
+  {
+   "index": 16,
+   "entry_id": "5290502370",
+   "roster": [
+    "44391833",
+    "44392184",
+    "44392262",
+    "44391938",
+    "44391906",
+    "44392176",
+    "44392618",
+    "44392861",
+    "44391900"
+   ],
+   "salary": 49600,
+   "prior_points": 132.558,
+   "bringback": true
+  },
+  {
+   "index": 17,
+   "entry_id": "5290502371",
+   "roster": [
+    "44391824",
+    "44392610",
+    "44392168",
+    "44391960",
+    "44391956",
+    "44392182",
+    "44392208",
+    "44392869",
+    "44392590"
+   ],
+   "salary": 49700,
+   "prior_points": 119.008,
+   "bringback": true
+  },
+  {
+   "index": 18,
+   "entry_id": "5290502372",
+   "roster": [
+    "44391827",
+    "44392220",
+    "44392618",
+    "44391902",
+    "44391960",
+    "44392166",
+    "44392208",
+    "44392860",
+    "44391930"
+   ],
+   "salary": 49600,
+   "prior_points": 126.143,
+   "bringback": true
+  },
+  {
+   "index": 19,
+   "entry_id": "5290502373",
+   "roster": [
+    "44391826",
+    "44392202",
+    "44392592",
+    "44392166",
+    "44391906",
+    "44391930",
+    "44391956",
+    "44392860",
+    "44392242"
+   ],
+   "salary": 50000,
+   "prior_points": 125.93,
+   "bringback": true
+  },
+  {
+   "index": 20,
+   "entry_id": "5290502374",
+   "roster": [
+    "44391841",
+    "44392278",
+    "44392208",
+    "44391942",
+    "44391930",
+    "44392166",
+    "44392598",
+    "44392852",
+    "44391898"
+   ],
+   "salary": 50000,
+   "prior_points": 119.96,
+   "bringback": true
+  },
+  {
+   "index": 21,
+   "entry_id": "5290502375",
+   "roster": [
+    "44391827",
+    "44392618",
+    "44392220",
+    "44391902",
+    "44391906",
+    "44392166",
+    "44392240",
+    "44392873",
+    "44392192"
+   ],
+   "salary": 50000,
+   "prior_points": 129.588,
+   "bringback": true
+  },
+  {
+   "index": 22,
+   "entry_id": "5290502376",
+   "roster": [
+    "44391825",
+    "44392294",
+    "44392194",
+    "44392188",
+    "44391898",
+    "44391906",
+    "44392598",
+    "44392855",
+    "44392268"
+   ],
+   "salary": 48800,
+   "prior_points": 117.472,
+   "bringback": true
+  },
+  {
+   "index": 23,
+   "entry_id": "5290502377",
+   "roster": [
+    "44391845",
+    "44392226",
+    "44392600",
+    "44391900",
+    "44391904",
+    "44392202",
+    "44392176",
+    "44392856",
+    "44392602"
+   ],
+   "salary": 49300,
+   "prior_points": 116.571,
+   "bringback": true
+  },
+  {
+   "index": 24,
+   "entry_id": "5290508929",
+   "roster": [
+    "44391824",
+    "44392168",
+    "44392276",
+    "44391906",
+    "44391930",
+    "44392262",
+    "44392594",
+    "44392865",
+    "44392174"
+   ],
+   "salary": 49800,
+   "prior_points": 118.223,
+   "bringback": true
+  },
+  {
+   "index": 25,
+   "entry_id": "5291537916",
+   "roster": [
+    "44391835",
+    "44392188",
+    "44391896",
+    "44391938",
+    "44392168",
+    "44392268",
+    "44392620",
+    "44392854",
+    "44392618"
+   ],
+   "salary": 49300,
+   "prior_points": 138.498,
+   "bringback": true
+  },
+  {
+   "index": 26,
+   "entry_id": "5291544300",
+   "roster": [
+    "44391832",
+    "44392340",
+    "44392166",
+    "44391898",
+    "44391918",
+    "44391936",
+    "44392600",
+    "44392865",
+    "44392208"
+   ],
+   "salary": 49800,
+   "prior_points": 116.71,
+   "bringback": true
+  },
+  {
+   "index": 27,
+   "entry_id": "5291553103",
+   "roster": [
+    "44391841",
+    "44392240",
+    "44392192",
+    "44391906",
+    "44391904",
+    "44392176",
+    "44392242",
+    "44392861",
+    "44392590"
+   ],
+   "salary": 49800,
+   "prior_points": 124.173,
+   "bringback": true
+  },
+  {
+   "index": 28,
+   "entry_id": "5291539087",
+   "roster": [
+    "44391845",
+    "44392226",
+    "44391956",
+    "44392174",
+    "44392182",
+    "44392180",
+    "44391900",
+    "44392865",
+    "44392600"
+   ],
+   "salary": 49900,
+   "prior_points": 119.414,
+   "bringback": true
+  },
+  {
+   "index": 29,
+   "entry_id": "5291559268",
+   "roster": [
+    "44391825",
+    "44392170",
+    "44392596",
+    "44392188",
+    "44391908",
+    "44391956",
+    "44392240",
+    "44392861",
+    "44392194"
+   ],
+   "salary": 49900,
+   "prior_points": 117.391,
+   "bringback": true
+  },
+  {
+   "index": 30,
+   "entry_id": "5291544881",
+   "roster": [
+    "44391834",
+    "44392230",
+    "44392296",
+    "44391990",
+    "44391898",
+    "44392168",
+    "44392596",
+    "44392864",
+    "44392180"
+   ],
+   "salary": 48400,
+   "prior_points": 110.499,
+   "bringback": true
+  },
+  {
+   "index": 31,
+   "entry_id": "5291560256",
+   "roster": [
+    "44391834",
+    "44392316",
+    "44392190",
+    "44392416",
+    "44391904",
+    "44391932",
+    "44392590",
+    "44392854",
+    "44392176"
+   ],
+   "salary": 47500,
+   "prior_points": 102.616,
+   "bringback": true
+  },
+  {
+   "index": 32,
+   "entry_id": "5291538136",
+   "roster": [
+    "44391827",
+    "44392220",
+    "44392224",
+    "44391912",
+    "44392592",
+    "44392202",
+    "44392618",
+    "44392865",
+    "44391896"
+   ],
+   "salary": 49100,
+   "prior_points": 154.479,
+   "bringback": true
+  }
+ ],
+ "assignments_by_entry_id": {
+  "5290501682": [
+   "44391835",
+   "44392188",
+   "44392590",
+   "44391896",
+   "44391912",
+   "44392448",
+   "44392220",
+   "44392873",
+   "44391938"
+  ],
+  "5290501757": [
+   "44391845",
+   "44392262",
+   "44392184",
+   "44391896",
+   "44391938",
+   "44392168",
+   "44392628",
+   "44392855",
+   "44392592"
+  ],
+  "5291568278": [
+   "44391824",
+   "44392178",
+   "44391960",
+   "44391938",
+   "44392220",
+   "44392182",
+   "44392592",
+   "44392858",
+   "44391912"
+  ],
+  "5291581053": [
+   "44391827",
+   "44392618",
+   "44392224",
+   "44391896",
+   "44391906",
+   "44392290",
+   "44392208",
+   "44392852",
+   "44391912"
+  ],
+  "5290502359": [
+   "44391826",
+   "44392182",
+   "44391938",
+   "44391912",
+   "44392268",
+   "44392208",
+   "44392618",
+   "44392865",
+   "44391896"
+  ],
+  "5290502360": [
+   "44391834",
+   "44392190",
+   "44392636",
+   "44392416",
+   "44391896",
+   "44391912",
+   "44392188",
+   "44392861",
+   "44391906"
+  ],
+  "5290502361": [
+   "44391825",
+   "44392170",
+   "44391914",
+   "44392242",
+   "44392168",
+   "44391936",
+   "44392626",
+   "44392864",
+   "44391932"
+  ],
+  "5290502362": [
+   "44391836",
+   "44392302",
+   "44392618",
+   "44391914",
+   "44391932",
+   "44392168",
+   "44392170",
+   "44392856",
+   "44392588"
+  ],
+  "5290502363": [
+   "44391845",
+   "44392644",
+   "44392262",
+   "44392184",
+   "44391912",
+   "44391896",
+   "44392170",
+   "44392855",
+   "44392600"
+  ],
+  "5290502364": [
+   "44391846",
+   "44392228",
+   "44392570",
+   "44392168",
+   "44391896",
+   "44391912",
+   "44392632",
+   "44392860",
+   "44392170"
+  ],
+  "5290502365": [
+   "44391827",
+   "44392220",
+   "44392618",
+   "44392224",
+   "44391896",
+   "44391938",
+   "44392170",
+   "44392860",
+   "44392242"
+  ],
+  "5290502366": [
+   "44391826",
+   "44392202",
+   "44392592",
+   "44391938",
+   "44391906",
+   "44392168",
+   "44392570",
+   "44392858",
+   "44392590"
+  ],
+  "5290502367": [
+   "44391837",
+   "44392208",
+   "44392270",
+   "44392192",
+   "44391938",
+   "44391912",
+   "44392614",
+   "44392855",
+   "44391898"
+  ],
+  "5290502368": [
+   "44391827",
+   "44392618",
+   "44392220",
+   "44392224",
+   "44391898",
+   "44391906",
+   "44392182",
+   "44392855",
+   "44391932"
+  ],
+  "5290502369": [
+   "44391835",
+   "44392188",
+   "44392170",
+   "44391912",
+   "44391938",
+   "44391936",
+   "44392596",
+   "44392865",
+   "44392208"
+  ],
+  "5290502370": [
+   "44391833",
+   "44392184",
+   "44392262",
+   "44391938",
+   "44391906",
+   "44392176",
+   "44392618",
+   "44392861",
+   "44391900"
+  ],
+  "5290502371": [
+   "44391824",
+   "44392610",
+   "44392168",
+   "44391960",
+   "44391956",
+   "44392182",
+   "44392208",
+   "44392869",
+   "44392590"
+  ],
+  "5290502372": [
+   "44391827",
+   "44392220",
+   "44392618",
+   "44391902",
+   "44391960",
+   "44392166",
+   "44392208",
+   "44392860",
+   "44391930"
+  ],
+  "5290502373": [
+   "44391826",
+   "44392202",
+   "44392592",
+   "44392166",
+   "44391906",
+   "44391930",
+   "44391956",
+   "44392860",
+   "44392242"
+  ],
+  "5290502374": [
+   "44391841",
+   "44392278",
+   "44392208",
+   "44391942",
+   "44391930",
+   "44392166",
+   "44392598",
+   "44392852",
+   "44391898"
+  ],
+  "5290502375": [
+   "44391827",
+   "44392618",
+   "44392220",
+   "44391902",
+   "44391906",
+   "44392166",
+   "44392240",
+   "44392873",
+   "44392192"
+  ],
+  "5290502376": [
+   "44391825",
+   "44392294",
+   "44392194",
+   "44392188",
+   "44391898",
+   "44391906",
+   "44392598",
+   "44392855",
+   "44392268"
+  ],
+  "5290502377": [
+   "44391845",
+   "44392226",
+   "44392600",
+   "44391900",
+   "44391904",
+   "44392202",
+   "44392176",
+   "44392856",
+   "44392602"
+  ],
+  "5290508929": [
+   "44391824",
+   "44392168",
+   "44392276",
+   "44391906",
+   "44391930",
+   "44392262",
+   "44392594",
+   "44392865",
+   "44392174"
+  ],
+  "5291537916": [
+   "44391835",
+   "44392188",
+   "44391896",
+   "44391938",
+   "44392168",
+   "44392268",
+   "44392620",
+   "44392854",
+   "44392618"
+  ],
+  "5291544300": [
+   "44391832",
+   "44392340",
+   "44392166",
+   "44391898",
+   "44391918",
+   "44391936",
+   "44392600",
+   "44392865",
+   "44392208"
+  ],
+  "5291553103": [
+   "44391841",
+   "44392240",
+   "44392192",
+   "44391906",
+   "44391904",
+   "44392176",
+   "44392242",
+   "44392861",
+   "44392590"
+  ],
+  "5291539087": [
+   "44391845",
+   "44392226",
+   "44391956",
+   "44392174",
+   "44392182",
+   "44392180",
+   "44391900",
+   "44392865",
+   "44392600"
+  ],
+  "5291559268": [
+   "44391825",
+   "44392170",
+   "44392596",
+   "44392188",
+   "44391908",
+   "44391956",
+   "44392240",
+   "44392861",
+   "44392194"
+  ],
+  "5291544881": [
+   "44391834",
+   "44392230",
+   "44392296",
+   "44391990",
+   "44391898",
+   "44392168",
+   "44392596",
+   "44392864",
+   "44392180"
+  ],
+  "5291560256": [
+   "44391834",
+   "44392316",
+   "44392190",
+   "44392416",
+   "44391904",
+   "44391932",
+   "44392590",
+   "44392854",
+   "44392176"
+  ],
+  "5291538136": [
+   "44391827",
+   "44392220",
+   "44392224",
+   "44391912",
+   "44392592",
+   "44392202",
+   "44392618",
+   "44392865",
+   "44391896"
+  ]
+ },
+ "unfilled_entry_ids": [],
+ "operator_excluded_entry_ids": {},
+ "construction": {
+  "theses": {
+   "DET_ARI_SHOOTOUT": 6,
+   "CHI_GB_BACKFIELDS": 4,
+   "CIN_MIA": 4,
+   "NE_LV": 4,
+   "SF_SEA_LATE": 4,
+   "MID_TOTAL_QBS": 5,
+   "MARKET_ALL": 5
+  },
+  "faded_in_priors_wrong": [],
+  "max_exposure": 10,
+  "max_overlap": 5,
+  "per_thesis_qb_cap": 3,
+  "seeds": [
+   1011,
+   5505
+  ],
+  "candidates_generated": {
+   "DET_ARI_SHOOTOUT": 72,
+   "CHI_GB_BACKFIELDS": 48,
+   "CIN_MIA": 48,
+   "NE_LV": 48,
+   "SF_SEA_LATE": 48,
+   "MID_TOTAL_QBS": 60,
+   "MARKET_ALL": 60
+  },
+  "manual_adds": [
+   "MANUAL_ADD 5291538136: Alvin Kamara (5400, prior 10.59) -> Braelon Allen (5400, prior 8.76), QB Jared Goff",
+   "MANUAL_ADD 5290502368: Terry McLaurin (5300, prior 10.84) -> Braelon Allen (5400, prior 8.76), QB Drake Maye",
+   "MANUAL_ADD 5291560256: Omarion Hampton (6000, prior 11.07) -> Braelon Allen (5400, prior 8.76), QB Bo Nix",
+   "MANUAL_ADD 5291537916: TreVeyon Henderson (5000, prior 11.41) -> Braelon Allen (5400, prior 8.76), QB Kirk Cousins",
+   "EXPOSURE Braelon Allen: 4 of target 4",
+   "MANUAL_ADD 5291538136: Bam Knight (4000, prior 8.29) -> Tre' Harris (4100, prior 6.74), QB Jared Goff",
+   "MANUAL_ADD 5291553103: Dalton Schultz (4000, prior 8.80) -> Tre' Harris (4100, prior 6.74), QB Daniel Jones",
+   "MANUAL_ADD 5290502365: Oronde Gadsden II (3600, prior 9.72) -> Tre' Harris (4100, prior 6.74), QB Drake Maye",
+   "MANUAL_ADD 5290502373: Oronde Gadsden II (3600, prior 9.72) -> Tre' Harris (4100, prior 6.74), QB Brock Purdy",
+   "EXPOSURE Tre' Harris: 4 of target 4",
+   "MANUAL_ADD 5290502369: Cam Skattebo (6000, prior 11.54) -> Ollie Gordon II (5300, prior 9.90), QB Jacoby Brissett",
+   "MANUAL_ADD 5291544300: Malik Nabers (6300, prior 11.88) -> Ollie Gordon II (5300, prior 9.90), QB Sam Darnold",
+   "MANUAL_ADD 5291538136: Chris Olave (7700, prior 11.89) -> Ollie Gordon II (5300, prior 9.90), QB Jared Goff",
+   "EXPOSURE Ollie Gordon II: 3 of target 3",
+   "MANUAL_ADD 5290502359: DeMario Douglas (3500, prior 8.33) -> Antonio Williams (3800, prior 7.17), QB Brock Purdy",
+   "MANUAL_ADD 5290502376: J.K. Dobbins (5000, prior 9.33) -> Antonio Williams (3800, prior 7.17), QB Jared Goff",
+   "MANUAL_ADD 5290502362: Courtland Sutton (4600, prior 10.44) -> Antonio Williams (3800, prior 7.17), QB Jacoby Brissett",
+   "EXPOSURE Antonio Williams: 3 of target 3"
+  ],
+  "mode": "redeploy",
+  "cap": 50000,
+  "min_salary": 0,
+  "changed_entry_ids": [
+   "5290502362",
+   "5290502373",
+   "5291538136",
+   "5291544300"
+  ],
+  "swap_log": [
+   "REDEPLOY 5290502362: AJ Barner -> Oronde Gadsden II (+2.26)",
+   "REDEPLOY 5290502373: Keenan Allen -> MarShawn Lloyd (+0.93)",
+   "REDEPLOY 5291544300: RJ Harvey -> Cam Skattebo (+0.74)",
+   "REDEPLOY 5291538136: DK Metcalf -> Ja'Marr Chase (+2.90)",
+   "REDEPLOY 5291538136: Kenyon Sadiq -> AJ Barner (+0.88)"
+  ],
+  "pareto_redeploy": {
+   "rule": "pareto_redeploy_v2",
+   "state": "COMPLETED",
+   "does_not_establish": [
+    "THAT_A_PRIOR_GAIN_IS_EXPECTED_VALUE_OR_A_WIN_PROBABILITY",
+    "THAT_THE_FOUR_WASHOUT_PROXIES_MEASURE_LEVERAGE_OR_FIELD_DUPLICATION",
+    "THAT_A_BLANK_DRAFTKINGS_STATUS_IS_OFFICIAL_ACTIVITY_EVIDENCE",
+    "THAT_ANY_REDEPLOYED_PERSON_IS_PLAYING_OR_HAS_THE_ROLE_HIS_PRIOR_ASSUMES",
+    "THAT_A_GAME_THE_CLOCK_SAYS_IS_OPEN_IS_OPEN_ON_DRAFTKINGS"
+   ],
+   "rows_considered": 32,
+   "gated_people": 274,
+   "locked_people": 0,
+   "passes": 2,
+   "fixed_point": true,
+   "protected": [
+    {
+     "dk_id": "44391932",
+     "name": "Braelon Allen",
+     "rows_before": 4,
+     "rows_after": 4
+    },
+    {
+     "dk_id": "44391936",
+     "name": "Ollie Gordon II",
+     "rows_before": 3,
+     "rows_after": 3
+    },
+    {
+     "dk_id": "44392242",
+     "name": "Tre' Harris",
+     "rows_before": 4,
+     "rows_after": 4
+    },
+    {
+     "dk_id": "44392268",
+     "name": "Antonio Williams",
+     "rows_before": 3,
+     "rows_after": 3
+    }
+   ],
+   "before": {
+    "rows": 32,
+    "prior_sum": 4126.626,
+    "max_exposure": 10,
+    "max_exposure_person": "Jahmyr Gibbs",
+    "top3_union": 15,
+    "mean_overlap": 1.153226,
+    "pair_overlap_sum": 572,
+    "distinct_people": 95
+   },
+   "after": {
+    "rows": 32,
+    "prior_sum": 4134.34,
+    "max_exposure": 10,
+    "max_exposure_person": "Jahmyr Gibbs",
+    "top3_union": 15,
+    "mean_overlap": 1.153226,
+    "pair_overlap_sum": 572,
+    "distinct_people": 95
+   },
+   "accepted_total": 5,
+   "accepted": [
+    {
+     "entry_id": "5290502362",
+     "out": "44392626",
+     "out_name": "AJ Barner",
+     "in": "44392620",
+     "in_name": "Oronde Gadsden II",
+     "prior_gain": 2.264,
+     "salary_delta": 400,
+     "pass": 1
+    },
+    {
+     "entry_id": "5290502373",
+     "out": "44392240",
+     "out_name": "Keenan Allen",
+     "in": "44391956",
+     "in_name": "MarShawn Lloyd",
+     "prior_gain": 0.929,
+     "salary_delta": 500,
+     "pass": 1
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391942",
+     "out_name": "RJ Harvey",
+     "in": "44391918",
+     "in_name": "Cam Skattebo",
+     "prior_gain": 0.741,
+     "salary_delta": 800,
+     "pass": 1
+    },
+    {
+     "entry_id": "5291538136",
+     "out": "44392208",
+     "out_name": "DK Metcalf",
+     "in": "44392168",
+     "in_name": "Ja'Marr Chase",
+     "prior_gain": 2.904,
+     "salary_delta": 2700,
+     "pass": 1
+    },
+    {
+     "entry_id": "5291538136",
+     "out": "44392616",
+     "out_name": "Kenyon Sadiq",
+     "in": "44392626",
+     "in_name": "AJ Barner",
+     "prior_gain": 0.877,
+     "salary_delta": -600,
+     "pass": 1
+    }
+   ],
+   "changed_entry_ids": [
+    "5290502362",
+    "5290502373",
+    "5291544300",
+    "5291538136"
+   ],
+   "refusal_scan": "COMPLETE",
+   "rejected_total": 111,
+   "rejected_by_goal": {
+    "max_exposure": 0,
+    "top3_union": 1,
+    "mean_overlap": 110,
+    "distinct_people": 30
+   },
+   "rejected": [
+    {
+     "entry_id": "5291560256",
+     "out": "44391904",
+     "out_name": "Chase Brown",
+     "in": "44391898",
+     "in_name": "Christian McCaffrey",
+     "prior_gain": 6.172,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290508929",
+     "out": "44392594",
+     "out_name": "Tyler Warren",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 5.736,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 4.857,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502376",
+     "out": "44392598",
+     "out_name": "T.J. Hockenson",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 4.239,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392596",
+     "out_name": "Sam LaPorta",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 4.207,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502373",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 3.904,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391950",
+     "out_name": "TreVeyon Henderson",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 3.605,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391950",
+     "out_name": "TreVeyon Henderson",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 3.557,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 3.479,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 3.431,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290508929",
+     "out": "44392594",
+     "out_name": "Tyler Warren",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 3.395,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502370",
+     "out": "44391900",
+     "out_name": "Jonathan Taylor",
+     "in": "44391898",
+     "in_name": "Christian McCaffrey",
+     "prior_gain": 3.281,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502377",
+     "out": "44391900",
+     "out_name": "Jonathan Taylor",
+     "in": "44391898",
+     "in_name": "Christian McCaffrey",
+     "prior_gain": 3.281,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502372",
+     "out": "44391960",
+     "out_name": "Jaylen Wright",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 3.259,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290501682",
+     "out": "44392448",
+     "out_name": "Elic Ayomanor",
+     "in": "44392316",
+     "in_name": "Troy Franklin",
+     "prior_gain": 3.021,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502370",
+     "out": "44391900",
+     "out_name": "Jonathan Taylor",
+     "in": "44392168",
+     "in_name": "Ja'Marr Chase",
+     "prior_gain": 2.999,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44392202",
+     "in_name": "Deebo Samuel Sr.",
+     "prior_gain": 2.941,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392170",
+     "in_name": "Amon-Ra St. Brown",
+     "prior_gain": 2.683,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392176",
+     "in_name": "Justin Jefferson",
+     "prior_gain": 2.596,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 2.466,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291560256",
+     "out": "44392176",
+     "out_name": "Justin Jefferson",
+     "in": "44391898",
+     "in_name": "Christian McCaffrey",
+     "prior_gain": 2.421,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502373",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 2.418,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 2.418,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291538136",
+     "out": "44392626",
+     "out_name": "AJ Barner",
+     "in": "44392620",
+     "in_name": "Oronde Gadsden II",
+     "prior_gain": 2.264,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392590",
+     "in_name": "Trey McBride",
+     "prior_gain": 2.201,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392590",
+     "in_name": "Trey McBride",
+     "prior_gain": 2.201,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291560256",
+     "out": "44392176",
+     "out_name": "Justin Jefferson",
+     "in": "44392168",
+     "in_name": "Ja'Marr Chase",
+     "prior_gain": 2.139,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502365",
+     "out": "44392170",
+     "out_name": "Amon-Ra St. Brown",
+     "in": "44392168",
+     "in_name": "Ja'Marr Chase",
+     "prior_gain": 2.052,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502377",
+     "out": "44392202",
+     "out_name": "Deebo Samuel Sr.",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.977,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502375",
+     "out": "44392192",
+     "out_name": "Josh Downs",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 1.949,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392202",
+     "in_name": "Deebo Samuel Sr.",
+     "prior_gain": 1.928,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502361",
+     "out": "44392202",
+     "out_name": "Deebo Samuel Sr.",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.916,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502377",
+     "out": "44392202",
+     "out_name": "Deebo Samuel Sr.",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.916,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44392598",
+     "out_name": "T.J. Hockenson",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 1.898,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502376",
+     "out": "44392598",
+     "out_name": "T.J. Hockenson",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 1.898,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392596",
+     "out_name": "Sam LaPorta",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 1.866,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.832,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.832,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.771,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.771,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44391900",
+     "in_name": "Jonathan Taylor",
+     "prior_gain": 1.736,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290501682",
+     "out": "44392448",
+     "out_name": "Elic Ayomanor",
+     "in": "44392302",
+     "in_name": "Cody White",
+     "prior_gain": 1.719,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290501682",
+     "out": "44392448",
+     "out_name": "Elic Ayomanor",
+     "in": "44392416",
+     "in_name": "Theo Wease Jr.",
+     "prior_gain": 1.548,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291568278",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.534,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502368",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.534,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.534,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44392192",
+     "in_name": "Josh Downs",
+     "prior_gain": 1.53,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290508929",
+     "out": "44392594",
+     "out_name": "Tyler Warren",
+     "in": "44392596",
+     "in_name": "Sam LaPorta",
+     "prior_gain": 1.528,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291568278",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.474,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502368",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.474,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502371",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.474,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.474,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290508929",
+     "out": "44392174",
+     "out_name": "Nico Collins",
+     "in": "44392590",
+     "in_name": "Trey McBride",
+     "prior_gain": 1.454,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392174",
+     "out_name": "Nico Collins",
+     "in": "44392590",
+     "in_name": "Trey McBride",
+     "prior_gain": 1.454,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290501757",
+     "out": "44392592",
+     "out_name": "George Kittle",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.438,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502375",
+     "out": "44392192",
+     "out_name": "Josh Downs",
+     "in": "44392202",
+     "in_name": "Deebo Samuel Sr.",
+     "prior_gain": 1.411,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291560256",
+     "out": "44392176",
+     "out_name": "Justin Jefferson",
+     "in": "44392166",
+     "in_name": "Jaxon Smith-Njigba",
+     "prior_gain": 1.308,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391950",
+     "out_name": "TreVeyon Henderson",
+     "in": "44392224",
+     "in_name": "Tre Tucker",
+     "prior_gain": 1.277,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391950",
+     "out_name": "TreVeyon Henderson",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 1.264,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290501682",
+     "out": "44392448",
+     "out_name": "Elic Ayomanor",
+     "in": "44392570",
+     "in_name": "Ryan Miller",
+     "prior_gain": 1.227,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502362",
+     "out": "44392620",
+     "out_name": "Oronde Gadsden II",
+     "in": "44392262",
+     "in_name": "Kalif Raymond",
+     "prior_gain": 1.192,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44392224",
+     "in_name": "Tre Tucker",
+     "prior_gain": 1.151,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502375",
+     "out": "44392166",
+     "out_name": "Jaxon Smith-Njigba",
+     "in": "44391898",
+     "in_name": "Christian McCaffrey",
+     "prior_gain": 1.113,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290508929",
+     "out": "44392174",
+     "out_name": "Nico Collins",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.085,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392174",
+     "out_name": "Nico Collins",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 1.085,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290508929",
+     "out": "44392174",
+     "out_name": "Nico Collins",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.025,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392174",
+     "out_name": "Nico Collins",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 1.025,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44391930",
+     "in_name": "Rhamondre Stevenson",
+     "prior_gain": 1.013,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502370",
+     "out": "44391900",
+     "out_name": "Jonathan Taylor",
+     "in": "44392170",
+     "in_name": "Amon-Ra St. Brown",
+     "prior_gain": 0.947,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502372",
+     "out": "44391960",
+     "out_name": "Jaylen Wright",
+     "in": "44392224",
+     "in_name": "Tre Tucker",
+     "prior_gain": 0.931,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502372",
+     "out": "44391960",
+     "out_name": "Jaylen Wright",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 0.918,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291538136",
+     "out": "44392626",
+     "out_name": "AJ Barner",
+     "in": "44392628",
+     "in_name": "Greg Dulcich",
+     "prior_gain": 0.914,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502372",
+     "out": "44392166",
+     "out_name": "Jaxon Smith-Njigba",
+     "in": "44392168",
+     "in_name": "Ja'Marr Chase",
+     "prior_gain": 0.831,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44392166",
+     "out_name": "Jaxon Smith-Njigba",
+     "in": "44392168",
+     "in_name": "Ja'Marr Chase",
+     "prior_gain": 0.831,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502373",
+     "out": "44391956",
+     "out_name": "MarShawn Lloyd",
+     "in": "44392224",
+     "in_name": "Tre Tucker",
+     "prior_gain": 0.758,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392174",
+     "in_name": "Nico Collins",
+     "prior_gain": 0.747,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502373",
+     "out": "44391956",
+     "out_name": "MarShawn Lloyd",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 0.745,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290501682",
+     "out": "44392448",
+     "out_name": "Elic Ayomanor",
+     "in": "44392340",
+     "in_name": "Tory Horton",
+     "prior_gain": 0.71,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502367",
+     "out": "44391938",
+     "out_name": "Emanuel Wilson",
+     "in": "44392168",
+     "in_name": "Ja'Marr Chase",
+     "prior_gain": 0.682,
+     "hurts": [
+      "top3_union"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44391914",
+     "in_name": "Jeremiyah Love",
+     "prior_gain": 0.579,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291559268",
+     "out": "44391908",
+     "out_name": "Aaron Jones Sr.",
+     "in": "44391930",
+     "in_name": "Rhamondre Stevenson",
+     "prior_gain": 0.521,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391950",
+     "out_name": "TreVeyon Henderson",
+     "in": "44391956",
+     "in_name": "MarShawn Lloyd",
+     "prior_gain": 0.519,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502377",
+     "out": "44392202",
+     "out_name": "Deebo Samuel Sr.",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 0.49,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502370",
+     "out": "44391900",
+     "out_name": "Jonathan Taylor",
+     "in": "44392590",
+     "in_name": "Trey McBride",
+     "prior_gain": 0.465,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290508929",
+     "out": "44392594",
+     "out_name": "Tyler Warren",
+     "in": "44392620",
+     "in_name": "Oronde Gadsden II",
+     "prior_gain": 0.435,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291537916",
+     "out": "44391914",
+     "out_name": "Jeremiyah Love",
+     "in": "44391930",
+     "in_name": "Rhamondre Stevenson",
+     "prior_gain": 0.434,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44391956",
+     "in_name": "MarShawn Lloyd",
+     "prior_gain": 0.394,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 0.393,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 0.393,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 0.345,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 0.345,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502366",
+     "out": "44392570",
+     "out_name": "Ryan Miller",
+     "in": "44392416",
+     "in_name": "Theo Wease Jr.",
+     "prior_gain": 0.321,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544881",
+     "out": "44392180",
+     "out_name": "Garrett Wilson",
+     "in": "44392182",
+     "in_name": "Mike Evans",
+     "prior_gain": 0.298,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44392194",
+     "in_name": "Jameson Williams",
+     "prior_gain": 0.295,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5291544300",
+     "out": "44391918",
+     "out_name": "Cam Skattebo",
+     "in": "44391960",
+     "in_name": "Jaylen Wright",
+     "prior_gain": 0.22,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502372",
+     "out": "44391960",
+     "out_name": "Jaylen Wright",
+     "in": "44391956",
+     "in_name": "MarShawn Lloyd",
+     "prior_gain": 0.173,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502373",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392224",
+     "in_name": "Tre Tucker",
+     "prior_gain": 0.138,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392224",
+     "in_name": "Tre Tucker",
+     "prior_gain": 0.138,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502373",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 0.125,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44391930",
+     "out_name": "Rhamondre Stevenson",
+     "in": "44392600",
+     "in_name": "Tucker Kraft",
+     "prior_gain": 0.125,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502370",
+     "out": "44391900",
+     "out_name": "Jonathan Taylor",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 0.096,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392592",
+     "in_name": "George Kittle",
+     "prior_gain": 0.096,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291559268",
+     "out": "44391908",
+     "out_name": "Aaron Jones Sr.",
+     "in": "44391914",
+     "in_name": "Jeremiyah Love",
+     "prior_gain": 0.087,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5290502377",
+     "out": "44392176",
+     "out_name": "Justin Jefferson",
+     "in": "44392170",
+     "in_name": "Amon-Ra St. Brown",
+     "prior_gain": 0.086,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291560256",
+     "out": "44392176",
+     "out_name": "Justin Jefferson",
+     "in": "44392170",
+     "in_name": "Amon-Ra St. Brown",
+     "prior_gain": 0.086,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502360",
+     "out": "44392188",
+     "out_name": "Michael Wilson",
+     "in": "44392208",
+     "in_name": "DK Metcalf",
+     "prior_gain": 0.06,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502371",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 0.048,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5291539087",
+     "out": "44392182",
+     "out_name": "Mike Evans",
+     "in": "44392220",
+     "in_name": "Romeo Doubs",
+     "prior_gain": 0.048,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502370",
+     "out": "44391900",
+     "out_name": "Jonathan Taylor",
+     "in": "44392188",
+     "in_name": "Michael Wilson",
+     "prior_gain": 0.036,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502374",
+     "out": "44392598",
+     "out_name": "T.J. Hockenson",
+     "in": "44392596",
+     "in_name": "Sam LaPorta",
+     "prior_gain": 0.031,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5290502376",
+     "out": "44392598",
+     "out_name": "T.J. Hockenson",
+     "in": "44392596",
+     "in_name": "Sam LaPorta",
+     "prior_gain": 0.031,
+     "hurts": [
+      "mean_overlap"
+     ]
+    }
+   ],
+   "row_rejections": {
+    "ILLEGAL": 204,
+    "SHAPE": 0,
+    "CAPS_OR_DISTINCT": 86
+   },
+   "available_at_stop": 0,
+   "stored_limit": null
+  },
+  "final_qa": [
+   "RB_PAIR 5290502374: no swap keeps the row's prior and every washout measure; left as is",
+   "CONTEST_SWAP 5291538136 (NFL $1.5K Daily Dollar [Single Entry]) <-> 5290502361 (Dime): prior 107.4 -> 154.5; Dime measures {'max_exposure': 8, 'top3_union': 15, 'mean_overlap': 1.326316, 'distinct': 76} -> {'max_exposure': 8, 'top3_union': 14, 'mean_overlap': 1.205263, 'distinct': 79}",
+   "CONTEST_SWAP 5291537916 (NFL $10K Daily Dollar [Single Entry]) <-> 5290502362 (Dime): prior 107.5 -> 138.5; Dime measures {'max_exposure': 8, 'top3_union': 14, 'mean_overlap': 1.205263, 'distinct': 79} -> {'max_exposure': 8, 'top3_union': 14, 'mean_overlap': 1.163158, 'distinct': 80}",
+   "JUDGMENT 5290502374: TreVeyon Henderson -> RJ Harvey to break a same-team RB pair with Rhamondre Stevenson; row prior -0.62, every washout measure unchanged; not a Pareto gain"
+  ]
+ }
+}
