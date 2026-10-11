@@ -53,6 +53,22 @@ file delivered 19:12Z.
   No open main-slate cell holds an OUT, IR, McConkey or Pettis. Recommended by hand on DraftKings before 4:05,
   research-backed, salary checked: 5291544881 Kimani Vidal to Keaton Mitchell; 5291560256 Theo Wease Jr. to
   Tre' Harris; 5290502360 Theo Wease Jr. to Tre' Harris with Jaylen Waddle to Courtland Sutton (salary 48,800).
+- Adversarial pass at Ben's request (19:21Z to 19:28Z), two iterations of a cap of three. Iteration 1:
+  `construction/contest_pareto_record.py` (whole-lineup exchanges between contests, none taken unless no contest
+  measure worsens) found `NO_PARETO_EXCHANGE`; the redeploy rerun with `--now` found `NO_PARETO_GAIN`. A background
+  agent (Yahoo live blogs 2:10 to 3:04 PM ET, NBC Sports, Chargers.com, 49ers.com, RotoBaller, Arizona Sports; no
+  prohibited host) found no late inactive or role cut: SEA's list is complete at five, Holani, Kittle, Evans and
+  Love are active, McConkey stays at 0 (Yahoo: "Expect WR Tre Harris to get all of the work he can handle"); four
+  LAC offensive line starters and three LAC defensive backs are out. Iteration 2,
+  `construction/split_backfield_record.py`: two rows held two LAC backs from a three-way split and three held two
+  ARI backs; Hampton to Harvey and Knight to Love (5292356750), Hampton to Jaylen Waddle (5292379456), Knight to
+  Harvey (5292379451), Allgeier to Dobbins (5292379448), Allgeier to Harvey (5292379457). No row now holds two backs
+  of one team. Redeploy and contest searches on the result found nothing. Delivered
+  `DK_REVIEW_ENTRY_wk5_afternoon_v3.csv`, `ec1fb926…32f8`, replacing v2: 25 of 25, 0 bytes changed outside the
+  roster cells, QA Tier 1 PASS, Tier 2 max exposure 10/25, top-3 union 15/25, 45 distinct, overlap max 5 mean
+  2.15, stacked and bring-back 25/25, DST conflicts 0, prior sum 3003.3 to 3011.1. Leverage stays unmeasured:
+  the agent found only unverified main-slate snippets (Gibbs about 45%); Gibbs, Michael Wilson and St. Brown stay
+  at 10 of 25 under the large-prize tie-break.
 - What would have made it better: `run-slate` exported C1 rather than the rung-4 thesis build on a run with no
   policy, so the thesis build was a hand step again; and the role gate keeps signed-this-week backups (Robert
   Henry Jr.) out, which was harmless today only because he was inactive.
