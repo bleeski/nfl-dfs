@@ -4,6 +4,76 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-11: Session 69b -- `nfl results-intake`, the write-once snapshot and the NFL artifacts
+
+Branch `claude/s69b-entry-history-cli`. Claimed at `023035a` (PR #129's merge, Session 69's close-out). Ben approved the
+plan before any code. No real export was available: the 2026-10-10 file Session 69 measured lived in a scratchpad
+that no longer exists, so every figure below comes from synthetic bytes, and the real-export run is operator item O11.
+
+**Added.**
+- `src/nfl_dfs/entry_history.py`: `run_intake(history_path, results_root)`. The file is read once (at most one byte past
+  the 64 MiB cap), then parsed. A refused file writes nothing, not even the results folder; a header refusal adds
+  `classified_as=<kind|none|unreadable>` from `cowork.classify_csv` (a second read, diagnosis only; `classify_csv` is
+  unchanged). An accepted file writes, in order, `inbox/<sha256>.csv` (the exact bytes),
+  `normalized/<sha256>/nfl_entries.w1.json` (`nfl_dk_entry_history_entries_v1`: the NFL rows in file order with
+  `source_row`, integer cents and hundredths, the aware Eastern start, the opaque `entry_name`; no null, nine top-level
+  keys) and `intake_summary.w1.json` (exactly Session 69's `summary_payload`). Each is written once by `_write_once`: a
+  pre-check returns `ALREADY_PRESENT` for the same bytes before any temporary is written; otherwise a temporary file in
+  the folder (flushed, fsynced, re-read) is hard-linked to the name, which fails rather than replaces, and the linked
+  file is re-read. Anything else holding a name (other bytes, a directory, a symlink) is refused and never touched. The
+  result has four statuses (`COMPLETE`, `ALREADY_PRESENT` exit 0; `REFUSED`, `WRITE_FAILED` exit 2) and a state per file
+  (`WRITTEN`, `ALREADY_PRESENT`, `REFUSED` with a recovery sentence, `WRITE_FAILED`, `NOT_ATTEMPTED`).
+- Four codes in family `entry_history` (`P`): `ENTRY_HISTORY_UNREADABLE` (exception class only),
+  `ENTRY_HISTORY_SNAPSHOT_CORRUPT`, `ENTRY_HISTORY_ARTIFACT_CONFLICT` and `ENTRY_HISTORY_WRITE_FAILED`. The family's
+  `covers` text now names the intake. `REGISTRY_SHA256` re-pinned from `4ad908b0...ce2cde` to `344f18fa...893c62` in
+  `tests/test_gate_registry.py` (the only edit to an existing test) and `docs/DATA_CONTRACTS.md`.
+- `src/nfl_dfs/cli.py`: `results-intake --history <csv> [--results-root <dir>]` (default `data/results`), printing
+  `IntakeOutcome.as_dict()`; `nfl.ps1`'s ValidateSet gains it.
+- `.gitignore`: `data/results/*`, in the claim commit, before any code could write there.
+- `docs/DATA_CONTRACTS.md`: *The intake, the snapshot and the artifacts (Session 69b)* under Session 69's section (its
+  heading, the registry's provenance, unchanged). `docs/OPERATOR_GUIDE.md`: *Results intake*, the Windows command.
+- `tests/test_entry_history_intake.py`: 36 tests, synthetic bytes only.
+- `docs/ROADMAP.md`: operator item O11, the real-export run.
+
+**Changed from the card, on purpose.**
+- `os.link` instead of `os.replace` only when the target is absent: check-then-replace can overwrite in a race, and
+  `os.link` is the no-clobber primitive `standings_transport` and `late_swap` already use. The cost: the folder must
+  support hard links (exFAT, FAT32 and some network shares do not), with no copy fallback, matching the transport. It
+  has run on Windows only under pytest's temp folder, so O11 is also its first run in Ben's checkout.
+- A fourth code and status, `WRITE_FAILED`: without them a full disk would reach `cli.main`'s generic handler, which
+  prints the exception message (a temp path) and the lineup release truths. Precedent:
+  `STANDINGS_TRANSPORT_WRITE_FAILED`.
+- The operator-guide section, not on the card: it is the command reference `CLAUDE.md` names.
+
+**Reviews and consults.**
+- The plan, before it was presented: a fresh-context `Plan` agent with model `fable` standing in for `/advisor`
+  (Ben asked for it), briefed to refute 11 claims. Taken: a pre-check before any temporary write and a re-read after the
+  link; the `WRITE_FAILED` status and `NOT_ATTEMPTED` state; no hash of a too-large file's prefix; `nfl_rows` and
+  `source_bytes` in the entries artifact; a `code=` keyword (the registry scan reads `^code$`; a `conflict_code=`
+  parameter would have hidden two literals and turned `test_every_entry_is_still_emitted` red); a directory instead of
+  a symlink at the snapshot name (no third Windows skip); the mutation test split so a refuse-everything build fails.
+- The diff, fresh-context `reviewer`. Blocking, fixed: `_tree` joined paths with the OS separator, so one test would
+  have failed in the Windows CI job. Should-fix, each proven by a surviving mutant, all fixed: the race branch (a name
+  appearing between the check and the link) had no test; every damaged fixture changed the length, so a size check
+  passed; the entries artifact's top-level keys were not pinned and the determinism test could not see a date; the
+  printed `files` and `summary` were unchecked. Notes, taken: the post-link mismatch now unlinks only this run's own
+  file (`os.path.samefile`); a temporary file that cannot be deleted (Defender on Windows) no longer hides the real
+  outcome; a symlink at the name is tested through a patched `is_symlink`; the contract's result paragraph now matches
+  the code. Recorded, not built: an `inbox` or `normalized` folder replaced by a link is followed (the contract says so).
+
+**Verification.**
+- The card's command: `410 passed` before the review, `418 passed in 11.41s` after.
+- Mutation: 13 of 13 killed before the review, then 22 of 22 after it (the reviewer's five survivors included).
+- The launcher on a synthetic export: `COMPLETE` then `ALREADY_PRESENT`, exit 0 both, no `$` in stdout; into the default
+  root, `git status --short` clean and `data/results/` ignored (the synthetic files removed afterwards).
+- Full suite `3409 passed, 1 skipped in 922.62s (0:15:22)` on Linux; `doctor` `pass_status: true`; `compileall` of both changed modules;
+  `git diff --check` clean; no protected path touched. 860 changed lines in source, tests, registry and docs (source 263,
+  tests 509) against a plan of about 610 and the card's 1,000 stop.
+
+**Left open.** The real-export acceptance: operator item O11 (two Windows runs, the second `ALREADY_PRESENT`, then
+`git status --short`; the printed result carries no money, so it can be pasted back). A `Read` and `Edit` deny on
+`data/results/**` in `.claude/settings.json`, the twin of the standings inbox's, is a protected-file change for Ben.
+
 ### 2026-10-11: Session 69 -- the DraftKings entry-history contract and parser (split to Session 69b at its seam)
 
 Branch `claude/s69-entry-history-intake`, pull request #129. The claim commit `d23936c` merged early as pull request
