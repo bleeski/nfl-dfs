@@ -1,0 +1,595 @@
+Entry ID,Contest Name,Contest ID,Entry Fee,QB,RB,RB,WR,WR,WR,TE,FLEX,DST,,Instructions
+5290501682,$2K T-Mobile Lightening Drive Football Takeover,196414741,$0,Jacoby Brissett (44391835),Jahmyr Gibbs (44391896),D'Andre Swift (44391912) (LOCKED),Elic Ayomanor (44392448) (LOCKED),Romeo Doubs (44392220) (LOCKED),Michael Wilson (44392188),Trey McBride (44392590),Emanuel Wilson (44391938),Dolphins (44392873) (LOCKED),,1. Column A lists all of your contest entries for this draftgroup
+5290501757,$5K Draft Time Matchups presented by Miller Lite,196414776,$0,Tyson Bagent (44391845) (LOCKED),Jahmyr Gibbs (44391896),Emanuel Wilson (44391938),Ja'Marr Chase (44392168) (LOCKED),Kalif Raymond (44392262) (LOCKED),Christian Watson (44392184) (LOCKED),Greg Dulcich (44392628) (LOCKED),George Kittle (44392592),Broncos (44392855),,2. Your current lineup is listed next to each entry (blank for reservations)
+5291568278,NFL $20K Quarter Jukebox [Just $0.25!] ,196420174,$0.25,Joe Burrow (44391824) (LOCKED),Emanuel Wilson (44391938),Jaylen Wright (44391960) (LOCKED),Romeo Doubs (44392220) (LOCKED),Mike Evans (44392182),Tee Higgins (44392178) (LOCKED),George Kittle (44392592),D'Andre Swift (44391912) (LOCKED),Patriots (44392858) (LOCKED),,3. You can change the lineup for an entry by entering the IDs of the players in the row next to that entry
+5291581053,NFL $20K Quarter Jukebox [Just $0.25!] ,196420174,$0.25,Drake Maye (44391827) (LOCKED),Jahmyr Gibbs (44391896),Jaylen Warren (44391906) (LOCKED),DeMario Douglas (44392290) (LOCKED),DK Metcalf (44392208) (LOCKED),Tre Tucker (44392224) (LOCKED),Hunter Henry (44392618) (LOCKED),D'Andre Swift (44391912) (LOCKED),Bengals (44392852) (LOCKED),,4. Use data from the Name+ID column or the ID column; you cannot use just the player's name
+5290502359,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Brock Purdy (44391826),D'Andre Swift (44391912) (LOCKED),Emanuel Wilson (44391938),Mike Evans (44392182),DK Metcalf (44392208) (LOCKED),Antonio Williams (44392268) (LOCKED),Hunter Henry (44392618) (LOCKED),Jahmyr Gibbs (44391896),Jets (44392864) (LOCKED),,5. For faster processing only include entries you are changing in the file you upload
+5290502360,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Bo Nix (44391834),Jahmyr Gibbs (44391896),D'Andre Swift (44391912) (LOCKED),Jaylen Waddle (44392190),Theo Wease Jr. (44392416),Michael Wilson (44392188),Evan Engram (44392636),Jaylen Warren (44391906) (LOCKED),Browns (44392861) (LOCKED),,
+5290502361,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Jared Goff (44391825),Ollie Gordon II (44391936) (LOCKED),Jeremiyah Love (44391914),Ja'Marr Chase (44392168) (LOCKED),Tre' Harris (44392242),Amon-Ra St. Brown (44392170),AJ Barner (44392626),Braelon Allen (44391932) (LOCKED),Jets (44392864) (LOCKED),,Position,Name + ID,Name,ID,Roster Position,Salary,Game Info,TeamAbbrev,AvgPointsPerGame
+5290502362,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Kirk Cousins (44391836) (LOCKED),Braelon Allen (44391932) (LOCKED),Jeremiyah Love (44391914),Ja'Marr Chase (44392168) (LOCKED),Amon-Ra St. Brown (44392170),Cody White (44392302) (LOCKED),Hunter Henry (44392618) (LOCKED),Brock Bowers (44392588) (LOCKED),Vikings (44392856) (LOCKED),,RB,Jahmyr Gibbs (44391896),Jahmyr Gibbs,44391896,RB/FLEX,9800,DET@ARI 10/11/2026 04:25PM ET,DET,30
+5290502363,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Tyson Bagent (44391845) (LOCKED),Jahmyr Gibbs (44391896),D'Andre Swift (44391912) (LOCKED),Kalif Raymond (44392262) (LOCKED),Amon-Ra St. Brown (44392170),Christian Watson (44392184) (LOCKED),Cole Kmet (44392644) (LOCKED),Tucker Kraft (44392600) (LOCKED),Broncos (44392855),,WR,Jaxon Smith-Njigba (44392166),Jaxon Smith-Njigba,44392166,WR/FLEX,8800,SF@SEA 10/11/2026 04:25PM ET,SEA,31.42
+5290502364,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Malik Willis (44391846) (LOCKED),Jahmyr Gibbs (44391896),D'Andre Swift (44391912) (LOCKED),Ja'Marr Chase (44392168) (LOCKED),Ryan Miller (44392570) (LOCKED),Malik Washington (44392228) (LOCKED),Darnell Washington (44392632) (LOCKED),Amon-Ra St. Brown (44392170),Commanders (44392860) (LOCKED),,RB,Christian McCaffrey (44391898),Christian McCaffrey,44391898,RB/FLEX,8200,SF@SEA 10/11/2026 04:25PM ET,SF,18.5
+5290502365,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Drake Maye (44391827) (LOCKED),Jahmyr Gibbs (44391896),Emanuel Wilson (44391938),Romeo Doubs (44392220) (LOCKED),Amon-Ra St. Brown (44392170),Tre Tucker (44392224) (LOCKED),Hunter Henry (44392618) (LOCKED),Tre' Harris (44392242),Commanders (44392860) (LOCKED),,WR,Ja'Marr Chase (44392168) (LOCKED),Ja'Marr Chase,44392168,WR/FLEX,8100,In Progress,CIN,15.05
+5290502366,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Brock Purdy (44391826),Jaylen Warren (44391906) (LOCKED),Emanuel Wilson (44391938),Ja'Marr Chase (44392168) (LOCKED),Ryan Miller (44392570) (LOCKED),Deebo Samuel Sr. (44392202),George Kittle (44392592),Trey McBride (44392590),Patriots (44392858) (LOCKED),,WR,Amon-Ra St. Brown (44392170),Amon-Ra St. Brown,44392170,WR/FLEX,7900,DET@ARI 10/11/2026 04:25PM ET,DET,23.58
+5290502367,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Aaron Rodgers (44391837) (LOCKED),D'Andre Swift (44391912) (LOCKED),Emanuel Wilson (44391938),Josh Downs (44392192) (LOCKED),DK Metcalf (44392208) (LOCKED),Roman Wilson (44392270) (LOCKED),Pat Freiermuth (44392614) (LOCKED),Christian McCaffrey (44391898),Broncos (44392855),,RB,Jonathan Taylor (44391900) (LOCKED),Jonathan Taylor,44391900,RB/FLEX,7800,In Progress,IND,21.8
+5290502368,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Drake Maye (44391827) (LOCKED),Christian McCaffrey (44391898),Jaylen Warren (44391906) (LOCKED),Romeo Doubs (44392220) (LOCKED),Mike Evans (44392182),Tre Tucker (44392224) (LOCKED),Hunter Henry (44392618) (LOCKED),Braelon Allen (44391932) (LOCKED),Broncos (44392855),,WR,Chris Olave (44392172) (LOCKED),Chris Olave,44392172,WR/FLEX,7700,In Progress,NO,24.78
+5290502369,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Jacoby Brissett (44391835),D'Andre Swift (44391912) (LOCKED),Emanuel Wilson (44391938),DK Metcalf (44392208) (LOCKED),Amon-Ra St. Brown (44392170),Michael Wilson (44392188),Sam LaPorta (44392596),Ollie Gordon II (44391936) (LOCKED),Jets (44392864) (LOCKED),,WR,Nico Collins (44392174) (LOCKED),Nico Collins,44392174,WR/FLEX,7500,In Progress,HOU,27.5
+5290502370,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Jordan Love (44391833) (LOCKED),Jaylen Warren (44391906) (LOCKED),Emanuel Wilson (44391938),Justin Jefferson (44392176) (LOCKED),Kalif Raymond (44392262) (LOCKED),Christian Watson (44392184) (LOCKED),Hunter Henry (44392618) (LOCKED),Jonathan Taylor (44391900) (LOCKED),Browns (44392861) (LOCKED),,WR,Justin Jefferson (44392176) (LOCKED),Justin Jefferson,44392176,WR/FLEX,7300,In Progress,MIN,14.97
+5290502371,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Joe Burrow (44391824) (LOCKED),MarShawn Lloyd (44391956) (LOCKED),Jaylen Wright (44391960) (LOCKED),Ja'Marr Chase (44392168) (LOCKED),Mike Evans (44392182),DK Metcalf (44392208) (LOCKED),Mike Gesicki (44392610) (LOCKED),Trey McBride (44392590),49ers (44392869),,RB,Ashton Jeanty (44391902) (LOCKED),Ashton Jeanty,44391902,RB/FLEX,7200,In Progress,LV,19.22
+5290502372,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Drake Maye (44391827) (LOCKED),Ashton Jeanty (44391902) (LOCKED),Jaylen Wright (44391960) (LOCKED),Romeo Doubs (44392220) (LOCKED),DK Metcalf (44392208) (LOCKED),Jaxon Smith-Njigba (44392166),Hunter Henry (44392618) (LOCKED),Rhamondre Stevenson (44391930) (LOCKED),Commanders (44392860) (LOCKED),,WR,Tee Higgins (44392178) (LOCKED),Tee Higgins,44392178,WR/FLEX,7100,In Progress,CIN,18.52
+5290502373,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Brock Purdy (44391826),Rhamondre Stevenson (44391930) (LOCKED),Jaylen Warren (44391906) (LOCKED),Tre' Harris (44392242),Deebo Samuel Sr. (44392202),Jaxon Smith-Njigba (44392166),George Kittle (44392592),MarShawn Lloyd (44391956) (LOCKED),Commanders (44392860) (LOCKED),,TE,Brock Bowers (44392588) (LOCKED),Brock Bowers,44392588,TE/FLEX,7000,In Progress,LV,25.6
+5290502374,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Daniel Jones (44391841) (LOCKED),RJ Harvey (44391942),Rhamondre Stevenson (44391930) (LOCKED),DK Metcalf (44392208) (LOCKED),Jaxon Smith-Njigba (44392166),Laquon Treadwell (44392278) (LOCKED),T.J. Hockenson (44392598) (LOCKED),Christian McCaffrey (44391898),Bengals (44392852) (LOCKED),,QB,Joe Burrow (44391824) (LOCKED),Joe Burrow,44391824,QB,6900,In Progress,CIN,20.91
+5290502375,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Drake Maye (44391827) (LOCKED),Ashton Jeanty (44391902) (LOCKED),Jaylen Warren (44391906) (LOCKED),Keenan Allen (44392240) (LOCKED),Romeo Doubs (44392220) (LOCKED),Jaxon Smith-Njigba (44392166),Hunter Henry (44392618) (LOCKED),Josh Downs (44392192) (LOCKED),Dolphins (44392873) (LOCKED),,RB,Chase Brown (44391904) (LOCKED),Chase Brown,44391904,RB/FLEX,6900,In Progress,CIN,14.5
+5290502376,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Jared Goff (44391825),Christian McCaffrey (44391898),Jaylen Warren (44391906) (LOCKED),Isaac TeSlaa (44392294),Jameson Williams (44392194),Michael Wilson (44392188),T.J. Hockenson (44392598) (LOCKED),Antonio Williams (44392268) (LOCKED),Broncos (44392855),,RB,Jaylen Warren (44391906) (LOCKED),Jaylen Warren,44391906,RB/FLEX,6700,In Progress,PIT,15.05
+5290502377,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Tyson Bagent (44391845) (LOCKED),Chase Brown (44391904) (LOCKED),Jonathan Taylor (44391900) (LOCKED),Justin Jefferson (44392176) (LOCKED),Rome Odunze (44392226) (LOCKED),Deebo Samuel Sr. (44392202),Tucker Kraft (44392600) (LOCKED),Colston Loveland (44392602) (LOCKED),Vikings (44392856) (LOCKED),,TE,Trey McBride (44392590),Trey McBride,44392590,TE/FLEX,6700,DET@ARI 10/11/2026 04:25PM ET,ARI,17.3
+5290508929,NFL $7.5K Dime Package [Just $0.10!] ,196420175,$0.10,Joe Burrow (44391824) (LOCKED),Rhamondre Stevenson (44391930) (LOCKED),Jaylen Warren (44391906) (LOCKED),Chris Bell (44392276) (LOCKED),Ja'Marr Chase (44392168) (LOCKED),Kalif Raymond (44392262) (LOCKED),Tyler Warren (44392594) (LOCKED),Nico Collins (44392174) (LOCKED),Jets (44392864) (LOCKED),,WR,Garrett Wilson (44392180) (LOCKED),Garrett Wilson,44392180,WR/FLEX,6600,In Progress,NYJ,16.5
+5291537916,NFL $10K Daily Dollar [Single Entry],196420207,$1,Jacoby Brissett (44391835),Jahmyr Gibbs (44391896),Emanuel Wilson (44391938),Ja'Marr Chase (44392168) (LOCKED),Antonio Williams (44392268) (LOCKED),Michael Wilson (44392188),Oronde Gadsden II (44392620),Hunter Henry (44392618) (LOCKED),Steelers (44392854) (LOCKED),,QB,Jared Goff (44391825),Jared Goff,44391825,QB,6600,DET@ARI 10/11/2026 04:25PM ET,DET,23.02
+5291544300,NFL Satellite to NBA 10-20 $20 Opening Tip Off,196422048,$0.25,Sam Darnold (44391832),Christian McCaffrey (44391898),Cam Skattebo (44391918) (LOCKED),Tory Horton (44392340),DK Metcalf (44392208) (LOCKED),Jaxon Smith-Njigba (44392166),Tucker Kraft (44392600) (LOCKED),Ollie Gordon II (44391936) (LOCKED),Saints (44392865) (LOCKED),,RB,Aaron Jones Sr. (44391908) (LOCKED),Aaron Jones Sr.,44391908,RB/FLEX,6500,In Progress,MIN,13.62
+5291553103,NFL Satellite to NBA 10-20 $20 Opening Tip Off,196422048,$0.25,Daniel Jones (44391841) (LOCKED),Chase Brown (44391904) (LOCKED),Jaylen Warren (44391906) (LOCKED),Keenan Allen (44392240) (LOCKED),Josh Downs (44392192) (LOCKED),Justin Jefferson (44392176) (LOCKED),Trey McBride (44392590),Tre' Harris (44392242),Browns (44392861) (LOCKED),,QB,Brock Purdy (44391826),Brock Purdy,44391826,QB,6500,SF@SEA 10/11/2026 04:25PM ET,SF,25.37
+5291539087,NFL Satellite to NBA Best Ball $20 Shootaround,196422065,$0.25,Tyson Bagent (44391845) (LOCKED),MarShawn Lloyd (44391956) (LOCKED),Jonathan Taylor (44391900) (LOCKED),Nico Collins (44392174) (LOCKED),Mike Evans (44392182),Rome Odunze (44392226) (LOCKED),Tucker Kraft (44392600) (LOCKED),Garrett Wilson (44392180) (LOCKED),Saints (44392865) (LOCKED),,WR,Mike Evans (44392182),Mike Evans,44392182,WR/FLEX,6500,SF@SEA 10/11/2026 04:25PM ET,SF,12.58
+5291559268,NFL Satellite to NBA Best Ball $20 Shootaround,196422065,$0.25,Jared Goff (44391825),Aaron Jones Sr. (44391908) (LOCKED),MarShawn Lloyd (44391956) (LOCKED),Keenan Allen (44392240) (LOCKED),Amon-Ra St. Brown (44392170),Michael Wilson (44392188),Sam LaPorta (44392596),Jameson Williams (44392194),Browns (44392861) (LOCKED),,WR,Christian Watson (44392184) (LOCKED),Christian Watson,44392184,WR/FLEX,6400,In Progress,GB,20.02
+5291544881,NFL Satellite to $20 NFL Fantasy Football Millionaire,196605098,$0.25,Bo Nix (44391834),Christian McCaffrey (44391898),Kimani Vidal (44391990),Ja'Marr Chase (44392168) (LOCKED),Marvin Mims Jr. (44392296),Courtland Sutton (44392230),Sam LaPorta (44392596),Garrett Wilson (44392180) (LOCKED),Jets (44392864) (LOCKED),,QB,Drake Maye (44391827) (LOCKED),Drake Maye,44391827,QB,6300,In Progress,NE,14.19
+5291560256,NFL Satellite to $20 NFL Fantasy Football Millionaire,196605098,$0.25,Bo Nix (44391834),Braelon Allen (44391932) (LOCKED),Chase Brown (44391904) (LOCKED),Troy Franklin (44392316),Jaylen Waddle (44392190),Theo Wease Jr. (44392416),Trey McBride (44392590),Justin Jefferson (44392176) (LOCKED),Steelers (44392854) (LOCKED),,WR,Malik Nabers (44392186) (LOCKED),Malik Nabers,44392186,WR/FLEX,6300,In Progress,NYG,11.95
+5291538136,NFL $1.5K Daily Dollar [Single Entry],196624194,$1,Drake Maye (44391827) (LOCKED),Jahmyr Gibbs (44391896),D'Andre Swift (44391912) (LOCKED),Romeo Doubs (44392220) (LOCKED),Deebo Samuel Sr. (44392202),Tre Tucker (44392224) (LOCKED),George Kittle (44392592),Hunter Henry (44392618) (LOCKED),Saints (44392865) (LOCKED),,RB,Josh Jacobs (44391910) (LOCKED),Josh Jacobs,44391910,RB/FLEX,6300,In Progress,GB,0
+5291960735,NFL FREE 200-Player,196636854,$0,Sam Darnold (44391832),Aaron Jones Sr. (44391908) (LOCKED),Alvin Kamara (44391934) (LOCKED),Justin Jefferson (44392176) (LOCKED),Rashid Shaheed (44392256),Jaxon Smith-Njigba (44392166),Juwan Johnson (44392604) (LOCKED),Quinshon Judkins (44391924) (LOCKED),Dolphins (44392873) (LOCKED),,WR,Michael Wilson (44392188),Michael Wilson,44392188,WR/FLEX,6200,DET@ARI 10/11/2026 04:25PM ET,ARI,14.2
+,,,,,,,,,,,,,,QB,Caleb Williams (44391828) (LOCKED),Caleb Williams,44391828,QB,6200,In Progress,CHI,22.99
+,,,,,,,,,,,,,,RB,D'Andre Swift (44391912) (LOCKED),D'Andre Swift,44391912,RB/FLEX,6200,In Progress,CHI,17.12
+,,,,,,,,,,,,,,QB,Tyler Shough (44391829) (LOCKED),Tyler Shough,44391829,QB,6100,In Progress,NO,23.58
+,,,,,,,,,,,,,,WR,Jaylen Waddle (44392190),Jaylen Waddle,44392190,WR/FLEX,6100,DEN@LAC 10/11/2026 04:05PM ET,DEN,11.72
+,,,,,,,,,,,,,,RB,Jeremiyah Love (44391914),Jeremiyah Love,44391914,RB/FLEX,6100,DET@ARI 10/11/2026 04:25PM ET,ARI,12.22
+,,,,,,,,,,,,,,WR,Josh Downs (44392192) (LOCKED),Josh Downs,44392192,WR/FLEX,6000,In Progress,IND,9.3
+,,,,,,,,,,,,,,QB,Jayden Daniels (44391830) (LOCKED),Jayden Daniels,44391830,QB,6000,In Progress,WAS,16.2
+,,,,,,,,,,,,,,RB,Cam Skattebo (44391918) (LOCKED),Cam Skattebo,44391918,RB/FLEX,6000,In Progress,NYG,11.05
+,,,,,,,,,,,,,,RB,Omarion Hampton (44391916),Omarion Hampton,44391916,RB/FLEX,6000,DEN@LAC 10/11/2026 04:05PM ET,LAC,11.68
+,,,,,,,,,,,,,,RB,Breece Hall (44391920) (LOCKED),Breece Hall,44391920,RB/FLEX,5900,In Progress,NYJ,15.17
+,,,,,,,,,,,,,,QB,C.J. Stroud (44391831) (LOCKED),C.J. Stroud,44391831,QB,5900,In Progress,HOU,19.06
+,,,,,,,,,,,,,,WR,Jameson Williams (44392194),Jameson Williams,44392194,WR/FLEX,5900,DET@ARI 10/11/2026 04:25PM ET,DET,10.48
+,,,,,,,,,,,,,,WR,Jordan Addison (44392196) (LOCKED),Jordan Addison,44392196,WR/FLEX,5800,In Progress,MIN,8.3
+,,,,,,,,,,,,,,RB,David Montgomery (44391922) (LOCKED),David Montgomery,44391922,RB/FLEX,5800,In Progress,HOU,11.1
+,,,,,,,,,,,,,,QB,Sam Darnold (44391832),Sam Darnold,44391832,QB,5800,SF@SEA 10/11/2026 04:25PM ET,SEA,15.83
+,,,,,,,,,,,,,,RB,Quinshon Judkins (44391924) (LOCKED),Quinshon Judkins,44391924,RB/FLEX,5700,In Progress,CLE,12.08
+,,,,,,,,,,,,,,QB,Jordan Love (44391833) (LOCKED),Jordan Love,44391833,QB,5700,In Progress,GB,18.71
+,,,,,,,,,,,,,,WR,Matthew Golden (44392198) (LOCKED),Matthew Golden,44392198,WR/FLEX,5700,In Progress,GB,15.25
+,,,,,,,,,,,,,,RB,Tony Pollard (44391926) (LOCKED),Tony Pollard,44391926,RB/FLEX,5600,In Progress,TEN,9.62
+,,,,,,,,,,,,,,QB,Bo Nix (44391834),Bo Nix,44391834,QB,5600,DEN@LAC 10/11/2026 04:05PM ET,DEN,15.32
+,,,,,,,,,,,,,,WR,Ladd McConkey (44392200),Ladd McConkey,44392200,WR/FLEX,5600,DEN@LAC 10/11/2026 04:05PM ET,LAC,9.08
+,,,,,,,,,,,,,,RB,Rhamondre Stevenson (44391930) (LOCKED),Rhamondre Stevenson,44391930,RB/FLEX,5500,In Progress,NE,11.08
+,,,,,,,,,,,,,,WR,Stefon Diggs (44392204) (LOCKED),Stefon Diggs,44392204,WR/FLEX,5500,In Progress,WAS,13.25
+,,,,,,,,,,,,,,QB,Jacoby Brissett (44391835),Jacoby Brissett,44391835,QB,5500,DET@ARI 10/11/2026 04:25PM ET,ARI,15.76
+,,,,,,,,,,,,,,RB,Zach Charbonnet (44391928),Zach Charbonnet,44391928,RB/FLEX,5500,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,WR,Deebo Samuel Sr. (44392202),Deebo Samuel Sr.,44392202,WR/FLEX,5500,SF@SEA 10/11/2026 04:25PM ET,SF,14.48
+,,,,,,,,,,,,,,QB,Kirk Cousins (44391836) (LOCKED),Kirk Cousins,44391836,QB,5400,In Progress,LV,21.46
+,,,,,,,,,,,,,,RB,Alvin Kamara (44391934) (LOCKED),Alvin Kamara,44391934,RB/FLEX,5400,In Progress,NO,11.7
+,,,,,,,,,,,,,,WR,Jordyn Tyson (44392206) (LOCKED),Jordyn Tyson,44392206,WR/FLEX,5400,In Progress,NO,0
+,,,,,,,,,,,,,,RB,Braelon Allen (44391932) (LOCKED),Braelon Allen,44391932,RB/FLEX,5400,In Progress,NYJ,6.48
+,,,,,,,,,,,,,,WR,DK Metcalf (44392208) (LOCKED),DK Metcalf,44392208,WR/FLEX,5400,In Progress,PIT,11.58
+,,,,,,,,,,,,,,RB,Ollie Gordon II (44391936) (LOCKED),Ollie Gordon II,44391936,RB/FLEX,5300,In Progress,MIA,9.05
+,,,,,,,,,,,,,,QB,Aaron Rodgers (44391837) (LOCKED),Aaron Rodgers,44391837,QB,5300,In Progress,PIT,16.54
+,,,,,,,,,,,,,,WR,Carnell Tate (44392210) (LOCKED),Carnell Tate,44392210,WR/FLEX,5300,In Progress,TEN,12.7
+,,,,,,,,,,,,,,WR,Terry McLaurin (44392212) (LOCKED),Terry McLaurin,44392212,WR/FLEX,5300,In Progress,WAS,10.03
+,,,,,,,,,,,,,,RB,Emanuel Wilson (44391938),Emanuel Wilson,44391938,RB/FLEX,5300,SF@SEA 10/11/2026 04:25PM ET,SEA,9.48
+,,,,,,,,,,,,,,QB,Kyler Murray (44391838) (LOCKED),Kyler Murray,44391838,QB,5200,In Progress,MIN,7.84
+,,,,,,,,,,,,,,WR,Devaughn Vele (44392216) (LOCKED),Devaughn Vele,44392216,WR/FLEX,5200,In Progress,NO,13.9
+,,,,,,,,,,,,,,WR,Denzel Boston (44392214) (LOCKED),Denzel Boston,44392214,WR/FLEX,5200,In Progress,CLE,13.85
+,,,,,,,,,,,,,,RB,RJ Harvey (44391942),RJ Harvey,44391942,RB/FLEX,5200,DEN@LAC 10/11/2026 04:05PM ET,DEN,12.7
+,,,,,,,,,,,,,,RB,Kyle Monangai (44391940) (LOCKED),Kyle Monangai,44391940,RB/FLEX,5200,In Progress,CHI,16.32
+,,,,,,,,,,,,,,TE,George Kittle (44392592),George Kittle,44392592,TE/FLEX,5200,SF@SEA 10/11/2026 04:25PM ET,SF,16.1
+,,,,,,,,,,,,,,QB,Deshaun Watson (44391839) (LOCKED),Deshaun Watson,44391839,QB,5100,In Progress,CLE,17.48
+,,,,,,,,,,,,,,RB,Rachaad White (44391944) (LOCKED),Rachaad White,44391944,RB/FLEX,5100,In Progress,WAS,10.03
+,,,,,,,,,,,,,,QB,Justin Herbert (44391840),Justin Herbert,44391840,QB,5100,DEN@LAC 10/11/2026 04:05PM ET,LAC,12.61
+,,,,,,,,,,,,,,WR,Quentin Johnston (44392218),Quentin Johnston,44392218,WR/FLEX,5100,DEN@LAC 10/11/2026 04:05PM ET,LAC,4.52
+,,,,,,,,,,,,,,RB,Tyler Allgeier (44391946),Tyler Allgeier,44391946,RB/FLEX,5100,DET@ARI 10/11/2026 04:25PM ET,ARI,7.68
+,,,,,,,,,,,,,,RB,TreVeyon Henderson (44391950) (LOCKED),TreVeyon Henderson,44391950,RB/FLEX,5000,In Progress,NE,7.23
+,,,,,,,,,,,,,,WR,Romeo Doubs (44392220) (LOCKED),Romeo Doubs,44392220,WR/FLEX,5000,In Progress,NE,11.08
+,,,,,,,,,,,,,,QB,Geno Smith (44391842) (LOCKED),Geno Smith,44391842,QB,5000,In Progress,NYJ,15.92
+,,,,,,,,,,,,,,QB,Daniel Jones (44391841) (LOCKED),Daniel Jones,44391841,QB,5000,In Progress,IND,10.82
+,,,,,,,,,,,,,,TE,Tyler Warren (44392594) (LOCKED),Tyler Warren,44392594,TE/FLEX,5000,In Progress,IND,12.12
+,,,,,,,,,,,,,,RB,J.K. Dobbins (44391948),J.K. Dobbins,44391948,RB/FLEX,5000,DEN@LAC 10/11/2026 04:05PM ET,DEN,5.18
+,,,,,,,,,,,,,,RB,Kendre Miller (44391952) (LOCKED),Kendre Miller,44391952,RB/FLEX,4900,In Progress,NO,5.27
+,,,,,,,,,,,,,,QB,Cam Ward (44391843) (LOCKED),Cam Ward,44391843,QB,4900,In Progress,TEN,14.68
+,,,,,,,,,,,,,,RB,Jacory Croskey-Merritt (44391954) (LOCKED),Jacory Croskey-Merritt,44391954,RB/FLEX,4900,In Progress,WAS,7.68
+,,,,,,,,,,,,,,TE,Sam LaPorta (44392596),Sam LaPorta,44392596,TE/FLEX,4900,DET@ARI 10/11/2026 04:25PM ET,DET,14.2
+,,,,,,,,,,,,,,WR,Luther Burden III (44392222) (LOCKED),Luther Burden III,44392222,WR/FLEX,4900,In Progress,CHI,11.98
+,,,,,,,,,,,,,,RB,Jaylen Wright (44391960) (LOCKED),Jaylen Wright,44391960,RB/FLEX,4800,In Progress,MIA,0.57
+,,,,,,,,,,,,,,WR,Tre Tucker (44392224) (LOCKED),Tre Tucker,44392224,WR/FLEX,4800,In Progress,LV,11.82
+,,,,,,,,,,,,,,TE,T.J. Hockenson (44392598) (LOCKED),T.J. Hockenson,44392598,TE/FLEX,4800,In Progress,MIN,12.62
+,,,,,,,,,,,,,,RB,Woody Marks (44391958) (LOCKED),Woody Marks,44391958,RB/FLEX,4800,In Progress,HOU,7.7
+,,,,,,,,,,,,,,QB,Jameis Winston (44391844) (LOCKED),Jameis Winston,44391844,QB,4800,In Progress,NYG,9.89
+,,,,,,,,,,,,,,RB,MarShawn Lloyd (44391956) (LOCKED),MarShawn Lloyd,44391956,RB/FLEX,4800,In Progress,GB,6.75
+,,,,,,,,,,,,,,RB,Raheim Sanders (44391964) (LOCKED),Raheim Sanders,44391964,RB/FLEX,4700,In Progress,CLE,5.1
+,,,,,,,,,,,,,,RB,Rico Dowdle (44391962) (LOCKED),Rico Dowdle,44391962,RB/FLEX,4700,In Progress,PIT,5.25
+,,,,,,,,,,,,,,QB,Tyson Bagent (44391845) (LOCKED),Tyson Bagent,44391845,QB,4700,In Progress,CHI,5.99
+,,,,,,,,,,,,,,WR,Rome Odunze (44392226) (LOCKED),Rome Odunze,44392226,WR/FLEX,4700,In Progress,CHI,9.32
+,,,,,,,,,,,,,,TE,Tucker Kraft (44392600) (LOCKED),Tucker Kraft,44392600,TE/FLEX,4700,In Progress,GB,9.02
+,,,,,,,,,,,,,,RB,Kaelon Black (44391966),Kaelon Black,44391966,RB/FLEX,4700,SF@SEA 10/11/2026 04:25PM ET,SF,3.38
+,,,,,,,,,,,,,,QB,Malik Willis (44391846) (LOCKED),Malik Willis,44391846,QB,4600,In Progress,MIA,11.42
+,,,,,,,,,,,,,,WR,Malik Washington (44392228) (LOCKED),Malik Washington,44392228,WR/FLEX,4600,In Progress,MIA,9.78
+,,,,,,,,,,,,,,RB,Tyjae Spears (44391970) (LOCKED),Tyjae Spears,44391970,RB/FLEX,4600,In Progress,TEN,3.88
+,,,,,,,,,,,,,,WR,Courtland Sutton (44392230),Courtland Sutton,44392230,WR/FLEX,4600,DEN@LAC 10/11/2026 04:05PM ET,DEN,4.4
+,,,,,,,,,,,,,,RB,James Conner (44391972),James Conner,44391972,RB/FLEX,4600,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,RB,Kaleb Johnson (44391968) (LOCKED),Kaleb Johnson,44391968,RB/FLEX,4600,In Progress,GB,2.25
+,,,,,,,,,,,,,,TE,Colston Loveland (44392602) (LOCKED),Colston Loveland,44392602,TE/FLEX,4600,In Progress,CHI,5.02
+,,,,,,,,,,,,,,TE,Juwan Johnson (44392604) (LOCKED),Juwan Johnson,44392604,TE/FLEX,4500,In Progress,NO,15.3
+,,,,,,,,,,,,,,WR,Adonai Mitchell (44392232) (LOCKED),Adonai Mitchell,44392232,WR/FLEX,4500,In Progress,NYJ,10.65
+,,,,,,,,,,,,,,WR,Wan'Dale Robinson (44392234) (LOCKED),Wan'Dale Robinson,44392234,WR/FLEX,4500,In Progress,TEN,10.1
+,,,,,,,,,,,,,,QB,Marcus Mariota (44391847) (LOCKED),Marcus Mariota,44391847,QB,4500,In Progress,WAS,11.5
+,,,,,,,,,,,,,,QB,Athan Kaliakmanis (44391848) (LOCKED),Athan Kaliakmanis,44391848,QB,4500,In Progress,WAS,12.04
+,,,,,,,,,,,,,,RB,Najee Harris (44391978) (LOCKED),Najee Harris,44391978,RB/FLEX,4500,In Progress,NYG,3.27
+,,,,,,,,,,,,,,RB,Keaton Mitchell (44391974),Keaton Mitchell,44391974,RB/FLEX,4500,DEN@LAC 10/11/2026 04:05PM ET,LAC,7.7
+,,,,,,,,,,,,,,RB,George Holani (44391976),George Holani,44391976,RB/FLEX,4500,SF@SEA 10/11/2026 04:25PM ET,SEA,4.8
+,,,,,,,,,,,,,,QB,Joe Flacco (44391849) (LOCKED),Joe Flacco,44391849,QB,4400,In Progress,CIN,0
+,,,,,,,,,,,,,,RB,Samaje Perine (44391984) (LOCKED),Samaje Perine,44391984,RB/FLEX,4400,In Progress,CIN,3.58
+,,,,,,,,,,,,,,RB,CJ Donaldson (44391980) (LOCKED),CJ Donaldson,44391980,RB/FLEX,4400,In Progress,NO,1.55
+,,,,,,,,,,,,,,TE,Harold Fannin Jr. (44392606) (LOCKED),Harold Fannin Jr.,44392606,TE/FLEX,4400,In Progress,CLE,12.58
+,,,,,,,,,,,,,,WR,Michael Pittman Jr. (44392238) (LOCKED),Michael Pittman Jr.,44392238,WR/FLEX,4400,In Progress,PIT,5.3
+,,,,,,,,,,,,,,RB,Austin Ekeler (44391982) (LOCKED),Austin Ekeler,44391982,RB/FLEX,4400,In Progress,WAS,5
+,,,,,,,,,,,,,,WR,Marvin Harrison Jr. (44392236),Marvin Harrison Jr.,44392236,WR/FLEX,4400,DET@ARI 10/11/2026 04:25PM ET,ARI,4.88
+,,,,,,,,,,,,,,RB,Seth McGowan (44391988) (LOCKED),Seth McGowan,44391988,RB/FLEX,4300,In Progress,IND,1.8
+,,,,,,,,,,,,,,WR,Keenan Allen (44392240) (LOCKED),Keenan Allen,44392240,WR/FLEX,4300,In Progress,IND,9.67
+,,,,,,,,,,,,,,QB,J.J. McCarthy (44391850) (LOCKED),J.J. McCarthy,44391850,QB,4300,In Progress,NYG,0
+,,,,,,,,,,,,,,WR,Malachi Fields (44392250) (LOCKED),Malachi Fields,44392250,WR/FLEX,4300,In Progress,NYG,6.65
+,,,,,,,,,,,,,,TE,Isaiah Likely (44392608) (LOCKED),Isaiah Likely,44392608,TE/FLEX,4300,In Progress,NYG,13.25
+,,,,,,,,,,,,,,RB,Kimani Vidal (44391990),Kimani Vidal,44391990,RB/FLEX,4300,DEN@LAC 10/11/2026 04:05PM ET,LAC,3.65
+,,,,,,,,,,,,,,RB,Sione Vaki (44391986),Sione Vaki,44391986,RB/FLEX,4300,DET@ARI 10/11/2026 04:25PM ET,DET,3.3
+,,,,,,,,,,,,,,RB,Mike Washington Jr. (44391992) (LOCKED),Mike Washington Jr.,44391992,RB/FLEX,4200,In Progress,LV,4.72
+,,,,,,,,,,,,,,WR,Mack Hollins (44392246) (LOCKED),Mack Hollins,44392246,WR/FLEX,4200,In Progress,NE,8.98
+,,,,,,,,,,,,,,RB,Isaiah Davis (44391996) (LOCKED),Isaiah Davis,44391996,RB/FLEX,4200,In Progress,NYJ,0
+,,,,,,,,,,,,,,WR,KC Concepcion Jr. (44392244) (LOCKED),KC Concepcion Jr.,44392244,WR/FLEX,4200,In Progress,CLE,7.82
+,,,,,,,,,,,,,,RB,Tyler Badie (44391994),Tyler Badie,44391994,RB/FLEX,4200,DEN@LAC 10/11/2026 04:05PM ET,DEN,5.07
+,,,,,,,,,,,,,,QB,Case Keenum (44391851) (LOCKED),Case Keenum,44391851,QB,4200,In Progress,CHI,12.24
+,,,,,,,,,,,,,,RB,Roschon Johnson (44391998) (LOCKED),Roschon Johnson,44391998,RB/FLEX,4200,In Progress,CHI,0.82
+,,,,,,,,,,,,,,RB,Kaytron Allen (44392002) (LOCKED),Kaytron Allen,44392002,RB/FLEX,4100,In Progress,MIA,1.02
+,,,,,,,,,,,,,,TE,Mike Gesicki (44392610) (LOCKED),Mike Gesicki,44392610,TE/FLEX,4100,In Progress,CIN,11.12
+,,,,,,,,,,,,,,WR,Jauan Jennings (44392248) (LOCKED),Jauan Jennings,44392248,WR/FLEX,4100,In Progress,MIN,0.97
+,,,,,,,,,,,,,,RB,Jaleel McLaughlin (44392000) (LOCKED),Jaleel McLaughlin,44392000,RB/FLEX,4100,In Progress,CLE,3.03
+,,,,,,,,,,,,,,WR,Tre' Harris (44392242),Tre' Harris,44392242,WR/FLEX,4100,DEN@LAC 10/11/2026 04:05PM ET,LAC,8.48
+,,,,,,,,,,,,,,RB,Chris Brooks (44392004) (LOCKED),Chris Brooks,44392004,RB/FLEX,4100,In Progress,GB,3.1
+,,,,,,,,,,,,,,RB,Robert Henry Jr. (44392068),Robert Henry Jr.,44392068,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,QB,Kyle McCord (44391892) (LOCKED),Kyle McCord,44391892,QB,4000,In Progress,MIA,0
+,,,,,,,,,,,,,,QB,Brady Cook (44391893) (LOCKED),Brady Cook,44391893,QB,4000,In Progress,MIA,0
+,,,,,,,,,,,,,,QB,Sean Clifford (44391894) (LOCKED),Sean Clifford,44391894,QB,4000,In Progress,CIN,0
+,,,,,,,,,,,,,,QB,Josh Johnson (44391895) (LOCKED),Josh Johnson,44391895,QB,4000,In Progress,CIN,0
+,,,,,,,,,,,,,,RB,De'Von Achane (44392012) (LOCKED),De'Von Achane,44392012,RB/FLEX,4000,In Progress,MIA,8.2
+,,,,,,,,,,,,,,RB,Carlos Washington Jr. (44392150) (LOCKED),Carlos Washington Jr.,44392150,RB/FLEX,4000,In Progress,MIA,0
+,,,,,,,,,,,,,,RB,Jarquez Hunter (44392152) (LOCKED),Jarquez Hunter,44392152,RB/FLEX,4000,In Progress,MIA,0
+,,,,,,,,,,,,,,RB,DJ Herman (44392154) (LOCKED),DJ Herman,44392154,RB/FLEX,4000,In Progress,MIA,0.7
+,,,,,,,,,,,,,,RB,Tahj Brooks (44392156) (LOCKED),Tahj Brooks,44392156,RB/FLEX,4000,In Progress,CIN,0
+,,,,,,,,,,,,,,RB,Kentrel Bullock (44392158) (LOCKED),Kentrel Bullock,44392158,RB/FLEX,4000,In Progress,CIN,0
+,,,,,,,,,,,,,,RB,Kendall Milton (44392160) (LOCKED),Kendall Milton,44392160,RB/FLEX,4000,In Progress,CIN,0
+,,,,,,,,,,,,,,QB,Fernando Mendoza (44391853) (LOCKED),Fernando Mendoza,44391853,QB,4000,In Progress,LV,0
+,,,,,,,,,,,,,,QB,Tommy DeVito (44391889) (LOCKED),Tommy DeVito,44391889,QB,4000,In Progress,NE,1.4
+,,,,,,,,,,,,,,QB,Behren Morton (44391890) (LOCKED),Behren Morton,44391890,QB,4000,In Progress,NE,0
+,,,,,,,,,,,,,,QB,Aidan O'Connell (44391891) (LOCKED),Aidan O'Connell,44391891,QB,4000,In Progress,LV,0
+,,,,,,,,,,,,,,RB,Corey Kiner (44392132) (LOCKED),Corey Kiner,44392132,RB/FLEX,4000,In Progress,NE,1.2
+,,,,,,,,,,,,,,RB,Myles Montgomery (44392134) (LOCKED),Myles Montgomery,44392134,RB/FLEX,4000,In Progress,NE,0
+,,,,,,,,,,,,,,RB,Reggie Gilliam (44392136) (LOCKED),Reggie Gilliam,44392136,RB/FLEX,4000,In Progress,NE,0.35
+,,,,,,,,,,,,,,RB,Lan Larison (44392138) (LOCKED),Lan Larison,44392138,RB/FLEX,4000,In Progress,NE,2.9
+,,,,,,,,,,,,,,RB,Dylan Laube (44392140) (LOCKED),Dylan Laube,44392140,RB/FLEX,4000,In Progress,LV,-0.25
+,,,,,,,,,,,,,,RB,Chris Collier (44392142) (LOCKED),Chris Collier,44392142,RB/FLEX,4000,In Progress,LV,0
+,,,,,,,,,,,,,,RB,Connor Heyward (44392144) (LOCKED),Connor Heyward,44392144,RB/FLEX,4000,In Progress,LV,0.42
+,,,,,,,,,,,,,,RB,Roman Hemby (44392146) (LOCKED),Roman Hemby,44392146,RB/FLEX,4000,In Progress,LV,0
+,,,,,,,,,,,,,,RB,Owen Wright (44392148) (LOCKED),Owen Wright,44392148,RB/FLEX,4000,In Progress,LV,0
+,,,,,,,,,,,,,,QB,Spencer Rattler (44391885) (LOCKED),Spencer Rattler,44391885,QB,4000,In Progress,NO,0
+,,,,,,,,,,,,,,QB,Zach Wilson (44391886) (LOCKED),Zach Wilson,44391886,QB,4000,In Progress,NO,0
+,,,,,,,,,,,,,,QB,Carson Wentz (44391887) (LOCKED),Carson Wentz,44391887,QB,4000,In Progress,MIN,12.77
+,,,,,,,,,,,,,,QB,Max Brosmer (44391888) (LOCKED),Max Brosmer,44391888,QB,4000,In Progress,MIN,0
+,,,,,,,,,,,,,,RB,Travis Etienne Jr. (44392010) (LOCKED),Travis Etienne Jr.,44392010,RB/FLEX,4000,In Progress,NO,10.3
+,,,,,,,,,,,,,,RB,Ty Chandler (44392116) (LOCKED),Ty Chandler,44392116,RB/FLEX,4000,In Progress,NO,0
+,,,,,,,,,,,,,,RB,Zamir White (44392118) (LOCKED),Zamir White,44392118,RB/FLEX,4000,In Progress,NO,0
+,,,,,,,,,,,,,,RB,Ulysses Bentley IV (44392120) (LOCKED),Ulysses Bentley IV,44392120,RB/FLEX,4000,In Progress,NO,0
+,,,,,,,,,,,,,,RB,Demond Claiborne (44392122) (LOCKED),Demond Claiborne,44392122,RB/FLEX,4000,In Progress,MIN,0.83
+,,,,,,,,,,,,,,RB,Jordan Mason (44392124) (LOCKED),Jordan Mason,44392124,RB/FLEX,4000,In Progress,MIN,11.9
+,,,,,,,,,,,,,,RB,Devin Neal (44392126) (LOCKED),Devin Neal,44392126,RB/FLEX,4000,In Progress,MIN,0
+,,,,,,,,,,,,,,RB,Audric Estime (44392128) (LOCKED),Audric Estime,44392128,RB/FLEX,4000,In Progress,MIN,0
+,,,,,,,,,,,,,,RB,Max Bredeson (44392130) (LOCKED),Max Bredeson,44392130,RB/FLEX,4000,In Progress,MIN,0
+,,,,,,,,,,,,,,RB,DeeJay Dallas (44392164) (LOCKED),DeeJay Dallas,44392164,RB/FLEX,4000,In Progress,MIN,1.58
+,,,,,,,,,,,,,,QB,Cade Klubnik (44391880) (LOCKED),Cade Klubnik,44391880,QB,4000,In Progress,NYJ,0
+,,,,,,,,,,,,,,QB,Will Levis (44391881) (LOCKED),Will Levis,44391881,QB,4000,In Progress,NYJ,0
+,,,,,,,,,,,,,,QB,Shedeur Sanders (44391882) (LOCKED),Shedeur Sanders,44391882,QB,4000,In Progress,CLE,0
+,,,,,,,,,,,,,,QB,Taylen Green (44391883) (LOCKED),Taylen Green,44391883,QB,4000,In Progress,CLE,0
+,,,,,,,,,,,,,,QB,Dillon Gabriel (44391884) (LOCKED),Dillon Gabriel,44391884,QB,4000,In Progress,CLE,0
+,,,,,,,,,,,,,,RB,Kene Nwangwu (44392102) (LOCKED),Kene Nwangwu,44392102,RB/FLEX,4000,In Progress,NYJ,0
+,,,,,,,,,,,,,,RB,Chip Trayanum (44392104) (LOCKED),Chip Trayanum,44392104,RB/FLEX,4000,In Progress,NYJ,0
+,,,,,,,,,,,,,,RB,Andrew Beck (44392106) (LOCKED),Andrew Beck,44392106,RB/FLEX,4000,In Progress,NYJ,0
+,,,,,,,,,,,,,,RB,Al-Jay Henderson (44392108) (LOCKED),Al-Jay Henderson,44392108,RB/FLEX,4000,In Progress,NYJ,0
+,,,,,,,,,,,,,,RB,Dylan Sampson (44392110) (LOCKED),Dylan Sampson,44392110,RB/FLEX,4000,In Progress,CLE,0
+,,,,,,,,,,,,,,RB,Michael Burton (44392112) (LOCKED),Michael Burton,44392112,RB/FLEX,4000,In Progress,CLE,0
+,,,,,,,,,,,,,,RB,Eric Gray (44392114) (LOCKED),Eric Gray,44392114,RB/FLEX,4000,In Progress,CLE,0
+,,,,,,,,,,,,,,RB,Jaret Patterson (44448264) (LOCKED),Jaret Patterson,44448264,RB/FLEX,4000,In Progress,CLE,0
+,,,,,,,,,,,,,,QB,Mason Rudolph (44391852) (LOCKED),Mason Rudolph,44391852,QB,4000,In Progress,PIT,0.3
+,,,,,,,,,,,,,,QB,Will Howard (44391876) (LOCKED),Will Howard,44391876,QB,4000,In Progress,PIT,0
+,,,,,,,,,,,,,,QB,Drew Allar (44391877) (LOCKED),Drew Allar,44391877,QB,4000,In Progress,PIT,0
+,,,,,,,,,,,,,,QB,Anthony Richardson Sr. (44391878) (LOCKED),Anthony Richardson Sr.,44391878,QB,4000,In Progress,IND,0
+,,,,,,,,,,,,,,QB,Riley Leonard (44391879) (LOCKED),Riley Leonard,44391879,QB,4000,In Progress,IND,0
+,,,,,,,,,,,,,,RB,Eli Heidenreich (44392006) (LOCKED),Eli Heidenreich,44392006,RB/FLEX,4000,In Progress,PIT,0
+,,,,,,,,,,,,,,RB,Travis Homer (44392092) (LOCKED),Travis Homer,44392092,RB/FLEX,4000,In Progress,PIT,0.5
+,,,,,,,,,,,,,,RB,Riley Nowakowski (44392094) (LOCKED),Riley Nowakowski,44392094,RB/FLEX,4000,In Progress,PIT,0
+,,,,,,,,,,,,,,RB,Lew Nichols (44392096) (LOCKED),Lew Nichols,44392096,RB/FLEX,4000,In Progress,PIT,0
+,,,,,,,,,,,,,,RB,DJ Giddens (44392098) (LOCKED),DJ Giddens,44392098,RB/FLEX,4000,In Progress,IND,0
+,,,,,,,,,,,,,,RB,Davon Booth (44392100) (LOCKED),Davon Booth,44392100,RB/FLEX,4000,In Progress,IND,0
+,,,,,,,,,,,,,,QB,Mitchell Trubisky (44391872) (LOCKED),Mitchell Trubisky,44391872,QB,4000,In Progress,TEN,0
+,,,,,,,,,,,,,,QB,Hendon Hooker (44391873) (LOCKED),Hendon Hooker,44391873,QB,4000,In Progress,TEN,0
+,,,,,,,,,,,,,,QB,Davis Mills (44391874) (LOCKED),Davis Mills,44391874,QB,4000,In Progress,HOU,0
+,,,,,,,,,,,,,,QB,Graham Mertz (44391875) (LOCKED),Graham Mertz,44391875,QB,4000,In Progress,HOU,0
+,,,,,,,,,,,,,,RB,Nick Singleton (44392078) (LOCKED),Nick Singleton,44392078,RB/FLEX,4000,In Progress,TEN,0.4
+,,,,,,,,,,,,,,RB,Julius Chestnut (44392080) (LOCKED),Julius Chestnut,44392080,RB/FLEX,4000,In Progress,TEN,0
+,,,,,,,,,,,,,,RB,Michael Carter (44392082) (LOCKED),Michael Carter,44392082,RB/FLEX,4000,In Progress,TEN,0
+,,,,,,,,,,,,,,RB,Kalel Mullings (44392084) (LOCKED),Kalel Mullings,44392084,RB/FLEX,4000,In Progress,TEN,0
+,,,,,,,,,,,,,,RB,Dare Ogunbowale (44392086) (LOCKED),Dare Ogunbowale,44392086,RB/FLEX,4000,In Progress,HOU,0
+,,,,,,,,,,,,,,RB,British Brooks (44392088) (LOCKED),British Brooks,44392088,RB/FLEX,4000,In Progress,HOU,0
+,,,,,,,,,,,,,,RB,Jawhar Jordan (44392090) (LOCKED),Jawhar Jordan,44392090,RB/FLEX,4000,In Progress,HOU,0
+,,,,,,,,,,,,,,WR,Xavier Hutchinson (44392254) (LOCKED),Xavier Hutchinson,44392254,WR/FLEX,4000,In Progress,HOU,7.25
+,,,,,,,,,,,,,,TE,Dalton Schultz (44392612) (LOCKED),Dalton Schultz,44392612,TE/FLEX,4000,In Progress,HOU,11.35
+,,,,,,,,,,,,,,QB,Mark Gronowski (44448257) (LOCKED),Mark Gronowski,44448257,QB,4000,In Progress,HOU,0
+,,,,,,,,,,,,,,RB,Deuce Vaughn (44448260) (LOCKED),Deuce Vaughn,44448260,RB/FLEX,4000,In Progress,HOU,0
+,,,,,,,,,,,,,,QB,Sam Hartman (44391869) (LOCKED),Sam Hartman,44391869,QB,4000,In Progress,WAS,0
+,,,,,,,,,,,,,,QB,Jake Haener (44391870) (LOCKED),Jake Haener,44391870,QB,4000,In Progress,NYG,0
+,,,,,,,,,,,,,,QB,Jaxson Dart (44391871) (LOCKED),Jaxson Dart,44391871,QB,4000,In Progress,NYG,13.7
+,,,,,,,,,,,,,,RB,Craig Reynolds (44392064) (LOCKED),Craig Reynolds,44392064,RB/FLEX,4000,In Progress,WAS,0.4
+,,,,,,,,,,,,,,RB,Jeremy McNichols (44392066) (LOCKED),Jeremy McNichols,44392066,RB/FLEX,4000,In Progress,WAS,0
+,,,,,,,,,,,,,,RB,Devin Singletary (44392070) (LOCKED),Devin Singletary,44392070,RB/FLEX,4000,In Progress,NYG,7.35
+,,,,,,,,,,,,,,RB,Patrick Ricard (44392072) (LOCKED),Patrick Ricard,44392072,RB/FLEX,4000,In Progress,NYG,0.28
+,,,,,,,,,,,,,,RB,Phil Mafah (44392074) (LOCKED),Phil Mafah,44392074,RB/FLEX,4000,In Progress,NYG,0
+,,,,,,,,,,,,,,RB,Grant Finley (44392076) (LOCKED),Grant Finley,44392076,RB/FLEX,4000,In Progress,NYG,0
+,,,,,,,,,,,,,,RB,Tyrone Tracy Jr. (44392162) (LOCKED),Tyrone Tracy Jr.,44392162,RB/FLEX,4000,In Progress,NYG,0.15
+,,,,,,,,,,,,,,QB,Trey Lance (44391865),Trey Lance,44391865,QB,4000,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,QB,DJ Uiagalelei (44391866),DJ Uiagalelei,44391866,QB,4000,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,QB,Jarrett Stidham (44391867),Jarrett Stidham,44391867,QB,4000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,QB,Sam Ehlinger (44391868),Sam Ehlinger,44391868,QB,4000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,RB,Gregory Desrosiers (44392050),Gregory Desrosiers,44392050,RB/FLEX,4000,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,RB,Alec Ingold (44392052),Alec Ingold,44392052,RB/FLEX,4000,DEN@LAC 10/11/2026 04:05PM ET,LAC,1.62
+,,,,,,,,,,,,,,RB,Amar Johnson (44392054),Amar Johnson,44392054,RB/FLEX,4000,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,RB,Scott Matlock (44392056),Scott Matlock,44392056,RB/FLEX,4000,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,RB,Jonah Coleman (44392058),Jonah Coleman,44392058,RB/FLEX,4000,DEN@LAC 10/11/2026 04:05PM ET,DEN,7.4
+,,,,,,,,,,,,,,RB,Cody Schrader (44392060),Cody Schrader,44392060,RB/FLEX,4000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,RB,Adam Prentice (44392062),Adam Prentice,44392062,RB/FLEX,4000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0.3
+,,,,,,,,,,,,,,WR,Pat Bryant (44392252),Pat Bryant,44392252,WR/FLEX,4000,DEN@LAC 10/11/2026 04:05PM ET,DEN,7.98
+,,,,,,,,,,,,,,QB,Gardner Minshew II (44391861),Gardner Minshew II,44391861,QB,4000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,QB,Carson Beck (44391862),Carson Beck,44391862,QB,4000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,QB,Joshua Dobbs (44391863),Joshua Dobbs,44391863,QB,4000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,QB,Luke Altmyer (44391864),Luke Altmyer,44391864,QB,4000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,RB,Bam Knight (44392038),Bam Knight,44392038,RB/FLEX,4000,DET@ARI 10/11/2026 04:25PM ET,ARI,0.6
+,,,,,,,,,,,,,,RB,Trey Benson (44392040),Trey Benson,44392040,RB/FLEX,4000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,RB,Evan Hull (44392042),Evan Hull,44392042,RB/FLEX,4000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,RB,Jacob Saylors (44392044),Jacob Saylors,44392044,RB/FLEX,4000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,RB,Isiah Pacheco (44392046),Isiah Pacheco,44392046,RB/FLEX,4000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,RB,Jabari Small (44392048),Jabari Small,44392048,RB/FLEX,4000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,QB,Tyrod Taylor (44391858) (LOCKED),Tyrod Taylor,44391858,QB,4000,In Progress,GB,0
+,,,,,,,,,,,,,,QB,Kedon Slovis (44391859) (LOCKED),Kedon Slovis,44391859,QB,4000,In Progress,GB,0
+,,,,,,,,,,,,,,QB,Miller Moss (44391860) (LOCKED),Miller Moss,44391860,QB,4000,In Progress,CHI,0
+,,,,,,,,,,,,,,RB,Pierre Strong Jr. (44392030) (LOCKED),Pierre Strong Jr.,44392030,RB/FLEX,4000,In Progress,GB,0
+,,,,,,,,,,,,,,RB,Brittain Brown (44392032) (LOCKED),Brittain Brown,44392032,RB/FLEX,4000,In Progress,CHI,0
+,,,,,,,,,,,,,,RB,Zavier Scott (44392034) (LOCKED),Zavier Scott,44392034,RB/FLEX,4000,In Progress,CHI,0
+,,,,,,,,,,,,,,RB,Salvon Ahmed (44392036) (LOCKED),Salvon Ahmed,44392036,RB/FLEX,4000,In Progress,CHI,0
+,,,,,,,,,,,,,,RB,Damon Bankston (44448258) (LOCKED),Damon Bankston,44448258,RB/FLEX,4000,In Progress,GB,0
+,,,,,,,,,,,,,,QB,Drew Lock (44391854),Drew Lock,44391854,QB,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,17.09
+,,,,,,,,,,,,,,QB,Jalen Milroe (44391855),Jalen Milroe,44391855,QB,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,QB,Mac Jones (44391856),Mac Jones,44391856,QB,4000,SF@SEA 10/11/2026 04:25PM ET,SF,-0.2
+,,,,,,,,,,,,,,QB,Kurtis Rourke (44391857),Kurtis Rourke,44391857,QB,4000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,RB,Jadarian Price (44392008),Jadarian Price,44392008,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,5.33
+,,,,,,,,,,,,,,RB,Velus Jones Jr. (44392014),Velus Jones Jr.,44392014,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,RB,Brady Russell (44392016),Brady Russell,44392016,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,1.75
+,,,,,,,,,,,,,,RB,Jacardia Wright (44392018),Jacardia Wright,44392018,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,RB,Robbie Ouzts (44392020),Robbie Ouzts,44392020,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,RB,Jordan James (44392022),Jordan James,44392022,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SF,0.75
+,,,,,,,,,,,,,,RB,Isaac Guerendo (44392024),Isaac Guerendo,44392024,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,RB,Sincere McCormick (44392026),Sincere McCormick,44392026,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,RB,Kyle Juszczyk (44392028),Kyle Juszczyk,44392028,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SF,3.88
+,,,,,,,,,,,,,,WR,Rashid Shaheed (44392256),Rashid Shaheed,44392256,WR/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,6
+,,,,,,,,,,,,,,RB,Dontae McMillan (44448262),Dontae McMillan,44448262,RB/FLEX,4000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,WR,Caleb Douglas (44392260) (LOCKED),Caleb Douglas,44392260,WR/FLEX,3900,In Progress,MIA,9.15
+,,,,,,,,,,,,,,TE,Pat Freiermuth (44392614) (LOCKED),Pat Freiermuth,44392614,TE/FLEX,3900,In Progress,PIT,9.7
+,,,,,,,,,,,,,,WR,Kayshon Boutte (44392258) (LOCKED),Kayshon Boutte,44392258,WR/FLEX,3900,In Progress,HOU,5.12
+,,,,,,,,,,,,,,WR,Kalif Raymond (44392262) (LOCKED),Kalif Raymond,44392262,WR/FLEX,3900,In Progress,CHI,12.25
+,,,,,,,,,,,,,,TE,Kenyon Sadiq (44392616) (LOCKED),Kenyon Sadiq,44392616,TE/FLEX,3800,In Progress,NYJ,10.4
+,,,,,,,,,,,,,,WR,Darnell Mooney (44392266) (LOCKED),Darnell Mooney,44392266,WR/FLEX,3800,In Progress,NYG,4.1
+,,,,,,,,,,,,,,WR,Antonio Williams (44392268) (LOCKED),Antonio Williams,44392268,WR/FLEX,3800,In Progress,WAS,7.6
+,,,,,,,,,,,,,,WR,Cooper Kupp (44392264),Cooper Kupp,44392264,WR/FLEX,3800,SF@SEA 10/11/2026 04:25PM ET,SEA,6.6
+,,,,,,,,,,,,,,TE,Hunter Henry (44392618) (LOCKED),Hunter Henry,44392618,TE/FLEX,3700,In Progress,NE,6.32
+,,,,,,,,,,,,,,WR,Isaiah Williams (44392272) (LOCKED),Isaiah Williams,44392272,WR/FLEX,3700,In Progress,NYJ,7.72
+,,,,,,,,,,,,,,WR,Jerry Jeudy (44392274) (LOCKED),Jerry Jeudy,44392274,WR/FLEX,3700,In Progress,CLE,2.8
+,,,,,,,,,,,,,,WR,Roman Wilson (44392270) (LOCKED),Roman Wilson,44392270,WR/FLEX,3700,In Progress,PIT,11.2
+,,,,,,,,,,,,,,WR,Chris Bell (44392276) (LOCKED),Chris Bell,44392276,WR/FLEX,3600,In Progress,MIA,3.55
+,,,,,,,,,,,,,,WR,Colbie Young (44392282) (LOCKED),Colbie Young,44392282,WR/FLEX,3600,In Progress,CIN,0.97
+,,,,,,,,,,,,,,WR,Jalen Nailor (44392280) (LOCKED),Jalen Nailor,44392280,WR/FLEX,3600,In Progress,LV,2.55
+,,,,,,,,,,,,,,WR,Laquon Treadwell (44392278) (LOCKED),Laquon Treadwell,44392278,WR/FLEX,3600,In Progress,IND,5.32
+,,,,,,,,,,,,,,TE,Oronde Gadsden II (44392620),Oronde Gadsden II,44392620,TE/FLEX,3600,DEN@LAC 10/11/2026 04:05PM ET,LAC,5.95
+,,,,,,,,,,,,,,WR,Dohnte Meyers (44392288) (LOCKED),Dohnte Meyers,44392288,WR/FLEX,3500,In Progress,CIN,6.22
+,,,,,,,,,,,,,,DST,Bengals  (44392852) (LOCKED),Bengals ,44392852,DST,3500,In Progress,CIN,9
+,,,,,,,,,,,,,,WR,DeMario Douglas (44392290) (LOCKED),DeMario Douglas,44392290,WR/FLEX,3500,In Progress,NE,4.3
+,,,,,,,,,,,,,,TE,Michael Mayer (44392622) (LOCKED),Michael Mayer,44392622,TE/FLEX,3500,In Progress,LV,10.72
+,,,,,,,,,,,,,,WR,Calvin Ridley (44392286) (LOCKED),Calvin Ridley,44392286,WR/FLEX,3500,In Progress,TEN,1.95
+,,,,,,,,,,,,,,WR,Brandin Cooks (44392284),Brandin Cooks,44392284,WR/FLEX,3500,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Germie Bernard (44392298) (LOCKED),Germie Bernard,44392298,WR/FLEX,3400,In Progress,PIT,3.25
+,,,,,,,,,,,,,,WR,Tank Dell (44392292) (LOCKED),Tank Dell,44392292,WR/FLEX,3400,In Progress,HOU,0
+,,,,,,,,,,,,,,DST,Texans  (44392853) (LOCKED),Texans ,44392853,DST,3400,In Progress,HOU,4.75
+,,,,,,,,,,,,,,WR,Marvin Mims Jr. (44392296),Marvin Mims Jr.,44392296,WR/FLEX,3400,DEN@LAC 10/11/2026 04:05PM ET,DEN,0.5
+,,,,,,,,,,,,,,WR,Isaac TeSlaa (44392294),Isaac TeSlaa,44392294,WR/FLEX,3400,DET@ARI 10/11/2026 04:25PM ET,DET,6.92
+,,,,,,,,,,,,,,WR,Kendrick Bourne (44392300),Kendrick Bourne,44392300,WR/FLEX,3400,DET@ARI 10/11/2026 04:25PM ET,ARI,5.7
+,,,,,,,,,,,,,,WR,Mitch Tinsley (44392310) (LOCKED),Mitch Tinsley,44392310,WR/FLEX,3300,In Progress,CIN,7.9
+,,,,,,,,,,,,,,WR,Cody White (44392302) (LOCKED),Cody White,44392302,WR/FLEX,3300,In Progress,LV,7.85
+,,,,,,,,,,,,,,WR,Darius Slayton (44392304) (LOCKED),Darius Slayton,44392304,WR/FLEX,3300,In Progress,IND,0
+,,,,,,,,,,,,,,DST,Steelers  (44392854) (LOCKED),Steelers ,44392854,DST,3300,In Progress,PIT,9.25
+,,,,,,,,,,,,,,TE,Chig Okonkwo (44392624) (LOCKED),Chig Okonkwo,44392624,TE/FLEX,3300,In Progress,WAS,3.05
+,,,,,,,,,,,,,,WR,Marquez Valdes-Scantling (44392308),Marquez Valdes-Scantling,44392308,WR/FLEX,3300,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,WR,Christian Kirk (44392306),Christian Kirk,44392306,WR/FLEX,3300,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Efton Chism III (44392312) (LOCKED),Efton Chism III,44392312,WR/FLEX,3200,In Progress,NE,4.91
+,,,,,,,,,,,,,,WR,Jaylin Noel (44392314) (LOCKED),Jaylin Noel,44392314,WR/FLEX,3200,In Progress,HOU,7.28
+,,,,,,,,,,,,,,WR,Treylon Burks (44392318) (LOCKED),Treylon Burks,44392318,WR/FLEX,3200,In Progress,WAS,7
+,,,,,,,,,,,,,,WR,Troy Franklin (44392316),Troy Franklin,44392316,WR/FLEX,3200,DEN@LAC 10/11/2026 04:05PM ET,DEN,1.82
+,,,,,,,,,,,,,,DST,Broncos  (44392855),Broncos ,44392855,DST,3200,DEN@LAC 10/11/2026 04:05PM ET,DEN,6.75
+,,,,,,,,,,,,,,WR,Skyy Moore (44392320) (LOCKED),Skyy Moore,44392320,WR/FLEX,3200,In Progress,GB,2.38
+,,,,,,,,,,,,,,TE,AJ Barner (44392626),AJ Barner,44392626,TE/FLEX,3200,SF@SEA 10/11/2026 04:25PM ET,SEA,6.32
+,,,,,,,,,,,,,,TE,Greg Dulcich (44392628) (LOCKED),Greg Dulcich,44392628,TE/FLEX,3100,In Progress,MIA,4.5
+,,,,,,,,,,,,,,WR,Dont'e Thornton Jr. (44392326) (LOCKED),Dont'e Thornton Jr.,44392326,WR/FLEX,3100,In Progress,LV,0
+,,,,,,,,,,,,,,WR,Kyle Williams (44392328) (LOCKED),Kyle Williams,44392328,WR/FLEX,3100,In Progress,NE,1.6
+,,,,,,,,,,,,,,DST,Vikings  (44392856) (LOCKED),Vikings ,44392856,DST,3100,In Progress,MIN,12.5
+,,,,,,,,,,,,,,WR,Odell Beckham Jr. (44448276) (LOCKED),Odell Beckham Jr.,44448276,WR/FLEX,3100,In Progress,MIN,0
+,,,,,,,,,,,,,,WR,Deion Burks (44392322) (LOCKED),Deion Burks,44392322,WR/FLEX,3100,In Progress,IND,0.75
+,,,,,,,,,,,,,,WR,Dyami Brown (44392330) (LOCKED),Dyami Brown,44392330,WR/FLEX,3100,In Progress,WAS,3.65
+,,,,,,,,,,,,,,WR,Derius Davis (44392324),Derius Davis,44392324,WR/FLEX,3100,DEN@LAC 10/11/2026 04:05PM ET,LAC,0.15
+,,,,,,,,,,,,,,WR,Kevin Coleman Jr. (44392566) (LOCKED),Kevin Coleman Jr.,44392566,WR/FLEX,3000,In Progress,MIA,0.65
+,,,,,,,,,,,,,,WR,Jalen Tolbert (44392568) (LOCKED),Jalen Tolbert,44392568,WR/FLEX,3000,In Progress,MIA,0
+,,,,,,,,,,,,,,WR,Ryan Miller (44392570) (LOCKED),Ryan Miller,44392570,WR/FLEX,3000,In Progress,MIA,4.55
+,,,,,,,,,,,,,,WR,Jalen Reagor (44392572) (LOCKED),Jalen Reagor,44392572,WR/FLEX,3000,In Progress,MIA,0
+,,,,,,,,,,,,,,WR,Will Sheppard (44392574) (LOCKED),Will Sheppard,44392574,WR/FLEX,3000,In Progress,MIA,0
+,,,,,,,,,,,,,,WR,AJ Henning (44392576) (LOCKED),AJ Henning,44392576,WR/FLEX,3000,In Progress,MIA,0
+,,,,,,,,,,,,,,WR,Andrei Iosivas (44392578) (LOCKED),Andrei Iosivas,44392578,WR/FLEX,3000,In Progress,CIN,2.45
+,,,,,,,,,,,,,,WR,Ke'Shawn Williams (44392580) (LOCKED),Ke'Shawn Williams,44392580,WR/FLEX,3000,In Progress,CIN,-1
+,,,,,,,,,,,,,,WR,Noah Thomas (44392582) (LOCKED),Noah Thomas,44392582,WR/FLEX,3000,In Progress,CIN,0
+,,,,,,,,,,,,,,WR,Jordan Moore (44392584) (LOCKED),Jordan Moore,44392584,WR/FLEX,3000,In Progress,CIN,0
+,,,,,,,,,,,,,,WR,Jack Bech (44392332) (LOCKED),Jack Bech,44392332,WR/FLEX,3000,In Progress,LV,5.27
+,,,,,,,,,,,,,,WR,A.J. Brown (44392544) (LOCKED),A.J. Brown,44392544,WR/FLEX,3000,In Progress,NE,5.6
+,,,,,,,,,,,,,,WR,Jeremiah Webb (44392546) (LOCKED),Jeremiah Webb,44392546,WR/FLEX,3000,In Progress,NE,0
+,,,,,,,,,,,,,,WR,Cameron Dorner (44392548) (LOCKED),Cameron Dorner,44392548,WR/FLEX,3000,In Progress,NE,0
+,,,,,,,,,,,,,,WR,Chandler Brayboy (44392550) (LOCKED),Chandler Brayboy,44392550,WR/FLEX,3000,In Progress,NE,0
+,,,,,,,,,,,,,,WR,Kyle Dixon (44392552) (LOCKED),Kyle Dixon,44392552,WR/FLEX,3000,In Progress,NE,0
+,,,,,,,,,,,,,,WR,Dareke Young (44392554) (LOCKED),Dareke Young,44392554,WR/FLEX,3000,In Progress,LV,1.15
+,,,,,,,,,,,,,,WR,Malik Benson (44392556) (LOCKED),Malik Benson,44392556,WR/FLEX,3000,In Progress,LV,0.2
+,,,,,,,,,,,,,,WR,Corey Rucker (44392558) (LOCKED),Corey Rucker,44392558,WR/FLEX,3000,In Progress,LV,0
+,,,,,,,,,,,,,,WR,Deven Thompkins (44392560) (LOCKED),Deven Thompkins,44392560,WR/FLEX,3000,In Progress,LV,0
+,,,,,,,,,,,,,,WR,Phillip Dorsett II (44392562) (LOCKED),Phillip Dorsett II,44392562,WR/FLEX,3000,In Progress,LV,0
+,,,,,,,,,,,,,,WR,Tyler Scott (44392564) (LOCKED),Tyler Scott,44392564,WR/FLEX,3000,In Progress,LV,0
+,,,,,,,,,,,,,,DST,Patriots  (44392858) (LOCKED),Patriots ,44392858,DST,3000,In Progress,NE,7.75
+,,,,,,,,,,,,,,WR,Bryce Lance (44392518) (LOCKED),Bryce Lance,44392518,WR/FLEX,3000,In Progress,NO,2.68
+,,,,,,,,,,,,,,WR,Kevin Austin Jr. (44392520) (LOCKED),Kevin Austin Jr.,44392520,WR/FLEX,3000,In Progress,NO,0.42
+,,,,,,,,,,,,,,WR,Barion Brown (44392522) (LOCKED),Barion Brown,44392522,WR/FLEX,3000,In Progress,NO,-0.07
+,,,,,,,,,,,,,,WR,Mason Tipton (44392524) (LOCKED),Mason Tipton,44392524,WR/FLEX,3000,In Progress,NO,0
+,,,,,,,,,,,,,,WR,Jalen Moreno-Cropper (44392526) (LOCKED),Jalen Moreno-Cropper,44392526,WR/FLEX,3000,In Progress,NO,0
+,,,,,,,,,,,,,,WR,Cedric Tillman (44392528) (LOCKED),Cedric Tillman,44392528,WR/FLEX,3000,In Progress,NO,0
+,,,,,,,,,,,,,,WR,Kyrese Rowan (44392530) (LOCKED),Kyrese Rowan,44392530,WR/FLEX,3000,In Progress,NO,0
+,,,,,,,,,,,,,,WR,Trey Palmer (44392532) (LOCKED),Trey Palmer,44392532,WR/FLEX,3000,In Progress,NO,0
+,,,,,,,,,,,,,,WR,Tai Felton (44392534) (LOCKED),Tai Felton,44392534,WR/FLEX,3000,In Progress,MIN,0.6
+,,,,,,,,,,,,,,WR,Myles Price (44392536) (LOCKED),Myles Price,44392536,WR/FLEX,3000,In Progress,MIN,2.2
+,,,,,,,,,,,,,,WR,Jeshaun Jones (44392538) (LOCKED),Jeshaun Jones,44392538,WR/FLEX,3000,In Progress,MIN,0
+,,,,,,,,,,,,,,WR,Michael Briscoe (44392540) (LOCKED),Michael Briscoe,44392540,WR/FLEX,3000,In Progress,MIN,0
+,,,,,,,,,,,,,,WR,Dillon Bell (44392542) (LOCKED),Dillon Bell,44392542,WR/FLEX,3000,In Progress,MIN,0
+,,,,,,,,,,,,,,TE,Noah Fant (44392630) (LOCKED),Noah Fant,44392630,TE/FLEX,3000,In Progress,NO,10.87
+,,,,,,,,,,,,,,WR,Malik McClain (44392494) (LOCKED),Malik McClain,44392494,WR/FLEX,3000,In Progress,NYJ,0
+,,,,,,,,,,,,,,WR,Jamaal Pritchett (44392496) (LOCKED),Jamaal Pritchett,44392496,WR/FLEX,3000,In Progress,NYJ,0
+,,,,,,,,,,,,,,WR,Sterling Shepard (44392498) (LOCKED),Sterling Shepard,44392498,WR/FLEX,3000,In Progress,NYJ,1.65
+,,,,,,,,,,,,,,WR,Tim Patrick (44392500) (LOCKED),Tim Patrick,44392500,WR/FLEX,3000,In Progress,NYJ,0
+,,,,,,,,,,,,,,WR,Omar Cooper Jr. (44392502) (LOCKED),Omar Cooper Jr.,44392502,WR/FLEX,3000,In Progress,NYJ,4
+,,,,,,,,,,,,,,WR,Arian Smith (44392504) (LOCKED),Arian Smith,44392504,WR/FLEX,3000,In Progress,NYJ,0
+,,,,,,,,,,,,,,WR,Tyler Johnson (44392506) (LOCKED),Tyler Johnson,44392506,WR/FLEX,3000,In Progress,NYJ,0
+,,,,,,,,,,,,,,WR,Isaiah Bond (44392508) (LOCKED),Isaiah Bond,44392508,WR/FLEX,3000,In Progress,CLE,0.8
+,,,,,,,,,,,,,,WR,Tylan Wallace (44392510) (LOCKED),Tylan Wallace,44392510,WR/FLEX,3000,In Progress,CLE,0
+,,,,,,,,,,,,,,WR,Malachi Corley (44392512) (LOCKED),Malachi Corley,44392512,WR/FLEX,3000,In Progress,CLE,-0.25
+,,,,,,,,,,,,,,WR,Bub Means (44392514) (LOCKED),Bub Means,44392514,WR/FLEX,3000,In Progress,CLE,0
+,,,,,,,,,,,,,,WR,Jimmy Horn Jr. (44392516) (LOCKED),Jimmy Horn Jr.,44392516,WR/FLEX,3000,In Progress,CLE,-1
+,,,,,,,,,,,,,,WR,James Proche II (44448272) (LOCKED),James Proche II,44448272,WR/FLEX,3000,In Progress,CLE,0
+,,,,,,,,,,,,,,WR,Ben Skowronek (44392470) (LOCKED),Ben Skowronek,44392470,WR/FLEX,3000,In Progress,PIT,3.05
+,,,,,,,,,,,,,,WR,Kaden Wetjen (44392472) (LOCKED),Kaden Wetjen,44392472,WR/FLEX,3000,In Progress,PIT,0
+,,,,,,,,,,,,,,WR,Cole Burgess (44392474) (LOCKED),Cole Burgess,44392474,WR/FLEX,3000,In Progress,PIT,0
+,,,,,,,,,,,,,,WR,Brandon Johnson (44392476) (LOCKED),Brandon Johnson,44392476,WR/FLEX,3000,In Progress,PIT,0
+,,,,,,,,,,,,,,WR,Isaiah Hodgins (44392478) (LOCKED),Isaiah Hodgins,44392478,WR/FLEX,3000,In Progress,PIT,0
+,,,,,,,,,,,,,,WR,Brandon Smith (44392480) (LOCKED),Brandon Smith,44392480,WR/FLEX,3000,In Progress,PIT,0
+,,,,,,,,,,,,,,WR,Ashton Dulin (44392482) (LOCKED),Ashton Dulin,44392482,WR/FLEX,3000,In Progress,IND,2.95
+,,,,,,,,,,,,,,WR,Anthony Gould (44392484) (LOCKED),Anthony Gould,44392484,WR/FLEX,3000,In Progress,IND,0
+,,,,,,,,,,,,,,WR,Nick Westbrook-Ikhine (44392486) (LOCKED),Nick Westbrook-Ikhine,44392486,WR/FLEX,3000,In Progress,IND,0
+,,,,,,,,,,,,,,WR,Alec Pierce (44392488) (LOCKED),Alec Pierce,44392488,WR/FLEX,3000,In Progress,IND,6.1
+,,,,,,,,,,,,,,WR,D.J. Montgomery (44392490) (LOCKED),D.J. Montgomery,44392490,WR/FLEX,3000,In Progress,IND,0
+,,,,,,,,,,,,,,WR,Eli Pancol (44392492) (LOCKED),Eli Pancol,44392492,WR/FLEX,3000,In Progress,IND,0
+,,,,,,,,,,,,,,WR,Quez Watkins (44448278) (LOCKED),Quez Watkins,44448278,WR/FLEX,3000,In Progress,IND,0
+,,,,,,,,,,,,,,WR,Elic Ayomanor (44392448) (LOCKED),Elic Ayomanor,44392448,WR/FLEX,3000,In Progress,TEN,5.58
+,,,,,,,,,,,,,,WR,Chimere Dike (44392450) (LOCKED),Chimere Dike,44392450,WR/FLEX,3000,In Progress,TEN,0.88
+,,,,,,,,,,,,,,WR,Xavier Restrepo (44392452) (LOCKED),Xavier Restrepo,44392452,WR/FLEX,3000,In Progress,TEN,0
+,,,,,,,,,,,,,,WR,K.J. Osborn (44392454) (LOCKED),K.J. Osborn,44392454,WR/FLEX,3000,In Progress,TEN,0
+,,,,,,,,,,,,,,WR,Tyren Montgomery (44392456) (LOCKED),Tyren Montgomery,44392456,WR/FLEX,3000,In Progress,TEN,0
+,,,,,,,,,,,,,,WR,Jared Wayne (44392458) (LOCKED),Jared Wayne,44392458,WR/FLEX,3000,In Progress,HOU,2.62
+,,,,,,,,,,,,,,WR,Jayden Higgins (44392460) (LOCKED),Jayden Higgins,44392460,WR/FLEX,3000,In Progress,HOU,0
+,,,,,,,,,,,,,,WR,Lewis Bond (44392462) (LOCKED),Lewis Bond,44392462,WR/FLEX,3000,In Progress,HOU,0
+,,,,,,,,,,,,,,WR,Daniel Sobkowicz (44392464) (LOCKED),Daniel Sobkowicz,44392464,WR/FLEX,3000,In Progress,HOU,0
+,,,,,,,,,,,,,,WR,Josh Kelly (44392466) (LOCKED),Josh Kelly,44392466,WR/FLEX,3000,In Progress,HOU,0
+,,,,,,,,,,,,,,WR,Treyvhon Saunders (44392468) (LOCKED),Treyvhon Saunders,44392468,WR/FLEX,3000,In Progress,HOU,0
+,,,,,,,,,,,,,,WR,Jaylin Lane (44392426) (LOCKED),Jaylin Lane,44392426,WR/FLEX,3000,In Progress,WAS,1.12
+,,,,,,,,,,,,,,WR,Luke McCaffrey (44392428) (LOCKED),Luke McCaffrey,44392428,WR/FLEX,3000,In Progress,WAS,0
+,,,,,,,,,,,,,,WR,Jaden Bradley (44392430) (LOCKED),Jaden Bradley,44392430,WR/FLEX,3000,In Progress,WAS,0
+,,,,,,,,,,,,,,WR,River Cracraft (44392432) (LOCKED),River Cracraft,44392432,WR/FLEX,3000,In Progress,WAS,0
+,,,,,,,,,,,,,,WR,Van Jefferson (44392434) (LOCKED),Van Jefferson,44392434,WR/FLEX,3000,In Progress,WAS,0
+,,,,,,,,,,,,,,WR,Braxton Berrios (44392436) (LOCKED),Braxton Berrios,44392436,WR/FLEX,3000,In Progress,NYG,0
+,,,,,,,,,,,,,,WR,Charlie Jones (44392438) (LOCKED),Charlie Jones,44392438,WR/FLEX,3000,In Progress,NYG,0
+,,,,,,,,,,,,,,WR,Calvin Austin III (44392440) (LOCKED),Calvin Austin III,44392440,WR/FLEX,3000,In Progress,NYG,0
+,,,,,,,,,,,,,,WR,Gunner Olszewski (44392442) (LOCKED),Gunner Olszewski,44392442,WR/FLEX,3000,In Progress,NYG,0
+,,,,,,,,,,,,,,WR,Jalin Hyatt (44392444) (LOCKED),Jalin Hyatt,44392444,WR/FLEX,3000,In Progress,NYG,0
+,,,,,,,,,,,,,,WR,Dalen Cambre (44392446) (LOCKED),Dalen Cambre,44392446,WR/FLEX,3000,In Progress,NYG,0
+,,,,,,,,,,,,,,WR,Dontae Fleming (44448268) (LOCKED),Dontae Fleming,44448268,WR/FLEX,3000,In Progress,NYG,0
+,,,,,,,,,,,,,,WR,Nick DeGennaro (44448274) (LOCKED),Nick DeGennaro,44448274,WR/FLEX,3000,In Progress,WAS,0
+,,,,,,,,,,,,,,WR,Brenen Thompson (44392410),Brenen Thompson,44392410,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,LAC,1.15
+,,,,,,,,,,,,,,WR,KeAndre Lambert-Smith (44392412),KeAndre Lambert-Smith,44392412,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,WR,Gary Jennings (44392414),Gary Jennings,44392414,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,WR,Theo Wease Jr. (44392416),Theo Wease Jr.,44392416,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,WR,Kolbe Katsis (44392418),Kolbe Katsis,44392418,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,WR,Lil'Jordan Humphrey (44392420),Lil'Jordan Humphrey,44392420,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,WR,Michael Bandy (44392422),Michael Bandy,44392422,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,WR,Dane Key (44392424),Dane Key,44392424,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,WR,Cameron Ross (44448266),Cameron Ross,44448266,WR/FLEX,3000,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,WR,Jalen Brooks (44392388),Jalen Brooks,44392388,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,WR,Simi Fehoko (44392390),Simi Fehoko,44392390,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,WR,Devin Duvernay (44392392),Devin Duvernay,44392392,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,WR,Reggie Virgil (44392394),Reggie Virgil,44392394,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,WR,Harrison Wallace III (44392396),Harrison Wallace III,44392396,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,WR,Tom Kennedy (44392398),Tom Kennedy,44392398,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,WR,Tay Martin (44392400),Tay Martin,44392400,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,WR,Kendrick Law (44392402),Kendrick Law,44392402,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,WR,Lucky Jackson (44392404),Lucky Jackson,44392404,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,WR,Lawrence Keys III (44392406),Lawrence Keys III,44392406,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,WR,Dominic Lovett (44392408),Dominic Lovett,44392408,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,DST,Lions  (44392857),Lions ,44392857,DST,3000,DET@ARI 10/11/2026 04:25PM ET,DET,4.25
+,,,,,,,,,,,,,,WR,Ihmir Smith-Marsette (44448270),Ihmir Smith-Marsette,44448270,WR/FLEX,3000,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,WR,Jayden Reed (44392334) (LOCKED),Jayden Reed,44392334,WR/FLEX,3000,In Progress,GB,3.2
+,,,,,,,,,,,,,,WR,Jahdae Walker (44392338) (LOCKED),Jahdae Walker,44392338,WR/FLEX,3000,In Progress,CHI,1.78
+,,,,,,,,,,,,,,WR,Bo Melton (44392370) (LOCKED),Bo Melton,44392370,WR/FLEX,3000,In Progress,GB,0.5
+,,,,,,,,,,,,,,WR,J. Michael Sturdivant (44392372) (LOCKED),J. Michael Sturdivant,44392372,WR/FLEX,3000,In Progress,GB,1.73
+,,,,,,,,,,,,,,WR,Savion Williams (44392374) (LOCKED),Savion Williams,44392374,WR/FLEX,3000,In Progress,GB,0
+,,,,,,,,,,,,,,WR,Isaiah Neyor (44392376) (LOCKED),Isaiah Neyor,44392376,WR/FLEX,3000,In Progress,GB,0
+,,,,,,,,,,,,,,WR,Coleman Owen (44392378) (LOCKED),Coleman Owen,44392378,WR/FLEX,3000,In Progress,GB,0
+,,,,,,,,,,,,,,WR,Quincy Skinner Jr. (44392380) (LOCKED),Quincy Skinner Jr.,44392380,WR/FLEX,3000,In Progress,GB,0
+,,,,,,,,,,,,,,WR,Zavion Thomas (44392382) (LOCKED),Zavion Thomas,44392382,WR/FLEX,3000,In Progress,CHI,0.28
+,,,,,,,,,,,,,,WR,Kaden Davis (44392384) (LOCKED),Kaden Davis,44392384,WR/FLEX,3000,In Progress,CHI,0
+,,,,,,,,,,,,,,WR,JP Richardson (44392386) (LOCKED),JP Richardson,44392386,WR/FLEX,3000,In Progress,CHI,0
+,,,,,,,,,,,,,,WR,Scotty Miller (44448280) (LOCKED),Scotty Miller,44448280,WR/FLEX,3000,In Progress,CHI,0
+,,,,,,,,,,,,,,WR,Jordan Watkins (44392336),Jordan Watkins,44392336,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,4
+,,,,,,,,,,,,,,WR,Tory Horton (44392340),Tory Horton,44392340,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SEA,5.13
+,,,,,,,,,,,,,,WR,Montorie Foster Jr. (44392342),Montorie Foster Jr.,44392342,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,WR,Irvin Charles (44392344),Irvin Charles,44392344,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,WR,Jake Bobo (44392346),Jake Bobo,44392346,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,WR,Emmanuel Henderson Jr. (44392348),Emmanuel Henderson Jr.,44392348,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,WR,Ricky White III (44392350),Ricky White III,44392350,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,WR,Malick Meiga (44392352),Malick Meiga,44392352,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,WR,Malik Turner (44392354),Malik Turner,44392354,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Demarcus Robinson (44392356),Demarcus Robinson,44392356,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,9.7
+,,,,,,,,,,,,,,WR,De'Zhaun Stribling (44392358),De'Zhaun Stribling,44392358,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Ricky Pearsall (44392360),Ricky Pearsall,44392360,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Wesley Grimes (44392362),Wesley Grimes,44392362,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Dante Pettis (44392364),Dante Pettis,44392364,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Will Pauling (44392366),Will Pauling,44392366,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Brandon Aiyuk (44392368),Brandon Aiyuk,44392368,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,WR,Jacob Cowing (44392586),Jacob Cowing,44392586,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0.05
+,,,,,,,,,,,,,,WR,Xavier Smith (44448282),Xavier Smith,44448282,WR/FLEX,3000,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,TE,Darnell Washington (44392632) (LOCKED),Darnell Washington,44392632,TE/FLEX,2900,In Progress,PIT,6.72
+,,,,,,,,,,,,,,DST,Commanders  (44392860) (LOCKED),Commanders ,44392860,DST,2900,In Progress,WAS,4.25
+,,,,,,,,,,,,,,DST,Bears  (44392859) (LOCKED),Bears ,44392859,DST,2900,In Progress,CHI,8
+,,,,,,,,,,,,,,DST,Browns  (44392861) (LOCKED),Browns ,44392861,DST,2800,In Progress,CLE,5.25
+,,,,,,,,,,,,,,TE,Gunnar Helm (44392634) (LOCKED),Gunnar Helm,44392634,TE/FLEX,2800,In Progress,TEN,4.25
+,,,,,,,,,,,,,,TE,Evan Engram (44392636),Evan Engram,44392636,TE/FLEX,2800,DEN@LAC 10/11/2026 04:05PM ET,DEN,4.65
+,,,,,,,,,,,,,,DST,Seahawks  (44392862),Seahawks ,44392862,DST,2800,SF@SEA 10/11/2026 04:25PM ET,SEA,8.75
+,,,,,,,,,,,,,,TE,Eli Raridon (44392638) (LOCKED),Eli Raridon,44392638,TE/FLEX,2700,In Progress,NE,4.47
+,,,,,,,,,,,,,,DST,Jets  (44392864) (LOCKED),Jets ,44392864,DST,2700,In Progress,NYJ,5.25
+,,,,,,,,,,,,,,TE,Elijah Higgins (44392642),Elijah Higgins,44392642,TE/FLEX,2700,DET@ARI 10/11/2026 04:25PM ET,ARI,3.72
+,,,,,,,,,,,,,,TE,Jonnu Smith (44392640) (LOCKED),Jonnu Smith,44392640,TE/FLEX,2700,In Progress,GB,3.38
+,,,,,,,,,,,,,,DST,Packers  (44392863) (LOCKED),Packers ,44392863,DST,2700,In Progress,GB,3
+,,,,,,,,,,,,,,TE,Drew Sample (44392648) (LOCKED),Drew Sample,44392648,TE/FLEX,2600,In Progress,CIN,1.48
+,,,,,,,,,,,,,,DST,Saints  (44392865) (LOCKED),Saints ,44392865,DST,2600,In Progress,NO,2
+,,,,,,,,,,,,,,TE,Theo Johnson (44392646) (LOCKED),Theo Johnson,44392646,TE/FLEX,2600,In Progress,NYG,2.5
+,,,,,,,,,,,,,,DST,Giants  (44392866) (LOCKED),Giants ,44392866,DST,2600,In Progress,NYG,7.25
+,,,,,,,,,,,,,,TE,Cole Kmet (44392644) (LOCKED),Cole Kmet,44392644,TE/FLEX,2600,In Progress,CHI,3.7
+,,,,,,,,,,,,,,TE,Will Kacmarek (44392834) (LOCKED),Will Kacmarek,44392834,TE/FLEX,2500,In Progress,MIA,0.98
+,,,,,,,,,,,,,,TE,Seydou Traore (44392836) (LOCKED),Seydou Traore,44392836,TE/FLEX,2500,In Progress,MIA,0
+,,,,,,,,,,,,,,TE,Justin Joly (44392838) (LOCKED),Justin Joly,44392838,TE/FLEX,2500,In Progress,MIA,0
+,,,,,,,,,,,,,,TE,Cole Turner (44392840) (LOCKED),Cole Turner,44392840,TE/FLEX,2500,In Progress,MIA,0
+,,,,,,,,,,,,,,TE,Tre Watson (44392842) (LOCKED),Tre Watson,44392842,TE/FLEX,2500,In Progress,MIA,0
+,,,,,,,,,,,,,,TE,Erick All Jr. (44392844) (LOCKED),Erick All Jr.,44392844,TE/FLEX,2500,In Progress,CIN,0.62
+,,,,,,,,,,,,,,TE,Tanner Hudson (44392846) (LOCKED),Tanner Hudson,44392846,TE/FLEX,2500,In Progress,CIN,1.97
+,,,,,,,,,,,,,,TE,Jack Endries (44392848) (LOCKED),Jack Endries,44392848,TE/FLEX,2500,In Progress,CIN,0
+,,,,,,,,,,,,,,TE,William Wagner (44392850) (LOCKED),William Wagner,44392850,TE/FLEX,2500,In Progress,CIN,0
+,,,,,,,,,,,,,,TE,Cameron Latu (44392818) (LOCKED),Cameron Latu,44392818,TE/FLEX,2500,In Progress,NE,0
+,,,,,,,,,,,,,,TE,Tanner Arkin (44392820) (LOCKED),Tanner Arkin,44392820,TE/FLEX,2500,In Progress,NE,0
+,,,,,,,,,,,,,,TE,Julian Hill (44392822) (LOCKED),Julian Hill,44392822,TE/FLEX,2500,In Progress,NE,0
+,,,,,,,,,,,,,,TE,Tanner Conner (44392824) (LOCKED),Tanner Conner,44392824,TE/FLEX,2500,In Progress,NE,0
+,,,,,,,,,,,,,,TE,Ian Thomas (44392826) (LOCKED),Ian Thomas,44392826,TE/FLEX,2500,In Progress,LV,3.32
+,,,,,,,,,,,,,,TE,Carter Runyon (44392828) (LOCKED),Carter Runyon,44392828,TE/FLEX,2500,In Progress,LV,0
+,,,,,,,,,,,,,,TE,Chris Myarick (44392830) (LOCKED),Chris Myarick,44392830,TE/FLEX,2500,In Progress,LV,0
+,,,,,,,,,,,,,,TE,Patrick Gurd (44392832) (LOCKED),Patrick Gurd,44392832,TE/FLEX,2500,In Progress,LV,0
+,,,,,,,,,,,,,,DST,Raiders  (44392868) (LOCKED),Raiders ,44392868,DST,2500,In Progress,LV,9.5
+,,,,,,,,,,,,,,TE,Oscar Delp (44392796) (LOCKED),Oscar Delp,44392796,TE/FLEX,2500,In Progress,NO,0.6
+,,,,,,,,,,,,,,TE,Treyton Welch (44392798) (LOCKED),Treyton Welch,44392798,TE/FLEX,2500,In Progress,NO,0
+,,,,,,,,,,,,,,TE,Moliki Matavao (44392800) (LOCKED),Moliki Matavao,44392800,TE/FLEX,2500,In Progress,NO,0
+,,,,,,,,,,,,,,TE,Stone Smartt (44392802) (LOCKED),Stone Smartt,44392802,TE/FLEX,2500,In Progress,NO,0
+,,,,,,,,,,,,,,TE,Cal Adomitis (44392804) (LOCKED),Cal Adomitis,44392804,TE/FLEX,2500,In Progress,NO,0
+,,,,,,,,,,,,,,TE,Zach Wood (44392806) (LOCKED),Zach Wood,44392806,TE/FLEX,2500,In Progress,NO,0
+,,,,,,,,,,,,,,TE,Gavin Bartholomew (44392808) (LOCKED),Gavin Bartholomew,44392808,TE/FLEX,2500,In Progress,MIN,0.35
+,,,,,,,,,,,,,,TE,Ben Yurosek (44392810) (LOCKED),Ben Yurosek,44392810,TE/FLEX,2500,In Progress,MIN,0
+,,,,,,,,,,,,,,TE,Josh Oliver (44392812) (LOCKED),Josh Oliver,44392812,TE/FLEX,2500,In Progress,MIN,2.53
+,,,,,,,,,,,,,,TE,Andrew DePaola (44392814) (LOCKED),Andrew DePaola,44392814,TE/FLEX,2500,In Progress,MIN,0
+,,,,,,,,,,,,,,TE,Cam Grandy (44392816) (LOCKED),Cam Grandy,44392816,TE/FLEX,2500,In Progress,MIN,0
+,,,,,,,,,,,,,,TE,Mason Taylor (44392780) (LOCKED),Mason Taylor,44392780,TE/FLEX,2500,In Progress,NYJ,0.9
+,,,,,,,,,,,,,,TE,Jeremy Ruckert (44392782) (LOCKED),Jeremy Ruckert,44392782,TE/FLEX,2500,In Progress,NYJ,4.7
+,,,,,,,,,,,,,,TE,Jelani Woods (44392784) (LOCKED),Jelani Woods,44392784,TE/FLEX,2500,In Progress,NYJ,1.28
+,,,,,,,,,,,,,,TE,Cody Hardy (44392786) (LOCKED),Cody Hardy,44392786,TE/FLEX,2500,In Progress,NYJ,0
+,,,,,,,,,,,,,,TE,Blake Whiteheart (44392788) (LOCKED),Blake Whiteheart,44392788,TE/FLEX,2500,In Progress,CLE,2.78
+,,,,,,,,,,,,,,TE,Carsen Ryan (44392790) (LOCKED),Carsen Ryan,44392790,TE/FLEX,2500,In Progress,CLE,0
+,,,,,,,,,,,,,,TE,Joe Royer (44392792) (LOCKED),Joe Royer,44392792,TE/FLEX,2500,In Progress,CLE,0
+,,,,,,,,,,,,,,TE,John FitzPatrick (44392794) (LOCKED),John FitzPatrick,44392794,TE/FLEX,2500,In Progress,CLE,0
+,,,,,,,,,,,,,,TE,Robert Tonyan (44392764) (LOCKED),Robert Tonyan,44392764,TE/FLEX,2500,In Progress,PIT,0.3
+,,,,,,,,,,,,,,TE,Lake McRee (44392766) (LOCKED),Lake McRee,44392766,TE/FLEX,2500,In Progress,PIT,0
+,,,,,,,,,,,,,,TE,Mo Alie-Cox (44392768) (LOCKED),Mo Alie-Cox,44392768,TE/FLEX,2500,In Progress,IND,0.65
+,,,,,,,,,,,,,,TE,Drew Ogletree (44392770) (LOCKED),Drew Ogletree,44392770,TE/FLEX,2500,In Progress,IND,0
+,,,,,,,,,,,,,,TE,Will Mallory (44392772) (LOCKED),Will Mallory,44392772,TE/FLEX,2500,In Progress,IND,0
+,,,,,,,,,,,,,,TE,Carson Towt (44392774) (LOCKED),Carson Towt,44392774,TE/FLEX,2500,In Progress,IND,0
+,,,,,,,,,,,,,,TE,Kenny Fletcher Jr. (44392776) (LOCKED),Kenny Fletcher Jr.,44392776,TE/FLEX,2500,In Progress,IND,0
+,,,,,,,,,,,,,,TE,Pharaoh Brown (44392778) (LOCKED),Pharaoh Brown,44392778,TE/FLEX,2500,In Progress,IND,0
+,,,,,,,,,,,,,,DST,Colts  (44392867) (LOCKED),Colts ,44392867,DST,2500,In Progress,IND,3.25
+,,,,,,,,,,,,,,TE,Foster Moreau (44392652) (LOCKED),Foster Moreau,44392652,TE/FLEX,2500,In Progress,HOU,4.68
+,,,,,,,,,,,,,,TE,Daniel Bellinger (44392746) (LOCKED),Daniel Bellinger,44392746,TE/FLEX,2500,In Progress,TEN,1.62
+,,,,,,,,,,,,,,TE,David Martin-Robinson (44392748) (LOCKED),David Martin-Robinson,44392748,TE/FLEX,2500,In Progress,TEN,0
+,,,,,,,,,,,,,,TE,Kylen Granson (44392750) (LOCKED),Kylen Granson,44392750,TE/FLEX,2500,In Progress,TEN,0
+,,,,,,,,,,,,,,TE,Jaren Kanak (44392752) (LOCKED),Jaren Kanak,44392752,TE/FLEX,2500,In Progress,TEN,0
+,,,,,,,,,,,,,,TE,Joel Wilson (44392754) (LOCKED),Joel Wilson,44392754,TE/FLEX,2500,In Progress,TEN,0
+,,,,,,,,,,,,,,TE,Cade Stover (44392756) (LOCKED),Cade Stover,44392756,TE/FLEX,2500,In Progress,HOU,0.95
+,,,,,,,,,,,,,,TE,Brevin Jordan (44392758) (LOCKED),Brevin Jordan,44392758,TE/FLEX,2500,In Progress,HOU,1.15
+,,,,,,,,,,,,,,TE,Marlin Klein (44392760) (LOCKED),Marlin Klein,44392760,TE/FLEX,2500,In Progress,HOU,0.87
+,,,,,,,,,,,,,,TE,Zaire Mitchell-Paden (44392762) (LOCKED),Zaire Mitchell-Paden,44392762,TE/FLEX,2500,In Progress,HOU,0
+,,,,,,,,,,,,,,TE,Ben Sinnott (44392730) (LOCKED),Ben Sinnott,44392730,TE/FLEX,2500,In Progress,WAS,0.4
+,,,,,,,,,,,,,,TE,John Bates (44392732) (LOCKED),John Bates,44392732,TE/FLEX,2500,In Progress,WAS,1.3
+,,,,,,,,,,,,,,TE,Colson Yankoff (44392734) (LOCKED),Colson Yankoff,44392734,TE/FLEX,2500,In Progress,WAS,0.9
+,,,,,,,,,,,,,,TE,Jack Westover (44392736) (LOCKED),Jack Westover,44392736,TE/FLEX,2500,In Progress,WAS,0
+,,,,,,,,,,,,,,TE,Tyler Ott (44392738) (LOCKED),Tyler Ott,44392738,TE/FLEX,2500,In Progress,WAS,0
+,,,,,,,,,,,,,,TE,Chris Manhertz (44392740) (LOCKED),Chris Manhertz,44392740,TE/FLEX,2500,In Progress,NYG,0
+,,,,,,,,,,,,,,TE,Thomas Fidone II (44392742) (LOCKED),Thomas Fidone II,44392742,TE/FLEX,2500,In Progress,NYG,0
+,,,,,,,,,,,,,,TE,Ben Mann (44392744) (LOCKED),Ben Mann,44392744,TE/FLEX,2500,In Progress,NYG,0
+,,,,,,,,,,,,,,TE,Charlie Kolar (44392650),Charlie Kolar,44392650,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,LAC,2.55
+,,,,,,,,,,,,,,TE,Hayden Rucci (44392710),Hayden Rucci,44392710,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,TE,Patrick Herbert (44392712),Patrick Herbert,44392712,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,TE,David Njoku (44392714),David Njoku,44392714,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,LAC,6.35
+,,,,,,,,,,,,,,TE,Evan Svoboda (44392716),Evan Svoboda,44392716,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,LAC,0
+,,,,,,,,,,,,,,TE,Adam Trautman (44392718),Adam Trautman,44392718,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,DEN,0.75
+,,,,,,,,,,,,,,TE,Nate Adkins (44392720),Nate Adkins,44392720,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,DEN,5.15
+,,,,,,,,,,,,,,TE,Dallen Bentley (44392722),Dallen Bentley,44392722,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,TE,Caleb Lohner (44392724),Caleb Lohner,44392724,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,TE,Lucas Krull (44392726),Lucas Krull,44392726,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,TE,Mitchell Fraboni (44392728),Mitchell Fraboni,44392728,TE/FLEX,2500,DEN@LAC 10/11/2026 04:05PM ET,DEN,0
+,,,,,,,,,,,,,,TE,Hunter Long (44392690),Hunter Long,44392690,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,ARI,0.88
+,,,,,,,,,,,,,,TE,Tip Reiman (44392692),Tip Reiman,44392692,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,TE,Jameson Geers (44392694),Jameson Geers,44392694,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,TE,Shawn Bowman (44392696),Shawn Bowman,44392696,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,TE,Teagan Quitoriano (44392698),Teagan Quitoriano,44392698,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,TE,Brock Wright (44392700),Brock Wright,44392700,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,DET,1.5
+,,,,,,,,,,,,,,TE,Jackson Meeks (44392702),Jackson Meeks,44392702,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,DET,0.45
+,,,,,,,,,,,,,,TE,Tyler Conklin (44392704),Tyler Conklin,44392704,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,TE,Thomas Gordon (44392706),Thomas Gordon,44392706,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,TE,Miles Kitselman (44392708),Miles Kitselman,44392708,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,DET,0
+,,,,,,,,,,,,,,TE,Kenny Yeboah (44448284),Kenny Yeboah,44448284,TE/FLEX,2500,DET@ARI 10/11/2026 04:25PM ET,ARI,0
+,,,,,,,,,,,,,,TE,Mark Redman (44392670) (LOCKED),Mark Redman,44392670,TE/FLEX,2500,In Progress,GB,1.22
+,,,,,,,,,,,,,,TE,Josh Whyle (44392672) (LOCKED),Josh Whyle,44392672,TE/FLEX,2500,In Progress,GB,0
+,,,,,,,,,,,,,,TE,Luke Musgrave (44392674) (LOCKED),Luke Musgrave,44392674,TE/FLEX,2500,In Progress,GB,0
+,,,,,,,,,,,,,,TE,Thomas Yassmin (44392676) (LOCKED),Thomas Yassmin,44392676,TE/FLEX,2500,In Progress,GB,0
+,,,,,,,,,,,,,,TE,Drake Dabney (44392678) (LOCKED),Drake Dabney,44392678,TE/FLEX,2500,In Progress,GB,0
+,,,,,,,,,,,,,,TE,Sam Roush (44392680) (LOCKED),Sam Roush,44392680,TE/FLEX,2500,In Progress,CHI,1.58
+,,,,,,,,,,,,,,TE,Nikola Kalinic (44392682) (LOCKED),Nikola Kalinic,44392682,TE/FLEX,2500,In Progress,CHI,0
+,,,,,,,,,,,,,,TE,Hayden Large (44392684) (LOCKED),Hayden Large,44392684,TE/FLEX,2500,In Progress,CHI,0
+,,,,,,,,,,,,,,TE,Stephen Carlson (44392686) (LOCKED),Stephen Carlson,44392686,TE/FLEX,2500,In Progress,CHI,0
+,,,,,,,,,,,,,,TE,Qadir Ismail (44392688) (LOCKED),Qadir Ismail,44392688,TE/FLEX,2500,In Progress,CHI,0
+,,,,,,,,,,,,,,TE,Eric Saubert (44392654),Eric Saubert,44392654,TE/FLEX,2500,SF@SEA 10/11/2026 04:25PM ET,SEA,2.08
+,,,,,,,,,,,,,,TE,Elijah Arroyo (44392656),Elijah Arroyo,44392656,TE/FLEX,2500,SF@SEA 10/11/2026 04:25PM ET,SEA,0.68
+,,,,,,,,,,,,,,TE,Nick Kallerup (44392658),Nick Kallerup,44392658,TE/FLEX,2500,SF@SEA 10/11/2026 04:25PM ET,SEA,0
+,,,,,,,,,,,,,,TE,Luke Farrell (44392660),Luke Farrell,44392660,TE/FLEX,2500,SF@SEA 10/11/2026 04:25PM ET,SF,0.98
+,,,,,,,,,,,,,,TE,Brayden Willis (44392662),Brayden Willis,44392662,TE/FLEX,2500,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,TE,Jake Tonges (44392664),Jake Tonges,44392664,TE/FLEX,2500,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,TE,Jack Stoll (44392666),Jack Stoll,44392666,TE/FLEX,2500,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,TE,Khalil Dinkins (44392668),Khalil Dinkins,44392668,TE/FLEX,2500,SF@SEA 10/11/2026 04:25PM ET,SF,0
+,,,,,,,,,,,,,,DST,49ers  (44392869),49ers ,44392869,DST,2400,SF@SEA 10/11/2026 04:25PM ET,SF,5
+,,,,,,,,,,,,,,DST,Chargers  (44392870),Chargers ,44392870,DST,2300,DEN@LAC 10/11/2026 04:05PM ET,LAC,5.75
+,,,,,,,,,,,,,,DST,Cardinals  (44392871),Cardinals ,44392871,DST,2200,DET@ARI 10/11/2026 04:25PM ET,ARI,4.75
+,,,,,,,,,,,,,,DST,Titans  (44392872) (LOCKED),Titans ,44392872,DST,2100,In Progress,TEN,4
+,,,,,,,,,,,,,,DST,Dolphins  (44392873) (LOCKED),Dolphins ,44392873,DST,2000,In Progress,MIA,1.75
