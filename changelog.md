@@ -4,6 +4,78 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-11: Week 5 Classic slate (32 entries, 11 games) and `run-slate --help`
+
+Branch `claude/wk5-classic-2026-10-11`. A lineup run, not a roadmap session. Inputs, committed under
+`data/inbox/slates/wk5-classic-2026-10-11/input/`:
+
+    salary  4b6787e131a02a8f0607a5bc29d25d4a128fca9c8168318c092d00d8c7dc6940
+    entries 60775f36fc0e0b8d0595169dad4eefe8146f01f62b2e20b1a333b32d217c6e8c
+
+Clock: request 16:07Z, lock 17:00Z (eight 1:00 PM ET games; DEN@LAC 4:05, SF@SEA and DET@ARI 4:25), delivery
+deadline 16:55Z; file delivered 16:17Z.
+
+- `session_probe.py`: every allowlisted host reachable, `CAN_COMPLETE_A_RUN`, 51.8 minutes to lock.
+  `.venv-linux` absent; `setup` ran in the background while the inputs were snapshotted.
+- Run `20261011T160914Z-wk5-classic-2026-10-11` (`--build-priors`): baseline first, then
+  `PRIOR_REVIEW_IDENTITY_BLOCKED` on six people, each a unique team and position row in the captured roster:
+  Scotty/Scott Miller CHI `00-0035298`, Drew/Andrew Ogletree IND `00-0037292`, Jalen Moreno-Cropper NO
+  `00-0038740` (the roster carries both names under one ID), and Week 4's three: Mitch Tinsley `00-0038839`,
+  Audric Estime `00-0039373`, Nick Singleton `00-0040886` (DK `OUT`). Reviewed crosswalk
+  `identity_reviewed_wk5.csv` (`b395e6bd…2f16`), then `priors-freeze` to `data/runs/wk5-priors-frozen` (8 s).
+- Run `20261011T161044Z-wk5-classic-r2` (`--prior-package-dir`, `NFL_DFS_DUMP_SCORES`): EXPORT in 13 s,
+  C1 file `7f2f9ba5…6e323129`, 32 of 32, `FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`, `PRIOR_ONLY / DO_NOT_UPLOAD`.
+  The QB depth package captured itself for all 22 teams (chart 13:56Z) and promoted Tyson Bagent over
+  DK-`OUT` Caleb Williams. QA Tier 1 PASS; Tier 2 legal and too narrow: rung 4 built 5 theses (ARI, SF, GB,
+  CIN, IND) at `person_share` 0.4, so 12 people sat at 12 of 32, 40 distinct players, 5 quarterbacks, mean
+  overlap 2.46, and 5 DST-versus-own-game conflicts (Saints with Justin Jefferson three times, Dolphins with
+  Burrow and Chase). It also rostered Ladd McConkey in 12 rows.
+- Research (one background agent, Yahoo's inactive list at 15:41Z, CBS's tracker, team sites; no prohibited
+  host): every early-game inactive skill player already carried a DK `OUT` or `IR` tag, Devin Singletary
+  included. Ladd McConkey (LAC, `Q`) missed all practice and is reported not expected to play (Schefter).
+  Role notes: Jaylen Warren took 23 touches and 90%+ of snaps in each game Rico Dowdle missed; Braelon Allen
+  had every NYJ running back carry in Week 4; Swift leads CHI with Roschon Johnson rotating; Ollie Gordon
+  leads MIA with an unconfirmed split; Tre' Harris is named LAC's likely top target; Diggs is out and
+  McLaurin active but limited.
+- Rebuilt on the run's own frozen scores (`build_thesis_portfolio.py`). Removed first: the 21 non-starting
+  quarterbacks the dump still carries (Week 4's known gap) and McConkey (operator exclusion, research above).
+  Seven theses (`construction/theses.json`): DET/ARI 6, CHI/GB 4, CIN/MIA 4, NE/LV 4, SF/SEA 4, eight mid-total
+  QBs 5, market-wide 5; max exposure 10, overlap 5, per-thesis QB cap 3, bring-back required. Two first
+  attempts filled 31 of 32 (a 7-row thesis over two QBs capped at 3 each; then the bank too small at
+  multiplier 3); multiplier 6 filled 32 of 32 (`portfolio_thesis_v3.json`, `b18dc2de…794acdc5`): 101 distinct
+  players, top-3 union 15/32, overlap max 5 mean 1.12, 13 quarterbacks, 0 DST conflicts. Exported as
+  `DK_REVIEW_ENTRY_wk5_classic_v3.csv` (`38b284ef…a18502c`) and kept as the fallback.
+- Judgment pass. The four confirmed or partly confirmed role changes the build left at 0 rows were placed by
+  construction, priors untouched (`construction/manual_add_record.py`, which replays byte-identical): Braelon
+  Allen 4, Tre' Harris 4, Ollie Gordon II 3, Antonio Williams 3. The first two versions of the record were
+  wrong: a row-by-row pass pulled D'Andre Swift and Ja'Marr Chase out of rows, and a pass without a placed
+  set let each later placement displace the one before. The shipped rule ranks every (row, outgoing) pair
+  across the portfolio by the outgoing player's prior. Then `swap_inactives.py --mode redeploy` with the four
+  protected: 5 Pareto swaps, prior sum 4126.6 to 4134.3, every washout measure unchanged.
+- Delivered `DK_REVIEW_ENTRY_wk5_classic_v5.csv`, `635cbec8…3692cbf25a`, 32 of 32, 0 bytes changed outside
+  the roster cells. QA Tier 1 PASS (backup pairs checked); Tier 2 max exposure 10/32 (Gibbs, Swift, Emanuel
+  Wilson, Warren, Hunter Henry), top-3 union 15/32, 95 distinct players, overlap max 5 mean 1.15, stacked and
+  bring-back 32/32, DST conflicts 0, 13 quarterbacks. Against v3 the placements cost 6 distinct players and
+  0.03 mean overlap. No rostered player is on a posted inactive list or carries a DK status.
+  `PRIOR_ONLY / DO_NOT_UPLOAD`. Not supplied: official activity file, weather captures (8 outdoor games
+  `UNOBSERVED`), ownership, so the file carries no leverage model.
+- Passed over: Tony Pollard and Tyjae Spears (TEN 15.5 implied, a reported workload cap), MarShawn Lloyd and
+  Kaleb Johnson beyond the build's own 3 rows (no lead back named), Isaiah Williams (one secondary summary),
+  the cheap SF and MIN wide receivers (no source named an heir).
+
+Fixed: `run-slate --help` (and `cowork-run --help`) raised `TypeError: must be real number, not dict`: the
+`--contest-facts-csv` help text carried a bare `5%`, which argparse reads as a format specifier. Escaped in
+`src/nfl_dfs/cli.py`; `tests/test_cli_help.py` renders every subcommand's help (3 failures on the original,
+reproduced before the fix). Found while looking for a thesis-count flag mid-slate.
+
+Found, not changed: the engine's rung-4 Classic build (`classic_thesis_sequential_v1`, 5 theses, share 0.4)
+delivers a file Tier 2 passes and the operator rebuilds every week: Week 4 and Week 5 both went to
+`build_thesis_portfolio.py`. Its DST placement has no own-game check. The score dump still carries backup
+quarterbacks. Each is a candidate roadmap card. Until then `docs/claude/working.md` § Classic judgment pass names
+the rebuild route and its settings, so next week's run goes straight to it.
+
+Verification: SUITE_LINE_PLACEHOLDER
+
 ### 2026-10-11: Session 70 -- `nfl grade-players`: realized player points, the reconciliation and the grade (Part A; back to Pending on O12, split to Session 70b)
 
 Branch `claude/s70-player-grading`, pull request #131. Claimed at `1750325` (PR #130's merge, Session 69b's close-out).

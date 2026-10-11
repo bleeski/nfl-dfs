@@ -1,0 +1,44 @@
+==============================================================
+TIER 1  VALIDITY, COVERAGE AND ENFORCEMENT  (blocking)
+==============================================================
+  lineups: 32
+  export checked: data/inbox/slates/wk5-classic-2026-10-11/DK_REVIEW_ENTRY_wk5_classic_v5.csv
+  validity failures: 0
+    all lineups legal
+  unfilled authorized Entry IDs: 0 []
+  enforcement defects (operator-requested limits): 0
+    no enforced limit exceeded
+
+==============================================================
+TIER 2  PORTFOLIO COHERENCE  (scored, must be shown at handoff)
+==============================================================
+  CONCENTRATION
+    max single-player exposure : 10/32 (31%)  Jahmyr Gibbs
+    top-3 union coverage       : 15/32 (46%)   <- 85% on 2026-09-13 meant a 4-lineup portfolio
+    distinct players           : 95
+    pairwise overlap max/mean  : 5 / 1.15
+  ANTI-CORRELATION  (all should be zero)
+    dst_vs_own_skill    : 0
+    dst_vs_own_qb       : 0
+  STACK INTEGRITY
+    QB + own pass catcher      : 32/32
+    bring-back                 : 32/32   <- suggested floor 70%, was 12/18 on 2026-09-20
+  LEVERAGE
+    no ownership supplied: this portfolio carries NO leverage model.
+    Say so at handoff. Mean-max in a large field is chalk.
+
+  TOP EXPOSURES
+    10/32  31%  Jahmyr Gibbs           RB   DET  $9800
+    10/32  31%  D'Andre Swift          RB   CHI  $6200
+    10/32  31%  Emanuel Wilson         RB   SEA  $5300
+    10/32  31%  Hunter Henry           TE   NE   $3700
+    10/32  31%  Jaylen Warren          RB   PIT  $6700
+     9/32  28%  Ja'Marr Chase          WR   CIN  $8100
+     8/32  25%  DK Metcalf             WR   PIT  $5400
+     7/32  21%  Romeo Doubs            WR   NE   $5000
+     7/32  21%  Amon-Ra St. Brown      WR   DET  $7900
+     6/32  18%  Michael Wilson         WR   ARI  $6200
+     6/32  18%  Drake Maye             QB   NE   $6300
+     6/32  18%  Saints                 DST  NO   $2600
+
+  VERDICT: PASS
