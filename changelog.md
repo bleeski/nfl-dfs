@@ -4,6 +4,51 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-11: Week 5 afternoon Classic slate (25 entries, 3 games)
+
+Branch `claude/wk5-afternoon-2026-10-11`. A lineup run, not a roadmap session. Inputs, committed under
+`data/inbox/slates/wk5-afternoon-2026-10-11/input/`:
+
+    salary  34fbdc8ca069705e86a5e1a28b2c540fcb39f080c8a0c3d3bb40fa77adc2f551
+    entries 5488d2564050ed28816b277451af3446d3318c55b1d1dde38053caf986bd430d
+
+Clock: request 19:04Z, lock 20:05Z (DEN@LAC 4:05; SF@SEA and DET@ARI 4:25 PM ET), delivery deadline 20:00Z;
+file delivered 19:12Z.
+
+- `session_probe.py`: every allowlisted host reachable, `CAN_COMPLETE_A_RUN`. `.venv-linux` absent; `setup`
+  ran in the background while the inputs were snapshotted.
+- Run `20261011T190715Z-wk5-afternoon` (`--build-priors`): no identity block, C1 export 25 of 25 in 21 s,
+  `FILE_VALID=true`, `EVIDENCE_STATE=UNKNOWN`, `PRIOR_ONLY / DO_NOT_UPLOAD`. QB depth captured for all six teams.
+  Rerun `20261011T190808Z-wk5-afternoon-r2` with `NFL_DFS_DUMP_SCORES` for `construction/pool_scores.json`.
+- Research (one background agent; NFL.com inactives page and CBS tracker at 15:05 ET, Chargers.com, NBC Sports
+  Bay Area, Field Level Media; no prohibited host): every rostered-relevant inactive already carried a DK tag.
+  Ladd McConkey (LAC) is active, but Schefter reports him not expected to play; Dante Pettis (SF) is on
+  practice-squad IR; Emanuel Wilson had 24 touches in Week 4 and leads SEA with Charbonnet out and Robert Henry
+  inactive; Tre' Harris led LAC in receiving yards Weeks 2 and 3; Keaton Mitchell led LAC's Week 4 backfield
+  (15 touches); Tyler Allgeier had 10 touches to Love's 15 in Week 4.
+- Built on the run's own scores with `build_thesis_portfolio.py`, the six backup quarterbacks and McConkey
+  (operator exclusion, research above) removed: four theses (`construction/theses.json`: DET/ARI 8, SF/SEA 7,
+  DEN/LAC 6, market 4), max exposure 10, overlap 5, per-thesis QB cap 4. Multiplier 6 filled 24 of 25 without
+  McConkey; multiplier 10 filled 25 (`portfolio_b2.json`). Variant A (with McConkey, `portfolio_a.json`,
+  `DK_REVIEW_ENTRY_wk5_afternoon_vA.csv`) kept as a record.
+- Judgment pass, priors untouched: `construction/manual_add_record.py` (the morning's rule) placed Tre' Harris 7,
+  Keaton Mitchell 5, Tyler Allgeier 5, Kendrick Bourne 4, Jordan Watkins 2. `swap_inactives.py --mode redeploy`
+  with them protected took 1 Pareto swap (prior 3002.8 to 3003.3, top-3 union 19 to 15). Then
+  `construction/contest_swap_record.py` exchanged whole lineups between the $1 single-entry Daily Dollar Entry ID
+  (prior 95.5) and the first Dime Entry ID (135.7); the lineup set is unchanged.
+- Delivered `DK_REVIEW_ENTRY_wk5_afternoon_v2.csv`, `e6303f56…4dda8d`, 25 of 25, 0 bytes changed outside the
+  roster cells. QA Tier 1 PASS (backup pairs checked); Tier 2 max exposure 10/25 (Michael Wilson, Gibbs,
+  Emanuel Wilson, St. Brown, McCaffrey, Broncos DST), top-3 union 15/25, 44 distinct players, overlap max 5
+  mean 2.13, stacked and bring-back 25/25, DST conflicts 0. Six quarterbacks (3 to 5 rows each).
+  `PRIOR_ONLY / DO_NOT_UPLOAD`. Not supplied: official activity file, SF@SEA weather (`UNOBSERVED`), ownership,
+  so the file carries no leverage model.
+- Passed over: Bam Knight beyond the build's own 3 rows (no source names him), Theo Wease Jr. beyond 2,
+  Elijah Higgins (Reiman's status unconfirmed), the cheap SEA and DET running backs behind the leads (no
+  source), Brandin Cooks (no SF usage found).
+- What would have made it better: `run-slate` exported C1 rather than the rung-4 thesis build on a run with no
+  policy, so the thesis build was a hand step again; and the role gate keeps signed-this-week backups (Robert
+  Henry Jr.) out, which was harmless today only because he was inactive.
+
 ### 2026-10-11: Week 5 Classic slate (32 entries, 11 games) and `run-slate --help`
 
 Branch `claude/wk5-classic-2026-10-11`. A lineup run, not a roadmap session. Inputs, committed under

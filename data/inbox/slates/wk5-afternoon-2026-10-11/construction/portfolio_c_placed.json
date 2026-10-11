@@ -1,0 +1,1376 @@
+{
+ "lineups": [
+  {
+   "index": 1,
+   "roster": [
+    "44433250",
+    "44433348",
+    "44433464",
+    "44433264",
+    "44433274",
+    "44433352",
+    "44433422",
+    "44433542",
+    "44433466"
+   ],
+   "thesis": "DET_ARI_SHOOTOUT",
+   "salary": 49900,
+   "prior_points": 134.152
+  },
+  {
+   "index": 2,
+   "roster": [
+    "44433247",
+    "44433356",
+    "44433466",
+    "44433274",
+    "44433264",
+    "44433346",
+    "44433384",
+    "44433539",
+    "44433288"
+   ],
+   "thesis": "SF_SEA",
+   "salary": 49500,
+   "prior_points": 135.415
+  },
+  {
+   "index": 3,
+   "roster": [
+    "44433249",
+    "44433384",
+    "44433360",
+    "44433470",
+    "44433264",
+    "44433274",
+    "44433344",
+    "44433540",
+    "44433464"
+   ],
+   "thesis": "DEN_LAC",
+   "salary": 49500,
+   "prior_points": 135.567
+  },
+  {
+   "index": 4,
+   "roster": [
+    "44433250",
+    "44433348",
+    "44433264",
+    "44433274",
+    "44433356",
+    "44433352",
+    "44433472",
+    "44433538",
+    "44433278"
+   ],
+   "thesis": "MARKET_ALL",
+   "salary": 49700,
+   "prior_points": 133.339
+  },
+  {
+   "index": 5,
+   "roster": [
+    "44433246",
+    "44433506",
+    "44433344",
+    "44433348",
+    "44433264",
+    "44433274",
+    "44433388",
+    "44433538",
+    "44433356"
+   ],
+   "thesis": "DET_ARI_SHOOTOUT",
+   "salary": 50000,
+   "prior_points": 135.67
+  },
+  {
+   "index": 6,
+   "roster": [
+    "44433247",
+    "44433466",
+    "44433274",
+    "44433264",
+    "44433344",
+    "44433374",
+    "44433348",
+    "44433542",
+    "44433472"
+   ],
+   "thesis": "SF_SEA",
+   "salary": 49800,
+   "prior_points": 137.602
+  },
+  {
+   "index": 7,
+   "roster": [
+    "44433251",
+    "44433470",
+    "44433452",
+    "44433360",
+    "44433264",
+    "44433266",
+    "44433364",
+    "44433541",
+    "44433464"
+   ],
+   "thesis": "DEN_LAC",
+   "salary": 47500,
+   "prior_points": 124.34
+  },
+  {
+   "index": 8,
+   "roster": [
+    "44433249",
+    "44433454",
+    "44433360",
+    "44433470",
+    "44433264",
+    "44433274",
+    "44433356",
+    "44433539",
+    "44433342"
+   ],
+   "thesis": "MARKET_ALL",
+   "salary": 49200,
+   "prior_points": 131.949
+  },
+  {
+   "index": 9,
+   "roster": [
+    "44433250",
+    "44433348",
+    "44433374",
+    "44433264",
+    "44433288",
+    "44433364",
+    "44433466",
+    "44433541",
+    "44433464"
+   ],
+   "thesis": "DET_ARI_SHOOTOUT",
+   "salary": 47800,
+   "prior_points": 121.808
+  },
+  {
+   "index": 10,
+   "roster": [
+    "44433247",
+    "44433466",
+    "44433274",
+    "44433264",
+    "44433276",
+    "44433348",
+    "44433404",
+    "44433538",
+    "44433360"
+   ],
+   "thesis": "SF_SEA",
+   "salary": 49000,
+   "prior_points": 132.484
+  },
+  {
+   "index": 11,
+   "roster": [
+    "44433251",
+    "44433470",
+    "44433280",
+    "44433274",
+    "44433344",
+    "44433346",
+    "44433342",
+    "44433539",
+    "44433364"
+   ],
+   "thesis": "DEN_LAC",
+   "salary": 49300,
+   "prior_points": 117.573
+  },
+  {
+   "index": 12,
+   "roster": [
+    "44433246",
+    "44433352",
+    "44433468",
+    "44433268",
+    "44433274",
+    "44433348",
+    "44433384",
+    "44433538",
+    "44433344"
+   ],
+   "thesis": "MARKET_ALL",
+   "salary": 49300,
+   "prior_points": 121.542
+  },
+  {
+   "index": 13,
+   "roster": [
+    "44433250",
+    "44433348",
+    "44433468",
+    "44433266",
+    "44433280",
+    "44433342",
+    "44433404",
+    "44433538",
+    "44433466"
+   ],
+   "thesis": "DET_ARI_SHOOTOUT",
+   "salary": 50000,
+   "prior_points": 115.452
+  },
+  {
+   "index": 14,
+   "roster": [
+    "44433247",
+    "44433346",
+    "44433466",
+    "44433278",
+    "44433266",
+    "44433268",
+    "44433388",
+    "44433538",
+    "44433348"
+   ],
+   "thesis": "SF_SEA",
+   "salary": 50000,
+   "prior_points": 118.803
+  },
+  {
+   "index": 15,
+   "roster": [
+    "44433249",
+    "44433384",
+    "44433270",
+    "44433266",
+    "44433360",
+    "44433352",
+    "44433466",
+    "44433539",
+    "44433344"
+   ],
+   "thesis": "DEN_LAC",
+   "salary": 49600,
+   "prior_points": 116.926
+  },
+  {
+   "index": 16,
+   "roster": [
+    "44433247",
+    "44433356",
+    "44433346",
+    "44433370",
+    "44433266",
+    "44433316",
+    "44433464",
+    "44433542",
+    "44433348"
+   ],
+   "thesis": "MARKET_ALL",
+   "salary": 49700,
+   "prior_points": 120.287
+  },
+  {
+   "index": 17,
+   "roster": [
+    "44433250",
+    "44433464",
+    "44433344",
+    "44433268",
+    "44433316",
+    "44433384",
+    "44433342",
+    "44433538",
+    "44433374"
+   ],
+   "thesis": "DET_ARI_SHOOTOUT",
+   "salary": 48800,
+   "prior_points": 112.086
+  },
+  {
+   "index": 18,
+   "roster": [
+    "44433248",
+    "44433370",
+    "44433266",
+    "44433276",
+    "44433346",
+    "44433356",
+    "44433464",
+    "44433538",
+    "44433468"
+   ],
+   "thesis": "SF_SEA",
+   "salary": 49800,
+   "prior_points": 116.208
+  },
+  {
+   "index": 19,
+   "roster": [
+    "44433251",
+    "44433452",
+    "44433364",
+    "44433276",
+    "44433266",
+    "44433342",
+    "44433464",
+    "44433543",
+    "44433346"
+   ],
+   "thesis": "DEN_LAC",
+   "salary": 49800,
+   "prior_points": 113.817
+  },
+  {
+   "index": 20,
+   "roster": [
+    "44433246",
+    "44433468",
+    "44433278",
+    "44433280",
+    "44433360",
+    "44433346",
+    "44433352",
+    "44433538",
+    "44433464"
+   ],
+   "thesis": "DET_ARI_SHOOTOUT",
+   "salary": 48500,
+   "prior_points": 108.143
+  },
+  {
+   "index": 21,
+   "roster": [
+    "44433248",
+    "44433342",
+    "44433388",
+    "44433356",
+    "44433266",
+    "44433288",
+    "44433464",
+    "44433543",
+    "44433278"
+   ],
+   "thesis": "SF_SEA",
+   "salary": 49800,
+   "prior_points": 106.791
+  },
+  {
+   "index": 22,
+   "roster": [
+    "44433251",
+    "44433364",
+    "44433470",
+    "44433384",
+    "44433266",
+    "44433270",
+    "44433342",
+    "44433539",
+    "44433288"
+   ],
+   "thesis": "DEN_LAC",
+   "salary": 46500,
+   "prior_points": 101.883
+  },
+  {
+   "index": 23,
+   "roster": [
+    "44433246",
+    "44433344",
+    "44433268",
+    "44433374",
+    "44433346",
+    "44433352",
+    "44433472",
+    "44433538",
+    "44433278"
+   ],
+   "thesis": "DET_ARI_SHOOTOUT",
+   "salary": 47900,
+   "prior_points": 104.147
+  },
+  {
+   "index": 24,
+   "roster": [
+    "44433248",
+    "44433342",
+    "44433370",
+    "44433266",
+    "44433268",
+    "44433356",
+    "44433466",
+    "44433542",
+    "44433364"
+   ],
+   "thesis": "SF_SEA",
+   "salary": 49800,
+   "prior_points": 111.331
+  },
+  {
+   "index": 25,
+   "roster": [
+    "44433246",
+    "44433468",
+    "44433288",
+    "44433270",
+    "44433344",
+    "44433364",
+    "44433352",
+    "44433541",
+    "44433316"
+   ],
+   "thesis": "DET_ARI_SHOOTOUT",
+   "salary": 46300,
+   "prior_points": 95.526
+  }
+ ],
+ "assignments_by_entry_id": {
+  "5292371376": [
+   "44433250",
+   "44433348",
+   "44433464",
+   "44433264",
+   "44433274",
+   "44433352",
+   "44433422",
+   "44433542",
+   "44433466"
+  ],
+  "5292379906": [
+   "44433247",
+   "44433356",
+   "44433466",
+   "44433274",
+   "44433264",
+   "44433346",
+   "44433384",
+   "44433539",
+   "44433288"
+  ],
+  "5292357006": [
+   "44433249",
+   "44433384",
+   "44433360",
+   "44433470",
+   "44433264",
+   "44433274",
+   "44433344",
+   "44433540",
+   "44433464"
+  ],
+  "5292364591": [
+   "44433250",
+   "44433348",
+   "44433264",
+   "44433274",
+   "44433356",
+   "44433352",
+   "44433472",
+   "44433538",
+   "44433278"
+  ],
+  "5292356750": [
+   "44433246",
+   "44433506",
+   "44433344",
+   "44433348",
+   "44433264",
+   "44433274",
+   "44433388",
+   "44433538",
+   "44433356"
+  ],
+  "5292379440": [
+   "44433247",
+   "44433466",
+   "44433274",
+   "44433264",
+   "44433344",
+   "44433374",
+   "44433348",
+   "44433542",
+   "44433472"
+  ],
+  "5292379441": [
+   "44433251",
+   "44433470",
+   "44433452",
+   "44433360",
+   "44433264",
+   "44433266",
+   "44433364",
+   "44433541",
+   "44433464"
+  ],
+  "5292379442": [
+   "44433249",
+   "44433454",
+   "44433360",
+   "44433470",
+   "44433264",
+   "44433274",
+   "44433356",
+   "44433539",
+   "44433342"
+  ],
+  "5292379443": [
+   "44433250",
+   "44433348",
+   "44433374",
+   "44433264",
+   "44433288",
+   "44433364",
+   "44433466",
+   "44433541",
+   "44433464"
+  ],
+  "5292379444": [
+   "44433247",
+   "44433466",
+   "44433274",
+   "44433264",
+   "44433276",
+   "44433348",
+   "44433404",
+   "44433538",
+   "44433360"
+  ],
+  "5292379445": [
+   "44433251",
+   "44433470",
+   "44433280",
+   "44433274",
+   "44433344",
+   "44433346",
+   "44433342",
+   "44433539",
+   "44433364"
+  ],
+  "5292379446": [
+   "44433246",
+   "44433352",
+   "44433468",
+   "44433268",
+   "44433274",
+   "44433348",
+   "44433384",
+   "44433538",
+   "44433344"
+  ],
+  "5292379447": [
+   "44433250",
+   "44433348",
+   "44433468",
+   "44433266",
+   "44433280",
+   "44433342",
+   "44433404",
+   "44433538",
+   "44433466"
+  ],
+  "5292379448": [
+   "44433247",
+   "44433346",
+   "44433466",
+   "44433278",
+   "44433266",
+   "44433268",
+   "44433388",
+   "44433538",
+   "44433348"
+  ],
+  "5292379449": [
+   "44433249",
+   "44433384",
+   "44433270",
+   "44433266",
+   "44433360",
+   "44433352",
+   "44433466",
+   "44433539",
+   "44433344"
+  ],
+  "5292379450": [
+   "44433247",
+   "44433356",
+   "44433346",
+   "44433370",
+   "44433266",
+   "44433316",
+   "44433464",
+   "44433542",
+   "44433348"
+  ],
+  "5292379451": [
+   "44433250",
+   "44433464",
+   "44433344",
+   "44433268",
+   "44433316",
+   "44433384",
+   "44433342",
+   "44433538",
+   "44433374"
+  ],
+  "5292379452": [
+   "44433248",
+   "44433370",
+   "44433266",
+   "44433276",
+   "44433346",
+   "44433356",
+   "44433464",
+   "44433538",
+   "44433468"
+  ],
+  "5292379453": [
+   "44433251",
+   "44433452",
+   "44433364",
+   "44433276",
+   "44433266",
+   "44433342",
+   "44433464",
+   "44433543",
+   "44433346"
+  ],
+  "5292379454": [
+   "44433246",
+   "44433468",
+   "44433278",
+   "44433280",
+   "44433360",
+   "44433346",
+   "44433352",
+   "44433538",
+   "44433464"
+  ],
+  "5292379455": [
+   "44433248",
+   "44433342",
+   "44433388",
+   "44433356",
+   "44433266",
+   "44433288",
+   "44433464",
+   "44433543",
+   "44433278"
+  ],
+  "5292379456": [
+   "44433251",
+   "44433364",
+   "44433470",
+   "44433384",
+   "44433266",
+   "44433270",
+   "44433342",
+   "44433539",
+   "44433288"
+  ],
+  "5292379457": [
+   "44433246",
+   "44433344",
+   "44433268",
+   "44433374",
+   "44433346",
+   "44433352",
+   "44433472",
+   "44433538",
+   "44433278"
+  ],
+  "5292379458": [
+   "44433248",
+   "44433342",
+   "44433370",
+   "44433266",
+   "44433268",
+   "44433356",
+   "44433466",
+   "44433542",
+   "44433364"
+  ],
+  "5292364781": [
+   "44433246",
+   "44433468",
+   "44433288",
+   "44433270",
+   "44433344",
+   "44433364",
+   "44433352",
+   "44433541",
+   "44433316"
+  ]
+ },
+ "unfilled_entry_ids": [],
+ "operator_excluded_entry_ids": {},
+ "construction": {
+  "theses": {
+   "DET_ARI_SHOOTOUT": 8,
+   "SF_SEA": 7,
+   "DEN_LAC": 6,
+   "MARKET_ALL": 4
+  },
+  "faded_in_priors_wrong": [],
+  "max_exposure": 10,
+  "max_overlap": 5,
+  "per_thesis_qb_cap": 4,
+  "seeds": [
+   1011,
+   5505
+  ],
+  "candidates_generated": {
+   "DET_ARI_SHOOTOUT": 148,
+   "SF_SEA": 132,
+   "DEN_LAC": 116,
+   "MARKET_ALL": 80
+  },
+  "pareto_redeploy": {
+   "rule": "pareto_redeploy_v2",
+   "state": "COMPLETED",
+   "does_not_establish": [
+    "THAT_A_PRIOR_GAIN_IS_EXPECTED_VALUE_OR_A_WIN_PROBABILITY",
+    "THAT_THE_FOUR_WASHOUT_PROXIES_MEASURE_LEVERAGE_OR_FIELD_DUPLICATION",
+    "THAT_A_BLANK_DRAFTKINGS_STATUS_IS_OFFICIAL_ACTIVITY_EVIDENCE",
+    "THAT_ANY_REDEPLOYED_PERSON_IS_PLAYING_OR_HAS_THE_ROLE_HIS_PRIOR_ASSUMES",
+    "THAT_A_GAME_THE_CLOCK_SAYS_IS_OPEN_IS_OPEN_ON_DRAFTKINGS"
+   ],
+   "rows_considered": 25,
+   "gated_people": 77,
+   "locked_people": 0,
+   "passes": 2,
+   "fixed_point": true,
+   "protected": [],
+   "before": {
+    "rows": 25,
+    "prior_sum": 3018.942,
+    "max_exposure": 10,
+    "max_exposure_person": "Michael Wilson",
+    "top3_union": 19,
+    "mean_overlap": 2.18,
+    "pair_overlap_sum": 654,
+    "distinct_people": 44
+   },
+   "after": {
+    "rows": 25,
+    "prior_sum": 3045.322,
+    "max_exposure": 10,
+    "max_exposure_person": "Michael Wilson",
+    "top3_union": 19,
+    "mean_overlap": 2.156667,
+    "pair_overlap_sum": 647,
+    "distinct_people": 45
+   },
+   "accepted_total": 10,
+   "accepted": [
+    {
+     "entry_id": "5292379906",
+     "out": "44433352",
+     "out_name": "Jameson Williams",
+     "in": "44433346",
+     "in_name": "Mike Evans",
+     "prior_gain": 3.089,
+     "salary_delta": 600,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292364591",
+     "out": "44433370",
+     "out_name": "Cooper Kupp",
+     "in": "44433276",
+     "in_name": "RJ Harvey",
+     "prior_gain": 4.26,
+     "salary_delta": 1400,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292356750",
+     "out": "44433454",
+     "out_name": "Lil'Jordan Humphrey",
+     "in": "44433388",
+     "in_name": "Tory Horton",
+     "prior_gain": 1.951,
+     "salary_delta": 0,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292379444",
+     "out": "44433384",
+     "out_name": "Troy Franklin",
+     "in": "44433276",
+     "in_name": "RJ Harvey",
+     "prior_gain": 2.477,
+     "salary_delta": 2000,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292379445",
+     "out": "44433352",
+     "out_name": "Jameson Williams",
+     "in": "44433346",
+     "in_name": "Mike Evans",
+     "prior_gain": 3.089,
+     "salary_delta": 600,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292379449",
+     "out": "44433356",
+     "out_name": "Deebo Samuel Sr.",
+     "in": "44433344",
+     "in_name": "Amon-Ra St. Brown",
+     "prior_gain": 2.828,
+     "salary_delta": 2400,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292379455",
+     "out": "44433454",
+     "out_name": "Lil'Jordan Humphrey",
+     "in": "44433452",
+     "in_name": "Theo Wease Jr.",
+     "prior_gain": 2.789,
+     "salary_delta": 0,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292379458",
+     "out": "44433316",
+     "out_name": "Bam Knight",
+     "in": "44433268",
+     "in_name": "Jeremiyah Love",
+     "prior_gain": 3.823,
+     "salary_delta": 2100,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292379458",
+     "out": "44433376",
+     "out_name": "Isaac TeSlaa",
+     "in": "44433292",
+     "in_name": "Kimani Vidal",
+     "prior_gain": 1.799,
+     "salary_delta": 900,
+     "pass": 1
+    },
+    {
+     "entry_id": "5292364781",
+     "out": "44433276",
+     "out_name": "RJ Harvey",
+     "in": "44433270",
+     "in_name": "Omarion Hampton",
+     "prior_gain": 0.274,
+     "salary_delta": 800,
+     "pass": 1
+    }
+   ],
+   "changed_entry_ids": [
+    "5292379906",
+    "5292364591",
+    "5292356750",
+    "5292379444",
+    "5292379445",
+    "5292379449",
+    "5292379455",
+    "5292379458",
+    "5292364781"
+   ],
+   "refusal_scan": "COMPLETE",
+   "rejected_total": 40,
+   "rejected_by_goal": {
+    "max_exposure": 0,
+    "top3_union": 0,
+    "mean_overlap": 40,
+    "distinct_people": 8
+   },
+   "rejected": [
+    {
+     "entry_id": "5292379457",
+     "out": "44433350",
+     "out_name": "Jaylen Waddle",
+     "in": "44433466",
+     "in_name": "George Kittle",
+     "prior_gain": 6.612,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379456",
+     "out": "44433468",
+     "out_name": "Sam LaPorta",
+     "in": "44433344",
+     "in_name": "Amon-Ra St. Brown",
+     "prior_gain": 6.218,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379457",
+     "out": "44433350",
+     "out_name": "Jaylen Waddle",
+     "in": "44433356",
+     "in_name": "Deebo Samuel Sr.",
+     "prior_gain": 6.074,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379454",
+     "out": "44433360",
+     "out_name": "Courtland Sutton",
+     "in": "44433356",
+     "in_name": "Deebo Samuel Sr.",
+     "prior_gain": 4.038,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292364781",
+     "out": "44433270",
+     "out_name": "Omarion Hampton",
+     "in": "44433466",
+     "in_name": "George Kittle",
+     "prior_gain": 3.946,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379456",
+     "out": "44433468",
+     "out_name": "Sam LaPorta",
+     "in": "44433466",
+     "in_name": "George Kittle",
+     "prior_gain": 3.929,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292364781",
+     "out": "44433270",
+     "out_name": "Omarion Hampton",
+     "in": "44433346",
+     "in_name": "Mike Evans",
+     "prior_gain": 3.851,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379456",
+     "out": "44433468",
+     "out_name": "Sam LaPorta",
+     "in": "44433346",
+     "in_name": "Mike Evans",
+     "prior_gain": 3.833,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379454",
+     "out": "44433346",
+     "out_name": "Mike Evans",
+     "in": "44433342",
+     "in_name": "Jaxon Smith-Njigba",
+     "prior_gain": 3.61,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292364781",
+     "out": "44433270",
+     "out_name": "Omarion Hampton",
+     "in": "44433356",
+     "in_name": "Deebo Samuel Sr.",
+     "prior_gain": 3.408,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379456",
+     "out": "44433468",
+     "out_name": "Sam LaPorta",
+     "in": "44433356",
+     "in_name": "Deebo Samuel Sr.",
+     "prior_gain": 3.39,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379458",
+     "out": "44433292",
+     "out_name": "Kimani Vidal",
+     "in": "44433470",
+     "in_name": "Oronde Gadsden II",
+     "prior_gain": 3.13,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5292379451",
+     "out": "44433472",
+     "out_name": "AJ Barner",
+     "in": "44433360",
+     "in_name": "Courtland Sutton",
+     "prior_gain": 2.984,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379455",
+     "out": "44433452",
+     "out_name": "Theo Wease Jr.",
+     "in": "44433470",
+     "in_name": "Oronde Gadsden II",
+     "prior_gain": 2.869,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379449",
+     "out": "44433352",
+     "out_name": "Jameson Williams",
+     "in": "44433356",
+     "in_name": "Deebo Samuel Sr.",
+     "prior_gain": 2.646,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379457",
+     "out": "44433350",
+     "out_name": "Jaylen Waddle",
+     "in": "44433276",
+     "in_name": "RJ Harvey",
+     "prior_gain": 2.392,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379454",
+     "out": "44433346",
+     "out_name": "Mike Evans",
+     "in": "44433344",
+     "in_name": "Amon-Ra St. Brown",
+     "prior_gain": 2.385,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379451",
+     "out": "44433384",
+     "out_name": "Troy Franklin",
+     "in": "44433360",
+     "in_name": "Courtland Sutton",
+     "prior_gain": 2.121,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379440",
+     "out": "44433376",
+     "out_name": "Isaac TeSlaa",
+     "in": "44433452",
+     "in_name": "Theo Wease Jr.",
+     "prior_gain": 2.061,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5292379440",
+     "out": "44433376",
+     "out_name": "Isaac TeSlaa",
+     "in": "44433374",
+     "in_name": "Kendrick Bourne",
+     "prior_gain": 2.017,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5292379447",
+     "out": "44433454",
+     "out_name": "Lil'Jordan Humphrey",
+     "in": "44433388",
+     "in_name": "Tory Horton",
+     "prior_gain": 1.951,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379458",
+     "out": "44433292",
+     "out_name": "Kimani Vidal",
+     "in": "44433316",
+     "in_name": "Bam Knight",
+     "prior_gain": 1.707,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5292379455",
+     "out": "44433452",
+     "out_name": "Theo Wease Jr.",
+     "in": "44433384",
+     "in_name": "Troy Franklin",
+     "prior_gain": 1.472,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379454",
+     "out": "44433280",
+     "out_name": "J.K. Dobbins",
+     "in": "44433276",
+     "in_name": "RJ Harvey",
+     "prior_gain": 1.471,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379443",
+     "out": "44433270",
+     "out_name": "Omarion Hampton",
+     "in": "44433268",
+     "in_name": "Jeremiyah Love",
+     "prior_gain": 1.046,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379455",
+     "out": "44433270",
+     "out_name": "Omarion Hampton",
+     "in": "44433268",
+     "in_name": "Jeremiyah Love",
+     "prior_gain": 1.046,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292364781",
+     "out": "44433270",
+     "out_name": "Omarion Hampton",
+     "in": "44433268",
+     "in_name": "Jeremiyah Love",
+     "prior_gain": 1.046,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379444",
+     "out": "44433276",
+     "out_name": "RJ Harvey",
+     "in": "44433352",
+     "in_name": "Jameson Williams",
+     "prior_gain": 1.035,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379458",
+     "out": "44433292",
+     "out_name": "Kimani Vidal",
+     "in": "44433472",
+     "in_name": "AJ Barner",
+     "prior_gain": 0.871,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5292379456",
+     "out": "44433468",
+     "out_name": "Sam LaPorta",
+     "in": "44433352",
+     "in_name": "Jameson Williams",
+     "prior_gain": 0.744,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379455",
+     "out": "44433452",
+     "out_name": "Theo Wease Jr.",
+     "in": "44433472",
+     "in_name": "AJ Barner",
+     "prior_gain": 0.609,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379442",
+     "out": "44433356",
+     "out_name": "Deebo Samuel Sr.",
+     "in": "44433466",
+     "in_name": "George Kittle",
+     "prior_gain": 0.538,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292364591",
+     "out": "44433276",
+     "out_name": "RJ Harvey",
+     "in": "44433468",
+     "in_name": "Sam LaPorta",
+     "prior_gain": 0.291,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379444",
+     "out": "44433276",
+     "out_name": "RJ Harvey",
+     "in": "44433468",
+     "in_name": "Sam LaPorta",
+     "prior_gain": 0.291,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379458",
+     "out": "44433292",
+     "out_name": "Kimani Vidal",
+     "in": "44433452",
+     "in_name": "Theo Wease Jr.",
+     "prior_gain": 0.261,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5292379458",
+     "out": "44433292",
+     "out_name": "Kimani Vidal",
+     "in": "44433374",
+     "in_name": "Kendrick Bourne",
+     "prior_gain": 0.218,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5292379458",
+     "out": "44433292",
+     "out_name": "Kimani Vidal",
+     "in": "44433364",
+     "in_name": "Tre' Harris",
+     "prior_gain": 0.15,
+     "hurts": [
+      "mean_overlap",
+      "distinct_people"
+     ]
+    },
+    {
+     "entry_id": "5292379445",
+     "out": "44433346",
+     "out_name": "Mike Evans",
+     "in": "44433466",
+     "in_name": "George Kittle",
+     "prior_gain": 0.096,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379453",
+     "out": "44433346",
+     "out_name": "Mike Evans",
+     "in": "44433466",
+     "in_name": "George Kittle",
+     "prior_gain": 0.096,
+     "hurts": [
+      "mean_overlap"
+     ]
+    },
+    {
+     "entry_id": "5292379457",
+     "out": "44433346",
+     "out_name": "Mike Evans",
+     "in": "44433466",
+     "in_name": "George Kittle",
+     "prior_gain": 0.096,
+     "hurts": [
+      "mean_overlap"
+     ]
+    }
+   ],
+   "row_rejections": {
+    "ILLEGAL": 71,
+    "SHAPE": 0,
+    "CAPS_OR_DISTINCT": 39
+   },
+   "available_at_stop": 0,
+   "stored_limit": null,
+   "left_alone": {
+    "PRIORS_WRONG_SALARY_FLAT": []
+   }
+  },
+  "manual_adds": [
+   "MANUAL_ADD 5292379458: Kimani Vidal (4300, prior 6.59) -> Tre' Harris (4100, prior 6.74), QB Sam Darnold",
+   "MANUAL_ADD 5292364781: Kendrick Bourne (3400, prior 6.80) -> Tre' Harris (4100, prior 6.74), QB Jared Goff",
+   "MANUAL_ADD 5292379441: Jaylen Waddle (6100, prior 8.41) -> Tre' Harris (4100, prior 6.74), QB Justin Herbert",
+   "MANUAL_ADD 5292379445: Courtland Sutton (4600, prior 10.44) -> Tre' Harris (4100, prior 6.74), QB Justin Herbert",
+   "MANUAL_ADD 5292379443: Courtland Sutton (4600, prior 10.44) -> Tre' Harris (4100, prior 6.74), QB Jacoby Brissett",
+   "EXPOSURE Tre' Harris: 7 of target 7",
+   "MANUAL_ADD 5292364781: Tyler Allgeier (5100, prior 7.86) -> Keaton Mitchell (4500, prior 5.47), QB Jared Goff",
+   "MANUAL_ADD 5292379443: Omarion Hampton (6000, prior 11.07) -> Keaton Mitchell (4500, prior 5.47), QB Jacoby Brissett",
+   "MANUAL_ADD 5292379455: Omarion Hampton (6000, prior 11.07) -> Keaton Mitchell (4500, prior 5.47), QB Sam Darnold",
+   "MANUAL_ADD 5292379456: Sam LaPorta (4900, prior 11.09) -> Keaton Mitchell (4500, prior 5.47), QB Justin Herbert",
+   "MANUAL_ADD 5292379906: Sam LaPorta (4900, prior 11.09) -> Keaton Mitchell (4500, prior 5.47), QB Brock Purdy",
+   "EXPOSURE Keaton Mitchell: 5 of target 5",
+   "MANUAL_ADD 5292379448: Cooper Kupp (3800, prior 6.54) -> Tyler Allgeier (5100, prior 7.86), QB Brock Purdy",
+   "MANUAL_ADD 5292379455: Theo Wease Jr. (3000, prior 6.85) -> Tyler Allgeier (5100, prior 7.86), QB Sam Darnold",
+   "MANUAL_ADD 5292379454: Bam Knight (4000, prior 8.29) -> Tyler Allgeier (5100, prior 7.86), QB Jared Goff",
+   "MANUAL_ADD 5292379457: Jaylen Waddle (6100, prior 8.41) -> Tyler Allgeier (5100, prior 7.86), QB Jared Goff",
+   "MANUAL_ADD 5292364591: RJ Harvey (5200, prior 10.80) -> Tyler Allgeier (5100, prior 7.86), QB Jacoby Brissett",
+   "EXPOSURE Tyler Allgeier: 5 of target 5",
+   "MANUAL_ADD 5292379440: Isaac TeSlaa (3400, prior 4.79) -> Kendrick Bourne (3400, prior 6.80), QB Brock Purdy",
+   "MANUAL_ADD 5292379451: AJ Barner (3200, prior 7.46) -> Kendrick Bourne (3400, prior 6.80), QB Jacoby Brissett",
+   "MANUAL_ADD 5292379457: Bam Knight (4000, prior 8.29) -> Kendrick Bourne (3400, prior 6.80), QB Jared Goff",
+   "EXPOSURE Kendrick Bourne: 4 of target 4",
+   "MANUAL_ADD 5292379447: Lil'Jordan Humphrey (3000, prior 4.06) -> Jordan Watkins (3000, prior 1.57), QB Jacoby Brissett",
+   "MANUAL_ADD 5292379444: Tory Horton (3000, prior 6.01) -> Jordan Watkins (3000, prior 1.57), QB Brock Purdy",
+   "EXPOSURE Jordan Watkins: 2 of target 2"
+  ]
+ }
+}

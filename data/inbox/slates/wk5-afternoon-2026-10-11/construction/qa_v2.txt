@@ -1,0 +1,47 @@
+==============================================================
+TIER 1  VALIDITY, COVERAGE AND ENFORCEMENT  (blocking)
+==============================================================
+  lineups: 25
+  export checked: data/inbox/slates/wk5-afternoon-2026-10-11/DK_REVIEW_ENTRY_wk5_afternoon_v2.csv
+  validity failures: 0
+    all lineups legal
+  unfilled authorized Entry IDs: 0 []
+  enforcement defects (operator-requested limits): 0
+    no enforced limit exceeded
+
+==============================================================
+TIER 2  PORTFOLIO COHERENCE  (scored, must be shown at handoff)
+==============================================================
+  CONCENTRATION
+    max single-player exposure : 10/25 (40%)  Michael Wilson
+    top-3 union coverage       : 15/25 (60%)   <- 85% on 2026-09-13 meant a 4-lineup portfolio
+    distinct players           : 44
+    pairwise overlap max/mean  : 5 / 2.13
+  ANTI-CORRELATION  (all should be zero)
+    dst_vs_own_skill    : 0
+    dst_vs_own_qb       : 0
+  STACK INTEGRITY
+    QB + own pass catcher      : 25/25
+    bring-back                 : 25/25   <- suggested floor 70%, was 12/18 on 2026-09-20
+  GAME ENVIRONMENT  (avg implied total of skill slots)
+    portfolio mean             : 24.39
+    weakest lineups            : L22=20.9, L19=21.8, L11=22.9, L7=23.0
+  LEVERAGE
+    no ownership supplied: this portfolio carries NO leverage model.
+    Say so at handoff. Mean-max in a large field is chalk.
+
+  TOP EXPOSURES
+    10/25  40%  Michael Wilson         WR   ARI  $6200
+    10/25  40%  Jahmyr Gibbs           RB   DET  $9800
+    10/25  40%  Emanuel Wilson         RB   SEA  $5300
+    10/25  40%  Amon-Ra St. Brown      WR   DET  $7900
+    10/25  40%  Broncos                DST  DEN  $3200
+    10/25  40%  Christian McCaffrey    RB   SF   $8200
+     9/25  36%  Trey McBride           TE   ARI  $6700
+     9/25  36%  George Kittle          TE   SF   $5200
+     8/25  32%  Deebo Samuel Sr.       WR   SF   $5500
+     8/25  32%  Mike Evans             WR   SF   $6500
+     8/25  32%  Jaxon Smith-Njigba     WR   SEA  $8800
+     7/25  28%  Jameson Williams       WR   DET  $5900
+
+  VERDICT: PASS

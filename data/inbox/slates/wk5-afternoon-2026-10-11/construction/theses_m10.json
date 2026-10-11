@@ -1,0 +1,16 @@
+{
+  "schema": "nfl_dfs_thesis_portfolio_config_v1",
+  "seeds": [1011, 5505],
+  "lineups_per_thesis_multiplier": 10,
+  "global": {"max_exposure": 10, "max_overlap": 5, "per_thesis_qb_cap": 4},
+  "flat_team_total": 23.0,
+  "theses": [
+    {"name": "DET_ARI_SHOOTOUT", "quota": 8, "team_totals": "market",
+     "restrict_qb_teams": ["DET", "ARI"]},
+    {"name": "SF_SEA", "quota": 7, "team_totals": "market",
+     "restrict_qb_teams": ["SF", "SEA"]},
+    {"name": "DEN_LAC", "quota": 6, "team_totals": "market",
+     "restrict_qb_teams": ["DEN", "LAC"]},
+    {"name": "MARKET_ALL", "quota": 4, "team_totals": "market"}
+  ]
+}
