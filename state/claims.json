@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "958ab219-e937-5f80-ac90-98150e4b8a08",
-      "branch": "claude/s70-player-grading",
-      "chunk": "S70",
-      "claimed_at": "2026-10-11T14:33:02Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }
