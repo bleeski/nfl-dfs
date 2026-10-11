@@ -4475,7 +4475,10 @@ once and never overwritten, followed or deleted. The same bytes already there is
 temporary file is written. A new file goes through a temporary file in its folder (flushed, fsynced, re-read) and a hard
 link, which fails rather than replaces when the name appears first; the linked file is re-read too. The folder must
 support hard links: one that does not (exFAT, FAT32, some network shares) is a write failure, never a fallback copy. The
-first file that cannot be written stops the run.
+link is removed again only when the re-read disagrees and the name still holds this run's own file. A temporary file
+that cannot be deleted (on Windows, a scanner can hold a fresh file) is left, its name starting with a dot, and never
+changes a file's state. The first file that cannot be written stops the run. Only the files are checked: an `inbox` or
+`normalized` folder the operator replaced with a link or junction is followed, and the files land where it points.
 
 - Another file under the snapshot's name (other bytes, a directory, a symlink) is
   `ENTRY_HISTORY_SNAPSHOT_CORRUPT:file=snapshot`. It can only be a damaged copy: it is never overwritten, it may be
@@ -4489,10 +4492,12 @@ first file that cannot be written stops the run.
   disagrees) name the exception class, never its message.
 
 **The result** (stdout, JSON). `status` is `COMPLETE` (at least one file written) or `ALREADY_PRESENT` (all three there
-and byte-identical, a no-op), exit 0; `REFUSED` or `WRITE_FAILED`, exit 2. Then `problems`; `source_sha256` (null when
-the file was unreadable or above the cap: never the hash of a prefix); `summary` (null when the file was refused); and
-for each file its `path` and `state`: `WRITTEN`, `ALREADY_PRESENT`, `REFUSED` (with a `recovery` sentence),
-`WRITE_FAILED` or `NOT_ATTEMPTED`. It carries no fee or winnings value.
+and byte-identical, a no-op), exit 0; `REFUSED` or `WRITE_FAILED`, exit 2; `exit_code` repeats it. Then `problems`;
+`contract`; `source_sha256` (null when the file was unreadable or above the cap: never the hash of a prefix); `summary`
+(null when the file itself was refused or unreadable; present when a file in the way refused or a write failed);
+`does_not_establish`; and for each file its `path` (null until the file parses) and `state`: `WRITTEN`,
+`ALREADY_PRESENT`, `REFUSED` (with a `recovery` sentence), `WRITE_FAILED` or `NOT_ATTEMPTED`. It carries no fee or
+winnings value.
 
 **`nfl_dk_entry_history_entries_v1`** (`nfl_entries.w1.json`: canonical JSON, ASCII, sorted keys, compact separators, one
 trailing LF). `schema_version`, `contract`, `writer` (`w1`), `sport` (`NFL`), `source_sha256`, `source_bytes`,

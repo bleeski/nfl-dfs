@@ -53,7 +53,7 @@ def _states(outcome) -> dict[str, str]:
 
 
 def _tree(root: Path) -> list[str]:
-    return sorted(str(path.relative_to(root)) for path in root.rglob("*")) if root.exists() else []
+    return sorted(path.relative_to(root).as_posix() for path in root.rglob("*")) if root.exists() else []
 
 
 # ------------------------------------------------------------------------------------------ a first intake
@@ -85,6 +85,9 @@ def test_the_entries_artifact_holds_the_nfl_rows_in_file_order_and_nothing_else(
     payload = json.loads(raw)
 
     assert raw == entry_history.canonical_bytes(payload) and raw.isascii()
+    assert set(payload) == {
+        "schema_version", "contract", "writer", "sport", "source_sha256", "source_bytes", "nfl_rows", "entries",
+        "does_not_establish"}
     assert {key: payload[key] for key in (
         "schema_version", "contract", "writer", "sport", "source_sha256", "source_bytes", "nfl_rows")} == {
         "schema_version": "nfl_dk_entry_history_entries_v1", "contract": "nfl_dk_entry_history_v1", "writer": "w1",
@@ -102,6 +105,7 @@ def test_the_entries_artifact_holds_the_nfl_rows_in_file_order_and_nothing_else(
         "winnings_non_ticket_cents": 1000, "winnings_ticket_cents": 0, "contest_entries": 1000,
         "entry_fee_cents": 500, "prize_pool_cents": 450000, "places_paid": 200, "places_paid_above_entries": False,
     }
+    assert all(set(entry) == set(first) for entry in entries)
     for entry in entries:
         assert None not in entry.values()
         assert EASTERN_TIME.fullmatch(entry["contest_start"])  # a real string, never a `default=str` repr
@@ -111,8 +115,9 @@ def test_the_entries_artifact_holds_the_nfl_rows_in_file_order_and_nothing_else(
 
 
 def test_the_same_bytes_in_two_roots_give_byte_identical_files(tmp_path):
-    first, root_a = _intake(tmp_path, root=tmp_path / "a")
-    second, root_b = _intake(tmp_path, root=tmp_path / "b")
+    root_a, root_b = tmp_path / "a", tmp_path / "b"
+    first = entry_history.run_intake(_source(tmp_path / "one", name="history.csv"), root_a)
+    second = entry_history.run_intake(_source(tmp_path / "two", name="draftkings-export.csv"), root_b)
 
     assert first.status == second.status == "COMPLETE"
     for name in ("snapshot", "entries", "summary"):
@@ -195,11 +200,21 @@ def test_a_deleted_artifact_is_rebuilt_byte_for_byte(tmp_path):
 # ------------------------------------------------------------------------------- never overwritten
 
 
-def test_a_corrupt_snapshot_is_never_overwritten_and_stops_before_any_artifact(tmp_path):
+def _flip(raw: bytes, at: int = 40) -> bytes:
+    """One byte changed, the length kept: a damaged copy no size check can tell from the real one."""
+
+    flipped = raw[:at] + bytes([raw[at] ^ 0x01]) + raw[at + 1:]
+    assert len(flipped) == len(raw) and flipped != raw
+    return flipped
+
+
+@pytest.mark.parametrize("damage", ["truncated", "one_byte_flipped"])
+def test_a_corrupt_snapshot_is_never_overwritten_and_stops_before_any_artifact(tmp_path, damage):
     root = tmp_path / "results"
     snapshot = _paths(root)["snapshot"]
     snapshot.parent.mkdir(parents=True)
-    snapshot.write_bytes(RAW[:-10])
+    damaged = RAW[:-10] if damage == "truncated" else _flip(RAW)
+    snapshot.write_bytes(damaged)
 
     outcome = entry_history.run_intake(_source(tmp_path), root)
 
@@ -208,7 +223,7 @@ def test_a_corrupt_snapshot_is_never_overwritten_and_stops_before_any_artifact(t
     assert _states(outcome) == {"snapshot": "REFUSED", "entries": "NOT_ATTEMPTED", "summary": "NOT_ATTEMPTED"}
     recovery = outcome.files["snapshot"]["recovery"]
     assert "never overwritten" in recovery and "delete it by hand" in recovery
-    assert snapshot.read_bytes() == RAW[:-10]
+    assert snapshot.read_bytes() == damaged
     assert not (root / "normalized").exists()
 
 
@@ -225,11 +240,13 @@ def test_a_directory_at_the_snapshot_name_is_refused_and_left_alone(tmp_path):
     assert not (root / "normalized").exists()
 
 
+@pytest.mark.parametrize("damage", ["replaced", "one_byte_flipped"])
 @pytest.mark.parametrize("damaged", ["entries", "summary"])
-def test_a_conflicting_artifact_is_never_overwritten_and_names_its_recovery(tmp_path, damaged):
+def test_a_conflicting_artifact_is_never_overwritten_and_names_its_recovery(tmp_path, damaged, damage):
     _outcome, root = _intake(tmp_path)
     target = _paths(root)[damaged]
-    target.write_bytes(b'{"damaged":true}\n')
+    other = b'{"damaged":true}\n' if damage == "replaced" else _flip(target.read_bytes())
+    target.write_bytes(other)
 
     outcome = entry_history.run_intake(_source(tmp_path), root)
 
@@ -241,7 +258,7 @@ def test_a_conflicting_artifact_is_never_overwritten_and_names_its_recovery(tmp_
     assert _states(outcome) == expected
     recovery = outcome.files[damaged]["recovery"]
     assert "derived from the snapshot" in recovery and "writer version" in recovery
-    assert target.read_bytes() == b'{"damaged":true}\n'
+    assert target.read_bytes() == other
     assert _paths(root)["snapshot"].read_bytes() == RAW
 
 
@@ -263,7 +280,8 @@ def test_a_refused_file_writes_nothing_and_names_every_problem(tmp_path, raw, pr
 
     assert (outcome.status, outcome.exit_code, outcome.problems) == ("REFUSED", 2, problems)
     assert set(_states(outcome).values()) == {"NOT_ATTEMPTED"}
-    assert outcome.summary is None
+    assert {report["path"] for report in outcome.files.values()} == {None}
+    assert outcome.summary is None and outcome.source_sha256 == sha256_bytes(raw)
     assert not root.exists()
 
 
@@ -356,8 +374,11 @@ def test_a_write_failure_is_named_and_every_file_reports_its_state(tmp_path, mon
 
 
 def test_bytes_that_differ_after_the_link_are_removed_and_named(tmp_path, monkeypatch):
-    def damaging_link(_source, target):
-        Path(target).write_bytes(b"not the bytes")
+    real_link = os.link
+
+    def damaging_link(source, target):
+        real_link(source, target)
+        Path(target).write_bytes(b"not the bytes")  # the same file, through the new link
 
     monkeypatch.setattr(entry_history.os, "link", damaging_link)
     outcome, root = _intake(tmp_path)
@@ -365,6 +386,76 @@ def test_bytes_that_differ_after_the_link_are_removed_and_named(tmp_path, monkey
     assert outcome.status == "WRITE_FAILED"
     assert outcome.problems == ("ENTRY_HISTORY_WRITE_FAILED:file=snapshot:exception=WrittenBytesDiffer",)
     assert list((root / "inbox").iterdir()) == []
+
+
+def test_a_file_that_takes_the_name_after_the_link_is_never_deleted(tmp_path, monkeypatch):
+    real_link = os.link
+
+    def replaced_after_link(source, target):
+        real_link(source, target)
+        stranger = Path(target).with_name("stranger")
+        stranger.write_bytes(b"someone else's bytes")
+        os.replace(stranger, target)
+
+    monkeypatch.setattr(entry_history.os, "link", replaced_after_link)
+    outcome, root = _intake(tmp_path)
+
+    assert outcome.problems == ("ENTRY_HISTORY_WRITE_FAILED:file=snapshot:exception=WrittenBytesDiffer",)
+    assert _paths(root)["snapshot"].read_bytes() == b"someone else's bytes"
+
+
+@pytest.mark.parametrize("arrived", ["other_bytes", "same_bytes"])
+def test_a_name_that_appears_between_the_check_and_the_link_is_never_replaced(tmp_path, monkeypatch, arrived):
+    other = _flip(RAW)
+
+    def raced(_source, target):
+        Path(target).write_bytes(other if arrived == "other_bytes" else RAW)
+        raise FileExistsError(target)
+
+    monkeypatch.setattr(entry_history.os, "link", raced)
+    outcome, root = _intake(tmp_path)
+    snapshot = _paths(root)["snapshot"]
+
+    if arrived == "other_bytes":
+        assert (outcome.status, outcome.problems) == ("REFUSED", ("ENTRY_HISTORY_SNAPSHOT_CORRUPT:file=snapshot",))
+        assert snapshot.read_bytes() == other
+        assert not (root / "normalized").exists()
+    else:
+        assert outcome.files["snapshot"]["state"] == "ALREADY_PRESENT"
+        assert snapshot.read_bytes() == RAW
+    assert sorted(path.name for path in (root / "inbox").iterdir()) == [f"{SHA}.csv"]
+
+
+def test_a_symlink_at_the_name_is_refused_even_when_it_reaches_the_same_bytes(tmp_path, monkeypatch):
+    # A real symlink needs a privilege on Windows; the check reads `is_symlink`, so a patched one tests the same branch
+    # on every platform with no skip.
+    root = tmp_path / "results"
+    snapshot = _paths(root)["snapshot"]
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_bytes(RAW)
+    real_is_symlink = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda self: self.name == snapshot.name or real_is_symlink(self))
+
+    outcome = entry_history.run_intake(_source(tmp_path), root)
+
+    assert outcome.problems == ("ENTRY_HISTORY_SNAPSHOT_CORRUPT:file=snapshot",)
+    assert snapshot.read_bytes() == RAW
+
+
+def test_a_temporary_file_that_cannot_be_deleted_never_hides_the_outcome(tmp_path, monkeypatch):
+    real_unlink = Path.unlink
+
+    def held_by_a_scanner(self, missing_ok=False):
+        if self.name.endswith(".tmp"):
+            raise PermissionError("held")
+        return real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", held_by_a_scanner)
+    outcome, root = _intake(tmp_path)
+
+    assert (outcome.status, outcome.problems) == ("COMPLETE", ())
+    assert set(_states(outcome).values()) == {"WRITTEN"}
+    assert _paths(root)["snapshot"].read_bytes() == RAW
 
 
 # ------------------------------------------------------------------------------------- git, stdout, registry
@@ -391,6 +482,10 @@ def test_the_command_exits_0_0_2_and_stdout_carries_no_money(tmp_path, capsys):
 
     assert [code for code, _out in printed] == [0, 0, 2]
     assert [json.loads(out)["status"] for _code, out in printed] == ["COMPLETE", "ALREADY_PRESENT", "REFUSED"]
+    first = json.loads(printed[0][1])
+    assert first["files"] == {name: {"path": str(path), "state": "WRITTEN"} for name, path in _paths(root).items()}
+    assert first["summary"] == json.loads(_paths(root)["summary"].read_bytes())
+    assert (first["source_sha256"], first["exit_code"], first["problems"]) == (SHA, 0, [])
     for _code, out in printed:
         assert "$" not in out and "_cents" not in out
     summary = _paths(root)["summary"].read_bytes()

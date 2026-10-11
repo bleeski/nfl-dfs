@@ -28,6 +28,7 @@ built, upload clearance.
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import os
@@ -521,6 +522,8 @@ def _write_once(path: Path, data: bytes, *, code: str, recovery: str) -> str:
     holding the name (other bytes, a directory, a symlink) is `code`. A new file goes through a temporary file in the
     same folder (flushed, fsynced, re-read) and a hard link, which fails rather than replaces when the name appears
     first; the linked file is re-read too. A filesystem with no hard links is an `OSError` for the caller to name.
+    A temporary file that cannot be deleted (on Windows, Defender or the indexer can hold a fresh file) is left, its
+    name starting with a dot, rather than hiding the file's real outcome.
     """
 
     sha256 = sha256_bytes(data)
@@ -545,11 +548,20 @@ def _write_once(path: Path, data: bytes, *, code: str, recovery: str) -> str:
                 return "ALREADY_PRESENT"
             raise _Stop(code, recovery) from None
         if sha256_file(path) != sha256:
-            path.unlink(missing_ok=True)  # this run's own fresh link, never a file that was already there
+            if _same_file(path, temporary):  # this run's own fresh link, never a file that took the name after it
+                path.unlink(missing_ok=True)
             raise WrittenBytesDiffer()
     finally:
-        temporary.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            temporary.unlink(missing_ok=True)
     return "WRITTEN"
+
+
+def _same_file(first: Path, second: Path) -> bool:
+    try:
+        return os.path.samefile(first, second)
+    except OSError:
+        return False
 
 
 def _classified(problem: str, source: Path) -> str:
