@@ -5133,7 +5133,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--contest-facts-csv",
         help=(
             "the contest facts file (nfl_contest_facts_v1: contest_id,field_size,places_paid,entry_fee per contest,"
-            " copied by hand from the lobby): labels entries whose contest pays under 5% FIRST_PLACE_OBJECTIVE;"
+            " copied by hand from the lobby): labels entries whose contest pays under 5%% FIRST_PLACE_OBJECTIVE;"
             " a fact from the supplied numbers, never a forecast (request v5)"
         ),
     )

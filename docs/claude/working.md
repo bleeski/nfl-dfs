@@ -219,6 +219,14 @@ or none supplied) builds the thesis portfolio, which is where a judgment applies
   not under Needs Ben as an open gap. Confirm the early-window players (`early_window_without_official_row`) against the posted
   official inactive lists. `OFFICIAL_STATUS_*` still stops certification; the watch list changes none of it.
 - **Say who was passed over and why** in the handoff, alongside who was added. Late-game candidates can wait for late swap.
+- **Read `construction.effective` before trusting rung 4 (Week 5, 2026-10-11).** The engine's rung-4 build (5 theses, share 0.4)
+  passed QA Tier 2 with 12 people at 12 of 32, 40 distinct players, 5 quarterbacks and 5 DST-versus-own-game rows. Under about
+  8 quarterback teams or any person above a third of the rows, rebuild at once on the run's own dump
+  (`NFL_DFS_DUMP_SCORES`, backup quarterbacks removed) with `build_thesis_portfolio.py`: seven theses, max exposure 10 of 32,
+  overlap 5, `lineups_per_thesis_multiplier` 6 (3 left a row unfilled), and no thesis quota above its QB count times the
+  per-thesis cap. Place research-backed role changes the build left at 0 rows with the whole-portfolio record
+  (`data/inbox/slates/wk5-classic-2026-10-11/construction/manual_add_record.py`, which never pulls a row's best player and never
+  displaces an earlier placement), then `--mode redeploy` with them protected. About ten minutes end to end.
 
 ## Repo etiquette and gotchas
 
