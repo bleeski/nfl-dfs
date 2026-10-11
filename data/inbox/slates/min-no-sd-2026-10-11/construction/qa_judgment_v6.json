@@ -1,0 +1,233 @@
+{
+  "lineups": 33,
+  "defects": 0,
+  "DEFECTS": [],
+  "limit_breaches": 0,
+  "LIMIT_BREACHES": [],
+  "unfilled_entry_ids": [],
+  "prefilled_entry_ids": [],
+  "observations": 20,
+  "OBSERVATIONS": [
+    "5290510492 MULTIPLE_KICKERS 2",
+    "5290510492 DST_WITH_OWN_OFFENSE NO:['NO|K|Daniel Carlson', 'NO|QB|Tyler Shough', 'NO|WR|Chris Olave']",
+    "5290504189 DST_WITH_OWN_OFFENSE MIN:['MIN|RB|Aaron Jones Sr.', 'MIN|WR|Jauan Jennings', 'MIN|QB|Kyler Murray', 'MIN|TE|T.J. Hockenson']",
+    "5290504190 DST_WITH_OWN_OFFENSE NO:['NO|WR|Chris Olave', 'NO|RB|Alvin Kamara', 'NO|WR|Cedric Tillman', 'NO|QB|Tyler Shough']",
+    "5290504191 DST_WITH_OWN_OFFENSE NO:['NO|TE|Juwan Johnson', 'NO|QB|Tyler Shough', 'NO|WR|Chris Olave']",
+    "5290504195 DST_WITH_OWN_OFFENSE NO:['NO|K|Daniel Carlson', 'NO|QB|Tyler Shough', 'NO|WR|Devaughn Vele', 'NO|WR|Chris Olave']",
+    "5290504197 DST_WITH_OWN_OFFENSE NO:['NO|RB|Alvin Kamara']",
+    "5290504198 MULTIPLE_KICKERS 2",
+    "5290504198 DST_WITH_OWN_OFFENSE NO:['NO|K|Daniel Carlson', 'NO|QB|Tyler Shough', 'NO|TE|Juwan Johnson']",
+    "5290504199 DST_WITH_OWN_OFFENSE NO:['NO|WR|Chris Olave', 'NO|TE|Noah Fant', 'NO|QB|Tyler Shough']",
+    "5290504201 DST_WITH_OWN_OFFENSE NO:['NO|K|Daniel Carlson', 'NO|QB|Tyler Shough', 'NO|WR|Chris Olave']",
+    "5290504205 DST_WITH_OWN_OFFENSE NO:['NO|K|Daniel Carlson', 'NO|QB|Tyler Shough', 'NO|TE|Juwan Johnson']",
+    "5290504207 DST_WITH_OWN_OFFENSE MIN:['MIN|K|Will Reichard', 'MIN|QB|Kyler Murray', 'MIN|WR|Justin Jefferson']",
+    "5290509919 MULTIPLE_KICKERS 2",
+    "5290509919 DST_WITH_OWN_OFFENSE MIN:['MIN|K|Will Reichard', 'MIN|QB|Kyler Murray', 'MIN|RB|Aaron Jones Sr.', 'MIN|WR|Justin Jefferson']",
+    "5290503456 DST_WITH_OWN_OFFENSE MIN:['MIN|K|Will Reichard', 'MIN|QB|Kyler Murray', 'MIN|TE|T.J. Hockenson']",
+    "5290504123 DST_WITH_OWN_OFFENSE MIN:['MIN|QB|Kyler Murray', 'MIN|RB|Aaron Jones Sr.', 'MIN|TE|T.J. Hockenson']",
+    "5290510827 MULTIPLE_KICKERS 2",
+    "5290510827 DST_WITH_OWN_OFFENSE MIN:['MIN|K|Will Reichard', 'MIN|QB|Kyler Murray', 'MIN|TE|T.J. Hockenson', 'MIN|WR|Justin Jefferson']",
+    "5290510829 DST_WITH_OWN_OFFENSE NO:['NO|QB|Tyler Shough', 'NO|RB|Alvin Kamara', 'NO|WR|Chris Olave']"
+  ],
+  "observation_note": "strategy observations never change the exit code; DraftKings accepts each of them",
+  "exit_codes": "1 validity failure; 3 blank authorized rows unfilled; 2 an operator limit only; 0 none of these, which does not clear an upload",
+  "max_pairwise_overlap": 5,
+  "salary_min": 43200,
+  "salary_max": 50000,
+  "distinct_captains": 9,
+  "qb_count_histogram": {
+    "2": 5,
+    "1": 28
+  },
+  "theses": {
+    "status": "CHECKED",
+    "policy_sha256": "1844b4ee7c329bcf41b7a796e8fccd63f085951b5703c1210c13700af735c7a3",
+    "claim_sha256": "94726cd92b5588d616797334a7c79eda3c7c77dc7cb7f7ce90f96d674ee6b3da",
+    "salary_sha256": "96b158de58fbdc4275032c14966f26a8b7026188e3e9f66ddda598a8042c4306",
+    "theses": [
+      "MIN_WINS_BIG",
+      "NO_WINS_BIG",
+      "MIN_WINS_CLOSE_HIGH",
+      "MIN_WINS_CLOSE_LOW",
+      "NO_WINS_CLOSE_HIGH",
+      "NO_WINS_CLOSE_LOW",
+      "DEFENSIVE_BATTLE",
+      "OFFENSIVE_SHOOTOUT"
+    ],
+    "backup_quarterback": "EVALUATED",
+    "backup_quarterbacks_unevaluated_teams": [],
+    "entries": {
+      "5290510303": {
+        "thesis": "MIN_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504017": {
+        "thesis": "NO_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290510492": {
+        "thesis": "DEFENSIVE_BATTLE",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504189": {
+        "thesis": "MIN_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504190": {
+        "thesis": "NO_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504191": {
+        "thesis": "NO_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504192": {
+        "thesis": "OFFENSIVE_SHOOTOUT",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504193": {
+        "thesis": "MIN_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504194": {
+        "thesis": "OFFENSIVE_SHOOTOUT",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504195": {
+        "thesis": "NO_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504196": {
+        "thesis": "NO_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504197": {
+        "thesis": "MIN_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504198": {
+        "thesis": "DEFENSIVE_BATTLE",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504199": {
+        "thesis": "NO_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504200": {
+        "thesis": "NO_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504201": {
+        "thesis": "NO_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504202": {
+        "thesis": "OFFENSIVE_SHOOTOUT",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504203": {
+        "thesis": "MIN_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504204": {
+        "thesis": "MIN_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504205": {
+        "thesis": "NO_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504206": {
+        "thesis": "MIN_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504207": {
+        "thesis": "MIN_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290510588": {
+        "thesis": "MIN_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290509919": {
+        "thesis": "DEFENSIVE_BATTLE",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290503456": {
+        "thesis": "MIN_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290503590": {
+        "thesis": "MIN_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290504123": {
+        "thesis": "MIN_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290510825": {
+        "thesis": "NO_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290510826": {
+        "thesis": "OFFENSIVE_SHOOTOUT",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290510827": {
+        "thesis": "DEFENSIVE_BATTLE",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290510828": {
+        "thesis": "NO_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290510829": {
+        "thesis": "NO_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5290510830": {
+        "thesis": "MIN_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      }
+    },
+    "rows_following": 33,
+    "rows_not_following": 0,
+    "entry_ids_without_thesis": [],
+    "claimed_entry_ids_not_filled": [],
+    "does_not_establish": "a structure check of each row against the thesis it fills: a thesis is a choice, not a forecast, and this establishes no projection, no ownership and no upload clearance"
+  },
+  "VERDICT": "PASS"
+}

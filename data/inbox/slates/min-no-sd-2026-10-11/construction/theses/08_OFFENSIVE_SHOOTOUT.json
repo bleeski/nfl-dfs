@@ -1,0 +1,32 @@
+{
+  "name": "OFFENSIVE_SHOOTOUT",
+  "teams": [
+    "MIN",
+    "NO"
+  ],
+  "captain_set": [
+    "MIN|QB|Kyler Murray",
+    "NO|QB|Tyler Shough",
+    "MIN|WR|Justin Jefferson",
+    "MIN|WR|Jauan Jennings",
+    "NO|WR|Chris Olave",
+    "NO|WR|Devaughn Vele"
+  ],
+  "position_bounds": [
+    {
+      "position": "QB",
+      "minimum": 2,
+      "maximum": 2
+    },
+    {
+      "position": "K",
+      "minimum": 0,
+      "maximum": 0
+    },
+    {
+      "position": "DST",
+      "minimum": 0,
+      "maximum": 0
+    }
+  ]
+}

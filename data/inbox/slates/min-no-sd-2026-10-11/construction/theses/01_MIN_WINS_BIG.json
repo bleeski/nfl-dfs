@@ -1,0 +1,21 @@
+{
+  "name": "MIN_WINS_BIG",
+  "teams": [
+    "MIN"
+  ],
+  "captain_set": [
+    "MIN|QB|Kyler Murray",
+    "MIN|RB|Aaron Jones Sr.",
+    "MIN|RB|DeeJay Dallas",
+    "MIN|WR|Justin Jefferson",
+    "MIN|WR|Jauan Jennings",
+    "MIN|DST|Vikings"
+  ],
+  "team_bounds": [
+    {
+      "team": "MIN",
+      "minimum": 4,
+      "maximum": 5
+    }
+  ]
+}

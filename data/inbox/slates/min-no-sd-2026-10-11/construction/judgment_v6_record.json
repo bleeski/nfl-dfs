@@ -1,0 +1,527 @@
+{
+  "input": "outputs/20261011T161741Z-min-no-sd-r3/review/DK_REVIEW_ENTRY_min-no-sd-r3.csv",
+  "output": "data/inbox/slates/min-no-sd-2026-10-11/construction/DK_REVIEW_ENTRY_min-no-sd_judgment_v6.csv",
+  "swaps": [
+    {
+      "step": "A",
+      "entry_id": "5290510303",
+      "thesis": "MIN_WINS_CLOSE_HIGH",
+      "out": "Cedric Tillman + Will Reichard",
+      "in": "Bryce Lance + Tai Felton",
+      "salary_before": 49800,
+      "salary_after": 49000,
+      "why": "Tillman elevated for special teams; Lance is the NO WR3 (85% snaps week 4); Tai Felton for Will Reichard frees the salary"
+    },
+    {
+      "step": "A",
+      "entry_id": "5290504190",
+      "kept": "Cedric Tillman",
+      "why": "Lance does not fit this row"
+    },
+    {
+      "step": "A",
+      "entry_id": "5290504192",
+      "thesis": "OFFENSIVE_SHOOTOUT",
+      "out": "Cedric Tillman + T.J. Hockenson",
+      "in": "Bryce Lance + Tai Felton",
+      "salary_before": 50000,
+      "salary_after": 47200,
+      "why": "Tillman elevated for special teams; Lance is the NO WR3 (85% snaps week 4); Tai Felton for T.J. Hockenson frees the salary"
+    },
+    {
+      "step": "A",
+      "entry_id": "5290504202",
+      "thesis": "OFFENSIVE_SHOOTOUT",
+      "out": "Cedric Tillman + T.J. Hockenson",
+      "in": "Bryce Lance + Tai Felton",
+      "salary_before": 49800,
+      "salary_after": 47000,
+      "why": "Tillman elevated for special teams; Lance is the NO WR3 (85% snaps week 4); Tai Felton for T.J. Hockenson frees the salary"
+    },
+    {
+      "step": "A",
+      "entry_id": "5290504203",
+      "thesis": "MIN_WINS_BIG",
+      "out": "Cedric Tillman + T.J. Hockenson",
+      "in": "Bryce Lance + Tai Felton",
+      "salary_before": 47600,
+      "salary_after": 44800,
+      "why": "Tillman elevated for special teams; Lance is the NO WR3 (85% snaps week 4); Tai Felton for T.J. Hockenson frees the salary"
+    },
+    {
+      "step": "A",
+      "entry_id": "5290510588",
+      "thesis": "MIN_WINS_CLOSE_HIGH",
+      "out": "Cedric Tillman + Will Reichard",
+      "in": "Bryce Lance + Tai Felton",
+      "salary_before": 48900,
+      "salary_after": 48100,
+      "why": "Tillman elevated for special teams; Lance is the NO WR3 (85% snaps week 4); Tai Felton for Will Reichard frees the salary"
+    },
+    {
+      "step": "A",
+      "entry_id": "5290510826",
+      "thesis": "OFFENSIVE_SHOOTOUT",
+      "out": "Cedric Tillman + Aaron Jones Sr.",
+      "in": "Bryce Lance + Jauan Jennings",
+      "salary_before": 50000,
+      "salary_after": 47800,
+      "why": "Tillman elevated for special teams; Lance is the NO WR3 (85% snaps week 4); Jauan Jennings for Aaron Jones Sr. frees the salary"
+    },
+    {
+      "step": "A",
+      "entry_id": "5290510828",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Cedric Tillman + Will Reichard",
+      "in": "Bryce Lance + Tai Felton",
+      "salary_before": 49400,
+      "salary_after": 48600,
+      "why": "Tillman elevated for special teams; Lance is the NO WR3 (85% snaps week 4); Tai Felton for Will Reichard frees the salary"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290504017",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Saints",
+      "out_id": "44422664",
+      "in": "Bryce Lance",
+      "in_id": "44422666",
+      "salary_before": 50000,
+      "salary_after": 49400,
+      "why": "Saints DST beside opposing QB Kyler Murray; DST out"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290510492",
+      "thesis": "DEFENSIVE_BATTLE",
+      "out": "Vikings",
+      "in": "Saints",
+      "salary_before": 48800,
+      "salary_after": 47200,
+      "why": "Vikings DST beside opposing QB Tyler Shough; the other DST matches the row"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290504191",
+      "thesis": "NO_WINS_CLOSE_LOW",
+      "out": "Kyler Murray",
+      "out_id": "44422647",
+      "in": "Juwan Johnson",
+      "in_id": "44422653",
+      "salary_before": 48400,
+      "salary_after": 45200,
+      "why": "Saints DST beside opposing QB Kyler Murray; QB out"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290504195",
+      "unresolved": "Saints DST with Kyler Murray"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290504196",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Saints",
+      "out_id": "44422664",
+      "in": "Bryce Lance",
+      "in_id": "44422666",
+      "salary_before": 47400,
+      "salary_after": 46800,
+      "why": "Saints DST beside opposing QB Kyler Murray; DST out"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290504197",
+      "unresolved": "Saints DST with Kyler Murray"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290504205",
+      "thesis": "NO_WINS_CLOSE_LOW",
+      "out": "Vikings",
+      "in": "Saints",
+      "salary_before": 49900,
+      "salary_after": 48300,
+      "why": "Vikings DST beside opposing QB Tyler Shough; the other DST matches the row"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290504206",
+      "thesis": "MIN_WINS_BIG",
+      "out": "Saints",
+      "out_id": "44422664",
+      "in": "Bryce Lance",
+      "in_id": "44422666",
+      "salary_before": 49600,
+      "salary_after": 49000,
+      "why": "Saints DST beside opposing QB Kyler Murray; DST out"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290504207",
+      "thesis": "MIN_WINS_CLOSE_LOW",
+      "out": "Tyler Shough",
+      "out_id": "44422645",
+      "in": "Kyler Murray",
+      "in_id": "44422647",
+      "salary_before": 48200,
+      "salary_after": 47200,
+      "why": "Vikings DST beside opposing QB Tyler Shough; own QB in"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290503456",
+      "thesis": "MIN_WINS_CLOSE_LOW",
+      "out": "Tyler Shough",
+      "out_id": "44422645",
+      "in": "Kyler Murray",
+      "in_id": "44422647",
+      "salary_before": 49000,
+      "salary_after": 48000,
+      "why": "Vikings DST beside opposing QB Tyler Shough; own QB in"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290503590",
+      "thesis": "MIN_WINS_CLOSE_HIGH",
+      "out": "Saints",
+      "out_id": "44422664",
+      "in": "Bryce Lance",
+      "in_id": "44422666",
+      "salary_before": 49800,
+      "salary_after": 49200,
+      "why": "Saints DST beside opposing QB Kyler Murray; DST out"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290510827",
+      "thesis": "DEFENSIVE_BATTLE",
+      "out": "Saints",
+      "in": "Vikings",
+      "salary_before": 42600,
+      "salary_after": 44200,
+      "why": "Saints DST beside opposing QB Kyler Murray; the other DST matches the row"
+    },
+    {
+      "step": "B",
+      "entry_id": "5290510830",
+      "thesis": "MIN_WINS_BIG",
+      "out": "Vikings",
+      "out_id": "44422658",
+      "in": "Jauan Jennings",
+      "in_id": "44422659",
+      "salary_before": 48800,
+      "salary_after": 48600,
+      "why": "Vikings DST beside opposing QB Tyler Shough; DST out"
+    },
+    {
+      "step": "C",
+      "entry_id": "5290510303",
+      "thesis": "MIN_WINS_CLOSE_HIGH",
+      "out": "Aaron Jones Sr.",
+      "out_id": "44422646",
+      "in": "Kyler Murray",
+      "in_id": "44422647",
+      "salary_before": 49000,
+      "salary_after": 48600,
+      "why": "Justin Jefferson Captain without Kyler Murray"
+    },
+    {
+      "step": "C",
+      "entry_id": "5290504200",
+      "unresolved": "Chris Olave Captain without Tyler Shough: no single swap fits"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290510303",
+      "thesis": "MIN_WINS_CLOSE_HIGH",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 48600,
+      "salary_after": 47800,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504017",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 49400,
+      "salary_after": 48600,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504192",
+      "thesis": "OFFENSIVE_SHOOTOUT",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 47200,
+      "salary_after": 46400,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504193",
+      "thesis": "MIN_WINS_CLOSE_HIGH",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 48900,
+      "salary_after": 48100,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504195",
+      "thesis": "NO_WINS_BIG",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 49600,
+      "salary_after": 48800,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504196",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 46800,
+      "salary_after": 46000,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504200",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 49400,
+      "salary_after": 48600,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290510825",
+      "thesis": "NO_WINS_BIG",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 49500,
+      "salary_after": 48700,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290510828",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Alvin Kamara",
+      "out_id": "44422650",
+      "in": "Devaughn Vele",
+      "in_id": "44422651",
+      "salary_before": 48600,
+      "salary_after": 47800,
+      "why": "Vele 7.8 targets/g, 89-96% snaps; Kamara in 16 rows"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504189",
+      "thesis": "MIN_WINS_BIG",
+      "out": "Will Reichard",
+      "out_id": "44422660",
+      "in": "Jauan Jennings",
+      "in_id": "44422659",
+      "salary_before": 49400,
+      "salary_after": 49600,
+      "why": "Addison OUT: Jennings is MIN WR2 (95% snaps week 4); FLEX kicker out"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504193",
+      "thesis": "MIN_WINS_CLOSE_HIGH",
+      "out": "Will Reichard",
+      "out_id": "44422660",
+      "in": "Jauan Jennings",
+      "in_id": "44422659",
+      "salary_before": 48100,
+      "salary_after": 48300,
+      "why": "Addison OUT: Jennings is MIN WR2 (95% snaps week 4); FLEX kicker out"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290504200",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Will Reichard",
+      "out_id": "44422660",
+      "in": "Jauan Jennings",
+      "in_id": "44422659",
+      "salary_before": 48600,
+      "salary_after": 48800,
+      "why": "Addison OUT: Jennings is MIN WR2 (95% snaps week 4); FLEX kicker out"
+    },
+    {
+      "step": "D",
+      "entry_id": "5290503590",
+      "thesis": "MIN_WINS_CLOSE_HIGH",
+      "out": "Daniel Carlson",
+      "out_id": "44422661",
+      "in": "Jauan Jennings",
+      "in_id": "44422659",
+      "salary_before": 49200,
+      "salary_after": 49600,
+      "why": "Addison OUT: Jennings is MIN WR2 (95% snaps week 4); FLEX kicker out"
+    },
+    {
+      "step": "E",
+      "entry_id": "5290504200",
+      "unresolved": "Chris Olave Captain without Tyler Shough"
+    },
+    {
+      "step": "E",
+      "entry_id": "5290504190",
+      "thesis": "NO_WINS_BIG",
+      "out": "Tyler Shough CPT + Chris Olave FLEX",
+      "in": "Chris Olave CPT + Tyler Shough FLEX",
+      "salary_before": 49700,
+      "salary_after": 50000,
+      "why": "Olave 12 targets/g (NFL lead), 1 Captain row before"
+    },
+    {
+      "step": "E",
+      "entry_id": "5290504199",
+      "thesis": "NO_WINS_BIG",
+      "out": "Tyler Shough CPT + Chris Olave FLEX",
+      "in": "Chris Olave CPT + Tyler Shough FLEX",
+      "salary_before": 49700,
+      "salary_after": 50000,
+      "why": "Olave 12 targets/g (NFL lead), 1 Captain row before"
+    },
+    {
+      "step": "F",
+      "entry_id": "5290504195",
+      "thesis": "NO_WINS_BIG",
+      "out": "Kyler Murray",
+      "out_id": "44422647",
+      "in": "Tyler Shough",
+      "in_id": "44422645",
+      "salary_before": 48800,
+      "salary_after": 49800,
+      "why": "Saints DST beside opposing QB; own QB in"
+    },
+    {
+      "step": "F",
+      "entry_id": "5290504197",
+      "unresolved": "Saints DST with Kyler Murray"
+    }
+  ],
+  "before": {
+    "total_prior": 2312.59,
+    "lowest_row_prior": 63.72,
+    "max_person": [
+      "Justin Jefferson",
+      19
+    ],
+    "people": {
+      "Justin Jefferson": 19,
+      "Will Reichard": 19,
+      "Tyler Shough": 19,
+      "Aaron Jones Sr.": 19,
+      "Kyler Murray": 19,
+      "T.J. Hockenson": 19,
+      "Alvin Kamara": 16,
+      "Saints": 13,
+      "Chris Olave": 12,
+      "Daniel Carlson": 11,
+      "Cedric Tillman": 8,
+      "Vikings": 8,
+      "Juwan Johnson": 7,
+      "Noah Fant": 7,
+      "Kendre Miller": 2
+    },
+    "distinct_people": 15,
+    "captains": {
+      "Justin Jefferson": 6,
+      "Will Reichard": 6,
+      "Tyler Shough": 6,
+      "Kyler Murray": 5,
+      "Saints": 3,
+      "Daniel Carlson": 3,
+      "Aaron Jones Sr.": 2,
+      "Chris Olave": 1,
+      "Vikings": 1
+    },
+    "mean_pair_overlap": 2.7348,
+    "max_pair_overlap": 4,
+    "pairs_sharing_5": 0,
+    "min_salary": 42600,
+    "max_salary": 50000
+  },
+  "after": {
+    "total_prior": 2113.62,
+    "lowest_row_prior": 50.71,
+    "max_person": [
+      "Kyler Murray",
+      20
+    ],
+    "people": {
+      "Kyler Murray": 20,
+      "Justin Jefferson": 19,
+      "Tyler Shough": 18,
+      "Aaron Jones Sr.": 17,
+      "T.J. Hockenson": 16,
+      "Will Reichard": 13,
+      "Chris Olave": 12,
+      "Bryce Lance": 11,
+      "Saints": 10,
+      "Daniel Carlson": 10,
+      "Devaughn Vele": 9,
+      "Juwan Johnson": 8,
+      "Alvin Kamara": 7,
+      "Noah Fant": 7,
+      "Tai Felton": 6,
+      "Vikings": 6,
+      "Jauan Jennings": 6,
+      "Kendre Miller": 2,
+      "Cedric Tillman": 1
+    },
+    "distinct_people": 19,
+    "captains": {
+      "Justin Jefferson": 6,
+      "Will Reichard": 6,
+      "Kyler Murray": 5,
+      "Tyler Shough": 4,
+      "Chris Olave": 3,
+      "Saints": 3,
+      "Daniel Carlson": 3,
+      "Aaron Jones Sr.": 2,
+      "Vikings": 1
+    },
+    "mean_pair_overlap": 2.2936,
+    "max_pair_overlap": 5,
+    "pairs_sharing_5": 7,
+    "min_salary": 43200,
+    "max_salary": 50000
+  },
+  "does_not_establish": [
+    "EV",
+    "ROI",
+    "WIN_PROBABILITY",
+    "UPLOAD_CLEARANCE"
+  ]
+}

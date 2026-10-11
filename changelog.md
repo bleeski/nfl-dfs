@@ -4,6 +4,63 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-11: MIN@NO Showdown (Sunday 1:00 PM ET), 33 entries, 6 contests (slate record, not a roadmap session)
+
+Inputs, byte-identical to the uploads, under `data/inbox/slates/min-no-sd-2026-10-11/input/`: salary SHA-256
+`96b158de58fbdc4275032c14966f26a8b7026188e3e9f66ddda598a8042c4306`, entries
+`9bca7eac14bd76d15bdc18d0b99c07d4d2bfd276ef10ff32907ea448ddead61c`. Request 16:13Z, lock 17:00Z, delivery deadline 16:55Z;
+file delivered 16:25Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+- **Runs.** `20261011T161437Z-min-no-sd` (`--build-priors`): baseline published, then `PRIOR_REVIEW_IDENTITY_BLOCKED` on Audric
+  Estime (`00-0039373`, nflverse "Audric Estimé") and Jalen Moreno-Cropper (`00-0038740`, "Jalen Cropper"), the same IDs earlier
+  slates accepted. Reviewed crosswalk `roles/identity_reviewed_min_no.csv` (`888b774d...09e7`), `priors-freeze` to
+  `data/runs/min-no-sd-1011-frozen` (weather `INDOOR` from the schedule roof). `20261011T161601Z-min-no-sd-r2` (no policy, 26
+  practice-squad `--exclude` IDs): 33 of 33, concentration `AS_REQUESTED`, `c2964bd0...4250`. `20261011T161741Z-min-no-sd-r3`
+  (policy v4, all eight R33 theses with `--variants`, QB depth package): 33 of 33 after one bank resize
+  (`CANDIDATE_BANK_EXHAUSTED_INCOMPLETE` on attempt 0), every thesis `ACTIVE`, backups Wentz, Brosmer, Rattler and Wilson out,
+  `4b69b329...5c82`, QA PASS. All three `DELIVERY_STATE=DELIVERABLE`.
+- **QB depth package** (`roles/qb_depth/qb_depth_roles.json`, nflverse chart observed 13:56:31Z): Murray (MIN) and Shough (NO)
+  start.
+- **Practice squad.** `practice_squad_check.py` named 12 not `ACT` plus Estime with no roster row. Official posts (vikings.com,
+  neworleanssaints.com, 10/10): MIN elevated Beckham (DraftKings `OUT`, inactive) and Jeshaun Jones; NO elevated Cedric Tillman.
+  Kevin Austin Jr. was waived 10/10; Smyth, Zamir White, Bentley, Palmer and Estime were not elevated. All 13 stayed excluded.
+- **Inactives (research, never a gate; team sites, posted 10:30 CT).** MIN: Addison, Beckham, Brosmer, Darrisaw, Demmings, J.
+  Thomas, E. Williams. NO: Z. Wilson, A. Jennings, Reid, Elliss, Wright, Broughton, Shepherd. Jefferson and Kamara active.
+- **Usage research** (nflverse `stats_player_week_2026.csv` `bda143a5...98ff`, `snap_counts_2026.csv` `fd2656db...79c6`, read for
+  construction only, no number written). Vele 7.8 targets a game on 88 to 96% of snaps (prior 5.2 FLEX; 0 engine rows). Lance 69 to
+  85% of snaps as NO's WR3; Tillman's elevation is reported as special teams (8 engine rows). Addison out: Jennings 95% of snaps in
+  week 4, Felton 59%. Olave 12 targets a game (1 engine Captain row).
+- **Judgment pass** (`construction/judgment_pass.py`, record `judgment_v6_record.json`). Tillman to Lance, paired with a cheaper
+  same-team swap where the cap needed it (7 of 8 rows; 1 kept Tillman); no DST beside the opposing starting QB (flip to the other
+  DST, else the DST's own QB, else a same-team player); Vele for Kamara in NO-script rows; Jennings for a FLEX kicker in MIN-script
+  rows; two NO-big rows flipped to Olave Captain and Shough FLEX; a final coherence pass once the adds freed salary. Engine file to
+  v6: prior total 2,312.59 to 2,113.62 (the priors price last season's roles), lowest row 63.72 to 50.71, people 15 to 19, mean
+  pair overlap 2.7348 to 2.2936, max overlap 4 to 5 (7 pairs), max person Jefferson 19 to Murray 20 (61%, inside the 75% ceiling
+  allowance), Captains Jefferson 6, Reichard 6, Murray 5, Shough 4, Olave 3, Saints 3, Carlson 3, A. Jones 2, Vikings 1. Vele 0 to
+  9, Lance 0 to 11, Jennings 0 to 6, Felton 0 to 6, Tillman 8 to 1, Kamara 16 to 7. QA with `--policy --claim`: PASS, 0 defects, 0
+  limit breaches, 33 of 33 rows follow their thesis. Not built: one MIN-close-low row keeps the Saints DST beside Murray (no single
+  legal swap), and one Olave Captain row has Murray, not Shough.
+- **Drafts not delivered.** v1 to v3 broke the policy's structural bounds (8 rows: 4 with no QB, 4 with 3 same-team pass catchers);
+  QA named each `THESIS_BROKEN`, and the script now checks them. v3's CRLF copy and v4/v5 were superseded. None is committed.
+- **Contest pass.** `diversify_showdown_contests.py` on v6 moved 24 rows (score 61.23 to 50.38). Final
+  `construction/DK_REVIEW_ENTRY_min-no-sd_final_v7.csv` (`11ddfc46...2f4d`): same 33 distinct lineups as v6, QA PASS, 0 defects,
+  max overlap 5, salary $43,200 to $50,000.
+- **Found.** `nfl run-slate --help` raises `TypeError: must be real number, not dict` in argparse's help formatting (a `%` in a
+  help string). Not investigated; the flags were read from `src/nfl_dfs/cli.py`. `docs/claude/working.md` now names the
+  structural-bound and CRLF traps.
+- **Final adversarial pass (Ben asked, 16:41Z).** `construction/pareto_scan.py` on v7: no DraftKings `OUT`/`IR` person, no
+  excluded practice-squad ID, no backup QB, 33 distinct rows. Its Pareto scan (row prior up; Captain, thesis, structural bounds,
+  research placements and both QBs and DSTs held; max exposure, top-3, mean overlap no higher, people no fewer, max overlap 5 or
+  under) found 3 swaps, all Kamara in (record `pareto_v8_record.json`). One taken on 2026 usage as well as the prior: 5290504191,
+  Carlson FLEX for Kamara FLEX (+2.52 prior). Rejected: Juwan Johnson for Kamara (Johnson 15.1 PPR a game in 2026 against
+  Kamara's 11.7) and Reichard for Kamara in a MIN-wins-big row (it cuts the row's own scoring for an opposing back). v9
+  `construction/DK_REVIEW_ENTRY_min-no-sd_final_v9.csv` (`47b0d4a1...4c6b`): QA PASS, 0 defects, 0 breaches, max overlap 5.
+- **Second adversarial pass (Ben asked again, 16:44Z).** Two-swap fixes for the two rows no single swap could fix. 5290504205
+  (Olave Captain with Murray): Murray for Shough and Fant for Felton, so the Captain has his own QB; prior +0.2, max exposure 20 to
+  19 (Murray), top-3 57 and 57, mean pair overlap 2.2898 to 2.2879, people 19 and 19: a Pareto gain. 5290504190 (Saints DST beside
+  Murray): the fix (Vikings DST, Juwan Johnson for Aaron Jones) would copy 5290510827's six people, so the row stays. v10
+  `construction/DK_REVIEW_ENTRY_min-no-sd_final_v10.csv` (`e5a20eeb...30da`), only that row differs from v9: QA PASS, 0 defects.
+
 ### 2026-10-11: Session 70 -- `nfl grade-players`: realized player points, the reconciliation and the grade (Part A; back to Pending on O12, split to Session 70b)
 
 Branch `claude/s70-player-grading`, pull request #131. Claimed at `1750325` (PR #130's merge, Session 69b's close-out).

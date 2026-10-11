@@ -1,0 +1,35 @@
+{
+  "name": "DEFENSIVE_BATTLE",
+  "teams": [
+    "MIN",
+    "NO"
+  ],
+  "captain_set": [
+    "MIN|K|Will Reichard",
+    "NO|K|Daniel Carlson",
+    "MIN|DST|Vikings",
+    "NO|DST|Saints"
+  ],
+  "position_bounds": [
+    {
+      "position": "K",
+      "minimum": 2,
+      "maximum": 2
+    },
+    {
+      "position": "DST",
+      "minimum": 1,
+      "maximum": 1
+    },
+    {
+      "position": "QB",
+      "minimum": 0,
+      "maximum": 1
+    },
+    {
+      "position": "WR",
+      "minimum": 0,
+      "maximum": 1
+    }
+  ]
+}
