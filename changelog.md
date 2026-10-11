@@ -4,6 +4,106 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-11: Session 70 -- `nfl grade-players`: realized player points, the reconciliation and the grade (Part A; back to Pending on O12, split to Session 70b)
+
+Branch `claude/s70-player-grading`, pull request #131. Claimed at `1750325` (PR #130's merge, Session 69b's close-out).
+Ben approved the plan before any code (twice: plan mode came back after a worker restart). Ben's entry-history export and
+the DET@CAR and TB@DAL r1 `priors/identity_reviewed.csv` files were asked for with the plan and did not arrive, so the
+card's real-data acceptance did not run: Session 70 goes back to `Pending` on operator item O12. Every test fixture is
+synthetic. Grading changes no prior, selection, gate or release truth; every path still ends `PRIOR_ONLY` /
+`DO_NOT_UPLOAD`.
+
+**Added.**
+- `src/nfl_dfs/player_grading.py` (`nfl_player_grading_v1`):
+  - **The stats package.** The priors adapter's own `player_stats_current` entry (`priors.source_specifications`, with
+    `optional` off so a failed fetch is a refusal, never an empty grade) through `priors.freeze_sources`, with a
+    `source_manifest.json` reloaded by `priors.load_frozen_manifest` (hash-checked). One fetch path; one frozen copy
+    serves every slate graded from it, and a rerun is byte-identical.
+  - **Realized points** (`nfl_realized_dk_points_v1`): `scoring.score_offense` and `score_kicker` on the mapped line
+    (`special_teams_tds` for return TDs, `fumbles_lost_total`, the three two-point columns, `fumble_recovery_tds`, the
+    kicker bins); a captain is an exact 3/2 of his hundredths. A row whose `fumbles_lost_total` differs from its three
+    parts carries a tracing note.
+  - **The joins.** People by the salary's `underlying_id` (the frozen `by_person` key, 29/29, 29/29, 27/27 and 360/360
+    on the four slates); identity from the run's reviewed decision CSV, exact DraftKings IDs only, each row checked
+    against the salary bytes; a stat row never matched by name. Each DraftKings game must bind one nflverse `game_id`
+    holding a row from both teams, or `GAME_UNBOUND` (a wrong `--week`, a bye, an unpublished game).
+  - **Gaps, never zeros:** `DST_NOT_IN_PLAYER_FILE`, `IDENTITY_UNBOUND`, `NO_STAT_ROW`, `STAT_NOT_CARRIED:<col>`,
+    `STAT_CELL_BLANK:<col>`, each named per person and kept out of every measure.
+  - **The reconciliation.** Each delivered lineup's realized total against the entry-history `points_hundredths` by
+    Entry ID, integer hundredths, within 1: `RECONCILED`, `MISMATCH` (every player's points and stat line),
+    `NOT_FULLY_COVERED`, `ENTRY_NOT_IN_HISTORY`, `CONTEST_DISAGREES`, `BLANK_LINEUP`; residual groups for lineups with
+    one uncovered person (implied points agree within 2 hundredths), with their coverage and blind spot stated.
+  - **The grade.** Per slate, `player_points_mae` (labelled a variant of the registered metric, with its departures) and
+    Spearman (ties averaged) for the prior and for `salary_scaled_points_v1`; `participation_brier` and the registered
+    bootstrap named not computed; `does_not_establish`.
+- `nfl grade-players` in `src/nfl_dfs/cli.py` and `nfl.ps1`'s ValidateSet. It catches its own failures, so it never
+  prints the lineup release truths `cli.main`'s handler prints.
+- Registry family `player_grading` (`P`, `CERTIFICATION`, "stops a grading report, never a lineup file") with six codes:
+  `PLAYER_GRADING_STATS_UNAVAILABLE`, `_STATS_INVALID`, `_WEEK_ABSENT`, `_GAME_UNBOUND`, `_INPUT_INVALID`,
+  `_OUTPUT_EXISTS`. `REGISTRY_SHA256` re-pinned from `344f18fa...893c62` to `325e8dc0...355a` in
+  `tests/test_gate_registry.py` (the only edit to an existing test) and `docs/DATA_CONTRACTS.md`.
+- `docs/DATA_CONTRACTS.md` § Player grading, `docs/OPERATOR_GUIDE.md` § Player grading, `tests/test_player_grading.py`
+  (65 tests), `docs/ROADMAP.md` operator item O12 and the Session 70b row and card.
+
+**Changed from the plan, on purpose.**
+- A sixth code, `PLAYER_GRADING_STATS_UNAVAILABLE`: a failed fetch is not an invalid file.
+- The real weekly file has one row a week with a blank `player_id` (plays credited to no player). The first real run
+  refused it (`DUPLICATE_OR_BLANK_PLAYER_WEEK:row=4450`); it is now counted (`unattributed_stat_rows`) and skipped, and a
+  repeated `player_id` still refuses.
+- `team` is not a required stat column (nothing joins on it); the game check uses the salary's teams.
+- Part A came to 1,256 changed lines when measured, past the plan's 700-line stop rule (the plan estimated about 260
+  source lines; the module is 612), so Part B (the tables by position and tier, play rate by status, `--pool`) is
+  Session 70b, as the plan expected.
+
+**Reviews and consults.**
+- The plan: the `advisor` skill's hook failed in this cloud session (`set: Illegal option -o pipefail`), so a
+  fresh-context `Plan` agent with model `fable` was briefed to refute six claims. Taken: the r1 identity folders (the r2
+  runs never write `identity_reviewed.csv`), the `by_person` population (Week 4's 17 filtered quarterbacks stay graded,
+  `out_of_selection`), Week 4 reconciled on v6 and v8, `optional` off behind a frozen package, integer hundredths, the
+  metric labelled a variant, `status` and `gaps` as names the registry scan cannot sweep, a pairwise trace instead of
+  least squares, and Part A cut to the acceptance. Dropped on its finding: a cloud re-resolution of identity.
+- The diff, fresh-context `reviewer`. Should-fix, each proven on a copy and fixed with a test: an identity CSV in another
+  encoding or with a misshapen row, an entries list holding a non-object, and a stats cell past the csv field limit fell
+  through to `cli.main`'s handler (which prints lineup release truths), now named refusals behind a last `FAILED` catch;
+  a wrong `--week` with one team on bye bound the other team's game, now refused; six untested mutants. Notes taken: a
+  failed write removes the report folder it made; the docs say the package never refreshes; the identity rule is stated
+  exactly (the file's own proposed ID).
+- Before close-out, a second fresh-context `fable` consult refuted closing Session 70 `Complete` with an operator item
+  (Session 69b's precedent): Session 69 had already parsed the real export, while this card's acceptance includes the
+  first end-to-end check of `scoring.py` and a defect it finds has to land somewhere. Taken: Session 70 back to `Pending`
+  on O12, Session 70b with no board dependency. Also from it: an unreadable package file was reported `WRITE_FAILED`, now
+  `STATS_INVALID` with a test; the contract no longer says a failed write leaves no folder (a parent it created stays) and
+  says the stats entry's 24-hour `expires_at` is carried, not enforced.
+
+**Verification.**
+- The card's command: `sh ./nfl.sh test tests/test_player_grading.py -x --tb=short`, red first (`ImportError: cannot
+  import name 'player_grading'`), then `65 passed in 2.21s`. Neighbors (scoring, metric registry, participation, priors
+  adapter, entry history and intake, gate registry, repo boundaries, sources TLS): `573 passed in 16.56s`.
+- Mutation on copies of the tree (`PYTHONPATH` into the copy, `nfl_dfs.__file__` checked): pass 1 30 of 33 killed (a
+  postseason row, two games sharing one `game_id`, a Classic file on a Showdown slate survived and got tests); pass 2 47
+  of 47 after the review; pass 3 48 of 48 with the package-read guard.
+- Before and after against `origin/main` (a copy built with `git show`): `results-intake` on a synthetic export
+  identical in stdout, exit code and every written byte; `nfl baseline` on DET@CAR identical but for timings,
+  `generated_at`, output paths, a clock string in the lock limitation and `gate_registry_sha256` (the re-pin); `--help`
+  differs only by the new command.
+- Full suite `3474 passed, 1 skipped in 1237.29s (0:20:37)` on Linux. `compileall` of both changed modules; `git diff --check` clean; no protected path
+  touched. 1,434 changed lines in source, tests, registry and docs (source 650, tests 642), against a plan of about 700 for Part A and the 1,500 breakpoint.
+
+**Measured on real inputs, outside git** (one stats package, `stats_player_week_2026.csv` SHA-256 `bda143a5...98ff`,
+weeks 1 to 4 complete and week 5 holding TB@DAL; one slate each, no calibration claim):
+- ATL@NO (week 4, committed crosswalk): 29 graded, 22 usable (2 DST, 5 no stat row), 4 out of selection; prior MAE
+  4.40 against salary 4.21, Spearman 0.79 against 0.84. Report `7b6ad74c...`, byte-identical on a rerun and after the
+  review fixes. `--week 5` refuses `GAME_UNBOUND:ATL@NO:NO_STAT_ROWS`.
+- Week 4 Classic (committed crosswalk, `scores_qbclean.json`): 360 graded, 254 usable (24 DST, 82 no stat row), 17 out of
+  selection, 12 games bound; prior MAE 4.78 against salary 5.72, Spearman 0.68 against 0.62. Report `81132ef1...`.
+- DET@CAR's `pool_scores.json` (a third run's dump) agrees with the delivered run's `scores_r2.json` on all 24 shared
+  IDs. All five delivered files (DET@CAR `final_v5`, ATL@NO `qa_iter3`, TB@DAL `final_v3`, Week 4 `LATESWAP_v8` and
+  `FINAL_v6`) parse with 0 unresolved cells, and every cell is in its slate's `by_dk_id`.
+
+**Left open.** The acceptance on real data: no lineup has been reconciled against DraftKings' points, so `scoring.py`
+is still unchecked end to end (O12: the export and the two r1 identity files, or the Windows run). DSTs are named, not
+graded (the player file has none). The report tables, play rate and the pooled report are Session 70b.
+
 ### 2026-10-11: Session 69b -- `nfl results-intake`, the write-once snapshot and the NFL artifacts
 
 Branch `claude/s69b-entry-history-cli`. Claimed at `023035a` (PR #129's merge, Session 69's close-out). Ben approved the

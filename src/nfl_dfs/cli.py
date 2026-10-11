@@ -100,6 +100,7 @@ from .delivery import (
 from .economics import evaluate_candidates_against_field
 from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
 from .entry_history import run_intake as run_results_intake
+from .player_grading import run as run_player_grading
 from .evidence import (
     EvidenceError,
     parse_official_inactive_snapshot,
@@ -2084,6 +2085,20 @@ def command_results_intake(args: argparse.Namespace) -> int:
     outcome = run_results_intake(args.history, args.results_root)
     _print_json(outcome.as_dict())
     return outcome.exit_code
+
+
+def command_grade_players(args: argparse.Namespace) -> int:
+    """Session 70: realized player points, the lineup reconciliation and the grade (`nfl_player_grading_v1`).
+
+    Exit 0 wrote the report; 2 refused by code and wrote nothing. A grading input only: no release truth.
+    """
+
+    exit_code, summary = run_player_grading(
+        salaries=args.salaries, pool_scores=args.pool_scores, identity_review=args.identity_review,
+        stats_package=args.stats_package, season=args.season, week=args.week, out=args.out,
+        lineups=args.lineups, entries=args.entries)
+    _print_json(summary)
+    return exit_code
 
 
 def command_priors_propose(args: argparse.Namespace) -> int:
@@ -5210,6 +5225,26 @@ def build_parser() -> argparse.ArgumentParser:
     results_intake.add_argument("--history", required=True, help="the entry-history CSV DraftKings exported")
     results_intake.add_argument("--results-root", default=str(DEFAULT_RESULTS_DIR))
     results_intake.set_defaults(func=command_results_intake)
+    grade_players = subparsers.add_parser(
+        "grade-players",
+        help=(
+            "score one slate's realized nflverse stat lines with scoring.py, join them to its frozen priors by exact"
+            " DraftKings ID, reconcile the delivered lineups against DraftKings' lineup points and grade the prior;"
+            " a grading input only"
+        ),
+    )
+    grade_players.add_argument("--salaries", required=True, help="the slate's DraftKings salary CSV")
+    grade_players.add_argument("--pool-scores", required=True, help="the run's nfl_prior_pool_scores_v1 dump")
+    grade_players.add_argument("--identity-review", required=True,
+                               help="the run's reviewed identity CSV (priors/identity_reviewed.csv)")
+    grade_players.add_argument("--stats-package", required=True,
+                               help="a folder holding the season's frozen nflverse weekly file; fetched into it once")
+    grade_players.add_argument("--season", required=True, type=int)
+    grade_players.add_argument("--week", required=True, type=int)
+    grade_players.add_argument("--out", required=True, help="a new folder for the report (never overwritten)")
+    grade_players.add_argument("--lineups", help="the delivered DK_REVIEW_ENTRY CSV (needs --entries)")
+    grade_players.add_argument("--entries", help="nfl_entries.w1.json from results-intake (needs --lineups)")
+    grade_players.set_defaults(func=command_grade_players)
     priors_propose = subparsers.add_parser(
         "priors-propose",
         help="freeze approved nflverse artifacts and propose the DK identity crosswalk",
