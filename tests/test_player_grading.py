@@ -5,6 +5,7 @@ Synthetic bytes only, written with `write_bytes` so every platform hashes the sa
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -567,6 +568,17 @@ def test_a_damaged_package_or_another_season_refuses(tmp_path, monkeypatch):
     with pytest.raises(pg.PlayerGradingRefused) as caught:
         pg.load_or_fetch_stats(tmp_path / "pkg", SEASON)
     assert caught.value.code == "PLAYER_GRADING_STATS_INVALID"
+
+
+def test_a_package_file_that_cannot_be_read_is_a_stats_refusal(tmp_path, monkeypatch):
+    monkeypatch.setattr(priors, "fetch_public_artifact", fake_fetch(stats_bytes(), []))
+    pg.load_or_fetch_stats(tmp_path / "pkg", SEASON)
+    loaded = priors.load_frozen_manifest((tmp_path / "pkg").resolve())
+    gone = {name: dataclasses.replace(item, path=tmp_path / "gone.csv") for name, item in loaded.items()}
+    monkeypatch.setattr(priors, "load_frozen_manifest", lambda _root: gone)
+    with pytest.raises(pg.PlayerGradingRefused) as caught:
+        pg.load_or_fetch_stats(tmp_path / "pkg", SEASON)
+    assert (caught.value.code, caught.value.detail.endswith(":FileNotFoundError")) == ("PLAYER_GRADING_STATS_INVALID", True)
 
 
 # ----------------------------------------------------------------- the command

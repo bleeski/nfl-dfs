@@ -4523,7 +4523,8 @@ DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION`.
 **The command.** `nfl grade-players --salaries <csv> --pool-scores <json> --identity-review <csv> --stats-package <dir>
 --season <yyyy> --week <n> --out <new folder> [--lineups <DK_REVIEW_ENTRY csv> --entries <nfl_entries.w1.json>]`. Exit 0
 wrote `<out>/player_grading.w1.json` and prints a summary; exit 2 refused (`status: REFUSED`, `code`, `detail`) and
-wrote no report, or could not write it (`WRITE_FAILED`, which leaves no folder behind), or failed unexpectedly
+wrote no report, or could not write it (`WRITE_FAILED`; the report folder it made is removed again, a parent folder it created is
+not), or failed unexpectedly
 (`FAILED`, with the exception class). It never prints a lineup release truth.
 
 **The stats package.** `--stats-package` holds the season's nflverse weekly player file. With no `source_manifest.json`
@@ -4533,7 +4534,8 @@ there, the command fetches the priors adapter's own `player_stats_current` entry
 (`nfl_prior_source_manifest_v1`, one artifact). Otherwise it loads the manifest with `priors.load_frozen_manifest`
 (hash-checked). One package serves the slates graded from it, and a rerun on it is byte-identical. It never
 refreshes: a week published after the fetch, or an nflverse stat correction, needs a new package folder, and a
-`MISMATCH` is checked against a fresh package before it is called a scoring defect. The first run writes the package
+`MISMATCH` is checked against a fresh package before it is called a scoring defect. The entry's `expires_at` (24
+hours, from the priors source) is carried into the report, not enforced: grading reads a frozen copy on purpose. The first run writes the package
 even when the grade then refuses. A failed fetch is
 `PLAYER_GRADING_STATS_UNAVAILABLE`; a damaged package, another season's, or bytes that do not match the entry are
 `PLAYER_GRADING_STATS_INVALID`.

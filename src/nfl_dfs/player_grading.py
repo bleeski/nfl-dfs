@@ -136,7 +136,10 @@ def load_or_fetch_stats(package: Path, season: int) -> tuple[bytes, dict]:
         raise PlayerGradingRefused("PLAYER_GRADING_STATS_INVALID", f"{package}:{exc}") from exc
     if artifact is None or artifact.source_uri != spec.url:
         raise PlayerGradingRefused("PLAYER_GRADING_STATS_INVALID", f"{package}:holds no {spec.url}")
-    raw = artifact.path.read_bytes()
+    try:
+        raw = artifact.path.read_bytes()
+    except OSError as exc:
+        raise PlayerGradingRefused("PLAYER_GRADING_STATS_INVALID", f"{artifact.path}:{type(exc).__name__}") from exc
     if sha256_bytes(raw) != artifact.sha256:
         raise PlayerGradingRefused("PLAYER_GRADING_STATS_INVALID", f"{artifact.path}:changed after the check")
     return raw, artifact.manifest_entry(package_root=package)
