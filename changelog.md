@@ -73,6 +73,47 @@ file delivered 19:12Z.
   policy, so the thesis build was a hand step again; and the role gate keeps signed-this-week backups (Robert
   Henry Jr.) out, which was harmless today only because he was inactive.
 
+### 2026-10-11: Week 5 Classic late swap (two FLEX cells) and the slot rule
+
+Branch `claude/wk5-classic-lateswap-2026-10-11`. A lineup run, not a roadmap session. Ben supplied his current
+entries export (`live/DKEntries_current_1914Z.csv`, `ea043905…8ec8`, 33 rows: our 32, which match v8 exactly, plus
+a free 200-player entry we did not build) and the Dime contest's standings at 19:05Z (86,047 entries; kept out of
+the repo because it carries other users' entry names).
+
+- Standings read: DraftKings hides every unlocked player, in the field's lineups (`LOCKED`, 83,452 cells) and in
+  the `%Drafted` table, so late-game ownership is unobservable mid-slate. Early-game ownership is observable and
+  graded the build: Warren ours 31% against the field's 16.8% (31.9 points), Maye 19% against 4.3% (22.9), Hunter
+  Henry 31% against 5.8% (13.4), Jefferson 12.5% against 6.0% (18.1); Chase 28% against 5.3% (5.9), Metcalf 25%
+  against 9.4% (5.3), Doubs 22% against 8.6% (2.6); Swift 31% against the field's 37.7%. Best Dime row rank 97 at
+  133.36 with Emanuel Wilson left.
+- Late inactives (Yahoo, CBS, team sites, 2:39 to 3:04 PM ET): every rostered DEN, LAC, SF, SEA, DET and ARI player
+  active. Ladd McConkey active but "not expected to play meaningful snaps" (Schefter); Quentin Johnston and Brenen
+  Thompson inactive; Denver without both starting corners (Surtain, Moss). The prior never moved McConkey's share,
+  so LAC's other pass catchers are understated in it.
+- Adversarial pass 1 (fresh-context agent, about 19:21Z to 19:28Z): could not refute "no swap needed"; redeploy
+  with `--now` and the placements protected: `NO_PARETO_GAIN`. Pass 2 (here): Oronde Gadsden II ($3,600, prior 9.72)
+  for Tre' Harris (6.74) in two rows and for Jaylen Waddle in a third is Pareto on the portfolio and inside every
+  multi-entry contest; the redeploy had missed the Harris rows only because Harris was protected as a placement.
+  Pass 3: redeploy from the result, fixed point, no gain.
+- **Found and fixed before anything shipped:** re-exporting the swapped portfolio with `write_dk_entries.py` from
+  the blank template re-slots every row: 107 cells differed from DraftKings' current file, locked players moved
+  between slots. A late-swap upload must keep every locked player where DraftKings holds him. The Waddle swap was
+  then infeasible (Gadsden cannot play WR and the row's FLEX is Justin Jefferson, locked), so it was dropped. The
+  delivered file is DraftKings' own current export with the two cells edited in place
+  (`construction/late_swap_cells_record.py`, which refuses a LOCKED cell, a slot the new position cannot fill, and
+  any change beyond the named cells). The re-slotted export was never sent and is not committed.
+- Delivered `DK_LATESWAP_wk5_classic_v10.csv`, `4ed31af6…2c1a1a`, 19:27Z: 2 cells changed (FLEX in 5290502365,
+  Dime, and 5291553103, NBA 10-20 satellite: Tre' Harris to Oronde Gadsden II), 595 of 595 lines CRLF, all 32 rows
+  equal to `portfolio_v10_lateswap.json`, the free entry untouched. QA Tier 1 PASS; prior sum +5.96; portfolio mean
+  overlap 1.1472 to 1.1431, every other measure unchanged; the Dime contest's mean overlap 1.1789 to 1.1684 and
+  distinct people 79 to 80. `PRIOR_ONLY / DO_NOT_UPLOAD`.
+- Rejected, not Pareto: LaPorta to Kittle (+4.21, Kittle ill, portfolio overlap up), Barner or Engram or Mims to
+  Gadsden (distinct people down), Evans or Deebo to Michael Wilson; Dime rows 5290502372 and 5290502375 both ride
+  Smith-Njigba alone (5 of 9 shared) and stay, since separating them lowers a prior.
+
+Verification: data and docs only, no code changed; `tests/test_roadmap_queue.py` and `tests/test_repo_boundaries.py`:
+`150 passed in 4.15s`; `git diff --check` clean; no protected path touched.
+
 ### 2026-10-11: Week 5 Classic slate (32 entries, 11 games) and `run-slate --help`
 
 Branch `claude/wk5-classic-2026-10-11`. A lineup run, not a roadmap session. Inputs, committed under
