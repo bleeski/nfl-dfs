@@ -45,6 +45,14 @@ file delivered 19:12Z.
 - Passed over: Bam Knight beyond the build's own 3 rows (no source names him), Theo Wease Jr. beyond 2,
   Elijah Higgins (Reiman's status unconfirmed), the cheap SEA and DET running backs behind the leads (no
   source), Brandin Cooks (no SF usage found).
+- Follow-up (19:13Z to 19:16Z): Ben supplied the main-slate portfolio as it stands (`DKEntries_143.csv`,
+  `ea043905…8ec8`, 33 entries, early cells `LOCKED`) and the Dime Package standings (contest 196420175, zip
+  `40ddfafa…fa0`, 86,047 entries). The export masks every not-yet-started player as `LOCKED` in field lineups,
+  so it carries no afternoon ownership; the afternoon portfolio is unchanged. Field afternoon slots per lineup:
+  top 1000 hold 0 to 3 (314 hold none); Ben's Dime entries rank 97 (Emanuel Wilson left) and 684 (none left).
+  No open main-slate cell holds an OUT, IR, McConkey or Pettis. Recommended by hand on DraftKings before 4:05,
+  research-backed, salary checked: 5291544881 Kimani Vidal to Keaton Mitchell; 5291560256 Theo Wease Jr. to
+  Tre' Harris; 5290502360 Theo Wease Jr. to Tre' Harris with Jaylen Waddle to Courtland Sutton (salary 48,800).
 - What would have made it better: `run-slate` exported C1 rather than the rung-4 thesis build on a run with no
   policy, so the thesis build was a hand step again; and the role gate keeps signed-this-week backups (Robert
   Henry Jr.) out, which was harmless today only because he was inactive.
