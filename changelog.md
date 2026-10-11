@@ -48,6 +48,13 @@ file delivered 16:25Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECIS
 - **Found.** `nfl run-slate --help` raises `TypeError: must be real number, not dict` in argparse's help formatting (a `%` in a
   help string). Not investigated; the flags were read from `src/nfl_dfs/cli.py`. `docs/claude/working.md` now names the
   structural-bound and CRLF traps.
+- **Final adversarial pass (Ben asked, 16:41Z).** `construction/pareto_scan.py` on v7: no DraftKings `OUT`/`IR` person, no
+  excluded practice-squad ID, no backup QB, 33 distinct rows. Its Pareto scan (row prior up; Captain, thesis, structural bounds,
+  research placements and both QBs and DSTs held; max exposure, top-3, mean overlap no higher, people no fewer, max overlap 5 or
+  under) found 3 swaps, all Kamara in (record `pareto_v8_record.json`). One taken on 2026 usage as well as the prior: 5290504191,
+  Carlson FLEX for Kamara FLEX (+2.52 prior). Rejected: Juwan Johnson for Kamara (Johnson 15.1 PPR a game in 2026 against
+  Kamara's 11.7) and Reichard for Kamara in a MIN-wins-big row (it cuts the row's own scoring for an opposing back). v9
+  `construction/DK_REVIEW_ENTRY_min-no-sd_final_v9.csv` (`47b0d4a1...4c6b`): QA PASS, 0 defects, 0 breaches, max overlap 5.
 
 ### 2026-10-11: Session 70 -- `nfl grade-players`: realized player points, the reconciliation and the grade (Part A; back to Pending on O12, split to Session 70b)
 
