@@ -1,0 +1,35 @@
+{
+  "name": "MIN_WINS_CLOSE_LOW",
+  "teams": [
+    "MIN",
+    "NO"
+  ],
+  "captain_set": [
+    "MIN|K|Will Reichard",
+    "MIN|DST|Vikings"
+  ],
+  "team_bounds": [
+    {
+      "team": "MIN",
+      "minimum": 3,
+      "maximum": 4
+    }
+  ],
+  "position_bounds": [
+    {
+      "position": "K",
+      "minimum": 1,
+      "maximum": 1
+    },
+    {
+      "position": "DST",
+      "minimum": 1,
+      "maximum": 1
+    },
+    {
+      "position": "WR",
+      "minimum": 0,
+      "maximum": 1
+    }
+  ]
+}
