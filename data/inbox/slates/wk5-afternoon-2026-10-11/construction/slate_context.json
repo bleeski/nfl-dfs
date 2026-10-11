@@ -1,0 +1,20 @@
+{
+ "schema": "nfl_classic_slate_context_v1",
+ "gameday": "2026-10-11",
+ "games": [
+  "DEN@LAC",
+  "DET@ARI",
+  "SF@SEA"
+ ],
+ "implied_team_totals": {
+  "LAC": 19.5,
+  "DEN": 23.0,
+  "ARI": 25.0,
+  "DET": 30.5,
+  "SEA": 24.75,
+  "SF": 21.75
+ },
+ "projected_ownership": {},
+ "role_boosts": {},
+ "teams_without_a_market_line": []
+}

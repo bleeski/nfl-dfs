@@ -1,0 +1,47 @@
+==============================================================
+TIER 1  VALIDITY, COVERAGE AND ENFORCEMENT  (blocking)
+==============================================================
+  lineups: 25
+  export checked: data/inbox/slates/wk5-afternoon-2026-10-11/DK_REVIEW_ENTRY_wk5_afternoon_vA.csv
+  validity failures: 0
+    all lineups legal
+  unfilled authorized Entry IDs: 0 []
+  enforcement defects (operator-requested limits): 0
+    no enforced limit exceeded
+
+==============================================================
+TIER 2  PORTFOLIO COHERENCE  (scored, must be shown at handoff)
+==============================================================
+  CONCENTRATION
+    max single-player exposure : 10/25 (40%)  Michael Wilson
+    top-3 union coverage       : 16/25 (64%)   <- 85% on 2026-09-13 meant a 4-lineup portfolio
+    distinct players           : 48
+    pairwise overlap max/mean  : 5 / 2.07
+  ANTI-CORRELATION  (all should be zero)
+    dst_vs_own_skill    : 0
+    dst_vs_own_qb       : 0
+  STACK INTEGRITY
+    QB + own pass catcher      : 25/25
+    bring-back                 : 25/25   <- suggested floor 70%, was 12/18 on 2026-09-20
+  GAME ENVIRONMENT  (avg implied total of skill slots)
+    portfolio mean             : 24.39
+    weakest lineups            : L22=21.9, L15=22.3, L14=22.4, L3=22.7
+  LEVERAGE
+    no ownership supplied: this portfolio carries NO leverage model.
+    Say so at handoff. Mean-max in a large field is chalk.
+
+  TOP EXPOSURES
+    10/25  40%  Michael Wilson         WR   ARI  $6200
+    10/25  40%  Jahmyr Gibbs           RB   DET  $9800
+    10/25  40%  Emanuel Wilson         RB   SEA  $5300
+    10/25  40%  Broncos                DST  DEN  $3200
+     9/25  36%  Jeremiyah Love         RB   ARI  $6100
+     9/25  36%  Ladd McConkey          WR   LAC  $5600
+     9/25  36%  Christian McCaffrey    RB   SF   $8200
+     9/25  36%  Amon-Ra St. Brown      WR   DET  $7900
+     8/25  32%  Trey McBride           TE   ARI  $6700
+     8/25  32%  George Kittle          TE   SF   $5200
+     7/25  28%  Deebo Samuel Sr.       WR   SF   $5500
+     7/25  28%  Lions                  DST  DET  $3000
+
+  VERDICT: PASS
