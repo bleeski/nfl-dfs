@@ -42,6 +42,10 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 ## Session protocol: `docs/ROADMAP.md` §2.1, plus these
 
 - Never reset, clean, stash or reformat a dirty tree; it is often user-owned work.
+- **The advisor in a cloud session (Session 69, 2026-10-11).** The `advisor` skill's hook has failed in cloud
+  sessions since Session 23b (2026-10-01, `set: Illegal option -o pipefail`). There, run its procedure directly: one
+  fresh-context read-only `Plan` agent with model `fable`, briefed to refute named claims, never to confirm; record
+  the question, the answer and what changed in the task file and the changelog.
 - **A named seam must be a real fraction of the estimate (Session 23d, 2026-10-08).** The plan named two seams of about 65 lines each
   (the workbook rows, the fee cross-check) against an estimate of 1,150 lines that became 2,150, so the 1,000 and 1,500 triggers could not
   bind. Name the seam as the part that is separable in the code (here the review layer, about 400 lines with its tests), and estimate a

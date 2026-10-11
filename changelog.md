@@ -4,6 +4,109 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-11: Session 69 -- the DraftKings entry-history contract and parser (split to Session 69b at its seam)
+
+Branch `claude/s69-entry-history-intake`, pull request #129. The claim commit `d23936c` merged early as pull request
+#128 (`f384ec6`, Ben's merge mid-session, no `Session close:` line, so no post-merge routine); `origin/main` was then
+merged into the branch with no file changed, and the work went up as #129 with no rebase or force push. Ben approved
+the plan before any code (his brief overrode the no-wait rule for this session). Input: his account entry-history export (SHA-256
+`5752c7f3a33b0e95c126b47b01e846b374a3c110f45b32ee618c14e056e807a3`, 1,753,502 bytes), kept in the session scratchpad
+and never committed: it carries account winnings and the repository is public. This entry records counts and the hash
+only.
+
+**Added.**
+- `src/nfl_dfs/entry_history.py`: `nfl_dk_entry_history_v1`. `parse_entry_history(raw)` refuses the whole file and names
+  every bad row in file order (header = row 1), never a cell value or the file's header text. Structure (decoding, the
+  14-column header, cell count and quoting, a terminated last line, `Sport`, `Game_Type`, `Entry_Key` form and
+  uniqueness, `Contest_Key` form) is checked on every row of every sport. Value rules (the contest time, `Place` within
+  1 to `Contest_Entries`, points, money, field size, places paid, per-contest agreement on seven columns) refuse on an
+  NFL row or in a contest with one, and are the note `NON_NFL_RULE_NOT_MET` on any other sport's row, because the export
+  is cumulative and one unforeseen row in a sport this engine never reads must not refuse every future export. A
+  `Places_Paid` above `Contest_Entries` is kept, flagged and named (`PLACES_PAID_ABOVE_CONTEST_ENTRIES`, any sport); a
+  fall-back-hour or skipped wall time is kept and named (`CONTEST_TIME_AMBIGUOUS`, `_NONEXISTENT`, read with `fold=0`).
+  Notes are not gate codes. Money is exact integer cents (at most three comma groups), points integer hundredths, the
+  contest time aware America/New_York. `summary_payload` counts rows by sport, game type and paid against free, with the
+  named notes and no money, path or run time.
+- `config/gate_registry_v1.json`: family `entry_history` (`P`, `CERTIFICATION`, provenance the new contract heading),
+  20 codes. `REGISTRY_SHA256` re-pinned from `ff56e1f9...d061372` to `4ad908b0...ce2cde` in
+  `tests/test_gate_registry.py` (the only edit to an existing test, which the card requires) and `docs/DATA_CONTRACTS.md`.
+- `docs/DATA_CONTRACTS.md`: *DraftKings entry history, nfl_dk_entry_history_v1 (Session 69)*, including that it is not a
+  run input and that a format change on NFL rows is a new version, never a relaxation of v1.
+- `tests/test_entry_history.py`: 93 tests, every fixture synthetic bytes.
+- `docs/ROADMAP.md`: Session 69b's row and card directly below Session 69; a dated note on Session 71's card (its report
+  may want 69b's snapshot; the dependency is left on Session 69); in the claim commit, the six cards 69 to 74 relabelled
+  `Size and breakpoint`, the label `scripts/next_prompt.py` reads, so the next handoff prompt reports each card's size.
+- `docs/claude/working.md`: the advisor fallback for cloud sessions, below.
+
+**Not changed.** Nothing on the run path: no `run-slate`, `prior_review`, `baseline` or `cli.py` change, so the
+three-exit rule does not apply. `classify_csv` is unchanged: the export stays an unclassified CSV, so two exports in one
+`--input-dir` are never run-slate's ambiguity refusal (a test pins it).
+
+**Measured on the real export** (scratch scripts outside the repository: `s69_summary.py`, `s69_tz.py`,
+`s69_acceptance.py`, the last through this branch's own parser).
+- The card's acceptance: 10,095 rows, 476 NFL rows, 396 paid NFL rows outside Best Ball (NFL paid and free by game type:
+  Showdown Captain Mode 245 and 9, Classic 151 and 62, Best Ball 1 and 0, Madden Classic 0 and 4,
+  `Campbell?s Chunky? Pick` 0 and 4). The only notes are the two named `Places_Paid` rows: row 10062 (NFL Classic,
+  2024-09-22, 9,910 places paid of 7,112 entries) and row 10065 (NBA Classic, 2024-02-22, 3,535 of 3,461), both free.
+- Bytes: no BOM, 10,096 CRLF and no bare LF or CR, a terminated last line, ASCII only (the `?` in the game type is a
+  literal byte), every row 14 cells.
+- Facts that changed the design: `Entry` is DraftKings' entry label, not a pure contest name (it differs inside all 1,570
+  multi-entry contests because an ` (n/m)` ordinal is appended), so it is carried as `entry_name` and kept out of the
+  per-contest check; 36 rows have `Places_Paid` 0, so the rule is non-negative; 1,095 `Points` cells have no decimal
+  point; every money cell matches the grouped `$d,ddd.dd` form; no contest's rows disagree on the seven checked columns.
+- Time zone: Eastern local and DST-aware (NFL starts at 13:00 in both EDT and EST months; the 170 rows in the 01:00 hour
+  are all GOLF in July); no row is ambiguous or skipped. All 70 contests of the eight committed slates start exactly at
+  their slate's earliest `Game Info` kickoff, and all 212 committed Entry IDs are in the export.
+
+**Reviews and consults.**
+- The plan, before it was presented: a fresh-context `Plan` agent with model `fable` standing in for `/advisor` (Ben's
+  instruction this session), briefed to refute nine claims. Taken: structure file-wide and values refusing only on NFL
+  rows (whole-file refusal on every sport's values would make one unforeseen non-NFL row refuse every future export);
+  notes built so the blocker scan never reads them, with a test that imports the scan; the date regex ahead of
+  `strptime`; `nfl.ps1` in the plan; never echoing a cell; a write-once design with a named recovery for 69b; a realistic
+  size (1,500 to 1,650) and a pre-committed split. Not taken: accepting `Size and seam` in `next_prompt.py` instead of
+  relabelling (Ben asked for the relabel).
+- Split or push on, at 975 changed lines after part 1 (same kind of agent): split. With about 500 lines to come, no inner
+  seam and about 60 ledger lines, the 1,500 breakpoint would have fired inside untested write-once code.
+- The diff, fresh-context `reviewer`: nothing blocking, four should-fix items, all taken because v1 cannot be mutated
+  after it lands. Money is bounded and computed with integer arithmetic (a 27-digit prize pool had been rounded through
+  `Decimal`); a places-paid note takes its date from the parsed time, never the raw cell (a non-NFL row with an unreadable
+  date could echo it); a value fault refuses on every row of a contest with an NFL row, through a pre-pass (only the
+  first row had been checked, leaving an earlier MLB row's faults unnamed); the contract now states every rule the code
+  enforces. Also fixed: `extra=` counts each column once; an invalid `Contest_Key` joins no contest.
+- The close-out drafts, before they were applied (fable agent again): taken, the pull-request facts above (the drafts
+  still named #128); Session 71's dependency left on Session 69 with a note, not re-pointed to 69b (its card never says
+  it reads the snapshot, Sessions 70 and 74 read the same history and stay on 69, and existing rows stay as they are);
+  the `working.md` line attributed to this session, not to Ben.
+
+**Verification.**
+- `sh ./nfl.sh test tests/test_entry_history.py -x --tb=short`: red first (`ImportError: cannot import name
+  'entry_history'`), then 93 passed; with `tests/test_gate_registry.py`, 256 passed; with the neighbours
+  (`test_contest_facts.py`, `test_contest_facts_intake.py`, `test_cowork.py`, `test_repo_boundaries.py`,
+  `test_roadmap_queue.py`, `test_next_prompt.py`), 605 passed, 1 skipped (the Linux junction skip).
+- Mutation pass on a `shutil.copytree` copy (`nfl_dfs.__file__` inside the copy): the first run killed 32 of 35, and the
+  three survivors (places paid equal to the field flagged, a duplicated header name not counted, the summary's notes
+  dropped) each got a test; after the review's fixes, 38 of 38 killed. The copy was deleted.
+- Before and after against `origin/main` (its bytes for every changed file in a scratch tree): `classify_csv` over 574
+  tracked CSVs and `discover_csv_inputs` over 18 slate folders identical; every old registry code keeps its family, class,
+  stops and provenance, and the 20 added are all `entry_history`; the CLI's subcommands identical; `nfl baseline` on
+  `wk4-classic-2026-10-04` and `tb-dal-sd-2026-10-08` exits 0 in both trees with byte-identical delivered files, the
+  reports differing only in `gate_registry_sha256`, the run clock and the output folder.
+- Full suite: `3373 passed, 1 skipped in 873.42s (0:14:33)`.
+- `sh ./nfl.sh doctor`, `git diff --check`, `python3 scripts/check_protected_paths.py` (no protected path touched).
+
+**Size.** 1,045 changed lines in source, tests, registry and contract (source 408, tests 536, registry 25, contract 76),
+against a plan of about 1,000 for this part.
+
+**Relaxed and open.** Nothing relaxed. Open: Session 69b (`nfl results-intake`, the snapshot, the normalized artifact and
+the summary file, `.gitignore`, `nfl.ps1`, three codes). Process: an unintended local commit (`tmp-check`, never pushed)
+was undone with `git reset --soft HEAD~1` before the claim commit, keeping its changes staged; nothing else was rewritten.
+
+**Next time.** The advisor skill was not invoked: Ben asked for a fable agent directly, after the skill's hook failed in
+two earlier cloud sessions. `docs/claude/working.md` now says to do that in a cloud session. Real-file facts measured
+during planning (the `Entry` ordinal, `Places_Paid` 0, integer points, the time zone) changed four rules before any test
+was written; measuring first is cheaper than a test written around a guess.
+
 ### 2026-10-10: the DraftKings results review -- Sessions 69 to 74 added (planning, not a roadmap session)
 
 Ben asked for the first review of real DraftKings results (his upload `dk-findings-and-engine-requirements.md`, SHA-256
