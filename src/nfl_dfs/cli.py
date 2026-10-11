@@ -99,6 +99,7 @@ from .delivery import (
 )
 from .economics import evaluate_candidates_against_field
 from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
+from .entry_history import run_intake as run_results_intake
 from .evidence import (
     EvidenceError,
     parse_official_inactive_snapshot,
@@ -197,6 +198,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_STAGED_WORKBOOK = PROJECT_ROOT / "operator_input.xlsx"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs"
 DEFAULT_RUNS_DIR = PROJECT_ROOT / "data" / "runs"
+DEFAULT_RESULTS_DIR = PROJECT_ROOT / "data" / "results"
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
 
 
@@ -2069,6 +2071,18 @@ def command_baseline(args: argparse.Namespace) -> int:
         official_status_csv=getattr(args, "official_status", None),
     )
     _print_json(baseline_summary(outcome))
+    return outcome.exit_code
+
+
+def command_results_intake(args: argparse.Namespace) -> int:
+    """Session 69b: keep one DraftKings entry-history export and its NFL rows (`nfl_dk_entry_history_v1`).
+
+    Exit 0 wrote the snapshot and artifacts, or found them all already there; 2 refused the file or could not write.
+    stdout is the summary, each file's path and state, and the problems; it holds no fee or winnings value.
+    """
+
+    outcome = run_results_intake(args.history, args.results_root)
+    _print_json(outcome.as_dict())
     return outcome.exit_code
 
 
@@ -5186,6 +5200,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--official-status",
         help="an official status CSV; people its accepted rows mark INACTIVE leave the pool (R32)")
     baseline_parser.set_defaults(func=command_baseline)
+    results_intake = subparsers.add_parser(
+        "results-intake",
+        help=(
+            "keep one DraftKings account entry-history export (an operator download): a write-once snapshot under"
+            " the results root's inbox and its NFL rows and summary under normalized/<sha256>/; nothing is fetched"
+        ),
+    )
+    results_intake.add_argument("--history", required=True, help="the entry-history CSV DraftKings exported")
+    results_intake.add_argument("--results-root", default=str(DEFAULT_RESULTS_DIR))
+    results_intake.set_defaults(func=command_results_intake)
     priors_propose = subparsers.add_parser(
         "priors-propose",
         help="freeze approved nflverse artifacts and propose the DK identity crosswalk",

@@ -538,6 +538,25 @@ result, and run/settlement brief reconstruct exactly. The compatibility form
 with only `--entries` and `--standings` is partial, exits `2`, and is never a
 Q1-complete settlement.
 
+## Results intake
+
+Download the account's contest entry history from DraftKings by hand (nothing
+here fetches it), then keep it with one command:
+
+```powershell
+.\nfl.ps1 results-intake --history 'C:\full\path\draftkings-contest-entry-history.csv'
+```
+
+The export is refused whole or kept whole (`nfl_dk_entry_history_v1`). A kept
+file becomes a write-once snapshot `data/results/inbox/<sha256>.csv` and two
+artifacts under `data/results/normalized/<sha256>/`: the NFL rows and the
+intake summary. Running it again on the same file is `ALREADY_PRESENT`, exit 0,
+and writes nothing. A newer export is a new hash and a new snapshot. Exit 2 is
+a refusal or a write failure, named in `problems` with the recovery for any
+file it found in the way. Everything under `data/results/` is gitignored
+because it carries fees and winnings; the printed result carries no money, so
+it is safe to paste back to Claude. It grades nothing and clears no upload.
+
 ## Safe failure behavior
 
 - Excel open: readable stop message; no partial workbook.

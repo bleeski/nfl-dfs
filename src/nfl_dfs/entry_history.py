@@ -18,23 +18,32 @@ A `Places_Paid` above `Contest_Entries` is kept and named (a free contest that r
 places than it had entries), never refused. Notes are not gate codes: they stop nothing. No problem or note ever echoes
 a cell value, and the summary carries no money.
 
+`run_intake` (Session 69b, `nfl results-intake`) keeps one hash-named, write-once snapshot of an accepted file under
+`<results root>/inbox/` and writes the NFL rows and the summary under `<results root>/normalized/<sha256>/`, each file
+written once and never overwritten. A refused file writes nothing.
+
 `does_not_establish`: expected value or ROI, win or cash probability, an edge, calibration, which entries the engine
 built, upload clearance.
 """
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
+import os
 import re
+import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Mapping, Sequence
 from zoneinfo import ZoneInfo
 
 from .contest_facts import canonical_bytes
+from .hashing import sha256_bytes, sha256_file
 
 CONTRACT_VERSION = "nfl_dk_entry_history_v1"
 SUMMARY_VERSION = "nfl_dk_entry_history_intake_v1"
@@ -396,13 +405,243 @@ def summary_payload(history: EntryHistory, *, sha256: str, byte_count: int) -> d
     }
 
 
+# ----------------------------------------------------------------------------- intake (Session 69b)
+
+ENTRIES_VERSION = "nfl_dk_entry_history_entries_v1"
+# A fix that changes a written byte takes a new writer version, so a file already on disk is never contradicted.
+WRITER = "w1"
+ENTRIES_NAME = f"nfl_entries.{WRITER}.json"
+SUMMARY_NAME = f"intake_summary.{WRITER}.json"
+FILES = ("snapshot", "entries", "summary")
+# The codes the intake adds; each is emitted as a full literal below.
+INTAKE_CODES = (
+    "ENTRY_HISTORY_UNREADABLE",
+    "ENTRY_HISTORY_SNAPSHOT_CORRUPT",
+    "ENTRY_HISTORY_ARTIFACT_CONFLICT",
+    "ENTRY_HISTORY_WRITE_FAILED",
+)
+SNAPSHOT_RECOVERY = (
+    "Another file holds this snapshot's name, so it is not the bytes the name promises. It is never overwritten:"
+    " check it, delete it by hand and rerun the intake."
+)
+ARTIFACT_RECOVERY = (
+    "This folder is derived from the snapshot beside it. Delete the whole folder, which also deletes any good file in"
+    " it, and rerun the intake to rebuild it; a fix that changes a written byte takes a new writer version instead."
+)
+
+
+class WrittenBytesDiffer(OSError):
+    """The bytes read back after a write are not the bytes written."""
+
+
+class _Stop(Exception):
+    """A file this run may not write: something else already holds its name."""
+
+    def __init__(self, code: str, recovery: str):
+        super().__init__(code)
+        self.code, self.recovery = code, recovery
+
+
+@dataclass(frozen=True)
+class IntakeOutcome:
+    """`COMPLETE` and `ALREADY_PRESENT` exit 0; `REFUSED` and `WRITE_FAILED` exit 2. Every file reports a state."""
+
+    status: str
+    problems: tuple[str, ...]
+    files: dict[str, dict[str, str | None]]
+    source_sha256: str | None = None
+    summary: dict[str, object] | None = None
+
+    @property
+    def exit_code(self) -> int:
+        return 0 if self.status in ("COMPLETE", "ALREADY_PRESENT") else 2
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "status": self.status,
+            "exit_code": self.exit_code,
+            "problems": list(self.problems),
+            "contract": CONTRACT_VERSION,
+            "source_sha256": self.source_sha256,
+            "files": self.files,
+            "summary": self.summary,
+            "does_not_establish": list(DOES_NOT_ESTABLISH),
+        }
+
+
+def entries_payload(history: EntryHistory, *, sha256: str, byte_count: int) -> dict[str, object]:
+    """The NFL rows in file order. Fields are listed, not derived, so a later `HistoryRow` field never moves w1's bytes.
+
+    An NFL row holds no null: a value that did not parse on an NFL row refuses the whole file.
+    """
+
+    entries = [
+        {
+            "source_row": row.row,
+            "entry_key": row.entry_key,
+            "contest_key": row.contest_key,
+            "game_type": row.game_type,
+            "entry_name": row.entry_name,
+            "contest_start": row.contest_start,
+            "contest_start_text": row.contest_start_text,
+            "place": row.place,
+            "points_hundredths": row.points_hundredths,
+            "winnings_non_ticket_cents": row.winnings_non_ticket_cents,
+            "winnings_ticket_cents": row.winnings_ticket_cents,
+            "contest_entries": row.contest_entries,
+            "entry_fee_cents": row.entry_fee_cents,
+            "prize_pool_cents": row.prize_pool_cents,
+            "places_paid": row.places_paid,
+            "places_paid_above_entries": row.places_paid_above_entries,
+        }
+        for row in history.nfl_rows
+    ]
+    return {
+        "schema_version": ENTRIES_VERSION,
+        "contract": CONTRACT_VERSION,
+        "writer": WRITER,
+        "sport": NFL,
+        "source_sha256": sha256,
+        "source_bytes": byte_count,
+        "nfl_rows": len(entries),
+        "entries": entries,
+        "does_not_establish": list(DOES_NOT_ESTABLISH),
+    }
+
+
+def _holds(path: Path, sha256: str) -> bool:
+    """A plain file, never a symlink (which points at bytes that can change), holding exactly `sha256`."""
+
+    return path.is_file() and not path.is_symlink() and sha256_file(path) == sha256
+
+
+def _write_once(path: Path, data: bytes, *, code: str, recovery: str) -> str:
+    """Write `data` at `path` only if nothing holds the name; never replace, never follow, never delete what is there.
+
+    The same bytes already there is `ALREADY_PRESENT`, found before any temporary file is written. Anything else
+    holding the name (other bytes, a directory, a symlink) is `code`. A new file goes through a temporary file in the
+    same folder (flushed, fsynced, re-read) and a hard link, which fails rather than replaces when the name appears
+    first; the linked file is re-read too. A filesystem with no hard links is an `OSError` for the caller to name.
+    A temporary file that cannot be deleted (on Windows, Defender or the indexer can hold a fresh file) is left, its
+    name starting with a dot, rather than hiding the file's real outcome.
+    """
+
+    sha256 = sha256_bytes(data)
+    if _holds(path, sha256):
+        return "ALREADY_PRESENT"
+    if path.exists() or path.is_symlink():
+        raise _Stop(code, recovery)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if sha256_file(temporary) != sha256:
+            raise WrittenBytesDiffer()
+        try:
+            os.link(temporary, path)
+        except FileExistsError:  # the name appeared after the check above
+            if _holds(path, sha256):
+                return "ALREADY_PRESENT"
+            raise _Stop(code, recovery) from None
+        if sha256_file(path) != sha256:
+            if _same_file(path, temporary):  # this run's own fresh link, never a file that took the name after it
+                path.unlink(missing_ok=True)
+            raise WrittenBytesDiffer()
+    finally:
+        with contextlib.suppress(OSError):
+            temporary.unlink(missing_ok=True)
+    return "WRITTEN"
+
+
+def _same_file(first: Path, second: Path) -> bool:
+    try:
+        return os.path.samefile(first, second)
+    except OSError:
+        return False
+
+
+def _classified(problem: str, source: Path) -> str:
+    """A header refusal also says what the run-input classifier takes the file for. Diagnosis only: a second read."""
+
+    if not problem.startswith("ENTRY_HISTORY_HEADER_INVALID"):
+        return problem
+    from . import cowork
+
+    try:
+        kind = cowork.classify_csv(source) or "none"
+    except (cowork.CoworkInputError, OSError):
+        kind = "unreadable"
+    return f"{problem}:classified_as={kind}"
+
+
+def run_intake(history_path: str | Path, results_root: str | Path) -> IntakeOutcome:
+    """Read the export once, refuse it whole or keep it: the snapshot, then the NFL rows, then the summary.
+
+    The first file that cannot be written stops the run, and every file reports `WRITTEN`, `ALREADY_PRESENT`,
+    `REFUSED`, `WRITE_FAILED` or `NOT_ATTEMPTED`. Nothing is created before the file parses.
+    """
+
+    source, root = Path(history_path), Path(results_root)
+    files: dict[str, dict[str, str | None]] = {name: {"path": None, "state": "NOT_ATTEMPTED"} for name in FILES}
+    try:
+        with source.open("rb") as handle:
+            raw = handle.read(MAX_BYTES + 1)  # one byte past the cap is enough to refuse a larger file
+    except OSError as exc:
+        return IntakeOutcome("REFUSED", (_problem("ENTRY_HISTORY_UNREADABLE", f"exception={type(exc).__name__}"),),
+                             files)
+    try:
+        history = parse_entry_history(raw)
+    except EntryHistoryRefused as refused:
+        prefix_only = len(raw) > MAX_BYTES  # never name the hash of a prefix
+        return IntakeOutcome("REFUSED", tuple(_classified(problem, source) for problem in refused.problems), files,
+                             None if prefix_only else sha256_bytes(raw))
+    sha256 = sha256_bytes(raw)
+    summary = summary_payload(history, sha256=sha256, byte_count=len(raw))
+    folder = root / "normalized" / sha256
+    targets = {"snapshot": root / "inbox" / f"{sha256}.csv", "entries": folder / ENTRIES_NAME,
+               "summary": folder / SUMMARY_NAME}
+    for name, path in targets.items():
+        files[name]["path"] = str(path)
+    writes = (
+        ("snapshot", lambda: _write_once(
+            targets["snapshot"], raw, code="ENTRY_HISTORY_SNAPSHOT_CORRUPT", recovery=SNAPSHOT_RECOVERY)),
+        ("entries", lambda: _write_once(
+            targets["entries"], canonical_bytes(entries_payload(history, sha256=sha256, byte_count=len(raw))),
+            code="ENTRY_HISTORY_ARTIFACT_CONFLICT", recovery=ARTIFACT_RECOVERY)),
+        ("summary", lambda: _write_once(
+            targets["summary"], canonical_bytes(summary), code="ENTRY_HISTORY_ARTIFACT_CONFLICT",
+            recovery=ARTIFACT_RECOVERY)),
+    )
+    for name, write in writes:
+        try:
+            files[name]["state"] = write()
+        except _Stop as stop:
+            files[name].update(state="REFUSED", recovery=stop.recovery)
+            return IntakeOutcome("REFUSED", (_problem(stop.code, f"file={name}"),), files, sha256, summary)
+        except OSError as exc:
+            files[name]["state"] = "WRITE_FAILED"
+            written = _problem("ENTRY_HISTORY_WRITE_FAILED", f"file={name}:exception={type(exc).__name__}")
+            return IntakeOutcome("WRITE_FAILED", (written,), files, sha256, summary)
+    status = "ALREADY_PRESENT" if all(report["state"] == "ALREADY_PRESENT" for report in files.values()) else "COMPLETE"
+    return IntakeOutcome(status, (), files, sha256, summary)
+
+
 __all__ = [
     "CONTRACT_VERSION",
+    "ENTRIES_VERSION",
     "EntryHistory",
     "EntryHistoryRefused",
     "HEADER",
     "HistoryRow",
+    "INTAKE_CODES",
+    "IntakeOutcome",
     "canonical_bytes",
+    "entries_payload",
     "parse_entry_history",
+    "run_intake",
     "summary_payload",
 ]
