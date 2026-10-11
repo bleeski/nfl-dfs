@@ -447,6 +447,18 @@ def _reconcile(lineups: Path, entries: Path, contract, by_dk_id: Mapping, people
     }
 
 
+def bind_games(dk_games: Sequence[str], found: Mapping[str, set[str]]) -> dict[str, str]:
+    """Each DraftKings game's one nflverse `game_id`: its bound players' rows share exactly one, and no two games do."""
+
+    bound: dict[str, str] = {}
+    for game in dk_games:
+        ids = sorted(found.get(game, ()))
+        if len(ids) != 1 or ids[0] in bound.values():
+            raise PlayerGradingRefused("PLAYER_GRADING_GAME_UNBOUND", f"{game}:{ids or 'NO_STAT_ROWS'}")
+        bound[game] = ids[0]
+    return bound
+
+
 def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: int, week: int, salaries: Path,
                 pool_scores: Path, identity_review: Path, lineups: Path | None = None,
                 entries: Path | None = None) -> dict:
@@ -474,16 +486,11 @@ def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: 
             "salary": player.salary, "dk_status": player.status_raw, "prior_points": prior.get(person_id),
             "out_of_selection": None if person_id not in prior else player.dk_id not in selectable,
             "provider_player_id": provider, **_realized(player.position, provider, rows, columns)}
-    games: dict[str, set[str]] = {}
+    found_games: dict[str, set[str]] = {}
     for person_id, entry in people.items():
         if entry["game_id"]:
-            games.setdefault(anchors[person_id].game_id, set()).add(entry["game_id"])
-    bound_games = {}
-    for game in contract.games:
-        found = sorted(games.get(game.game_id, ()))
-        if len(found) != 1 or found[0] in bound_games.values():
-            raise PlayerGradingRefused("PLAYER_GRADING_GAME_UNBOUND", f"{game.game_id}:{found or 'NO_STAT_ROWS'}")
-        bound_games[game.game_id] = found[0]
+            found_games.setdefault(anchors[person_id].game_id, set()).add(entry["game_id"])
+    bound_games = bind_games([game.game_id for game in contract.games], found_games)
 
     graded = [entry for person_id, entry in people.items() if person_id in prior]
     usable = [entry for entry in graded if entry["realized_hundredths"] is not None]

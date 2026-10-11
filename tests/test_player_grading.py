@@ -444,6 +444,26 @@ def test_a_game_whose_rows_name_two_games_is_unbound(tmp_path):
     assert "2026_02_DEN_LV" in detail
 
 
+def test_two_slate_games_never_share_one_nflverse_game():
+    assert pg.bind_games(["A@B", "C@D"], {"A@B": {"g1"}, "C@D": {"g2"}}) == {"A@B": "g1", "C@D": "g2"}
+    with pytest.raises(pg.PlayerGradingRefused) as caught:
+        pg.bind_games(["A@B", "C@D"], {"A@B": {"g1"}, "C@D": {"g1"}})
+    assert (caught.value.code, caught.value.detail) == ("PLAYER_GRADING_GAME_UNBOUND", "C@D:['g1']")
+
+
+def test_a_postseason_row_in_the_same_week_is_not_read(tmp_path):
+    post = dict(player_id=GSIS["kc_te"], season=SEASON, week=WEEK, season_type="POST", game_id=GAME_ID, team="KC",
+                receptions=9, receiving_yards=150)
+    assert person(grade(tmp_path, stats_bytes(extra_rows=[post])), "kc_te")["realized_hundredths"] == 770
+
+
+def test_a_classic_lineup_file_on_a_showdown_slate_refuses(tmp_path):
+    keys = ["kc_qb", "kc_rb", "den_rb", "kc_wr1", "kc_wr2", "den_wr1", "kc_te", "den_te", "kc_dst"]
+    data = ("Entry ID,Contest Name,Contest ID,Entry Fee,QB,RB,RB,WR,WR,WR,TE,FLEX,DST,,Instructions\n"
+            f"{entry_id(0)},Classic,9001,$5,{','.join(FLEX[k] for k in keys)},,\n").encode("utf-8")
+    assert "MODE" in refused(tmp_path, "PLAYER_GRADING_INPUT_INVALID", lineups=data)
+
+
 @pytest.mark.parametrize("name, data", [
     ("salaries", b"Position,Name + ID\n"),
     ("pool_scores", pool_scores_bytes(schema_version="nfl_prior_pool_scores_v9")),
