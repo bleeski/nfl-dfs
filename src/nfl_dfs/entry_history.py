@@ -108,7 +108,8 @@ _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")
 _COUNT = re.compile(r"0|[1-9][0-9]{0,8}")
 _POSITIVE = re.compile(r"[1-9][0-9]{0,8}")
 _POINTS = re.compile(r"-?(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,2})?")
-_MONEY = re.compile(r"\$(?:0|[1-9][0-9]{0,2}(?:,[0-9]{3})*)\.[0-9]{2}")
+# At most three comma groups ($999,999,999,999.99), read as exact integer cents.
+_MONEY = re.compile(r"\$(?:0|[1-9][0-9]{0,2}(?:,[0-9]{3}){0,3})\.[0-9]{2}")
 
 
 class EntryHistoryRefused(Exception):
@@ -176,7 +177,7 @@ def _hundredths(text: str) -> int | None:
 
 
 def _cents(text: str) -> int | None:
-    return int(Decimal(text[1:].replace(",", "")) * 100) if _MONEY.fullmatch(text) else None
+    return int(text[1:].replace(",", "").replace(".", "")) if _MONEY.fullmatch(text) else None
 
 
 def _contest_start(text: str) -> tuple[str | None, str | None]:
@@ -206,7 +207,7 @@ def _header_problem(header: Sequence[str]) -> str | None:
         position = next(index for index, (got, want) in enumerate(zip(found, HEADER), start=1) if got != want)
         return _problem("ENTRY_HISTORY_HEADER_INVALID", f"order:position={position}")
     missing = [name for name in HEADER if name not in found]
-    extra = sum(1 for name in found if name not in HEADER) + max(0, len(found) - len(set(found)))
+    extra = len(found) - (len(HEADER) - len(missing))  # every column beyond one per expected name present
     return _problem("ENTRY_HISTORY_HEADER_INVALID", f"missing={'|'.join(missing)}:extra={extra}")
 
 
@@ -300,7 +301,13 @@ def parse_entry_history(raw: bytes) -> EntryHistory:
     notes: list[dict] = []
     rows: list[HistoryRow] = []
     first_entry: dict[str, int] = {}
-    first_contest: dict[str, tuple[int, bool, dict[str, str]]] = {}
+    first_contest: dict[str, tuple[int, dict[str, str]]] = {}
+    # A value fault refuses on any row of a contest that has an NFL row, whichever of its rows comes first.
+    sport_at, contest_at = HEADER.index("Sport"), HEADER.index("Contest_Key")
+    nfl_contests = {
+        cells[contest_at] for _number, cells in body
+        if len(cells) == len(HEADER) and cells[sport_at] == NFL and _KEY.fullmatch(cells[contest_at])
+    }
     for number, raw_cells in body:
         where = f"row={number}"
         if len(raw_cells) != len(HEADER):
@@ -321,29 +328,29 @@ def parse_entry_history(raw: bytes) -> EntryHistory:
             problems.append(_problem("ENTRY_HISTORY_ENTRY_KEY_DUPLICATE", f"{where}:first={first_entry[entry_key]}"))
         else:
             first_entry[entry_key] = number
-        if not _KEY.fullmatch(contest_key):
+        contest_known = bool(_KEY.fullmatch(contest_key))
+        if not contest_known:
             problems.append(_problem("ENTRY_HISTORY_CONTEST_KEY_INVALID", where))
 
         is_nfl = sport == NFL
         values, broken, time_kind = _value_rules(number, cells)
-        first_number, first_is_nfl, first_cells = first_contest.setdefault(contest_key, (number, is_nfl, cells))
-        disagreements = [
-            _problem("ENTRY_HISTORY_CONTEST_DISAGREES", f"{where}:first={first_number}:column={column}")
-            for column in AGREEMENT_COLUMNS
-            if first_number != number and cells[column] != first_cells[column]
-        ]
-        if is_nfl:
+        disagreements: list[str] = []
+        if contest_known:  # an invalid key groups nothing, so it adds no disagreement of its own
+            first_number, first_cells = first_contest.setdefault(contest_key, (number, cells))
+            disagreements = [
+                _problem("ENTRY_HISTORY_CONTEST_DISAGREES", f"{where}:first={first_number}:column={column}")
+                for column in AGREEMENT_COLUMNS
+                if first_number != number and cells[column] != first_cells[column]
+            ]
+        if is_nfl or contest_key in nfl_contests:
             problems.extend(broken + disagreements)
         else:
-            # A contest with an NFL row refuses on any disagreement; the row's own value rules stay its sport's notes.
-            problems.extend(disagreements if first_is_nfl else ())
-            rules = broken if first_is_nfl else broken + disagreements
-            notes.extend(_note("NON_NFL_RULE_NOT_MET", number, sport, rule=rule) for rule in rules)
-        entries, paid = values["contest_entries"], values["places_paid"]
+            notes.extend(_note("NON_NFL_RULE_NOT_MET", number, sport, rule=rule) for rule in broken + disagreements)
+        entries, paid, start = values["contest_entries"], values["places_paid"], values["contest_start"]
         above = isinstance(entries, int) and isinstance(paid, int) and paid > entries
-        if above:
+        if above:  # the date comes from the parsed time, never the raw cell
             notes.append(_note("PLACES_PAID_ABOVE_CONTEST_ENTRIES", number, sport, entry_key=entry_key,
-                               contest_key=contest_key, contest_date=cells["Contest_Date_EST"][:10],
+                               contest_key=contest_key, contest_date=start[:10] if isinstance(start, str) else None,
                                places_paid=paid, contest_entries=entries))
         if time_kind:
             notes.append(_note(time_kind, number, sport, entry_key=entry_key, contest_key=contest_key,

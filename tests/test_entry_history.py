@@ -241,9 +241,10 @@ def test_a_missing_column_is_refused_and_named():
         "ENTRY_HISTORY_HEADER_INVALID:missing=Places_Paid:extra=0",)
     assert _problems(_history(*GOOD, header=HEADER_VARIANTS[3])) == (
         "ENTRY_HISTORY_HEADER_INVALID:missing=Entry_Key:extra=1",)
-    # A name given twice is an extra column, though every name in it is an expected one.
+    # A name given twice is an extra column, though every name in it is an expected one; each column counts once.
     assert _problems(_history(*GOOD, header=HEADER.replace("Game_Type", "Sport"))) == (
         "ENTRY_HISTORY_HEADER_INVALID:missing=Game_Type:extra=1",)
+    assert _problems(_history(*GOOD, header=HEADER + ",X,X")) == ("ENTRY_HISTORY_HEADER_INVALID:missing=:extra=2",)
 
 
 def test_a_reordered_header_is_refused():
@@ -377,9 +378,38 @@ def test_a_non_nfl_value_failure_is_a_note_and_a_non_nfl_structural_failure_refu
         "ENTRY_HISTORY_ENTRY_KEY_DUPLICATE:row=3:first=2",)
 
 
-def test_a_contest_that_mixes_nfl_and_another_sport_refuses():
-    raw = _history(_row(Sport="MLB"), _row(Entry_Key="4000000002"))
-    assert _problems(raw) == ("ENTRY_HISTORY_CONTEST_DISAGREES:row=3:first=2:column=Sport",)
+def test_a_contest_that_mixes_nfl_and_another_sport_refuses_and_names_every_fault():
+    # The MLB row comes first, but its contest has an NFL row, so its own value fault refuses too and is named.
+    raw = _history(_row(Sport="MLB", Place="x"), _row(Entry_Key="4000000002"))
+    assert _problems(raw) == (
+        "ENTRY_HISTORY_PLACE_INVALID:row=2",
+        "ENTRY_HISTORY_CONTEST_DISAGREES:row=3:first=2:column=Sport",
+    )
+
+
+def test_an_invalid_contest_key_never_groups_rows_into_a_contest():
+    raw = _history(_row(Contest_Key=""), _row(Entry_Key="4000000002", Contest_Key="", Contest_Entries="999"))
+    assert _problems(raw) == (
+        "ENTRY_HISTORY_CONTEST_KEY_INVALID:row=2",
+        "ENTRY_HISTORY_CONTEST_KEY_INVALID:row=3",
+    )
+
+
+def test_money_is_exact_integer_cents_up_to_three_comma_groups_and_refused_beyond():
+    history = entry_history.parse_entry_history(_history(_row(Prize_Pool="$999,999,999,999.99", Winnings_Non_Ticket="$0.07")))
+    assert (history.rows[0].prize_pool_cents, history.rows[0].winnings_non_ticket_cents) == (99_999_999_999_999, 7)
+    long_cell = "$1" + ",000" * 3000 + ".00"  # far under the csv cell limit
+    for cell in ("$1,000,000,000,000.00", long_cell):
+        assert _problems(_history(_row(Prize_Pool=cell))) == ("ENTRY_HISTORY_MONEY_INVALID:row=2:column=Prize_Pool",)
+
+
+def test_counts_and_points_hold_at_most_nine_integer_digits():
+    history = entry_history.parse_entry_history(_history(_row(
+        Place="999999999", Contest_Entries="999999999", Places_Paid="999999999", Points="-999999999.99")))
+    assert (history.rows[0].place, history.rows[0].points_hundredths) == (999_999_999, -99_999_999_999)
+    for column in ("Place", "Contest_Entries", "Places_Paid", "Points"):
+        assert len(_problems(_history(_row(**{column: "1000000000"})))) >= 1, column
+    assert _problems(_history(_row(Points="01.5"))) == ("ENTRY_HISTORY_POINTS_INVALID:row=2",)
 
 
 def test_contest_time_is_eastern_aware_and_ambiguous_or_nonexistent_rows_are_kept_and_named():
@@ -410,11 +440,15 @@ def test_a_short_form_date_is_refused_before_strptime_sees_it():
 
 def test_problem_details_never_echo_a_cell():
     secret_mlb = _row(Sport="MLB", Entry_Key="4000000009", Contest_Key="100000009", Winnings_Non_Ticket="$9,99SECRET")
+    # A non-NFL row with an unreadable date that also pays more places than entries: its note names no date text.
+    secret_date = _row(Sport="MLB", Entry_Key="4000000008", Contest_Key="100000008",
+                       Contest_Date_EST="$9,999.00 SECRET", Contest_Entries="10", Place="1", Places_Paid="20")
     problems = _problems(_history(
         _row(Place="SECRETPLACE", Points="SECRETPOINTS", Entry_Fee="$SECRET.00", Contest_Date_EST="SECRETDATE")))
-    notes = entry_history.parse_entry_history(_history(GOOD[0], secret_mlb)).notes
+    notes = entry_history.parse_entry_history(_history(GOOD[0], secret_mlb, secret_date)).notes
     header_problems = _problems(_history(*GOOD, header=HEADER.replace("Points", "SECRETCOLUMN")))
-    assert len(problems) == 4 and len(notes) == 1
+    assert len(problems) == 4 and len(notes) == 3
+    assert notes[2]["kind"] == "PLACES_PAID_ABOVE_CONTEST_ENTRIES" and notes[2]["contest_date"] is None
     text = json.dumps([problems, list(notes), header_problems])
     assert "SECRET" not in text and "9,99" not in text, text
     assert header_problems == ("ENTRY_HISTORY_HEADER_INVALID:missing=Points:extra=1",)

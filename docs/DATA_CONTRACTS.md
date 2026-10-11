@@ -3556,7 +3556,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `27ea88ecf4f5ee7c2fd77f9ef37f0f3b328ed1199f5902a163ada4fc11d08128`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `4ad908b0065f51f7d1c92d0c8fc26b0d378da5c661b45ac9a9f1129c65ce2cde`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4397,7 +4397,8 @@ design, so it never joins run-folder discovery (two exports in one `--input-dir`
 file carries account winnings and this repository is public: the export and anything holding a fee or a winnings value
 stay out of git (Session 69b gitignores the snapshot and artifacts it writes), and every test fixture is synthetic.
 
-**The file.** UTF-8, or UTF-8 with a BOM; CRLF or LF; at most 67,108,864 bytes; the csv module's own cell limit. The
+**The file.** UTF-8, or UTF-8 with a BOM; CRLF, LF or a bare CR, as the csv module reads them; at most 67,108,864
+bytes; the csv module's own cell limit. The
 header row is exactly, in this order: `Sport,Game_Type,Entry_Key,Entry,Contest_Key,Contest_Date_EST,Place,Points,
 Winnings_Non_Ticket,Winnings_Ticket,Contest_Entries,Entry_Fee,Prize_Pool,Places_Paid`. A fully blank line is skipped,
 and the last line must end with a line terminator. Cells are not trimmed.
@@ -4405,20 +4406,21 @@ and the last line must end with a line terminator. Cells are not trimmed.
 | Column | Rule | Kind | Read as |
 |---|---|---|---|
 | `Sport` | upper-case letters and digits, 1 to 16, starting with a letter; NFL is exactly `NFL` | structure | text |
-| `Game_Type` | not blank, no leading or trailing space; carried as opaque text | structure | text |
+| `Game_Type` | not blank, no leading or trailing whitespace (`str.strip`, so a tab or a no-break space counts); carried as opaque text | structure | text |
 | `Entry_Key` | 1 to 18 ASCII digits, no leading zero, unique in the file | structure | text |
 | `Entry` | DraftKings' entry label: the contest name, with ` (n/m)` appended on a multi-entry contest. Any text, never parsed, compared or checked | none | `entry_name` |
 | `Contest_Key` | 1 to 18 ASCII digits, no leading zero | structure | text |
 | `Contest_Date_EST` | exactly `YYYY-MM-DD HH:MM:SS` (checked before `strptime`, which accepts short fields), America/New_York wall time | value | source text and ISO time with offset |
-| `Place` | an unsigned integer without a leading zero, 1 to `Contest_Entries` | value | integer |
-| `Points` | `-?` digits, at most 2 decimals (`142` and `142.5` are both legal) | value | integer hundredths |
-| `Winnings_Non_Ticket`, `Winnings_Ticket`, `Entry_Fee`, `Prize_Pool` | exactly `$`, digits with comma thousands grouping, and two decimals (`$0.00`, `$4,500.00`); no sign | value | integer cents |
-| `Contest_Entries` | a positive integer, no separators | value | integer |
-| `Places_Paid` | a non-negative integer, no separators | value | integer |
+| `Place` | an unsigned integer of at most 9 digits, no leading zero, 1 to `Contest_Entries` | value | integer |
+| `Points` | an optional `-`, an integer part of at most 9 digits with no leading zero, at most 2 decimals (`142` and `142.5` are legal, `01.5` is not) | value | integer hundredths |
+| `Winnings_Non_Ticket`, `Winnings_Ticket`, `Entry_Fee`, `Prize_Pool` | exactly `$`, digits with no leading zero and comma thousands grouping (at most three commas), and two decimals: `$0.00`, `$4,500.00`, at most `$999,999,999,999.99`; no sign | value | integer cents, by integer arithmetic |
+| `Contest_Entries` | a positive integer of at most 9 digits, no separators or leading zero | value | integer |
+| `Places_Paid` | a non-negative integer of at most 9 digits, no separators or leading zero | value | integer |
 
 Rows that share a `Contest_Key` must agree on `Sport`, `Game_Type`, `Contest_Date_EST`, `Contest_Entries`, `Entry_Fee`,
 `Prize_Pool` and `Places_Paid`, compared as source text (a value rule). `Entry` is excluded: its ordinal differs inside
-every multi-entry contest. No float appears anywhere in what this contract produces.
+every multi-entry contest. A row whose `Contest_Key` is invalid joins no contest. No float appears anywhere in what this
+contract produces.
 
 **Refusals.** The whole file is refused, never repaired and never used in part. Every problem is named in file order,
 with its row number (the header is row 1) and, where it helps, the column; no problem ever echoes a cell value or the
@@ -4426,8 +4428,8 @@ file's own header text. A structure fault refuses the file on any row of any spo
 an NFL row, and on any row of a contest that has an NFL row; on a row of another sport it is the note
 `NON_NFL_RULE_NOT_MET` naming the rule and the row, because the export is cumulative and one unforeseen row in a sport
 this engine never reads must not refuse every future export. Codes: `ENTRY_HISTORY_FILE_EMPTY`, `_FILE_TOO_LARGE`,
-`_NOT_TEXT` (not UTF-8, or a NUL byte), `_HEADER_INVALID` (`missing=<expected names>:extra=<count>`, or
-`order:position=<n>`), `_NO_ROWS` (a header only), `_ROW_MISSHAPEN` (`row=<n>` for a short or long row,
+`_NOT_TEXT` (not UTF-8, or a NUL byte), `_HEADER_INVALID` (`missing=<expected names>:extra=<count>`, where `extra`
+counts every column beyond one per expected name present, or `order:position=<n>`), `_NO_ROWS` (a header only), `_ROW_MISSHAPEN` (`row=<n>` for a short or long row,
 `row=<n>:unterminated` for a last line with no terminator, `csv:line=<n>` for an unterminated quote),
 `_SPORT_INVALID`, `_GAME_TYPE_INVALID`, `_ENTRY_KEY_INVALID`, `_ENTRY_KEY_DUPLICATE` (`row=<n>:first=<m>`),
 `_CONTEST_KEY_INVALID`, `_CONTEST_DATE_INVALID`, `_PLACE_INVALID`, `_PLACE_OUTSIDE_FIELD` (0, or above
@@ -4439,15 +4441,18 @@ holds no NFL row). All are registry family `entry_history` (`P`): a refusal stop
 `PLACES_PAID_ABOVE_CONTEST_ENTRIES` (any sport: a free contest that ran under its guaranteed size pays more places than it
 had entries; the row is kept and flagged `places_paid_above_entries`), `CONTEST_TIME_AMBIGUOUS` (a wall time in the
 fall-back hour, read with `fold=0`, the first of the two) and `CONTEST_TIME_NONEXISTENT` (a wall time the spring-forward
-change skipped, read with the offset before the change). Neither time note moves the Eastern calendar date. Each note
-names its row, sport, `Entry_Key` and `Contest_Key`, and no money. The contest time's offset comes from the tz database
-(the `tzdata` wheel on Windows, the system zoneinfo on Linux); the US rules for 2007 onward are the same in every current
-release.
+change skipped, read with the offset before the change). Neither time note moves the Eastern calendar date. Every note
+names its row and sport. The places-paid and time notes also name `Entry_Key` and `Contest_Key`; the places-paid note
+carries `places_paid`, `contest_entries` and `contest_date` from the parsed time (null when the time did not parse), and a
+time note `contest_start_text`, a date cell that passed its rule. No note carries money or a cell that broke a rule. The
+contest time's offset comes from the tz database (the `tzdata` wheel on Windows, the system zoneinfo on Linux); the US
+rules for 2007 onward are the same in every current release.
 
 **The summary** (`nfl_dk_entry_history_intake_v1`, canonical JSON: sorted keys, compact separators, one trailing LF).
 `source_sha256`, `source_bytes`, `rows_total`, `nfl_rows`, `rows_by_sport`, `rows_by_game_type` (per sport and game
 type: `paid` with an entry fee above $0.00, `free`, and `fee_unreadable` for a non-NFL row whose fee broke the money
-rule), `notes`, `note_counts` and `does_not_establish`. It holds no money value, no path and no time. Which game types
+rule), `notes`, `note_counts` and `does_not_establish`. It holds no money value, no path and no run time (a time
+note's `contest_start_text` is the contest's own source time). Which game types
 a measure leaves out (Best Ball, for one) is the consuming metric's definition, not this contract's.
 
 **A changed format.** A DraftKings export that breaks a rule on an NFL row is refused by name. The remedy is a new

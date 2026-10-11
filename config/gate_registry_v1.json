@@ -235,7 +235,7 @@
     "entry_history": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "DraftKings entry history, nfl_dk_entry_history_v1 (Session 69)"},
-      "covers": "The operator's DraftKings entry-history export was refused whole: a structural fault on any row, a value fault on an NFL row, no NFL row, or an intake step that could not snapshot or record it. Nothing is written from a refused file; it stops a results record, never a lineup file."
+      "covers": "The operator's DraftKings entry-history export was refused whole: a structural fault on any row, a value fault on an NFL row or in a contest with an NFL row, or no NFL row. It stops a results record, never a lineup file."
     },
     "presentation": {
       "class": "P", "stops": "CERTIFICATION",
