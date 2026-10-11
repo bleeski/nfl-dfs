@@ -1,0 +1,178 @@
+{
+  "input": "data/inbox/slates/bal-atl-sd-2026-10-11/construction/DK_REVIEW_ENTRY_bal-atl-sd_judgment_v3.csv",
+  "output": "/tmp/claude-0/-home-user-nfl-dfs/419ef5be-7df4-5242-badc-985952c806da/scratchpad/qa_agent/it3_pre.csv",
+  "swaps": [
+    {
+      "entry_id": "5292879393",
+      "thesis": "DEFENSIVE_BATTLE",
+      "kind": "conflict_fix",
+      "out": [
+        "Falcons"
+      ],
+      "in": [
+        "Ravens"
+      ],
+      "prior_before": 66.229,
+      "prior_after": 63.523,
+      "salary_after": 48100
+    },
+    {
+      "entry_id": "5292900194",
+      "thesis": "ATL_WINS_BIG",
+      "kind": "flex",
+      "out": [
+        "Jahan Dotson"
+      ],
+      "in": [
+        "Justice Hill"
+      ],
+      "prior_before": 72.218,
+      "prior_after": 73.647,
+      "salary_after": 48300
+    },
+    {
+      "entry_id": "5292886314",
+      "thesis": "ATL_WINS_CLOSE_HIGH",
+      "kind": "flex",
+      "out": [
+        "Zay Flowers"
+      ],
+      "in": [
+        "Derrick Henry"
+      ],
+      "prior_before": 71.244,
+      "prior_after": 72.612,
+      "salary_after": 49100
+    },
+    {
+      "entry_id": "5292886318",
+      "thesis": "OFFENSIVE_SHOOTOUT",
+      "kind": "flex",
+      "out": [
+        "Josh Cuevas"
+      ],
+      "in": [
+        "LaJohntay Wester"
+      ],
+      "prior_before": 64.134,
+      "prior_after": 65.03,
+      "salary_after": 49300
+    },
+    {
+      "entry_id": "5292886327",
+      "thesis": "BAL_WINS_BIG",
+      "kind": "flip",
+      "out": [
+        "Zay Flowers(CPT)",
+        "Derrick Henry"
+      ],
+      "in": [
+        "Derrick Henry(CPT)",
+        "Zay Flowers"
+      ],
+      "prior_before": 69.158,
+      "prior_after": 69.842,
+      "salary_after": 49700
+    },
+    {
+      "entry_id": "5292900194",
+      "thesis": "ATL_WINS_BIG",
+      "kind": "flip",
+      "out": [
+        "Michael Penix Jr.(CPT)",
+        "Drake London"
+      ],
+      "in": [
+        "Drake London(CPT)",
+        "Michael Penix Jr."
+      ],
+      "prior_before": 73.647,
+      "prior_after": 74.116,
+      "salary_after": 48500
+    },
+    {
+      "entry_id": "5292879390",
+      "thesis": "OFFENSIVE_SHOOTOUT",
+      "kind": "flip",
+      "out": [
+        "Michael Penix Jr.(CPT)",
+        "Zay Flowers"
+      ],
+      "in": [
+        "Zay Flowers(CPT)",
+        "Michael Penix Jr."
+      ],
+      "prior_before": 64.352,
+      "prior_after": 64.714,
+      "salary_after": 49000
+    },
+    {
+      "entry_id": "5292879390",
+      "thesis": "OFFENSIVE_SHOOTOUT",
+      "kind": "flex",
+      "out": [
+        "Rasheen Ali"
+      ],
+      "in": [
+        "Charlie Woerner"
+      ],
+      "prior_before": 64.714,
+      "prior_after": 64.762,
+      "salary_after": 49200
+    }
+  ],
+  "final": {
+    "total": 2214.756,
+    "low": 56.971,
+    "maxp": 20,
+    "maxp_name": [
+      "Michael Penix Jr."
+    ],
+    "top3": 56,
+    "meanov": 2.3468,
+    "maxov": 5,
+    "distinct": 22,
+    "cap": {
+      "Zay Flowers": 6,
+      "Nick Folk": 6,
+      "Drake London": 5,
+      "Tyler Loop": 5,
+      "Derrick Henry": 3,
+      "Michael Penix Jr.": 3,
+      "Bijan Robinson": 2,
+      "Falcons": 1,
+      "Brian Robinson Jr.": 1
+    },
+    "ov_sum": 1164,
+    "exposure": {
+      "Michael Penix Jr.": 20,
+      "Derrick Henry": 18,
+      "Zay Flowers": 18,
+      "Drake London": 17,
+      "Tyler Huntley": 16,
+      "Bijan Robinson": 16,
+      "Nick Folk": 13,
+      "Tyler Loop": 10,
+      "Justice Hill": 9,
+      "Jahan Dotson": 8,
+      "Kyle Pitts Sr.": 8,
+      "Mark Andrews": 6,
+      "Brian Robinson Jr.": 6,
+      "Falcons": 6,
+      "Ravens": 6,
+      "Matt Hibner": 5,
+      "Austin Hooper": 4,
+      "Charlie Woerner": 2,
+      "Devontez Walker": 1,
+      "LaJohntay Wester": 1,
+      "Josh Cuevas": 1,
+      "Rasheen Ali": 1
+    }
+  },
+  "does_not_establish": [
+    "EV",
+    "ROI",
+    "WIN_PROBABILITY",
+    "UPLOAD_CLEARANCE"
+  ]
+}

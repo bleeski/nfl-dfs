@@ -43,6 +43,15 @@ delivered 23:31Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=D
   `construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v4.csv` (`16e01aaf...636b`): same 32 distinct lineups as v3, QA PASS, 0 defects, 0 limit
   breaches, max overlap 5, salary $43,500 to $50,000, CRLF, Entry IDs equal to the template, no `OUT`/`IR`, practice-squad or backup QB.
   Captains: Folk 6, Flowers 6, Penix 5, Loop 5, London 4, Henry 2, Bijan 2, B. Robinson 1, Falcons 1.
+- **Adversarial pass (Ben asked, 23:51Z).** A fresh-context QA agent, at most 3 iterations, started from v3 (scripts and records in
+  `construction/adversarial/`). Lineup-level Pareto swaps exist but are small (7 swaps, +5.25 prior on 2,212) and the contest pass on
+  that set leaves one Dime Package pair sharing 5 people (v4: 4; four seeds, 1,000 restarts each), so the lineup set stays. The two
+  remaining DST-beside-opposing-QB rows (5292886321, 5292886325) have no legal 1-2 FLEX fix that keeps Bijan or Henry (-4.35 to -6.36);
+  left. Accepted: the single-entry contest (196537744) swaps lineups with Dime Package Entry 5292886321, so it holds London CPT | Folk,
+  Penix, B. Robinson Jr., Henry, J. Hill (prior 75.48) instead of Folk CPT (67.05). Verified here, not taken on the agent's word: QA PASS,
+  0 defects, 0 breaches; only those two rows differ from v4; same 32 lineups; non-roster cells and CRLF unchanged; every contest's max
+  and mean overlap, pairs sharing 5, Captain counts and max person unchanged (Flowers ties Penix at 13 of 20 in the Dime Package). Final
+  `construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v5.csv` (`3c66734f...df2f`), delivered 23:59Z.
 - **Found.** The QB depth capture has no way to promote the backup of a DraftKings-`OUT` starter on a Showdown slate when the chart lags
   the news; the by-hand route was a one-team package plus an operator exclusion. The ceiling pass's prior-raising FLEX swaps were not run:
   they would have re-added Pitts and FLEX kickers on last season's priors, against the 2026 usage research.
