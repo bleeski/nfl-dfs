@@ -1,0 +1,105 @@
+{
+  "problems": [],
+  "taken": [
+    {
+      "entry_id": "5290504189",
+      "thesis": "OFFENSIVE_SHOOTOUT",
+      "out": "Juwan Johnson",
+      "in": "Alvin Kamara",
+      "prior_gain": 3.039
+    },
+    {
+      "entry_id": "5290504191",
+      "thesis": "NO_WINS_CLOSE_HIGH",
+      "out": "Daniel Carlson",
+      "in": "Alvin Kamara",
+      "prior_gain": 2.521
+    },
+    {
+      "entry_id": "5290504203",
+      "thesis": "MIN_WINS_BIG",
+      "out": "Will Reichard",
+      "in": "Alvin Kamara",
+      "prior_gain": 1.109
+    }
+  ],
+  "before": {
+    "max_exposure": 20,
+    "top3": 57,
+    "mean_overlap": 2.293560606060606,
+    "distinct": 19,
+    "max_overlap": 5,
+    "prior": 2113.6177426115983
+  },
+  "after": {
+    "max_exposure": 20,
+    "top3": 57,
+    "mean_overlap": 2.2859848484848486,
+    "distinct": 19,
+    "max_overlap": 5,
+    "prior": 2120.2864155573156
+  },
+  "rejected_top": [
+    [
+      "Noah Fant->Saints",
+      8
+    ],
+    [
+      "Aaron Jones Sr.->Justin Jefferson",
+      7
+    ],
+    [
+      "Juwan Johnson->Daniel Carlson",
+      4
+    ],
+    [
+      "Chris Olave->Justin Jefferson",
+      4
+    ],
+    [
+      "Alvin Kamara->T.J. Hockenson",
+      4
+    ],
+    [
+      "Chris Olave->Aaron Jones Sr.",
+      4
+    ],
+    [
+      "Noah Fant->Daniel Carlson",
+      4
+    ],
+    [
+      "T.J. Hockenson->Aaron Jones Sr.",
+      4
+    ],
+    [
+      "Aaron Jones Sr.->Tyler Shough",
+      3
+    ],
+    [
+      "Kendre Miller->Daniel Carlson",
+      2
+    ],
+    [
+      "Kendre Miller->Saints",
+      2
+    ],
+    [
+      "Kendre Miller->Noah Fant",
+      2
+    ],
+    [
+      "Daniel Carlson->Will Reichard",
+      2
+    ],
+    [
+      "Juwan Johnson->Aaron Jones Sr.",
+      2
+    ],
+    [
+      "Juwan Johnson->Alvin Kamara",
+      2
+    ]
+  ],
+  "wrote": true
+}

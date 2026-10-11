@@ -1,0 +1,764 @@
+{
+  "schema_version": "nfl_showdown_portfolio_policy_v4",
+  "bindings": {
+    "salary_sha256": "96b158de58fbdc4275032c14966f26a8b7026188e3e9f66ddda598a8042c4306",
+    "game_id": "MIN@NO",
+    "entry_ids": [
+      "5290510303",
+      "5290504017",
+      "5290510492",
+      "5290504189",
+      "5290504190",
+      "5290504191",
+      "5290504192",
+      "5290504193",
+      "5290504194",
+      "5290504195",
+      "5290504196",
+      "5290504197",
+      "5290504198",
+      "5290504199",
+      "5290504200",
+      "5290504201",
+      "5290504202",
+      "5290504203",
+      "5290504204",
+      "5290504205",
+      "5290504206",
+      "5290504207",
+      "5290510588",
+      "5290509919",
+      "5290503456",
+      "5290503590",
+      "5290504123",
+      "5290510825",
+      "5290510826",
+      "5290510827",
+      "5290510828",
+      "5290510829",
+      "5290510830"
+    ],
+    "person_identities": [
+      {
+        "underlying_id": "MIN|DST|Vikings",
+        "cpt_dk_id": "44422715",
+        "flex_dk_id": "44422658"
+      },
+      {
+        "underlying_id": "MIN|K|Will Reichard",
+        "cpt_dk_id": "44422717",
+        "flex_dk_id": "44422660"
+      },
+      {
+        "underlying_id": "MIN|QB|Carson Wentz",
+        "cpt_dk_id": "44422711",
+        "flex_dk_id": "44422654"
+      },
+      {
+        "underlying_id": "MIN|QB|Kyler Murray",
+        "cpt_dk_id": "44422704",
+        "flex_dk_id": "44422647"
+      },
+      {
+        "underlying_id": "MIN|QB|Max Brosmer",
+        "cpt_dk_id": "44422712",
+        "flex_dk_id": "44422655"
+      },
+      {
+        "underlying_id": "MIN|RB|Aaron Jones Sr.",
+        "cpt_dk_id": "44422703",
+        "flex_dk_id": "44422646"
+      },
+      {
+        "underlying_id": "MIN|RB|Audric Estime",
+        "cpt_dk_id": "44422732",
+        "flex_dk_id": "44422675"
+      },
+      {
+        "underlying_id": "MIN|RB|DeeJay Dallas",
+        "cpt_dk_id": "44422724",
+        "flex_dk_id": "44422667"
+      },
+      {
+        "underlying_id": "MIN|RB|Demond Claiborne",
+        "cpt_dk_id": "44422727",
+        "flex_dk_id": "44422670"
+      },
+      {
+        "underlying_id": "MIN|RB|Devin Neal",
+        "cpt_dk_id": "44422737",
+        "flex_dk_id": "44422680"
+      },
+      {
+        "underlying_id": "MIN|RB|Jordan Mason",
+        "cpt_dk_id": "44422733",
+        "flex_dk_id": "44422676"
+      },
+      {
+        "underlying_id": "MIN|RB|Max Bredeson",
+        "cpt_dk_id": "44422735",
+        "flex_dk_id": "44422678"
+      },
+      {
+        "underlying_id": "MIN|TE|Andrew DePaola",
+        "cpt_dk_id": "44422750",
+        "flex_dk_id": "44422693"
+      },
+      {
+        "underlying_id": "MIN|TE|Ben Yurosek",
+        "cpt_dk_id": "44422755",
+        "flex_dk_id": "44422698"
+      },
+      {
+        "underlying_id": "MIN|TE|Cam Grandy",
+        "cpt_dk_id": "44422748",
+        "flex_dk_id": "44422691"
+      },
+      {
+        "underlying_id": "MIN|TE|Gavin Bartholomew",
+        "cpt_dk_id": "44422731",
+        "flex_dk_id": "44422674"
+      },
+      {
+        "underlying_id": "MIN|TE|Josh Oliver",
+        "cpt_dk_id": "44422747",
+        "flex_dk_id": "44422690"
+      },
+      {
+        "underlying_id": "MIN|TE|T.J. Hockenson",
+        "cpt_dk_id": "44422709",
+        "flex_dk_id": "44422652"
+      },
+      {
+        "underlying_id": "MIN|WR|Dillon Bell",
+        "cpt_dk_id": "44422742",
+        "flex_dk_id": "44422685"
+      },
+      {
+        "underlying_id": "MIN|WR|Jauan Jennings",
+        "cpt_dk_id": "44422716",
+        "flex_dk_id": "44422659"
+      },
+      {
+        "underlying_id": "MIN|WR|Jeshaun Jones",
+        "cpt_dk_id": "44448332",
+        "flex_dk_id": "44448330"
+      },
+      {
+        "underlying_id": "MIN|WR|Jordan Addison",
+        "cpt_dk_id": "44422705",
+        "flex_dk_id": "44422648"
+      },
+      {
+        "underlying_id": "MIN|WR|Justin Jefferson",
+        "cpt_dk_id": "44422701",
+        "flex_dk_id": "44422644"
+      },
+      {
+        "underlying_id": "MIN|WR|Michael Briscoe",
+        "cpt_dk_id": "44422740",
+        "flex_dk_id": "44422683"
+      },
+      {
+        "underlying_id": "MIN|WR|Myles Price",
+        "cpt_dk_id": "44422729",
+        "flex_dk_id": "44422672"
+      },
+      {
+        "underlying_id": "MIN|WR|Odell Beckham Jr.",
+        "cpt_dk_id": "44448331",
+        "flex_dk_id": "44448329"
+      },
+      {
+        "underlying_id": "MIN|WR|Tai Felton",
+        "cpt_dk_id": "44422728",
+        "flex_dk_id": "44422671"
+      },
+      {
+        "underlying_id": "NO|DST|Saints",
+        "cpt_dk_id": "44422721",
+        "flex_dk_id": "44422664"
+      },
+      {
+        "underlying_id": "NO|K|Charlie Smyth",
+        "cpt_dk_id": "44422719",
+        "flex_dk_id": "44422662"
+      },
+      {
+        "underlying_id": "NO|K|Daniel Carlson",
+        "cpt_dk_id": "44422718",
+        "flex_dk_id": "44422661"
+      },
+      {
+        "underlying_id": "NO|QB|Spencer Rattler",
+        "cpt_dk_id": "44422714",
+        "flex_dk_id": "44422657"
+      },
+      {
+        "underlying_id": "NO|QB|Tyler Shough",
+        "cpt_dk_id": "44422702",
+        "flex_dk_id": "44422645"
+      },
+      {
+        "underlying_id": "NO|QB|Zach Wilson",
+        "cpt_dk_id": "44422713",
+        "flex_dk_id": "44422656"
+      },
+      {
+        "underlying_id": "NO|RB|Alvin Kamara",
+        "cpt_dk_id": "44422707",
+        "flex_dk_id": "44422650"
+      },
+      {
+        "underlying_id": "NO|RB|CJ Donaldson",
+        "cpt_dk_id": "44422725",
+        "flex_dk_id": "44422668"
+      },
+      {
+        "underlying_id": "NO|RB|Kendre Miller",
+        "cpt_dk_id": "44422720",
+        "flex_dk_id": "44422663"
+      },
+      {
+        "underlying_id": "NO|RB|Travis Etienne Jr.",
+        "cpt_dk_id": "44422734",
+        "flex_dk_id": "44422677"
+      },
+      {
+        "underlying_id": "NO|RB|Ty Chandler",
+        "cpt_dk_id": "44422739",
+        "flex_dk_id": "44422682"
+      },
+      {
+        "underlying_id": "NO|RB|Ulysses Bentley IV",
+        "cpt_dk_id": "44422736",
+        "flex_dk_id": "44422679"
+      },
+      {
+        "underlying_id": "NO|RB|Zamir White",
+        "cpt_dk_id": "44422738",
+        "flex_dk_id": "44422681"
+      },
+      {
+        "underlying_id": "NO|TE|Cal Adomitis",
+        "cpt_dk_id": "44422749",
+        "flex_dk_id": "44422692"
+      },
+      {
+        "underlying_id": "NO|TE|Juwan Johnson",
+        "cpt_dk_id": "44422710",
+        "flex_dk_id": "44422653"
+      },
+      {
+        "underlying_id": "NO|TE|Moliki Matavao",
+        "cpt_dk_id": "44422753",
+        "flex_dk_id": "44422696"
+      },
+      {
+        "underlying_id": "NO|TE|Noah Fant",
+        "cpt_dk_id": "44422722",
+        "flex_dk_id": "44422665"
+      },
+      {
+        "underlying_id": "NO|TE|Oscar Delp",
+        "cpt_dk_id": "44422726",
+        "flex_dk_id": "44422669"
+      },
+      {
+        "underlying_id": "NO|TE|Stone Smartt",
+        "cpt_dk_id": "44422752",
+        "flex_dk_id": "44422695"
+      },
+      {
+        "underlying_id": "NO|TE|Treyton Welch",
+        "cpt_dk_id": "44422754",
+        "flex_dk_id": "44422697"
+      },
+      {
+        "underlying_id": "NO|TE|Zach Wood",
+        "cpt_dk_id": "44422751",
+        "flex_dk_id": "44422694"
+      },
+      {
+        "underlying_id": "NO|WR|Barion Brown",
+        "cpt_dk_id": "44422746",
+        "flex_dk_id": "44422689"
+      },
+      {
+        "underlying_id": "NO|WR|Bryce Lance",
+        "cpt_dk_id": "44422723",
+        "flex_dk_id": "44422666"
+      },
+      {
+        "underlying_id": "NO|WR|Cedric Tillman",
+        "cpt_dk_id": "44422743",
+        "flex_dk_id": "44422686"
+      },
+      {
+        "underlying_id": "NO|WR|Chris Olave",
+        "cpt_dk_id": "44422700",
+        "flex_dk_id": "44422643"
+      },
+      {
+        "underlying_id": "NO|WR|Devaughn Vele",
+        "cpt_dk_id": "44422708",
+        "flex_dk_id": "44422651"
+      },
+      {
+        "underlying_id": "NO|WR|Jalen Moreno-Cropper",
+        "cpt_dk_id": "44422745",
+        "flex_dk_id": "44422688"
+      },
+      {
+        "underlying_id": "NO|WR|Jordyn Tyson",
+        "cpt_dk_id": "44422706",
+        "flex_dk_id": "44422649"
+      },
+      {
+        "underlying_id": "NO|WR|Kevin Austin Jr.",
+        "cpt_dk_id": "44422730",
+        "flex_dk_id": "44422673"
+      },
+      {
+        "underlying_id": "NO|WR|Kyrese Rowan",
+        "cpt_dk_id": "44422741",
+        "flex_dk_id": "44422684"
+      },
+      {
+        "underlying_id": "NO|WR|Mason Tipton",
+        "cpt_dk_id": "44422756",
+        "flex_dk_id": "44422699"
+      },
+      {
+        "underlying_id": "NO|WR|Trey Palmer",
+        "cpt_dk_id": "44422744",
+        "flex_dk_id": "44422687"
+      }
+    ]
+  },
+  "controls": {
+    "fraction_unit": "FRACTION_0_TO_1",
+    "max_combined_person_exposure": {
+      "default_fraction": 0.6,
+      "overrides": []
+    },
+    "max_captain_exposure": {
+      "default_fraction": 0.2,
+      "overrides": [
+        {
+          "underlying_id": "NO|K|Charlie Smyth",
+          "cpt_dk_id": "44422719",
+          "flex_dk_id": "44422662",
+          "fraction": 0.0
+        }
+      ]
+    },
+    "excluded_people": [],
+    "max_pairwise_person_overlap": 4,
+    "require_unique_lineups": true,
+    "structural_bounds": {
+      "qb_count": {
+        "minimum": 1,
+        "maximum": 2
+      },
+      "pass_catchers_with_rostered_qb": {
+        "minimum": 1,
+        "maximum": 2
+      },
+      "salary_left": {
+        "minimum": 0,
+        "maximum": 50000
+      },
+      "kicker_count": 1,
+      "dst_count": 1,
+      "offense_against_own_dst": false
+    },
+    "theses": [
+      {
+        "name": "MIN_WINS_BIG",
+        "teams": [
+          "MIN"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "MIN|QB|Kyler Murray",
+            "cpt_dk_id": "44422704",
+            "flex_dk_id": "44422647"
+          },
+          {
+            "underlying_id": "MIN|RB|Aaron Jones Sr.",
+            "cpt_dk_id": "44422703",
+            "flex_dk_id": "44422646"
+          },
+          {
+            "underlying_id": "MIN|RB|DeeJay Dallas",
+            "cpt_dk_id": "44422724",
+            "flex_dk_id": "44422667"
+          },
+          {
+            "underlying_id": "MIN|WR|Justin Jefferson",
+            "cpt_dk_id": "44422701",
+            "flex_dk_id": "44422644"
+          },
+          {
+            "underlying_id": "MIN|WR|Jauan Jennings",
+            "cpt_dk_id": "44422716",
+            "flex_dk_id": "44422659"
+          },
+          {
+            "underlying_id": "MIN|DST|Vikings",
+            "cpt_dk_id": "44422715",
+            "flex_dk_id": "44422658"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "MIN",
+            "minimum": 4,
+            "maximum": 5
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "NO_WINS_BIG",
+        "teams": [
+          "NO"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "NO|QB|Tyler Shough",
+            "cpt_dk_id": "44422702",
+            "flex_dk_id": "44422645"
+          },
+          {
+            "underlying_id": "NO|RB|Alvin Kamara",
+            "cpt_dk_id": "44422707",
+            "flex_dk_id": "44422650"
+          },
+          {
+            "underlying_id": "NO|RB|Kendre Miller",
+            "cpt_dk_id": "44422720",
+            "flex_dk_id": "44422663"
+          },
+          {
+            "underlying_id": "NO|WR|Chris Olave",
+            "cpt_dk_id": "44422700",
+            "flex_dk_id": "44422643"
+          },
+          {
+            "underlying_id": "NO|WR|Devaughn Vele",
+            "cpt_dk_id": "44422708",
+            "flex_dk_id": "44422651"
+          },
+          {
+            "underlying_id": "NO|DST|Saints",
+            "cpt_dk_id": "44422721",
+            "flex_dk_id": "44422664"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "NO",
+            "minimum": 4,
+            "maximum": 5
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "MIN_WINS_CLOSE_HIGH",
+        "teams": [
+          "MIN",
+          "NO"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "MIN|QB|Kyler Murray",
+            "cpt_dk_id": "44422704",
+            "flex_dk_id": "44422647"
+          },
+          {
+            "underlying_id": "NO|QB|Tyler Shough",
+            "cpt_dk_id": "44422702",
+            "flex_dk_id": "44422645"
+          },
+          {
+            "underlying_id": "MIN|WR|Justin Jefferson",
+            "cpt_dk_id": "44422701",
+            "flex_dk_id": "44422644"
+          },
+          {
+            "underlying_id": "MIN|WR|Jauan Jennings",
+            "cpt_dk_id": "44422716",
+            "flex_dk_id": "44422659"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "MIN",
+            "minimum": 3,
+            "maximum": 4
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "QB",
+            "minimum": 1,
+            "maximum": 2
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "MIN_WINS_CLOSE_LOW",
+        "teams": [
+          "MIN",
+          "NO"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "MIN|K|Will Reichard",
+            "cpt_dk_id": "44422717",
+            "flex_dk_id": "44422660"
+          },
+          {
+            "underlying_id": "MIN|DST|Vikings",
+            "cpt_dk_id": "44422715",
+            "flex_dk_id": "44422658"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "MIN",
+            "minimum": 3,
+            "maximum": 4
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "K",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "DST",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "WR",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "NO_WINS_CLOSE_HIGH",
+        "teams": [
+          "NO",
+          "MIN"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "NO|QB|Tyler Shough",
+            "cpt_dk_id": "44422702",
+            "flex_dk_id": "44422645"
+          },
+          {
+            "underlying_id": "MIN|QB|Kyler Murray",
+            "cpt_dk_id": "44422704",
+            "flex_dk_id": "44422647"
+          },
+          {
+            "underlying_id": "NO|WR|Chris Olave",
+            "cpt_dk_id": "44422700",
+            "flex_dk_id": "44422643"
+          },
+          {
+            "underlying_id": "NO|WR|Devaughn Vele",
+            "cpt_dk_id": "44422708",
+            "flex_dk_id": "44422651"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "NO",
+            "minimum": 3,
+            "maximum": 4
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "QB",
+            "minimum": 1,
+            "maximum": 2
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "NO_WINS_CLOSE_LOW",
+        "teams": [
+          "NO",
+          "MIN"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "NO|K|Daniel Carlson",
+            "cpt_dk_id": "44422718",
+            "flex_dk_id": "44422661"
+          },
+          {
+            "underlying_id": "NO|DST|Saints",
+            "cpt_dk_id": "44422721",
+            "flex_dk_id": "44422664"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "NO",
+            "minimum": 3,
+            "maximum": 4
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "K",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "DST",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "WR",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "DEFENSIVE_BATTLE",
+        "teams": [
+          "MIN",
+          "NO"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "MIN|K|Will Reichard",
+            "cpt_dk_id": "44422717",
+            "flex_dk_id": "44422660"
+          },
+          {
+            "underlying_id": "NO|K|Daniel Carlson",
+            "cpt_dk_id": "44422718",
+            "flex_dk_id": "44422661"
+          },
+          {
+            "underlying_id": "MIN|DST|Vikings",
+            "cpt_dk_id": "44422715",
+            "flex_dk_id": "44422658"
+          },
+          {
+            "underlying_id": "NO|DST|Saints",
+            "cpt_dk_id": "44422721",
+            "flex_dk_id": "44422664"
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "K",
+            "minimum": 2,
+            "maximum": 2
+          },
+          {
+            "position": "DST",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "QB",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "position": "WR",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "OFFENSIVE_SHOOTOUT",
+        "teams": [
+          "MIN",
+          "NO"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "MIN|QB|Kyler Murray",
+            "cpt_dk_id": "44422704",
+            "flex_dk_id": "44422647"
+          },
+          {
+            "underlying_id": "NO|QB|Tyler Shough",
+            "cpt_dk_id": "44422702",
+            "flex_dk_id": "44422645"
+          },
+          {
+            "underlying_id": "MIN|WR|Justin Jefferson",
+            "cpt_dk_id": "44422701",
+            "flex_dk_id": "44422644"
+          },
+          {
+            "underlying_id": "MIN|WR|Jauan Jennings",
+            "cpt_dk_id": "44422716",
+            "flex_dk_id": "44422659"
+          },
+          {
+            "underlying_id": "NO|WR|Chris Olave",
+            "cpt_dk_id": "44422700",
+            "flex_dk_id": "44422643"
+          },
+          {
+            "underlying_id": "NO|WR|Devaughn Vele",
+            "cpt_dk_id": "44422708",
+            "flex_dk_id": "44422651"
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "QB",
+            "minimum": 2,
+            "maximum": 2
+          },
+          {
+            "position": "K",
+            "minimum": 0,
+            "maximum": 0
+          },
+          {
+            "position": "DST",
+            "minimum": 0,
+            "maximum": 0
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      }
+    ]
+  }
+}

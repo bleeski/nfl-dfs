@@ -144,6 +144,13 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   `data/inbox/slates/tb-dal-sd-2026-10-08/construction/ceiling_pass.py` on the rerun's file (edit its `STARTING_QB` map), then
   `scripts/diversify_showdown_contests.py`, then QA. Every row keeps both teams: that pass's first version had no such check, one
   FLEX upgrade made an all-Dallas row, and only `qa_showdown_portfolio.py` (`SINGLE_TEAM_LINEUP`) caught it.
+  On a v4 thesis run a hand pass must also hold the policy's `structural_bounds` (1 to 2 quarterbacks a row; 1 to 2 WR/TE of
+  each rostered quarterback's team), not only the thesis files' team and position bounds: MIN@NO (2026-10-11) broke 8 rows on
+  them, which QA names `THESIS_BROKEN ... rule=structural_bounds.*`. Its `construction/judgment_pass.py` checks both, and a DST
+  beside the opposing quarterback first flips to the other DST, then takes its own team's quarterback. Write a hand-edited file
+  with CRLF line endings, as DraftKings does, or `diversify_showdown_contests.py` refuses it (`ENTRIES_GEOMETRY_DIFFERS_FROM_TEMPLATE`).
+  The contest pass moves lineups between Entry IDs, so run the `--policy --claim` QA on the file before it and prove the file
+  after it holds the same lineup set.
 - **Practice-squad punts (DET@CAR, 2026-10-04).** A practice-squad player who was not elevated cannot play, and no inactive list
   names him, so a blank DraftKings status and an old-team prior keep him selectable. Check every rostered player under about $1,000
   against the team's elevations for the game (the club's Saturday transaction post); exclude any who was not elevated with

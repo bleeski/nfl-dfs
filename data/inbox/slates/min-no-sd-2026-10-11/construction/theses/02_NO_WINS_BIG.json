@@ -1,0 +1,21 @@
+{
+  "name": "NO_WINS_BIG",
+  "teams": [
+    "NO"
+  ],
+  "captain_set": [
+    "NO|QB|Tyler Shough",
+    "NO|RB|Alvin Kamara",
+    "NO|RB|Kendre Miller",
+    "NO|WR|Chris Olave",
+    "NO|WR|Devaughn Vele",
+    "NO|DST|Saints"
+  ],
+  "team_bounds": [
+    {
+      "team": "NO",
+      "minimum": 4,
+      "maximum": 5
+    }
+  ]
+}

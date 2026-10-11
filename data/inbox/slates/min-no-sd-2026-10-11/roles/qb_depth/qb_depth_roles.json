@@ -1,0 +1,109 @@
+{
+  "allocation_version": "qb_depth_chart_attempt_share_allocation_v2",
+  "declarations": [
+    {
+      "backups": [
+        {
+          "cpt_dk_id": "44422711",
+          "flex_dk_id": "44422654",
+          "player_name": "Carson Wentz",
+          "pos_rank": 2,
+          "provider_player_id": "00-0032950",
+          "underlying_id": "MIN|QB|Carson Wentz"
+        },
+        {
+          "cpt_dk_id": "44422712",
+          "flex_dk_id": "44422655",
+          "player_name": "Max Brosmer",
+          "pos_rank": 3,
+          "provider_player_id": "00-0040494",
+          "underlying_id": "MIN|QB|Max Brosmer"
+        }
+      ],
+      "declared_observed_at": "2026-10-11T13:56:31+00:00",
+      "game_id": "MIN@NO",
+      "source_sha256": "1fa3142fcfeb54d74f87b68dfc78e009c6534434ede4239a89d7b4cfc930e2e7",
+      "starter": {
+        "cpt_dk_id": "44422704",
+        "flex_dk_id": "44422647",
+        "player_name": "Kyler Murray",
+        "pos_rank": 1,
+        "provider_player_id": "00-0035228",
+        "underlying_id": "MIN|QB|Kyler Murray"
+      },
+      "team": "MIN",
+      "unlisted": []
+    },
+    {
+      "backups": [
+        {
+          "cpt_dk_id": "44422714",
+          "flex_dk_id": "44422657",
+          "player_name": "Spencer Rattler",
+          "pos_rank": 2,
+          "provider_player_id": "00-0039376",
+          "underlying_id": "NO|QB|Spencer Rattler"
+        },
+        {
+          "cpt_dk_id": "44422713",
+          "flex_dk_id": "44422656",
+          "player_name": "Zach Wilson",
+          "pos_rank": 3,
+          "provider_player_id": "00-0037013",
+          "underlying_id": "NO|QB|Zach Wilson"
+        }
+      ],
+      "declared_observed_at": "2026-10-11T13:56:31+00:00",
+      "game_id": "MIN@NO",
+      "source_sha256": "fdf0fe254b9568a2ea2138a31517e124d3e802232134604a450dfd2139ba8ac5",
+      "starter": {
+        "cpt_dk_id": "44422702",
+        "flex_dk_id": "44422645",
+        "player_name": "Tyler Shough",
+        "pos_rank": 1,
+        "provider_player_id": "00-0040743",
+        "underlying_id": "NO|QB|Tyler Shough"
+      },
+      "team": "NO",
+      "unlisted": []
+    }
+  ],
+  "game_ids": [
+    "MIN@NO"
+  ],
+  "salary_sha256": "96b158de58fbdc4275032c14966f26a8b7026188e3e9f66ddda598a8042c4306",
+  "schema_version": "nfl_qb_depth_role_evidence_v1",
+  "sources": [
+    {
+      "captured_at": "2026-10-11T16:17:04.193471+00:00",
+      "expires_at": "2026-10-13T01:56:31+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-11T13:56:31+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/1fa3142fcfeb54d74f87b68dfc78e009c6534434ede4239a89d7b4cfc930e2e7.csv",
+      "sha256": "1fa3142fcfeb54d74f87b68dfc78e009c6534434ede4239a89d7b4cfc930e2e7",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-11T13:56:31Z,MIN,Kyler Murray,3917315,00-0035228,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-11T13:56:31Z,MIN,Carson Wentz,2573079,00-0032950,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-11T13:56:31Z,MIN,Max Brosmer,4573398,00-0040494,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "4a17f55fd9f025b12f2a09e8839552bc6e67abc08b828d580afacccdbbb6ac66"
+    },
+    {
+      "captured_at": "2026-10-11T16:17:04.193471+00:00",
+      "expires_at": "2026-10-13T01:56:31+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-11T13:56:31+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/fdf0fe254b9568a2ea2138a31517e124d3e802232134604a450dfd2139ba8ac5.csv",
+      "sha256": "fdf0fe254b9568a2ea2138a31517e124d3e802232134604a450dfd2139ba8ac5",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-11T13:56:31Z,NO,Tyler Shough,4360689,00-0040743,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-11T13:56:31Z,NO,Spencer Rattler,4426339,00-0039376,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-11T13:56:31Z,NO,Zach Wilson,4361259,00-0037013,21,3WR 1TE,8,Quarterback,QB,9,3\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "4a17f55fd9f025b12f2a09e8839552bc6e67abc08b828d580afacccdbbb6ac66"
+    }
+  ],
+  "transformation_version": "qb_depth_chart_order_v2"
+}

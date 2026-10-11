@@ -1,0 +1,213 @@
+{
+  "schema_version": "nfl_practice_squad_check_v1",
+  "salaries": "data/inbox/slates/min-no-sd-2026-10-11/input/DKSalaries_169.csv",
+  "rosters": "data/runs/20261011T161437Z-min-no-sd/prior_review/priors/proposal/raw/ff5969b8e9e78d840e91ef727770ba04aaf73b3b717f926f070a0c7680d03feb.csv",
+  "people": 57,
+  "not_active": [
+    {
+      "name": "Cam Grandy",
+      "team": "MIN",
+      "position": "TE",
+      "dk_status": "",
+      "dk_ids": [
+        "44422748",
+        "44422691"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Cam Grandy",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Devin Neal",
+      "team": "MIN",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44422737",
+        "44422680"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "CUT",
+      "nflverse_name": "Devin Neal",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Dillon Bell",
+      "team": "MIN",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44422742",
+        "44422685"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Dillon Bell",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Michael Briscoe",
+      "team": "MIN",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44422740",
+        "44422683"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Michael Briscoe",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Charlie Smyth",
+      "team": "NO",
+      "position": "K",
+      "dk_status": "",
+      "dk_ids": [
+        "44422719",
+        "44422662"
+      ],
+      "max_salary": 6900,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Charlie Smyth",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Jalen Moreno-Cropper",
+      "team": "NO",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44422745",
+        "44422688"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Jalen Cropper",
+      "nflverse_week": 5,
+      "match_method": "HYPHENATED_SURNAME_HALF_TEAM"
+    },
+    {
+      "name": "Kevin Austin Jr.",
+      "team": "NO",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44422730",
+        "44422673"
+      ],
+      "max_salary": 1200,
+      "nflverse_status": "CUT",
+      "nflverse_name": "Kevin Austin Jr.",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Kyrese Rowan",
+      "team": "NO",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44422741",
+        "44422684"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Kyrese Rowan",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Stone Smartt",
+      "team": "NO",
+      "position": "TE",
+      "dk_status": "",
+      "dk_ids": [
+        "44422752",
+        "44422695"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Stone Smartt",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Trey Palmer",
+      "team": "NO",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44422744",
+        "44422687"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Trey Palmer",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Ulysses Bentley IV",
+      "team": "NO",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44422736",
+        "44422679"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Ulysses Bentley IV",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Zamir White",
+      "team": "NO",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44422738",
+        "44422681"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Zamir White",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    }
+  ],
+  "no_roster_row": [
+    {
+      "name": "Audric Estime",
+      "team": "MIN",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44422732",
+        "44422675"
+      ],
+      "max_salary": 600,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    }
+  ],
+  "exclude_args": "--exclude 44422748 --exclude 44422691 --exclude 44422737 --exclude 44422680 --exclude 44422742 --exclude 44422685 --exclude 44422740 --exclude 44422683 --exclude 44422719 --exclude 44422662 --exclude 44422745 --exclude 44422688 --exclude 44422730 --exclude 44422673 --exclude 44422741 --exclude 44422684 --exclude 44422752 --exclude 44422695 --exclude 44422744 --exclude 44422687 --exclude 44422736 --exclude 44422679 --exclude 44422738 --exclude 44422681",
+  "does_not_establish": [
+    "OFFICIAL_ACTIVE_STATUS",
+    "GAME_DAY_ELEVATION",
+    "A_CURRENT_ROLE",
+    "UPLOAD_CLEARANCE"
+  ],
+  "next": "Check each team's elevation post for this game; exclude only the people it does not name."
+}

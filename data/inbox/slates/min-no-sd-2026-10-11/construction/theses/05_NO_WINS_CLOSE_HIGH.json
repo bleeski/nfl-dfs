@@ -1,0 +1,27 @@
+{
+  "name": "NO_WINS_CLOSE_HIGH",
+  "teams": [
+    "NO",
+    "MIN"
+  ],
+  "captain_set": [
+    "NO|QB|Tyler Shough",
+    "MIN|QB|Kyler Murray",
+    "NO|WR|Chris Olave",
+    "NO|WR|Devaughn Vele"
+  ],
+  "team_bounds": [
+    {
+      "team": "NO",
+      "minimum": 3,
+      "maximum": 4
+    }
+  ],
+  "position_bounds": [
+    {
+      "position": "QB",
+      "minimum": 1,
+      "maximum": 2
+    }
+  ]
+}
