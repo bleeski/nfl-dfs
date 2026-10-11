@@ -572,9 +572,10 @@ check its lineups against DraftKings' own points:
   --entries 'data\results\normalized\<sha256>\nfl_entries.w1.json'
 ```
 
-The first run of a season fetches nflverse's weekly player file into the stats
-package; every later run reads that frozen copy, so one package serves every
-slate. Use the run that built the prior package for `--identity-review`: a
+The first run fetches nflverse's weekly player file into the stats package,
+and every later run with that folder reads the same frozen copy. The copy
+never refreshes: for a week published later, or after nflverse corrects a
+stat, use a new package folder. Use the run that built the prior package for `--identity-review`: a
 `--request` rerun on frozen priors does not write that file. `--lineups` and
 `--entries` go together; leave both off to grade players only.
 
@@ -584,7 +585,8 @@ instead of a zero for anyone the file cannot score (a DST, a player with no
 stat row, an unbound identity). It gives the prior's error and rank correlation
 beside the salary baseline's, and each delivered lineup's status against
 DraftKings (`RECONCILED` within 0.01, `MISMATCH` with every player's stat line,
-or not fully covered). Exit 2 is a refusal named by code; nothing is written.
+or not fully covered). Exit 2 is a refusal named by code, and no report is
+written (a first run may already have fetched the stats package).
 It is a grading input only: it changes no prior and clears no upload.
 
 ## Safe failure behavior

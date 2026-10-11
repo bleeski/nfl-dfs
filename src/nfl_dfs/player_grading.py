@@ -11,6 +11,7 @@ from the entry-history artifact (`nfl_dk_entry_history_entries_v1`).
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import dataclasses
 import io
@@ -166,6 +167,7 @@ def parse_week(raw: bytes, season: int, week: int) -> tuple[frozenset[str], dict
     try:
         reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig"), newline=""))
         header = tuple(reader.fieldnames or ())
+        records = list(reader)
     except (UnicodeDecodeError, csv.Error) as exc:
         raise PlayerGradingRefused("PLAYER_GRADING_STATS_INVALID", f"UNREADABLE:{exc}") from exc
     missing = [column for column in IDENTITY_COLUMNS if column not in header]
@@ -174,7 +176,7 @@ def parse_week(raw: bytes, season: int, week: int) -> tuple[frozenset[str], dict
     checked = [column for column in CHECKED_COLUMNS if column in header]
     rows: dict[str, dict[str, str]] = {}
     unattributed = 0
-    for number, row in enumerate(reader, start=2):
+    for number, row in enumerate(records, start=2):
         if None in row or None in row.values():
             raise PlayerGradingRefused("PLAYER_GRADING_STATS_INVALID", f"ROW_MISSHAPEN:row={number}")
         if (row["season"].strip(), row["week"].strip(), row["season_type"].strip()) != (str(season), str(week), "REG"):
@@ -290,12 +292,16 @@ def _pool_scores(path: Path, people: Mapping[str, object], dk_ids: set[str]) -> 
 
 
 def _identity(path: Path, anchors: Mapping[str, object]) -> dict[str, str]:
-    """Each anchor DK ID's accepted nflverse ID, by `_resolve_reviewed`'s rule; anyone else is unbound."""
+    """Each anchor DK ID's accepted nflverse ID; anyone else is unbound.
+
+    `_resolve_reviewed`'s rule on the file's own columns: `ACCEPT`, then the reviewed ID, else the file's proposed ID.
+    The engine takes the proposed ID from its own fresh proposal instead; the two agree on any file the engine wrote.
+    """
 
     try:
         decisions = priors.read_reviewed_decisions(Path(path))
-    except priors.PriorsBuildError as exc:
-        raise _input("identity", exc) from exc
+    except (priors.PriorsBuildError, ValueError, csv.Error, AttributeError) as exc:  # bad encoding or a misshapen row
+        raise _input("identity", f"{type(exc).__name__}:{exc}") from exc
     bound: dict[str, str] = {}
     for dk_id, row in decisions.items():
         player = anchors.get(dk_id)
@@ -319,6 +325,8 @@ def _entries(path: Path) -> dict[str, dict]:
         raise _input("entries", f"SCHEMA:{payload.get('schema_version')!r}")
     found: dict[str, dict] = {}
     for item in payload["entries"]:
+        if not isinstance(item, dict):
+            raise _input("entries", "ENTRY_NOT_AN_OBJECT")
         key, points = item.get("entry_key"), item.get("points_hundredths")
         if (not isinstance(key, str) or key in found or not isinstance(item.get("contest_key"), str)
                 or isinstance(points, bool) or not isinstance(points, int)):
@@ -447,14 +455,29 @@ def _reconcile(lineups: Path, entries: Path, contract, by_dk_id: Mapping, people
     }
 
 
-def bind_games(dk_games: Sequence[str], found: Mapping[str, set[str]]) -> dict[str, str]:
-    """Each DraftKings game's one nflverse `game_id`: its bound players' rows share exactly one, and no two games do."""
+def bind_games(games: Sequence[tuple[str, Sequence[str]]],
+               found: Mapping[str, Sequence[tuple[str, str, str]]]) -> dict[str, str]:
+    """Each DraftKings game's one nflverse `game_id`.
+
+    `games` is each game with its two teams; `found` is, per game, `(team, game_id, person)` for every bound person with
+    a stat row. Both teams must have a row (a wrong week with one team on bye would otherwise bind), every row must name
+    the same `game_id`, and no two games may share one.
+    """
 
     bound: dict[str, str] = {}
-    for game in dk_games:
-        ids = sorted(found.get(game, ()))
-        if len(ids) != 1 or ids[0] in bound.values():
-            raise PlayerGradingRefused("PLAYER_GRADING_GAME_UNBOUND", f"{game}:{ids or 'NO_STAT_ROWS'}")
+    for game, teams in games:
+        rows = found.get(game, ())
+        ids = sorted({game_id for _team, game_id, _person in rows})
+        if not ids:
+            raise PlayerGradingRefused("PLAYER_GRADING_GAME_UNBOUND", f"{game}:NO_STAT_ROWS")
+        if len(ids) > 1:
+            people = {game_id: sorted(p for _t, g, p in rows if g == game_id)[:3] for game_id in ids}
+            raise PlayerGradingRefused("PLAYER_GRADING_GAME_UNBOUND", f"{game}:ROWS_NAME_SEVERAL_GAMES:{people}")
+        absent = sorted(set(teams) - {team for team, _game_id, _person in rows})
+        if absent:
+            raise PlayerGradingRefused("PLAYER_GRADING_GAME_UNBOUND", f"{game}:{ids[0]}:NO_STAT_ROW_FOR:{absent}")
+        if ids[0] in bound.values():
+            raise PlayerGradingRefused("PLAYER_GRADING_GAME_UNBOUND", f"{game}:{ids[0]}:ALSO_ANOTHER_GAME")
         bound[game] = ids[0]
     return bound
 
@@ -486,11 +509,13 @@ def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: 
             "salary": player.salary, "dk_status": player.status_raw, "prior_points": prior.get(person_id),
             "out_of_selection": None if person_id not in prior else player.dk_id not in selectable,
             "provider_player_id": provider, **_realized(player.position, provider, rows, columns)}
-    found_games: dict[str, set[str]] = {}
+    found_games: dict[str, list[tuple[str, str, str]]] = {}
     for person_id, entry in people.items():
         if entry["game_id"]:
-            found_games.setdefault(anchors[person_id].game_id, set()).add(entry["game_id"])
-    bound_games = bind_games([game.game_id for game in contract.games], found_games)
+            anchor = anchors[person_id]
+            found_games.setdefault(anchor.game_id, []).append((anchor.team, entry["game_id"], person_id))
+    bound_games = bind_games([(game.game_id, (game.away_team, game.home_team)) for game in contract.games],
+                             found_games)
 
     graded = [entry for person_id, entry in people.items() if person_id in prior]
     usable = [entry for entry in graded if entry["realized_hundredths"] is not None]
@@ -542,10 +567,17 @@ def write_report(report: Mapping[str, object], out: Path) -> tuple[Path, str]:
     except FileExistsError as exc:
         raise PlayerGradingRefused("PLAYER_GRADING_OUTPUT_EXISTS", str(out)) from exc
     target = Path(out) / REPORT_NAME
-    target.write_bytes(data)
-    digest = sha256_file(target)
-    if digest != sha256_bytes(data):
-        raise OSError(f"{target}: written bytes differ")
+    try:
+        target.write_bytes(data)
+        digest = sha256_file(target)
+        if digest != sha256_bytes(data):
+            raise OSError(f"{target}: written bytes differ")
+    except OSError:
+        # This run made the folder: leave nothing behind, so a rerun is not refused as OUTPUT_EXISTS.
+        with contextlib.suppress(OSError):
+            target.unlink(missing_ok=True)
+            Path(out).rmdir()
+        raise
     return target, digest
 
 
@@ -565,6 +597,8 @@ def run(*, salaries, pool_scores, identity_review, stats_package, season, week, 
         return 2, {"status": "REFUSED", "code": exc.code, "detail": exc.detail, "model_status": "PRIOR_ONLY"}
     except OSError as exc:
         return 2, {"status": "WRITE_FAILED", "detail": f"{type(exc).__name__}:{exc}", "model_status": "PRIOR_ONLY"}
+    except Exception as exc:  # never fall through to cli.main's handler, which prints lineup release truths
+        return 2, {"status": "FAILED", "detail": f"{type(exc).__name__}:{exc}", "model_status": "PRIOR_ONLY"}
     grade = report["grade"]
     reconciliation = report["reconciliation"]
     return 0, {

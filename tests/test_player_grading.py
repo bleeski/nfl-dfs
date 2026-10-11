@@ -67,7 +67,7 @@ KICKER = ["pat_made", "fg_made_0_19", "fg_made_20_29", "fg_made_30_39", "fg_made
           "fg_made_60_"]
 
 
-def stats_bytes(*, drop=(), cells=None, extra_rows=(), week_rows=True, game_for=None) -> bytes:
+def stats_bytes(*, drop=(), cells=None, extra_rows=(), week_rows=True, game_for=None, teams=("KC", "DEN")) -> bytes:
     """The nflverse weekly file: one week-2 row per STATS person, a week-1 row, and a decoy named DEN WR2."""
 
     header = [c for c in ID_COLUMNS + OFFENSE + KICKER if c not in drop]
@@ -75,6 +75,8 @@ def stats_bytes(*, drop=(), cells=None, extra_rows=(), week_rows=True, game_for=
     if week_rows:
         for key, values in STATS.items():
             name, pos, team, _ = INFO[key]
+            if team not in teams:
+                continue
             base = dict(player_id=GSIS[key], player_display_name=name, position=pos, season=SEASON, week=WEEK,
                         season_type="REG", game_id=(game_for or {}).get(team, GAME_ID), team=team)
             rows.append({**base, **values, **(cells or {}).get(key, {})})
@@ -333,8 +335,9 @@ def test_single_uncovered_lineups_form_residual_groups(tmp_path):
     group = report["reconciliation"]["residual_groups"][uid("kc_dst")]
     assert group == {"lineups": 3, "implied_hundredths": ["700", "700", "700"], "spread_hundredths": "0",
                      "status": "AGREE"}
-    report = grade(tmp_path, entries=entries_bytes({4: 11495}))
-    assert report["reconciliation"]["residual_groups"][uid("kc_dst")]["status"] == "DISAGREE"
+    for points, status in ((11492, "AGREE"), (11493, "DISAGREE")):
+        report = grade(tmp_path, entries=entries_bytes({4: points}))
+        assert report["reconciliation"]["residual_groups"][uid("kc_dst")]["status"] == status
 
 
 def test_an_entry_missing_from_history_or_another_contest_is_named(tmp_path):
@@ -422,6 +425,8 @@ def test_stats_refusals(tmp_path):
     duplicate = dict(player_id=GSIS["kc_te"], season=SEASON, week=WEEK, season_type="REG", game_id=GAME_ID)
     assert "DUPLICATE" in refused(tmp_path, "PLAYER_GRADING_STATS_INVALID", stats=stats_bytes(extra_rows=[duplicate]))
     refused(tmp_path, "PLAYER_GRADING_WEEK_ABSENT", stats=stats_bytes(week_rows=False))
+    huge = stats_bytes(cells={"kc_qb": {"player_display_name": "x" * 200_000}})
+    assert "UNREADABLE" in refused(tmp_path, "PLAYER_GRADING_STATS_INVALID", stats=huge)
 
 
 def test_a_row_credited_to_no_player_is_counted_not_refused(tmp_path):
@@ -444,11 +449,26 @@ def test_a_game_whose_rows_name_two_games_is_unbound(tmp_path):
     assert "2026_02_DEN_LV" in detail
 
 
-def test_two_slate_games_never_share_one_nflverse_game():
-    assert pg.bind_games(["A@B", "C@D"], {"A@B": {"g1"}, "C@D": {"g2"}}) == {"A@B": "g1", "C@D": "g2"}
+GAMES = [("A@B", ("A", "B")), ("C@D", ("C", "D"))]
+
+
+@pytest.mark.parametrize("found, detail", [
+    ({"A@B": [("A", "g1", "a"), ("B", "g1", "b")], "C@D": [("C", "g1", "c"), ("D", "g1", "d")]},
+     "C@D:g1:ALSO_ANOTHER_GAME"),
+    ({"A@B": [("A", "g1", "a"), ("B", "g1", "b")]}, "C@D:NO_STAT_ROWS"),
+    ({"A@B": [("A", "g1", "a")], "C@D": [("C", "g2", "c"), ("D", "g2", "d")]}, "A@B:g1:NO_STAT_ROW_FOR:['B']"),
+    ({"A@B": [("A", "g1", "a"), ("B", "g9", "b")]}, "A@B:ROWS_NAME_SEVERAL_GAMES:{'g1': ['a'], 'g9': ['b']}"),
+])
+def test_each_slate_game_binds_one_nflverse_game_holding_both_teams(found, detail):
     with pytest.raises(pg.PlayerGradingRefused) as caught:
-        pg.bind_games(["A@B", "C@D"], {"A@B": {"g1"}, "C@D": {"g1"}})
-    assert (caught.value.code, caught.value.detail) == ("PLAYER_GRADING_GAME_UNBOUND", "C@D:['g1']")
+        pg.bind_games(GAMES, found)
+    assert (caught.value.code, caught.value.detail) == ("PLAYER_GRADING_GAME_UNBOUND", detail)
+    both = {"A@B": [("A", "g1", "a"), ("B", "g1", "b")], "C@D": [("C", "g2", "c"), ("D", "g2", "d")]}
+    assert pg.bind_games(GAMES, both) == {"A@B": "g1", "C@D": "g2"}
+
+
+def test_a_wrong_week_with_one_team_on_bye_refuses(tmp_path):
+    assert "NO_STAT_ROW_FOR:['DEN']" in refused(tmp_path, "PLAYER_GRADING_GAME_UNBOUND", stats=stats_bytes(teams=("KC",)))
 
 
 def test_a_postseason_row_in_the_same_week_is_not_read(tmp_path):
@@ -468,8 +488,15 @@ def test_a_classic_lineup_file_on_a_showdown_slate_refuses(tmp_path):
     ("salaries", b"Position,Name + ID\n"),
     ("pool_scores", pool_scores_bytes(schema_version="nfl_prior_pool_scores_v9")),
     ("pool_scores", pool_scores_bytes(by_person={"KC|QB|Nobody": 1.0})),
+    ("pool_scores", pool_scores_bytes(by_dk_id={"9999": 1.0})),
+    ("pool_scores", pool_scores_bytes(by_person={uid("kc_qb"): float("nan")})),
     ("identity_review", b"DK_ID,DK_NAME\n3000,KC QB\n"),
     ("identity_review", identity_bytes(alter={"kc_qb": {"DK_NAME": "Other QB"}})),
+    ("identity_review", identity_bytes(alter={"kc_qb": {"DK_TEAM": "DEN"}})),
+    ("identity_review", identity_bytes(alter={"kc_qb": {"DK_POSITION": "RB"}})),
+    ("identity_review", identity_bytes().replace(b"KC TE,KC", b"KC T\xc9,KC", 1)),
+    ("identity_review", identity_bytes().replace(b",ACCEPT,", b",ACCEPT,,", 1)),
+    ("entries", json.dumps({"schema_version": ENTRIES_VERSION, "entries": [1]}).encode("utf-8")),
     ("identity_review", identity_bytes(alter={"kc_te": {"REVIEWED_PROVIDER_PLAYER_ID": GSIS["kc_qb"]}})),
     ("lineups", lineup_bytes().replace(CPT["kc_qb"].encode() + b",", b"Some Name,", 1)),
     ("entries", entries_bytes(schema="nfl_dk_entry_history_entries_v0")),
@@ -576,8 +603,27 @@ def test_the_command_refuses_by_code_and_never_prints_release_truths(tmp_path, c
     (tmp_path / "taken").mkdir()
     code, summary = run_cli(tmp_path, capsys, tmp_path / "taken", monkeypatch)
     assert (code, summary["status"], summary["code"]) == (2, "REFUSED", "PLAYER_GRADING_OUTPUT_EXISTS")
-    code, summary = run_cli(tmp_path, capsys, tmp_path / "fresh", monkeypatch,
-                            pool_scores=pool_scores_bytes(schema_version="x"))
-    assert (code, summary["code"]) == (2, "PLAYER_GRADING_INPUT_INVALID")
-    assert not (tmp_path / "fresh").exists()
+    assert not (tmp_path / "pkg").exists(), "the folder check runs before any fetch"
+    for name, data in (("pool_scores", pool_scores_bytes(schema_version="x")),
+                       ("identity_review", identity_bytes().replace(b"KC TE,KC", b"KC T\xc9,KC", 1)),
+                       ("entries", b'{"schema_version": "nfl_dk_entry_history_entries_v1", "entries": [1]}')):
+        code, summary = run_cli(tmp_path, capsys, tmp_path / "fresh", monkeypatch, **{name: data})
+        assert (code, summary["code"]) == (2, "PLAYER_GRADING_INPUT_INVALID"), name
+        assert not (tmp_path / "fresh").exists()
+        assert "RELEASE_DECISION" not in json.dumps(summary)
+
+
+def test_an_unexpected_failure_is_still_never_a_release_truth(tmp_path, capsys, monkeypatch):
+    def broken(**_kwargs):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(pg, "grade_slate", broken)
+    code, summary = run_cli(tmp_path, capsys, tmp_path / "out", monkeypatch)
+    assert (code, summary["status"], summary["detail"]) == (2, "FAILED", "RuntimeError:boom")
     assert "RELEASE_DECISION" not in json.dumps(summary)
+
+
+def test_a_failed_write_leaves_no_folder_behind(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(pg, "sha256_file", lambda _path: "0" * 64)
+    code, summary = run_cli(tmp_path, capsys, tmp_path / "out", monkeypatch)
+    assert (code, summary["status"]) == (2, "WRITE_FAILED")
+    assert not (tmp_path / "out").exists()

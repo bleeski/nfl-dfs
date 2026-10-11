@@ -4523,22 +4523,28 @@ DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION`.
 **The command.** `nfl grade-players --salaries <csv> --pool-scores <json> --identity-review <csv> --stats-package <dir>
 --season <yyyy> --week <n> --out <new folder> [--lineups <DK_REVIEW_ENTRY csv> --entries <nfl_entries.w1.json>]`. Exit 0
 wrote `<out>/player_grading.w1.json` and prints a summary; exit 2 refused (`status: REFUSED`, `code`, `detail`) and
-wrote no report, or could not write it (`WRITE_FAILED`). It never prints a lineup release truth.
+wrote no report, or could not write it (`WRITE_FAILED`, which leaves no folder behind), or failed unexpectedly
+(`FAILED`, with the exception class). It never prints a lineup release truth.
 
 **The stats package.** `--stats-package` holds the season's nflverse weekly player file. With no `source_manifest.json`
 there, the command fetches the priors adapter's own `player_stats_current` entry (`priors.source_specifications`:
 `.../stats_player/stats_player_week_<season>.csv`, parser `nflverse_stats_player_week_csv_v1`) through
 `priors.freeze_sources`, with `optional` off so a failed fetch is never an empty grade, and writes the manifest
 (`nfl_prior_source_manifest_v1`, one artifact). Otherwise it loads the manifest with `priors.load_frozen_manifest`
-(hash-checked). One package serves every slate of a season, and a rerun on it is byte-identical. A failed fetch is
+(hash-checked). One package serves the slates graded from it, and a rerun on it is byte-identical. It never
+refreshes: a week published after the fetch, or an nflverse stat correction, needs a new package folder, and a
+`MISMATCH` is checked against a fresh package before it is called a scoring defect. The first run writes the package
+even when the grade then refuses. A failed fetch is
 `PLAYER_GRADING_STATS_UNAVAILABLE`; a damaged package, another season's, or bytes that do not match the entry are
 `PLAYER_GRADING_STATS_INVALID`.
 
 **The week.** Rows of the season and week with `season_type` `REG`. `player_id`, `season`, `week`, `season_type` and
 `game_id` are required; every cell of a column the scoring reads is blank, `NA` or a finite number (integral except
 the three yards columns); a player-week appears once. Each failure is `PLAYER_GRADING_STATS_INVALID`; no row at all is
-`PLAYER_GRADING_WEEK_ABSENT`. The bound players of each DraftKings game must share exactly one `game_id`, and no two
-games the same one, or `PLAYER_GRADING_GAME_UNBOUND` (a wrong `--week`, or a game not yet published).
+`PLAYER_GRADING_WEEK_ABSENT`. Each DraftKings game needs a row from a bound player of each of its two teams, every
+such row must name one `game_id`, and no two games may share one, or `PLAYER_GRADING_GAME_UNBOUND` (a wrong
+`--week`, a team on bye that week, a game not yet published, or a person bound to a player in another game, whom the
+detail names).
 
 **`nfl_realized_dk_points_v1`.** `scoring.score_offense` or `score_kicker` on the line the row maps to; realized
 hundredths are `round(points * 100)`. A Showdown captain counts 3/2 of his hundredths, held exactly.
@@ -4563,7 +4569,8 @@ key must be on the slate. The file carries no salary hash, so it binds by key me
 graded person whose ID is not in `by_dk_id`, or is in `excluded_dk_ids`, is `out_of_selection: true` and still graded.
 Identity is the run's reviewed decision CSV (`priors.REVIEW_COLUMNS`, read with `read_reviewed_decisions`): each
 row's `DK_ID` must be a person's FLEX or Classic ID on the slate, with `DK_NAME`, `DK_TEAM` and `DK_POSITION` equal to the
-salary row's. `ACCEPT` with `REVIEWED_PROVIDER_PLAYER_ID`, else `PROPOSED_PROVIDER_PLAYER_ID`, binds; any other row
+salary row's. `ACCEPT` with `REVIEWED_PROVIDER_PLAYER_ID`, else the file's own `PROPOSED_PROVIDER_PLAYER_ID`, binds
+(the engine's freeze takes the proposed ID from its own fresh proposal, which agrees on any file the engine wrote); any other row
 leaves the person unbound, and an nflverse ID bound twice refuses. Stat rows join by that ID only, never by name. A
 failure in any of these is `PLAYER_GRADING_INPUT_INVALID:<input>:<why>`.
 
