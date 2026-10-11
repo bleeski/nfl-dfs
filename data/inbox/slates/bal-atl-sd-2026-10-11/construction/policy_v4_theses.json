@@ -1,0 +1,721 @@
+{
+  "schema_version": "nfl_showdown_portfolio_policy_v4",
+  "bindings": {
+    "salary_sha256": "64f05238448c69766642081905d221d4905e52125ece3608ddc1cb27874b3026",
+    "game_id": "BAL@ATL",
+    "entry_ids": [
+      "5292879389",
+      "5292879390",
+      "5292879391",
+      "5292879392",
+      "5292879393",
+      "5292879394",
+      "5292887579",
+      "5292900194",
+      "5292900232",
+      "5292886314",
+      "5292886315",
+      "5292886316",
+      "5292886317",
+      "5292886318",
+      "5292886319",
+      "5292886320",
+      "5292886321",
+      "5292886322",
+      "5292886323",
+      "5292886324",
+      "5292886325",
+      "5292886326",
+      "5292886327",
+      "5292886328",
+      "5292886329",
+      "5292886330",
+      "5292886331",
+      "5292886332",
+      "5292894395",
+      "5292896923",
+      "5292888219",
+      "5292898557"
+    ],
+    "person_identities": [
+      {
+        "underlying_id": "ATL|DST|Falcons",
+        "cpt_dk_id": "44446763",
+        "flex_dk_id": "44446711"
+      },
+      {
+        "underlying_id": "ATL|K|Nick Folk",
+        "cpt_dk_id": "44446759",
+        "flex_dk_id": "44446707"
+      },
+      {
+        "underlying_id": "ATL|QB|Cooper Rush",
+        "cpt_dk_id": "44446753",
+        "flex_dk_id": "44446701"
+      },
+      {
+        "underlying_id": "ATL|QB|Jack Strand",
+        "cpt_dk_id": "44446754",
+        "flex_dk_id": "44446702"
+      },
+      {
+        "underlying_id": "ATL|QB|Michael Penix Jr.",
+        "cpt_dk_id": "44446749",
+        "flex_dk_id": "44446697"
+      },
+      {
+        "underlying_id": "ATL|QB|Tua Tagovailoa",
+        "cpt_dk_id": "44446756",
+        "flex_dk_id": "44446704"
+      },
+      {
+        "underlying_id": "ATL|RB|Bijan Robinson",
+        "cpt_dk_id": "44446744",
+        "flex_dk_id": "44446692"
+      },
+      {
+        "underlying_id": "ATL|RB|Brian Robinson Jr.",
+        "cpt_dk_id": "44446758",
+        "flex_dk_id": "44446706"
+      },
+      {
+        "underlying_id": "ATL|RB|Jam Miller",
+        "cpt_dk_id": "44446780",
+        "flex_dk_id": "44446728"
+      },
+      {
+        "underlying_id": "ATL|RB|Khalil Herbert",
+        "cpt_dk_id": "44446782",
+        "flex_dk_id": "44446730"
+      },
+      {
+        "underlying_id": "ATL|RB|Trey Sermon",
+        "cpt_dk_id": "44446777",
+        "flex_dk_id": "44446725"
+      },
+      {
+        "underlying_id": "ATL|TE|Austin Hooper",
+        "cpt_dk_id": "44446770",
+        "flex_dk_id": "44446718"
+      },
+      {
+        "underlying_id": "ATL|TE|Charlie Woerner",
+        "cpt_dk_id": "44446775",
+        "flex_dk_id": "44446723"
+      },
+      {
+        "underlying_id": "ATL|TE|Jack Velling",
+        "cpt_dk_id": "44446794",
+        "flex_dk_id": "44446742"
+      },
+      {
+        "underlying_id": "ATL|TE|Kyle Pitts Sr.",
+        "cpt_dk_id": "44446761",
+        "flex_dk_id": "44446709"
+      },
+      {
+        "underlying_id": "ATL|TE|Nick Muse",
+        "cpt_dk_id": "44446795",
+        "flex_dk_id": "44446743"
+      },
+      {
+        "underlying_id": "ATL|WR|Antwane Wells Jr.",
+        "cpt_dk_id": "44446788",
+        "flex_dk_id": "44446736"
+      },
+      {
+        "underlying_id": "ATL|WR|Beaux Collins",
+        "cpt_dk_id": "44446784",
+        "flex_dk_id": "44446732"
+      },
+      {
+        "underlying_id": "ATL|WR|Chris Blair",
+        "cpt_dk_id": "44446774",
+        "flex_dk_id": "44446722"
+      },
+      {
+        "underlying_id": "ATL|WR|Drake London",
+        "cpt_dk_id": "44446748",
+        "flex_dk_id": "44446696"
+      },
+      {
+        "underlying_id": "ATL|WR|Dylan Drummond",
+        "cpt_dk_id": "44446786",
+        "flex_dk_id": "44446734"
+      },
+      {
+        "underlying_id": "ATL|WR|Jahan Dotson",
+        "cpt_dk_id": "44446764",
+        "flex_dk_id": "44446712"
+      },
+      {
+        "underlying_id": "ATL|WR|Olamide Zaccheaus",
+        "cpt_dk_id": "44446768",
+        "flex_dk_id": "44446716"
+      },
+      {
+        "underlying_id": "ATL|WR|Vinny Anthony II",
+        "cpt_dk_id": "44446789",
+        "flex_dk_id": "44446737"
+      },
+      {
+        "underlying_id": "ATL|WR|Zachariah Branch",
+        "cpt_dk_id": "44446769",
+        "flex_dk_id": "44446717"
+      },
+      {
+        "underlying_id": "BAL|DST|Ravens",
+        "cpt_dk_id": "44446762",
+        "flex_dk_id": "44446710"
+      },
+      {
+        "underlying_id": "BAL|K|Tyler Loop",
+        "cpt_dk_id": "44446760",
+        "flex_dk_id": "44446708"
+      },
+      {
+        "underlying_id": "BAL|QB|Joe Fagnano",
+        "cpt_dk_id": "44446757",
+        "flex_dk_id": "44446705"
+      },
+      {
+        "underlying_id": "BAL|QB|Lamar Jackson",
+        "cpt_dk_id": "44446746",
+        "flex_dk_id": "44446694"
+      },
+      {
+        "underlying_id": "BAL|QB|Skylar Thompson",
+        "cpt_dk_id": "44446755",
+        "flex_dk_id": "44446703"
+      },
+      {
+        "underlying_id": "BAL|QB|Tyler Huntley",
+        "cpt_dk_id": "44446750",
+        "flex_dk_id": "44446698"
+      },
+      {
+        "underlying_id": "BAL|RB|Adam Randall",
+        "cpt_dk_id": "44446778",
+        "flex_dk_id": "44446726"
+      },
+      {
+        "underlying_id": "BAL|RB|Derrick Henry",
+        "cpt_dk_id": "44446745",
+        "flex_dk_id": "44446693"
+      },
+      {
+        "underlying_id": "BAL|RB|Jonathan Ward",
+        "cpt_dk_id": "44446779",
+        "flex_dk_id": "44446727"
+      },
+      {
+        "underlying_id": "BAL|RB|Justice Hill",
+        "cpt_dk_id": "44446765",
+        "flex_dk_id": "44446713"
+      },
+      {
+        "underlying_id": "BAL|RB|Lucas Scott",
+        "cpt_dk_id": "44446781",
+        "flex_dk_id": "44446729"
+      },
+      {
+        "underlying_id": "BAL|RB|Rasheen Ali",
+        "cpt_dk_id": "44446776",
+        "flex_dk_id": "44446724"
+      },
+      {
+        "underlying_id": "BAL|TE|Durham Smythe",
+        "cpt_dk_id": "44446790",
+        "flex_dk_id": "44446738"
+      },
+      {
+        "underlying_id": "BAL|TE|Josh Cuevas",
+        "cpt_dk_id": "44446792",
+        "flex_dk_id": "44446740"
+      },
+      {
+        "underlying_id": "BAL|TE|Mark Andrews",
+        "cpt_dk_id": "44446751",
+        "flex_dk_id": "44446699"
+      },
+      {
+        "underlying_id": "BAL|TE|Matt Hibner",
+        "cpt_dk_id": "44446771",
+        "flex_dk_id": "44446719"
+      },
+      {
+        "underlying_id": "BAL|TE|Nick Vannett",
+        "cpt_dk_id": "44446793",
+        "flex_dk_id": "44446741"
+      },
+      {
+        "underlying_id": "BAL|TE|Ty Pezza",
+        "cpt_dk_id": "44446791",
+        "flex_dk_id": "44446739"
+      },
+      {
+        "underlying_id": "BAL|WR|Chris Moore",
+        "cpt_dk_id": "44446767",
+        "flex_dk_id": "44446715"
+      },
+      {
+        "underlying_id": "BAL|WR|Devontez Walker",
+        "cpt_dk_id": "44446766",
+        "flex_dk_id": "44446714"
+      },
+      {
+        "underlying_id": "BAL|WR|Elijah Sarratt",
+        "cpt_dk_id": "44446772",
+        "flex_dk_id": "44446720"
+      },
+      {
+        "underlying_id": "BAL|WR|Gage Larvadain",
+        "cpt_dk_id": "44446785",
+        "flex_dk_id": "44446733"
+      },
+      {
+        "underlying_id": "BAL|WR|Ja'Kobi Lane",
+        "cpt_dk_id": "44446783",
+        "flex_dk_id": "44446731"
+      },
+      {
+        "underlying_id": "BAL|WR|LaJohntay Wester",
+        "cpt_dk_id": "44446773",
+        "flex_dk_id": "44446721"
+      },
+      {
+        "underlying_id": "BAL|WR|Rashod Bateman",
+        "cpt_dk_id": "44446752",
+        "flex_dk_id": "44446700"
+      },
+      {
+        "underlying_id": "BAL|WR|Xavier Guillory",
+        "cpt_dk_id": "44446787",
+        "flex_dk_id": "44446735"
+      },
+      {
+        "underlying_id": "BAL|WR|Zay Flowers",
+        "cpt_dk_id": "44446747",
+        "flex_dk_id": "44446695"
+      }
+    ]
+  },
+  "controls": {
+    "fraction_unit": "FRACTION_0_TO_1",
+    "max_combined_person_exposure": {
+      "default_fraction": 0.6,
+      "overrides": []
+    },
+    "max_captain_exposure": {
+      "default_fraction": 0.2,
+      "overrides": []
+    },
+    "excluded_people": [],
+    "max_pairwise_person_overlap": 4,
+    "require_unique_lineups": true,
+    "structural_bounds": {
+      "qb_count": {
+        "minimum": 1,
+        "maximum": 2
+      },
+      "pass_catchers_with_rostered_qb": {
+        "minimum": 1,
+        "maximum": 2
+      },
+      "salary_left": {
+        "minimum": 0,
+        "maximum": 50000
+      },
+      "kicker_count": 1,
+      "dst_count": 1,
+      "offense_against_own_dst": false
+    },
+    "theses": [
+      {
+        "name": "BAL_WINS_BIG",
+        "teams": [
+          "BAL"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "BAL|QB|Tyler Huntley",
+            "cpt_dk_id": "44446750",
+            "flex_dk_id": "44446698"
+          },
+          {
+            "underlying_id": "BAL|RB|Derrick Henry",
+            "cpt_dk_id": "44446745",
+            "flex_dk_id": "44446693"
+          },
+          {
+            "underlying_id": "BAL|RB|Justice Hill",
+            "cpt_dk_id": "44446765",
+            "flex_dk_id": "44446713"
+          },
+          {
+            "underlying_id": "BAL|WR|Zay Flowers",
+            "cpt_dk_id": "44446747",
+            "flex_dk_id": "44446695"
+          },
+          {
+            "underlying_id": "BAL|WR|Rashod Bateman",
+            "cpt_dk_id": "44446752",
+            "flex_dk_id": "44446700"
+          },
+          {
+            "underlying_id": "BAL|DST|Ravens",
+            "cpt_dk_id": "44446762",
+            "flex_dk_id": "44446710"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "BAL",
+            "minimum": 4,
+            "maximum": 5
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "ATL_WINS_BIG",
+        "teams": [
+          "ATL"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "ATL|QB|Michael Penix Jr.",
+            "cpt_dk_id": "44446749",
+            "flex_dk_id": "44446697"
+          },
+          {
+            "underlying_id": "ATL|RB|Bijan Robinson",
+            "cpt_dk_id": "44446744",
+            "flex_dk_id": "44446692"
+          },
+          {
+            "underlying_id": "ATL|RB|Brian Robinson Jr.",
+            "cpt_dk_id": "44446758",
+            "flex_dk_id": "44446706"
+          },
+          {
+            "underlying_id": "ATL|WR|Drake London",
+            "cpt_dk_id": "44446748",
+            "flex_dk_id": "44446696"
+          },
+          {
+            "underlying_id": "ATL|WR|Jahan Dotson",
+            "cpt_dk_id": "44446764",
+            "flex_dk_id": "44446712"
+          },
+          {
+            "underlying_id": "ATL|DST|Falcons",
+            "cpt_dk_id": "44446763",
+            "flex_dk_id": "44446711"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "ATL",
+            "minimum": 4,
+            "maximum": 5
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "BAL_WINS_CLOSE_HIGH",
+        "teams": [
+          "BAL",
+          "ATL"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "BAL|QB|Tyler Huntley",
+            "cpt_dk_id": "44446750",
+            "flex_dk_id": "44446698"
+          },
+          {
+            "underlying_id": "ATL|QB|Michael Penix Jr.",
+            "cpt_dk_id": "44446749",
+            "flex_dk_id": "44446697"
+          },
+          {
+            "underlying_id": "BAL|WR|Zay Flowers",
+            "cpt_dk_id": "44446747",
+            "flex_dk_id": "44446695"
+          },
+          {
+            "underlying_id": "BAL|WR|Rashod Bateman",
+            "cpt_dk_id": "44446752",
+            "flex_dk_id": "44446700"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "BAL",
+            "minimum": 3,
+            "maximum": 4
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "QB",
+            "minimum": 1,
+            "maximum": 2
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "BAL_WINS_CLOSE_LOW",
+        "teams": [
+          "BAL",
+          "ATL"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "BAL|K|Tyler Loop",
+            "cpt_dk_id": "44446760",
+            "flex_dk_id": "44446708"
+          },
+          {
+            "underlying_id": "BAL|DST|Ravens",
+            "cpt_dk_id": "44446762",
+            "flex_dk_id": "44446710"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "BAL",
+            "minimum": 3,
+            "maximum": 4
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "K",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "DST",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "WR",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "ATL_WINS_CLOSE_HIGH",
+        "teams": [
+          "ATL",
+          "BAL"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "ATL|QB|Michael Penix Jr.",
+            "cpt_dk_id": "44446749",
+            "flex_dk_id": "44446697"
+          },
+          {
+            "underlying_id": "BAL|QB|Tyler Huntley",
+            "cpt_dk_id": "44446750",
+            "flex_dk_id": "44446698"
+          },
+          {
+            "underlying_id": "ATL|WR|Drake London",
+            "cpt_dk_id": "44446748",
+            "flex_dk_id": "44446696"
+          },
+          {
+            "underlying_id": "ATL|WR|Jahan Dotson",
+            "cpt_dk_id": "44446764",
+            "flex_dk_id": "44446712"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "ATL",
+            "minimum": 3,
+            "maximum": 4
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "QB",
+            "minimum": 1,
+            "maximum": 2
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "ATL_WINS_CLOSE_LOW",
+        "teams": [
+          "ATL",
+          "BAL"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "ATL|K|Nick Folk",
+            "cpt_dk_id": "44446759",
+            "flex_dk_id": "44446707"
+          },
+          {
+            "underlying_id": "ATL|DST|Falcons",
+            "cpt_dk_id": "44446763",
+            "flex_dk_id": "44446711"
+          }
+        ],
+        "team_bounds": [
+          {
+            "team": "ATL",
+            "minimum": 3,
+            "maximum": 4
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "K",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "DST",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "WR",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "DEFENSIVE_BATTLE",
+        "teams": [
+          "BAL",
+          "ATL"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "BAL|K|Tyler Loop",
+            "cpt_dk_id": "44446760",
+            "flex_dk_id": "44446708"
+          },
+          {
+            "underlying_id": "ATL|K|Nick Folk",
+            "cpt_dk_id": "44446759",
+            "flex_dk_id": "44446707"
+          },
+          {
+            "underlying_id": "BAL|DST|Ravens",
+            "cpt_dk_id": "44446762",
+            "flex_dk_id": "44446710"
+          },
+          {
+            "underlying_id": "ATL|DST|Falcons",
+            "cpt_dk_id": "44446763",
+            "flex_dk_id": "44446711"
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "K",
+            "minimum": 2,
+            "maximum": 2
+          },
+          {
+            "position": "DST",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "position": "QB",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "position": "WR",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      },
+      {
+        "name": "OFFENSIVE_SHOOTOUT",
+        "teams": [
+          "BAL",
+          "ATL"
+        ],
+        "captain_set": [
+          {
+            "underlying_id": "BAL|QB|Tyler Huntley",
+            "cpt_dk_id": "44446750",
+            "flex_dk_id": "44446698"
+          },
+          {
+            "underlying_id": "ATL|QB|Michael Penix Jr.",
+            "cpt_dk_id": "44446749",
+            "flex_dk_id": "44446697"
+          },
+          {
+            "underlying_id": "BAL|WR|Zay Flowers",
+            "cpt_dk_id": "44446747",
+            "flex_dk_id": "44446695"
+          },
+          {
+            "underlying_id": "BAL|WR|Rashod Bateman",
+            "cpt_dk_id": "44446752",
+            "flex_dk_id": "44446700"
+          },
+          {
+            "underlying_id": "ATL|WR|Drake London",
+            "cpt_dk_id": "44446748",
+            "flex_dk_id": "44446696"
+          },
+          {
+            "underlying_id": "ATL|WR|Jahan Dotson",
+            "cpt_dk_id": "44446764",
+            "flex_dk_id": "44446712"
+          }
+        ],
+        "position_bounds": [
+          {
+            "position": "QB",
+            "minimum": 2,
+            "maximum": 2
+          },
+          {
+            "position": "K",
+            "minimum": 0,
+            "maximum": 0
+          },
+          {
+            "position": "DST",
+            "minimum": 0,
+            "maximum": 0
+          }
+        ],
+        "excluded_people": [],
+        "named_backup_quarterbacks": []
+      }
+    ]
+  }
+}

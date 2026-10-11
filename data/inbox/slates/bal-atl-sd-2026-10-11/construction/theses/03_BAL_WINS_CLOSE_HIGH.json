@@ -1,0 +1,27 @@
+{
+  "name": "BAL_WINS_CLOSE_HIGH",
+  "teams": [
+    "BAL",
+    "ATL"
+  ],
+  "captain_set": [
+    "BAL|QB|Tyler Huntley",
+    "ATL|QB|Michael Penix Jr.",
+    "BAL|WR|Zay Flowers",
+    "BAL|WR|Rashod Bateman"
+  ],
+  "team_bounds": [
+    {
+      "team": "BAL",
+      "minimum": 3,
+      "maximum": 4
+    }
+  ],
+  "position_bounds": [
+    {
+      "position": "QB",
+      "minimum": 1,
+      "maximum": 2
+    }
+  ]
+}

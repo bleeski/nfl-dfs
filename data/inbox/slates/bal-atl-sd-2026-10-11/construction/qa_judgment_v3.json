@@ -1,0 +1,226 @@
+{
+  "lineups": 32,
+  "defects": 0,
+  "DEFECTS": [],
+  "limit_breaches": 0,
+  "LIMIT_BREACHES": [],
+  "unfilled_entry_ids": [],
+  "prefilled_entry_ids": [],
+  "observations": 16,
+  "OBSERVATIONS": [
+    "5292879392 DST_WITH_OWN_OFFENSE ATL:['ATL|QB|Michael Penix Jr.', 'ATL|WR|Drake London']",
+    "5292879393 MULTIPLE_KICKERS 2",
+    "5292879393 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|RB|Bijan Robinson']",
+    "5292900232 DST_WITH_OWN_OFFENSE BAL:['BAL|K|Tyler Loop', 'BAL|QB|Tyler Huntley', 'BAL|TE|Mark Andrews']",
+    "5292886315 DST_WITH_OWN_OFFENSE ATL:['ATL|QB|Michael Penix Jr.', 'ATL|TE|Austin Hooper']",
+    "5292886316 DST_WITH_OWN_OFFENSE BAL:['BAL|K|Tyler Loop', 'BAL|QB|Tyler Huntley', 'BAL|WR|Zay Flowers']",
+    "5292886319 DST_WITH_OWN_OFFENSE ATL:['ATL|QB|Michael Penix Jr.', 'ATL|RB|Bijan Robinson', 'ATL|WR|Jahan Dotson']",
+    "5292886321 DST_WITH_OWN_OFFENSE BAL:['BAL|RB|Derrick Henry']",
+    "5292886325 MULTIPLE_KICKERS 2",
+    "5292886325 DST_WITH_OWN_OFFENSE BAL:['BAL|K|Tyler Loop', 'BAL|RB|Derrick Henry']",
+    "5292886329 MULTIPLE_KICKERS 2",
+    "5292886329 DST_WITH_OWN_OFFENSE BAL:['BAL|K|Tyler Loop', 'BAL|QB|Tyler Huntley', 'BAL|RB|Derrick Henry', 'BAL|WR|Zay Flowers']",
+    "5292886330 MULTIPLE_KICKERS 2",
+    "5292886330 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|QB|Michael Penix Jr.', 'ATL|RB|Bijan Robinson', 'ATL|WR|Drake London']",
+    "5292896923 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|QB|Michael Penix Jr.', 'ATL|TE|Austin Hooper']",
+    "5292888219 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|QB|Michael Penix Jr.', 'ATL|TE|Kyle Pitts Sr.']"
+  ],
+  "observation_note": "strategy observations never change the exit code; DraftKings accepts each of them",
+  "exit_codes": "1 validity failure; 3 blank authorized rows unfilled; 2 an operator limit only; 0 none of these, which does not clear an upload",
+  "max_pairwise_overlap": 5,
+  "salary_min": 43500,
+  "salary_max": 50000,
+  "distinct_captains": 9,
+  "qb_count_histogram": {
+    "1": 28,
+    "2": 4
+  },
+  "theses": {
+    "status": "CHECKED",
+    "policy_sha256": "77a8c65f2de99e61220e0565d281313d1f96011b7f84755c8d790fa6deec43c9",
+    "claim_sha256": "8323c9648d6febf59a002ecf3f7634a7a016bc916ae551989b8d0b9456f8f6ed",
+    "salary_sha256": "64f05238448c69766642081905d221d4905e52125ece3608ddc1cb27874b3026",
+    "theses": [
+      "BAL_WINS_BIG",
+      "ATL_WINS_BIG",
+      "BAL_WINS_CLOSE_HIGH",
+      "BAL_WINS_CLOSE_LOW",
+      "ATL_WINS_CLOSE_HIGH",
+      "ATL_WINS_CLOSE_LOW",
+      "DEFENSIVE_BATTLE",
+      "OFFENSIVE_SHOOTOUT"
+    ],
+    "backup_quarterback": "PARTIAL",
+    "backup_quarterbacks_unevaluated_teams": [
+      "BAL"
+    ],
+    "entries": {
+      "5292879389": {
+        "thesis": "BAL_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292879390": {
+        "thesis": "OFFENSIVE_SHOOTOUT",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292879391": {
+        "thesis": "ATL_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292879392": {
+        "thesis": "BAL_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292879393": {
+        "thesis": "DEFENSIVE_BATTLE",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292879394": {
+        "thesis": "ATL_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292887579": {
+        "thesis": "BAL_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292900194": {
+        "thesis": "ATL_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292900232": {
+        "thesis": "BAL_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886314": {
+        "thesis": "ATL_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886315": {
+        "thesis": "BAL_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886316": {
+        "thesis": "BAL_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886317": {
+        "thesis": "BAL_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886318": {
+        "thesis": "OFFENSIVE_SHOOTOUT",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886319": {
+        "thesis": "ATL_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886320": {
+        "thesis": "BAL_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886321": {
+        "thesis": "ATL_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886322": {
+        "thesis": "BAL_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886323": {
+        "thesis": "ATL_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886324": {
+        "thesis": "BAL_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886325": {
+        "thesis": "DEFENSIVE_BATTLE",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886326": {
+        "thesis": "ATL_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886327": {
+        "thesis": "BAL_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886328": {
+        "thesis": "ATL_WINS_CLOSE_HIGH",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886329": {
+        "thesis": "DEFENSIVE_BATTLE",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886330": {
+        "thesis": "DEFENSIVE_BATTLE",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886331": {
+        "thesis": "OFFENSIVE_SHOOTOUT",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292886332": {
+        "thesis": "OFFENSIVE_SHOOTOUT",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292894395": {
+        "thesis": "ATL_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292896923": {
+        "thesis": "ATL_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292888219": {
+        "thesis": "ATL_WINS_CLOSE_LOW",
+        "follows": true,
+        "broken_rules": []
+      },
+      "5292898557": {
+        "thesis": "BAL_WINS_BIG",
+        "follows": true,
+        "broken_rules": []
+      }
+    },
+    "rows_following": 32,
+    "rows_not_following": 0,
+    "entry_ids_without_thesis": [],
+    "claimed_entry_ids_not_filled": [],
+    "does_not_establish": "a structure check of each row against the thesis it fills: a thesis is a choice, not a forecast, and this establishes no projection, no ownership and no upload clearance"
+  },
+  "VERDICT": "PASS"
+}

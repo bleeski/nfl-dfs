@@ -1,0 +1,27 @@
+{
+  "name": "ATL_WINS_CLOSE_HIGH",
+  "teams": [
+    "ATL",
+    "BAL"
+  ],
+  "captain_set": [
+    "ATL|QB|Michael Penix Jr.",
+    "BAL|QB|Tyler Huntley",
+    "ATL|WR|Drake London",
+    "ATL|WR|Jahan Dotson"
+  ],
+  "team_bounds": [
+    {
+      "team": "ATL",
+      "minimum": 3,
+      "maximum": 4
+    }
+  ],
+  "position_bounds": [
+    {
+      "position": "QB",
+      "minimum": 1,
+      "maximum": 2
+    }
+  ]
+}

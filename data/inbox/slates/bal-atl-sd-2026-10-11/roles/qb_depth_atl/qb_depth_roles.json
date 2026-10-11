@@ -1,0 +1,69 @@
+{
+  "allocation_version": "qb_depth_chart_attempt_share_allocation_v2",
+  "declarations": [
+    {
+      "backups": [
+        {
+          "cpt_dk_id": "44446756",
+          "flex_dk_id": "44446704",
+          "player_name": "Tua Tagovailoa",
+          "pos_rank": 2,
+          "provider_player_id": "00-0036212",
+          "underlying_id": "ATL|QB|Tua Tagovailoa"
+        },
+        {
+          "cpt_dk_id": "44446753",
+          "flex_dk_id": "44446701",
+          "player_name": "Cooper Rush",
+          "pos_rank": 3,
+          "provider_player_id": "00-0033662",
+          "underlying_id": "ATL|QB|Cooper Rush"
+        },
+        {
+          "cpt_dk_id": "44446754",
+          "flex_dk_id": "44446702",
+          "player_name": "Jack Strand",
+          "pos_rank": 4,
+          "provider_player_id": "00-0041194",
+          "underlying_id": "ATL|QB|Jack Strand"
+        }
+      ],
+      "declared_observed_at": "2026-10-11T13:56:31+00:00",
+      "game_id": "BAL@ATL",
+      "source_sha256": "331c89273a25ed2e0ba5361f6eb2035140c1c3850479fdf0098a4f75da93535f",
+      "starter": {
+        "cpt_dk_id": "44446749",
+        "flex_dk_id": "44446697",
+        "player_name": "Michael Penix Jr.",
+        "pos_rank": 1,
+        "provider_player_id": "00-0039917",
+        "underlying_id": "ATL|QB|Michael Penix Jr."
+      },
+      "team": "ATL",
+      "unlisted": []
+    }
+  ],
+  "game_ids": [
+    "BAL@ATL"
+  ],
+  "salary_sha256": "64f05238448c69766642081905d221d4905e52125ece3608ddc1cb27874b3026",
+  "schema_version": "nfl_qb_depth_role_evidence_v1",
+  "sources": [
+    {
+      "captured_at": "2026-10-11T23:25:30.665030+00:00",
+      "expires_at": "2026-10-13T01:56:31+00:00",
+      "license_decision": "PERMITTED_REPOSITORY_LICENSE",
+      "observed_at": "2026-10-11T13:56:31+00:00",
+      "parser_version": "nflverse_depth_charts_csv_v1",
+      "path": "sources/331c89273a25ed2e0ba5361f6eb2035140c1c3850479fdf0098a4f75da93535f.csv",
+      "sha256": "331c89273a25ed2e0ba5361f6eb2035140c1c3850479fdf0098a4f75da93535f",
+      "source_uri": "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv",
+      "support_kind": "DEPTH_CHART_ORDER",
+      "supporting_excerpt": "dt,team,player_name,espn_id,gsis_id,pos_grp_id,pos_grp,pos_id,pos_name,pos_abb,pos_slot,pos_rank\n2026-10-11T13:56:31Z,ATL,Michael Penix Jr.,4360423,00-0039917,21,3WR 1TE,8,Quarterback,QB,9,1\n2026-10-11T13:56:31Z,ATL,Tua Tagovailoa,4241479,00-0036212,21,3WR 1TE,8,Quarterback,QB,9,2\n2026-10-11T13:56:31Z,ATL,Cooper Rush,2972515,00-0033662,21,3WR 1TE,8,Quarterback,QB,9,3\n2026-10-11T13:56:31Z,ATL,Jack Strand,5344782,00-0041194,21,3WR 1TE,8,Quarterback,QB,9,4\n",
+      "synthetic": false,
+      "transformation_version": "qb_depth_chart_order_v2",
+      "upstream_sha256": "4a17f55fd9f025b12f2a09e8839552bc6e67abc08b828d580afacccdbbb6ac66"
+    }
+  ],
+  "transformation_version": "qb_depth_chart_order_v2"
+}

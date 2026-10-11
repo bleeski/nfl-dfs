@@ -1,0 +1,176 @@
+{
+ "contest_assignment": {
+  "contest_assignment_version": "within_contest_diversity_v1",
+  "contest_count": 5,
+  "does_not_establish": [
+   "EXPECTED_POINTS_OR_VALUE",
+   "WIN_OR_CASH_LIKELIHOOD",
+   "OWNERSHIP_OR_DUPLICATION",
+   "PAYOUT_OR_CONTEST_WORTH",
+   "UPLOAD_CLEARANCE"
+  ],
+  "fixed_entry_ids": [],
+  "moved_rows": 29,
+  "pools": {
+   "template": 32
+  },
+  "restarts_run": 300,
+  "score_definition": "WORST_PAIR_COST_PLUS_MEAN_PAIR_COST_EVERY_CONTEST_COUNTS_ONCE",
+  "seconds": 3.672,
+  "seed": 20260929,
+  "single_entry_contest_count": 1,
+  "status": "IMPROVED",
+  "timed_out": false,
+  "total_score_after": "49.821303",
+  "total_score_before": "54.386968",
+  "unscored_entry_ids": [],
+  "weights": {
+   "registered": true,
+   "same_key_person": 12,
+   "same_stack_team": 6,
+   "same_thesis": 3,
+   "shared_people_exponent": 2
+  }
+ },
+ "contests_after": {
+  "196536579": {
+   "distinct_captains": 7,
+   "distinct_theses": 6,
+   "entries": 7,
+   "in_every_lineup": [],
+   "max_shared_people": 3,
+   "mean_shared_people": 2.048,
+   "score": "14.047619",
+   "worst_pair_cost": 9
+  },
+  "196536965": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [],
+   "max_shared_people": 0,
+   "mean_shared_people": 0.0,
+   "score": "0.000000",
+   "worst_pair_cost": 0
+  },
+  "196537727": {
+   "distinct_captains": 9,
+   "distinct_theses": 8,
+   "entries": 20,
+   "in_every_lineup": [],
+   "max_shared_people": 4,
+   "mean_shared_people": 2.332,
+   "score": "35.773684",
+   "worst_pair_cost": 28
+  },
+  "196537955": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [],
+   "max_shared_people": 0,
+   "mean_shared_people": 0.0,
+   "score": "0.000000",
+   "worst_pair_cost": 0
+  }
+ },
+ "contests_before": {
+  "196536579": {
+   "distinct_captains": 7,
+   "distinct_theses": 7,
+   "entries": 7,
+   "in_every_lineup": [],
+   "max_shared_people": 3,
+   "mean_shared_people": 2.19,
+   "score": "14.523810",
+   "worst_pair_cost": 9
+  },
+  "196536965": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "ATL|Drake London"
+   ],
+   "max_shared_people": 1,
+   "mean_shared_people": 1.0,
+   "score": "2.000000",
+   "worst_pair_cost": 1
+  },
+  "196537727": {
+   "distinct_captains": 9,
+   "distinct_theses": 8,
+   "entries": 20,
+   "in_every_lineup": [],
+   "max_shared_people": 4,
+   "mean_shared_people": 2.347,
+   "score": "35.863158",
+   "worst_pair_cost": 28
+  },
+  "196537955": {
+   "distinct_captains": 2,
+   "distinct_theses": 2,
+   "entries": 2,
+   "in_every_lineup": [
+    "BAL|Zay Flowers"
+   ],
+   "max_shared_people": 1,
+   "mean_shared_people": 1.0,
+   "score": "2.000000",
+   "worst_pair_cost": 1
+  }
+ },
+ "does_not_establish": [
+  "EXPECTED_POINTS_OR_VALUE",
+  "WIN_OR_CASH_LIKELIHOOD",
+  "OWNERSHIP_OR_DUPLICATION",
+  "PAYOUT_OR_CONTEST_WORTH",
+  "UPLOAD_CLEARANCE",
+  "LINEUP_LEGALITY"
+ ],
+ "mapping_entry_to_source_entry": {
+  "5292879389": "5292879393",
+  "5292879390": "5292879389",
+  "5292879391": "5292879394",
+  "5292879392": "5292886332",
+  "5292879393": "5292898557",
+  "5292879394": "5292886323",
+  "5292886314": "5292887579",
+  "5292886315": "5292886318",
+  "5292886316": "5292886316",
+  "5292886317": "5292886330",
+  "5292886318": "5292886331",
+  "5292886319": "5292886320",
+  "5292886320": "5292886327",
+  "5292886321": "5292879391",
+  "5292886322": "5292886324",
+  "5292886323": "5292886326",
+  "5292886324": "5292886322",
+  "5292886325": "5292886328",
+  "5292886326": "5292886321",
+  "5292886327": "5292900194",
+  "5292886328": "5292886314",
+  "5292886329": "5292879390",
+  "5292886330": "5292886329",
+  "5292886331": "5292879392",
+  "5292886332": "5292886319",
+  "5292887579": "5292886315",
+  "5292888219": "5292900232",
+  "5292894395": "5292894395",
+  "5292896923": "5292896923",
+  "5292898557": "5292888219",
+  "5292900194": "5292886325",
+  "5292900232": "5292886317"
+ },
+ "mode": "SHOWDOWN",
+ "schema_version": "nfl_contest_diversification_v2",
+ "score": {
+  "after": 49.821303,
+  "before": 54.386968,
+  "captain_penalty": 12,
+  "restarts": 300,
+  "seed": 20260929,
+  "stack_penalty": 6,
+  "thesis_penalty": 3
+ }
+}

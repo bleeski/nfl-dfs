@@ -1,0 +1,21 @@
+{
+  "name": "ATL_WINS_BIG",
+  "teams": [
+    "ATL"
+  ],
+  "captain_set": [
+    "ATL|QB|Michael Penix Jr.",
+    "ATL|RB|Bijan Robinson",
+    "ATL|RB|Brian Robinson Jr.",
+    "ATL|WR|Drake London",
+    "ATL|WR|Jahan Dotson",
+    "ATL|DST|Falcons"
+  ],
+  "team_bounds": [
+    {
+      "team": "ATL",
+      "minimum": 4,
+      "maximum": 5
+    }
+  ]
+}

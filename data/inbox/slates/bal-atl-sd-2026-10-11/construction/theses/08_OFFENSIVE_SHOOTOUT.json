@@ -1,0 +1,32 @@
+{
+  "name": "OFFENSIVE_SHOOTOUT",
+  "teams": [
+    "BAL",
+    "ATL"
+  ],
+  "captain_set": [
+    "BAL|QB|Tyler Huntley",
+    "ATL|QB|Michael Penix Jr.",
+    "BAL|WR|Zay Flowers",
+    "BAL|WR|Rashod Bateman",
+    "ATL|WR|Drake London",
+    "ATL|WR|Jahan Dotson"
+  ],
+  "position_bounds": [
+    {
+      "position": "QB",
+      "minimum": 2,
+      "maximum": 2
+    },
+    {
+      "position": "K",
+      "minimum": 0,
+      "maximum": 0
+    },
+    {
+      "position": "DST",
+      "minimum": 0,
+      "maximum": 0
+    }
+  ]
+}
