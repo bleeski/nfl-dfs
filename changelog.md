@@ -55,6 +55,11 @@ file delivered 16:25Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECIS
   Carlson FLEX for Kamara FLEX (+2.52 prior). Rejected: Juwan Johnson for Kamara (Johnson 15.1 PPR a game in 2026 against
   Kamara's 11.7) and Reichard for Kamara in a MIN-wins-big row (it cuts the row's own scoring for an opposing back). v9
   `construction/DK_REVIEW_ENTRY_min-no-sd_final_v9.csv` (`47b0d4a1...4c6b`): QA PASS, 0 defects, 0 breaches, max overlap 5.
+- **Second adversarial pass (Ben asked again, 16:44Z).** Two-swap fixes for the two rows no single swap could fix. 5290504205
+  (Olave Captain with Murray): Murray for Shough and Fant for Felton, so the Captain has his own QB; prior +0.2, max exposure 20 to
+  19 (Murray), top-3 57 and 57, mean pair overlap 2.2898 to 2.2879, people 19 and 19: a Pareto gain. 5290504190 (Saints DST beside
+  Murray): the fix (Vikings DST, Juwan Johnson for Aaron Jones) would copy 5290510827's six people, so the row stays. v10
+  `construction/DK_REVIEW_ENTRY_min-no-sd_final_v10.csv` (`e5a20eeb...30da`), only that row differs from v9: QA PASS, 0 defects.
 
 ### 2026-10-11: Session 70 -- `nfl grade-players`: realized player points, the reconciliation and the grade (Part A; back to Pending on O12, split to Session 70b)
 
