@@ -235,7 +235,7 @@
     "entry_history": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "DraftKings entry history, nfl_dk_entry_history_v1 (Session 69)"},
-      "covers": "The operator's DraftKings entry-history export was refused whole: a structural fault on any row, a value fault on an NFL row or in a contest with an NFL row, or no NFL row. It stops a results record, never a lineup file."
+      "covers": "The operator's DraftKings entry-history export was refused whole: a structural fault on any row, a value fault on an NFL row or in a contest with an NFL row, or no NFL row; or its intake could not read it, found another file holding the snapshot's or an artifact's name (never overwritten), or could not write. It stops a results record, never a lineup file."
     },
     "presentation": {
       "class": "P", "stops": "CERTIFICATION",
@@ -809,6 +809,7 @@
     "ENTRY_CHANGED_BEFORE_ARTIFACT_PUBLISH": "delivered_bytes",
     "ENTRY_FEE_MISMATCH": "settlement",
     "ENTRY_GROUP_UNRESOLVED": "entry_authority",
+    "ENTRY_HISTORY_ARTIFACT_CONFLICT": "entry_history",
     "ENTRY_HISTORY_CONTEST_DATE_INVALID": "entry_history",
     "ENTRY_HISTORY_CONTEST_DISAGREES": "entry_history",
     "ENTRY_HISTORY_CONTEST_ENTRIES_INVALID": "entry_history",
@@ -828,7 +829,10 @@
     "ENTRY_HISTORY_PLACE_OUTSIDE_FIELD": "entry_history",
     "ENTRY_HISTORY_POINTS_INVALID": "entry_history",
     "ENTRY_HISTORY_ROW_MISSHAPEN": "entry_history",
+    "ENTRY_HISTORY_SNAPSHOT_CORRUPT": "entry_history",
     "ENTRY_HISTORY_SPORT_INVALID": "entry_history",
+    "ENTRY_HISTORY_UNREADABLE": "entry_history",
+    "ENTRY_HISTORY_WRITE_FAILED": "entry_history",
     "ENTRY_ID_ASSIGNMENT_MISMATCH": "settlement",
     "ENTRY_INPUT_CHANGED_BEFORE_SELECTION": "delivered_bytes",
     "ENTRY_INPUT_CHANGED_DURING_CERTIFICATION": "delivered_bytes",

@@ -3556,7 +3556,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `4ad908b0065f51f7d1c92d0c8fc26b0d378da5c661b45ac9a9f1129c65ce2cde`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `344f18fa1880c6611296c27b9d066215709dffffbb32aa1e3e80da6aca893c62`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4395,7 +4395,7 @@ field size, fee and winnings, keyed by `Entry_Key` (the DKEntries Entry ID) and 
 not a run input: no `run-slate`, `prior_review` or `baseline` path reads it, and `classify_csv` returns `None` for it by
 design, so it never joins run-folder discovery (two exports in one `--input-dir` are not an ambiguity refusal). The
 file carries account winnings and this repository is public: the export and anything holding a fee or a winnings value
-stay out of git (Session 69b gitignores the snapshot and artifacts it writes), and every test fixture is synthetic.
+stay out of git (`.gitignore` ignores `data/results/*`, where Session 69b's intake writes), and every test fixture is synthetic.
 
 **The file.** UTF-8, or UTF-8 with a BOM; CRLF, LF or a bare CR, as the csv module reads them; at most 67,108,864
 bytes; the csv module's own cell limit. The
@@ -4460,6 +4460,53 @@ contract version with its own section; this version is never relaxed.
 
 Does not establish: expected value or ROI, win or cash probability, an edge or its absence, calibration, which entries
 the engine built, or upload clearance.
+
+### The intake, the snapshot and the artifacts (Session 69b)
+
+`nfl results-intake --history <csv> [--results-root <dir>]` (default `data/results`; `entry_history.run_intake`). The
+file is read once, at most one byte past the cap, then hashed and parsed; nothing is fetched. A refused file writes
+nothing, not even the results folder. A header refusal adds `:classified_as=<kind>`: what `classify_csv` takes the file
+for (`salary_csv`, `entry_csv` and the rest), `none` when it takes it for nothing, `unreadable` when it cannot read it.
+That is a second read of the path, for diagnosis only; it feeds no written byte.
+
+**Write-once.** An accepted file writes, in this order, `<root>/inbox/<sha256>.csv` (the exact bytes),
+`<root>/normalized/<sha256>/nfl_entries.w1.json` and `<root>/normalized/<sha256>/intake_summary.w1.json`. Each is written
+once and never overwritten, followed or deleted. The same bytes already there is `ALREADY_PRESENT`, found before any
+temporary file is written. A new file goes through a temporary file in its folder (flushed, fsynced, re-read) and a hard
+link, which fails rather than replaces when the name appears first; the linked file is re-read too. The folder must
+support hard links: one that does not (exFAT, FAT32, some network shares) is a write failure, never a fallback copy. The
+first file that cannot be written stops the run.
+
+- Another file under the snapshot's name (other bytes, a directory, a symlink) is
+  `ENTRY_HISTORY_SNAPSHOT_CORRUPT:file=snapshot`. It can only be a damaged copy: it is never overwritten, it may be
+  deleted by hand, and the intake rerun. No artifact is attempted.
+- Another file under an artifact's name is `ENTRY_HISTORY_ARTIFACT_CONFLICT:file=<entries|summary>`. The folder is
+  derived from the snapshot and may be deleted whole and rebuilt by a rerun, which deletes any good file in it too. A
+  fix that changes a written byte takes a new writer version (`w2`, a new file name), so a file on disk is never
+  contradicted.
+- `ENTRY_HISTORY_UNREADABLE:exception=<class>` (the file could not be opened or read) and
+  `ENTRY_HISTORY_WRITE_FAILED:file=<snapshot|entries|summary>:exception=<class>` (`WrittenBytesDiffer` when a re-read
+  disagrees) name the exception class, never its message.
+
+**The result** (stdout, JSON). `status` is `COMPLETE` (at least one file written) or `ALREADY_PRESENT` (all three there
+and byte-identical, a no-op), exit 0; `REFUSED` or `WRITE_FAILED`, exit 2. Then `problems`; `source_sha256` (null when
+the file was unreadable or above the cap: never the hash of a prefix); `summary` (null when the file was refused); and
+for each file its `path` and `state`: `WRITTEN`, `ALREADY_PRESENT`, `REFUSED` (with a `recovery` sentence),
+`WRITE_FAILED` or `NOT_ATTEMPTED`. It carries no fee or winnings value.
+
+**`nfl_dk_entry_history_entries_v1`** (`nfl_entries.w1.json`: canonical JSON, ASCII, sorted keys, compact separators, one
+trailing LF). `schema_version`, `contract`, `writer` (`w1`), `sport` (`NFL`), `source_sha256`, `source_bytes`,
+`nfl_rows`, `does_not_establish` and `entries`: the NFL rows in file order, each with `source_row`, `entry_key`,
+`contest_key`, `game_type`, `entry_name` (opaque), `contest_start` (ISO with its Eastern offset), `contest_start_text`,
+`place`, `points_hundredths`, `winnings_non_ticket_cents`, `winnings_ticket_cents`, `contest_entries`,
+`entry_fee_cents`, `prize_pool_cents`, `places_paid` and `places_paid_above_entries`. No value is null: a value that
+does not parse on an NFL row refuses the file. Other sports are counted in the summary and never normalized.
+`intake_summary.w1.json` is exactly the summary above (`nfl_dk_entry_history_intake_v1`).
+
+**Out of git.** `.gitignore` ignores `data/results/*` wholesale. A tracked record may only ever sit directly under
+`data/results/`, listed back in by name; nothing under `inbox/` or `normalized/` can be tracked. `CLAUDE.md`'s
+never-overwrite rule names `data/runs/` and `data/standings/inbox/`; this contract carries the same rule for
+`data/results/`. All four codes are registry family `entry_history` (`P`).
 
 ## Standings corpus transport (Session 17, X2)
 
