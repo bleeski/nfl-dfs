@@ -167,7 +167,7 @@ def _patched_lstat(monkeypatch, snapshot: Path, mode: int | None) -> None:
     monkeypatch.setattr(os, "lstat", lstat)
 
 
-@pytest.mark.parametrize("damage", ["absent", "symlink", "unreadable", "fifo", "stat_denied", "hash",
+@pytest.mark.parametrize("damage", ["absent", "symlink", "unreadable", "fifo", "stat_denied", "open_denied", "hash",
                                     "past_the_cap"])
 def test_a_snapshot_that_is_not_its_bytes_is_refused_by_reason(tmp_path, monkeypatch, damage):
     root, sha = _intake(tmp_path)
@@ -182,6 +182,16 @@ def test_a_snapshot_that_is_not_its_bytes_is_refused_by_reason(tmp_path, monkeyp
         snapshot.mkdir()
     elif damage in ("fifo", "stat_denied"):  # a FIFO would block open() forever; a stat error is named, not raised
         _patched_lstat(monkeypatch, snapshot, stat.S_IFIFO | 0o644 if damage == "fifo" else None)
+        reason = "unreadable"
+    elif damage == "open_denied":  # a plain file a scanner or another process holds
+        real_open = os.open
+
+        def held(path, *args, **kwargs):
+            if Path(path).name == snapshot.name:
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(os, "open", held)
         reason = "unreadable"
     elif damage == "hash":
         snapshot.write_bytes(RAW + b"\r\n")
