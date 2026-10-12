@@ -4,6 +4,114 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-12: Session 71 -- the results metrics and the report payload (split to Session 71b at a re-planned seam)
+
+Branch `claude/s71-results-report`, pull request #139, claimed at `99be91b` (PR #138's merge, now recorded in Session
+70b's close-out row). Ben approved the plan before any code. The `advisor` skill's hook failed again (`set: Illegal
+option -o pipefail`), so fresh-context fable agents ran each consult. A report only: nothing reaches `run-slate`,
+`prior_review` or a release truth, and every path stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- `config/results_metrics_v1.json`, `nfl_results_metrics_v1` (SHA-256 `56c471710421f5f4fca579a82409610f9c2b73d3dd7d8e0d80170538fa1f736c`):
+  - the populations: paid, `Best Ball` excluded, the engine-era start and game types;
+  - the declared rules: the percentile `Place / n` with random `(n+1)/2n`, the top and bottom 10% with their random
+    expectations, blanks at exactly zero points, and DraftKings' best-place tie rule;
+  - the slate and the fine slate;
+  - the payout, field-size and fee bands;
+  - the within-slate test and its trigger, registered 2026-10-10;
+  - the bootstrap parameters Session 71b reads;
+  - the card's `does_not_establish` text.
+- `src/nfl_dfs/results_report.py`:
+  - **The loader.** It validates every key and refuses any declared rule it does not implement, a repeated key, a bool,
+    a bad fraction or date, and any unreadable bytes, JSON, nesting or number (`ResultsMetricsError`).
+  - **The entry-level definitions Session 18 imports.**
+  - **`build_report`.** The `nfl` and `engine_era` scopes, each with rollups by format, payout shape
+    (`contest_facts.first_place_label`, never the contest name), field size, fee, month and slate. Fee concentration
+    by contest. The exact one-sided sign test of top-heavy against flatter contests within each slate, beside the same
+    test on the slates after registration alone. The trigger, which always reads the registered era. The all-sport
+    check.
+  - **Arithmetic.** Every figure is exact rational arithmetic, rounded once, half to even.
+- `tests/test_results_report.py` (60 tests); no existing test edited. A `docs/DATA_CONTRACTS.md` section for the
+  metrics file. Nothing writes the report yet, and no command runs it.
+
+**The split.** The plan put the core at about 960 lines: the definitions and rollups (540), the within-slate test (90),
+the command and writer (200), and the contracts (130). It moved the bootstrap, the minimum detectable effect, the
+readable table and the RUNBOOK pointer to a Session 71b in advance.
+- Part A measured 869 against 540 (1.6 times), past the plan's 1.5 rule, so a consult on splitting was asked before
+  the next part.
+- Part B was built while that consult ran, which the rule did not allow. Part B came to 134 against 90, putting the
+  branch at 1,003.
+- The consult's answer: the writer would land near 1,500 inside untested write-once code, Session 69's own reason to
+  split at the same number. The command, writer and refusals joined Session 71b, and this session landed the metrics
+  contract only.
+- The card's acceptance needs the writer and Ben's export, neither of which is here. So Session 71 closes `Complete` at
+  its seam, with the acceptance moved to Session 71b. That follows two precedents: Session 69 closed at its seam with
+  its rest in 69b, and 69b closed `Complete` with its real-export run left to Ben (O11).
+- This departs from the approved plan and the claim row, which said the row would go back to `Pending` on a new
+  operator item O13. That assumed the writer landed here. With the command in 71b, an O13 would ask Ben to run a
+  command that does not exist, and a dependency on 71b would point at a later row. So no O13 was opened, and 71b
+  depends on Session 71.
+
+**Reviews and consults.**
+- **The plan consult** (refuting nine claims). Taken:
+  - the wild bootstrap studentized, not a percentile interval;
+  - the size re-planned;
+  - O13 worded like O11;
+  - the metrics file validated like the gate registry, not hash-pinned in code;
+  - fields of 10 and 20 to separate the bottom boundaries;
+  - a pure-Python t quantile instead of scipy;
+  - the two-sided p and the registration date;
+  - four refusal codes instead of six.
+
+  Not taken: a closed-form interval below 30 slates, because the card names a wild bootstrap.
+- **The split consult.** Taken: the split, an era check in `build_report` (a string compare would have let `2026-9-9`
+  put every row in the era), exact Fractions in place of 50-digit Decimals (a fourth-place tie could have rounded the
+  wrong way), and fee sums computed once. Not taken: dropping the bootstrap section from v1. It stays pre-registered,
+  and the 71b card says a wrong value is v2.
+- **The fresh-context `reviewer`** found three blocking issues, each reproduced by its own probe and all fixed:
+  - the trigger followed a caller's era override (twenty October 2025 slates met it once the era started in 2025);
+  - the all-sport check counted a non-NFL row whose place parsed but fell outside its field (place 50 of 10);
+  - the loader kept the last of two repeated keys.
+
+  Also taken: the post-registration figures; the contract naming tied slates, `Places_Paid` 0 and the three
+  definitions the export decides; a test renamed for what it checks.
+- **Mutation, on a `shutil.copytree` scratchpad copy** (`nfl_dfs` resolved inside it, the copy then deleted).
+  - First pass: 40 of 47 killed.
+  - Six were test gaps, now closed: fee concentration past ten contests, the registration-day slate, a repeated game
+    type, a bool count, a fraction of 1, and a slate's fine-slate count.
+  - The seventh (`<` to `<=` on alpha) cannot differ at 1/20, because a sign-test p is k/2^n; a dyadic-alpha test
+    pins it.
+  - Final pass, with mutants aimed at each review fix: 52 of 52 killed.
+
+**Verification.**
+- New tests red first: `ImportError: cannot import name 'results_report'`, then `AttributeError: ... no attribute
+  'sign_test'`.
+- `tests/test_results_report.py` 60 passed. With `tests/test_entry_history.py`, `tests/test_gate_registry.py` and
+  `tests/test_repo_boundaries.py`, 442 passed. A variable named `edge` broke
+  `test_no_module_names_a_value_ev_roi_or_edge` and was renamed.
+- Full suite on Linux: `3605 passed, 1 skipped in 890.41s (0:14:50)` (3,545 before, plus the 60 new tests; the skip is the Windows junction test).
+- CI on the close-out head (`f65205c`): `suite`, `boundaries` and `protected-paths` green, `windows` red. The deep-nesting metrics case's 200,000-byte parameter became its test id, and pytest's `PYTEST_CURRENT_TEST` passed Windows' 32,767-character limit on environment variables (`ValueError` at setup and teardown, the only errors in the run). Every malformed-metrics case now has a short id; the longest node id in the file is 104 characters, and the trap is a line in `docs/claude/working.md`. No `src/` change, so the full suite was not rerun.
+- Before and after against `origin/main`: the only `src/` change is the new module (`git diff --name-status`). No
+  command, parser, registry code or run path changed, so no existing command's output can move.
+- `sh ./nfl.sh doctor`, `git diff --check`, and `python3 scripts/check_protected_paths.py` (no protected path).
+- Size: 1,144 changed lines in source (589), config (60), tests (438) and the contract (57), plus the ledgers.
+
+**Left open.**
+- Ben's 2026-10-10 export (O11's file) is not in this container, so none of the card's figures was measured here. The
+  three v1 choices it decides (the strict bottom boundary, the `Best Ball` text, tickets in winnings) are named in the
+  contract and in Session 71b's acceptance.
+- No O13 was opened, although the plan's consult wording for it was taken. O11 now names Session 71b among the sessions
+  that read its snapshot.
+- Paid NFL rows with `Places_Paid` 0 fall in the top-heavy band. The real export has 36 such rows in all; 71b counts the
+  paid NFL ones.
+- Ledger row ROADMAP:3536 (Session 12) still says its merge "is recorded by the next session"; this session's prompt
+  named only Session 70b's row.
+
+**Next time.** Part A's estimate (540) missed by 1.6 times for the same reason as Sessions 69b, 70 and 70b: a loader that
+validates every key, and rollup rows with a dozen fields, each needing a hand-computed assertion. Estimate a registered
+file plus its loader at about 200 lines with tests, and a rollup payload at about 1.4 test lines per source line. Wait
+for a split consult before starting the next part, as the plan's rule says.
+
 ### 2026-10-12: Session 70b -- player grading tables, play rate and `nfl grade-players --pool`
 
 Branch `claude/s70b-player-grading-tables`, pull request #138, claimed at `6330177` (PR #136's merge). PR #137 was
