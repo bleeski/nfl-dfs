@@ -1,0 +1,515 @@
+<title>NFL DFS Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a coach's game-plan board. A yard-line progress strip up top, three summary panels, then one drive of cards per business goal, and Ben's own list last. */
+:root {
+  --bg: #f2f5f1;
+  --surface: #ffffff;
+  --sunk: #e9eee8;
+  --ink: #15201a;
+  --muted: #56655b;
+  --line: #d4ddd5;
+  --turf: #2d6a43;
+  --turf-2: #367a4e;
+  --chalk: #ffffff;
+  --focus: #1f5fa8;
+  --done: #2d6a43;   --done-bg: #e1eee4;
+  --active: #5d3aa6; --active-bg: #ece6f8;
+  --ready: #1d5ea4;  --ready-bg: #e2ecf8;
+  --you: #955200;    --you-bg: #fbeed9;
+  --decision: #a83a1b; --decision-bg: #f8e4dc;
+  --blocked: #5f6873; --blocked-bg: #eaedef;
+  --parked: #7a7468; --parked-bg: #eeebe5;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1511; --surface: #151f19; --sunk: #1b2720; --ink: #e4ece6; --muted: #9baba1; --line: #27352c;
+    --turf: #255a39; --turf-2: #2d6943; --chalk: #f4f7f4; --focus: #8ab8f0;
+    --done: #6cc08b; --done-bg: #1b3325;
+    --active: #b9a0f2; --active-bg: #29213d;
+    --ready: #84b5ef; --ready-bg: #17293e;
+    --you: #f1b462; --you-bg: #372812;
+    --decision: #f2906d; --decision-bg: #3b2018;
+    --blocked: #a5adb6; --blocked-bg: #212729;
+    --parked: #b8b0a1; --parked-bg: #28261f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1511; --surface: #151f19; --sunk: #1b2720; --ink: #e4ece6; --muted: #9baba1; --line: #27352c;
+  --turf: #255a39; --turf-2: #2d6943; --chalk: #f4f7f4; --focus: #8ab8f0;
+  --done: #6cc08b; --done-bg: #1b3325;
+  --active: #b9a0f2; --active-bg: #29213d;
+  --ready: #84b5ef; --ready-bg: #17293e;
+  --you: #f1b462; --you-bg: #372812;
+  --decision: #f2906d; --decision-bg: #3b2018;
+  --blocked: #a5adb6; --blocked-bg: #212729;
+  --parked: #b8b0a1; --parked-bg: #28261f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: flex; flex-direction: column; gap: 36px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 4.5vw, 2.75rem); font-weight: 700; letter-spacing: 0.01em; }
+h2 { font-size: 1.6rem; font-weight: 700; }
+h3 { font-size: 1.15rem; font-weight: 600; }
+p { margin: 0; }
+.eyebrow { font-family: var(--display); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+/* Header */
+header { display: flex; flex-direction: column; gap: 10px; }
+.sub { color: var(--muted); max-width: 64ch; }
+
+/* The field strip */
+.field-wrap { display: flex; flex-direction: column; gap: 10px; }
+.score { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+.score strong { font-family: var(--display); font-size: 2.4rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.score .of { color: var(--muted); }
+.score .spot { font-family: var(--display); font-weight: 600; color: var(--turf); letter-spacing: 0.02em; }
+.field { position: relative; height: 54px; border-radius: 6px; overflow: hidden;
+  background: repeating-linear-gradient(90deg, var(--turf) 0 10%, var(--turf-2) 10% 20%); }
+.field .gain { position: absolute; inset: 0 auto 0 0; background: rgba(255,255,255,0.16); border-right: 3px solid var(--chalk); }
+.field .yard { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.5); }
+.field .num { position: absolute; bottom: 4px; transform: translateX(-50%); font-family: var(--display); font-weight: 700; font-size: 0.8rem; color: var(--chalk); opacity: 0.85; letter-spacing: 0.04em; }
+.field .ball { position: absolute; top: 50%; width: 22px; height: 13px; margin-left: -11px; margin-top: -9px; border-radius: 50%; background: #7b4a26; border: 1.5px solid #f4efe6; box-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+.field .ball::after { content: ""; position: absolute; left: 6px; right: 6px; top: 5px; height: 1.5px; background: #f4efe6; }
+
+/* State chips (the legend doubles as the filter) */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+.chip .n { font-family: var(--mono); font-size: 0.8rem; }
+.chip[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+.s-done { --c: var(--done); --cb: var(--done-bg); }
+.s-active { --c: var(--active); --cb: var(--active-bg); }
+.s-ready { --c: var(--ready); --cb: var(--ready-bg); }
+.s-you { --c: var(--you); --cb: var(--you-bg); }
+.s-decision { --c: var(--decision); --cb: var(--decision-bg); }
+.s-blocked { --c: var(--blocked); --cb: var(--blocked-bg); }
+.s-parked { --c: var(--parked); --cb: var(--parked-bg); }
+.pill { color: var(--c); background: var(--cb); }
+.dot { background: var(--c); }
+
+/* Summary panels */
+.panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel.you { border-color: var(--you); box-shadow: inset 4px 0 0 var(--you); }
+.panel ol, .panel ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.panel li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.panel .t { font-weight: 600; }
+.panel a { color: inherit; }
+.linkish { background: none; border: 0; padding: 0; color: var(--ready); text-decoration: underline; cursor: pointer; text-align: left; font-weight: 600; }
+
+/* Goal navigation and search */
+.toolbar { display: flex; flex-direction: column; gap: 12px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); }
+.goalnav { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.goalnav .chip { white-space: nowrap; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.search { flex: 1 1 220px; min-width: 0; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font: inherit; color: var(--ink); }
+
+/* Goals */
+.goal { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 140px; }
+.goal-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 20px; align-items: end; padding-bottom: 12px; border-bottom: 2px solid var(--ink); }
+.goal-head .tag { grid-column: 1 / -1; color: var(--muted); max-width: 70ch; }
+.meter { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.meter .bar { width: 160px; height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; display: flex; }
+.meter .bar span { display: block; height: 100%; }
+details.why { color: var(--ink); max-width: 75ch; }
+details.why summary { cursor: pointer; color: var(--muted); font-weight: 600; font-size: 0.92rem; }
+details.why p { margin-top: 8px; }
+.group-label { font-family: var(--display); font-weight: 600; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.card h3 { font-family: var(--body); font-size: 1.05rem; font-weight: 600; }
+.card dl { margin: 0; display: grid; gap: 8px; }
+.card dt { font-family: var(--display); font-weight: 600; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.card dd { margin: 0; }
+.waits { display: flex; flex-wrap: wrap; gap: 6px; }
+.wait { font-size: 0.82rem; padding: 2px 8px; border-radius: 6px; background: var(--sunk); }
+.note { font-size: 0.9rem; padding: 8px 10px; border-radius: 6px; background: var(--sunk); }
+.done-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.done-item { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
+.done-item summary { list-style: none; cursor: pointer; display: flex; gap: 10px; align-items: baseline; padding: 10px 12px; }
+.done-item summary::-webkit-details-marker { display: none; }
+.done-item summary::before { content: "\2713"; color: var(--done); font-weight: 700; flex: none; }
+.done-item summary .t { flex: 1; min-width: 0; font-weight: 500; }
+.done-item .body { padding: 0 12px 12px 34px; display: grid; gap: 8px; font-size: 0.94rem; }
+.done-item .body b { font-weight: 600; }
+
+/* Ben's list */
+.yours { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.yours > div { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ask { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.ask.blocking { border-color: var(--decision); }
+.ask.todo-open { border-color: var(--you); }
+.ask .rec { font-size: 0.94rem; }
+.ask .rec b { font-weight: 600; }
+.small { font-size: 0.9rem; color: var(--muted); }
+
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; padding: 28px; display: flex; flex-direction: column; gap: 8px; }
+.hidden-by-filter { display: none !important; }
+footer { color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (max-width: 860px) {
+  .panels { grid-template-columns: minmax(0, 1fr); }
+  .cards, .done-list, .yours { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .wrap { padding-inline: 16px; gap: 28px; }
+  .goal-head { grid-template-columns: minmax(0, 1fr); }
+  .meter { align-items: flex-start; }
+  .field .num.minor { display: none; }
+  .toolbar { position: static; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .field .gain { transition: width 0.6s ease; }
+  .field .ball { transition: left 0.6s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Ben's engine for DraftKings NFL Classic and Showdown</div>
+    <h1>NFL DFS Roadmap</h1>
+    <p class="sub">Every chunk of work on the engine, in plain English: what it is, why we're doing it, and why it matters. Claude keeps this current from the project's roadmap.</p>
+  </header>
+
+  <section class="field-wrap" aria-label="Overall progress">
+    <div class="score">
+      <strong id="doneCount">&mdash;</strong>
+      <span class="of" id="doneOf">chunks done</span>
+      <span class="spot" id="spot"></span>
+    </div>
+    <div class="field" id="field" role="img" aria-label="Progress shown as a football field">
+      <div class="gain" id="gain" style="width:0%"></div>
+      <div class="ball" id="ball" style="left:0%"></div>
+    </div>
+    <div class="chips" id="stateChips" role="group" aria-label="Filter by status"></div>
+  </section>
+
+  <section class="panels" id="panels" aria-label="Summary"></section>
+
+  <div class="toolbar">
+    <div class="goalnav" id="goalNav" role="group" aria-label="Filter by goal"></div>
+    <div class="row">
+      <label class="eyebrow" for="q">Search</label>
+      <input class="search" id="q" type="search" placeholder="Search any chunk, e.g. late swap, quarterback, S72" autocomplete="off">
+    </div>
+  </div>
+
+  <main id="goals">
+    <div class="empty" id="emptyState">
+      <h2>Loading the roadmap&hellip;</h2>
+      <p class="sub">The cards come from this page's database. If nothing appears after a few seconds, ask Claude to sync the tracker.</p>
+    </div>
+  </main>
+
+  <section id="you" aria-label="Your list" hidden>
+    <div class="goal-head" style="margin-bottom:16px">
+      <h2>Your list</h2>
+      <span></span>
+      <p class="tag">Decisions only you can make, and things only you can do. Nothing here is urgent unless a card says it holds up work.</p>
+    </div>
+    <div class="yours">
+      <div id="decisions"></div>
+      <div id="todos"></div>
+    </div>
+  </section>
+
+  <footer id="foot">Updated from the project roadmap.</footer>
+</div>
+
+<script>
+(function () {
+  const STATES = [
+    ["done", "Done"],
+    ["active", "In progress"],
+    ["ready", "Ready to start"],
+    ["you", "Waiting on you"],
+    ["decision", "Needs your decision"],
+    ["blocked", "Waiting on other work"],
+    ["parked", "Parked"],
+  ];
+  const OPEN_ORDER = { active: 0, decision: 1, you: 2, ready: 3, blocked: 4, parked: 5 };
+  const view = { goal: "all", state: "all", q: "" };
+  try {
+    const saved = JSON.parse(localStorage.getItem("tracker-view") || "{}");
+    if (saved && typeof saved === "object") Object.assign(view, { goal: saved.goal || "all", state: saved.state || "all" });
+  } catch (e) {}
+  let goals = [];
+  let meta = null;
+  let you = null;
+
+  const $ = (id) => document.getElementById(id);
+  function el(tag, attrs, ...kids) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === "class") node.className = v;
+      else if (k === "text") node.textContent = v;
+      else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) node.append(kid);
+    return node;
+  }
+  function remember() {
+    try { localStorage.setItem("tracker-view", JSON.stringify({ goal: view.goal, state: view.state })); } catch (e) {}
+  }
+  function fmtDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso.length === 10 ? iso + "T12:00:00Z" : iso);
+    if (isNaN(d)) return iso;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function goalTitle(key) {
+    const g = goals.find((x) => x.key === key);
+    return g ? g.title : key;
+  }
+  function jumpTo(id) {
+    view.goal = "all"; view.state = "all"; view.q = ""; $("q").value = ""; remember(); render();
+    requestAnimationFrame(() => {
+      const target = document.getElementById("card-" + id);
+      if (!target) return;
+      if (target.tagName === "DETAILS") target.open = true;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.focus({ preventScroll: true });
+    });
+  }
+
+  function renderField() {
+    const total = meta ? meta.total : goals.reduce((n, g) => n + (g.total || 0), 0);
+    const counts = meta ? meta.counts : {};
+    const done = counts.done || 0;
+    const pct = total ? (done / total) * 100 : 0;
+    $("doneCount").textContent = String(done);
+    $("doneOf").textContent = "of " + total + " chunks done";
+    const yard = Math.round(pct);
+    $("spot").textContent = !total ? "" : yard === 50 ? "Ball at midfield" : yard < 50 ? "Ball on our own " + yard : yard >= 100 ? "Touchdown" : "Ball on their " + (100 - yard);
+    $("gain").style.width = pct + "%";
+    $("ball").style.left = pct + "%";
+    const field = $("field");
+    field.setAttribute("aria-label", done + " of " + total + " chunks done, " + Math.round(pct) + " percent");
+    field.querySelectorAll(".yard,.num").forEach((n) => n.remove());
+    for (let i = 1; i < 10; i++) {
+      const x = i * 10;
+      field.append(el("div", { class: "yard", style: "left:" + x + "%" }));
+      const label = x <= 50 ? x : 100 - x;
+      field.append(el("div", { class: "num" + (x % 20 === 0 ? "" : " minor"), style: "left:" + x + "%", text: String(label) }));
+    }
+    const chips = $("stateChips");
+    chips.replaceChildren(
+      el("button", { class: "chip", "aria-pressed": String(view.state === "all"), onclick: () => { view.state = "all"; remember(); render(); } }, "Everything", el("span", { class: "n", text: String(total) })),
+      ...STATES.filter(([k]) => (counts[k] || 0) > 0).map(([k, label]) =>
+        el("button", { class: "chip s-" + k, "aria-pressed": String(view.state === k), onclick: () => { view.state = view.state === k ? "all" : k; remember(); render(); } },
+          el("span", { class: "dot" }), label, el("span", { class: "n", text: String(counts[k] || 0) })))
+    );
+  }
+
+  function renderPanels() {
+    const panels = $("panels");
+    if (!meta) { panels.replaceChildren(); return; }
+    const openDecisions = you ? you.decisions.filter((d) => d.holds_up && d.holds_up.length) : [];
+    const openTodos = you ? you.todos.filter((t) => !t.done && t.now) : [];
+    const needs = el("div", { class: "panel you" },
+      el("div", { class: "eyebrow", text: "Needs you" }),
+      el("ul", {},
+        openDecisions.map((d) => el("li", {}, el("span", { class: "t", text: d.title }), el("span", { class: "small", text: "Decision · holds up " + d.holds_up.map((h) => h.title).join(", ") }))),
+        openTodos.map((t) => el("li", {}, el("span", { class: "t", text: t.title }), el("span", { class: "small", text: t.unblocks.length ? "To-do · unlocks " + t.unblocks.map((h) => h.title).join(", ") : "To-do · " + (t.note || t.why) })))
+      ),
+      el("button", { class: "linkish", onclick: () => $("you").scrollIntoView({ behavior: "smooth" }), text: "See your full list" })
+    );
+    const next = el("div", { class: "panel" },
+      el("div", { class: "eyebrow", text: "Up next" }),
+      el("ol", {}, (meta.next_up || []).map((n) => el("li", {},
+        el("button", { class: "linkish", onclick: () => jumpTo(n.id), text: n.title }),
+        el("span", { class: "small", text: goalTitle(n.goal) })))),
+      el("p", { class: "small", text: (meta.counts.ready || 0) + " chunks are ready to start; these are first in the queue." })
+    );
+    const recent = el("div", { class: "panel" },
+      el("div", { class: "eyebrow", text: "Finished lately" }),
+      el("ul", {}, (meta.recent || []).map((r) => el("li", {},
+        el("button", { class: "linkish", onclick: () => jumpTo(r.id), text: r.title }),
+        el("span", { class: "small", text: fmtDate(r.done_date) + " · " + goalTitle(r.goal) }))))
+    );
+    panels.replaceChildren(needs, next, recent);
+  }
+
+  function renderGoalNav() {
+    const nav = $("goalNav");
+    nav.replaceChildren(
+      el("button", { class: "chip", "aria-pressed": String(view.goal === "all"), onclick: () => { view.goal = "all"; remember(); render(); } }, "All goals"),
+      ...goals.map((g) => el("button", { class: "chip", "aria-pressed": String(view.goal === g.key), onclick: () => { view.goal = view.goal === g.key ? "all" : g.key; remember(); render(); } },
+        g.title, el("span", { class: "n", text: (g.counts.done || 0) + "/" + g.total })))
+    );
+  }
+
+  function matches(c) {
+    if (view.state !== "all" && c.state !== view.state) return false;
+    if (!view.q) return true;
+    const hay = [c.id, c.title, c.what, c.why, c.matters, c.note, c.return_when].join(" ").toLowerCase();
+    return view.q.split(/\s+/).every((w) => hay.includes(w));
+  }
+
+  function openCard(c) {
+    const waits = (c.waiting_on || []).length
+      ? el("div", {}, el("dt", { text: c.state === "parked" ? "Depends on" : "Waiting on" }),
+          el("dd", {}, el("div", { class: "waits" }, c.waiting_on.map((w) => w.kind === "work"
+            ? el("button", { class: "wait linkish", onclick: () => jumpTo(w.id), text: w.label })
+            : el("span", { class: "wait", text: (w.kind === "todo" ? "Your to-do: " : "") + w.label })))))
+      : null;
+    return el("article", { class: "card", id: "card-" + c.id, tabindex: "-1" },
+      el("div", { class: "card-top" },
+        el("span", { class: "pill s-" + c.state }, el("span", { class: "dot" }), c.state_label),
+        el("span", { class: "mono", text: c.id })),
+      el("h3", { text: c.title }),
+      el("dl", {},
+        el("div", {}, el("dt", { text: "What it is" }), el("dd", { text: c.what })),
+        el("div", {}, el("dt", { text: "Why we're doing it" }), el("dd", { text: c.why })),
+        el("div", {}, el("dt", { text: "Why it matters" }), el("dd", { text: c.matters })),
+        c.return_when ? el("div", {}, el("dt", { text: "What brings it back" }), el("dd", { text: c.return_when })) : null,
+        waits),
+      c.note ? el("p", { class: "note", text: c.note }) : null
+    );
+  }
+
+  function doneCard(c) {
+    return el("details", { class: "done-item", id: "card-" + c.id, tabindex: "-1" },
+      el("summary", {}, el("span", { class: "t", text: c.title }), el("span", { class: "mono", text: fmtDate(c.done_date) })),
+      el("div", { class: "body" },
+        el("p", {}, el("b", { text: "What it is. " }), c.what),
+        el("p", {}, el("b", { text: "Why we did it. " }), c.why),
+        el("p", {}, el("b", { text: "Why it matters. " }), c.matters),
+        c.note ? el("p", { class: "note", text: c.note }) : null,
+        el("span", { class: "mono", text: c.id }))
+    );
+  }
+
+  function renderGoals() {
+    const main = $("goals");
+    if (!goals.length) return;
+    const sections = [];
+    let shown = 0;
+    for (const g of goals) {
+      if (view.goal !== "all" && view.goal !== g.key) continue;
+      const all = Object.values(g.chunks || {}).sort((a, b) => a.order - b.order);
+      const items = all.filter(matches);
+      if (!items.length && (view.q || view.state !== "all")) continue;
+      shown += items.length;
+      const open = items.filter((c) => c.state !== "done").sort((a, b) => (OPEN_ORDER[a.state] - OPEN_ORDER[b.state]) || (a.order - b.order));
+      const done = items.filter((c) => c.state === "done").sort((a, b) => (b.done_date || "").localeCompare(a.done_date || "") || b.order - a.order);
+      const bar = el("div", { class: "bar" }, STATES.map(([k]) => {
+        const n = g.counts[k] || 0;
+        return n ? el("span", { class: "s-" + k, style: "width:" + (n / g.total) * 100 + "%;background:var(--c)", title: n + " " + k }) : null;
+      }));
+      sections.push(el("section", { class: "goal", id: "goal-" + g.key },
+        el("div", { class: "goal-head" },
+          el("h2", { text: g.title }),
+          el("div", { class: "meter" }, el("span", { class: "mono", text: (g.counts.done || 0) + " of " + g.total + " done" }), bar),
+          el("p", { class: "tag", text: g.tagline })),
+        el("details", { class: "why" }, el("summary", { text: "Why this goal matters" }), el("p", { text: g.why })),
+        open.length ? el("div", { class: "group-label", text: "Still to do · " + open.length }) : null,
+        open.length ? el("div", { class: "cards" }, open.map(openCard)) : null,
+        done.length ? el("div", { class: "group-label", text: "Done · " + done.length }) : null,
+        done.length ? el("div", { class: "done-list" }, done.map(doneCard)) : null
+      ));
+    }
+    if (!sections.length || !shown) {
+      sections.length = 0;
+      sections.push(el("div", { class: "empty" }, el("h2", { text: "Nothing matches" }),
+        el("p", { class: "sub", text: "Try another word, or clear the filters." }),
+        el("button", { class: "linkish", onclick: () => { view.goal = "all"; view.state = "all"; view.q = ""; $("q").value = ""; remember(); render(); }, text: "Clear filters" })));
+    }
+    main.replaceChildren(...sections);
+  }
+
+  function renderYou() {
+    const box = $("you");
+    if (!you) { box.hidden = true; return; }
+    box.hidden = false;
+    const blocking = you.decisions.filter((d) => d.holds_up.length);
+    const later = you.decisions.filter((d) => !d.holds_up.length);
+    const dcard = (d) => el("div", { class: "ask" + (d.holds_up.length ? " blocking" : "") },
+      el("h3", { text: d.title }),
+      el("p", { text: d.question }),
+      el("p", { class: "rec" }, el("b", { text: "Claude's recommendation: " }), d.recommendation),
+      d.holds_up.length ? el("div", { class: "waits" }, el("span", { class: "small", text: "Holds up:" }),
+        d.holds_up.map((h) => el("button", { class: "wait linkish", onclick: () => jumpTo(h.id), text: h.title }))) : el("span", { class: "small", text: "Blocks nothing." }));
+    $("decisions").replaceChildren(
+      el("div", { class: "group-label", text: "Decisions · " + you.decisions.length }),
+      blocking.map(dcard), later.map(dcard));
+    const openTodos = you.todos.filter((t) => !t.done);
+    const doneTodos = you.todos.filter((t) => t.done);
+    const tcard = (t) => el("div", { class: "ask" + (t.unblocks.length ? " todo-open" : "") },
+      el("div", { class: "card-top" }, el("h3", { text: t.title }), el("span", { class: "mono", text: t.id })),
+      el("p", { text: t.what }),
+      el("p", { class: "small", text: t.why }),
+      t.note ? el("p", { class: "note", text: t.note }) : null,
+      t.unblocks.length ? el("div", { class: "waits" }, el("span", { class: "small", text: "Unlocks:" }),
+        t.unblocks.map((h) => el("button", { class: "wait linkish", onclick: () => jumpTo(h.id), text: h.title }))) : null);
+    $("todos").replaceChildren(
+      el("div", { class: "group-label", text: "To-dos · " + openTodos.length + " open" }),
+      openTodos.map(tcard),
+      doneTodos.length ? el("p", { class: "small", text: "Done: " + doneTodos.map((t) => t.title).join("; ") + "." }) : null);
+  }
+
+  function renderFoot() {
+    if (!meta) return;
+    $("foot").textContent = "Updated " + fmtDate(meta.updated_at) + " from the project roadmap (commit " + meta.source_commit + "). Session numbers like S72 are the roadmap's own references.";
+  }
+
+  function render() {
+    renderField();
+    renderPanels();
+    renderGoalNav();
+    renderGoals();
+    renderYou();
+    renderFoot();
+  }
+
+  $("q").addEventListener("input", (e) => {
+    clearTimeout(window.__qt);
+    window.__qt = setTimeout(() => { view.q = e.target.value.trim().toLowerCase(); renderGoals(); }, 120);
+  });
+
+  function showEmpty(title, text) {
+    $("goals").replaceChildren(el("div", { class: "empty" }, el("h2", { text: title }), el("p", { class: "sub", text: text })));
+  }
+
+  (async () => {
+    const db = window.claude && window.claude.use ? await window.claude.use("db") : null;
+    if (!db) {
+      showEmpty("The roadmap data isn't available here", "This page reads its cards from its own database, which this view can't reach. Open it on claude.ai while signed in.");
+      return;
+    }
+    const fail = () => showEmpty("The roadmap data didn't load", "Reload the page. If it keeps happening, ask Claude to sync the tracker.");
+    let gotGoals = false;
+    db.collection("goals").onSnapshot((snap) => {
+      gotGoals = true;
+      goals = snap.docs.map((d) => d.data()).filter(Boolean).sort((a, b) => a.order - b.order);
+      if (!goals.length) { showEmpty("No cards yet", "Claude fills this page from the project roadmap. Ask Claude to sync the tracker."); return; }
+      render();
+    }, fail);
+    db.collection("board").onSnapshot((snap) => {
+      meta = null; you = null;
+      for (const d of snap.docs) {
+        if (d.id === "meta") meta = d.data();
+        if (d.id === "you") you = d.data();
+      }
+      if (gotGoals && goals.length) render(); else { renderField(); renderPanels(); renderYou(); renderFoot(); }
+    }, fail);
+  })();
+})();
+</script>

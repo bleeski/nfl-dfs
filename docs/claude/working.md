@@ -84,6 +84,24 @@ check, no branch cleanup, no PowerShell blocks, no archive, and no `Session clos
 record or a procedure fix that merges mid-run is a mid-session merge. Ben typing `/post-merge` still runs it anywhere, and archives
 only when the merged pull request carries the marker or he asks.
 
+## The plain-English tracker (Ben, 2026-10-12)
+
+Ben's page, "NFL DFS Roadmap": https://claude.ai/artifact/ReBDmhtgMztFsVJgKQo5Ax. It shows every board row and operator item in
+plain English (what it is, why we are doing it, why it matters) under seven business goals, plus his decisions and to-dos. The
+status comes from `docs/ROADMAP.md` through `scripts/repo_state.py`, the words from `docs/tracker/plain.json`, and the page source
+is `docs/tracker/tracker.html`.
+
+- **A pull request that adds a board row or an operator item adds its card to `plain.json` in the same commit.**
+  `tests/test_tracker_plain.py` names any row or item without one. Write for a reader who is not an engineer: no engine terms,
+  and never EV, ROI, edge or upload-ready (the test refuses those words). A deferred row says what brings it back
+  (`return_when`); a decision Ben owes goes in `decisions` with Claude's recommendation.
+- **Sync after any merge that changes the board** (a close-out, a split, a new row, an operator item done). Run
+  `python scripts/tracker_payload.py --out <scratchpad>/<new folder>` (a new folder each time: `rm -rf` is denied), read the
+  current versions with one `ArtifactData` `list` of `goals` and one of `board`, then one `batch` of `set` writes from the
+  printed `writes`, each pinned with that document's `if_version`. Republish the page only when `tracker.html` changes (the
+  Artifact tool with this `url`). A session without the Artifact tools, such as a cloud session, leaves the sync to the next
+  desktop session: the page's footer names the commit it was built from, so a stale page is visible.
+
 ## Token discipline
 
 - Ledgers by section, never whole: `docs/ROADMAP.md` §1, §2.1 and the one card;

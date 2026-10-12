@@ -1,0 +1,904 @@
+{
+  "schema_version": "nfl_plain_tracker_v1",
+  "about": "Plain-English cards for Ben's roadmap tracker. One card per docs/ROADMAP.md status-board row and one per operator item; scripts/tracker_payload.py joins them to the board's live status. Write for a reader who is not an engineer: what it is, why we are doing it, why it matters. Never call anything EV, ROI, edge or upload-ready; nothing has been graded yet.",
+  "goals": [
+    {
+      "key": "deliver",
+      "title": "Never miss a contest",
+      "tagline": "A valid lineup file is ready before every lock, whatever else goes wrong.",
+      "why": "A missed lock is the one mistake that can't be fixed: the entry fee is paid and the entry has no chance. A weak lineup can still be swapped later. So the engine builds a safe, legal file first, then improves on it with whatever time is left, and names every gap instead of stopping."
+    },
+    {
+      "key": "portfolio",
+      "title": "Build lineups that can win big",
+      "tagline": "Spread entries across different game stories so a few can reach the top, without all failing together.",
+      "why": "Tournament prizes are weighted heavily to the top. Twenty near-copies of one lineup is one bet placed twenty times: they all hit or all miss. Your two goals are winning large prizes and avoiding washouts, and when they conflict, large prizes win. This work spreads entries across believable game scripts, caps how often any one player appears, and keeps every lineup distinct."
+    },
+    {
+      "key": "players",
+      "title": "Know who plays and how much",
+      "tagline": "Get the right starters, injury replacements and backups into the player pool before building.",
+      "why": "A lineup with an inactive player or a backup quarterback is dead before kickoff, and a starter the engine scores at zero never gets picked. This work keeps the player picture current: starters, injury replacements, new arrivals, official status and weather."
+    },
+    {
+      "key": "lateswap",
+      "title": "Fix lineups after kickoff",
+      "tagline": "Swap players in later games when news breaks, without touching anything already locked.",
+      "why": "On a main slate the early games lock first, but late news (a 4pm scratch) can still be acted on for players in later games. Late swap is the second decision point of the day, and the only path that can produce a file cleared for upload."
+    },
+    {
+      "key": "measure",
+      "title": "Measure what's working",
+      "tagline": "Score our real DraftKings results against the plan, to learn whether the projections or the lineup building is the weak link.",
+      "why": "No build has yet been graded against real results (0 of 0 slates), so nobody can say yet whether any of this work pays. At about 36 slates a season, lineup-level effects take a long time to show, so this work starts with the measures that produce the most data per slate, like player-by-player projection accuracy, before changing anything else."
+    },
+    {
+      "key": "field",
+      "title": "Out-think the field",
+      "tagline": "Simulate how games can unfold and what other entrants will pick, then aim for lineups that win big when they hit.",
+      "why": "Large-field tournaments are won by lineups that score very high and are shared by few others. That needs a simulator of game outcomes and a model of the crowd's picks. It's the biggest build on the list, and it comes after the measurement work so its effect can be checked rather than assumed."
+    },
+    {
+      "key": "foundations",
+      "title": "Keep the engine safe and sound",
+      "tagline": "Guardrails, cleanup and tooling that prevent costly mistakes and keep development fast.",
+      "why": "The engine prepares real-money entries, so its safety checks have to be airtight and its code easy to change. This work closes gaps in the guardrails, splits oversized code so it can be changed safely, keeps the documentation honest and removes dead parts."
+    }
+  ],
+  "chunks": {
+    "S00": {
+      "goal": "foundations",
+      "title": "One roadmap for everything",
+      "what": "Merged every plan, backlog and to-do list into a single roadmap, and pointed the project's tools and start-up summary at it.",
+      "why": "Work was scattered across several trackers that disagreed with each other.",
+      "matters": "One place to see what's done and what's next, which this page is built from."
+    },
+    "S01": {
+      "goal": "foundations",
+      "title": "Write your rulings into the rules",
+      "what": "Recorded your rulings (ship the file and name its gaps, keep every lineup distinct, deliver 5 minutes before lock) in the project's rules, and corrected claims there that were not true.",
+      "why": "The rules file is what every session reads first; it said things the engine didn't actually do.",
+      "matters": "Every later session works from your actual priorities."
+    },
+    "S02": {
+      "goal": "deliver",
+      "title": "Fill only the right entries",
+      "what": "The step that writes the DraftKings file now refuses entries it doesn't recognize, fills every open entry or names the ones it couldn't, re-checks every lineup, and never overwrites an earlier file.",
+      "why": "An earlier version could write a file with a wrong or missing entry and still report success.",
+      "matters": "A wrong file can waste entry fees outright, so this came first."
+    },
+    "S02b": {
+      "goal": "deliver",
+      "title": "Backup builder never repeats a lineup",
+      "what": "The fallback lineup builder stops and names any entries it can't fill instead of repeating a lineup, drops players DraftKings lists as out, and won't overwrite an existing file.",
+      "why": "Repeated lineups and injured players could slip into fallback files.",
+      "matters": "Keeps the emergency path as safe as the main one."
+    },
+    "S03": {
+      "goal": "deliver",
+      "title": "A clear answer to 'is there a file to hand over?'",
+      "what": "Every run now reports whether a valid file exists to give you, separately from whether it's cleared to upload, with each gap listed by name.",
+      "why": "Before this, one missing piece of evidence could stop the whole run and leave no file at all.",
+      "matters": "Puts your rule 'no lineup is the worst outcome' into the engine itself."
+    },
+    "S03b": {
+      "goal": "deliver",
+      "title": "A catalogue of every warning",
+      "what": "Every stop or warning the engine can raise is listed in one place and sorted: breaks the file, unproven claim, or presentation only.",
+      "why": "Without it, nobody could tell which warnings should block a file and which just need mentioning.",
+      "matters": "Minor issues stop blocking files, and serious ones always do."
+    },
+    "S04": {
+      "goal": "deliver",
+      "title": "Baseline lineups from the DraftKings files alone",
+      "what": "A command that builds distinct, legal lineups from just the salary and entry files, with no internet and no projections, and fills your open entries.",
+      "why": "If every outside data source fails, you still need something legal to enter.",
+      "matters": "Guarantees a file exists before lock."
+    },
+    "S05": {
+      "goal": "deliver",
+      "title": "A good file survives later crashes",
+      "what": "Once a valid file is written, a later failure (a report, the workbook) can no longer erase or invalidate it, and a pointer always names the latest good file.",
+      "why": "A crash in a cosmetic step could throw away a perfectly good lineup file.",
+      "matters": "Finished work is protected from unrelated failures."
+    },
+    "S06": {
+      "goal": "deliver",
+      "title": "Baseline first, improvements after",
+      "what": "The main slate command publishes the baseline file right after reading your files, before projections or weather, and swaps in a better file only when it passes every check.",
+      "why": "The old order ran slow evidence steps first; if they stalled, there was no file.",
+      "matters": "You have a file within minutes of starting a run."
+    },
+    "S06b": {
+      "goal": "deliver",
+      "title": "Known inactives leave the baseline",
+      "what": "Players an official inactive list rules out are removed before the baseline is built.",
+      "why": "The safety file could include players already ruled out.",
+      "matters": "Fewer dead lineups in the file you might fall back on."
+    },
+    "S07": {
+      "goal": "deliver",
+      "title": "The engine watches the clock",
+      "what": "Every run carries a delivery deadline (by default 5 minutes before the first lock), and each step sizes its effort to the time left.",
+      "why": "Steps used fixed time limits and could run past lock.",
+      "matters": "Runs finish before lock instead of being cut off by it."
+    },
+    "S07b": {
+      "goal": "deliver",
+      "title": "Downloads respect the deadline too",
+      "what": "Data downloads, weather fetches and the size of the lineup search all stop at the deadline instead of retrying past it.",
+      "why": "Network retries could eat the last minutes before lock.",
+      "matters": "No slow website can make you miss a lock."
+    },
+    "S08": {
+      "goal": "deliver",
+      "title": "Keep the best answer when time runs out",
+      "what": "If the lineup optimizer hits its time limit, the engine keeps the best valid result found so far instead of discarding it.",
+      "why": "A search that ran out of time threw away good lineups and came back empty.",
+      "matters": "Search time turns into better files, not empty ones."
+    },
+    "S09": {
+      "goal": "deliver",
+      "title": "Missing weather or status data doesn't stop the run",
+      "what": "Missing weather or official activity reports now become named gaps in the report, not hard stops. A real conflict in the data still counts against it.",
+      "why": "A weather site being down could block an entire slate.",
+      "matters": "The file ships, and you know exactly what was unproven."
+    },
+    "S10": {
+      "goal": "deliver",
+      "title": "Automatic fallback ladder",
+      "what": "When lineup rules can't all be met, the engine loosens them itself one step at a time and records each step. It never loosens 'every lineup distinct'.",
+      "why": "The engine used to print advice and stop, so someone had to rerun it by hand under the clock.",
+      "matters": "A stuck run becomes a delivered file without anyone stepping in."
+    },
+    "S11": {
+      "goal": "deliver",
+      "title": "Entry files with some lineups already in",
+      "what": "If some entries already hold lineups, the engine keeps them exactly as they are, fills only the blanks, and handles each contest separately.",
+      "why": "A file with any prefilled entries used to be rejected outright.",
+      "matters": "You can mix hand-picked lineups with engine lineups."
+    },
+    "S11b": {
+      "goal": "deliver",
+      "title": "A build plan for some entries, defaults for the rest",
+      "what": "A build plan can cover just some of your open entries; the rest are filled automatically without repeating any lineup.",
+      "why": "Plans had to cover every entry or none.",
+      "matters": "More flexibility on slate day without risking duplicates."
+    },
+    "S11c": {
+      "goal": "deliver",
+      "title": "The same flexibility for the advanced Classic builders",
+      "what": "The two advanced Classic builders accept plans that cover only some entries, and the review shows which builder produced each lineup.",
+      "why": "Finishes the partial-plan work for Classic.",
+      "matters": "Every Classic path handles mixed entry files the same way."
+    },
+    "S12": {
+      "goal": "lateswap",
+      "title": "Late swap safety: clock and name checks",
+      "what": "Late swap now refuses to run on a stale clock time, and reads lineup cells written as 'Name (ID)', the way DraftKings writes them.",
+      "why": "Without the clock check, a game that had already started could be treated as still open, and DraftKings' 'Name (ID)' cells could be misread.",
+      "matters": "Prevents an illegal or wrong swap at the day's second decision point."
+    },
+    "S12b": {
+      "goal": "lateswap",
+      "title": "Late swap from what you actually submitted",
+      "what": "Late swap works from the entry file you download after uploading, handles several contests at once, keeps locked players exactly as they are, and prefers later-game players in flexible slots.",
+      "why": "Today late swap can only start from an engine-certified file, which never happens in practice, so it can't be used on real entries.",
+      "matters": "Makes the second decision point usable on your real entries every Sunday."
+    },
+    "S13": {
+      "goal": "deliver",
+      "title": "Pre-flight check before building",
+      "what": "One report at the start of a run that checks player identities, the player pool and the evidence against the actual files, plus a saved list of exactly which players were scored.",
+      "why": "Problems now surface partway through a run instead of at the start.",
+      "matters": "Catches problems while there's still time to fix them."
+    },
+    "S14": {
+      "goal": "deliver",
+      "title": "A complete record of each delivery",
+      "what": "One record per run of what was delivered, when, how complete it was, what was loosened and what was done by hand.",
+      "why": "Delivery facts are spread across several reports.",
+      "matters": "Makes it possible to review how each slate actually went."
+    },
+    "S15": {
+      "goal": "deliver",
+      "title": "Rehearse bad days, part 1",
+      "what": "End-to-end tests that fake a short window, a data feed being down, impossible rules, running out of unique lineups, a timeout and a failed improvement, and check a file still ships.",
+      "why": "Each safety feature has been tested alone, not all together under stress.",
+      "matters": "Confidence that the engine delivers on a bad Sunday."
+    },
+    "S15b": {
+      "goal": "deliver",
+      "title": "Rehearse bad days, part 2",
+      "what": "Six more failure scenarios: a crash after the baseline, one contest group failing, a source that keeps timing out, the report eating the time window, and more.",
+      "why": "Covers the remaining failure cases from the delivery audit.",
+      "matters": "Finishes the stress test of the delivery path."
+    },
+    "S16": {
+      "goal": "deliver",
+      "title": "Full dress rehearsal on your PC",
+      "what": "Run a real current slate on Windows, Classic and Showdown, timing each step from start to finished file.",
+      "why": "Proves the whole chain works on the machine you use on game days.",
+      "matters": "No surprises on a live slate."
+    },
+    "S17": {
+      "goal": "measure",
+      "title": "Standings exports reachable from the cloud",
+      "what": "Your 26 contest standings exports can be stored as private release files and fetched with their fingerprints checked on arrival.",
+      "why": "Cloud sessions couldn't see standings that live only on your PC.",
+      "matters": "Lets grading work happen in cloud sessions, not just at your desk."
+    },
+    "S17b": {
+      "goal": "measure",
+      "title": "Prove the cloud fetch on the real files",
+      "what": "Once the standings files are in a private place, a cloud session fetches them and checks every fingerprint matches.",
+      "why": "The fetch was built and tested on stand-in files, not the real ones.",
+      "matters": "Confirms the cloud grading path before relying on it."
+    },
+    "S18": {
+      "goal": "measure",
+      "title": "Grade past contests from the standings",
+      "what": "A command that reads the standings exports on your PC and works out, per contest, the cash and top-1% score lines, where our entries finished, and how many copies of each lineup the field played.",
+      "why": "The feedback loop: we can't improve what we don't score.",
+      "matters": "The first real yardstick of our lineups against the field."
+    },
+    "S18b": {
+      "goal": "measure",
+      "title": "What winning lineups had in common",
+      "what": "From graded contests: which lineup features show up in the top 1%, how often top lineups are duplicated, and our exposure to each player compared with the field's.",
+      "why": "Construction rules should come from what wins, not from guesses.",
+      "matters": "Turns past contests into evidence for future builds."
+    },
+    "S19": {
+      "goal": "foundations",
+      "title": "Automatic post-mortems and a merge gate",
+      "what": "An automatic review after every run, recovery of abandoned runs, and a hard check that blocks merging any change unless all tests pass.",
+      "why": "Today 'merge only when tests pass' is a rule Claude follows, not something the system enforces.",
+      "matters": "A broken change can't reach the engine you run on Sunday."
+    },
+    "S20": {
+      "goal": "foundations",
+      "title": "Network checks in the health check",
+      "what": "The health check reports which data sites this machine can reach, and the setup notes come from that check instead of hand-written facts.",
+      "why": "Hand-written notes about which sites work go stale.",
+      "matters": "Fewer slate-day surprises about blocked data sources."
+    },
+    "S21": {
+      "goal": "players",
+      "title": "Fix how missed games were counted",
+      "what": "Player projections now use per-game rates instead of season totals.",
+      "why": "A units mix-up underrated every player who missed games last season, every week.",
+      "matters": "Fixed a mispricing that touched every slate."
+    },
+    "S22": {
+      "goal": "measure",
+      "title": "A paper trail for every slate",
+      "what": "Every run folder gets a complete record of its inputs, hand-built entries get the same record, and each slate gets a note, written before the games, of what we expect.",
+      "why": "Without a before-the-fact record, after-the-fact grading can fool us.",
+      "matters": "Keeps the measurement honest."
+    },
+    "S23": {
+      "goal": "portfolio",
+      "title": "Lineup hygiene for Showdown",
+      "what": "Showdown builds follow structure rules (how many quarterbacks, salary left over, kickers and defenses) and cap how often any one player appears across your entries.",
+      "why": "In a look-back over past graded games, this bundle of rules was the only one that improved both of your goals at once: more top-1% finishes and fewer entries that cashed nothing.",
+      "matters": "The best-supported lineup rules we had from past contests (a look-back, not proof)."
+    },
+    "S23b": {
+      "goal": "portfolio",
+      "title": "Game stories, part 1",
+      "what": "A game story ('Kansas City wins big', 'a shootout') can be written as a rule set: which teams, which captains, how many players from each side. The engine builds lineups that fit it.",
+      "why": "Your ruling: each lineup should be a bet on a specific way the game plays out.",
+      "matters": "Turns your read of a game into lineups the engine builds for you."
+    },
+    "S23c": {
+      "goal": "portfolio",
+      "title": "A portfolio of game stories",
+      "what": "Splits your entries across several game stories at once, keeps every lineup distinct, spreads captains across the stories, and reports which entry follows which story.",
+      "why": "With one story per slate, every entry needed the same thing to happen.",
+      "matters": "Several different routes to a big finish, so one bad script doesn't sink everything."
+    },
+    "S23d": {
+      "goal": "portfolio",
+      "title": "Contest facts and first-place targeting",
+      "what": "Each entry is tagged with its contest's size, how many places pay and the entry fee, entries in winner-take-most contests are labelled, and a screening checklist runs before upload.",
+      "why": "The engine didn't know which contests were top-heavy.",
+      "matters": "Sends the right kind of lineup to the right kind of contest."
+    },
+    "S23e": {
+      "goal": "portfolio",
+      "title": "Lineup hygiene for Classic",
+      "what": "Classic builds get the salary rule, the own-defense rule and a cap on any one player's share of lineups.",
+      "why": "Brings the Showdown hygiene rules to Classic.",
+      "matters": "Classic portfolios get the same protection against concentration."
+    },
+    "S23f": {
+      "goal": "portfolio",
+      "title": "Game stories in the readable review",
+      "what": "The review you read on slate day shows each entry's game story, captain counts, the most-used players, and which pairs of lineups overlap most.",
+      "why": "The story behind each lineup was only in machine files.",
+      "matters": "You can check the portfolio's shape at a glance before uploading."
+    },
+    "S24": {
+      "goal": "field",
+      "title": "Fix the game simulator",
+      "what": "Fix known errors in the game simulator (sacks, turnovers, kickers, return touchdowns) and remove weighting code that does nothing.",
+      "why": "Simulated outcomes have to be right before any lineup is built from them.",
+      "matters": "The foundation for everything else in this goal."
+    },
+    "S24b": {
+      "goal": "field",
+      "title": "Simulate each slate thousands of times",
+      "what": "Play out each slate thousands of times and give every lineup a typical, good and great outcome (the 50th, 90th and 99th percentile).",
+      "why": "Tournaments reward the great outcome, not the average one.",
+      "matters": "Lets lineups be judged on what wins tournaments."
+    },
+    "S24c": {
+      "goal": "field",
+      "title": "Use betting lines to scale team scoring",
+      "what": "Scale each team's expected scoring by the betting total and spread, add realistic player variance, and make the simulated field spend the salary cap like real entrants do.",
+      "why": "Last season's scoring alone ignores what the market expects this week.",
+      "matters": "More realistic game scripts and a more realistic crowd."
+    },
+    "S25": {
+      "goal": "field",
+      "title": "Aim at the top-1% outcome",
+      "what": "A build goal that targets a lineup's best realistic outcome rather than its average, across families of lineup shapes (stacks, bring-backs, defense plays), with an average-chasing portfolio kept alongside for comparison.",
+      "why": "Building for the average produces safe lineups that rarely win tournaments.",
+      "matters": "Points construction at the prizes that matter most."
+    },
+    "S25b": {
+      "goal": "field",
+      "title": "A ceiling sleeve and smarter captains",
+      "what": "Set aside some entries for high-ceiling, lightly-picked plays with clear rules, choose captains by ceiling, and re-check the result on a separate set of simulations.",
+      "why": "A few bold entries can reach places a balanced portfolio can't.",
+      "matters": "Adds deliberate long shots without betting the whole portfolio on them."
+    },
+    "S26": {
+      "goal": "field",
+      "title": "Predict ownership",
+      "what": "A model of how many entrants will pick each player, graded slate by slate against actual ownership.",
+      "why": "Being different from the crowd only helps if you know what the crowd will do.",
+      "matters": "Makes leverage measurable instead of guessed."
+    },
+    "S27": {
+      "goal": "field",
+      "title": "Predict duplicate lineups",
+      "what": "Predict how many others will play the exact same lineup.",
+      "why": "A first-place finish split with duplicates pays much less.",
+      "matters": "Avoids lineups that would have to share the top prize."
+    },
+    "S28": {
+      "goal": "field",
+      "title": "How many entries to swing big with",
+      "what": "Measure how many game scenarios the portfolio covers and the chance that no entry cashes, to choose how many entries go to high-risk lineups.",
+      "why": "Too many long shots risk a washout; too few cap the upside.",
+      "matters": "Balances your two goals with numbers instead of instinct."
+    },
+    "S29": {
+      "goal": "field",
+      "title": "First-place value after splits",
+      "what": "Value a lineup by what first place actually pays after splitting with duplicates, using each contest's real payout table.",
+      "why": "Payout tables differ a lot between contests.",
+      "matters": "Targets the prize that's really on offer."
+    },
+    "S30": {
+      "goal": "measure",
+      "title": "Standings with ties and no-shows",
+      "what": "Update the standings format so contests with exact ties, and entrants who never submitted a lineup, can be settled correctly.",
+      "why": "Your exports include both cases, and the current format can't represent them.",
+      "matters": "Accurate grading for every contest, not just the tidy ones."
+    },
+    "S31": {
+      "goal": "field",
+      "title": "A second opinion on each portfolio",
+      "what": "A check that tries to find a better portfolio and suggests rule changes, for at most three rounds.",
+      "why": "Catches portfolios that are legal but weak.",
+      "matters": "Automated review of construction quality.",
+      "return_when": "After the ceiling sleeve (Session 25b) exists for it to review."
+    },
+    "S32": {
+      "goal": "lateswap",
+      "title": "Late-swap strategy aids",
+      "what": "A quality check for swaps, keeping some salary in reserve for late news, tagging entries that are easy to swap, and points per $1,000 of locked salary.",
+      "why": "Makes late swap a planned part of the build, not only a repair.",
+      "matters": "More options when late news breaks.",
+      "return_when": "After late swap from submitted entries (Session 12b) and the ceiling sleeve (Session 25b)."
+    },
+    "S33": {
+      "goal": "field",
+      "title": "Contest-specific crowd effects",
+      "what": "Adjust the crowd model by contest type (size, entry fee), shrunk toward the average where data is thin.",
+      "why": "Different contests attract different crowds.",
+      "matters": "Sharper predictions where they differ most.",
+      "return_when": "After the duplicate-lineup model (Session 27) and about 20 more Showdown standings (to-do O10)."
+    },
+    "S34": {
+      "goal": "foundations",
+      "title": "Spec report and helper cost rules",
+      "what": "A report against the original design spec, and rules for how much helper agents may spend.",
+      "why": "Housekeeping for development.",
+      "matters": "Keeps development spending and scope in check.",
+      "return_when": "Needs re-scoping first; after Sessions 17, 19 and 20."
+    },
+    "S35": {
+      "goal": "foundations",
+      "title": "Check the workbook in real Excel",
+      "what": "Open, recalculate, save and reopen the review workbook in real Excel as a final check.",
+      "why": "The software checks pass, but nobody has opened it in Excel itself as part of a test.",
+      "matters": "Low risk; deferred by your ruling.",
+      "return_when": "Deferred by your ruling R30: the software checks pass, and a real-Excel check can wait."
+    },
+    "S36": {
+      "goal": "field",
+      "title": "Earn trust in the model",
+      "what": "The promotion track: the tests the projections must pass, over enough slates, before the engine may call its own file cleared for upload.",
+      "why": "Every file is marked 'do not upload' today because the model hasn't proven itself on real results.",
+      "matters": "The path from 'review this' to a model you can lean on.",
+      "return_when": "After first-place value (Session 29) and enough single-contest entries (to-do O5)."
+    },
+    "S37": {
+      "goal": "deliver",
+      "title": "Showdown files can't hold duplicates",
+      "what": "Showdown files can never contain duplicate lineups, and the Showdown quality check compares the exact file contents.",
+      "why": "A setting allowed duplicate lineups, and the check could miss them.",
+      "matters": "A duplicate lineup is a wasted entry."
+    },
+    "S38": {
+      "goal": "deliver",
+      "title": "Never lose or mislabel a finished file",
+      "what": "Fixed ways a run could delete a valid file, reuse an old output folder, or report 'certified' from stale data; the Windows launcher accepts the baseline command.",
+      "why": "Each could put a wrong or missing file in front of you.",
+      "matters": "Top priority tier: a wrong file loses the entry fee outright."
+    },
+    "S39": {
+      "goal": "portfolio",
+      "title": "Spread out Classic lineups",
+      "what": "Caps how many players any two Classic lineups can share (6 of 9 by default) and makes the builder vary its starting points.",
+      "why": "Classic portfolios were mostly one lineup with a player changed, so they won or lost together.",
+      "matters": "Directly reduces washouts."
+    },
+    "S39b": {
+      "goal": "deliver",
+      "title": "Deliver what's built when lineups run out",
+      "what": "If the builder runs out of distinct lineups partway, it hands over the ones it built and names the unfilled entries instead of failing completely.",
+      "why": "A shortfall used to throw away the whole portfolio.",
+      "matters": "Partial delivery beats no delivery."
+    },
+    "S40": {
+      "goal": "deliver",
+      "title": "Faster lineup search under the clock",
+      "what": "Treat a search that stopped at its limit with enough good options as a success, and remove slow, wasteful steps from the search.",
+      "why": "Showdown searches that hit their time limit were being treated as failures.",
+      "matters": "More of the available time goes into better lineups."
+    },
+    "S41": {
+      "goal": "players",
+      "title": "Weather data from approved sources only",
+      "what": "Weather downloads follow the approved-source list, refuse redirects, save the raw response and expire at the right time; one agreed list of retractable-roof stadiums.",
+      "why": "The weather script could reach sites outside the approved list.",
+      "matters": "Keeps a project rule intact and weather data trustworthy."
+    },
+    "S42": {
+      "goal": "players",
+      "title": "Tighter official status checks",
+      "what": "One agreed list of official sources for inactive and status reports, stricter time checks, and name-based player matches clearly labelled as guesses.",
+      "why": "A code review found loose spots in how official status is checked.",
+      "matters": "Stops a wrong 'active' or 'inactive' from steering a lineup."
+    },
+    "S43": {
+      "goal": "foundations",
+      "title": "Close holes in the safety guards",
+      "what": "Tighten the automatic guards that block dangerous git commands and changes to protected files.",
+      "why": "A review found command shapes the guards miss.",
+      "matters": "Protects the code and history from accidental damage."
+    },
+    "S44": {
+      "goal": "foundations",
+      "title": "Split the biggest module, part 1",
+      "what": "Move the Classic publishing steps out of the engine's largest module into their own file, without changing any output.",
+      "why": "The module is too big to change safely in one session, and the simulator work needs it split.",
+      "matters": "Unblocks the simulator and pre-flight work."
+    },
+    "S44b": {
+      "goal": "foundations",
+      "title": "Split the biggest module, part 2",
+      "what": "Move the intake, evidence and projection steps into their own files and compute the shared statuses once.",
+      "why": "Finishes the split.",
+      "matters": "Makes the core engine safer and faster to change."
+    },
+    "S45": {
+      "goal": "foundations",
+      "title": "Make the documentation match the code",
+      "what": "Document formats nobody wrote down, fix stale claims in scripts and docs, and state what each command's exit codes mean.",
+      "why": "Docs that disagree with the code mislead every later session.",
+      "matters": "Fewer wrong turns on slate day and in development."
+    },
+    "S46": {
+      "goal": "foundations",
+      "title": "Remove dead code",
+      "what": "Delete unused functions and settings, and decide whether to retire three old commands.",
+      "why": "Dead code slows every change and hides real problems.",
+      "matters": "A leaner engine that's easier to trust."
+    },
+    "S47": {
+      "goal": "deliver",
+      "title": "Time this PC before planning the search",
+      "what": "Before a Classic build, time a few real lineup builds on this PC and size the search from that, instead of a built-in guess.",
+      "why": "The guess assumed 0.28 seconds per lineup and this PC took 4.4. In Week 3 the search reached only 13% of its target and fell all the way back to the simplest builder.",
+      "matters": "Keeps the diversified Classic builder in play instead of the fallback."
+    },
+    "S48": {
+      "goal": "players",
+      "title": "Quarterbacks who changed teams",
+      "what": "A starting quarterback who joined his team this year (Malik Willis, Geno Smith) is no longer scored at zero.",
+      "why": "The rule looked only at the team's own history, so new arrivals got nothing.",
+      "matters": "Stops the engine ignoring real starters."
+    },
+    "S49": {
+      "goal": "portfolio",
+      "title": "Several game stories even in the fallback",
+      "what": "When the engine falls back to its simplest Classic builder, it now builds stacks around several different games under one player cap instead of repeating one construction.",
+      "why": "The Week 3 fallback file had three players in all 25 lineups and no stacks.",
+      "matters": "Even the emergency file has several ways to win."
+    },
+    "S50": {
+      "goal": "portfolio",
+      "title": "Different lineups in each contest",
+      "what": "Rearranges which lineup goes to which contest so lineups in the same contest share as few players and captains as possible.",
+      "why": "Near-identical lineups in one contest compete with each other for the same prize.",
+      "matters": "More distinct shots at each contest's top prize."
+    },
+    "S50b": {
+      "goal": "portfolio",
+      "title": "Require differences inside each contest",
+      "what": "Make the optimizer itself require different captains or quarterbacks within each contest.",
+      "why": "Only needed if rearranging lineups across contests (part A) isn't enough.",
+      "matters": "A stronger guarantee of variety per contest.",
+      "return_when": "Only if rearranging lineups across contests (Session 50) proves unable to give each contest enough variety."
+    },
+    "S50c": {
+      "goal": "portfolio",
+      "title": "Contest spreading for Classic and the baseline",
+      "what": "Applies the contest-by-contest spreading to every Classic builder and to the baseline file.",
+      "why": "Part A covered Showdown first.",
+      "matters": "Every file gets the same spread."
+    },
+    "S51": {
+      "goal": "players",
+      "title": "Rate new faces from this season's games",
+      "what": "Players with no usable history from last season (rookies, new arrivals, players who barely played) are now rated from this season's games on their current team.",
+      "why": "The engine couldn't score anyone without a prior-season record.",
+      "matters": "Gets in-season breakouts into the pool."
+    },
+    "S52": {
+      "goal": "portfolio",
+      "title": "Add a left-out player by recorded judgment",
+      "what": "A formal input to roster a player the engine left out, with the reason recorded and no projection invented for him.",
+      "why": "Today this is done by hand following a written procedure.",
+      "matters": "Makes a common slate-day correction safer and repeatable.",
+      "return_when": "Set aside on 2026-10-02 after counting its cost; the Classic run already takes a recorded judgment (Session 61), so this general version waits for a need."
+    },
+    "S53": {
+      "goal": "players",
+      "title": "Keep backup quarterbacks out of Showdown",
+      "what": "The run reads the depth chart itself and keeps every backup quarterback out of Showdown lineups by default.",
+      "why": "Backup quarterbacks were reaching lineups, and they rarely play.",
+      "matters": "Removes near-certain zeros."
+    },
+    "S54": {
+      "goal": "players",
+      "title": "A named starter with no history can be picked",
+      "what": "A quarterback the depth chart names as starter but who has no usable history can now be selected.",
+      "why": "New starters were left out of the pool entirely.",
+      "matters": "Captures starters the crowd may overlook."
+    },
+    "S55": {
+      "goal": "portfolio",
+      "title": "Safely add a player to Showdown lineups",
+      "what": "A tool that works a named player into a set number of Showdown lineups, one swap per lineup, checking every lineup stays legal and distinct.",
+      "why": "Adding a missed starter by hand was done with one-off scripts that didn't check validity.",
+      "matters": "Fast, safe slate-day corrections."
+    },
+    "S56": {
+      "goal": "portfolio",
+      "title": "Default exposure caps for Showdown",
+      "what": "Showdown runs without a custom plan cap any player at 60% of lineups and any captain at 20%, loosening by name only when the slate can't support it.",
+      "why": "One Showdown file had five captains at 25% each and four players in 13 of 20 lineups, and you rejected it.",
+      "matters": "No portfolio rides on the same few players."
+    },
+    "S57": {
+      "goal": "portfolio",
+      "title": "Drop default rules that winners break",
+      "what": "Removed two default rules that past winning lineups contradict: the ban on playing an offense against your own defense, and the one-quarterback limit in Showdown.",
+      "why": "A review found the own-defense ban ruled out every first-place Showdown lineup in three games.",
+      "matters": "Stops the engine ruling out the kind of lineup that wins."
+    },
+    "S58": {
+      "goal": "players",
+      "title": "A starter whose record shows zero",
+      "what": "Extends the same fix to a named starter whose past record shows zero playing time.",
+      "why": "A backup promoted to starter looked like a zero.",
+      "matters": "One more kind of real starter stops being invisible."
+    },
+    "S59": {
+      "goal": "deliver",
+      "title": "A short, readable run summary",
+      "what": "An option that ends a run with a compact summary: the file to use, its status and every gap, instead of a long data dump.",
+      "why": "The full output is hard to read under a lock clock.",
+      "matters": "Faster, clearer handoffs on slate day."
+    },
+    "S60": {
+      "goal": "players",
+      "title": "An injured player's work goes to teammates",
+      "what": "When a player is listed out, his expected share of carries and catches moves to the others at his position.",
+      "why": "The injured starter's share used to vanish, so his replacement still looked like a backup.",
+      "matters": "Finds the value plays that injuries create."
+    },
+    "S61": {
+      "goal": "players",
+      "title": "Slate-day research list built into the run",
+      "what": "The Classic run lists starting quarterbacks it couldn't score, who inherits the work in each injury situation, and a ranked list of players worth researching.",
+      "why": "This checklist was done by hand every slate.",
+      "matters": "Points your judgment at the decisions where it adds the most."
+    },
+    "S62": {
+      "goal": "portfolio",
+      "title": "Spend leftover salary only when it helps",
+      "what": "Unused salary is allowed. A swap that spends it is taken only when it raises the lineup's projection and makes no spread measure worse.",
+      "why": "Your ruling: leaving salary on the table can be strategic.",
+      "matters": "Upgrades lineups without concentrating the portfolio."
+    },
+    "S63": {
+      "goal": "players",
+      "title": "Depth chart captured for Classic too",
+      "what": "The Classic run builds its quarterback depth chart itself, team by team, and names any team it can't.",
+      "why": "Without it, the backup-quarterback rule couldn't run for Classic.",
+      "matters": "Keeps backups out of Classic lineups."
+    },
+    "S64": {
+      "goal": "portfolio",
+      "title": "The leftover-salary rule inside the engine",
+      "what": "The same leftover-salary rule now runs automatically at the end of the main Classic build, with no hand step.",
+      "why": "It existed only as a separate script.",
+      "matters": "One less manual step on slate day."
+    },
+    "S65": {
+      "goal": "portfolio",
+      "title": "Stop forcing Classic lineups to spend the cap",
+      "what": "Remove the rule that pushes the first Classic build attempt to spend $49,000 or more.",
+      "why": "The rule's benefit was never measured on its own, and it conflicts with your leftover-salary ruling.",
+      "matters": "Lets the engine leave salary unused when that makes a better lineup."
+    },
+    "S66": {
+      "goal": "portfolio",
+      "title": "Hand edits keep each lineup's game story",
+      "what": "The tools for hand-tuning Showdown lineups refuse a swap that would break a lineup's game story, and the quality check names any entry that drifted.",
+      "why": "Hand swaps after the engine could quietly turn a lineup into a different bet under the old label.",
+      "matters": "The portfolio's plan survives slate-day edits."
+    },
+    "S67": {
+      "goal": "portfolio",
+      "title": "Game stories from the salary file",
+      "what": "A script writes the standard set of game stories for any matchup from the salary file, and contest placement keeps lineups of the same story apart.",
+      "why": "Writing stories by hand each slate took time under the clock.",
+      "matters": "Faster slate prep and better spread within each contest."
+    },
+    "S68": {
+      "goal": "portfolio",
+      "title": "Contest facts in the workbook",
+      "what": "Show the same contest facts (field size, places paid) in the Excel review workbook.",
+      "why": "The readable review has them; the workbook doesn't.",
+      "matters": "A small convenience, the last piece of the contest-facts work."
+    },
+    "S69": {
+      "goal": "measure",
+      "title": "Read your DraftKings entry history",
+      "what": "Defines the format of DraftKings' account history export (one row per entry), checks it, fingerprints it and keeps an untouchable copy.",
+      "why": "Your entry history is the ground truth for how our lineups actually did.",
+      "matters": "The starting point for all results measurement."
+    },
+    "S69b": {
+      "goal": "measure",
+      "title": "One command to take in the history file",
+      "what": "One command takes in the history export, stores a write-once copy and builds the files the later steps read.",
+      "why": "Makes intake repeatable and tamper-proof.",
+      "matters": "Every results report starts from the same verified file.",
+      "note": "Its check on your real export is still open (to-do O11)."
+    },
+    "S70": {
+      "goal": "measure",
+      "title": "Grade the player projections",
+      "what": "Scores each player's real DraftKings points from official stats and compares them with what the engine projected, alongside a salary-only benchmark.",
+      "why": "It tells us whether the weak link is the projections or the lineup building, with 20 to 60 data points per slate, so it shows up much faster than lineup results.",
+      "matters": "Decides where the next effort (and any spending on data) should go.",
+      "note": "Built and merged on 2026-10-11. What's left is checking it on your real files (to-do O12)."
+    },
+    "S70b": {
+      "goal": "measure",
+      "title": "Projection accuracy tables",
+      "what": "Adds average error and rank agreement against the salary benchmark, broken out by position and playing time, pooled across slates.",
+      "why": "One overall number hides where the projections are weak.",
+      "matters": "Shows exactly which positions need work."
+    },
+    "S71": {
+      "goal": "measure",
+      "title": "Results report: the measures",
+      "what": "Defines the results measures (finishing percentile, top-10% and bottom-10% rates, blank entries), each beside what random entries would get, with rollups by contest type.",
+      "why": "Results only mean something next to a fair benchmark.",
+      "matters": "An honest scorecard for our entries."
+    },
+    "S71b": {
+      "goal": "measure",
+      "title": "Results report: the command",
+      "what": "One command writes the results report once, with ranges that account for how few slates we have.",
+      "why": "A handful of slates can look like a trend when it's noise.",
+      "matters": "Keeps us from reading too much into a few good or bad weeks.",
+      "note": "Built and merged on 2026-10-12. What's left is checking it on your real history file (to-do O13)."
+    },
+    "S71c": {
+      "goal": "measure",
+      "title": "Results report: the readable table",
+      "what": "A short, readable table written next to the full report.",
+      "why": "The full report is machine-readable data.",
+      "matters": "Results you can read in a minute."
+    },
+    "S72": {
+      "goal": "measure",
+      "title": "Record how every entry was built",
+      "what": "For every delivered entry: which run made it, how (engine, fallback step, or hand-edited), its game story, captain, projected points, salary left, and DraftKings status flags.",
+      "why": "To learn what works, each result has to be tied to how its lineup was built.",
+      "matters": "The link between our decisions and our outcomes."
+    },
+    "S73": {
+      "goal": "measure",
+      "title": "Join results to how lineups were built",
+      "what": "Connects your results to the build records, compares the best and worst entries on how they were built, and checks whether higher-projected lineups finished higher.",
+      "why": "Shows which construction choices go with good and bad finishes.",
+      "matters": "The first answer to 'what should we do more of?'."
+    },
+    "S74": {
+      "goal": "measure",
+      "title": "Did our extra steps add points?",
+      "what": "For each graded slate, compares our delivered lineups with controls (the baseline, the engine's file before hand edits, random legal lineups) to see whether game stories, the ceiling pass and hand edits added real points.",
+      "why": "Each extra step costs time on slate day; we should know which ones earn it.",
+      "matters": "Tells you which parts of the process are worth the effort."
+    }
+  },
+  "todos": {
+    "O1": {
+      "title": "Pick a private home for the standings files",
+      "what": "Put the 26 contest standings exports somewhere private on GitHub so cloud sessions can fetch them.",
+      "why": "The main repository is public, and these files contain other DraftKings players' names and lineups, so they can't go there."
+    },
+    "O2": {
+      "title": "Copy the DAL@NYG and DEN@KC files into their run folders",
+      "what": "Copy those two slates' salary and entry files from Downloads into their run folders on your PC.",
+      "why": "Contest grading (Session 18) needs them to replay those slates.",
+      "note": "Looks done: on 2026-10-12 all four files were already in their run folders on this PC. Three match fingerprints recorded in the project; the DAL@NYG entries file has no recorded fingerprint to check. I'll confirm when Session 18 runs."
+    },
+    "O3": {
+      "title": "Pull standings for two NE@SEA contests",
+      "what": "Download the standings for contests 193391019 and 193391038.",
+      "why": "Completes the set of graded NE@SEA contests."
+    },
+    "O4": {
+      "title": "Save each contest's payout table when you enter",
+      "what": "When you enter a contest, paste its payout table into a small file in the slate folder.",
+      "why": "First-place value (Session 29) needs the real payout for every finishing place."
+    },
+    "O5": {
+      "title": "Enter at least one contest per slate from a single-contest entry file",
+      "what": "Each slate, enter at least one contest using an entry file that covers only that contest.",
+      "why": "Builds clean evidence for the model's promotion track (Session 36)."
+    },
+    "O6": {
+      "title": "Let cloud sessions reach the weather service",
+      "what": "Allow api.weather.gov in the cloud environment's network settings (optionally also api.sleeper.app and api.the-odds-api.com).",
+      "why": "Cloud sessions can't fetch weather today. It no longer blocks a file, but projections are better with it."
+    },
+    "O7": {
+      "title": "Approve the Session 01 rules change",
+      "what": "Label and merge the Session 01 pull request.",
+      "why": "Done as pull request #42."
+    },
+    "O8": {
+      "title": "Provide current files for a rehearsal slate",
+      "what": "Current Classic and Showdown salary and entry files, on Windows, for a full dress rehearsal.",
+      "why": "The rehearsal (Session 16) has to run on real, current files."
+    },
+    "O9": {
+      "title": "Save your post-upload entries download each slate",
+      "what": "After uploading, download the entries file from DraftKings and save it into that slate's run folder.",
+      "why": "Late swap from what you actually submitted (Session 12b) starts from this file."
+    },
+    "O10": {
+      "title": "Collect about 20 more Showdown standings",
+      "what": "Pull standings for about 20 more Showdown games into the standings inbox.",
+      "why": "Contest-specific crowd effects (Session 33) need more Showdown data."
+    },
+    "O11": {
+      "title": "Run the results intake on your PC",
+      "what": "Run the results intake twice on your 2026-10-10 entry-history export and paste the output back. It contains no money figures.",
+      "why": "The real-file check for the intake command, and the stored copy the later results steps read.",
+      "now": true,
+      "note": "This is the last check on Session 69b, and the Windows route for O13 runs after it."
+    },
+    "O12": {
+      "title": "Grade the projections on four slates",
+      "what": "Attach the entry-history export and two identity files to a cloud session, or run the player grading on Windows for the four slates and paste the summaries back.",
+      "why": "The real-data check for projection grading (Session 70)."
+    },
+    "O13": {
+      "title": "Run the results report on your history file",
+      "what": "Attach the entry-history export to a cloud session, or run the results report twice on Windows after the intake, and paste the output back.",
+      "why": "The real-data check for the results report (Session 71b)."
+    }
+  },
+  "decisions": [
+    {
+      "key": "salary-band",
+      "title": "Should Classic stop forcing near-full salary spend?",
+      "question": "The first Classic build attempt pushes every lineup to spend $49,000 or more. Remove that rule?",
+      "recommendation": "Yes. Its benefit was never measured on its own, and it conflicts with your ruling that leftover salary can be strategic.",
+      "holds_up": [
+        "S65"
+      ]
+    },
+    {
+      "key": "late-swap-anchor",
+      "title": "Late swap from submitted entries: how should the result be labelled?",
+      "question": "A: the swapped file is cleared for upload when its own checks pass, as for a certified start. B: it always stays review-only, which needs about 400 more lines of work.",
+      "recommendation": "A.",
+      "holds_up": [
+        "S12b"
+      ]
+    },
+    {
+      "key": "standings-ties",
+      "title": "How should standings record ties and no-shows?",
+      "question": "The standings format can't represent an entrant who never submitted a lineup, or a tie split that isn't a whole number of cents. How should each be recorded?",
+      "recommendation": "Your call; the roadmap's Session 30 card lays out both defects.",
+      "holds_up": [
+        "S30"
+      ]
+    },
+    {
+      "key": "private-repo",
+      "title": "Where should the standings files live, given the repo is public?",
+      "question": "GitHub reports this repository as public (re-checked 2026-10-12), but the project's git rules still describe it as private. Name a separate private repository for the standings files, or make this one private (which costs GitHub Actions minutes).",
+      "recommendation": "A separate private repository is the cheaper route.",
+      "holds_up": [
+        "S17b"
+      ]
+    },
+    {
+      "key": "legacy-commands",
+      "title": "Retire three old commands?",
+      "question": "The old build, project and run commands use a path nothing calls anymore. Retire them?",
+      "recommendation": "Yes, after the simulator work (Session 24b) lands. Blocks nothing in the meantime.",
+      "holds_up": []
+    },
+    {
+      "key": "thesis-weight",
+      "title": "Keep same-story lineups apart at the current weight?",
+      "question": "Contest placement pays a small price (one more shared player in a contest's closest pair) to keep two lineups of the same game story apart. Keep that balance?",
+      "recommendation": "Keep it until results say otherwise. Blocks nothing.",
+      "holds_up": []
+    },
+    {
+      "key": "late-swap-clock",
+      "title": "Late swap clock tolerance",
+      "question": "Late swap accepts a stated time up to 2 minutes off the real clock. Keep that, change it, or always use the later of the two?",
+      "recommendation": "Fine as it is; blocks nothing.",
+      "holds_up": []
+    },
+    {
+      "key": "sample-files",
+      "title": "Two sample DraftKings files",
+      "question": "Drop one entries download with some lineups already entered, and one salary export taken after a game kicked off, into the inbox.",
+      "recommendation": "Whenever convenient; they confirm how DraftKings writes those cells. Blocks nothing.",
+      "holds_up": []
+    }
+  ]
+}
