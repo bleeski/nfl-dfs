@@ -4,6 +4,30 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-12: Ben's plain-English roadmap tracker (procedure, not a roadmap session)
+
+Ben asked for an interactive page, maintained by Claude, that tracks what is done and what is left, with each chunk of work in
+plain English: what it is, why we are doing it, why it matters, framed by its business goal. Branch `claude/plain-tracker`. The
+page is published at https://claude.ai/artifact/ReBDmhtgMztFsVJgKQo5Ax ("NFL DFS Roadmap"); its rows live in the page's own
+database and nothing about a run, a gate or a release truth changes.
+
+- `docs/tracker/plain.json`: seven business goals, one card for each of the 101 board rows and 13 operator items, eight
+  decisions Ben owes (from the open `[BEN: ...]` flags) with Claude's recommendation, and `return_when` on each deferred row.
+- `scripts/tracker_payload.py`: joins the cards to the board through `repo_state.session_queue`, so "ready" is the digest's own
+  startable set (14 today); derives one display state per row (done, ready, waiting on other work, waiting on Ben, needs his
+  decision, parked); writes nine documents, one batch. `--check` names every gap.
+- `tests/test_tracker_plain.py`: a row or operator item without a card fails with its ID and the file to edit; the ready set
+  matches the digest; the forbidden words (EV, ROI, upload-ready and the other `CLAUDE.md` claims) are refused.
+- `docs/tracker/tracker.html`: the page source. `docs/claude/working.md` § The plain-English tracker and step 7 of
+  `docs/claude/post_merge.md`: when and how to sync.
+- Found while building it: GitHub reports `bleeski/nfl-dfs` as public (re-checked 2026-10-12; the flag on Session 17b's card
+  has said so since 2026-09-29), while `.claude/rules/git-authority.md` still describes it as private. Taken to Ben, not
+  changed here. The DAL@NYG and DEN@KC salary and entry files (O2) are already in their `data/runs/` folders on the Windows
+  checkout; three of the four match recorded hashes, and the DAL@NYG entries file has none recorded. O2 stays Open until
+  Session 18 confirms it.
+- Verification: `tests/test_tracker_plain.py` and `tests/test_roadmap_queue.py`, 37 passed; full suite on Windows
+  `3685 passed, 2 skipped in 1832.98s (0:30:32)` (the two skips are the established pair).
+
 ### 2026-10-12: Session 71c -- the readable results table and the RUNBOOK pointer
 
 Branch `claude/s71c-results-table`, pull request #141, claimed at `02f9235` (PR #140's merge, now recorded in Session
