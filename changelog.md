@@ -58,6 +58,14 @@ delivered 23:31Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=D
   Flowers is), overlap and exposure are unchanged, salary -$600 each. Captains: Folk 6, Penix 5, Loop 5, Flowers 4, London 4, Henry 2,
   Bijan 2, Huntley 2, B. Robinson Jr. 1, Falcons 1 (10 distinct). `construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v6.csv`
   (`3b14e785...688d`): QA PASS, 0 defects, 0 breaches, 32 distinct, only those two rows differ from v5, CRLF; delivered 00:02Z.
+- **Final QA pass (Ben asked, 00:02Z), on v6.** Every hard rule holds (slots, salary, both teams, no OUT/IR/practice-squad/backup QB,
+  1-2 QBs with 1-2 own pass catchers, 32 distinct, template geometry); the four two-kicker rows are DEFENSIVE_BATTLE, which requires 2.
+  Observations kept: three rows pair a DST with the opposing QB (two DEFENSIVE_BATTLE, one ATL_WINS_CLOSE_LOW), three leave $5,900 to
+  $6,500 unused. A single-FLEX Pareto scan (prior +1 or more; no portfolio or per-contest washout measure worse; Pitts never incoming)
+  found 7 swaps, all rejected: Dotson to Falcons DST (two put the DST beside Huntley, one strips a Penix Captain's WR2), Dotson to J.
+  Hill (2026 usage favours Dotson), Flowers to Henry in the Huntley Captain row (his top target). Flowers to Henry in 5292886328 was
+  built as v7 (`construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v7.csv`, QA PASS) and rejected: it pairs Henry with Justice Hill, two BAL
+  backs splitting one workload. v6 stays the delivered file.
 - **Found.** The QB depth capture has no way to promote the backup of a DraftKings-`OUT` starter on a Showdown slate when the chart lags
   the news; the by-hand route was a one-team package plus an operator exclusion. The ceiling pass's prior-raising FLEX swaps were not run:
   they would have re-added Pitts and FLEX kickers on last season's priors, against the 2026 usage research.
