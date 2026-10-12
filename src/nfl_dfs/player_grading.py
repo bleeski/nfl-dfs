@@ -28,6 +28,7 @@ from .dk import parse_entries, parse_salaries
 from .entry_history import ENTRIES_VERSION
 from .hashing import sha256_bytes, sha256_file
 from .lineups import prefilled_cell_id
+from .participation import AVAILABLE_STATUSES, DEGRADED_STATUSES, UNAVAILABLE_STATUSES
 from .scoring import KickerStatLine, OffensiveStatLine, score_kicker, score_offense
 
 SCHEMA_VERSION = "nfl_player_grading_v1"
@@ -87,7 +88,17 @@ DOES_NOT_ESTABLISH = (
     "baseline for who gets the points, not a projection.",
     "One slate is one sample. No figure here measures calibration, expected value, return or edge, and nothing here "
     "changes a prior, a selection or a release truth.",
+    "The tables by position and by within-slate salary tier are cuts of the same usable people, never crossed; a cell "
+    "under 3 people is null, and the salary side keeps the slate's one scale.",
+    "Play rate counts a stat row as played: an undercount, and not the registered participation_brier event.",
 )
+TIER_NAMES = ("low", "mid", "high")
+TIER_RULE = ("graded non-DST people by salary ascending; tied salaries share their mid-rank r of n; tier "
+             "floor(3 (r - 0.5) / n), at most 2, so a tied salary never splits across tiers")
+MIN_CELL_PEOPLE = 3
+PLAY_RATE_POPULATION = "every identity-bound non-DST salary person, graded or not"
+PLAYED_MEANS = ("a stat row in the nflverse weekly file that week: an undercount (a player on the field with no "
+                "counting stat has no row), and not the registered participation_brier event")
 NOT_COMPUTED = {
     "participation_brier": "NOT_COMPUTABLE: the engine states no pre-lock playing probability (participation.py).",
     "bootstrap_interval": "NOT_COMPUTED: the registered interval resamples slates and needs 500 player-weeks; one "
@@ -383,6 +394,81 @@ def _text(value: Fraction) -> str:
     return f"{float(value):.2f}"
 
 
+# ----------------------------------------------------------------- the tables and play rate (Session 70b)
+
+
+def salary_tiers(salaries: Sequence[float]) -> list[str]:
+    """Each salary's tertile, in input order (`TIER_RULE`). A tied block takes its mid-rank's tier, which can empty one."""
+
+    # 3 (r - 0.5) / n is (6r - 3) / 2n; r is a whole or half rank, so 6r - 3 is a whole number and the floor is exact.
+    return [TIER_NAMES[min(2, int(6 * rank - 3) // (2 * len(salaries)))] for rank in _ranks(salaries)]
+
+
+def tier_bounds(salaries: Sequence[float], tiers: Sequence[str]) -> dict[str, dict]:
+    found = {}
+    for name in TIER_NAMES:
+        members = [salary for salary, tier in zip(salaries, tiers) if tier == name]
+        found[name] = {"people": len(members), "salary_min": min(members, default=None),
+                       "salary_max": max(members, default=None)}
+    return found
+
+
+def _cell(rows: Sequence[Mapping]) -> dict:
+    usable = [row for row in rows if row["realized"] is not None]
+    cell: dict[str, object] = {"n": len(usable)}
+    for side, key in (("prior", "prior"), ("salary", "salary_points")):
+        if len(usable) < MIN_CELL_PEOPLE:
+            cell[side] = {"player_points_mae": None, "spearman": None, "note": "FEWER_THAN_3"}
+            continue
+        measures = _measures([row[key] for row in usable], [row["realized"] for row in usable])
+        cell[side] = {"player_points_mae": measures["player_points_mae"]["value"],
+                      "spearman": measures["spearman"]["value"], "note": measures["spearman"]["note"]}
+    return cell
+
+
+def grade_tables(rows: Sequence[Mapping]) -> dict:
+    """`player_points_mae` and Spearman by position and by salary tier, reported separately and never crossed.
+
+    `rows` are the graded non-DST people (`position`, `salary_tier`, `prior`, `salary_points`, `realized`; the last two
+    None without realized points). Each cell is measured over its rows with realized points and is null below 3.
+    """
+
+    positions = sorted({row["position"] for row in rows})
+    return {"by_position": {position: _cell([row for row in rows if row["position"] == position])
+                            for position in positions},
+            "by_tier": {tier: _cell([row for row in rows if row["salary_tier"] == tier]) for tier in TIER_NAMES}}
+
+
+def _status_class(status: str) -> str:
+    value = status.strip().upper()  # `dk.py` only strips; the engine's unavailability test upper-cases
+    for name, vocabulary in (("AVAILABLE", AVAILABLE_STATUSES), ("DEGRADED", DEGRADED_STATUSES),
+                             ("UNAVAILABLE", UNAVAILABLE_STATUSES)):
+        if value in vocabulary:
+            return name
+    return "UNRECOGNIZED"
+
+
+def play_rate(people: Sequence[Mapping]) -> dict:
+    """Realized play rate by DraftKings status over every identity-bound non-DST person (`PLAYED_MEANS`)."""
+
+    by_status: dict[str, dict] = {}
+    for person in people:
+        if person["position"] == "DST":
+            continue
+        status = person["dk_status"] or ""
+        row = by_status.setdefault(status or "(blank)", {"class": _status_class(status), "people": 0, "played": 0,
+                                                         "unbound": 0})
+        if person["provider_player_id"] is None:
+            row["unbound"] += 1
+        else:
+            row["people"] += 1
+            row["played"] += int(person["game_id"] is not None)
+    for row in by_status.values():
+        row["rate"] = round(row["played"] / row["people"], 6) if row["people"] else None
+    return {"population": PLAY_RATE_POPULATION, "played_means": PLAYED_MEANS,
+            "by_status": dict(sorted(by_status.items()))}
+
+
 # ----------------------------------------------------------------- the grade
 
 
@@ -511,7 +597,8 @@ def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: 
             "underlying_id": person_id, "dk_id": player.dk_id, "position": player.position, "team": player.team,
             "salary": player.salary, "dk_status": player.status_raw, "prior_points": prior.get(person_id),
             "out_of_selection": None if person_id not in prior else player.dk_id not in selectable,
-            "provider_player_id": provider, **_realized(player.position, provider, rows, columns)}
+            "provider_player_id": provider, "salary_tier": None,
+            **_realized(player.position, provider, rows, columns)}
     found_games: dict[str, list[tuple[str, str, str]]] = {}
     for person_id, entry in people.items():
         if entry["game_id"]:
@@ -527,6 +614,16 @@ def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: 
     salary_total = sum(entry["salary"] for entry in usable)
     scale = sum(priors_) / salary_total if salary_total else 0.0
     salary_points = [entry["salary"] * scale for entry in usable]
+    tiered = [entry for entry in graded if entry["position"] != "DST"]
+    tier_salaries = [entry["salary"] for entry in tiered]
+    for entry, tier in zip(tiered, salary_tiers(tier_salaries)):
+        entry["salary_tier"] = tier
+    salary_by_person = {entry["underlying_id"]: points for entry, points in zip(usable, salary_points)}
+    tables = grade_tables([
+        {"position": entry["position"], "salary_tier": entry["salary_tier"], "prior": entry["prior_points"],
+         "salary_points": salary_by_person.get(entry["underlying_id"]),
+         "realized": None if entry["realized_hundredths"] is None else entry["realized_hundredths"] / 100}
+        for entry in tiered])
     report = {
         "schema_version": SCHEMA_VERSION,
         "realized_points_version": REALIZED_VERSION,
@@ -551,6 +648,10 @@ def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: 
             "prior": _measures(priors_, realized),
             "salary": {**_measures(salary_points, realized), "baseline_version": SALARY_BASELINE_VERSION},
             "sample": {"people": len(usable), "slates": 1},
+            "by_position": tables["by_position"],
+            "by_tier": tables["by_tier"],
+            "tiers": {"rule": TIER_RULE, **tier_bounds(tier_salaries, [entry["salary_tier"] for entry in tiered])},
+            "play_rate": play_rate([people[person_id] for person_id in sorted(people)]),
         },
         "reconciliation": None if lineups is None else _reconcile(lineups, entries, contract, by_dk_id, people),
         "not_computed": dict(NOT_COMPUTED),

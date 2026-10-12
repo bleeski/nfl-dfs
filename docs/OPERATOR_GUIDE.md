@@ -583,7 +583,9 @@ stat, use a new package folder. Use the run that built the prior package for `--
 person's realized points and the stat line behind them, with a named gap
 instead of a zero for anyone the file cannot score (a DST, a player with no
 stat row, an unbound identity). It gives the prior's error and rank correlation
-beside the salary baseline's, and each delivered lineup's status against
+beside the salary baseline's, overall, by position and by salary tier (low,
+mid, high within the slate; a group under 3 people shows no figure), how often
+people of each DraftKings status had a stat line, and each delivered lineup's status against
 DraftKings (`RECONCILED` within 0.01, `MISMATCH` with every player's stat line,
 or not fully covered). Exit 2 is a refusal named by code, and no report is
 written (a first run may already have fetched the stats package).

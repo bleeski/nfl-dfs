@@ -4607,6 +4607,28 @@ SHA-256, never a path), `stats_source` (the manifest entry: URL, SHA-256, observ
 salary person), `grade`, `reconciliation` (null without lineups), `not_computed` and `does_not_establish`. The same bytes
 give the same report. All six codes are registry family `player_grading` (`P`).
 
+**Additive keys (Session 70b, 2026-10-12; additive keys, not a new version, as in Session 08).** A reader that predates
+them ignores them; the pool (`nfl_player_grading_pool_v1`, below) requires them, so a report written before them is
+regraded before it pools. The top-level keys above are unchanged; the new keys are inside `grade` and on each person.
+- `grade.tiers`: within-slate salary tertiles over the graded non-DST people (pre-lock: who later played never moves a
+  boundary). Salary ascending, tied salaries share their mid-rank `r` of `n`, and the tier is `floor(3 (r - 0.5) / n)`,
+  at most 2, named `low`, `mid` and `high`. A tied salary never splits across tiers, so a large tied block can leave a
+  tier empty. Each tier gives `people`, `salary_min` and `salary_max` (null when empty); `rule` states the rule. Each
+  person carries `salary_tier`, null for a DST or anyone ungraded.
+- `grade.by_position` (each position among the graded non-DST people) and `grade.by_tier` (all three tiers): each cell
+  is measured over its usable people (graded, no gap) and carries `n` and, for `prior` and `salary`,
+  `player_points_mae`, `spearman` and `note`. Under 3 people both values are null with `note: FEWER_THAN_3`; a Spearman
+  with no variance is `ZERO_VARIANCE`. The salary side keeps the slate's one `salary_scaled_points_v1` scale, never a
+  per-cell rescale. Position and tier are reported separately, never crossed; the cells over positions, and over tiers,
+  each sum to `usable_people`.
+- `grade.play_rate`: over every identity-bound non-DST salary person, graded or not. `by_status` is keyed by the salary
+  file's `Status` cell (`(blank)` for an empty one), each with `class` (`AVAILABLE`, `DEGRADED` or `UNAVAILABLE` from
+  `participation.py` on the upper-cased value, else `UNRECOGNIZED`), `people`, `played`, `rate` (null at 0 people) and
+  `unbound` (people of that status no identity binds, left out). Played is a stat row in the weekly file that week: an
+  undercount (a player on the field with no counting stat has no row) and not the registered `participation_brier`
+  event; `population` and `played_means` say so in the report.
+- `does_not_establish` gains a sentence for the tables and one for play rate.
+
 ## Standings corpus transport (Session 17, X2)
 
 **Decision, so it is not relitigated.** Ben ruled option (A) on 2026-09-21 (R27): the 26 DraftKings
