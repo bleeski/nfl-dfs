@@ -4731,10 +4731,12 @@ a proven edge (the file's `does_not_establish` travels with every report).
 `<root>/reports/<sha256>/results_report.era-<date>.w1.json` once, through the intake's write-once path
 (`entry_history._write_once`: a temporary file, fsync, a re-read and a hard link; the same bytes already there is
 `ALREADY_PRESENT`; another file at the name is never replaced). The era names the file, so a report for another era is
-another file, never a conflict. Realized results only: nothing reaches `run-slate`, `prior_review`, a frozen package or
-a release truth, and the file sits under the gitignored results root because it carries fees and winnings.
+another file, never a conflict. The readable table, `results_report.era-<date>.w1.md`, is written once beside it by
+the same path (**The table**, below). Realized results only: nothing reaches `run-slate`, `prior_review`, a frozen
+package or a release truth, and both files sit under the gitignored results root because they carry fees and winnings.
 
-**Order and refusals** (registry family `results_report`, `P`, stops `CERTIFICATION`; a refusal writes nothing). The
+**Order and refusals** (registry family `results_report`, `P`, stops `CERTIFICATION`; a refused input writes nothing,
+and a table refused or not written leaves the report written). The
 registered metrics load first, from `config/results_metrics_v1.json` at call time. A file that will not load raises
 `ResultsMetricsError`, a defect in a tracked file and not a refusal: `main`'s handler prints it as `stage: CLI_FAILED`
 with `error: ResultsMetricsError` and the loader's message (the first fault, no money), exit 2. Then:
@@ -4746,16 +4748,17 @@ with `error: ResultsMetricsError` and the loader's message (the first fault, no 
   read that fails; bytes that do not hash to the name. At most `MAX_BYTES + 1` bytes are read: a longer file is not one
   any intake wrote, and its prefix cannot hash to the name, so it is `reason=hash`.
 - A snapshot the parser refuses passes through as its own `ENTRY_HISTORY_*` problems.
-- `RESULTS_REPORT_ARTIFACT_CONFLICT:file=report`: another file holds the report's name. It is never overwritten, and the
-  file's `recovery` sentence says to delete it (or the folder) and rerun; a change to a written byte takes a new writer.
-- `RESULTS_REPORT_WRITE_FAILED:file=report:exception=<class>`.
+- `RESULTS_REPORT_ARTIFACT_CONFLICT:file=<report|table>`: another file holds the report's or the table's name. It is
+  never overwritten, and the file's `recovery` sentence says to delete it (or the folder) and rerun; a change to a
+  written byte takes a new writer.
+- `RESULTS_REPORT_WRITE_FAILED:file=<report|table>:exception=<class>`.
 
-**stdout** (JSON; nothing derived from `Entry_Fee`, `Winnings_*` or `Prize_Pool`). `status` (`COMPLETE` or
-`ALREADY_PRESENT`, exit 0; `REFUSED` or `WRITE_FAILED`, exit 2), `exit_code`, `problems`, `contract`
-(`nfl_results_report_v1`), `source_sha256` (null when the given hash is malformed), `engine_era_start` (as in the file;
-null before the payload is built), `files` with `report`: its `path` (null until the payload is built), `state`
-(`WRITTEN`, `ALREADY_PRESENT`, `REFUSED` with `recovery`, `WRITE_FAILED`, `NOT_ATTEMPTED`) and `sha256` (this
-report's bytes, null unless they are on disk at the name); `headline` (null when an input was refused) and `does_not_establish`. The `headline` holds
+**stdout** (JSON; nothing derived from `Entry_Fee`, `Winnings_*` or `Prize_Pool`). `status` (`COMPLETE`, or
+`ALREADY_PRESENT` when both files already were, exit 0; `REFUSED` or `WRITE_FAILED`, exit 2), `exit_code`, `problems`,
+`contract` (`nfl_results_report_v1`), `source_sha256` (null when the given hash is malformed), `engine_era_start` (as
+in the file; null before the payload is built), `files` with `report` and `table`, each: its `path` (null until the
+payload is built), `state` (`WRITTEN`, `ALREADY_PRESENT`, `REFUSED` with `recovery`, `WRITE_FAILED`, `NOT_ATTEMPTED`)
+and `sha256` (that file's bytes, null unless they are on disk at the name); `headline` (null when an input was refused) and `does_not_establish`. The `headline` holds
 `nfl` and `engine_era`, each with `entries`, `slates`, `fine_slates`, `contests`, `blanks`, `blanks_by_date` (date to
 count, dates with a blank only), `rates` (the overall `with_blanks` block) and `within_slate_test` (`slates_with_both`,
 `worse`, `better`, `tied`, `p_one_sided`); `all_sport_check` (`entries`, `left_out_rule_not_met`, `blanks`, `rates`);
@@ -4785,6 +4788,26 @@ and `within_slate_trigger` as in the file.
   `p_one_sided`, `met` and `when_met`, always on the registered era.
 - `all_sport_check`: `entries`, `left_out_rule_not_met` (sport to count) and `overall` (a slice with no `uncertainty`).
 - `notes`: each `kind` (`PLACES_PAID_ABOVE_CONTEST_ENTRIES_CAPPED`), `row`, `entry_key` and `contest_key`.
+
+**The table** (Session 71c; `render_table(payload)`, `results_report.era-<date>.w1.md`). Markdown, ASCII, LF, one
+trailing LF. It is rendered from the payload alone (`render_table(json.loads(report))` gives the same bytes) before
+either write, and written after the report. A table that conflicts or fails leaves the report on disk; a rerun then
+writes the table alone, `COMPLETE` with the report `ALREADY_PRESENT`, as it does beside a report an earlier version
+wrote. Its layout is frozen under `w1` with the report, so a change takes a new writer. Nothing printed comes from a
+CSV cell, so nothing is escaped. Sections, in order:
+- a title and one line naming the contract, writer, metrics version, source hash and bytes, and the era;
+- `Overall`, within the table's first 20 lines: NFL, engine era and all sports (`all_sport_check.overall`), each with
+  entries, slates, blanks, fees, net, realized and rake-implied return, and the three `with_blanks` rates each beside
+  random;
+- `Payout shape, NFL` and `Payout shape, engine era` (`PAYOUT_SHAPE_HEADING`): an `All shapes` group from the scope's
+  `overall`, then each `by_payout_shape` row in order, three lines a group, one per rate: realized beside random, then
+  its `*_excess` estimate, interval and MDE from `uncertainty`. An empty scope prints `No entries in this scope.`;
+- `Within-slate test: top-heavy against flatter`: each scope's `within_slate_test`, then one line from
+  `within_slate_trigger`;
+- `Not established`: each `does_not_establish` line.
+
+Every figure is the payload's own string or integer, never rounded again. Money is the one conversion, exact cents to
+signed dollars (`-$145.96`). A null prints `n/a`, an interval adding its `reason`; it never prints a zero.
 
 **The bootstrap.** `bootstrap` repeats the registered section (`cluster`, `seed`, `resamples`, `level`,
 `pairs_min_slates`, `wild`, `interval_min_slates`, `mde_alpha_two_sided`, `mde_power`) and adds `pairs_method`,
