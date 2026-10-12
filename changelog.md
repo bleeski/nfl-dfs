@@ -90,6 +90,7 @@ readable table and the RUNBOOK pointer to a Session 71b in advance.
   `tests/test_repo_boundaries.py`, 442 passed. A variable named `edge` broke
   `test_no_module_names_a_value_ev_roi_or_edge` and was renamed.
 - Full suite on Linux: `3605 passed, 1 skipped in 890.41s (0:14:50)` (3,545 before, plus the 60 new tests; the skip is the Windows junction test).
+- CI on the close-out head (`f65205c`): `suite`, `boundaries` and `protected-paths` green, `windows` red. The deep-nesting metrics case's 200,000-byte parameter became its test id, and pytest's `PYTEST_CURRENT_TEST` passed Windows' 32,767-character limit on environment variables (`ValueError` at setup and teardown, the only errors in the run). Every malformed-metrics case now has a short id; the longest node id in the file is 104 characters, and the trap is a line in `docs/claude/working.md`. No `src/` change, so the full suite was not rerun.
 - Before and after against `origin/main`: the only `src/` change is the new module (`git diff --name-status`). No
   command, parser, registry code or run path changed, so no existing command's output can move.
 - `sh ./nfl.sh doctor`, `git diff --check`, and `python3 scripts/check_protected_paths.py` (no protected path).

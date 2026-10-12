@@ -305,6 +305,14 @@ _DELETE = object()
         _metrics_with(bootstrap__level="1"),
         _metrics_with(does_not_establish=[]),
     ],
+    # Short ids: pytest copies each id into PYTEST_CURRENT_TEST, which Windows caps at 32,767 characters.
+    ids=["empty", "not_utf8", "not_json", "deep_nesting", "not_an_object", "schema_v2", "unknown_top_key",
+         "unknown_population_key", "missing_excluded_types", "blank_game_type", "repeated_game_type",
+         "repeated_json_key", "bool_top_count", "power_of_one", "engine_types_not_a_list", "era_not_a_date",
+         "paid_rule_changed", "bottom_rule_changed", "slate_rule_changed", "first_cut_not_threshold",
+         "cuts_not_increasing", "cut_not_a_fraction", "sizes_repeated", "fee_bound_bool", "fee_bound_huge",
+         "top_count_zero", "trigger_scope_unknown", "alpha_zero", "min_slates_negative", "resamples_huge",
+         "level_not_a_fraction", "no_does_not_establish"],
 )
 def test_a_malformed_metrics_file_is_refused_by_name(raw):
     with pytest.raises(rr.ResultsMetricsError, match="^results metrics "):

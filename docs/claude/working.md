@@ -40,6 +40,9 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
   characters, `rev` spins at full CPU and holds the shell; use `cut -c`, `grep -o` or the Read tool. **Start the full suite as the
   background task itself** (`sh ./nfl.sh test 2>&1 | tee /tmp/pytest.log | tail -4` with `run_in_background`): one wrapped in a
   subshell with `&` returns at once and sends no exit notification, and the exit code shown is `tail`'s, so read the log's summary line.
+- One Windows-only trap (Session 71). **Give every parametrized case a short id** (`ids=[...]` or `pytest.param(..., id=...)`):
+  pytest copies the node id into `PYTEST_CURRENT_TEST`, and Windows caps an environment variable at 32,767 characters. A
+  200,000-byte deep-nesting case passed on Linux and errored only in the `windows` job.
 
 ## Session protocol: `docs/ROADMAP.md` §2.1, plus these
 
