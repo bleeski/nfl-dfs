@@ -4666,6 +4666,58 @@ packages and lists the `score_version`s. `not_computed` names the registered boo
 `does_not_establish` travels with every pool. The file is canonical JSON as the report, written by exclusive create
 (parent folders made); the same report bytes give the same pool.
 
+## NFL results metrics, nfl_results_metrics_v1 (Session 71)
+
+Registered 2026-10-12. `config/results_metrics_v1.json`, SHA-256
+`56c471710421f5f4fca579a82409610f9c2b73d3dd7d8e0d80170538fa1f736c` (pinned by `tests/test_results_report.py`). It
+defines the measures of realized results that every later grader imports from `src/nfl_dfs/results_report.py` (Session
+18's `standings_metrics.py` among them), read from the `nfl_dk_entry_history_v1` export. v1 is never mutated: a
+definition the real export proves wrong is `nfl_results_metrics_v2`.
+
+**Loading.** `load_results_metrics` reads the file and `parse_results_metrics` refuses it whole as
+`ResultsMetricsError` (a defect in a tracked file, not a gate code), naming the first fault: bytes, JSON, nesting or a
+number Python cannot read (`results metrics unreadable: <exception class>`); a missing or extra key at any level; a
+declared rule other than the one the module implements; a list that is empty, repeated, untrimmed or not increasing;
+an integer outside its range or a bool; a fraction not `a/b` strictly between 0 and 1; a date that is not a real
+`YYYY-MM-DD`. The loaded metrics carry the file's SHA-256.
+
+**Populations** (`populations`). Paid is `Entry_Fee` above $0.00 (`ENTRY_FEE_ABOVE_ZERO`). Winnings are
+`Winnings_Non_Ticket + Winnings_Ticket`, tickets at face value (`NON_TICKET_PLUS_TICKET_AT_FACE_VALUE`), so a ticket and
+the entry it funds cancel. `excluded_game_types` (`Best Ball`) are left out by exact text. Scope `nfl`: NFL, paid, not
+excluded. Scope `engine_era`: `nfl` rows whose game type is in `engine_game_types` (`Classic`, `Showdown Captain Mode`)
+on or after `engine_era_start` (`2026-09-09`, the first live run; a caller may name another real date). The all-sport
+check takes every sport's paid, not-excluded rows and leaves out, counted by sport, a non-NFL row with a value the
+parser could not read.
+
+**Rates** (`rates`, one public function each). The finishing percentile is `Place / Contest_Entries` (lower is better),
+beside its random expectation `(n+1)/2n`. A top-10% finish is `Place * 10 <= n`, random `floor(n/10)/n` (impossible
+below 10 entries); a bottom-10% finish is `Place * 10 > 9n`, random `(n - floor(9n/10))/n` (1/5 at five entries;
+`BOTTOM_STRICT`). A blank is `Points` exactly zero. `TIE_GROUP_TAKES_BEST_PLACE`: DraftKings gives a tie group its best
+place, so the percentile flatters where ties are common, and the random expectation assumes no ties; `Place` is read as
+given. Every mean is exact rational arithmetic rounded once, half to even, to 4 places in percent or percentile points.
+
+**Slates and bands.** A slate is sport, Eastern date (from the parsed contest time) and game type, which merges same-day
+Showdown games; a fine slate uses the contest start time instead of the date. The paid fraction is `Places_Paid /
+Contest_Entries`, capped at 1; its bands start at `contest_facts.THRESHOLD` (checked at load), so the first band is
+exactly the `FIRST_PLACE_OBJECTIVE` label: `[0, 1/20)`, `[1/20, 1/5)`, `[1/5, 1/2)`, `[1/2, 1]`. Field-size bands end at
+20, 100, 500 and 2,000 entries, fee bands at $1, $5 and $20 (upper bounds inclusive). No contest name is read.
+
+**The within-slate test** (`within_slate_test`, registered 2026-10-10). Per slate holding both kinds, the mean
+percentile (blanks included) of top-heavy entries (`FIRST_PLACE_OBJECTIVE`) minus that of flatter ones; an exact sign
+test, one-sided (top-heavy worse), ties dropped, with the two-sided p beside it. The trigger reads the `engine_era`
+scope and is met at p below 1/20 over at least 20 slates: it opens a roadmap row for the per-contest term inside Session
+50's placement objective, and the report itself acts on nothing. Its direction was chosen on the first 12 slates.
+
+**Bootstrap** (`bootstrap`), registered ahead of Session 71b, which reads it: slate clusters, seed 20261010, 10,000
+resamples, a 90% interval (the review's level; the metric registry's 95% is for promotion metrics), pairs from 30
+slates, the studentized wild cluster bootstrap with Webb weights below that, no interval below 5 slates, and a minimum
+detectable effect at two-sided alpha 1/20 and power 4/5.
+
+The report artifact, `nfl_results_report_v1`, gets its own section with its writer and command (Session 71b).
+
+Does not establish: realized results of past entries are not EV, an ROI forecast, a win probability, a calibration or
+a proven edge (the file's `does_not_establish` travels with every report).
+
 ## Standings corpus transport (Session 17, X2)
 
 **Decision, so it is not relitigated.** Ben ruled option (A) on 2026-09-21 (R27): the 26 DraftKings

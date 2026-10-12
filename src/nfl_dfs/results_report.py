@@ -8,6 +8,8 @@ flatters where ties are common; the random expectation assumes no ties, and `Pla
 
 The registered metrics file (`config/results_metrics_v1.json`) names the populations, the rules, the bands, the slate
 and the within-slate test; the loader refuses any file whose declared rules are not the ones this module implements.
+Its bootstrap section is registered ahead of the intervals and the minimum detectable effect (Session 71b); nothing
+here reads it yet. Every figure is exact rational arithmetic rounded once, so the same rows give the same text.
 Payout shape and field size come from the numeric columns only, never from a contest name, and nothing here reaches a
 run, a frozen package, a selection or a release truth.
 """
@@ -20,7 +22,6 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date
-from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from fractions import Fraction
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
@@ -67,8 +68,6 @@ REQUIRED = ("contest_start", "place", "points_hundredths", "winnings_non_ticket_
 
 _FRACTION = re.compile(r"[1-9][0-9]{0,5}/[1-9][0-9]{0,5}")
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
-_FOUR = Decimal("0.0001")
-_SIX = Decimal("0.000001")
 
 
 class ResultsMetricsError(ValueError):
@@ -119,13 +118,19 @@ def _fraction(value: object, where: str) -> Fraction:
     return Fraction(value)
 
 
-def _date(value: object, where: str) -> str:
+def is_calendar_date(value: object) -> bool:
+    """A YYYY-MM-DD string naming a real day; dates compare as text only in this exact form."""
+
     try:
-        if isinstance(value, str) and _DATE.fullmatch(value) and date.fromisoformat(value):
-            return value
+        return isinstance(value, str) and bool(_DATE.fullmatch(value)) and bool(date.fromisoformat(value))
     except ValueError:
-        pass
-    raise _invalid(where, "must be a calendar date YYYY-MM-DD")
+        return False
+
+
+def _date(value: object, where: str) -> str:
+    if not is_calendar_date(value):
+        raise _invalid(where, "must be a calendar date YYYY-MM-DD")
+    return value
 
 
 def _texts(value: object, where: str) -> tuple[str, ...]:
@@ -275,28 +280,20 @@ def paid_fraction(places_paid: int, entries: int) -> Fraction:
 # ------------------------------------------------------------------------------------- aggregation
 
 
-def _quantized(value: Decimal, quantum: Decimal = _FOUR) -> str:
-    rounded = value.quantize(quantum, rounding=ROUND_HALF_EVEN)
-    return str(rounded.copy_abs() if rounded.is_zero() else rounded)
+def _fixed(value: Fraction, places: int = 4) -> str:
+    """Exact rational arithmetic rounded once, half to even (Python's `round` on a Fraction), never through a float."""
+
+    units = round(value * 10 ** places)
+    whole, part = divmod(abs(units), 10 ** places)
+    return f"{'-' if units < 0 else ''}{whole}.{part:0{places}d}"
 
 
 def _mean_percent(values: Sequence[Fraction]) -> str | None:
-    """The mean, x100, to four places; exact per entry and summed at 50 digits, so the same rows give the same text."""
-
-    if not values:
-        return None
-    with localcontext() as context:
-        context.prec = 50
-        total = sum((Decimal(value.numerator) / value.denominator for value in values), Decimal(0))
-        return _quantized(total * 100 / len(values))
+    return _fixed(sum(values, Fraction(0)) * 100 / len(values)) if values else None
 
 
-def _ratio_percent(numerator: Decimal | int, denominator: int) -> str | None:
-    if not denominator:
-        return None
-    with localcontext() as context:
-        context.prec = 50
-        return _quantized(Decimal(numerator) * 100 / denominator)
+def _ratio_percent(numerator: Fraction | int, denominator: int) -> str | None:
+    return _fixed(Fraction(numerator) * 100 / denominator) if denominator else None
 
 
 def _pair(rows: Sequence[HistoryRow], realized: Callable[[int, int], object],
@@ -331,9 +328,7 @@ def _slice(rows: Sequence[HistoryRow]) -> dict[str, object]:
     fees = sum(row.entry_fee_cents for row in rows)
     cash = sum(row.winnings_non_ticket_cents for row in rows)
     ticket = sum(row.winnings_ticket_cents for row in rows)
-    with localcontext() as context:
-        context.prec = 50
-        pool_share = sum((Decimal(row.prize_pool_cents) / row.contest_entries for row in rows), Decimal(0))
+    pool_share = sum((Fraction(row.prize_pool_cents, row.contest_entries) for row in rows), Fraction(0))
     return {
         "entries": len(rows),
         "slates": len({slate_key(row) for row in rows}),
@@ -384,8 +379,9 @@ def _fee_concentration(rows: Sequence[HistoryRow], top: int) -> dict[str, object
     contests: dict[str, list[HistoryRow]] = {}
     for row in rows:
         contests.setdefault(row.contest_key, []).append(row)
-    total = sum(row.entry_fee_cents for row in rows)
-    ranked = sorted(contests.items(), key=lambda item: (-sum(row.entry_fee_cents for row in item[1]), item[0]))
+    fees = {key: sum(row.entry_fee_cents for row in group) for key, group in contests.items()}
+    total = sum(fees.values())
+    ranked = sorted(contests.items(), key=lambda item: (-fees[item[0]], item[0]))
     return {
         "contests": len(contests),
         "fees_cents": total,
@@ -396,8 +392,8 @@ def _fee_concentration(rows: Sequence[HistoryRow], top: int) -> dict[str, object
                 "date": str(group[0].contest_start)[:10],
                 "contest_entries": group[0].contest_entries,
                 "entries": len(group),
-                "fees_cents": sum(row.entry_fee_cents for row in group),
-                "share": _ratio_percent(sum(row.entry_fee_cents for row in group), total),
+                "fees_cents": fees[key],
+                "share": _ratio_percent(fees[key], total),
             }
             for key, group in ranked[:top]
         ],
@@ -465,8 +461,8 @@ def _within_slate(rows: Sequence[HistoryRow], registered_on: str) -> dict[str, o
         "worse": worse,
         "better": better,
         "tied": len(slates) - worse - better,
-        "p_one_sided": _quantized(Decimal(one_sided.numerator) / one_sided.denominator, _SIX),
-        "p_two_sided": _quantized(Decimal(two_sided.numerator) / two_sided.denominator, _SIX),
+        "p_one_sided": _fixed(one_sided, 6),
+        "p_two_sided": _fixed(two_sided, 6),
         "mean_difference_points": _mean_percent([difference for *_, difference in slates]),
         "slates_after_registration": sum(key[1] > registered_on for key, *_ in slates),
         "slates": [
@@ -514,9 +510,11 @@ def _all_sport(history: EntryHistory, metrics: ResultsMetrics) -> tuple[list[His
 
 def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha256: str, source_bytes: int,
                  engine_era_start: str | None = None) -> dict[str, object]:
-    """The report payload (`nfl_results_report_v1`). `engine_era_start` is a checked YYYY-MM-DD, or the default."""
+    """The report payload (`nfl_results_report_v1`); `engine_era_start` overrides the registered default."""
 
-    era = engine_era_start or metrics.engine_era_start
+    if engine_era_start is not None and not is_calendar_date(engine_era_start):
+        raise ValueError("engine_era_start must be a calendar date YYYY-MM-DD")
+    era = metrics.engine_era_start if engine_era_start is None else engine_era_start
     counted, left_out = _all_sport(history, metrics)
     nfl = [row for row in counted if row.is_nfl]
     engine_era = [row for row in nfl
@@ -560,6 +558,7 @@ __all__ = [
     "fine_slate_key",
     "in_bottom",
     "in_top",
+    "is_calendar_date",
     "is_blank",
     "load_results_metrics",
     "paid_fraction",

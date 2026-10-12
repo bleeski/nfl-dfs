@@ -8,6 +8,7 @@ builders and written with `write_bytes` (Ben's real export carries account winni
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from fractions import Fraction
@@ -128,8 +129,8 @@ def test_the_nfl_rollup_matches_a_hand_computed_fixture():
     assert [row["game_type"] for row in nfl["by_format"]] == ["Classic", "Showdown Captain Mode"]
     assert _by(nfl["by_format"], "game_type", "Classic")["entries"] == 2
     assert [row["month"] for row in nfl["by_month"]] == ["2026-09"]
-    assert [(row["date"], row["game_type"], row["entries"]) for row in nfl["by_slate"]] == [
-        ("2026-09-13", "Classic", 2), ("2026-09-14", "Showdown Captain Mode", 1)]
+    assert [(row["date"], row["game_type"], row["entries"], row["fine_slates"]) for row in nfl["by_slate"]] == [
+        ("2026-09-13", "Classic", 2, 1), ("2026-09-14", "Showdown Captain Mode", 1, 1)]
     # Payout shape from the numeric columns: 200 of 1000 is 1/5, 2 of 10 is 1/5.
     assert [(row["band"], row["first_place_label"], row["entries"]) for row in nfl["by_payout_shape"]] == [
         ("[1/5, 1/2)", None, 3)]
@@ -280,6 +281,9 @@ _DELETE = object()
         _metrics_with(populations__surprise=1),
         _metrics_with(populations__excluded_game_types=_DELETE),
         _metrics_with(populations__excluded_game_types=[""]),
+        _metrics_with(populations__excluded_game_types=["Best Ball", "Best Ball"]),
+        _metrics_with(fee_concentration_top=True),
+        _metrics_with(bootstrap__mde_power="1/1"),
         _metrics_with(populations__engine_game_types="Classic"),
         _metrics_with(populations__engine_era_start="2026-02-30"),
         _metrics_with(populations__paid="ENTRY_FEE_AT_LEAST_ZERO"),
@@ -331,14 +335,15 @@ def test_the_paired_test_counts_slates_by_hand():
         _contest(4, "2026-09-14", 500, FLATTER, "Showdown Captain Mode"),  # -0.4: better
         _contest(5, "2026-09-21", 300, TOP_HEAVY), _contest(6, "2026-09-21", 300, FLATTER),  # tied: dropped
         _contest(7, "2026-09-28", 900, TOP_HEAVY),  # one kind only: not in the test
+        _contest(8, "2026-10-10", 500, TOP_HEAVY), _contest(9, "2026-10-10", 500, FLATTER),  # registration day: tied
     )
     report = _report(*rows)
     test = report["scopes"]["nfl"]["within_slate_test"]
-    assert (test["slates_with_both"], test["worse"], test["better"], test["tied"]) == (3, 1, 1, 1)
+    assert (test["slates_with_both"], test["worse"], test["better"], test["tied"]) == (4, 1, 1, 2)
     assert (test["p_one_sided"], test["p_two_sided"]) == ("0.750000", "1.000000")
-    assert test["mean_difference_points"] == "6.6667"  # (60 - 40 + 0) / 3
+    assert test["mean_difference_points"] == "5.0000"  # (60 - 40 + 0 + 0) / 4
     assert [(row["date"], row["difference_points"]) for row in test["slates"]] == [
-        ("2026-09-13", "60.0000"), ("2026-09-14", "-40.0000"), ("2026-09-21", "0.0000")]
+        ("2026-09-13", "60.0000"), ("2026-09-14", "-40.0000"), ("2026-09-21", "0.0000"), ("2026-10-10", "0.0000")]
     assert test["slates"][0]["top_heavy_entries"] == 1 and test["slates"][0]["flatter_entries"] == 1
     assert test["slates_after_registration"] == 0
     trigger = report["within_slate_trigger"]
@@ -369,3 +374,41 @@ def test_a_capped_contest_is_flatter_not_top_heavy():
     rows = (_contest(1, "2026-09-13", 800, "1200"), _contest(2, "2026-09-13", 200, TOP_HEAVY))
     test = _report(*rows)["scopes"]["nfl"]["within_slate_test"]
     assert (test["worse"], test["better"]) == (0, 1)  # the capped contest is the flatter side
+
+
+def test_an_era_start_that_is_not_a_calendar_date_is_refused():
+    history = entry_history.parse_entry_history(_history(*STANDARD))
+    for bad in ("2026-9-9", "2026-02-30", "20260909", ""):
+        assert not rr.is_calendar_date(bad)
+        with pytest.raises(ValueError, match="engine_era_start"):
+            rr.build_report(history, metrics=rr.load_results_metrics(), source_sha256=ZERO_SHA, source_bytes=1,
+                            engine_era_start=bad)
+    assert rr.is_calendar_date("2026-09-09")
+
+
+def test_every_figure_is_exact_and_rounds_half_to_even():
+    # 123465 / 10,000,000 is exactly 1.23465 points: half to even keeps 1.2346, where half-up would give 1.2347.
+    rates = _report(_row(Place="123465", Contest_Entries="10000000"))["scopes"]["nfl"]["overall"]["with_blanks"]
+    assert rates["percentile"]["realized"] == "1.2346"
+    rates = _report(_row(Place="123475", Contest_Entries="10000000"))["scopes"]["nfl"]["overall"]["with_blanks"]
+    assert rates["percentile"]["realized"] == "1.2348"
+
+
+def test_the_contracts_doc_names_the_metrics_hash():
+    assert METRICS_SHA256 in (REPO / "docs" / "DATA_CONTRACTS.md").read_text(encoding="utf-8")
+
+
+def test_fee_concentration_lists_the_registered_top_ten():
+    rows = [_row(Entry_Key=str(4200000000 + number), Contest_Key=str(120000000 + number),
+                 Entry_Fee=f"${number}.00", Prize_Pool="$900.00") for number in range(1, 13)]
+    concentration = _report(*rows)["scopes"]["nfl"]["fee_concentration"]
+    assert concentration["contests"] == 12 and concentration["fees_cents"] == 7800
+    assert [row["contest_key"] for row in concentration["top_contests"]] == [
+        str(120000000 + number) for number in range(12, 2, -1)]
+
+
+def test_the_trigger_needs_p_strictly_below_alpha():
+    # A sign-test p is k / 2^n and never equals the registered 1/20; a dyadic alpha pins the strict rule.
+    metrics = dataclasses.replace(rr.load_results_metrics(), trigger_alpha=Fraction(1, 4), trigger_min_slates=2)
+    trigger = _report(*_worse_slates(2), metrics=metrics)["within_slate_trigger"]
+    assert (trigger["p_one_sided"], trigger["met"]) == ("0.250000", False)
