@@ -4,6 +4,56 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-12: Session 70b -- player grading tables, play rate and `nfl grade-players --pool`
+
+Branch `claude/s70b-player-grading-tables`, pull request #138, claimed at `6330177` (PR #136's merge). PR #137 was
+merged at 01:30Z holding only the claim commit (`db98efe`); the branch merged `origin/main` (no rebase or force push)
+and the code went up in PR #138. Ben approved the plan before any code. The `advisor` skill's hook failed again (`set: Illegal option -o pipefail`), so fresh-context
+fable agents ran each consult. A grading input only: every path stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- `nfl_player_grading_v1` additive keys inside `grade` (as in Session 08): `by_position` and `by_tier` (MAE and
+  Spearman for the prior and `salary_scaled_points_v1`, ties averaged, null below 3, the slate's one salary scale,
+  never crossed); `tiers` (graded non-DST people; a tied salary takes its mid-rank's tier and never splits);
+  `play_rate` by DraftKings status (every identity-bound non-DST person; a stat row counts as played, an undercount and
+  not the `participation_brier` event); `salary_tier` per person.
+- `nfl grade-players --pool <report>... --out <file>` (`nfl_player_grading_pool_v1`): per measure, the unweighted mean
+  over the slates with a value, never filled; Kish ESS at equal weights, `independent_slates` over shared nflverse
+  games, the registered minimum sample (500) and bootstrap named, not computed. A repeated slate (same salary SHA-256,
+  or same mode, season, week and games) and every malformed report refuse as `PLAYER_GRADING_INPUT_INVALID`; no new code.
+- `tests/test_player_grading_tables.py` (46 tests); no existing test edited. Contract sections, the operator-guide
+  command, and Session 70's push-batching line in `docs/claude/working.md`.
+
+**Reviews and consults.** The plan consult turned v2 into additive v1 keys, defined empty tiers, upper-cased the status
+class, made a re-export the same slate and added `independent_slates`. Part 1 measured 297 lines, under its 500-line
+checkpoint, but part 2 measured 504 against a plan of 400, and the checkpoint measured only part 1: the lesson is to
+measure each part against its own estimate. The size consult at 821 lines said push on, with no self-granted 1,100 cap.
+The `reviewer` found no blocker. Taken: three malformed inputs that ended `FAILED` (deep nesting, a 5,000-digit number,
+an integer past float range) now refuse by name; a game listed twice is refused; values are bounded and `usable_people`
+must equal the overall `n`; `--pool` given twice keeps both lists; two weak tests strengthened. Mutation on a
+scratchpad copy killed 51 of 53; the two left (`run_pool`'s existence check, `write_pool`'s exclusive create) each
+refuse an existing `--out` alone.
+
+**Verification.** New tests red first (8, then 21; the first `AttributeError: ... no attribute 'grade_tables'`), then
+`111 passed` with Session 70's file; neighbors and CLI parser tests `525 passed`. Before and after against `origin/main`
+(a copy built with `git show`): ATL@NO, Week 4 Classic and the synthetic fixture with lineups are byte-identical to the
+base once the additive keys are removed; refusals and the usage error are identical; `--help` differs by the two-form
+usage, `--out` and `--pool`. Full suite `3545 passed, 1 skipped in 905.59s (0:15:05)` on Linux. Size: 933 changed lines in source, tests and docs,
+and 1,004 with the ledgers, against the card's 300 to 450: 4 past its stop at 1,000.
+
+**Measured on real inputs, outside git** (fresh package `28f0c38f...`; Session 70's 29/22 and 360/254 people and its
+MAE 4.40 and 4.78 against salary 4.21 and 5.72 reproduced). Week 4 Classic: within position, salary out-ranks the prior
+at QB (Spearman 0.51 against 0.37), RB (0.72 against 0.68) and WR (0.63 against 0.55), while the prior's MAE is lower at
+every position; within every salary tier the prior out-ranks salary. Play rate: `Q` 2 of 5, `OUT` 0 of 42, `IR` 0 of
+67, blank 269 of 491. ATL@NO: the K and QB cells are null (2 people each). Two-slate pool `7bbf2514...`, identical in
+either argument order: prior MAE 4.59 against 4.97, Spearman 0.73 against 0.73, 276 people (`meets_minimum_sample`
+false), `independent_slates` 2 (ATL@NO was the Monday game, outside the Sunday Classic slate). One slate each; no
+calibration claim.
+
+**Left open.** The four-slate pool joins O12. Session 70's `_json` input reader has the gap the review found in the pool
+reader (deep nesting or an over-long number ends `FAILED`, never a release truth); not fixed here. `--pool` used to
+abbreviate `--pool-scores`; that use now stops as a usage error.
+
 ### 2026-10-11: BAL@ATL Showdown (Sunday Night Football), 32 entries, 5 contests (slate record, not a roadmap session)
 
 Branch `claude/bal-atl-sd-2026-10-11`. Inputs, byte-identical to the uploads, under `data/inbox/slates/bal-atl-sd-2026-10-11/input/`:
