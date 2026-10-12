@@ -101,6 +101,7 @@ from .economics import evaluate_candidates_against_field
 from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
 from .entry_history import run_intake as run_results_intake
 from .player_grading import run as run_player_grading
+from .player_grading import run_pool as run_player_grading_pool
 from .evidence import (
     EvidenceError,
     parse_official_inactive_snapshot,
@@ -2090,15 +2091,38 @@ def command_results_intake(args: argparse.Namespace) -> int:
 def command_grade_players(args: argparse.Namespace) -> int:
     """Session 70: realized player points, the lineup reconciliation and the grade (`nfl_player_grading_v1`).
 
-    Exit 0 wrote the report; 2 refused by code and wrote nothing. A grading input only: no release truth.
+    Exit 0 wrote the report; 2 refused by code and wrote nothing. A grading input only: no release truth. With
+    `--pool` (Session 70b) it writes `nfl_player_grading_pool_v1` from per-slate reports instead. A usage error goes
+    through `parser.error`, a `SystemExit` that `main`'s handler (which prints release truths) never catches.
     """
 
-    exit_code, summary = run_player_grading(
-        salaries=args.salaries, pool_scores=args.pool_scores, identity_review=args.identity_review,
-        stats_package=args.stats_package, season=args.season, week=args.week, out=args.out,
-        lineups=args.lineups, entries=args.entries)
+    parser = args.grade_players_parser
+    per_slate = [flag for dest, flag in _GRADE_PLAYERS_OPTIONS if getattr(args, dest) is not None]
+    if args.pool is not None:
+        extra = [flag for flag in per_slate if flag != "--out"]
+        if extra:
+            parser.error(f"--pool takes only --out; drop {', '.join(extra)}")
+        if args.out is None:
+            parser.error("the following arguments are required: --out")
+        exit_code, summary = run_player_grading_pool(reports=args.pool, out=args.out)
+    else:
+        missing = [flag for dest, flag in _GRADE_PLAYERS_OPTIONS[:7] if getattr(args, dest) is None]
+        if missing:
+            parser.error(f"the following arguments are required: {', '.join(missing)}")
+        exit_code, summary = run_player_grading(
+            salaries=args.salaries, pool_scores=args.pool_scores, identity_review=args.identity_review,
+            stats_package=args.stats_package, season=args.season, week=args.week, out=args.out,
+            lineups=args.lineups, entries=args.entries)
     _print_json(summary)
     return exit_code
+
+
+# The one-slate options in the order argparse listed them when they were required; the first seven are required.
+_GRADE_PLAYERS_OPTIONS = (
+    ("salaries", "--salaries"), ("pool_scores", "--pool-scores"), ("identity_review", "--identity-review"),
+    ("stats_package", "--stats-package"), ("season", "--season"), ("week", "--week"), ("out", "--out"),
+    ("lineups", "--lineups"), ("entries", "--entries"),
+)
 
 
 def command_priors_propose(args: argparse.Namespace) -> int:
@@ -5227,24 +5251,34 @@ def build_parser() -> argparse.ArgumentParser:
     results_intake.set_defaults(func=command_results_intake)
     grade_players = subparsers.add_parser(
         "grade-players",
+        usage=("%(prog)s --salaries SALARIES --pool-scores POOL_SCORES --identity-review IDENTITY_REVIEW\n"
+               "         --stats-package STATS_PACKAGE --season SEASON --week WEEK --out OUT\n"
+               "         [--lineups LINEUPS --entries ENTRIES]\n"
+               "       %(prog)s --pool REPORT [REPORT ...] --out OUT"),
         help=(
             "score one slate's realized nflverse stat lines with scoring.py, join them to its frozen priors by exact"
             " DraftKings ID, reconcile the delivered lineups against DraftKings' lineup points and grade the prior;"
             " a grading input only"
         ),
     )
-    grade_players.add_argument("--salaries", required=True, help="the slate's DraftKings salary CSV")
-    grade_players.add_argument("--pool-scores", required=True, help="the run's nfl_prior_pool_scores_v1 dump")
-    grade_players.add_argument("--identity-review", required=True,
+    # Required without --pool; command_grade_players enforces it, because --pool takes none of them.
+    grade_players.add_argument("--salaries", help="the slate's DraftKings salary CSV")
+    grade_players.add_argument("--pool-scores", help="the run's nfl_prior_pool_scores_v1 dump")
+    grade_players.add_argument("--identity-review",
                                help="the run's reviewed identity CSV (priors/identity_reviewed.csv)")
-    grade_players.add_argument("--stats-package", required=True,
+    grade_players.add_argument("--stats-package",
                                help="a folder holding the season's frozen nflverse weekly file; fetched into it once")
-    grade_players.add_argument("--season", required=True, type=int)
-    grade_players.add_argument("--week", required=True, type=int)
-    grade_players.add_argument("--out", required=True, help="a new folder for the report (never overwritten)")
+    grade_players.add_argument("--season", type=int)
+    grade_players.add_argument("--week", type=int)
+    grade_players.add_argument(
+        "--out", help="a new folder for one slate's report, or a new file for --pool (never overwritten)")
     grade_players.add_argument("--lineups", help="the delivered DK_REVIEW_ENTRY CSV (needs --entries)")
     grade_players.add_argument("--entries", help="nfl_entries.w1.json from results-intake (needs --lineups)")
-    grade_players.set_defaults(func=command_grade_players)
+    grade_players.add_argument(
+        "--pool", nargs="+", metavar="REPORT",
+        help=("two or more per-slate player_grading.w1.json reports to macro-average, slate as the unit, into"
+              " nfl_player_grading_pool_v1 at --out; takes no other option"))
+    grade_players.set_defaults(func=command_grade_players, grade_players_parser=grade_players)
     priors_propose = subparsers.add_parser(
         "priors-propose",
         help="freeze approved nflverse artifacts and propose the DK identity crosswalk",

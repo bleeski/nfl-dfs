@@ -4629,6 +4629,41 @@ regraded before it pools. The top-level keys above are unchanged; the new keys a
   event; `population` and `played_means` say so in the report.
 - `does_not_establish` gains a sentence for the tables and one for play rate.
 
+### `nfl_player_grading_pool_v1` (Session 70b)
+
+Registered 2026-10-12. `nfl grade-players --pool <report> <report>... --out <new file>` macro-averages two or more
+per-slate reports with the slate as the unit, the registered aggregation of `player_points_mae`. A grading input only:
+`model_status: PRIOR_ONLY`, `status: DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION`. `--pool` takes no one-slate option, and a
+usage error is argparse's (exit 2, no JSON).
+
+**Inputs.** Each report's SHA-256 is taken from the bytes parsed. It must be a JSON object with `schema_version:
+nfl_player_grading_v1` and the additive keys above; every key read is type-checked (a count a whole number of at least
+0, a value finite or null, never a bool). Two reports are one slate, refused, when they share `inputs.salaries.sha256`
+or the same `slate.mode`, `season`, `week` and set of bound nflverse `game_id`s (a re-exported salary file). Reports from
+different stats packages may pool, each naming its own. Refusals are `PLAYER_GRADING_INPUT_INVALID`:
+`pool:FEWER_THAN_2_REPORTS` or `pool_report:<n>:<why>`, `<n>` the report's 1-based argument position and `<why>` one of
+`UNREADABLE:<exception class>`, `NOT_AN_OBJECT`, `SCHEMA:<value>`, `SHAPE:<key path>` (a report graded before Session
+70b fails on `grade.by_position`: regrade it) or `REPEATED_SLATE:<m>`, the earlier argument. An existing `--out` is
+`PLAYER_GRADING_OUTPUT_EXISTS`. Exit 2 writes nothing (`WRITE_FAILED` removes the file it made); it never prints a lineup
+release truth.
+
+**The pool.** Slates are ordered by season, week and salary SHA-256, so argument order changes no byte; `slates` lists
+each with its report and salary hashes, mode, season, week, nflverse games, stats package and observation time, prior
+`score_version`, and graded and usable people. Each measure of `overall`, `by_position` and `by_tier` (`prior` and
+`salary`, `player_points_mae` and `spearman`) is `{value, slates, people, values}`: the unweighted mean to 6 places over
+the slates with a non-null value, their count, the sum of their `n`, and each slate's value in order (null where absent
+or under 3 people, never filled). The Spearman figure is a mean of per-slate correlations. `play_rate` per status sums
+`people`, `played` and `unbound` and pools `rate` the same way.
+
+**Sample and independence.** `sample` gives `slates`, `weights: EQUAL_PER_SLATE`, `kish_ess` ((sum w)^2 / sum w^2 at
+w = 1: the slate count, as each measure's own `slates` is its ESS), `independent_slates`, usable people per slate and in
+total, `registered_minimum_sample` (500) and `meets_minimum_sample`. `independence.shared_games` names each nflverse game
+two or more slates hold, by position: declared, not refused, since a Showdown game inside a Classic slate is one set of
+player-weeks in two slates; `independent_slates` counts each group linked by shared games once. `sources` counts stats
+packages and lists the `score_version`s. `not_computed` names the registered bootstrap interval and `participation_brier`;
+`does_not_establish` travels with every pool. The file is canonical JSON as the report, written by exclusive create
+(parent folders made); the same report bytes give the same pool.
+
 ## Standings corpus transport (Session 17, X2)
 
 **Decision, so it is not relitigated.** Ben ruled option (A) on 2026-09-21 (R27): the 26 DraftKings

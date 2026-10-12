@@ -591,6 +591,22 @@ or not fully covered). Exit 2 is a refusal named by code, and no report is
 written (a first run may already have fetched the stats package).
 It is a grading input only: it changes no prior and clears no upload.
 
+To grade the prior across slates, pool two or more of those reports:
+
+```powershell
+.\nfl.ps1 grade-players --pool 'data\results\grades\<slate 1>\player_grading.w1.json' `
+  'data\results\grades\<slate 2>\player_grading.w1.json' `
+  --out 'data\results\grades\pool-<name>.json'
+```
+
+Each slate counts once, however many players it graded, and the pool
+(`nfl_player_grading_pool_v1`) lists the slates that went in and how many
+players each graded. `--out` is a new file here, not a folder. A report graded
+before 2026-10-12 lacks the tables, so grade that slate again into a new folder
+first. Two reports of one slate are refused, a re-downloaded salary file
+included. Under 500 graded players in total is below the registered minimum
+sample, and the pool says so.
+
 ## Safe failure behavior
 
 - Excel open: readable stop message; no partial workbook.

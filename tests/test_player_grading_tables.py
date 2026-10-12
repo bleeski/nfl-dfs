@@ -6,9 +6,16 @@ Synthetic bytes only, written with `write_bytes` so every platform hashes the sa
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
+from pathlib import Path
+
 import pytest
 
+from nfl_dfs import cli
 from nfl_dfs import player_grading as pg
+from nfl_dfs.metric_registry import load_metric_registry
 from tests.test_player_grading import INFO, PRIORS, REALIZED, grade, person
 
 # ----------------------------------------------------------------- the tables, by hand
@@ -166,3 +173,198 @@ def test_the_report_carries_the_tables_and_play_rate(tmp_path):
         "(blank)": {"class": "AVAILABLE", "people": 10, "played": 9, "rate": 0.9, "unbound": 1},
         "Q": {"class": "DEGRADED", "people": 1, "played": 1, "rate": 1.0, "unbound": 0},
     }
+
+
+# ----------------------------------------------------------------- the pool
+
+
+def second_slate(report: dict, *, week=3, salary="b" * 64, games=None, mode=None) -> dict:
+    """Another slate: its own salary bytes, week and nflverse games."""
+
+    other = copy.deepcopy(report)
+    other["inputs"]["salaries"]["sha256"] = salary
+    other["slate"]["week"] = week
+    other["slate"]["games"] = games if games is not None else {"DEN@KC 09/27/2026 08:20PM ET": f"2026_{week:02d}_DEN_KC"}
+    if mode is not None:
+        other["slate"]["mode"] = mode
+    return other
+
+
+def write_reports(tmp_path: Path, *reports) -> list[Path]:
+    paths = []
+    for n, report in enumerate(reports, start=1):
+        path = tmp_path / f"report{n}.json"
+        path.write_bytes(report if isinstance(report, bytes) else pg.render(report))
+        paths.append(path)
+    return paths
+
+
+def pool_refused(paths) -> str:
+    with pytest.raises(pg.PlayerGradingRefused) as caught:
+        pg.pool_reports(paths)
+    assert caught.value.code == "PLAYER_GRADING_INPUT_INVALID", caught.value
+    return caught.value.detail
+
+
+def test_the_pool_macro_averages_with_the_slate_as_the_unit(tmp_path):
+    first = grade(tmp_path)
+    second = second_slate(first)
+    first["grade"]["prior"]["player_points_mae"]["value"] = 4.0
+    second["grade"]["prior"]["player_points_mae"].update(value=6.0, n=200)
+    second["grade"]["usable_people"] = 200
+    second["grade"]["by_tier"]["high"]["prior"]["player_points_mae"] = 7.775
+    pool = pg.pool_reports(write_reports(tmp_path, second, first))
+    # Unweighted: (4 + 6) / 2 = 5, though the second slate has 20 times the people (people-weighted: 5.9).
+    assert pool["overall"]["prior"]["player_points_mae"] == {"value": 5.0, "slates": 2, "people": 210,
+                                                             "values": [4.0, 6.0]}
+    assert pool["by_tier"]["high"]["prior"]["player_points_mae"] == {"value": 7.275, "slates": 2, "people": 8,
+                                                                     "values": [6.775, 7.775]}
+    sample = pool["sample"]
+    assert sample["slates"] == 2 and sample["kish_ess"] == 2.0 and sample["independent_slates"] == 2
+    assert sample["usable_people_by_slate"] == [10, 200] and sample["usable_people"] == 210
+    assert (sample["registered_minimum_sample"], sample["meets_minimum_sample"]) == (500, False)
+    assert [slate["week"] for slate in pool["slates"]] == [2, 3]
+    assert pool["schema_version"] == "nfl_player_grading_pool_v1" and pool["model_status"] == "PRIOR_ONLY"
+    assert pool["play_rate"]["Q"] == {"class": "DEGRADED", "rate": {"value": 1.0, "slates": 2, "people": 2,
+                                                                     "values": [1.0, 1.0]},
+                                      "people": 2, "played": 2, "unbound": 0}
+
+
+def test_a_cell_missing_from_one_slate_averages_over_the_others(tmp_path):
+    first = grade(tmp_path)
+    second = second_slate(first)
+    first["grade"]["by_position"]["WR"].update(n=3, prior={"player_points_mae": 2.0, "spearman": 0.5, "note": None})
+    del second["grade"]["by_position"]["WR"]
+    second["grade"]["by_tier"]["high"]["prior"].update(spearman=None, note="ZERO_VARIANCE")
+    pool = pg.pool_reports(write_reports(tmp_path, first, second))
+    assert pool["by_position"]["WR"]["prior"]["player_points_mae"] == {"value": 2.0, "slates": 1, "people": 3,
+                                                                       "values": [2.0, None]}
+    assert pool["by_position"]["K"]["prior"]["spearman"] == {"value": None, "slates": 0, "people": 0,
+                                                             "values": [None, None]}
+    high = pool["by_tier"]["high"]["prior"]
+    assert (high["player_points_mae"]["slates"], high["spearman"]["slates"]) == (2, 1)
+
+
+def test_shared_games_are_declared_not_refused(tmp_path):
+    first = grade(tmp_path)
+    game = next(iter(first["slate"]["games"].values()))
+    classic = second_slate(first, week=2, mode="CLASSIC", games={"A": game, "B": "2026_02_X_Y"})
+    later = second_slate(first, salary="c" * 64)
+    pool = pg.pool_reports(write_reports(tmp_path, first, classic, later))
+    assert pool["independence"]["shared_games"] == {game: [1, 2]}
+    assert pool["sample"]["independent_slates"] == 2 and pool["sample"]["slates"] == 3
+
+
+def damaged(report: dict, change) -> dict:
+    other = second_slate(report)
+    change(other)
+    return other
+
+
+@pytest.mark.parametrize("name, build, detail", [
+    ("graded before the tables", lambda r: damaged(r, lambda o: o["grade"].pop("by_tier")),
+     "pool_report:2:SHAPE:grade.by_tier"),
+    ("another schema", lambda r: damaged(r, lambda o: o.update(schema_version="nfl_player_grading_v9")),
+     "pool_report:2:SCHEMA:'nfl_player_grading_v9'"),
+    ("not JSON", lambda r: b"{not json", "pool_report:2:UNREADABLE"),
+    ("not an object", lambda r: b"[1]", "pool_report:2:NOT_AN_OBJECT"),
+    ("a bool value", lambda r: damaged(r, lambda o: o["grade"]["prior"]["player_points_mae"].update(value=True)),
+     "pool_report:2:SHAPE:grade.prior.player_points_mae.value"),
+    ("a text count", lambda r: damaged(r, lambda o: o["grade"]["by_tier"]["low"].update(n="4")),
+     "pool_report:2:SHAPE:grade.by_tier.low.n"),
+    ("an infinite value", lambda r: damaged(r, lambda o: o["grade"]["by_tier"]["low"]["prior"].update(
+        player_points_mae=float("inf"))), "pool_report:2:SHAPE:grade.by_tier.low.prior.player_points_mae"),
+    ("a play rate count", lambda r: damaged(r, lambda o: o["grade"]["play_rate"]["by_status"]["Q"].update(
+        played=-1)), "pool_report:2:SHAPE:grade.play_rate.by_status.Q.played"),
+    ("the same salary bytes", lambda r: second_slate(r, salary=r["inputs"]["salaries"]["sha256"]),
+     "pool_report:2:REPEATED_SLATE:1"),
+    ("a re-export of the same games", lambda r: second_slate(r, week=r["slate"]["week"], games=r["slate"]["games"]),
+     "pool_report:2:REPEATED_SLATE:1"),
+])
+def test_each_pool_refusal(tmp_path, name, build, detail):
+    first = grade(tmp_path)
+    assert pool_refused(write_reports(tmp_path, first, build(first))).startswith(detail), name
+
+
+def test_too_few_or_unreadable_reports_refuse(tmp_path):
+    first = grade(tmp_path)
+    assert pool_refused(write_reports(tmp_path, first)) == "pool:FEWER_THAN_2_REPORTS"
+    missing = pool_refused([write_reports(tmp_path, first)[0], tmp_path / "absent.json"])
+    assert missing.startswith("pool_report:2:UNREADABLE")
+
+
+def test_the_pool_is_byte_identical_and_order_free(tmp_path):
+    first = grade(tmp_path)
+    paths = write_reports(tmp_path, first, second_slate(first))
+    data = pg.render(pg.pool_reports(paths))
+    assert data == pg.render(pg.pool_reports(list(reversed(paths)))) == pg.render(pg.pool_reports(paths))
+    assert data.endswith(b"}\n") and b"\r" not in data
+    text = data.decode("utf-8").lower()
+    for word in ("calibrated", "win_probability", "\"ev\"", "roi"):
+        assert word not in text
+
+
+def test_one_changed_report_byte_changes_the_pool_or_refuses(tmp_path):
+    first = grade(tmp_path)
+    paths = write_reports(tmp_path, first, second_slate(first))
+    before = pg.render(pg.pool_reports(paths))
+    raw = paths[0].read_bytes()
+    paths[0].write_bytes(raw[:-1] + b" \n")  # still the same JSON, but other bytes
+    assert pg.render(pg.pool_reports(paths)) != before
+    paths[0].write_bytes(raw.replace(b"6.775", b"6.776", 1))
+    assert pg.pool_reports(paths)["by_tier"]["high"]["prior"]["player_points_mae"]["values"][0] == 6.776
+    paths[0].write_bytes(b"[" + raw[1:])
+    assert pool_refused(paths).startswith("pool_report:1:UNREADABLE")
+
+
+def test_the_registered_constants_agree_with_the_registry():
+    registry = load_metric_registry(Path(__file__).resolve().parents[1] / "config" / "metric_registry_q1_v1.json")
+    metric = next(m for m in registry.metrics if m["metric_id"] == "player_points_mae")
+    assert pg.REGISTERED_MINIMUM_SAMPLE == metric["minimum_sample"]
+    assert metric["uncertainty_interval"] in pg.POOL_NOT_COMPUTED["bootstrap_interval"]
+
+
+# ----------------------------------------------------------------- the command
+
+
+def pool_cli(capsys, argv) -> tuple[int, dict]:
+    code = cli.main(argv)
+    return code, json.loads(capsys.readouterr().out)
+
+
+def test_the_pool_command_writes_one_file(tmp_path, capsys):
+    first = grade(tmp_path)
+    paths = [str(p) for p in write_reports(tmp_path, first, second_slate(first))]
+    code, summary = pool_cli(capsys, ["grade-players", "--pool", *paths, "--out", str(tmp_path / "pools" / "p.json")])
+    assert (code, summary["status"], summary["model_status"]) == (0, "COMPLETE", "PRIOR_ONLY")
+    written = (tmp_path / "pools" / "p.json").read_bytes()
+    assert hashlib.sha256(written).hexdigest() == summary["pool_sha256"]
+    assert written == pg.render(pg.pool_reports([Path(p) for p in paths]))
+    assert (summary["slates"], summary["usable_people"]) == (2, 20)
+    code, summary = pool_cli(capsys, ["grade-players", "--pool", *paths, "--out", str(tmp_path / "pools" / "p.json")])
+    assert (code, summary["code"]) == (2, "PLAYER_GRADING_OUTPUT_EXISTS")
+    assert (tmp_path / "pools" / "p.json").read_bytes() == written
+
+
+def test_a_pool_refusal_never_prints_release_truths(tmp_path, capsys):
+    first = grade(tmp_path)
+    paths = [str(p) for p in write_reports(tmp_path, first)]
+    code, summary = pool_cli(capsys, ["grade-players", "--pool", *paths, "--out", str(tmp_path / "p.json")])
+    assert (code, summary["status"], summary["code"]) == (2, "REFUSED", "PLAYER_GRADING_INPUT_INVALID")
+    assert "RELEASE_DECISION" not in json.dumps(summary) and not (tmp_path / "p.json").exists()
+
+
+@pytest.mark.parametrize("argv, message", [
+    (["--pool", "a.json", "b.json", "--salaries", "s.csv", "--out", "p.json"], "--pool takes only --out"),
+    (["--pool", "a.json", "b.json"], "the following arguments are required: --out"),
+    (["--pool-scores", "p.json", "--identity-review", "i.csv", "--stats-package", "pkg", "--season", "2026",
+      "--week", "2", "--out", "o"], "the following arguments are required: --salaries"),
+    ([], "the following arguments are required: --salaries, --pool-scores, --identity-review, --stats-package, "
+         "--season, --week, --out"),
+])
+def test_usage_errors_stay_argparse_errors(capsys, argv, message):
+    with pytest.raises(SystemExit) as caught:
+        cli.main(["grade-players", *argv])
+    captured = capsys.readouterr()
+    assert caught.value.code == 2 and message in captured.err
+    assert "RELEASE_DECISION" not in captured.out + captured.err
