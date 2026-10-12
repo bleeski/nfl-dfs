@@ -1,5 +1,9 @@
 # Implementation Status
 
+## Capability added: 2026-10-12 (Session 71, the results metrics and the report payload)
+
+Working and verified through 60 synthetic-byte cases (`tests/test_results_report.py`), a mutation pass (52 of 52 killed), a fresh-context review and the full suite (`3605 passed, 1 skipped in 890.41s (0:14:50)`, Linux): `nfl_results_metrics_v1` (`config/results_metrics_v1.json`) loads and validates, and `results_report.build_report` computes in memory the NFL and engine-era rollups (the percentile and tail rates beside their random expectations, blanks, money in cents, realized and rake-implied returns), fee concentration, the within-slate sign test and its trigger, and the all-sport check. Not yet: a command or a written report, intervals, or any run on the real export (Session 71b).
+
 ## Capability added: 2026-10-12 (Session 70b, grading tables and `nfl grade-players --pool`)
 
 Working and verified through 46 synthetic-byte cases (`tests/test_player_grading_tables.py`), a mutation pass (51 of 53 killed, the two left equivalent), a fresh-context review, a before/after against `origin/main` and the full suite (`3545 passed, 1 skipped in 905.59s (0:15:05)`, Linux), and run on real inputs outside git: each `nfl grade-players` report carries MAE and Spearman by position and by within-slate salary tertile, play rate by DraftKings status and each person's tier (additive keys of `nfl_player_grading_v1`), and `nfl grade-players --pool` macro-averages two or more reports with the slate as the unit (`nfl_player_grading_pool_v1`). Not yet run: the four-slate pool (O12).
