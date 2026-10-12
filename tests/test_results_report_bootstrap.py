@@ -120,6 +120,7 @@ def test_a_zero_denominator_resample_is_named_never_dropped():
 def test_the_interval_takes_the_registered_order_statistics():
     assert rr.order_statistics(Fraction(9, 10), 10_000) == (499, 9499)
     assert rr.order_statistics(Fraction(9, 10), 200) == (9, 189)
+    assert rr.order_statistics(Fraction(9, 10), 7) == (0, 6)  # ceil(0.35) - 1 and ceil(6.65) - 1: never a floor
     settings = rr.bootstrap_settings(FAST)
     values = [index / 100 for index in range(200)]  # t* sorted: q_lo = 0.09, q_hi = 1.89
     figures = rr.interval_figures(0.5, 0.1, values, settings)
