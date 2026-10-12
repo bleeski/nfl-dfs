@@ -1,5 +1,9 @@
 # Implementation Status
 
+## Capability added: 2026-10-12 (Session 71b, `nfl results-report` and the bootstrap)
+
+Working and verified through 52 synthetic-byte cases (`tests/test_results_report_command.py`, `tests/test_results_report_bootstrap.py`), a mutation pass (41 of 42 killed, the survivor equivalent at the registered values and now pinned), a fresh-context review, a before/after against `origin/main` and the full suite (`3658 passed, 1 skipped in 959.45s (0:15:59)`, Linux): `nfl results-report` checks the snapshot `results-intake` kept (one `lstat`, its hash), writes `nfl_results_report_v1` once under the gitignored results root with a money-free stdout and four named refusals, and gives every slice of at least 5 slates a bootstrap-t interval and minimum detectable effect as the registered `bootstrap` section sets them. Not yet: any run on Ben's export (O13) or the readable table and RUNBOOK pointer (Session 71c).
+
 ## Capability added: 2026-10-12 (Session 71, the results metrics and the report payload)
 
 Working and verified through 60 synthetic-byte cases (`tests/test_results_report.py`), a mutation pass (52 of 52 killed), a fresh-context review and the full suite (`3605 passed, 1 skipped in 890.41s (0:14:50)`, Linux): `nfl_results_metrics_v1` (`config/results_metrics_v1.json`) loads and validates, and `results_report.build_report` computes in memory the NFL and engine-era rollups (the percentile and tail rates beside their random expectations, blanks, money in cents, realized and rake-implied returns), fee concentration, the within-slate sign test and its trigger, and the all-sport check. Not yet: a command or a written report, intervals, or any run on the real export (Session 71b).
