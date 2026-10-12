@@ -52,6 +52,12 @@ delivered 23:31Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=D
   0 defects, 0 breaches; only those two rows differ from v4; same 32 lineups; non-roster cells and CRLF unchanged; every contest's max
   and mean overlap, pairs sharing 5, Captain counts and max person unchanged (Flowers ties Penix at 13 of 20 in the Dime Package). Final
   `construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v5.csv` (`3c66734f...df2f`), delivered 23:59Z.
+- **Huntley Captain (Ben asked, 00:01Z).** v5 had Huntley Captain in 0 of 32 rows (FLEX in 16; Penix Captain 5), short of the
+  working.md rule that a starting QB captains at least 2 rows. Two Dime Package rows that already held both, 5292886314 and 5292886320,
+  flip Flowers CPT / Huntley FLEX to Huntley CPT / Flowers FLEX: same six people, so thesis captain sets (Huntley is in every one
+  Flowers is), overlap and exposure are unchanged, salary -$600 each. Captains: Folk 6, Penix 5, Loop 5, Flowers 4, London 4, Henry 2,
+  Bijan 2, Huntley 2, B. Robinson Jr. 1, Falcons 1 (10 distinct). `construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v6.csv`
+  (`3b14e785...688d`): QA PASS, 0 defects, 0 breaches, 32 distinct, only those two rows differ from v5, CRLF; delivered 00:02Z.
 - **Found.** The QB depth capture has no way to promote the backup of a DraftKings-`OUT` starter on a Showdown slate when the chart lags
   the news; the by-hand route was a one-team package plus an operator exclusion. The ceiling pass's prior-raising FLEX swaps were not run:
   they would have re-added Pitts and FLEX kickers on last season's priors, against the 2026 usage research.
