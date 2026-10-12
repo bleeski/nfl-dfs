@@ -4,6 +4,122 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-12: Session 71b -- `nfl results-report`, the write-once report and its bootstrap (the table split to Session 71c)
+
+Branch `claude/s71b-results-report`, pull request #140, claimed at `9ec42ab` (PR #139's merge, now recorded in Session
+71's close-out row). Ben approved the plan before any code. The `advisor` skill's hook failed again (`set: Illegal
+option -o pipefail`), so fresh-context fable agents ran each consult. A report only: nothing reaches `run-slate`,
+`prior_review` or a release truth, and every path stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- `nfl results-report --source-sha256 <64 hex> [--results-root] [--engine-era-start]` (`cli.py`, `nfl.ps1`):
+  - **The snapshot.** It reads `<root>/inbox/<sha256>.csv`. One `lstat` decides: absent, a symlink, or anything but a
+    plain file is refused; the open refuses a symlink swapped in where the platform can. At most `MAX_BYTES + 1` bytes
+    are read, and they must hash to the name.
+  - **The report.** It parses the snapshot and writes `reports/<sha256>/results_report.era-<date>.w1.json` once through
+    `entry_history._write_once`: `ALREADY_PRESENT` on identical bytes, never an overwrite. The era names the file;
+    the trigger still reads the registered era.
+  - **stdout.** Each file's path, state and SHA-256, the problems and a money-free headline (counts, place-based rates,
+    blanks by date, the within-slate test and the trigger). Exit 0 for `COMPLETE` or `ALREADY_PRESENT`, 2 otherwise.
+- **The refusals.** A `results_report` registry family (`P`, `CERTIFICATION`) with `RESULTS_REPORT_INPUT_INVALID`,
+  `RESULTS_REPORT_SNAPSHOT_INVALID` (`reason=absent|symlink|unreadable|hash`), `RESULTS_REPORT_ARTIFACT_CONFLICT` and
+  `RESULTS_REPORT_WRITE_FAILED`. A parser refusal passes through by its own code; a metrics file that will not load is
+  `ResultsMetricsError`, shown as `CLI_FAILED`. `REGISTRY_SHA256` re-pinned to `cb6a85b7...694c`.
+- **The bootstrap, as v1's `bootstrap` section registers it.** `build_report(..., bootstrap=True)`, which the writer
+  always passes, gives every slice but a one-slate `by_slate` row seven ratio statistics: the excess over random of the
+  percentile, top-10% and bottom-10% rates, with and without blanks, and the realized return on fees. Each carries:
+  - an exact estimate;
+  - a bootstrap-t interval with CR1 standard errors: pairs from 30 slates, Webb six-point wild below, none below 5,
+    10,000 resamples, 90%;
+  - a minimum detectable effect at two-sided alpha 1/20 and power 4/5, through a pure-Python t quantile (the exact
+    series for integer df, inverted by bisection; no scipy).
+
+  Degenerate draws are counted, never dropped. Each slice and statistic draws from its own seeded generator. Without the
+  flag the payload is byte-identical to Session 71's.
+- The `nfl_results_report_v1` section of `docs/DATA_CONTRACTS.md` (every written key, the refusals, the bootstrap and its
+  determinism) and a "Results report" section of `docs/OPERATOR_GUIDE.md`.
+- `tests/test_results_report_command.py` (25 tests) and `tests/test_results_report_bootstrap.py` (27). One existing test
+  edited, as every registry change requires: the `REGISTRY_SHA256` pin in `tests/test_gate_registry.py`.
+
+**Decided, with the reason.**
+- **Writer `w1` carries the bootstrap.** Nothing had been written, so no file on disk ever lacks the intervals.
+- **No money on stdout,** like `results-intake`. The acceptance's money figures are read from the JSON (O13).
+- **The pairs interval is studentized too.** The registered section names only the wild method; this way only the
+  resampling changes at 30 slates, and the skewed return statistic gets the better-covering interval.
+- **No interval on the all-sport check,** which reproduces the review's point figures.
+- **`places_paid_zero` left out of the payload,** so `build_report`'s default bytes stay Session 71's. The count comes
+  from `nfl_entries.w1.json`, as Session 71 counted its 36.
+
+**The split.** The plan budgeted the command and writer at 480, the bootstrap at 350, the contract at 130 and the table
+with the RUNBOOK pointer at 100, about 1,060 against a 1,000 stop. It decided the cut in advance: the table would be built
+only if the other three came under 880. Parts 1 and 2 measured 488 and about 479 (967), so the table and pointer became
+Session 71c, directly below with no board dependency. Parts 1 and 4 stayed under 650, so the bootstrap stayed.
+Final size: 1,238 changed lines in source (508), config and `nfl.ps1` (11), tests (581) and docs (138), plus the
+ledgers.
+
+**Reviews and consults.**
+- **The plan consult** (16 claims). Taken:
+  - the CR1 algebra restated (the factor moves t* and leaves the interval invariant only algebraically);
+  - a zero SE* with a non-zero SE is possible (its counterexample checked), so degenerate draws sit at +-inf;
+  - the t-quantile details;
+  - O13 independent of the table, with the full hash;
+  - Part 1 re-budgeted and the cuts decided in advance;
+  - metrics loaded at call time;
+  - JSON-encoded seed keys and a two-process determinism test;
+  - no `uncertainty` on `by_slate`;
+  - no cross-platform claim for the MDE.
+- **The fresh-context `reviewer`.** Nothing blocking. Two should-fix findings, each reproduced by its probe and fixed:
+  - a FIFO at the snapshot name hung the command in `open()`;
+  - a stat error (EACCES) escaped as `CLI_FAILED`, because Python 3.13's `is_symlink()` and `exists()` re-raise it.
+
+  Also taken: a pairs draw with no shift and no spread has no sign, so it nulls the interval; the floor reason names
+  the registered minimum; a two-eras test with slates the trigger counts; four contract sentences corrected.
+- **The close-out consult.** Taken: section 1 names Session 71c (no board dependency puts it first); the 71b row's cells
+  and Landed paragraph; O13 names where the `Places_Paid` 0 count comes from and reads a second `ALREADY_PRESENT` as the
+  byte-identity check; the measured sizes.
+- **Mutation, on a `shutil.copytree` scratchpad copy** (`nfl_dfs` resolved inside it; the copy deleted).
+  - A first walk found three gaps before the pass ran, now tests: `ZERO_STANDARD_ERROR`, the intervals pinned for both
+    methods, and `--engine-era-start` through the CLI.
+  - First pass: one survivor, a read failure after a passing stat, now an `os.open` case.
+  - Final pass: 41 of 42 killed. The survivor (ceil to floor in the lower order statistic) is equivalent at the
+    registered 10,000 resamples. A 7-resample case now pins the rule.
+
+**Verification.**
+- New tests red first: `argparse.ArgumentError: argument command: invalid choice: 'results-report'`, then
+  `AttributeError: module 'nfl_dfs.results_report' has no attribute 't_quantile'`, then the contract section's
+  `IndexError`.
+- One own-test fix: the plan's hand MDE (5.8778) was a rounding slip; 3.7174097 x 1.5811388 = 5.87774, checked with
+  `Decimal`.
+- t quantiles match published values to 6 places at df 1, 2, 3, 4, 16, 54 and 500.
+- 90% coverage on skewed synthetic clusters, 300 trials each: wild at 8 slates 0.893, wild at 15 0.870, pairs at 40
+  0.887 (misses 15 above and 19 below).
+- A 55-slate, 268-entry synthetic history runs in 8.0 s at 10,000 resamples.
+- Real files on Linux: a FIFO is `unreadable` with no hang; real and broken symlinks are `symlink`.
+- Neighbours (the three results files, entry history and intake, contest facts, the registry, boundaries, CLI help and
+  the roadmap queue): 698 passed.
+- Before and after against `9ec42ab`, on synthetic inputs:
+  - `results-intake`'s stdout, exit codes and three written files are byte-identical;
+  - `build_report`'s default bytes are identical on three fixtures;
+  - the registry differs by the four codes and one family only;
+  - `--help` gains `results-report`;
+  - `doctor` exits 0 in both.
+- Full suite on Linux: `3658 passed, 1 skipped in 959.45s (0:15:59)`.
+- `sh ./nfl.sh doctor`, `git diff --check` and `python3 scripts/check_protected_paths.py` (no protected path).
+
+**Left open.**
+- **Ben's export.** It is not in this container, so none of the card's figures was measured, and the row is `Pending`
+  on O13. The three v1 choices it decides are named in the contract: the strict bottom boundary, the `Best Ball` text and
+  tickets in winnings.
+- **Session 71c:** the readable table and the RUNBOOK pointer.
+- **Windows.** The pinned intervals and the two-process test rest on IEEE arithmetic and Python's guaranteed
+  `random()`; only the `windows` CI job proves them there.
+- **The Session 12 ledger row** still says its merge "is recorded by the next session".
+
+**Next time.** The command and writer came in on budget once Session 69b's sibling set the estimate (488 against 480).
+The bootstrap ran 1.37 times, from hand-computed tests for each branch of the arithmetic. Budget a statistical method at
+about 1.4 test lines per source line, and decide a cut before the work starts, as this plan did: no consult was needed
+at the seam.
+
 ### 2026-10-12: Session 71 -- the results metrics and the report payload (split to Session 71b at a re-planned seam)
 
 Branch `claude/s71-results-report`, pull request #139, claimed at `99be91b` (PR #138's merge, now recorded in Session
