@@ -1,5 +1,9 @@
 # Implementation Status
 
+## Capability added: 2026-10-12 (Session 71c, the readable results table)
+
+Working and verified through 15 synthetic-byte cases (`tests/test_results_report_table.py`), a mutation pass (33 of 33 killed), a fresh-context review, a before/after against the unmodified tree (9 of 9 scenarios identical) and the full suite (`3671 passed, 1 skipped in 993.58s (0:16:33)`, Linux): `nfl results-report` writes `results_report.era-<date>.w1.md` once beside the `nfl_results_report_v1` JSON, a short Markdown table (Overall with fees and net in its first 20 lines, each scope's payout-shape rows with each rate's excess, interval and MDE, the within-slate test and its trigger) whose every figure is the JSON's own string; a rerun beside a report already on disk writes the table alone. The JSON's bytes do not move. Realized results only: not EV, an ROI forecast, a probability, a calibration or an edge; nothing reaches `run-slate` or a release truth.
+
 ## Capability added: 2026-10-12 (Session 71b, `nfl results-report` and the bootstrap)
 
 Working and verified through 52 synthetic-byte cases (`tests/test_results_report_command.py`, `tests/test_results_report_bootstrap.py`), a mutation pass (41 of 42 killed, the survivor equivalent at the registered values and now pinned), a fresh-context review, a before/after against `origin/main` and the full suite (`3658 passed, 1 skipped in 959.45s (0:15:59)`, Linux): `nfl results-report` checks the snapshot `results-intake` kept (one `lstat`, its hash), writes `nfl_results_report_v1` once under the gitignored results root with a money-free stdout and four named refusals, and gives every slice of at least 5 slates a bootstrap-t interval and minimum detectable effect as the registered `bootstrap` section sets them. Not yet: any run on Ben's export (O13) or the readable table and RUNBOOK pointer (Session 71c).
