@@ -22,7 +22,9 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
   `VERIFY_X509_STRICT`. Container facts: `docs/CLAUDE_CODE_SETUP.md`.
 - CI runs the pinned suite and `tests/test_repo_boundaries.py` on every push,
   and the protected-path check on every pull request event, labels included.
-  Green CI replaced Ben reading each diff, so never push speculatively.
+  Green CI replaced Ben reading each diff, so never push speculatively. Each push cancels the CI run before it on
+  the same branch (17 to 26 minutes with Windows; four of Session 70's code pushes never finished CI that way):
+  commit locally and push once per validated batch.
 - Three traps that cost Sessions 61 and 62 time (added by Session 63). **Delete the old suite log before any Monitor is armed on it:**
   a Monitor on a log an earlier run left reports that run's result (it did in Session 62). **PowerShell 5.1 cannot pipe
   `git commit -F -`:** write the message with the Write tool to a file and commit from Bash with `git commit -F <file>`. **Edit
