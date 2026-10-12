@@ -203,7 +203,7 @@ def test_the_all_sport_check_leaves_out_unreadable_rows_and_counts_them():
     assert [note["kind"] for note in history.notes].count("NON_NFL_RULE_NOT_MET") >= 2
     check = _report(*STANDARD, unreadable, zero_field)["all_sport_check"]
     assert check["entries"] == 4  # 3 NFL and 1 MLB; Best Ball and the free row are out
-    assert check["left_out_unreadable"] == {"NBA": 2}
+    assert check["left_out_rule_not_met"] == {"NBA": 2}
     assert check["overall"]["fees_cents"] == 1200
 
 
@@ -282,6 +282,8 @@ _DELETE = object()
         _metrics_with(populations__excluded_game_types=_DELETE),
         _metrics_with(populations__excluded_game_types=[""]),
         _metrics_with(populations__excluded_game_types=["Best Ball", "Best Ball"]),
+        rr.DEFAULT_METRICS_PATH.read_bytes().replace(
+            b'"engine_era_start": "2026-09-09"', b'"engine_era_start": "2020-01-01", "engine_era_start": "2026-09-09"'),
         _metrics_with(fee_concentration_top=True),
         _metrics_with(bootstrap__mde_power="1/1"),
         _metrics_with(populations__engine_game_types="Classic"),
@@ -345,7 +347,7 @@ def test_the_paired_test_counts_slates_by_hand():
     assert [(row["date"], row["difference_points"]) for row in test["slates"]] == [
         ("2026-09-13", "60.0000"), ("2026-09-14", "-40.0000"), ("2026-09-21", "0.0000"), ("2026-10-10", "0.0000")]
     assert test["slates"][0]["top_heavy_entries"] == 1 and test["slates"][0]["flatter_entries"] == 1
-    assert test["slates_after_registration"] == 0
+    assert test["after_registration"] == {"slates_with_both": 0, "worse": 0, "better": 0, "p_one_sided": "1.000000"}
     trigger = report["within_slate_trigger"]
     assert trigger["scope"] == "engine_era" and trigger["met"] is False
     assert (trigger["slates"], trigger["p_one_sided"]) == (2, "0.750000")
@@ -367,10 +369,13 @@ def test_the_trigger_needs_twenty_slates_and_p_under_one_twentieth(count, better
     trigger = report["within_slate_trigger"]
     assert (trigger["slates"], trigger["met"]) == (count, met)
     assert trigger["registered_on"] == "2026-10-10"
-    assert report["scopes"]["engine_era"]["within_slate_test"]["slates_after_registration"] == count
+    assert trigger["engine_era_start"] == "2026-09-09"
+    fresh = report["scopes"]["engine_era"]["within_slate_test"]["after_registration"]
+    assert (fresh["slates_with_both"], fresh["worse"], fresh["better"]) == (count, count - better, better)
+    assert fresh["p_one_sided"] == trigger["p_one_sided"]  # every slate here is dated after registration
 
 
-def test_a_capped_contest_is_flatter_not_top_heavy():
+def test_a_contest_paying_more_places_than_entries_is_flatter():
     rows = (_contest(1, "2026-09-13", 800, "1200"), _contest(2, "2026-09-13", 200, TOP_HEAVY))
     test = _report(*rows)["scopes"]["nfl"]["within_slate_test"]
     assert (test["worse"], test["better"]) == (0, 1)  # the capped contest is the flatter side
@@ -412,3 +417,22 @@ def test_the_trigger_needs_p_strictly_below_alpha():
     metrics = dataclasses.replace(rr.load_results_metrics(), trigger_alpha=Fraction(1, 4), trigger_min_slates=2)
     trigger = _report(*_worse_slates(2), metrics=metrics)["within_slate_trigger"]
     assert (trigger["p_one_sided"], trigger["met"]) == ("0.250000", False)
+
+
+def test_the_trigger_reads_the_registered_era_whatever_the_caller_names():
+    rows = []
+    for index in range(20):  # October 2025: before the engine era, top-heavy worse every time
+        day = f"2025-10-{index + 1:02d}"
+        rows += [_contest(2 * index, day, 900, TOP_HEAVY), _contest(2 * index + 1, day, 100, FLATTER)]
+    report = _report(*rows, era="2025-01-01")
+    assert report["scopes"]["engine_era"]["within_slate_test"]["worse"] == 20
+    assert report["scopes"]["nfl"]["within_slate_test"]["worse"] == 20
+    trigger = report["within_slate_trigger"]
+    assert (trigger["slates"], trigger["met"], trigger["engine_era_start"]) == (0, False, "2026-09-09")
+
+
+def test_the_all_sport_check_leaves_out_a_place_outside_its_field():
+    zero = _row(Sport="NBA", Entry_Key="4000000011", Contest_Key="100000011", Place="0", Contest_Entries="10")
+    beyond = _row(Sport="NBA", Entry_Key="4000000012", Contest_Key="100000012", Place="50", Contest_Entries="10")
+    check = _report(*STANDARD, zero, beyond)["all_sport_check"]
+    assert check["entries"] == 4 and check["left_out_rule_not_met"] == {"NBA": 2}

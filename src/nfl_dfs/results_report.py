@@ -62,9 +62,6 @@ DECLARED = {
     },
     "bootstrap": {"cluster": "SLATE", "wild": "WEBB_SIX_POINT_STUDENTIZED_CR1"},
 }
-# The values a row must hold to be counted; an NFL row always holds them (the parser refuses the file otherwise).
-REQUIRED = ("contest_start", "place", "points_hundredths", "winnings_non_ticket_cents", "winnings_ticket_cents",
-            "contest_entries", "entry_fee_cents", "prize_pool_cents", "places_paid")
 
 _FRACTION = re.compile(r"[1-9][0-9]{0,5}/[1-9][0-9]{0,5}")
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
@@ -161,11 +158,19 @@ def _declared(document: Mapping[str, object], section: str, extra: frozenset[str
     return block
 
 
+def _unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    if len({key for key, _ in pairs}) != len(pairs):
+        raise _invalid("an object", "repeats a key")
+    return dict(pairs)
+
+
 def parse_results_metrics(raw: bytes) -> ResultsMetrics:
     """The registered metrics, or `ResultsMetricsError` naming the first fault."""
 
     try:
-        document = json.loads(raw.decode("utf-8"))
+        document = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_keys)
+    except ResultsMetricsError:
+        raise
     except (ValueError, RecursionError) as exc:  # UnicodeDecodeError and JSONDecodeError are ValueErrors
         raise ResultsMetricsError(f"results metrics unreadable: {type(exc).__name__}") from None
     _object(document, frozenset({"schema_version", "registered_at", "authority", "populations", "rates", "slates",
@@ -464,7 +469,7 @@ def _within_slate(rows: Sequence[HistoryRow], registered_on: str) -> dict[str, o
         "p_one_sided": _fixed(one_sided, 6),
         "p_two_sided": _fixed(two_sided, 6),
         "mean_difference_points": _mean_percent([difference for *_, difference in slates]),
-        "slates_after_registration": sum(key[1] > registered_on for key, *_ in slates),
+        "after_registration": _fresh([difference for key, *_, difference in slates if key[1] > registered_on]),
         "slates": [
             {"sport": key[0], "date": key[1], "game_type": key[2], "top_heavy_entries": top,
              "flatter_entries": flat, "difference_points": _mean_percent([difference])}
@@ -473,11 +478,22 @@ def _within_slate(rows: Sequence[HistoryRow], registered_on: str) -> dict[str, o
     }
 
 
+def _fresh(differences: Sequence[Fraction]) -> dict[str, object]:
+    """The same test on the slates after registration alone: the ones that did not choose its direction."""
+
+    worse, better = sum(value > 0 for value in differences), sum(value < 0 for value in differences)
+    return {"slates_with_both": len(differences), "worse": worse, "better": better,
+            "p_one_sided": _fixed(sign_test(worse, better)[0], 6)}
+
+
 def _trigger(test: Mapping[str, object], metrics: ResultsMetrics) -> dict[str, object]:
+    """Always on the registered population: an era a caller names moves the scopes, never the trigger."""
+
     one_sided, _ = sign_test(int(test["worse"]), int(test["better"]))
-    slates = int(test["worse"]) + int(test["better"])
+    slates = int(test["worse"]) + int(test["better"])  # tied slates drop out of the test and the count
     return {
         "scope": metrics.trigger_scope,
+        "engine_era_start": metrics.engine_era_start,
         "registered_on": metrics.registered_on,
         "alpha": str(metrics.trigger_alpha),
         "min_slates": metrics.trigger_min_slates,
@@ -489,23 +505,26 @@ def _trigger(test: Mapping[str, object], metrics: ResultsMetrics) -> dict[str, o
     }
 
 
-def _complete(row: HistoryRow) -> bool:
-    return all(getattr(row, name) is not None for name in REQUIRED)
-
-
 def _all_sport(history: EntryHistory, metrics: ResultsMetrics) -> tuple[list[HistoryRow], Counter[str]]:
-    """Every sport's paid entries outside the excluded game types; a row with an unparsed value is left out."""
+    """Every sport's paid entries outside the excluded game types. A non-NFL row the parser named for a value rule
+    (an unreadable cell, a place outside its field, a contest that disagrees) is left out and counted; an NFL row never
+    has one, because the parser refuses the file instead."""
 
+    named = {note["row"] for note in history.notes if note["kind"] == "NON_NFL_RULE_NOT_MET"}
     counted: list[HistoryRow] = []
     left_out: Counter[str] = Counter()
     for row in history.rows:
         if row.game_type in metrics.excluded_game_types or row.entry_fee_cents == 0:
             continue
-        if _complete(row):
-            counted.append(row)
-        else:
+        if row.row in named:
             left_out[row.sport] += 1
+        else:
+            counted.append(row)
     return counted, left_out
+
+
+def _era_rows(nfl: Sequence[HistoryRow], metrics: ResultsMetrics, start: str) -> list[HistoryRow]:
+    return [row for row in nfl if row.game_type in metrics.engine_game_types and str(row.contest_start)[:10] >= start]
 
 
 def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha256: str, source_bytes: int,
@@ -517,9 +536,8 @@ def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha25
     era = metrics.engine_era_start if engine_era_start is None else engine_era_start
     counted, left_out = _all_sport(history, metrics)
     nfl = [row for row in counted if row.is_nfl]
-    engine_era = [row for row in nfl
-                  if row.game_type in metrics.engine_game_types and str(row.contest_start)[:10] >= era]
-    scopes = {"nfl": _scope(nfl, metrics), "engine_era": _scope(engine_era, metrics)}
+    scopes = {"nfl": _scope(nfl, metrics), "engine_era": _scope(_era_rows(nfl, metrics, era), metrics)}
+    registered = nfl if metrics.trigger_scope == "nfl" else _era_rows(nfl, metrics, metrics.engine_era_start)
     return {
         "schema_version": REPORT_VERSION,
         "writer": WRITER,
@@ -533,8 +551,8 @@ def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha25
             "engine_game_types": list(metrics.engine_game_types),
         },
         "scopes": scopes,
-        "within_slate_trigger": _trigger(scopes[metrics.trigger_scope]["within_slate_test"], metrics),
-        "all_sport_check": {"entries": len(counted), "left_out_unreadable": dict(sorted(left_out.items())),
+        "within_slate_trigger": _trigger(_within_slate(registered, metrics.registered_on), metrics),
+        "all_sport_check": {"entries": len(counted), "left_out_rule_not_met": dict(sorted(left_out.items())),
                             "overall": _slice(counted)},
         "notes": [
             {"kind": "PLACES_PAID_ABOVE_CONTEST_ENTRIES_CAPPED", "row": row.row, "entry_key": row.entry_key,

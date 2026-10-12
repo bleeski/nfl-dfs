@@ -4672,12 +4672,14 @@ Registered 2026-10-12. `config/results_metrics_v1.json`, SHA-256
 `56c471710421f5f4fca579a82409610f9c2b73d3dd7d8e0d80170538fa1f736c` (pinned by `tests/test_results_report.py`). It
 defines the measures of realized results that every later grader imports from `src/nfl_dfs/results_report.py` (Session
 18's `standings_metrics.py` among them), read from the `nfl_dk_entry_history_v1` export. v1 is never mutated: a
-definition the real export proves wrong is `nfl_results_metrics_v2`.
+definition the real export proves wrong is `nfl_results_metrics_v2`. Three choices wait on that export (Session 71b's
+acceptance): the strict bottom-10% boundary (the review's 13.6% all-sport bottom rate decides it), the exact `Best Ball`
+text (9,960 all-sport entries) and tickets inside winnings (-$640.20).
 
 **Loading.** `load_results_metrics` reads the file and `parse_results_metrics` refuses it whole as
 `ResultsMetricsError` (a defect in a tracked file, not a gate code), naming the first fault: bytes, JSON, nesting or a
-number Python cannot read (`results metrics unreadable: <exception class>`); a missing or extra key at any level; a
-declared rule other than the one the module implements; a list that is empty, repeated, untrimmed or not increasing;
+number Python cannot read (`results metrics unreadable: <exception class>`); a missing, extra or repeated key at any
+level; a declared rule other than the one the module implements; a list that is empty, repeated, untrimmed or not increasing;
 an integer outside its range or a bool; a fraction not `a/b` strictly between 0 and 1; a date that is not a real
 `YYYY-MM-DD`. The loaded metrics carry the file's SHA-256.
 
@@ -4686,8 +4688,8 @@ an integer outside its range or a bool; a fraction not `a/b` strictly between 0 
 the entry it funds cancel. `excluded_game_types` (`Best Ball`) are left out by exact text. Scope `nfl`: NFL, paid, not
 excluded. Scope `engine_era`: `nfl` rows whose game type is in `engine_game_types` (`Classic`, `Showdown Captain Mode`)
 on or after `engine_era_start` (`2026-09-09`, the first live run; a caller may name another real date). The all-sport
-check takes every sport's paid, not-excluded rows and leaves out, counted by sport, a non-NFL row with a value the
-parser could not read.
+check takes every sport's paid, not-excluded rows and leaves out, counted by sport, every non-NFL row the parser named
+`NON_NFL_RULE_NOT_MET` (a cell it could not read, a place outside its field, a contest whose rows disagree).
 
 **Rates** (`rates`, one public function each). The finishing percentile is `Place / Contest_Entries` (lower is better),
 beside its random expectation `(n+1)/2n`. A top-10% finish is `Place * 10 <= n`, random `floor(n/10)/n` (impossible
@@ -4699,14 +4701,17 @@ given. Every mean is exact rational arithmetic rounded once, half to even, to 4 
 **Slates and bands.** A slate is sport, Eastern date (from the parsed contest time) and game type, which merges same-day
 Showdown games; a fine slate uses the contest start time instead of the date. The paid fraction is `Places_Paid /
 Contest_Entries`, capped at 1; its bands start at `contest_facts.THRESHOLD` (checked at load), so the first band is
-exactly the `FIRST_PLACE_OBJECTIVE` label: `[0, 1/20)`, `[1/20, 1/5)`, `[1/5, 1/2)`, `[1/2, 1]`. Field-size bands end at
+exactly the `FIRST_PLACE_OBJECTIVE` label: `[0, 1/20)`, `[1/20, 1/5)`, `[1/5, 1/2)`, `[1/2, 1]` (a `Places_Paid` of 0
+is a paid fraction of 0, the first band). Field-size bands end at
 20, 100, 500 and 2,000 entries, fee bands at $1, $5 and $20 (upper bounds inclusive). No contest name is read.
 
 **The within-slate test** (`within_slate_test`, registered 2026-10-10). Per slate holding both kinds, the mean
 percentile (blanks included) of top-heavy entries (`FIRST_PLACE_OBJECTIVE`) minus that of flatter ones; an exact sign
-test, one-sided (top-heavy worse), ties dropped, with the two-sided p beside it. The trigger reads the `engine_era`
-scope and is met at p below 1/20 over at least 20 slates: it opens a roadmap row for the per-contest term inside Session
-50's placement objective, and the report itself acts on nothing. Its direction was chosen on the first 12 slates.
+test, one-sided (top-heavy worse), ties dropped, with the two-sided p beside it, and the same test on the slates dated
+after 2026-10-10 alone, since the first 12 chose its direction. The trigger always reads the registered engine era
+(`engine_era_start` from the file, whatever era a caller names for the scopes) and is met at p below 1/20 over at least
+20 slates, tied slates not counted: it opens a roadmap row for the per-contest term inside Session 50's placement
+objective, and the report itself acts on nothing.
 
 **Bootstrap** (`bootstrap`), registered ahead of Session 71b, which reads it: slate clusters, seed 20261010, 10,000
 resamples, a 90% interval (the review's level; the metric registry's 95% is for promotion metrics), pairs from 30
