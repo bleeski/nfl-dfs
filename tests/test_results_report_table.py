@@ -359,3 +359,6 @@ def test_the_table_flags_what_it_does_not_establish(tmp_path):
     assert f"source `{payload['source']['sha256']}`" in text.splitlines()[2]
     trigger = payload["within_slate_trigger"]
     assert f"met: {json.dumps(trigger['met'])}" in text and trigger["when_met"] in text
+    assert (f"Trigger, on {trigger['scope']} from {trigger['engine_era_start']} (registered {trigger['registered_on']}): "
+            f"{trigger['slates']} slates against a minimum of {trigger['min_slates']}, p one-sided "
+            f"{trigger['p_one_sided']} against alpha {trigger['alpha']};") in text

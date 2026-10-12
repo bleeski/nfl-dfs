@@ -77,8 +77,15 @@ option -o pipefail`), so fresh-context fable agents ran each consult. A report o
   one nit: the table's path on a refused report was untested. Not taken: a two-process table comparison
   (`render_table(json.loads(file)) == table` ties the table to the JSON, which the existing two-process test covers),
   and the exact folder listing's exposure to a dotted temporary file on Windows (the risk predates this change).
-- **The close-out consult.** A fresh-context fable agent was briefed to refute seven close-out claims; its outcome is
-  recorded here before the merge.
+- **The close-out consult** (seven claims). Held: `Complete`, the ledger conventions, section 1, no EV wording or
+  money on stdout, and both pins free of anything platform-dependent. Taken:
+  - the docs measured 74 changed lines, not 64;
+  - the local suite ran on the tree before `d0a341a`, so CI's `suite` on `d0a341a` is the full-suite evidence for
+    the 15-test tree, and the card and ledger row now say so;
+  - `state/last-verify.json` stamps HEAD at recording, not the tree the run collected;
+  - one assertion on the trigger line's scope, dates, counts and p.
+
+  The lesson: never commit a collected test module while the suite runs.
 - **Mutation, on a `shutil.copytree` scratchpad copy** (`nfl_dfs` resolved inside it; the copy deleted): 33 of 33
   killed, each by a named test. Among them: the sign at zero, a missing `abs`, the separators, the padding, a null as
   a zero, a swapped pair, the blanks-removed statistic, a swapped interval, the reason, the lead cells, the estimate and
@@ -95,8 +102,9 @@ option -o pipefail`), so fresh-context fable agents ran each consult. A report o
   code, stdout without `files.table` and the JSON's bytes were identical in all 9. The export is not in this
   container, so the runs are synthetic.
 - Full suite (Linux): `3671 passed, 1 skipped in 993.58s (0:16:33)`, run before the two review tests were added (they pass in the card command); `src/`
-  was unchanged after it.
-- Size: 591 changed lines before the ledgers (source 153, tests 364, docs 64) against the card's 110 and the plan's 310;
+  was unchanged after it. CI on `d0a341a`, the 15-test tree (run 38257373200): `suite` and `boundaries` green;
+  `windows` was cancelled by the next push.
+- Size: 591 changed lines before the ledgers (source 153, tests 364, docs 74) against the card's 110 and the plan's 310;
   the new test file is 361 of them. No seam was needed.
 - `git diff --check` clean; `check_protected_paths.py`: none touched; `doctor` `pass_status: true`; the edited modules
   compile; zero CR bytes in the four ledgers.
