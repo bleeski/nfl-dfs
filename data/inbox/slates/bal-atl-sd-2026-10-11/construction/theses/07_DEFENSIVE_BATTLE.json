@@ -1,0 +1,35 @@
+{
+  "name": "DEFENSIVE_BATTLE",
+  "teams": [
+    "BAL",
+    "ATL"
+  ],
+  "captain_set": [
+    "BAL|K|Tyler Loop",
+    "ATL|K|Nick Folk",
+    "BAL|DST|Ravens",
+    "ATL|DST|Falcons"
+  ],
+  "position_bounds": [
+    {
+      "position": "K",
+      "minimum": 2,
+      "maximum": 2
+    },
+    {
+      "position": "DST",
+      "minimum": 1,
+      "maximum": 1
+    },
+    {
+      "position": "QB",
+      "minimum": 0,
+      "maximum": 1
+    },
+    {
+      "position": "WR",
+      "minimum": 0,
+      "maximum": 1
+    }
+  ]
+}

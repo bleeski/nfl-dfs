@@ -1,0 +1,39 @@
+{
+  "lineups": 32,
+  "defects": 0,
+  "DEFECTS": [],
+  "limit_breaches": 0,
+  "LIMIT_BREACHES": [],
+  "unfilled_entry_ids": [],
+  "prefilled_entry_ids": [],
+  "observations": 16,
+  "OBSERVATIONS": [
+    "5292879389 MULTIPLE_KICKERS 2",
+    "5292879389 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|RB|Bijan Robinson']",
+    "5292887579 DST_WITH_OWN_OFFENSE ATL:['ATL|QB|Michael Penix Jr.', 'ATL|TE|Austin Hooper']",
+    "5292900194 MULTIPLE_KICKERS 2",
+    "5292900194 DST_WITH_OWN_OFFENSE BAL:['BAL|K|Tyler Loop', 'BAL|RB|Derrick Henry']",
+    "5292886316 DST_WITH_OWN_OFFENSE BAL:['BAL|K|Tyler Loop', 'BAL|QB|Tyler Huntley', 'BAL|WR|Zay Flowers']",
+    "5292886317 MULTIPLE_KICKERS 2",
+    "5292886317 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|QB|Michael Penix Jr.', 'ATL|RB|Bijan Robinson', 'ATL|WR|Drake London']",
+    "5292886321 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|QB|Michael Penix Jr.', 'ATL|TE|Austin Hooper']",
+    "5292886326 DST_WITH_OWN_OFFENSE BAL:['BAL|RB|Derrick Henry']",
+    "5292886330 MULTIPLE_KICKERS 2",
+    "5292886330 DST_WITH_OWN_OFFENSE BAL:['BAL|K|Tyler Loop', 'BAL|QB|Tyler Huntley', 'BAL|RB|Derrick Henry', 'BAL|WR|Zay Flowers']",
+    "5292886331 DST_WITH_OWN_OFFENSE ATL:['ATL|QB|Michael Penix Jr.', 'ATL|WR|Drake London']",
+    "5292886332 DST_WITH_OWN_OFFENSE ATL:['ATL|QB|Michael Penix Jr.', 'ATL|RB|Bijan Robinson', 'ATL|WR|Jahan Dotson']",
+    "5292888219 DST_WITH_OWN_OFFENSE BAL:['BAL|K|Tyler Loop', 'BAL|QB|Tyler Huntley', 'BAL|TE|Mark Andrews']",
+    "5292898557 DST_WITH_OWN_OFFENSE ATL:['ATL|K|Nick Folk', 'ATL|QB|Michael Penix Jr.', 'ATL|TE|Kyle Pitts Sr.']"
+  ],
+  "observation_note": "strategy observations never change the exit code; DraftKings accepts each of them",
+  "exit_codes": "1 validity failure; 3 blank authorized rows unfilled; 2 an operator limit only; 0 none of these, which does not clear an upload",
+  "max_pairwise_overlap": 5,
+  "salary_min": 43500,
+  "salary_max": 50000,
+  "distinct_captains": 9,
+  "qb_count_histogram": {
+    "1": 28,
+    "2": 4
+  },
+  "VERDICT": "PASS"
+}

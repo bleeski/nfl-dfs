@@ -1,0 +1,73 @@
+{
+  "input": "data/inbox/slates/bal-atl-sd-2026-10-11/construction/DK_REVIEW_ENTRY_bal-atl-sd_judgment_v1.csv",
+  "output": "data/inbox/slates/bal-atl-sd-2026-10-11/construction/DK_REVIEW_ENTRY_bal-atl-sd_judgment_v2.csv",
+  "swaps": [
+    {
+      "entry_id": "5292879393",
+      "thesis": "DEFENSIVE_BATTLE",
+      "unresolved": "no legal one- or two-FLEX change"
+    },
+    {
+      "entry_id": "5292900232",
+      "thesis": "BAL_WINS_CLOSE_LOW",
+      "out": [
+        "Falcons",
+        "Derrick Henry"
+      ],
+      "in": [
+        "Drake London",
+        "Ravens"
+      ],
+      "prior_before": 65.45,
+      "prior_after": 61.59,
+      "salary_before": 49500,
+      "salary_after": 48700,
+      "why": "DST beside the opposing starting QB; best legal one- or two-FLEX change"
+    },
+    {
+      "entry_id": "5292886321",
+      "thesis": "ATL_WINS_CLOSE_LOW",
+      "out": [
+        "Ravens",
+        "Bijan Robinson"
+      ],
+      "in": [
+        "Mark Andrews",
+        "Falcons"
+      ],
+      "prior_before": 73.68,
+      "prior_after": 67.32,
+      "salary_before": 49500,
+      "salary_after": 43700,
+      "why": "DST beside the opposing starting QB; best legal one- or two-FLEX change"
+    },
+    {
+      "entry_id": "5292886325",
+      "thesis": "DEFENSIVE_BATTLE",
+      "unresolved": "no legal one- or two-FLEX change"
+    },
+    {
+      "entry_id": "5292896923",
+      "thesis": "ATL_WINS_CLOSE_LOW",
+      "out": [
+        "Tyler Huntley",
+        "Brian Robinson Jr."
+      ],
+      "in": [
+        "Michael Penix Jr.",
+        "Austin Hooper"
+      ],
+      "prior_before": 65.91,
+      "prior_after": 67.05,
+      "salary_before": 47700,
+      "salary_after": 44100,
+      "why": "DST beside the opposing starting QB; best legal one- or two-FLEX change"
+    }
+  ],
+  "does_not_establish": [
+    "EV",
+    "ROI",
+    "WIN_PROBABILITY",
+    "UPLOAD_CLEARANCE"
+  ]
+}

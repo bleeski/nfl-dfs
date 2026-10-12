@@ -1,0 +1,21 @@
+{
+  "name": "BAL_WINS_BIG",
+  "teams": [
+    "BAL"
+  ],
+  "captain_set": [
+    "BAL|QB|Tyler Huntley",
+    "BAL|RB|Derrick Henry",
+    "BAL|RB|Justice Hill",
+    "BAL|WR|Zay Flowers",
+    "BAL|WR|Rashod Bateman",
+    "BAL|DST|Ravens"
+  ],
+  "team_bounds": [
+    {
+      "team": "BAL",
+      "minimum": 4,
+      "maximum": 5
+    }
+  ]
+}

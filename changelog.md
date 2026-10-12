@@ -4,6 +4,72 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-11: BAL@ATL Showdown (Sunday Night Football), 32 entries, 5 contests (slate record, not a roadmap session)
+
+Branch `claude/bal-atl-sd-2026-10-11`. Inputs, byte-identical to the uploads, under `data/inbox/slates/bal-atl-sd-2026-10-11/input/`:
+salary SHA-256 `64f05238448c69766642081905d221d4905e52125ece3608ddc1cb27874b3026`, entries
+`7d692506953443cc47d101bc2624282a0c5fd62d70ca0bacc71890845fce74f7`. Request 23:20Z, lock 00:20Z, delivery deadline 00:15Z; file
+delivered 23:31Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`, `RELEASE_DECISION=DO_NOT_UPLOAD`.
+
+- **Runs.** `.venv-linux` absent; `setup` ran in the background. `20261011T232202Z-bal-atl-sd` (`--build-priors`): baseline published,
+  then `PRIOR_REVIEW_IDENTITY_BLOCKED` on Matt Hibner (`44446719`, BAL TE): nflverse carries him as Matthew Hibner `00-0040879`, BAL, TE,
+  `ACT` (roster, weekly stats and depth chart). Reviewed crosswalk `roles/identity_reviewed_bal_atl.csv` (`92f0d18f...2fed`), `priors-freeze`
+  to `data/runs/bal-atl-sd-1011-frozen` (weather `ROOF_CLOSED` from roof history, 9 of 9 closed). `20261011T232358Z-bal-atl-sd-r2` (no
+  policy, 22 practice-squad `--exclude` IDs): 32 of 32, `e2eb2b0b...aab8`, with Pitts Captain 6 and Henry in 19 rows.
+  `20261011T232540Z-bal-atl-sd-r3` (policy v4, all eight R33 theses with `--variants`, ATL-only QB depth package, Fagnano excluded): 32 of
+  32 on attempt 0, no relaxation, `d27cad73...3df6`, QA with `--policy --claim` PASS, 0 defects. All three `DELIVERY_STATE=DELIVERABLE`.
+- **Quarterbacks (research, never a gate).** Lamar Jackson ruled out Friday (ankle); Tyler Huntley starts (ESPN, Yahoo live blog,
+  atlantafalcons.com). The nflverse depth chart's latest snapshot (13:56:31Z) still lists Jackson first and Huntley second, so a
+  two-team package would have treated Huntley as a backup. The package went in for ATL only (`roles/qb_depth_atl/`: Penix starts;
+  Tagovailoa, Rush, Strand backups), BAL stayed unevaluated (`backup_quarterback: PARTIAL` in QA), and Joe Fagnano (BAL QB3) was
+  excluded by hand (`44446757`, `44446705`). Skylar Thompson is DraftKings `IR`.
+- **Inactives (Yahoo live blog, posted 22:52Z).** BAL: Jurgens, L. Jackson, Sarratt, Vorhees, Peebles, Hendrickson. ATL: Za'Darius
+  Smith, C. Harris, Rush (emergency third QB), Strand, Onianwa, DeWalt, Longerbeam.
+- **Practice squad.** `practice_squad_check.py` named 11 people `DEV` (22 IDs) plus Hibner with no roster row by that name (he is `ACT`
+  as Matthew). Elevations: BAL elevated OL Chuma Edoga and Kyle Hergel (baltimoreravens.com); ATL elevated DE Bralen Trice and Drake
+  Jackson (profootballrumors.com, 10/10). No skill player was elevated; all 11 stayed excluded.
+- **Usage research** (the run's own nflverse `stats_player_week_2026` capture, read for construction only, no number written). Kyle Pitts
+  2.2 targets and 2.9 PPR a game over 4 games against a 10.32 FLEX prior; Mark Andrews 6.0 targets, 9.7 PPR (prior 7.38); Jahan Dotson 3.2
+  targets, 5.4 PPR (prior 4.59); Austin Hooper 2.3 targets, 5.0 PPR in 3 games.
+- **Judgment pass** (`construction/judgment_pass.py`, record `judgment_v1_record.json`). A: Pitts 19 rows to 8 (Dotson 9 rows, Hooper 2).
+  B: DST beside the opposing starting QB fixed in 2 rows by one swap. C: London and Flowers Captains each given their own QB (one row
+  each). D: Andrews for a FLEX kicker in 4 BAL-script rows. Part 2 (`construction/judgment_pass2.py`, `judgment_v2_record.json`): best
+  legal one- or two-FLEX change for the 5 rows still pairing a DST with the opposing QB; 2 taken (5292900232, 5292896923), 1 rejected by
+  hand (5292886321: the fix dropped Bijan from an ATL-wins row for -6.4 prior points), 2 DEFENSIVE_BATTLE rows have no legal fix and keep the
+  pair. v3 `DK_REVIEW_ENTRY_bal-atl-sd_judgment_v3.csv`: QA with `--policy --claim --max-overlap 5` PASS, 0 defects, 32 of 32 follow their
+  thesis. Engine file to v3: prior total 2,286.27 to about 2,215 (priors price last season's roles), people 20 to 21, mean pair overlap
+  2.635 to 2.361, max overlap 4 to 5, top-3 57 to 56, Penix 19 to 20 rows (62.5%, inside the 75% ceiling allowance).
+- **Contest pass.** `diversify_showdown_contests.py` on v3 moved 29 rows (score 54.39 to 49.82). Final
+  `construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v4.csv` (`16e01aaf...636b`): same 32 distinct lineups as v3, QA PASS, 0 defects, 0 limit
+  breaches, max overlap 5, salary $43,500 to $50,000, CRLF, Entry IDs equal to the template, no `OUT`/`IR`, practice-squad or backup QB.
+  Captains: Folk 6, Flowers 6, Penix 5, Loop 5, London 4, Henry 2, Bijan 2, B. Robinson 1, Falcons 1.
+- **Adversarial pass (Ben asked, 23:51Z).** A fresh-context QA agent, at most 3 iterations, started from v3 (scripts and records in
+  `construction/adversarial/`). Lineup-level Pareto swaps exist but are small (7 swaps, +5.25 prior on 2,212) and the contest pass on
+  that set leaves one Dime Package pair sharing 5 people (v4: 4; four seeds, 1,000 restarts each), so the lineup set stays. The two
+  remaining DST-beside-opposing-QB rows (5292886321, 5292886325) have no legal 1-2 FLEX fix that keeps Bijan or Henry (-4.35 to -6.36);
+  left. Accepted: the single-entry contest (196537744) swaps lineups with Dime Package Entry 5292886321, so it holds London CPT | Folk,
+  Penix, B. Robinson Jr., Henry, J. Hill (prior 75.48) instead of Folk CPT (67.05). Verified here, not taken on the agent's word: QA PASS,
+  0 defects, 0 breaches; only those two rows differ from v4; same 32 lineups; non-roster cells and CRLF unchanged; every contest's max
+  and mean overlap, pairs sharing 5, Captain counts and max person unchanged (Flowers ties Penix at 13 of 20 in the Dime Package). Final
+  `construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v5.csv` (`3c66734f...df2f`), delivered 23:59Z.
+- **Huntley Captain (Ben asked, 00:01Z).** v5 had Huntley Captain in 0 of 32 rows (FLEX in 16; Penix Captain 5), short of the
+  working.md rule that a starting QB captains at least 2 rows. Two Dime Package rows that already held both, 5292886314 and 5292886320,
+  flip Flowers CPT / Huntley FLEX to Huntley CPT / Flowers FLEX: same six people, so thesis captain sets (Huntley is in every one
+  Flowers is), overlap and exposure are unchanged, salary -$600 each. Captains: Folk 6, Penix 5, Loop 5, Flowers 4, London 4, Henry 2,
+  Bijan 2, Huntley 2, B. Robinson Jr. 1, Falcons 1 (10 distinct). `construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v6.csv`
+  (`3b14e785...688d`): QA PASS, 0 defects, 0 breaches, 32 distinct, only those two rows differ from v5, CRLF; delivered 00:02Z.
+- **Final QA pass (Ben asked, 00:02Z), on v6.** Every hard rule holds (slots, salary, both teams, no OUT/IR/practice-squad/backup QB,
+  1-2 QBs with 1-2 own pass catchers, 32 distinct, template geometry); the four two-kicker rows are DEFENSIVE_BATTLE, which requires 2.
+  Observations kept: three rows pair a DST with the opposing QB (two DEFENSIVE_BATTLE, one ATL_WINS_CLOSE_LOW), three leave $5,900 to
+  $6,500 unused. A single-FLEX Pareto scan (prior +1 or more; no portfolio or per-contest washout measure worse; Pitts never incoming)
+  found 7 swaps, all rejected: Dotson to Falcons DST (two put the DST beside Huntley, one strips a Penix Captain's WR2), Dotson to J.
+  Hill (2026 usage favours Dotson), Flowers to Henry in the Huntley Captain row (his top target). Flowers to Henry in 5292886328 was
+  built as v7 (`construction/DK_REVIEW_ENTRY_bal-atl-sd_final_v7.csv`, QA PASS) and rejected: it pairs Henry with Justice Hill, two BAL
+  backs splitting one workload. v6 stays the delivered file.
+- **Found.** The QB depth capture has no way to promote the backup of a DraftKings-`OUT` starter on a Showdown slate when the chart lags
+  the news; the by-hand route was a one-team package plus an operator exclusion. The ceiling pass's prior-raising FLEX swaps were not run:
+  they would have re-added Pitts and FLEX kickers on last season's priors, against the 2026 usage research.
+
 ### 2026-10-11: Week 5 afternoon Classic slate (25 entries, 3 games)
 
 Branch `claude/wk5-afternoon-2026-10-11`. A lineup run, not a roadmap session. Inputs, committed under
