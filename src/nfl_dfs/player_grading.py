@@ -109,8 +109,8 @@ POOL_DOES_NOT_ESTABLISH = (
     "Slates that share an nflverse game count its player-weeks twice; independent_slates counts each group of slates "
     "linked by shared games once.",
     "Across prior versions the pool grades the priors as delivered, not one model version.",
-    "No bootstrap interval is computed, and below the registered minimum sample no figure here is a promotion, demotion "
-    "or rollback measure. No figure measures calibration, expected value, return or edge.",
+    "No bootstrap interval is computed, and below the registered minimum sample no figure here is a promotion, "
+    "demotion or rollback measure. No figure measures calibration, expected value, return or edge.",
 )
 NOT_COMPUTED = {
     "participation_brier": "NOT_COMPUTABLE: the engine states no pre-lock playing probability (participation.py).",
@@ -416,7 +416,7 @@ def _text(value: Fraction) -> str:
 
 
 def salary_tiers(salaries: Sequence[float]) -> list[str]:
-    """Each salary's tertile, in input order (`TIER_RULE`). A tied block takes its mid-rank's tier, which can empty one."""
+    """Each salary's tertile, in input order (`TIER_RULE`). A tied block takes its mid-rank's tier and can empty one."""
 
     # 3 (r - 0.5) / n is (6r - 3) / 2n; r is a whole or half rank, so 6r - 3 is a whole number and the floor is exact.
     return [TIER_NAMES[min(2, int(6 * rank - 3) // (2 * len(salaries)))] for rank in _ranks(salaries)]
@@ -750,13 +750,19 @@ def _at(payload: Mapping, *keys: str) -> object:
     return value
 
 
-def _value_at(payload: Mapping, *keys: str) -> float | None:
+def _value_at(payload: Mapping, *keys: str, low: float | None = None, high: float | None = None) -> float | None:
     value = _at(payload, *keys)
     if value is None:
         return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise _Shape(".".join(keys))
-    return float(value)
+    try:
+        number = float(value)  # a whole number past the float range overflows here
+    except OverflowError:
+        raise _Shape(".".join(keys)) from None
+    if not math.isfinite(number) or (low is not None and number < low) or (high is not None and number > high):
+        raise _Shape(".".join(keys))
+    return number
 
 
 def _whole_at(payload: Mapping, *keys: str) -> int:
@@ -773,36 +779,48 @@ def _typed_at(payload: Mapping, kind: type, *keys: str):
     return value
 
 
+BOUNDS = {"player_points_mae": {"low": 0.0}, "spearman": {"low": -1.0, "high": 1.0}}
+
+
 def _pool_entry(payload: Mapping) -> dict:
-    games = _typed_at(payload, dict, "slate", "games")
-    if not all(isinstance(game_id, str) for game_id in games.values()):
+    games = list(_typed_at(payload, dict, "slate", "games").values())
+    if not all(isinstance(game_id, str) for game_id in games) or len(set(games)) != len(games):
         raise _Shape("slate.games")
     slate = {
         "salaries_sha256": _typed_at(payload, str, "inputs", "salaries", "sha256"),
         "mode": _typed_at(payload, str, "slate", "mode"),
         "season": _whole_at(payload, "slate", "season"),
         "week": _whole_at(payload, "slate", "week"),
-        "games": sorted(games.values()),
+        "games": sorted(games),
         "stats_source_sha256": _typed_at(payload, str, "stats_source", "sha256"),
         "stats_observed_at": _typed_at(payload, str, "stats_source", "observed_at"),
         "score_version": _typed_at(payload, str, "inputs", "pool_scores", "score_version"),
         "graded_people": _whole_at(payload, "grade", "graded_people"),
         "usable_people": _whole_at(payload, "grade", "usable_people"),
     }
-    cells = {("overall", "", side): {measure: (_value_at(payload, "grade", side, measure, "value"),
+    cells = {("overall", "", side): {measure: (_value_at(payload, "grade", side, measure, "value", **BOUNDS[measure]),
                                                _whole_at(payload, "grade", side, measure, "n"))
                                      for measure in MEASURES} for side in SIDES}
+    if cells[("overall", "", "prior")]["player_points_mae"][1] != slate["usable_people"]:
+        raise _Shape("grade.usable_people")
     for section in ("by_position", "by_tier"):
         for group in sorted(_typed_at(payload, dict, "grade", section)):
             n = _whole_at(payload, "grade", section, group, "n")
             for side in SIDES:
                 cells[(section, group, side)] = {
-                    measure: (_value_at(payload, "grade", section, group, side, measure), n) for measure in MEASURES}
+                    measure: (_value_at(payload, "grade", section, group, side, measure, **BOUNDS[measure]), n)
+                    for measure in MEASURES}
     play = {}
     for status in sorted(_typed_at(payload, dict, "grade", "play_rate", "by_status")):
         keys = ("grade", "play_rate", "by_status", status)
-        play[status] = {"class": _typed_at(payload, str, *keys, "class"), "rate": _value_at(payload, *keys, "rate"),
-                        **{count: _whole_at(payload, *keys, count) for count in ("people", "played", "unbound")}}
+        row = {"class": _typed_at(payload, str, *keys, "class"),
+               "rate": _value_at(payload, *keys, "rate", low=0.0, high=1.0),
+               **{count: _whole_at(payload, *keys, count) for count in ("people", "played", "unbound")}}
+        if row["class"] != _status_class("" if status == "(blank)" else status):
+            raise _Shape(".".join((*keys, "class")))
+        if row["played"] > row["people"]:
+            raise _Shape(".".join((*keys, "played")))
+        play[status] = row
     return {"slate": slate, "cells": cells, "play": play}
 
 
@@ -813,7 +831,7 @@ def read_pool_report(path: Path, index: int) -> dict:
     try:
         raw = Path(path).read_bytes()
         payload = json.loads(raw.decode("utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, RecursionError) as exc:  # ValueError: bad UTF-8, bad JSON, an over-long number
         raise _input(name, f"UNREADABLE:{type(exc).__name__}") from exc
     if not isinstance(payload, dict):
         raise _input(name, "NOT_AN_OBJECT")

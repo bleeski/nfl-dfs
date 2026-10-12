@@ -5275,7 +5275,7 @@ def build_parser() -> argparse.ArgumentParser:
     grade_players.add_argument("--lineups", help="the delivered DK_REVIEW_ENTRY CSV (needs --entries)")
     grade_players.add_argument("--entries", help="nfl_entries.w1.json from results-intake (needs --lineups)")
     grade_players.add_argument(
-        "--pool", nargs="+", metavar="REPORT",
+        "--pool", nargs="+", action="extend", metavar="REPORT",
         help=("two or more per-slate player_grading.w1.json reports to macro-average, slate as the unit, into"
               " nfl_player_grading_pool_v1 at --out; takes no other option"))
     grade_players.set_defaults(func=command_grade_players, grade_players_parser=grade_players)

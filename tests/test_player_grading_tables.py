@@ -16,7 +16,7 @@ import pytest
 from nfl_dfs import cli
 from nfl_dfs import player_grading as pg
 from nfl_dfs.metric_registry import load_metric_registry
-from tests.test_player_grading import INFO, PRIORS, REALIZED, grade, person
+from tests.test_player_grading import INFO, PRIORS, REALIZED, grade, person, pool_scores_bytes, uid
 
 # ----------------------------------------------------------------- the tables, by hand
 
@@ -175,6 +175,14 @@ def test_the_report_carries_the_tables_and_play_rate(tmp_path):
     }
 
 
+def test_play_rate_counts_people_the_prior_did_not_grade(tmp_path):
+    # kc_wr2 leaves the prior's people: ungraded, so out of every table, but still a bound blank-status person.
+    by_person = {uid(k): v for k, v in PRIORS.items() if k != "kc_wr2"}
+    report = grade(tmp_path, pool_scores=pool_scores_bytes(by_person=by_person))
+    assert report["grade"]["graded_people"] == 13 and person(report, "kc_wr2")["salary_tier"] is None
+    assert report["grade"]["play_rate"]["by_status"]["(blank)"]["people"] == 10
+
+
 # ----------------------------------------------------------------- the pool
 
 
@@ -223,6 +231,9 @@ def test_the_pool_macro_averages_with_the_slate_as_the_unit(tmp_path):
     assert sample["slates"] == 2 and sample["kish_ess"] == 2.0 and sample["independent_slates"] == 2
     assert sample["usable_people_by_slate"] == [10, 200] and sample["usable_people"] == 210
     assert (sample["registered_minimum_sample"], sample["meets_minimum_sample"]) == (500, False)
+    for report in (first, second):  # exactly the registered 500
+        report["grade"]["usable_people"] = report["grade"]["prior"]["player_points_mae"]["n"] = 250
+    assert pg.pool_reports(write_reports(tmp_path, first, second))["sample"]["meets_minimum_sample"] is True
     assert [slate["week"] for slate in pool["slates"]] == [2, 3]
     assert pool["schema_version"] == "nfl_player_grading_pool_v1" and pool["model_status"] == "PRIOR_ONLY"
     assert pool["play_rate"]["Q"] == {"class": "DEGRADED", "rate": {"value": 1.0, "slates": 2, "people": 2,
@@ -253,6 +264,12 @@ def test_shared_games_are_declared_not_refused(tmp_path):
     pool = pg.pool_reports(write_reports(tmp_path, first, classic, later))
     assert pool["independence"]["shared_games"] == {game: [1, 2]}
     assert pool["sample"]["independent_slates"] == 2 and pool["sample"]["slates"] == 3
+    # Two slates sharing two games are one independent slate, not none.
+    one = second_slate(first, week=6, salary="d" * 64, games={"A": "g1", "B": "g2"})
+    other = second_slate(first, week=6, mode="CLASSIC", salary="e" * 64, games={"A": "g1", "B": "g2", "C": "g3"})
+    pool = pg.pool_reports(write_reports(tmp_path, one, other))
+    assert pool["independence"]["shared_games"] == {"g1": [1, 2], "g2": [1, 2]}
+    assert pool["sample"]["independent_slates"] == 1
 
 
 def damaged(report: dict, change) -> dict:
@@ -276,6 +293,31 @@ def damaged(report: dict, change) -> dict:
         player_points_mae=float("inf"))), "pool_report:2:SHAPE:grade.by_tier.low.prior.player_points_mae"),
     ("a play rate count", lambda r: damaged(r, lambda o: o["grade"]["play_rate"]["by_status"]["Q"].update(
         played=-1)), "pool_report:2:SHAPE:grade.play_rate.by_status.Q.played"),
+    ("games not an object", lambda r: damaged(r, lambda o: o["slate"].update(games=["2026_03_DEN_KC"])),
+     "pool_report:2:SHAPE:slate.games"),
+    ("a status class not text", lambda r: damaged(r, lambda o: o["grade"]["play_rate"]["by_status"]["Q"].update(
+        **{"class": 1})), "pool_report:2:SHAPE:grade.play_rate.by_status.Q.class"),
+    ("another status's class", lambda r: damaged(r, lambda o: o["grade"]["play_rate"]["by_status"]["Q"].update(
+        **{"class": "AVAILABLE"})), "pool_report:2:SHAPE:grade.play_rate.by_status.Q.class"),
+    ("more played than people", lambda r: damaged(r, lambda o: o["grade"]["play_rate"]["by_status"]["Q"].update(
+        played=2)), "pool_report:2:SHAPE:grade.play_rate.by_status.Q.played"),
+    ("a rate past 1", lambda r: damaged(r, lambda o: o["grade"]["play_rate"]["by_status"]["Q"].update(rate=3.0)),
+     "pool_report:2:SHAPE:grade.play_rate.by_status.Q.rate"),
+    ("a negative error", lambda r: damaged(r, lambda o: o["grade"]["by_tier"]["low"]["salary"].update(
+        player_points_mae=-0.5)), "pool_report:2:SHAPE:grade.by_tier.low.salary.player_points_mae"),
+    ("a correlation past 1", lambda r: damaged(r, lambda o: o["grade"]["by_tier"]["low"]["prior"].update(
+        spearman=5.0)), "pool_report:2:SHAPE:grade.by_tier.low.prior.spearman"),
+    ("a value past the float range", lambda r: damaged(
+        r, lambda o: o["grade"]["prior"]["player_points_mae"].update(value=10 ** 400)),
+     "pool_report:2:SHAPE:grade.prior.player_points_mae.value"),
+    ("a usable count its cells disagree with", lambda r: damaged(r, lambda o: o["grade"].update(
+        usable_people=10 ** 6)), "pool_report:2:SHAPE:grade.usable_people"),
+    ("a game id not text", lambda r: damaged(r, lambda o: o["slate"].update(games={"A": 7})),
+     "pool_report:2:SHAPE:slate.games"),
+    ("one game twice", lambda r: damaged(r, lambda o: o["slate"].update(games={"A": "g1", "B": "g1"})),
+     "pool_report:2:SHAPE:slate.games"),
+    ("nested too deep", lambda r: b"[" * 100000 + b"]" * 100000, "pool_report:2:UNREADABLE:RecursionError"),
+    ("a number too long to read", lambda r: b'{"a": ' + b"9" * 5000 + b"}", "pool_report:2:UNREADABLE:ValueError"),
     ("the same salary bytes", lambda r: second_slate(r, salary=r["inputs"]["salaries"]["sha256"]),
      "pool_report:2:REPEATED_SLATE:1"),
     ("a re-export of the same games", lambda r: second_slate(r, week=r["slate"]["week"], games=r["slate"]["games"]),
@@ -284,6 +326,15 @@ def damaged(report: dict, change) -> dict:
 def test_each_pool_refusal(tmp_path, name, build, detail):
     first = grade(tmp_path)
     assert pool_refused(write_reports(tmp_path, first, build(first))).startswith(detail), name
+
+
+def test_a_re_export_with_its_games_in_another_order_is_the_same_slate(tmp_path):
+    first = grade(tmp_path)
+    one = second_slate(first, week=6, salary="d" * 64, games={"A": "g1", "B": "g2"})
+    other = second_slate(first, week=6, salary="e" * 64, games={"B": "g2", "A": "g1"})
+    # Written without sorted keys, so its games really are in the other order.
+    reordered = json.dumps(other).encode("utf-8")
+    assert pool_refused(write_reports(tmp_path, one, reordered)) == "pool_report:2:REPEATED_SLATE:1"
 
 
 def test_too_few_or_unreadable_reports_refuse(tmp_path):
@@ -295,7 +346,9 @@ def test_too_few_or_unreadable_reports_refuse(tmp_path):
 
 def test_the_pool_is_byte_identical_and_order_free(tmp_path):
     first = grade(tmp_path)
-    paths = write_reports(tmp_path, first, second_slate(first))
+    # A third slate in the same week as the first: only the salary SHA-256 orders the two.
+    same_week = second_slate(first, week=2, salary="0" * 64, games={"X": "2026_02_X_Y"})
+    paths = write_reports(tmp_path, first, second_slate(first), same_week)
     data = pg.render(pg.pool_reports(paths))
     assert data == pg.render(pg.pool_reports(list(reversed(paths)))) == pg.render(pg.pool_reports(paths))
     assert data.endswith(b"}\n") and b"\r" not in data
@@ -344,6 +397,10 @@ def test_the_pool_command_writes_one_file(tmp_path, capsys):
     code, summary = pool_cli(capsys, ["grade-players", "--pool", *paths, "--out", str(tmp_path / "pools" / "p.json")])
     assert (code, summary["code"]) == (2, "PLAYER_GRADING_OUTPUT_EXISTS")
     assert (tmp_path / "pools" / "p.json").read_bytes() == written
+    # --pool given twice keeps every report.
+    code, summary = pool_cli(capsys, ["grade-players", "--pool", paths[0], "--pool", paths[1], "--out",
+                                      str(tmp_path / "pools" / "q.json")])
+    assert (code, summary["slates"]) == (0, 2) and (tmp_path / "pools" / "q.json").read_bytes() == written
 
 
 def test_a_pool_refusal_never_prints_release_truths(tmp_path, capsys):
