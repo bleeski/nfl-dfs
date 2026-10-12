@@ -860,6 +860,138 @@ def report_name(era: str) -> str:
     return f"results_report.era-{era}.{WRITER}.json"
 
 
+# ------------------------------------------------------------------------------------- the table (Session 71c)
+#
+# Markdown beside the JSON, every figure the payload's own string. Money is the one conversion, exact cents to signed
+# dollars. Nothing printed comes from a CSV cell, so nothing needs escaping. It reads only the written payload, so
+# `render_table(json.loads(file))` is the table, and it raises nothing of its own, so no message carries a figure.
+
+PAYOUT_SHAPE_HEADING = "Payout shape"
+MISSING = "n/a"
+_RATE_TITLES = (("percentile", "Percentile"), ("top_10", "Top 10%"), ("bottom_10", "Bottom 10%"))
+_SHAPE_HEADER = ("Band", "Label", "Entries", "Slates", "Rate", "Realized % (random)", "Excess, points", "Interval",
+                 "MDE")
+
+
+def table_name(era: str) -> str:
+    return f"results_report.era-{era}.{WRITER}.md"
+
+
+def _dollars(cents: int) -> str:
+    """`-14596` is `-$145.96`; `_cents_text`, which names the JSON's fee bands, would print `$-146.04`."""
+
+    whole, part = divmod(abs(cents), 100)
+    return f"{'-' if cents < 0 else ''}${whole:,}.{part:02d}"
+
+
+def _shown(value: object) -> str:
+    return MISSING if value is None else str(value)
+
+
+def _beside(rates: Mapping[str, object], name: str) -> str:
+    pair = rates[name]
+    return MISSING if pair["realized"] is None else f"{pair['realized']} ({pair['random']})"
+
+
+def _grid(header: Sequence[str], rows: Sequence[Sequence[str]]) -> list[str]:
+    return [f"| {' | '.join(row)} |" for row in (header, ["---"] * len(header), *rows)]
+
+
+_OVERALL_ROWS: tuple[tuple[str, Callable[[Mapping[str, object]], str]], ...] = (
+    ("Entries", lambda block: str(block["entries"])),
+    ("Slates", lambda block: str(block["slates"])),
+    ("Blanks", lambda block: str(block["blanks"])),
+    ("Fees", lambda block: _dollars(block["fees_cents"])),
+    ("Net, tickets at face value", lambda block: _dollars(block["net_cents"])),
+    ("Realized return on fees, %", lambda block: _shown(block["realized_return_on_fees"])),
+    ("Rake-implied return, %", lambda block: _shown(block["rake_implied_return"])),
+    ("Percentile % (random), lower is better", lambda block: _beside(block["with_blanks"], "percentile")),
+    ("Top 10% (random), higher is better", lambda block: _beside(block["with_blanks"], "top_10")),
+    ("Bottom 10% (random), lower is better", lambda block: _beside(block["with_blanks"], "bottom_10")),
+)
+
+
+def _shape_rows(band: str, label: str, block: Mapping[str, object]) -> list[list[str]]:
+    """Three lines, one per rate; the band, label, entries and slates on the first line only."""
+
+    rows = []
+    for name, title in _RATE_TITLES:
+        figures = block["uncertainty"][f"{name}_excess"]
+        interval = figures["interval"]
+        span = f"[{interval['low']}, {interval['high']}]" if interval else f"{MISSING} ({figures['reason']})"
+        lead = [band, label, str(block["entries"]), str(block["slates"])] if not rows else [""] * 4
+        rows.append([*lead, title, _beside(block["with_blanks"], name), _shown(figures["estimate"]), span,
+                     _shown(figures["mde"])])
+    return rows
+
+
+def _shape_section(title: str, scope: Mapping[str, object], method: Mapping[str, object]) -> list[str]:
+    lines = [f"## {PAYOUT_SHAPE_HEADING}, {title}", ""]
+    if not scope["overall"]["entries"]:
+        return [*lines, "No entries in this scope.", ""]
+    note = ("Places paid over entries, banded. Excess is realized minus random in percentage points: above 0 is worse "
+            "for percentile and bottom 10%, better for top 10%. It is rounded once from the exact figure, so it can "
+            "differ in the last place from the difference of the two printed rates. Intervals are slate-cluster "
+            f"bootstrap-t at level {method['level']}; the MDE is the smallest true excess a two-sided test at alpha "
+            f"{method['mde_alpha_two_sided']} finds with power {method['mde_power']}.")
+    rows = _shape_rows("All shapes", "", scope["overall"])
+    for band in scope["by_payout_shape"]:
+        rows += _shape_rows(band["band"], _shown(band["first_place_label"]), band)
+    return [*lines, note, "", *_grid(_SHAPE_HEADER, rows), ""]
+
+
+def _within_section(payload: Mapping[str, object]) -> list[str]:
+    tests = [payload["scopes"][scope]["within_slate_test"] for scope in SCOPES]
+    fresh = [test["after_registration"] for test in tests]
+    rows = [
+        ["Slates with both", *(str(test["slates_with_both"]) for test in tests)],
+        ["Top-heavy worse / better / tied", *(f"{test['worse']} / {test['better']} / {test['tied']}" for test in tests)],
+        ["Mean difference, points", *(_shown(test["mean_difference_points"]) for test in tests)],
+        ["p, one-sided", *(test["p_one_sided"] for test in tests)],
+        ["p, two-sided", *(test["p_two_sided"] for test in tests)],
+        ["After registration: slates with both", *(str(block["slates_with_both"]) for block in fresh)],
+        ["After registration: worse / better", *(f"{block['worse']} / {block['better']}" for block in fresh)],
+        ["After registration: p, one-sided", *(block["p_one_sided"] for block in fresh)],
+    ]
+    trigger = payload["within_slate_trigger"]
+    return [
+        "## Within-slate test: top-heavy against flatter", "",
+        (f"Per slate holding both, the mean percentile of {LABEL} entries minus the flatter ones' (above 0: top-heavy "
+         "finished worse); the exact sign test, ties dropped."), "",
+        *_grid(("", "NFL", "Engine era"), rows), "",
+        (f"Trigger, on {trigger['scope']} from {trigger['engine_era_start']} (registered {trigger['registered_on']}): "
+         f"{trigger['slates']} slates against a minimum of {trigger['min_slates']}, p one-sided "
+         f"{trigger['p_one_sided']} against alpha {trigger['alpha']}; met: {json.dumps(trigger['met'])}. When met: "
+         f"{trigger['when_met']}."), "",
+    ]
+
+
+def render_table(payload: Mapping[str, object]) -> bytes:
+    """The short readable table of one report payload (`results_report.era-<date>.w1.md`): Overall first (NFL, engine
+    era, all sports), then each scope's payout-shape rows with each rate's excess, interval and MDE, then the
+    within-slate test and its trigger. A null prints `n/a`, never a zero. ASCII, LF, one trailing LF."""
+
+    era, source, scopes = payload["engine_era_start"], payload["source"], payload["scopes"]
+    columns = (scopes["nfl"]["overall"], scopes["engine_era"]["overall"], payload["all_sport_check"]["overall"])
+    lines = [
+        "# NFL results report", "",
+        (f"`{payload['schema_version']}`, writer `{payload['writer']}`, metrics `{payload['metrics']['version']}`; "
+         f"source `{source['sha256']}` ({source['bytes']} bytes); engine era from {era['date']} "
+         f"({'registered default' if era['is_default'] else 'given'}). Realized results only."), "",
+        "## Overall", "",
+        *_grid(("", "NFL", "Engine era", "All sports"),
+               [[label, *(cell(block) for block in columns)] for label, cell in _OVERALL_ROWS]), "",
+        *_shape_section("NFL", scopes["nfl"], payload["bootstrap"]),
+        *_shape_section("engine era", scopes["engine_era"], payload["bootstrap"]),
+        *_within_section(payload),
+        "## Not established", "",
+        *(f"- {line}" for line in payload["does_not_establish"]), "",
+        (f"Only in `{report_name(era['date'])}` beside this file: the format, field-size, fee, month and slate "
+         "rollups, fee concentration, the blanks-removed rates and the return's interval."),
+    ]
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
 @dataclass(frozen=True)
 class ReportOutcome:
     """`COMPLETE` and `ALREADY_PRESENT` exit 0; `REFUSED` and `WRITE_FAILED` exit 2. Nothing here carries money."""
@@ -952,15 +1084,18 @@ def _snapshot(path: Path, sha256: str) -> tuple[bytes | None, str | None]:
 
 def run_results_report(source_sha256: str, results_root: str | Path, engine_era_start: str | None = None, *,
                        metrics: ResultsMetrics | None = None) -> ReportOutcome:
-    """Read one snapshot, build the report and write it once: `<root>/reports/<sha256>/results_report.era-<date>.w1.json`.
+    """Read one snapshot, build the report and write it once: `<root>/reports/<sha256>/results_report.era-<date>.w1.json`,
+    then the table beside it (`.w1.md`).
 
     The registered metrics load first, from the module's path at call time: a defect there is `ResultsMetricsError`, a
-    fault in a tracked file and never a refusal. A refused input writes nothing. The trigger reads the registered era
-    whatever `engine_era_start` names.
+    fault in a tracked file and never a refusal. A refused input writes nothing. The table is rendered before either
+    write and written after the JSON, so a table that conflicts or fails leaves the JSON, and a rerun writes the table
+    alone. The trigger reads the registered era whatever `engine_era_start` names.
     """
 
     metrics = load_results_metrics(DEFAULT_METRICS_PATH) if metrics is None else metrics
-    files: dict[str, dict[str, str | None]] = {"report": {"path": None, "state": "NOT_ATTEMPTED", "sha256": None}}
+    files: dict[str, dict[str, str | None]] = {
+        name: {"path": None, "state": "NOT_ATTEMPTED", "sha256": None} for name in ("report", "table")}
     refused = partial(ReportOutcome, "REFUSED", files=files, does_not_establish=metrics.does_not_establish)
     if not isinstance(source_sha256, str) or not _SHA256.fullmatch(source_sha256):
         return refused((_problem("RESULTS_REPORT_INPUT_INVALID", "field=source_sha256"),))
@@ -979,9 +1114,12 @@ def run_results_report(source_sha256: str, results_root: str | Path, engine_era_
     era = payload["engine_era_start"]
     done = partial(ReportOutcome, files=files, does_not_establish=metrics.does_not_establish,
                    source_sha256=source_sha256, engine_era_start=era, headline=headline(payload))
-    writes = (("report", root / "reports" / source_sha256 / report_name(era["date"]), canonical_bytes(payload)),)
-    for name, path, data in writes:
+    folder = root / "reports" / source_sha256
+    writes = (("report", folder / report_name(era["date"]), canonical_bytes(payload)),
+              ("table", folder / table_name(era["date"]), render_table(payload)))
+    for name, path, _ in writes:
         files[name]["path"] = str(path)
+    for name, path, data in writes:
         try:
             files[name]["state"] = entry_history._write_once(
                 path, data, code="RESULTS_REPORT_ARTIFACT_CONFLICT", recovery=REPORT_RECOVERY)
@@ -1001,6 +1139,7 @@ __all__ = [
     "BOTTOM_STRICT",
     "DEFAULT_METRICS_PATH",
     "METRICS_VERSION",
+    "PAYOUT_SHAPE_HEADING",
     "REPORT_CODES",
     "REPORT_VERSION",
     "ReportOutcome",
@@ -1016,10 +1155,12 @@ __all__ = [
     "interval_figures",
     "minimum_detectable_effect",
     "order_statistics",
+    "render_table",
     "report_name",
     "resample",
     "run_results_report",
     "t_quantile",
+    "table_name",
     "wild_t",
     "finishing_percentile",
     "fine_slate_key",

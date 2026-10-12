@@ -128,7 +128,8 @@ def test_two_eras_write_two_files_and_the_trigger_never_moves(tmp_path, capsys):
     assert first["within_slate_trigger"] == second["within_slate_trigger"]
     assert first["within_slate_trigger"]["slates"] == 3  # the registered era's three slates, in both files
     assert sorted(path.name for path in (root / "reports" / sha).iterdir()) == [
-        "results_report.era-2026-09-09.w1.json", "results_report.era-2026-10-12.w1.json"]
+        "results_report.era-2026-09-09.w1.json", "results_report.era-2026-09-09.w1.md",
+        "results_report.era-2026-10-12.w1.json", "results_report.era-2026-10-12.w1.md"]
 
 
 # ------------------------------------------------------------------------------------------- refusals

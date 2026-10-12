@@ -691,6 +691,13 @@ always wrote, so a review with no Contest facts section means no labels were com
 A path that does not exist stops at command start like any other input path. The file never clears
 `CONTEST_PAYOUT_REQUIRED` or `FIELD_SIZE_REQUIRED`: a facts row is not a payout table.
 
+**Your own results by payout shape.** Before choosing contests, read the `Payout shape` sections of the results table,
+`data/results/reports/<sha256>/results_report.era-<date>.w1.md`, which `results-report` writes beside its JSON
+(`docs/OPERATOR_GUIDE.md`, Results report). Each band of places paid over entries shows your realized percentile,
+top-10% and bottom-10% rates beside a random finish, and each excess with its interval and minimum detectable effect;
+the within-slate test of top-heavy against flatter contests follows. It is realized history: the engine reads none of
+it, it is never a forecast or a model number, and an interval that spans 0 means the band has not shown a difference.
+
 ## Complete the run request
 
 The generated request uses schema `nfl_cowork_run_request_v1`. Paths written by

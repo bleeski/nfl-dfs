@@ -4,6 +4,112 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-12: Session 71c -- the readable results table and the RUNBOOK pointer
+
+Branch `claude/s71c-results-table`, pull request #141, claimed at `02f9235` (PR #140's merge, now recorded in Session
+71b's close-out row). Ben approved the plan before any code. The `advisor` skill's hook failed again (`set: Illegal
+option -o pipefail`), so fresh-context fable agents ran each consult. A report only: nothing reaches `run-slate`,
+`prior_review` or a release truth, so the three-exit rule does not apply, and every path stays `PRIOR_ONLY` /
+`DO_NOT_UPLOAD`.
+
+**Added.**
+- `render_table(payload) -> bytes` (`results_report.py`): Markdown, ASCII, LF, one trailing LF, written once beside the
+  JSON as `reports/<sha256>/results_report.era-<date>.w1.md` through `entry_history._write_once`. In order:
+  - **Overall**, ending at line 18: NFL, engine era and all sports, each with entries, slates, blanks, fees, net,
+    realized and rake-implied return, and the three rates beside random;
+  - **Payout shape, NFL** and **Payout shape, engine era**: an `All shapes` group, then each band, three lines a group,
+    one per rate: realized beside random, then the excess's estimate, interval and MDE;
+  - **Within-slate test**, both scopes, then the trigger line; then **Not established**.
+
+  Every figure is the payload's own string or integer. Money is the one conversion, exact cents to signed dollars with
+  thousands separators (`-$145.96`). A null prints `n/a`, and an interval adds its reason.
+- `run_results_report` renders the table before either write, writes the JSON, then the table. `files` gains `table`
+  (`path`, `state`, `sha256`), and both paths are named once the payload is built. A table conflict
+  (`RESULTS_REPORT_ARTIFACT_CONFLICT:file=table`) or write failure (`RESULTS_REPORT_WRITE_FAILED:file=table:...`)
+  leaves the JSON, and a rerun writes the table alone: `COMPLETE`, with the report `ALREADY_PRESENT`. No new registry
+  code.
+- The RUNBOOK contest screening checklist points at the table's `Payout shape` sections. The contract names the table,
+  its sections, its order of writes and the `table` key, and the operator guide names the `.md`.
+- `tests/test_results_report_table.py`: 15 tests. Commit `6feead0`'s message says 14; the file then held 13.
+
+**Changed.**
+- One existing test edited as its own visible change.
+  `tests/test_results_report_command.py::test_two_eras_write_two_files_and_the_trigger_never_moves` lists the report
+  folder exactly, and the folder now holds the table beside each JSON, so the two `.md` names were added. The test is
+  stricter, not looser.
+- Two sentences the table made false. The contract's "a refusal writes nothing" now says a refused input writes
+  nothing and a table refused or not written leaves the report. The guide's "Running it again ... writes nothing" now
+  adds that beside a report an earlier version wrote, it writes the table alone.
+
+**Decided, with the reason.**
+- **No writer bump.** The JSON's bytes do not move: `test_the_json_bytes_do_not_move` pins `c386564f...4da1ea`, hashed on
+  the unmodified tree before the first edit (two slates, so no libm call and one hash on every platform). The table's
+  layout is frozen under `w1` too and pinned (`8bb4f8db...6aa80f`), since a changed table at the old name would refuse
+  a rerun.
+- **Money in the table, never on stdout.** The table sits beside the JSON under the gitignored root, and stdout gains
+  only its path, state and hash. `test_stdout_carries_no_money` passes unedited.
+- **`All shapes` added** to each payout section beyond the card's band rows. The overall excess's interval and MDE
+  appear nowhere else in the table, and a band reads against them.
+- **No pre-check of the table name before the JSON write.** The end state after a rerun is the same, and one write
+  path keeps the code small.
+- **The RUNBOOK pointer names the file and the section**, in the RUNBOOK's forward-slash form; the test reads the
+  heading from `PAYOUT_SHAPE_HEADING`.
+- **`Complete`.** The acceptance is synthetic and needs nothing from Ben.
+
+**Reviews and consults.**
+- **The plan consult** (nine claims). Taken:
+  - copy the unmodified `src` and `config` before any edit for the pin and the before/after run, since a second copy
+    of the module cannot be loaded beside the first;
+  - the direction notes moved into the row labels, so Overall ends at line 18, not 20;
+  - the note says the excess can differ in the last place from the difference of the printed rates;
+  - `met` prints as the payload holds it;
+  - the two false sentences rewritten;
+  - forward slashes in the RUNBOOK;
+  - a pre-era slate so the scopes differ, and the Overall and within-slate grids asserted cell by cell;
+  - one figure per cell;
+  - an empty label cell for `All shapes`;
+  - a write-failure test by name, never by folder listing.
+
+  Not taken: the table-name pre-check, and a test driving a money-bearing exception through `cli.main` (`render_table`
+  raises nothing of its own; a render fault writing nothing is tested instead).
+- **The fresh-context `reviewer`.** Nothing blocking. Two should-fix findings became tests: only one payout section
+  was checked cell by cell (a section wired to the other scope passed), and the table's layout was unpinned. So did
+  one nit: the table's path on a refused report was untested. Not taken: a two-process table comparison
+  (`render_table(json.loads(file)) == table` ties the table to the JSON, which the existing two-process test covers),
+  and the exact folder listing's exposure to a dotted temporary file on Windows (the risk predates this change).
+- **The close-out consult** (seven claims). Held: `Complete`, the ledger conventions, section 1, no EV wording or
+  money on stdout, and both pins free of anything platform-dependent. Taken:
+  - the docs measured 74 changed lines, not 64;
+  - the local suite ran on the tree before `d0a341a`, so CI's `suite` on `d0a341a` is the full-suite evidence for
+    the 15-test tree, and the card and ledger row now say so;
+  - `state/last-verify.json` stamps HEAD at recording, not the tree the run collected;
+  - one assertion on the trigger line's scope, dates, counts and p.
+
+  The lesson: never commit a collected test module while the suite runs.
+- **Mutation, on a `shutil.copytree` scratchpad copy** (`nfl_dfs` resolved inside it; the copy deleted): 33 of 33
+  killed, each by a named test. Among them: the sign at zero, a missing `abs`, the separators, the padding, a null as
+  a zero, a swapped pair, the blanks-removed statistic, a swapped interval, the reason, the lead cells, the estimate and
+  MDE fields, the empty-scope line, `All shapes` dropped or labelled, the p rows, the after-registration block, each
+  column and section swapped, CRLF, net from cash, the era wording, the write order and the paths set inside the loop.
+
+**Verification.**
+- Red first: 12 of 13 failed, the first a `FileNotFoundError` on the `.md`; the pin test passed on the unmodified code.
+- Card command (`tests/test_results_report_table.py tests/test_results_report_command.py`): `40 passed in 15.10s`.
+  Neighbours (the results-report files, entry-history intake, gate registry, repo boundaries, CLI help, roadmap queue):
+  `500 passed in 24.72s`.
+- Before/after: the unmodified copy against the branch over 9 CLI scenarios (complete, already present, the standard
+  fixture, an empty era, a second era, a report conflict, a hash refusal, a malformed hash, a write failure). Exit
+  code, stdout without `files.table` and the JSON's bytes were identical in all 9. The export is not in this
+  container, so the runs are synthetic.
+- Full suite (Linux): `3671 passed, 1 skipped in 993.58s (0:16:33)`, run before the two review tests were added (they pass in the card command); `src/`
+  was unchanged after it. CI on `d0a341a`, the 15-test tree (run 38257373200): `suite` and `boundaries` green;
+  `windows` was cancelled by the next push.
+- Size: 591 changed lines before the ledgers (source 153, tests 364, docs 74) against the card's 110 and the plan's 310;
+  the new test file is 361 of them. No seam was needed.
+- `git diff --check` clean; `check_protected_paths.py`: none touched; `doctor` `pass_status: true`; the edited modules
+  compile; zero CR bytes in the four ledgers.
+- Left open: `cli.py`'s `results-report` help text does not mention the table (out of the card's files).
+
 ### 2026-10-12: Session 71b -- `nfl results-report`, the write-once report and its bootstrap (the table split to Session 71c)
 
 Branch `claude/s71b-results-report`, pull request #140, claimed at `9ec42ab` (PR #139's merge, now recorded in Session

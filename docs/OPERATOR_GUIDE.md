@@ -622,17 +622,23 @@ once (`nfl_results_report_v1`). The file holds realized results only: each
 rate beside what a random finish would give, rollups by format, payout shape,
 field size, fee, month and slate, fee concentration, the within-slate test of
 top-heavy against flatter contests, and an interval and minimum detectable
-effect for every slice of at least 5 slates. It takes under a minute (16
-seconds for 40 slates on Linux; Windows is slower). Running it again is `ALREADY_PRESENT`, exit 0, and writes nothing.
-`--engine-era-start YYYY-MM-DD` reports another era into its own file; the
+effect for every slice of at least 5 slates. Beside it, `results_report.era-2026-09-09.w1.md`
+is the short table to read first: the Overall figures in its first 20 lines,
+then each payout band's rates beside random with their intervals, then the
+within-slate test. It takes under a minute (16
+seconds for 40 slates on Linux; Windows is slower). Running it again is `ALREADY_PRESENT`, exit 0, and writes nothing;
+beside a report an earlier version wrote, it writes the table alone (`COMPLETE`).
+`--engine-era-start YYYY-MM-DD` reports another era into its own files; the
 within-slate trigger always reads the registered era.
 
 The printed result carries no money (counts, place-based rates and the test),
-so it is safe to paste back to Claude; the file itself carries fees and
-winnings and stays under the gitignored `data\results\`. Exit 2 names the
+so it is safe to paste back to Claude; the two files carry fees and
+winnings and stay under the gitignored `data\results\`. Exit 2 names the
 problem: a malformed hash or date, a snapshot that is missing, a link,
 unreadable or no longer the bytes its name promises, another file in the
-report's place (never overwritten; delete it and rerun), or a write failure.
+report's or the table's place (never overwritten; delete it and rerun), or a
+write failure. A table that could not be written leaves the report; rerun to
+write the table.
 It is not EV, an ROI forecast, a win probability, a calibration or an edge, and
 it clears no upload.
 
