@@ -247,6 +247,11 @@
       "provenance": {"kind": "CONTRACT", "ref": "SD5 prior-only readable review"},
       "covers": "A readable review, workbook or report could not be built, written or reconciled; the independently validated file is unaffected."
     },
+    "results_report": {
+      "class": "P", "stops": "CERTIFICATION",
+      "provenance": {"kind": "CONTRACT", "ref": "NFL results report, nfl_results_report_v1 (Session 71b)"},
+      "covers": "The NFL results report was refused whole: a source hash or era that is not well formed, a snapshot that is absent, a symlink, unreadable or not the bytes its name promises, or another file holding the report's name (never overwritten); or the report could not be written. It stops a results record, never a lineup file."
+    },
     "stage_failure": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "C1 Classic intake and prior-review artifacts"},
@@ -1466,6 +1471,10 @@
     "RELEASE_TRUTHS_INCOMPLETE": "certification_prerequisite",
     "REPARSE_ASSIGNMENT_MISMATCH": "delivered_bytes",
     "REPLAY_REQUEST_BUNDLE_ID_MISMATCH": "settlement",
+    "RESULTS_REPORT_ARTIFACT_CONFLICT": "results_report",
+    "RESULTS_REPORT_INPUT_INVALID": "results_report",
+    "RESULTS_REPORT_SNAPSHOT_INVALID": "results_report",
+    "RESULTS_REPORT_WRITE_FAILED": "results_report",
     "REVIEWED_POOL_COVERAGE_MISMATCH": "prior_package",
     "REVIEWED_PROVIDER_ID_NOT_UNIQUE": "provider_identity",
     "REVIEW_DK_ID_MISSING": "provider_identity",

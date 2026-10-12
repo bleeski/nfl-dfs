@@ -100,6 +100,7 @@ from .delivery import (
 from .economics import evaluate_candidates_against_field
 from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
 from .entry_history import run_intake as run_results_intake
+from .results_report import run_results_report
 from .player_grading import run as run_player_grading
 from .player_grading import run_pool as run_player_grading_pool
 from .evidence import (
@@ -2084,6 +2085,19 @@ def command_results_intake(args: argparse.Namespace) -> int:
     """
 
     outcome = run_results_intake(args.history, args.results_root)
+    _print_json(outcome.as_dict())
+    return outcome.exit_code
+
+
+def command_results_report(args: argparse.Namespace) -> int:
+    """Session 71b: the NFL results report from one kept snapshot (`nfl_results_report_v1`), written once.
+
+    Exit 0 wrote the report or found it already there; 2 refused an input or could not write. stdout is each file's
+    path, state and SHA-256, the problems and a money-free headline. A metrics file that will not load raises
+    `ResultsMetricsError`, which `main`'s handler prints as `CLI_FAILED`.
+    """
+
+    outcome = run_results_report(args.source_sha256, args.results_root, args.engine_era_start)
     _print_json(outcome.as_dict())
     return outcome.exit_code
 
@@ -5249,6 +5263,19 @@ def build_parser() -> argparse.ArgumentParser:
     results_intake.add_argument("--history", required=True, help="the entry-history CSV DraftKings exported")
     results_intake.add_argument("--results-root", default=str(DEFAULT_RESULTS_DIR))
     results_intake.set_defaults(func=command_results_intake)
+    results_report = subparsers.add_parser(
+        "results-report",
+        help=(
+            "the NFL results report from one snapshot results-intake kept: rollups beside each rate's random"
+            " expectation, slate-cluster intervals and the within-slate test, written once under reports/<sha256>/;"
+            " realized results only, never EV or an ROI forecast"
+        ),
+    )
+    results_report.add_argument("--source-sha256", required=True,
+                                help="the snapshot's SHA-256 (64 lower-case hex), as results-intake printed it")
+    results_report.add_argument("--results-root", default=str(DEFAULT_RESULTS_DIR))
+    results_report.add_argument("--engine-era-start", help="YYYY-MM-DD; default the registered era (2026-09-09)")
+    results_report.set_defaults(func=command_results_report)
     grade_players = subparsers.add_parser(
         "grade-players",
         usage=("%(prog)s --salaries SALARIES --pool-scores POOL_SCORES --identity-review IDENTITY_REVIEW\n"

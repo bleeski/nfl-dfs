@@ -607,6 +607,35 @@ first. Two reports of one slate are refused, a re-downloaded salary file
 included. Under 500 graded players in total is below the registered minimum
 sample, and the pool says so.
 
+## Results report
+
+After `results-intake` keeps an entry-history export, report how those entries
+finished, using the SHA-256 the intake printed:
+
+```powershell
+.\nfl.ps1 results-report --source-sha256 <the 64-character sha256 results-intake printed>
+```
+
+It reads `data\results\inbox\<sha256>.csv`, checks the bytes still hash to
+that name, and writes `data\results\reports\<sha256>\results_report.era-2026-09-09.w1.json`
+once (`nfl_results_report_v1`). The file holds realized results only: each
+rate beside what a random finish would give, rollups by format, payout shape,
+field size, fee, month and slate, fee concentration, the within-slate test of
+top-heavy against flatter contests, and an interval and minimum detectable
+effect for every slice of at least 5 slates. It takes about ten to twenty
+seconds. Running it again is `ALREADY_PRESENT`, exit 0, and writes nothing.
+`--engine-era-start YYYY-MM-DD` reports another era into its own file; the
+within-slate trigger always reads the registered era.
+
+The printed result carries no money (counts, place-based rates and the test),
+so it is safe to paste back to Claude; the file itself carries fees and
+winnings and stays under the gitignored `data\results\`. Exit 2 names the
+problem: a malformed hash or date, a snapshot that is missing, a link,
+unreadable or no longer the bytes its name promises, another file in the
+report's place (never overwritten; delete it and rerun), or a write failure.
+It is not EV, an ROI forecast, a win probability, a calibration or an edge, and
+it clears no upload.
+
 ## Safe failure behavior
 
 - Excel open: readable stop message; no partial workbook.

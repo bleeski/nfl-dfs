@@ -8,8 +8,9 @@ flatters where ties are common; the random expectation assumes no ties, and `Pla
 
 The registered metrics file (`config/results_metrics_v1.json`) names the populations, the rules, the bands, the slate
 and the within-slate test; the loader refuses any file whose declared rules are not the ones this module implements.
-Its bootstrap section is registered ahead of the intervals and the minimum detectable effect (Session 71b); nothing
-here reads it yet. Every figure is exact rational arithmetic rounded once, so the same rows give the same text.
+Every point figure is exact rational arithmetic rounded once, so the same rows give the same text. Session 71b reads the
+file's bootstrap section for each slice's interval and minimum detectable effect (resampled in IEEE doubles, in a fixed
+order, rounded once) and writes the report once through `nfl results-report`.
 Payout shape and field size come from the numeric columns only, never from a contest name, and nothing here reaches a
 run, a frozen package, a selection or a release truth.
 """
@@ -18,17 +19,20 @@ from __future__ import annotations
 
 import json
 import math
+import random
 import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date
 from fractions import Fraction
+from functools import partial
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
-from .contest_facts import LABEL, THRESHOLD, first_place_label
+from . import entry_history
+from .contest_facts import LABEL, THRESHOLD, canonical_bytes, first_place_label
 from .entry_history import CONTRACT_VERSION as HISTORY_CONTRACT
-from .entry_history import EntryHistory, HistoryRow
+from .entry_history import EntryHistory, EntryHistoryRefused, HistoryRow, _problem
 from .hashing import sha256_bytes
 
 METRICS_VERSION = "nfl_results_metrics_v1"
@@ -351,11 +355,18 @@ def _slice(rows: Sequence[HistoryRow]) -> dict[str, object]:
 
 
 def _rollup(rows: Sequence[HistoryRow], key: Callable[[HistoryRow], tuple],
-            describe: Callable[[tuple, list[HistoryRow]], dict]) -> list[dict]:
+            describe: Callable[[tuple, list[HistoryRow]], dict],
+            measure: Callable[[dict, list[HistoryRow]], dict] | None = None) -> list[dict]:
     groups: dict[tuple, list[HistoryRow]] = {}
     for row in rows:
         groups.setdefault(key(row), []).append(row)
-    return [{**describe(found, groups[found]), **_slice(groups[found])} for found in sorted(groups)]
+    out = []
+    for found in sorted(groups):
+        described = describe(found, groups[found])
+        out.append({**described, **_slice(groups[found])})
+        if measure is not None:
+            out[-1]["uncertainty"] = measure(described, groups[found])
+    return out
 
 
 def _band(value: object, uppers: Sequence) -> int:
@@ -405,23 +416,36 @@ def _fee_concentration(rows: Sequence[HistoryRow], top: int) -> dict[str, object
     }
 
 
-def _scope(rows: Sequence[HistoryRow], metrics: ResultsMetrics) -> dict[str, object]:
+def _scope(rows: Sequence[HistoryRow], metrics: ResultsMetrics,
+           measure: Callable[[str, dict, Sequence[HistoryRow]], dict] | None = None) -> dict[str, object]:
+    """One scope's rollups; with `measure` every slice but a one-slate `by_slate` row gains `uncertainty`."""
+
     shapes = _shape_labels(metrics.paid_fraction_edges)
     sizes = _labels(metrics.field_size_upper, str)
     fees = _labels(metrics.entry_fee_upper_cents, _cents_text)
+
+    def measured(rollup: str) -> Callable[[dict, list[HistoryRow]], dict] | None:
+        return None if measure is None else partial(measure, rollup)
+
+    overall = _slice(rows)
+    if measure is not None:
+        overall["uncertainty"] = measure("overall", {}, rows)
     return {
         "slates": len({slate_key(row) for row in rows}),
         "fine_slates": len({fine_slate_key(row) for row in rows}),
-        "overall": _slice(rows),
-        "by_format": _rollup(rows, lambda row: (row.game_type,), lambda key, _: {"game_type": key[0]}),
+        "overall": overall,
+        "by_format": _rollup(rows, lambda row: (row.game_type,), lambda key, _: {"game_type": key[0]},
+                             measured("by_format")),
         "by_payout_shape": _rollup(
             rows, lambda row: (_shape_band(row, metrics.paid_fraction_edges),),
-            lambda key, _: {"band": shapes[key[0]], "first_place_label": LABEL if key[0] == 0 else None}),
+            lambda key, _: {"band": shapes[key[0]], "first_place_label": LABEL if key[0] == 0 else None},
+            measured("by_payout_shape")),
         "by_field_size": _rollup(rows, lambda row: (_band(row.contest_entries, metrics.field_size_upper),),
-                                 lambda key, _: {"band": sizes[key[0]]}),
+                                 lambda key, _: {"band": sizes[key[0]]}, measured("by_field_size")),
         "by_entry_fee": _rollup(rows, lambda row: (_band(row.entry_fee_cents, metrics.entry_fee_upper_cents),),
-                                lambda key, _: {"band": fees[key[0]]}),
-        "by_month": _rollup(rows, lambda row: (str(row.contest_start)[:7],), lambda key, _: {"month": key[0]}),
+                                lambda key, _: {"band": fees[key[0]]}, measured("by_entry_fee")),
+        "by_month": _rollup(rows, lambda row: (str(row.contest_start)[:7],), lambda key, _: {"month": key[0]},
+                            measured("by_month")),
         "by_slate": _rollup(
             rows, lambda row: slate_key(row)[1:] + slate_key(row)[:1],
             lambda key, group: {"sport": key[2], "date": key[0], "game_type": key[1],
@@ -527,18 +551,260 @@ def _era_rows(nfl: Sequence[HistoryRow], metrics: ResultsMetrics, start: str) ->
     return [row for row in nfl if row.game_type in metrics.engine_game_types and str(row.contest_start)[:10] >= start]
 
 
+# ------------------------------------------------------------------------------ the bootstrap (Session 71b)
+#
+# Each statistic is a ratio of slate sums, sum(Y_g) / sum(X_g), over the slice's slates holding at least one of its
+# entries. Both methods are bootstrap-t with CR1 standard errors; only the resampling changes at `pairs_min_slates`.
+# The wild draw holds X_g fixed and moves the unrestricted residual e_g = Y_g - theta X_g by a Webb weight. The
+# resampled figures are IEEE doubles (`math.fsum`, `/`, `sqrt`) in a fixed order; estimates stay exact.
+
+PAIRS = "PAIRS_CLUSTER_STUDENTIZED"
+WILD = "WILD_WEBB_STUDENTIZED"
+WEBB_WEIGHTS = (-math.sqrt(1.5), -1.0, -math.sqrt(0.5), math.sqrt(0.5), 1.0, math.sqrt(1.5))
+BLANKS_REMOVED = "_blanks_removed"
+RETURN = "realized_return_on_fees"
+_EXCESS = {
+    "percentile_excess": (finishing_percentile, random_percentile),
+    "top_10_excess": (in_top, random_top),
+    "bottom_10_excess": (in_bottom, random_bottom),
+}
+STATISTICS = tuple(sorted([*_EXCESS, *(name + BLANKS_REMOVED for name in _EXCESS), RETURN]))
+FEWER_SLATES = "FEWER_THAN_5_SLATES"
+
+
+@dataclass(frozen=True)
+class BootstrapSettings:
+    seed: int
+    resamples: int
+    level: Fraction
+    pairs_min_slates: int
+    interval_min_slates: int
+    alpha: Fraction
+    power: Fraction
+
+
+def bootstrap_settings(metrics: ResultsMetrics) -> BootstrapSettings:
+    """The registered section, already validated by the loader, as numbers."""
+
+    section = metrics.bootstrap
+    return BootstrapSettings(section["seed"], section["resamples"], Fraction(section["level"]),
+                             section["pairs_min_slates"], section["interval_min_slates"],
+                             Fraction(section["mde_alpha_two_sided"]), Fraction(section["mde_power"]))
+
+
+def _method_block(metrics: ResultsMetrics) -> dict[str, object]:
+    return {**metrics.bootstrap, "pairs_method": PAIRS, "wild_method": WILD, "statistics": list(STATISTICS),
+            "degrees_of_freedom": "SLATES_MINUS_ONE", "quantile": "ORDER_STATISTIC_CEIL",
+            "seeding": "SHA256_OF_SEED_SCOPE_ROLLUP_LABEL_STATISTIC"}
+
+
+def _t_two_sided(t: float, df: int) -> float:
+    """`P(|T| < t)` for integer df: the exact finite series (Abramowitz and Stegun 26.7.3 odd, 26.7.4 even)."""
+
+    theta = math.atan(t / math.sqrt(df))
+    sine, cosine = math.sin(theta), math.cos(theta)
+    if df % 2 == 0:
+        term = total = 1.0
+        for k in range(1, df // 2):
+            term *= (2 * k - 1) / (2 * k) * cosine * cosine
+            total += term
+        return sine * total
+    total = 0.0  # df 1, the Cauchy, has no bracket term
+    if df > 1:
+        term = total = cosine
+        for k in range(1, (df - 1) // 2):
+            term *= (2 * k) / (2 * k + 1) * cosine * cosine
+            total += term
+    return 2 / math.pi * (theta + sine * total)
+
+
+def t_quantile(probability: Fraction, df: int) -> float:
+    """Student's t quantile above the median, by bisection on the exact series; no scipy."""
+
+    if df < 1 or not Fraction(1, 2) < probability < 1:
+        raise ValueError("t_quantile needs df >= 1 and a probability strictly between 1/2 and 1")
+    target = float(2 * Fraction(probability) - 1)
+    low, high = 0.0, 1.0
+    while _t_two_sided(high, df) < target:
+        low, high = high, 2 * high
+    while True:
+        middle = (low + high) / 2
+        if middle in (low, high):
+            return high
+        if _t_two_sided(middle, df) < target:
+            low = middle
+        else:
+            high = middle
+
+
+def cr1_standard_error(residuals: Sequence[float], x: Sequence[float]) -> float:
+    """`sqrt(G/(G-1) * sum(e_g^2)) / sum(X_g)`, the cluster-robust (CR1) standard error of `sum(Y) / sum(X)`."""
+
+    count = len(x)
+    return math.sqrt(count / (count - 1) * math.fsum(value * value for value in residuals)) / math.fsum(x)
+
+
+def minimum_detectable_effect(standard_error: float, slates: int, alpha: Fraction, power: Fraction) -> float:
+    """`(t_{1 - alpha/2, G-1} + t_{power, G-1}) * SE`: the smallest true effect a two-sided test finds at that power."""
+
+    return (t_quantile(1 - alpha / 2, slates - 1) + t_quantile(power, slates - 1)) * standard_error
+
+
+def _studentized(shift: float, standard_error: float) -> float:
+    """A resample with no spread left is never dropped: it sits at +-inf by the sign of its shift."""
+
+    return shift / standard_error if standard_error else math.copysign(math.inf, shift)
+
+
+def wild_t(weights: Sequence[float], residuals: Sequence[float], x: Sequence[float]) -> float:
+    """One wild draw: Y*_g = theta X_g + v_g e_g with X_g fixed, so theta* - theta = sum(v e) / sum(X)."""
+
+    moved = [weight * residual for weight, residual in zip(weights, residuals)]
+    shift = math.fsum(moved) / math.fsum(x)
+    return _studentized(shift, cr1_standard_error([value - shift * size for value, size in zip(moved, x)], x))
+
+
+def _pairs_t(indices: Sequence[int], y: Sequence[float], x: Sequence[float], theta: float) -> float | None:
+    sizes = [x[index] for index in indices]
+    total = math.fsum(sizes)
+    if total == 0:  # unreachable while every cluster's denominator is positive; counted, never dropped
+        return None
+    values = [y[index] for index in indices]
+    star = math.fsum(values) / total
+    return _studentized(star - theta, cr1_standard_error([v - star * s for v, s in zip(values, sizes)], sizes))
+
+
+def resample(y: Sequence[float], x: Sequence[float], theta: float, settings: BootstrapSettings,
+             draw: Callable[[], float], *, pairs: bool) -> tuple[str, list[float], int]:
+    """The method, each resample's t* and the count of pairs resamples whose denominator was zero.
+
+    Draws use `random()` alone, the one stream Python keeps across versions: `int(u * G)` picks a slate, `int(u * 6)`
+    a Webb weight.
+    """
+
+    count, values, zero = len(x), [], 0
+    if pairs:
+        for _ in range(settings.resamples):
+            t_star = _pairs_t([int(draw() * count) for _ in range(count)], y, x, theta)
+            if t_star is None:
+                zero += 1
+            else:
+                values.append(t_star)
+        return PAIRS, values, zero
+    residuals = [value - theta * size for value, size in zip(y, x)]
+    for _ in range(settings.resamples):
+        values.append(wild_t([WEBB_WEIGHTS[int(draw() * 6)] for _ in range(count)], residuals, x))
+    return WILD, values, zero
+
+
+def order_statistics(level: Fraction, resamples: int) -> tuple[int, int]:
+    """The 0-based indices of the lower and upper order statistics: `ceil(B a) - 1` and `ceil(B (1 - a)) - 1`."""
+
+    tail = (1 - level) / 2
+    return math.ceil(resamples * tail) - 1, math.ceil(resamples * (1 - tail)) - 1
+
+
+def _percent(value: float) -> str:
+    return _fixed(Fraction(value) * 100)
+
+
+def interval_figures(theta: float, standard_error: float, t_values: Sequence[float],
+                     settings: BootstrapSettings) -> dict[str, object]:
+    """The bootstrap-t interval `[theta - q_hi SE, theta - q_lo SE]`, null when an infinite t* is an endpoint."""
+
+    ordered = sorted(t_values)
+    low, high = order_statistics(settings.level, settings.resamples)
+    degenerate = sum(math.isinf(value) for value in ordered)
+    if math.isinf(ordered[low]) or math.isinf(ordered[high]):
+        return {"interval": None, "reason": "DEGENERATE_RESAMPLES", "degenerate_resamples": degenerate}
+    return {"interval": {"low": _percent(theta - ordered[high] * standard_error),
+                         "high": _percent(theta - ordered[low] * standard_error)},
+            "reason": None, "degenerate_resamples": degenerate}
+
+
+def _clusters(rows: Sequence[HistoryRow], statistic: str) -> list[tuple[Fraction, Fraction]]:
+    """`(Y_g, X_g)` per slate in slate-key order, only where `X_g > 0`: a slate holding none of the statistic's entries
+    (an all-blank slate, for a blanks-removed statistic) is not one of its clusters."""
+
+    groups: dict[tuple[str, str, str], list[HistoryRow]] = {}
+    for row in rows:
+        groups.setdefault(slate_key(row), []).append(row)
+    clusters = []
+    for key in sorted(groups):
+        group = groups[key]
+        if statistic == RETURN:
+            pair = (Fraction(sum(row.winnings_non_ticket_cents + row.winnings_ticket_cents - row.entry_fee_cents
+                                 for row in group)), Fraction(sum(row.entry_fee_cents for row in group)))
+        else:
+            if statistic.endswith(BLANKS_REMOVED):
+                group = [row for row in group if not is_blank(row.points_hundredths)]
+            realized, expected = _EXCESS[statistic.removesuffix(BLANKS_REMOVED)]
+            pair = (sum((Fraction(realized(row.place, row.contest_entries)) - expected(row.contest_entries)
+                         for row in group), Fraction(0)), Fraction(len(group)))
+        if pair[1] > 0:
+            clusters.append(pair)
+    return clusters
+
+
+def _statistic(clusters: Sequence[tuple[Fraction, Fraction]], settings: BootstrapSettings,
+               draw: Callable[[], float]) -> dict[str, object]:
+    count = len(clusters)
+    figures: dict[str, object] = {"slates": count, "estimate": None, "method": None, "interval": None,
+                                  "standard_error": None, "mde": None, "reason": None, "degenerate_resamples": 0}
+    if count:
+        exact = sum(y for y, _ in clusters) / sum(x for _, x in clusters)
+        figures["estimate"] = _fixed(exact * 100)
+    if count < settings.interval_min_slates:
+        return {**figures, "reason": FEWER_SLATES}
+    residuals = [y - exact * x for y, x in clusters]  # exact, so a slice with no spread is caught exactly
+    if not any(residuals):
+        return {**figures, "reason": "ZERO_STANDARD_ERROR"}
+    x = [float(size) for _, size in clusters]
+    standard_error = cr1_standard_error([float(value) for value in residuals], x)
+    method, t_values, zero = resample([float(value) for value, _ in clusters], x, float(exact), settings, draw,
+                                      pairs=count >= settings.pairs_min_slates)
+    figures.update(method=method, standard_error=_percent(standard_error), mde=_percent(minimum_detectable_effect(
+        standard_error, count, settings.alpha, settings.power)))
+    if zero:
+        return {**figures, "reason": "ZERO_DENOMINATOR_RESAMPLES", "degenerate_resamples": zero}
+    return {**figures, **interval_figures(float(exact), standard_error, t_values, settings)}
+
+
+def _uncertainty(settings: BootstrapSettings, scope: str, rollup: str, described: Mapping[str, object],
+                 rows: Sequence[HistoryRow]) -> dict[str, dict[str, object]]:
+    """Each statistic draws from its own generator, seeded from the slice's own name: no row moves another's draws."""
+
+    figures = {}
+    for statistic in STATISTICS:
+        key = json.dumps([settings.seed, scope, rollup, described, statistic], sort_keys=True).encode("utf-8")
+        draw = random.Random(int(sha256_bytes(key), 16)).random
+        figures[statistic] = _statistic(_clusters(rows, statistic), settings, draw)
+    return figures
+
+
 def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha256: str, source_bytes: int,
-                 engine_era_start: str | None = None) -> dict[str, object]:
-    """The report payload (`nfl_results_report_v1`); `engine_era_start` overrides the registered default."""
+                 engine_era_start: str | None = None, bootstrap: bool = False) -> dict[str, object]:
+    """The report payload (`nfl_results_report_v1`); `engine_era_start` overrides the registered default.
+
+    `bootstrap=True` (what the writer passes) adds the `bootstrap` method block and every scope slice's `uncertainty`.
+    """
 
     if engine_era_start is not None and not is_calendar_date(engine_era_start):
         raise ValueError("engine_era_start must be a calendar date YYYY-MM-DD")
     era = metrics.engine_era_start if engine_era_start is None else engine_era_start
     counted, left_out = _all_sport(history, metrics)
     nfl = [row for row in counted if row.is_nfl]
-    scopes = {"nfl": _scope(nfl, metrics), "engine_era": _scope(_era_rows(nfl, metrics, era), metrics)}
+    settings = bootstrap_settings(metrics) if bootstrap else None
+
+    def measure(scope: str) -> Callable[[str, dict, Sequence[HistoryRow]], dict] | None:
+        return None if settings is None else partial(_uncertainty, settings, scope)
+
+    scopes = {"nfl": _scope(nfl, metrics, measure("nfl")),
+              "engine_era": _scope(_era_rows(nfl, metrics, era), metrics, measure("engine_era"))}
     registered = nfl if metrics.trigger_scope == "nfl" else _era_rows(nfl, metrics, metrics.engine_era_start)
+    extra = {} if settings is None else {"bootstrap": _method_block(metrics)}
     return {
+        **extra,
         "schema_version": REPORT_VERSION,
         "writer": WRITER,
         "metrics": {"version": metrics.version, "sha256": metrics.sha256},
@@ -564,14 +830,177 @@ def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha25
     }
 
 
+# ------------------------------------------------------------------------------------ the command (Session 71b)
+
+REPORT_CODES = (
+    "RESULTS_REPORT_INPUT_INVALID",
+    "RESULTS_REPORT_SNAPSHOT_INVALID",
+    "RESULTS_REPORT_ARTIFACT_CONFLICT",
+    "RESULTS_REPORT_WRITE_FAILED",
+)
+REPORT_RECOVERY = (
+    "This file is derived from the snapshot and the registered metrics. Delete it, or the whole reports/<sha256>/"
+    " folder, and rerun results-report to rebuild it; a fix that changes a written byte takes a new writer version"
+    " instead."
+)
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+
+
+def report_name(era: str) -> str:
+    """The era names the file, so a report for another era is another file and never a conflict."""
+
+    return f"results_report.era-{era}.{WRITER}.json"
+
+
+@dataclass(frozen=True)
+class ReportOutcome:
+    """`COMPLETE` and `ALREADY_PRESENT` exit 0; `REFUSED` and `WRITE_FAILED` exit 2. Nothing here carries money."""
+
+    status: str
+    problems: tuple[str, ...]
+    files: dict[str, dict[str, str | None]]
+    does_not_establish: tuple[str, ...]
+    source_sha256: str | None = None
+    engine_era_start: Mapping[str, object] | None = None
+    headline: Mapping[str, object] | None = None
+
+    @property
+    def exit_code(self) -> int:
+        return 0 if self.status in ("COMPLETE", "ALREADY_PRESENT") else 2
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "status": self.status,
+            "exit_code": self.exit_code,
+            "problems": list(self.problems),
+            "contract": REPORT_VERSION,
+            "source_sha256": self.source_sha256,
+            "engine_era_start": self.engine_era_start,
+            "files": self.files,
+            "headline": self.headline,
+            "does_not_establish": list(self.does_not_establish),
+        }
+
+
+def headline(payload: Mapping[str, object]) -> dict[str, object]:
+    """What stdout carries: counts, place-based rates, the within-slate test and the trigger; no fee or winnings."""
+
+    def scope(block: Mapping[str, object]) -> dict[str, object]:
+        blanks: Counter[str] = Counter()
+        for row in block["by_slate"]:
+            blanks[row["date"]] += row["blanks"]
+        test = block["within_slate_test"]
+        return {
+            "entries": block["overall"]["entries"],
+            "slates": block["slates"],
+            "fine_slates": block["fine_slates"],
+            "contests": block["overall"]["contests"],
+            "blanks": block["overall"]["blanks"],
+            "blanks_by_date": {day: count for day, count in sorted(blanks.items()) if count},
+            "rates": block["overall"]["with_blanks"],
+            "within_slate_test": {key: test[key] for key in ("slates_with_both", "worse", "better", "tied",
+                                                             "p_one_sided")},
+        }
+
+    check = payload["all_sport_check"]
+    return {
+        "nfl": scope(payload["scopes"]["nfl"]),
+        "engine_era": scope(payload["scopes"]["engine_era"]),
+        "all_sport_check": {"entries": check["entries"], "left_out_rule_not_met": check["left_out_rule_not_met"],
+                            "blanks": check["overall"]["blanks"], "rates": check["overall"]["with_blanks"]},
+        "within_slate_trigger": dict(payload["within_slate_trigger"]),
+    }
+
+
+def _snapshot(path: Path, sha256: str) -> tuple[bytes | None, str | None]:
+    """The snapshot's bytes, or why they are not the bytes its name promises: never followed through a symlink."""
+
+    if path.is_symlink():
+        return None, "symlink"
+    if not path.exists():
+        return None, "absent"
+    try:
+        with path.open("rb") as handle:
+            raw = handle.read(entry_history.MAX_BYTES + 1)
+    except OSError:  # a directory at the name, a lock, a permission
+        return None, "unreadable"
+    # No intake writes a file past the cap, and its first MAX_BYTES + 1 bytes cannot hash to the name.
+    if len(raw) > entry_history.MAX_BYTES or sha256_bytes(raw) != sha256:
+        return None, "hash"
+    return raw, None
+
+
+def run_results_report(source_sha256: str, results_root: str | Path, engine_era_start: str | None = None, *,
+                       metrics: ResultsMetrics | None = None) -> ReportOutcome:
+    """Read one snapshot, build the report and write it once: `<root>/reports/<sha256>/results_report.era-<date>.w1.json`.
+
+    The registered metrics load first, from the module's path at call time: a defect there is `ResultsMetricsError`, a
+    fault in a tracked file and never a refusal. A refused input writes nothing. The trigger reads the registered era
+    whatever `engine_era_start` names.
+    """
+
+    metrics = load_results_metrics(DEFAULT_METRICS_PATH) if metrics is None else metrics
+    files: dict[str, dict[str, str | None]] = {"report": {"path": None, "state": "NOT_ATTEMPTED", "sha256": None}}
+    refused = partial(ReportOutcome, "REFUSED", files=files, does_not_establish=metrics.does_not_establish)
+    if not isinstance(source_sha256, str) or not _SHA256.fullmatch(source_sha256):
+        return refused((_problem("RESULTS_REPORT_INPUT_INVALID", "field=source_sha256"),))
+    if engine_era_start is not None and not is_calendar_date(engine_era_start):
+        return refused((_problem("RESULTS_REPORT_INPUT_INVALID", "field=engine_era_start"),), source_sha256=source_sha256)
+    root = Path(results_root)
+    raw, reason = _snapshot(root / "inbox" / f"{source_sha256}.csv", source_sha256)
+    if reason is not None:
+        return refused((_problem("RESULTS_REPORT_SNAPSHOT_INVALID", f"reason={reason}"),), source_sha256=source_sha256)
+    try:
+        history = entry_history.parse_entry_history(raw)
+    except EntryHistoryRefused as refusal:  # a snapshot the parser no longer takes: its own codes, unchanged
+        return refused(tuple(refusal.problems), source_sha256=source_sha256)
+    payload = build_report(history, metrics=metrics, source_sha256=source_sha256, source_bytes=len(raw),
+                           engine_era_start=engine_era_start, bootstrap=True)
+    era = payload["engine_era_start"]
+    done = partial(ReportOutcome, files=files, does_not_establish=metrics.does_not_establish,
+                   source_sha256=source_sha256, engine_era_start=era, headline=headline(payload))
+    writes = (("report", root / "reports" / source_sha256 / report_name(era["date"]), canonical_bytes(payload)),)
+    for name, path, data in writes:
+        files[name]["path"] = str(path)
+        try:
+            files[name]["state"] = entry_history._write_once(
+                path, data, code="RESULTS_REPORT_ARTIFACT_CONFLICT", recovery=REPORT_RECOVERY)
+        except entry_history._Stop as stop:
+            files[name].update(state="REFUSED", recovery=stop.recovery)
+            return done("REFUSED", (_problem(stop.code, f"file={name}"),))
+        except OSError as exc:
+            files[name]["state"] = "WRITE_FAILED"
+            written = _problem("RESULTS_REPORT_WRITE_FAILED", f"file={name}:exception={type(exc).__name__}")
+            return done("WRITE_FAILED", (written,))
+        files[name]["sha256"] = sha256_bytes(data)
+    status = "ALREADY_PRESENT" if all(entry["state"] == "ALREADY_PRESENT" for entry in files.values()) else "COMPLETE"
+    return done(status, ())
+
+
 __all__ = [
     "BOTTOM_STRICT",
     "DEFAULT_METRICS_PATH",
     "METRICS_VERSION",
+    "REPORT_CODES",
     "REPORT_VERSION",
+    "ReportOutcome",
     "ResultsMetrics",
     "ResultsMetricsError",
+    "BootstrapSettings",
+    "STATISTICS",
+    "bootstrap_settings",
     "build_report",
+    "canonical_bytes",
+    "cr1_standard_error",
+    "headline",
+    "interval_figures",
+    "minimum_detectable_effect",
+    "order_statistics",
+    "report_name",
+    "resample",
+    "run_results_report",
+    "t_quantile",
+    "wild_t",
     "finishing_percentile",
     "fine_slate_key",
     "in_bottom",

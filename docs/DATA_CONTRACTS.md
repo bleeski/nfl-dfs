@@ -3556,7 +3556,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `325e8dc03fc98530d5fb3062ea5317f746911d1748e4380fe9059c8bafd5355a`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `cb6a85b7e34608912fb9981d79d54fa43f9fd14da1aec54e327a3ce668f7694c`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4718,10 +4718,108 @@ resamples, a 90% interval (the review's level; the metric registry's 95% is for 
 slates, the studentized wild cluster bootstrap with Webb weights below that, no interval below 5 slates, and a minimum
 detectable effect at two-sided alpha 1/20 and power 4/5.
 
-The report artifact, `nfl_results_report_v1`, gets its own section with its writer and command (Session 71b).
+The report artifact, its writer and its command are the next section (`nfl_results_report_v1`, Session 71b).
 
 Does not establish: realized results of past entries are not EV, an ROI forecast, a win probability, a calibration or
 a proven edge (the file's `does_not_establish` travels with every report).
+
+## NFL results report, nfl_results_report_v1 (Session 71b)
+
+`nfl results-report --source-sha256 <64 hex> [--results-root <dir>] [--engine-era-start YYYY-MM-DD]` (default root
+`data/results`; `results_report.run_results_report`). It reads the snapshot `results-intake` kept,
+`<root>/inbox/<sha256>.csv`, builds the report with `build_report(..., bootstrap=True)` and writes
+`<root>/reports/<sha256>/results_report.era-<date>.w1.json` once, through the intake's write-once path
+(`entry_history._write_once`: a temporary file, fsync, a re-read and a hard link; the same bytes already there is
+`ALREADY_PRESENT`; another file at the name is never replaced). The era names the file, so a report for another era is
+another file, never a conflict. Realized results only: nothing reaches `run-slate`, `prior_review`, a frozen package or
+a release truth, and the file sits under the gitignored results root because it carries fees and winnings.
+
+**Order and refusals** (registry family `results_report`, `P`, stops `CERTIFICATION`; a refusal writes nothing). The
+registered metrics load first, from `config/results_metrics_v1.json` at call time. A file that will not load raises
+`ResultsMetricsError`, a defect in a tracked file and not a refusal: `main`'s handler prints it as `stage: CLI_FAILED`
+with `error: ResultsMetricsError` and the loader's message (the first fault, no money), exit 2. Then:
+- `RESULTS_REPORT_INPUT_INVALID:field=source_sha256` (not exactly 64 lower-case hex) or `:field=engine_era_start`
+  (not a real `YYYY-MM-DD`).
+- `RESULTS_REPORT_SNAPSHOT_INVALID:reason=<absent|symlink|unreadable|hash>`: nothing at the name; a symlink (never
+  followed); a file that cannot be read (a directory, a lock); bytes that do not hash to the name. At most
+  `MAX_BYTES + 1` bytes are read: a longer file is not one any intake wrote, and its prefix cannot hash to the name, so
+  it is `reason=hash`.
+- A snapshot the parser refuses passes through as its own `ENTRY_HISTORY_*` problems.
+- `RESULTS_REPORT_ARTIFACT_CONFLICT:file=report`: another file holds the report's name. It is never overwritten, and the
+  file's `recovery` sentence says to delete it (or the folder) and rerun; a change to a written byte takes a new writer.
+- `RESULTS_REPORT_WRITE_FAILED:file=report:exception=<class>`.
+
+**stdout** (JSON; nothing derived from `Entry_Fee`, `Winnings_*` or `Prize_Pool`). `status` (`COMPLETE` or
+`ALREADY_PRESENT`, exit 0; `REFUSED` or `WRITE_FAILED`, exit 2), `exit_code`, `problems`, `contract`
+(`nfl_results_report_v1`), `source_sha256` (null when the given hash is malformed), `engine_era_start` (as in the file;
+null before the payload is built), `files` with `report`: its `path` (null until the payload is built), `state`
+(`WRITTEN`, `ALREADY_PRESENT`, `REFUSED` with `recovery`, `WRITE_FAILED`, `NOT_ATTEMPTED`) and `sha256` (the file's,
+null unless it is on disk); `headline` (null when an input was refused) and `does_not_establish`. The `headline` holds
+`nfl` and `engine_era`, each with `entries`, `slates`, `fine_slates`, `contests`, `blanks`, `blanks_by_date` (date to
+count, dates with a blank only), `rates` (the overall `with_blanks` block) and `within_slate_test` (`slates_with_both`,
+`worse`, `better`, `tied`, `p_one_sided`); `all_sport_check` (`entries`, `left_out_rule_not_met`, `blanks`, `rates`);
+and `within_slate_trigger` as in the file.
+
+**The file** (canonical JSON: sorted keys, compact separators, one trailing LF; writer `w1`). `schema_version`
+(`nfl_results_report_v1`), `writer`, `metrics` {`version`, `sha256`}, `source` {`sha256`, `bytes`, `contract`},
+`engine_era_start` {`date`, `is_default`}, `definitions` (the registered rules: `percentile`, `random_percentile`,
+`top_10`, `bottom_10`, `blank`, `tie_rule`), `populations` (`paid`, `winnings`, `excluded_game_types`,
+`engine_game_types`), `scopes` {`nfl`, `engine_era`}, `within_slate_trigger`, `all_sport_check`, `notes`,
+`parser_note_counts` (note kind to count), `bootstrap` and `does_not_establish`.
+- **A scope** (`nfl`: NFL, paid, outside `Best Ball`; `engine_era`: those of the engine's game types from the era date):
+  `slates`, `fine_slates`, `overall`, `by_format` (`game_type`), `by_payout_shape` (`band`, `first_place_label`),
+  `by_field_size` (`band`), `by_entry_fee` (`band`), `by_month` (`month`), `by_slate` (`sport`, `date`, `game_type`,
+  `fine_slates`), `fee_concentration` and `within_slate_test`.
+- **A slice** (the overall block and every rollup row): `entries`, `slates`, `contests`, `blanks`, `fees_cents`,
+  `winnings_cash_cents`, `winnings_ticket_cents`, `net_cents`, `realized_return_on_fees` and `rake_implied_return`
+  (percent), `with_blanks` and `blanks_removed`, each a rates block (`entries`, `tie_rule`, and `percentile`, `top_10`
+  and `bottom_10`, each {`realized`, `random`} in percent), and `uncertainty` (below), which `by_slate` rows omit: each
+  holds one slate. A slice with no entries reports nulls, never zeros.
+- `fee_concentration`: `contests`, `fees_cents` and `top_contests` (the registered top ten by fees: `contest_key`,
+  `game_type`, `date`, `contest_entries`, `entries`, `fees_cents`, `share`).
+- `within_slate_test`: `slates_with_both`, `worse`, `better`, `tied`, `p_one_sided`, `p_two_sided`,
+  `mean_difference_points`, `after_registration` (`slates_with_both`, `worse`, `better`, `p_one_sided`) and `slates`
+  (each `sport`, `date`, `game_type`, `top_heavy_entries`, `flatter_entries`, `difference_points`).
+- `within_slate_trigger`: `scope`, `engine_era_start`, `registered_on`, `alpha`, `min_slates`, `slates`,
+  `p_one_sided`, `met` and `when_met`, always on the registered era.
+- `all_sport_check`: `entries`, `left_out_rule_not_met` (sport to count) and `overall` (a slice with no `uncertainty`).
+- `notes`: each `kind` (`PLACES_PAID_ABOVE_CONTEST_ENTRIES_CAPPED`), `row`, `entry_key` and `contest_key`.
+
+**The bootstrap.** `bootstrap` repeats the registered section (`cluster`, `seed`, `resamples`, `level`,
+`pairs_min_slates`, `wild`, `interval_min_slates`, `mde_alpha_two_sided`, `mde_power`) and adds `pairs_method`,
+`wild_method`, `statistics`, `degrees_of_freedom` (`SLATES_MINUS_ONE`), `quantile` (`ORDER_STATISTIC_CEIL`) and
+`seeding`. Each slice's `uncertainty` holds the seven `statistics`, each a ratio of slate sums `sum(Y_g) / sum(X_g)`
+over the slice's slates holding at least one of its entries: `percentile_excess`, `top_10_excess` and
+`bottom_10_excess` (realized minus random summed over a slate's entries, over its entries; percentage points), the
+same three over non-blank entries (`percentile_excess_blanks_removed`, `top_10_excess_blanks_removed`,
+`bottom_10_excess_blanks_removed`; an all-blank slate is no cluster of theirs), and `realized_return_on_fees` (net
+over fees, percent; its rake-implied comparison stays a point figure). Each holds `slates` (G), `estimate` (exact,
+rounded once), `method`, `interval` {`low`, `high`}, `standard_error`, `mde`, `reason` and `degenerate_resamples`.
+- Dispatch, in this order: below `interval_min_slates` (5) only the estimate, `reason` `FEWER_THAN_5_SLATES`;
+  residuals all exactly zero, `ZERO_STANDARD_ERROR`; from `pairs_min_slates` (30), `PAIRS_CLUSTER_STUDENTIZED` (G
+  slates drawn with replacement); otherwise `WILD_WEBB_STUDENTIZED` (X_g held fixed, the unrestricted residual
+  `e_g = Y_g - theta X_g` times a Webb weight, +-sqrt(1/2), +-1 or +-sqrt(3/2)). Both are bootstrap-t: the CR1 standard
+  error `sqrt(G/(G-1) * sum(e_g^2)) / sum(X_g)`, the same on each resample, and the interval
+  `[theta - q_hi SE, theta - q_lo SE]` at the registered level, with `q` the order statistics `s[ceil(B a) - 1]` and
+  `s[ceil(B (1 - a)) - 1]`, `a = (1 - level) / 2` (10,000 draws: `s[499]`, `s[9499]`). The registered section names only
+  the wild method; studentizing the pairs draw too is this v1's reading, so only the resampling changes at 30 slates,
+  and a change is `nfl_results_metrics_v2`. Scaling the drawn residuals by sqrt(G/(G-1)) cancels in t*; the CR1 factor
+  inside SE and SE* moves t*, the standard error and the MDE, and leaves the interval unchanged algebraically, not
+  bitwise. At 5 slates the six weights give 7,776 distinct vectors, fewer than the draws, so t* repeats.
+- A resample whose SE* is zero (possible while SE is not: Y = 2,2,2,2,0 over X = 1,1,1,1,4) is never dropped: its t* is
+  +inf or -inf by the sign of its shift and counts in `degenerate_resamples`, and the interval is null
+  (`DEGENERATE_RESAMPLES`) only when an infinite t* is an endpoint. A pairs resample with a zero denominator cannot occur
+  while every cluster's is positive; one would be counted the same way, `ZERO_DENOMINATOR_RESAMPLES`.
+- `mde` is `(t_{1-alpha/2, G-1} + t_{power, G-1}) * SE` at two-sided alpha 1/20 and power 4/5: the smallest true effect a
+  two-sided test would find at that power. It uses the Student t, not the bootstrap's distribution, and at 5 slates the
+  standard error itself is noisy, so it is indicative. The t quantile is pure Python: the exact series for integer df
+  (Abramowitz and Stegun 26.7.3 and 26.7.4) inverted by bisection.
+- Determinism: one generator per slice and statistic, seeded with the integer of the SHA-256 of the JSON list
+  `[seed, scope, rollup, row label, statistic]`, drawing `random()` alone (`int(u * G)` picks a slate, `int(u * 6)` a
+  weight), so a new month's row draws nothing an earlier row draws. Resampled figures are IEEE doubles summed with
+  `math.fsum` in a fixed order and rounded once like every figure, so two runs on one machine write the same bytes. The
+  interval and standard error use only correctly rounded operations; the MDE's quantile uses `atan` for odd df, which
+  libm does not round correctly, so the MDE alone may differ in its last place across platforms.
 
 ## Standings corpus transport (Session 17, X2)
 
