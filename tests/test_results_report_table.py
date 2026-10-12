@@ -22,6 +22,9 @@ from tests.test_results_report_command import ERA, FAST, RAW, REGISTERED, REPO, 
 # The JSON `RAW` gives under the registered metrics, hashed on the unmodified tree before Session 71c's first edit. Two
 # slates, so every slice stops before the bootstrap: each figure is exact and the hash is the same on every platform.
 PIN = "c386564fca63a99d37e4b626d837e6d61b9dee1c82aa47f0016a67b44b4da1ea"
+# The table beside it. Its layout is frozen under `w1` with the JSON: a changed byte at the old name would refuse a
+# rerun beside a table already on disk, so a layout change takes a new writer and a new pin.
+TABLE_PIN = "8bb4f8dbb314358fc2e0dd1ba5ec26fa2897876a086ccc7d5c11203c4a6aa80f"
 OVERALL = "## Overall"
 WITHIN = "## Within-slate test: top-heavy against flatter"
 RATES = (("Percentile % (random), lower is better", "percentile"), ("Top 10% (random), higher is better", "top_10"),
@@ -86,6 +89,22 @@ def _cents(token: str) -> int:
     return -value if token.startswith("-") else value
 
 
+def _assert_group(rows: list[list[str]], band: str, label: str, block: dict) -> None:
+    """One group's three lines against its slice: band, label, entries and slates on the first line only, then each
+    rate beside random and its excess's estimate, interval (or `n/a` and the reason) and MDE."""
+
+    assert rows[0][:4] == [band, label, str(block["entries"]), str(block["slates"])]
+    assert [row[:4] for row in rows[1:]] == [["", "", "", ""]] * 2
+    for row, (title, name) in zip(rows, (("Percentile", "percentile"), ("Top 10%", "top_10"),
+                                         ("Bottom 10%", "bottom_10"))):
+        figures = block["uncertainty"][f"{name}_excess"]
+        pair = block["with_blanks"][name]
+        interval = figures["interval"]
+        span = f"[{interval['low']}, {interval['high']}]" if interval else f"n/a ({figures['reason']})"
+        assert row[4:] == [title, f"{pair['realized']} ({pair['random']})", figures["estimate"], span,
+                           "n/a" if figures["mde"] is None else figures["mde"]]
+
+
 def _columns(payload: dict) -> list[dict]:
     scopes = payload["scopes"]
     return [scopes["nfl"]["overall"], scopes["engine_era"]["overall"], payload["all_sport_check"]["overall"]]
@@ -133,23 +152,19 @@ def test_the_table_figures_equal_the_json_as_strings(tmp_path):
     assert within["After registration: slates with both"] == [str(block["slates_with_both"]) for block in fresh]
     assert within["After registration: worse / better"] == [f"{block['worse']} / {block['better']}" for block in fresh]
     assert within["After registration: p, one-sided"] == [block["p_one_sided"] for block in fresh]
-    # A band row, each rate's line against its payload row; one interval pinned (correctly rounded arithmetic only).
+    # Both payout sections, every group (All shapes first) line by line; the two scopes differ on this fixture.
+    for scope, title in (("nfl", "NFL"), ("engine_era", "engine era")):
+        block = payload["scopes"][scope]
+        rows = _cells(lines, f"## Payout shape, {title}")
+        groups = [("All shapes", "", block["overall"]),
+                  *((band["band"], band["first_place_label"] or "n/a", band) for band in block["by_payout_shape"])]
+        assert len(rows) == 3 * len(groups) == 9
+        for index, (band, label, figures) in enumerate(groups):
+            _assert_group(rows[3 * index:3 * index + 3], band, label, figures)
+    # One interval pinned (correctly rounded arithmetic only); no bottom-10% finish, so that excess has no spread.
     rows = _cells(lines, "## Payout shape, engine era")
-    band = payload["scopes"]["engine_era"]["by_payout_shape"][0]
-    start = [row[0] for row in rows].index(band["band"])
-    assert rows[start][:4] == [band["band"], band["first_place_label"], str(band["entries"]), str(band["slates"])]
-    assert [row[:4] for row in rows[start + 1:start + 3]] == [["", "", "", ""]] * 2
-    for row, (title, name) in zip(rows[start:start + 3], (("Percentile", "percentile"), ("Top 10%", "top_10"),
-                                                           ("Bottom 10%", "bottom_10"))):
-        figures = band["uncertainty"][f"{name}_excess"]
-        pair = band["with_blanks"][name]
-        interval = figures["interval"]
-        span = f"[{interval['low']}, {interval['high']}]" if interval else f"n/a ({figures['reason']})"
-        assert row[4:] == [title, f"{pair['realized']} ({pair['random']})", figures["estimate"], span,
-                           "n/a" if figures["mde"] is None else figures["mde"]]
-    assert rows[start][7] == "[-23.0765, 24.6811]"
-    # No entry finished in the bottom 10%, so that excess has no spread: a null interval with its reason.
-    assert rows[start + 2][7:] == ["n/a (ZERO_STANDARD_ERROR)", "n/a"]
+    assert rows[3][:2] == ["[0, 1/20)", "FIRST_PLACE_OBJECTIVE"] and rows[3][7] == "[-23.0765, 24.6811]"
+    assert rows[5][7:] == ["n/a (ZERO_STANDARD_ERROR)", "n/a"]
     # Every decimal figure anywhere in the table is the payload's own string, or money whose cents it holds.
     strings: set[str] = set()
     cents: set[int] = set()
@@ -210,6 +225,12 @@ def test_the_json_bytes_do_not_move(tmp_path):
     assert outcome.status == "COMPLETE"
     assert sha256_bytes(_target(root, sha).read_bytes()) == outcome.files["report"]["sha256"] == PIN
     assert "table" not in json.loads(_target(root, sha).read_bytes())
+
+
+def test_the_table_layout_is_frozen_under_w1(tmp_path):
+    root, sha = _intake(tmp_path, RAW)
+    outcome = _run(root, sha, metrics=REGISTERED)
+    assert sha256_bytes(_table_path(root, sha).read_bytes()) == outcome.files["table"]["sha256"] == TABLE_PIN
 
 
 # ------------------------------------------------------------------------------------------- figures
@@ -291,6 +312,17 @@ def test_a_table_write_failure_leaves_the_report(tmp_path, monkeypatch):
     rerun = _run(root, sha)
     assert (rerun.status, rerun.files["report"]["state"], rerun.files["table"]["state"]) == (
         "COMPLETE", "ALREADY_PRESENT", "WRITTEN")
+
+
+def test_a_refused_report_names_the_table_and_leaves_it_unwritten(tmp_path):
+    root, sha = _intake(tmp_path, MAIN)
+    _target(root, sha).parent.mkdir(parents=True)
+    _target(root, sha).write_bytes(b"{}\n")
+    outcome = _run(root, sha)
+    assert (outcome.status, outcome.problems) == ("REFUSED", ("RESULTS_REPORT_ARTIFACT_CONFLICT:file=report",))
+    # Both paths are known once the payload is built; the table waits behind the report.
+    assert outcome.files["table"] == {"path": str(_table_path(root, sha)), "state": "NOT_ATTEMPTED", "sha256": None}
+    assert not _table_path(root, sha).exists()
 
 
 def test_a_render_fault_writes_nothing(tmp_path, monkeypatch):
