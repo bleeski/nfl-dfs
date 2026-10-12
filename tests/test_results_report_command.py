@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +24,7 @@ from nfl_dfs.gate_registry import load_gate_registry
 from nfl_dfs.hashing import sha256_bytes
 from tests.test_entry_history import _history, _row
 from tests.test_gate_registry import scanned_codes
-from tests.test_results_report import STANDARD, TOP_HEAVY, _contest
+from tests.test_results_report import STANDARD, TOP_HEAVY, _contest, _worse_slates
 
 REPO = Path(__file__).resolve().parents[1]
 REGISTERED = rr.load_results_metrics()
@@ -113,18 +114,21 @@ def test_one_changed_snapshot_byte_is_refused(tmp_path):
 
 
 def test_two_eras_write_two_files_and_the_trigger_never_moves(tmp_path, capsys):
-    root, sha = _intake(tmp_path)
+    # Three slates from 2026-10-11, each with a top-heavy contest finishing worse than a flatter one.
+    root, sha = _intake(tmp_path, _history(*_worse_slates(3)))
     default = _run(root, sha)
     code, moved = _command(capsys, "--source-sha256", sha, "--results-root", str(root),
-                           "--engine-era-start", "2026-09-14")
+                           "--engine-era-start", "2026-10-12")
     assert (default.status, code, moved["status"]) == ("COMPLETE", 0, "COMPLETE")
-    assert moved["engine_era_start"] == {"date": "2026-09-14", "is_default": False}
-    first, second = json.loads(_target(root, sha).read_bytes()), json.loads(_target(root, sha, "2026-09-14").read_bytes())
+    assert moved["engine_era_start"] == {"date": "2026-10-12", "is_default": False}
+    first, second = json.loads(_target(root, sha).read_bytes()), json.loads(_target(root, sha, "2026-10-12").read_bytes())
     assert (first["engine_era_start"], second["engine_era_start"]) == (
-        {"date": ERA, "is_default": True}, {"date": "2026-09-14", "is_default": False})
+        {"date": ERA, "is_default": True}, {"date": "2026-10-12", "is_default": False})
+    assert (first["scopes"]["engine_era"]["slates"], second["scopes"]["engine_era"]["slates"]) == (3, 2)
     assert first["within_slate_trigger"] == second["within_slate_trigger"]
+    assert first["within_slate_trigger"]["slates"] == 3  # the registered era's three slates, in both files
     assert sorted(path.name for path in (root / "reports" / sha).iterdir()) == [
-        "results_report.era-2026-09-09.w1.json", "results_report.era-2026-09-14.w1.json"]
+        "results_report.era-2026-09-09.w1.json", "results_report.era-2026-10-12.w1.json"]
 
 
 # ------------------------------------------------------------------------------------------- refusals
@@ -147,7 +151,24 @@ def test_input_invalid_is_refused_and_writes_nothing(tmp_path, sha, era, field):
     assert not (root / "reports").exists()
 
 
-@pytest.mark.parametrize("damage", ["absent", "symlink", "unreadable", "hash", "past_the_cap"])
+def _patched_lstat(monkeypatch, snapshot: Path, mode: int | None) -> None:
+    """The check reads one `os.lstat`: a patched mode reaches each branch on every platform (a real symlink needs a
+    privilege on Windows, and a FIFO does not exist there). `None` makes the call itself fail, as EACCES does."""
+
+    real_lstat = os.lstat
+
+    def lstat(path, *args, **kwargs):
+        if Path(path).name != snapshot.name:
+            return real_lstat(path, *args, **kwargs)
+        if mode is None:
+            raise PermissionError(13, "Permission denied", str(path))
+        return os.stat_result((mode, 0, 0, 1, 0, 0, 0, 0, 0, 0))
+
+    monkeypatch.setattr(os, "lstat", lstat)
+
+
+@pytest.mark.parametrize("damage", ["absent", "symlink", "unreadable", "fifo", "stat_denied", "hash",
+                                    "past_the_cap"])
 def test_a_snapshot_that_is_not_its_bytes_is_refused_by_reason(tmp_path, monkeypatch, damage):
     root, sha = _intake(tmp_path)
     snapshot = root / "inbox" / f"{sha}.csv"
@@ -155,12 +176,13 @@ def test_a_snapshot_that_is_not_its_bytes_is_refused_by_reason(tmp_path, monkeyp
     if damage == "absent":
         sha = sha256_bytes(b"never taken in")
     elif damage == "symlink":
-        # A real symlink needs a privilege on Windows; the check reads `is_symlink`, so a patched one tests the branch.
-        real_is_symlink = Path.is_symlink
-        monkeypatch.setattr(Path, "is_symlink", lambda self: self.name == snapshot.name or real_is_symlink(self))
+        _patched_lstat(monkeypatch, snapshot, stat.S_IFLNK | 0o777)
     elif damage == "unreadable":
         snapshot.unlink()
         snapshot.mkdir()
+    elif damage in ("fifo", "stat_denied"):  # a FIFO would block open() forever; a stat error is named, not raised
+        _patched_lstat(monkeypatch, snapshot, stat.S_IFIFO | 0o644 if damage == "fifo" else None)
+        reason = "unreadable"
     elif damage == "hash":
         snapshot.write_bytes(RAW + b"\r\n")
     else:

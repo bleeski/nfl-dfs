@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 import re
+import stat
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date
@@ -569,7 +571,6 @@ _EXCESS = {
     "bottom_10_excess": (in_bottom, random_bottom),
 }
 STATISTICS = tuple(sorted([*_EXCESS, *(name + BLANKS_REMOVED for name in _EXCESS), RETURN]))
-FEWER_SLATES = "FEWER_THAN_5_SLATES"
 
 
 @dataclass(frozen=True)
@@ -651,9 +652,12 @@ def minimum_detectable_effect(standard_error: float, slates: int, alpha: Fractio
 
 
 def _studentized(shift: float, standard_error: float) -> float:
-    """A resample with no spread left is never dropped: it sits at +-inf by the sign of its shift."""
+    """A resample with no spread left is never dropped: it sits at +-inf by the sign of its shift. A pairs draw with no
+    shift either (every drawn slate exactly at theta) has no sign: NaN, which nulls the interval."""
 
-    return shift / standard_error if standard_error else math.copysign(math.inf, shift)
+    if standard_error:
+        return shift / standard_error
+    return math.copysign(math.inf, shift) if shift else math.nan
 
 
 def wild_t(weights: Sequence[float], residuals: Sequence[float], x: Sequence[float]) -> float:
@@ -710,11 +714,15 @@ def _percent(value: float) -> str:
 
 def interval_figures(theta: float, standard_error: float, t_values: Sequence[float],
                      settings: BootstrapSettings) -> dict[str, object]:
-    """The bootstrap-t interval `[theta - q_hi SE, theta - q_lo SE]`, null when an infinite t* is an endpoint."""
+    """The bootstrap-t interval `[theta - q_hi SE, theta - q_lo SE]`, null when an infinite t* is an endpoint or a t*
+    has no sign at all."""
 
+    undefined = sum(math.isnan(value) for value in t_values)
+    degenerate = undefined + sum(math.isinf(value) for value in t_values)
+    if undefined:
+        return {"interval": None, "reason": "DEGENERATE_RESAMPLES", "degenerate_resamples": degenerate}
     ordered = sorted(t_values)
     low, high = order_statistics(settings.level, settings.resamples)
-    degenerate = sum(math.isinf(value) for value in ordered)
     if math.isinf(ordered[low]) or math.isinf(ordered[high]):
         return {"interval": None, "reason": "DEGENERATE_RESAMPLES", "degenerate_resamples": degenerate}
     return {"interval": {"low": _percent(theta - ordered[high] * standard_error),
@@ -755,7 +763,7 @@ def _statistic(clusters: Sequence[tuple[Fraction, Fraction]], settings: Bootstra
         exact = sum(y for y, _ in clusters) / sum(x for _, x in clusters)
         figures["estimate"] = _fixed(exact * 100)
     if count < settings.interval_min_slates:
-        return {**figures, "reason": FEWER_SLATES}
+        return {**figures, "reason": f"FEWER_THAN_{settings.interval_min_slates}_SLATES"}
     residuals = [y - exact * x for y, x in clusters]  # exact, so a slice with no spread is caught exactly
     if not any(residuals):
         return {**figures, "reason": "ZERO_STANDARD_ERROR"}
@@ -913,16 +921,28 @@ def headline(payload: Mapping[str, object]) -> dict[str, object]:
 
 
 def _snapshot(path: Path, sha256: str) -> tuple[bytes | None, str | None]:
-    """The snapshot's bytes, or why they are not the bytes its name promises: never followed through a symlink."""
+    """The snapshot's bytes, or why they are not the bytes its name promises.
 
-    if path.is_symlink():
-        return None, "symlink"
-    if not path.exists():
-        return None, "absent"
+    One `lstat` decides: nothing there is `absent`; a symlink is `symlink` (never followed); anything but a plain file
+    (a directory, a FIFO that would block `open` forever, a device) or a stat that fails is `unreadable`. The open
+    refuses a symlink that took the name since, where the platform can.
+    """
+
     try:
-        with path.open("rb") as handle:
+        mode = os.lstat(path).st_mode
+    except (FileNotFoundError, NotADirectoryError):
+        return None, "absent"
+    except OSError:
+        return None, "unreadable"
+    if stat.S_ISLNK(mode):
+        return None, "symlink"
+    if not stat.S_ISREG(mode):
+        return None, "unreadable"
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+        with os.fdopen(os.open(path, flags), "rb") as handle:
             raw = handle.read(entry_history.MAX_BYTES + 1)
-    except OSError:  # a directory at the name, a lock, a permission
+    except OSError:  # a lock, a permission, a symlink swapped in
         return None, "unreadable"
     # No intake writes a file past the cap, and its first MAX_BYTES + 1 bytes cannot hash to the name.
     if len(raw) > entry_history.MAX_BYTES or sha256_bytes(raw) != sha256:

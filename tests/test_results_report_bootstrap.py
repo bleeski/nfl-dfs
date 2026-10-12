@@ -93,6 +93,23 @@ def test_a_degenerate_draw_sits_at_infinity_and_is_counted():
     assert (many["degenerate_resamples"], many["interval"], many["reason"]) == (15, None, "DEGENERATE_RESAMPLES")
 
 
+def test_a_pairs_draw_with_no_shift_and_no_spread_has_no_sign_and_nulls_the_interval():
+    # Theta 0 and a draw of only the first slate (Y 0, X 1): shift 0 and SE* 0, a t* of 0/0 that no sign can place.
+    method, values, zero = rr.resample([0.0, 1.0, -1.0], [1.0, 1.0, 1.0], 0.0, rr.bootstrap_settings(FAST),
+                                       random.Random(3).random, pairs=True)
+    undefined = sum(math.isnan(value) for value in values)
+    assert method == "PAIRS_CLUSTER_STUDENTIZED" and zero == 0 and 0 < undefined < 200
+    figures = rr.interval_figures(0.0, 0.5, [math.nan] + [0.0] * 199, rr.bootstrap_settings(FAST))
+    assert (figures["interval"], figures["reason"], figures["degenerate_resamples"]) == (
+        None, "DEGENERATE_RESAMPLES", 1)
+
+
+def test_the_floor_reason_names_the_registered_minimum():
+    raised = dataclasses.replace(FAST, bootstrap={**FAST.bootstrap, "interval_min_slates": 6})
+    figures = _payload(*_slates(5), metrics=raised)["scopes"]["nfl"]["overall"]["uncertainty"]["percentile_excess"]
+    assert (figures["reason"], figures["interval"]) == ("FEWER_THAN_6_SLATES", None)
+
+
 def test_a_zero_denominator_resample_is_named_never_dropped():
     # Unreachable from a report (every cluster has a positive denominator); the pairs loop still counts it.
     method, values, zero = rr.resample([0.0, 1.0], [0.0, 1.0], 1.0, rr.bootstrap_settings(FAST),

@@ -622,8 +622,8 @@ once (`nfl_results_report_v1`). The file holds realized results only: each
 rate beside what a random finish would give, rollups by format, payout shape,
 field size, fee, month and slate, fee concentration, the within-slate test of
 top-heavy against flatter contests, and an interval and minimum detectable
-effect for every slice of at least 5 slates. It takes about ten to twenty
-seconds. Running it again is `ALREADY_PRESENT`, exit 0, and writes nothing.
+effect for every slice of at least 5 slates. It takes under a minute (16
+seconds for 40 slates on Linux; Windows is slower). Running it again is `ALREADY_PRESENT`, exit 0, and writes nothing.
 `--engine-era-start YYYY-MM-DD` reports another era into its own file; the
 within-slate trigger always reads the registered era.
 

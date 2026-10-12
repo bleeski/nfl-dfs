@@ -4740,10 +4740,11 @@ registered metrics load first, from `config/results_metrics_v1.json` at call tim
 with `error: ResultsMetricsError` and the loader's message (the first fault, no money), exit 2. Then:
 - `RESULTS_REPORT_INPUT_INVALID:field=source_sha256` (not exactly 64 lower-case hex) or `:field=engine_era_start`
   (not a real `YYYY-MM-DD`).
-- `RESULTS_REPORT_SNAPSHOT_INVALID:reason=<absent|symlink|unreadable|hash>`: nothing at the name; a symlink (never
-  followed); a file that cannot be read (a directory, a lock); bytes that do not hash to the name. At most
-  `MAX_BYTES + 1` bytes are read: a longer file is not one any intake wrote, and its prefix cannot hash to the name, so
-  it is `reason=hash`.
+- `RESULTS_REPORT_SNAPSHOT_INVALID:reason=<absent|symlink|unreadable|hash>`, from one `lstat` of the name: nothing
+  there; a symlink (never followed, and the open refuses one that takes the name since, where the platform can);
+  anything but a plain file (a directory, a FIFO that would block an open forever, a device), a stat that fails or a
+  read that fails; bytes that do not hash to the name. At most `MAX_BYTES + 1` bytes are read: a longer file is not one
+  any intake wrote, and its prefix cannot hash to the name, so it is `reason=hash`.
 - A snapshot the parser refuses passes through as its own `ENTRY_HISTORY_*` problems.
 - `RESULTS_REPORT_ARTIFACT_CONFLICT:file=report`: another file holds the report's name. It is never overwritten, and the
   file's `recovery` sentence says to delete it (or the folder) and rerun; a change to a written byte takes a new writer.
@@ -4753,8 +4754,8 @@ with `error: ResultsMetricsError` and the loader's message (the first fault, no 
 `ALREADY_PRESENT`, exit 0; `REFUSED` or `WRITE_FAILED`, exit 2), `exit_code`, `problems`, `contract`
 (`nfl_results_report_v1`), `source_sha256` (null when the given hash is malformed), `engine_era_start` (as in the file;
 null before the payload is built), `files` with `report`: its `path` (null until the payload is built), `state`
-(`WRITTEN`, `ALREADY_PRESENT`, `REFUSED` with `recovery`, `WRITE_FAILED`, `NOT_ATTEMPTED`) and `sha256` (the file's,
-null unless it is on disk); `headline` (null when an input was refused) and `does_not_establish`. The `headline` holds
+(`WRITTEN`, `ALREADY_PRESENT`, `REFUSED` with `recovery`, `WRITE_FAILED`, `NOT_ATTEMPTED`) and `sha256` (this
+report's bytes, null unless they are on disk at the name); `headline` (null when an input was refused) and `does_not_establish`. The `headline` holds
 `nfl` and `engine_era`, each with `entries`, `slates`, `fine_slates`, `contests`, `blanks`, `blanks_by_date` (date to
 count, dates with a blank only), `rates` (the overall `with_blanks` block) and `within_slate_test` (`slates_with_both`,
 `worse`, `better`, `tied`, `p_one_sided`); `all_sport_check` (`entries`, `left_out_rule_not_met`, `blanks`, `rates`);
@@ -4795,7 +4796,8 @@ same three over non-blank entries (`percentile_excess_blanks_removed`, `top_10_e
 `bottom_10_excess_blanks_removed`; an all-blank slate is no cluster of theirs), and `realized_return_on_fees` (net
 over fees, percent; its rake-implied comparison stays a point figure). Each holds `slates` (G), `estimate` (exact,
 rounded once), `method`, `interval` {`low`, `high`}, `standard_error`, `mde`, `reason` and `degenerate_resamples`.
-- Dispatch, in this order: below `interval_min_slates` (5) only the estimate, `reason` `FEWER_THAN_5_SLATES`;
+- Dispatch, in this order: below `interval_min_slates` (5) only the estimate, `reason` `FEWER_THAN_5_SLATES` (the
+  number is the registered minimum);
   residuals all exactly zero, `ZERO_STANDARD_ERROR`; from `pairs_min_slates` (30), `PAIRS_CLUSTER_STUDENTIZED` (G
   slates drawn with replacement); otherwise `WILD_WEBB_STUDENTIZED` (X_g held fixed, the unrestricted residual
   `e_g = Y_g - theta X_g` times a Webb weight, +-sqrt(1/2), +-1 or +-sqrt(3/2)). Both are bootstrap-t: the CR1 standard
@@ -4806,20 +4808,25 @@ rounded once), `method`, `interval` {`low`, `high`}, `standard_error`, `mde`, `r
   and a change is `nfl_results_metrics_v2`. Scaling the drawn residuals by sqrt(G/(G-1)) cancels in t*; the CR1 factor
   inside SE and SE* moves t*, the standard error and the MDE, and leaves the interval unchanged algebraically, not
   bitwise. At 5 slates the six weights give 7,776 distinct vectors, fewer than the draws, so t* repeats.
-- A resample whose SE* is zero (possible while SE is not: Y = 2,2,2,2,0 over X = 1,1,1,1,4) is never dropped: its t* is
-  +inf or -inf by the sign of its shift and counts in `degenerate_resamples`, and the interval is null
-  (`DEGENERATE_RESAMPLES`) only when an infinite t* is an endpoint. A pairs resample with a zero denominator cannot occur
-  while every cluster's is positive; one would be counted the same way, `ZERO_DENOMINATOR_RESAMPLES`.
+- No resample is dropped. One whose SE* is zero (possible while SE is not: Y = 2,2,2,2,0 over X = 1,1,1,1,4) has t* at
+  +inf or -inf by the sign of its shift, counts in `degenerate_resamples`, and nulls the interval
+  (`DEGENERATE_RESAMPLES`) only when an infinite t* is an endpoint; the wild draw's shift is never zero then. A pairs draw
+  whose shift is zero too (every drawn slate exactly at theta) has no sign, counts the same way, and nulls the interval
+  whenever it occurs. A pairs draw with a zero denominator cannot occur while every cluster's is positive; one would null
+  the interval as `ZERO_DENOMINATOR_RESAMPLES`, with its count in `degenerate_resamples`.
 - `mde` is `(t_{1-alpha/2, G-1} + t_{power, G-1}) * SE` at two-sided alpha 1/20 and power 4/5: the smallest true effect a
   two-sided test would find at that power. It uses the Student t, not the bootstrap's distribution, and at 5 slates the
   standard error itself is noisy, so it is indicative. The t quantile is pure Python: the exact series for integer df
   (Abramowitz and Stegun 26.7.3 and 26.7.4) inverted by bisection.
-- Determinism: one generator per slice and statistic, seeded with the integer of the SHA-256 of the JSON list
-  `[seed, scope, rollup, row label, statistic]`, drawing `random()` alone (`int(u * G)` picks a slate, `int(u * 6)` a
-  weight), so a new month's row draws nothing an earlier row draws. Resampled figures are IEEE doubles summed with
-  `math.fsum` in a fixed order and rounded once like every figure, so two runs on one machine write the same bytes. The
-  interval and standard error use only correctly rounded operations; the MDE's quantile uses `atan` for odd df, which
-  libm does not round correctly, so the MDE alone may differ in its last place across platforms.
+- Determinism: one `random.Random` per slice and statistic, seeded with the integer of the hex SHA-256 of the UTF-8
+  bytes of `json.dumps([seed, scope, rollup, row, statistic], sort_keys=True)` (default separators), where `rollup` is
+  `overall` or the rollup's key and `row` is the row's descriptor object (`{}` for `overall`; `{"game_type": ...}`,
+  `{"band": ..., "first_place_label": ...}`, `{"band": ...}` or `{"month": ...}`). Draws use `random()` alone
+  (`int(u * G)` picks a slate, `int(u * 6)` a weight), so a new month's row draws nothing an earlier row draws. Resampled
+  figures are IEEE doubles summed with `math.fsum` in a fixed order and rounded once like every figure, so two runs on
+  one machine write the same bytes. The interval and standard error use only correctly rounded operations; the MDE's
+  quantile calls `atan`, `sin` and `cos`, which libm does not round correctly, so the MDE alone may differ in its last
+  place across platforms.
 
 ## Standings corpus transport (Session 17, X2)
 
