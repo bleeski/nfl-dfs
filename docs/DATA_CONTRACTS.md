@@ -4607,6 +4607,65 @@ SHA-256, never a path), `stats_source` (the manifest entry: URL, SHA-256, observ
 salary person), `grade`, `reconciliation` (null without lineups), `not_computed` and `does_not_establish`. The same bytes
 give the same report. All six codes are registry family `player_grading` (`P`).
 
+**Additive keys (Session 70b, 2026-10-12; additive keys, not a new version, as in Session 08).** A reader that predates
+them ignores them; the pool (`nfl_player_grading_pool_v1`, below) requires them, so a report written before them is
+regraded before it pools. The top-level keys above are unchanged; the new keys are inside `grade` and on each person.
+- `grade.tiers`: within-slate salary tertiles over the graded non-DST people (pre-lock: who later played never moves a
+  boundary). Salary ascending, tied salaries share their mid-rank `r` of `n`, and the tier is `floor(3 (r - 0.5) / n)`,
+  at most 2, named `low`, `mid` and `high`. A tied salary never splits across tiers, so a large tied block can leave a
+  tier empty. Each tier gives `people`, `salary_min` and `salary_max` (null when empty); `rule` states the rule. Each
+  person carries `salary_tier`, null for a DST or anyone ungraded.
+- `grade.by_position` (each position among the graded non-DST people) and `grade.by_tier` (all three tiers): each cell
+  is measured over its usable people (graded, no gap) and carries `n` and, for `prior` and `salary`,
+  `player_points_mae`, `spearman` and `note`. Under 3 people both values are null with `note: FEWER_THAN_3`; a Spearman
+  with no variance is `ZERO_VARIANCE`. The salary side keeps the slate's one `salary_scaled_points_v1` scale, never a
+  per-cell rescale. Position and tier are reported separately, never crossed; the cells over positions, and over tiers,
+  each sum to `usable_people`.
+- `grade.play_rate`: over every identity-bound non-DST salary person, graded or not. `by_status` is keyed by the salary
+  file's `Status` cell (`(blank)` for an empty one), each with `class` (`AVAILABLE`, `DEGRADED` or `UNAVAILABLE` from
+  `participation.py` on the upper-cased value, else `UNRECOGNIZED`), `people`, `played`, `rate` (null at 0 people) and
+  `unbound` (people of that status no identity binds, left out). Played is a stat row in the weekly file that week: an
+  undercount (a player on the field with no counting stat has no row) and not the registered `participation_brier`
+  event; `population` and `played_means` say so in the report.
+- `does_not_establish` gains a sentence for the tables and one for play rate.
+
+### `nfl_player_grading_pool_v1` (Session 70b)
+
+Registered 2026-10-12. `nfl grade-players --pool <report> <report>... --out <new file>` macro-averages two or more
+per-slate reports with the slate as the unit, the registered aggregation of `player_points_mae`. A grading input only:
+`model_status: PRIOR_ONLY`, `status: DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION`. `--pool` takes no one-slate option, and a
+usage error is argparse's (exit 2, no JSON).
+
+**Inputs.** Each report's SHA-256 is taken from the bytes parsed. It must be a JSON object with `schema_version:
+nfl_player_grading_v1` and the additive keys above; every key read is type-checked (a count a whole number of at least
+0, a value finite or null, never a bool) and bounded (an error at least 0, a correlation and a rate within [-1, 1] and
+[0, 1], `played` at most `people`, each status's `class` its own, `usable_people` the overall `n`, no game twice). Two
+reports are one slate, refused, when they share `inputs.salaries.sha256`
+or the same `slate.mode`, `season`, `week` and set of bound nflverse `game_id`s (a re-exported salary file). Reports from
+different stats packages may pool, each naming its own. Refusals are `PLAYER_GRADING_INPUT_INVALID`:
+`pool:FEWER_THAN_2_REPORTS` or `pool_report:<n>:<why>`, `<n>` the report's 1-based argument position (`--pool` given
+twice keeps every report) and `<why>` one of `UNREADABLE:<exception class>` (bad bytes, JSON, nesting or number), `NOT_AN_OBJECT`, `SCHEMA:<value>`, `SHAPE:<key path>` (a report graded before Session
+70b fails on `grade.by_position`: regrade it) or `REPEATED_SLATE:<m>`, the earlier argument. An existing `--out` is
+`PLAYER_GRADING_OUTPUT_EXISTS`. Exit 2 writes nothing (`WRITE_FAILED` removes the file it made); it never prints a lineup
+release truth.
+
+**The pool.** Slates are ordered by season, week and salary SHA-256, so argument order changes no byte; `slates` lists
+each with its report and salary hashes, mode, season, week, nflverse games, stats package and observation time, prior
+`score_version`, and graded and usable people. Each measure of `overall`, `by_position` and `by_tier` (`prior` and
+`salary`, `player_points_mae` and `spearman`) is `{value, slates, people, values}`: the unweighted mean to 6 places over
+the slates with a non-null value, their count, the sum of their `n`, and each slate's value in order (null where absent
+or under 3 people, never filled). The Spearman figure is a mean of per-slate correlations. `play_rate` per status sums
+`people`, `played` and `unbound` and pools `rate` the same way.
+
+**Sample and independence.** `sample` gives `slates`, `weights: EQUAL_PER_SLATE`, `kish_ess` ((sum w)^2 / sum w^2 at
+w = 1: the slate count, as each measure's own `slates` is its ESS), `independent_slates`, usable people per slate and in
+total, `registered_minimum_sample` (500) and `meets_minimum_sample`. `independence.shared_games` names each nflverse game
+two or more slates hold, by position in `slates`: declared, not refused, since a Showdown game inside a Classic slate is one set of
+player-weeks in two slates; `independent_slates` counts each group linked by shared games once. `sources` counts stats
+packages and lists the `score_version`s. `not_computed` names the registered bootstrap interval and `participation_brier`;
+`does_not_establish` travels with every pool. The file is canonical JSON as the report, written by exclusive create
+(parent folders made); the same report bytes give the same pool.
+
 ## Standings corpus transport (Session 17, X2)
 
 **Decision, so it is not relitigated.** Ben ruled option (A) on 2026-09-21 (R27): the 26 DraftKings

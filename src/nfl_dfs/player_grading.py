@@ -28,6 +28,7 @@ from .dk import parse_entries, parse_salaries
 from .entry_history import ENTRIES_VERSION
 from .hashing import sha256_bytes, sha256_file
 from .lineups import prefilled_cell_id
+from .participation import AVAILABLE_STATUSES, DEGRADED_STATUSES, UNAVAILABLE_STATUSES
 from .scoring import KickerStatLine, OffensiveStatLine, score_kicker, score_offense
 
 SCHEMA_VERSION = "nfl_player_grading_v1"
@@ -87,11 +88,39 @@ DOES_NOT_ESTABLISH = (
     "baseline for who gets the points, not a projection.",
     "One slate is one sample. No figure here measures calibration, expected value, return or edge, and nothing here "
     "changes a prior, a selection or a release truth.",
+    "The tables by position and by within-slate salary tier are cuts of the same usable people, never crossed; a cell "
+    "under 3 people is null, and the salary side keeps the slate's one scale.",
+    "Play rate counts a stat row as played: an undercount, and not the registered participation_brier event.",
+)
+TIER_NAMES = ("low", "mid", "high")
+TIER_RULE = ("graded non-DST people by salary ascending; tied salaries share their mid-rank r of n; tier "
+             "floor(3 (r - 0.5) / n), at most 2, so a tied salary never splits across tiers")
+MIN_CELL_PEOPLE = 3
+PLAY_RATE_POPULATION = "every identity-bound non-DST salary person, graded or not"
+PLAYED_MEANS = ("a stat row in the nflverse weekly file that week: an undercount (a player on the field with no "
+                "counting stat has no row), and not the registered participation_brier event")
+POOL_SCHEMA_VERSION = "nfl_player_grading_pool_v1"
+MEASURES = ("player_points_mae", "spearman")
+SIDES = ("prior", "salary")
+REGISTERED_MINIMUM_SAMPLE = 500  # player_points_mae's minimum_sample in config/metric_registry_q1_v1.json
+POOL_DOES_NOT_ESTABLISH = (
+    "Each figure is the unweighted mean over the slates that have it: the slate is the unit, whatever its people, so "
+    "Kish ESS at equal weights is the slate count.",
+    "Slates that share an nflverse game count its player-weeks twice; independent_slates counts each group of slates "
+    "linked by shared games once.",
+    "Across prior versions the pool grades the priors as delivered, not one model version.",
+    "No bootstrap interval is computed, and below the registered minimum sample no figure here is a promotion, "
+    "demotion or rollback measure. No figure measures calibration, expected value, return or edge.",
 )
 NOT_COMPUTED = {
     "participation_brier": "NOT_COMPUTABLE: the engine states no pre-lock playing probability (participation.py).",
     "bootstrap_interval": "NOT_COMPUTED: the registered interval resamples slates and needs 500 player-weeks; one "
                           "slate is one cluster.",
+}
+POOL_NOT_COMPUTED = {
+    "bootstrap_interval": "NOT_COMPUTED: the registered 95% slate-cluster bootstrap interval with 10000 deterministic "
+                          "resamples (player_points_mae, config/metric_registry_q1_v1.json)",
+    "participation_brier": NOT_COMPUTED["participation_brier"],
 }
 
 
@@ -383,6 +412,81 @@ def _text(value: Fraction) -> str:
     return f"{float(value):.2f}"
 
 
+# ----------------------------------------------------------------- the tables and play rate (Session 70b)
+
+
+def salary_tiers(salaries: Sequence[float]) -> list[str]:
+    """Each salary's tertile, in input order (`TIER_RULE`). A tied block takes its mid-rank's tier and can empty one."""
+
+    # 3 (r - 0.5) / n is (6r - 3) / 2n; r is a whole or half rank, so 6r - 3 is a whole number and the floor is exact.
+    return [TIER_NAMES[min(2, int(6 * rank - 3) // (2 * len(salaries)))] for rank in _ranks(salaries)]
+
+
+def tier_bounds(salaries: Sequence[float], tiers: Sequence[str]) -> dict[str, dict]:
+    found = {}
+    for name in TIER_NAMES:
+        members = [salary for salary, tier in zip(salaries, tiers) if tier == name]
+        found[name] = {"people": len(members), "salary_min": min(members, default=None),
+                       "salary_max": max(members, default=None)}
+    return found
+
+
+def _cell(rows: Sequence[Mapping]) -> dict:
+    usable = [row for row in rows if row["realized"] is not None]
+    cell: dict[str, object] = {"n": len(usable)}
+    for side, key in (("prior", "prior"), ("salary", "salary_points")):
+        if len(usable) < MIN_CELL_PEOPLE:
+            cell[side] = {"player_points_mae": None, "spearman": None, "note": "FEWER_THAN_3"}
+            continue
+        measures = _measures([row[key] for row in usable], [row["realized"] for row in usable])
+        cell[side] = {"player_points_mae": measures["player_points_mae"]["value"],
+                      "spearman": measures["spearman"]["value"], "note": measures["spearman"]["note"]}
+    return cell
+
+
+def grade_tables(rows: Sequence[Mapping]) -> dict:
+    """`player_points_mae` and Spearman by position and by salary tier, reported separately and never crossed.
+
+    `rows` are the graded non-DST people (`position`, `salary_tier`, `prior`, `salary_points`, `realized`; the last two
+    None without realized points). Each cell is measured over its rows with realized points and is null below 3.
+    """
+
+    positions = sorted({row["position"] for row in rows})
+    return {"by_position": {position: _cell([row for row in rows if row["position"] == position])
+                            for position in positions},
+            "by_tier": {tier: _cell([row for row in rows if row["salary_tier"] == tier]) for tier in TIER_NAMES}}
+
+
+def _status_class(status: str) -> str:
+    value = status.strip().upper()  # `dk.py` only strips; the engine's unavailability test upper-cases
+    for name, vocabulary in (("AVAILABLE", AVAILABLE_STATUSES), ("DEGRADED", DEGRADED_STATUSES),
+                             ("UNAVAILABLE", UNAVAILABLE_STATUSES)):
+        if value in vocabulary:
+            return name
+    return "UNRECOGNIZED"
+
+
+def play_rate(people: Sequence[Mapping]) -> dict:
+    """Realized play rate by DraftKings status over every identity-bound non-DST person (`PLAYED_MEANS`)."""
+
+    by_status: dict[str, dict] = {}
+    for person in people:
+        if person["position"] == "DST":
+            continue
+        status = person["dk_status"] or ""
+        row = by_status.setdefault(status or "(blank)", {"class": _status_class(status), "people": 0, "played": 0,
+                                                         "unbound": 0})
+        if person["provider_player_id"] is None:
+            row["unbound"] += 1
+        else:
+            row["people"] += 1
+            row["played"] += int(person["game_id"] is not None)
+    for row in by_status.values():
+        row["rate"] = round(row["played"] / row["people"], 6) if row["people"] else None
+    return {"population": PLAY_RATE_POPULATION, "played_means": PLAYED_MEANS,
+            "by_status": dict(sorted(by_status.items()))}
+
+
 # ----------------------------------------------------------------- the grade
 
 
@@ -511,7 +615,8 @@ def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: 
             "underlying_id": person_id, "dk_id": player.dk_id, "position": player.position, "team": player.team,
             "salary": player.salary, "dk_status": player.status_raw, "prior_points": prior.get(person_id),
             "out_of_selection": None if person_id not in prior else player.dk_id not in selectable,
-            "provider_player_id": provider, **_realized(player.position, provider, rows, columns)}
+            "provider_player_id": provider, "salary_tier": None,
+            **_realized(player.position, provider, rows, columns)}
     found_games: dict[str, list[tuple[str, str, str]]] = {}
     for person_id, entry in people.items():
         if entry["game_id"]:
@@ -527,6 +632,16 @@ def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: 
     salary_total = sum(entry["salary"] for entry in usable)
     scale = sum(priors_) / salary_total if salary_total else 0.0
     salary_points = [entry["salary"] * scale for entry in usable]
+    tiered = [entry for entry in graded if entry["position"] != "DST"]
+    tier_salaries = [entry["salary"] for entry in tiered]
+    for entry, tier in zip(tiered, salary_tiers(tier_salaries)):
+        entry["salary_tier"] = tier
+    salary_by_person = {entry["underlying_id"]: points for entry, points in zip(usable, salary_points)}
+    tables = grade_tables([
+        {"position": entry["position"], "salary_tier": entry["salary_tier"], "prior": entry["prior_points"],
+         "salary_points": salary_by_person.get(entry["underlying_id"]),
+         "realized": None if entry["realized_hundredths"] is None else entry["realized_hundredths"] / 100}
+        for entry in tiered])
     report = {
         "schema_version": SCHEMA_VERSION,
         "realized_points_version": REALIZED_VERSION,
@@ -551,6 +666,10 @@ def grade_slate(*, stats_raw: bytes, stats_entry: Mapping[str, object], season: 
             "prior": _measures(priors_, realized),
             "salary": {**_measures(salary_points, realized), "baseline_version": SALARY_BASELINE_VERSION},
             "sample": {"people": len(usable), "slates": 1},
+            "by_position": tables["by_position"],
+            "by_tier": tables["by_tier"],
+            "tiers": {"rule": TIER_RULE, **tier_bounds(tier_salaries, [entry["salary_tier"] for entry in tiered])},
+            "play_rate": play_rate([people[person_id] for person_id in sorted(people)]),
         },
         "reconciliation": None if lineups is None else _reconcile(lineups, entries, contract, by_dk_id, people),
         "not_computed": dict(NOT_COMPUTED),
@@ -612,4 +731,250 @@ def run(*, salaries, pool_scores, identity_review, stats_package, season, week, 
         "reconciliation": None if reconciliation is None else reconciliation["statuses"],
         "residual_groups": None if reconciliation is None else dict(sorted(Counter(
             group["status"] for group in reconciliation["residual_groups"].values()).items())),
+    }
+
+
+# ----------------------------------------------------------------- the pool (Session 70b, `nfl_player_grading_pool_v1`)
+
+
+class _Shape(ValueError):
+    """A report key that is absent or of the wrong type; the message names it."""
+
+
+def _at(payload: Mapping, *keys: str) -> object:
+    value: object = payload
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            raise _Shape(".".join(keys))
+        value = value[key]
+    return value
+
+
+def _value_at(payload: Mapping, *keys: str, low: float | None = None, high: float | None = None) -> float | None:
+    value = _at(payload, *keys)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _Shape(".".join(keys))
+    try:
+        number = float(value)  # a whole number past the float range overflows here
+    except OverflowError:
+        raise _Shape(".".join(keys)) from None
+    if not math.isfinite(number) or (low is not None and number < low) or (high is not None and number > high):
+        raise _Shape(".".join(keys))
+    return number
+
+
+def _whole_at(payload: Mapping, *keys: str) -> int:
+    value = _at(payload, *keys)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise _Shape(".".join(keys))
+    return value
+
+
+def _typed_at(payload: Mapping, kind: type, *keys: str):
+    value = _at(payload, *keys)
+    if not isinstance(value, kind):
+        raise _Shape(".".join(keys))
+    return value
+
+
+BOUNDS = {"player_points_mae": {"low": 0.0}, "spearman": {"low": -1.0, "high": 1.0}}
+
+
+def _pool_entry(payload: Mapping) -> dict:
+    games = list(_typed_at(payload, dict, "slate", "games").values())
+    if not all(isinstance(game_id, str) for game_id in games) or len(set(games)) != len(games):
+        raise _Shape("slate.games")
+    slate = {
+        "salaries_sha256": _typed_at(payload, str, "inputs", "salaries", "sha256"),
+        "mode": _typed_at(payload, str, "slate", "mode"),
+        "season": _whole_at(payload, "slate", "season"),
+        "week": _whole_at(payload, "slate", "week"),
+        "games": sorted(games),
+        "stats_source_sha256": _typed_at(payload, str, "stats_source", "sha256"),
+        "stats_observed_at": _typed_at(payload, str, "stats_source", "observed_at"),
+        "score_version": _typed_at(payload, str, "inputs", "pool_scores", "score_version"),
+        "graded_people": _whole_at(payload, "grade", "graded_people"),
+        "usable_people": _whole_at(payload, "grade", "usable_people"),
+    }
+    cells = {("overall", "", side): {measure: (_value_at(payload, "grade", side, measure, "value", **BOUNDS[measure]),
+                                               _whole_at(payload, "grade", side, measure, "n"))
+                                     for measure in MEASURES} for side in SIDES}
+    if cells[("overall", "", "prior")]["player_points_mae"][1] != slate["usable_people"]:
+        raise _Shape("grade.usable_people")
+    for section in ("by_position", "by_tier"):
+        for group in sorted(_typed_at(payload, dict, "grade", section)):
+            n = _whole_at(payload, "grade", section, group, "n")
+            for side in SIDES:
+                cells[(section, group, side)] = {
+                    measure: (_value_at(payload, "grade", section, group, side, measure, **BOUNDS[measure]), n)
+                    for measure in MEASURES}
+    play = {}
+    for status in sorted(_typed_at(payload, dict, "grade", "play_rate", "by_status")):
+        keys = ("grade", "play_rate", "by_status", status)
+        row = {"class": _typed_at(payload, str, *keys, "class"),
+               "rate": _value_at(payload, *keys, "rate", low=0.0, high=1.0),
+               **{count: _whole_at(payload, *keys, count) for count in ("people", "played", "unbound")}}
+        if row["class"] != _status_class("" if status == "(blank)" else status):
+            raise _Shape(".".join((*keys, "class")))
+        if row["played"] > row["people"]:
+            raise _Shape(".".join((*keys, "played")))
+        play[status] = row
+    return {"slate": slate, "cells": cells, "play": play}
+
+
+def read_pool_report(path: Path, index: int) -> dict:
+    """One per-slate report for the pool, its SHA-256 taken from the bytes it was parsed from."""
+
+    name = f"pool_report:{index}"
+    try:
+        raw = Path(path).read_bytes()
+        payload = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError, RecursionError) as exc:  # ValueError: bad UTF-8, bad JSON, an over-long number
+        raise _input(name, f"UNREADABLE:{type(exc).__name__}") from exc
+    if not isinstance(payload, dict):
+        raise _input(name, "NOT_AN_OBJECT")
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise _input(name, f"SCHEMA:{payload.get('schema_version')!r}")
+    try:
+        found = _pool_entry(payload)
+    except _Shape as exc:
+        raise _input(name, f"SHAPE:{exc}") from None
+    found["slate"]["report_sha256"] = sha256_bytes(raw)
+    found["argument"] = index
+    return found
+
+
+def _pooled(items: Sequence[tuple[float | None, int] | None]) -> dict:
+    """The unweighted mean over the slates with a value, each slate's value aligned (null where it has none)."""
+
+    present = [item for item in items if item is not None and item[0] is not None]
+    return {"value": round(sum(value for value, _n in present) / len(present), 6) if present else None,
+            "slates": len(present), "people": sum(n for _value, n in present),
+            "values": [None if item is None else item[0] for item in items]}
+
+
+def _pooled_cells(found: Sequence[dict], section: str, group: str) -> dict:
+    return {side: {measure: _pooled([entry["cells"].get((section, group, side), {}).get(measure) for entry in found])
+                   for measure in MEASURES} for side in SIDES}
+
+
+def _independent_slates(found: Sequence[dict]) -> tuple[dict[str, list[int]], int]:
+    """Each nflverse game two or more slates share (1-based positions), and the groups shared games link."""
+
+    at: dict[str, list[int]] = {}
+    for position, entry in enumerate(found, start=1):
+        for game_id in entry["slate"]["games"]:
+            at.setdefault(game_id, []).append(position)
+    shared = {game_id: positions for game_id, positions in sorted(at.items()) if len(positions) > 1}
+    parent = list(range(len(found) + 1))
+
+    def root(position: int) -> int:
+        while parent[position] != position:
+            position = parent[position]
+        return position
+
+    for positions in shared.values():
+        for position in positions[1:]:
+            parent[root(position)] = root(positions[0])
+    return shared, len({root(position) for position in range(1, len(found) + 1)})
+
+
+def pool_reports(paths: Sequence[Path]) -> dict:
+    """`nfl_player_grading_pool_v1`: each cell macro-averaged over the slates that have it. Raises, writes nothing."""
+
+    if len(paths) < 2:
+        raise _input("pool", "FEWER_THAN_2_REPORTS")
+    found = [read_pool_report(Path(path), index) for index, path in enumerate(paths, start=1)]
+    seen_salary: dict[str, int] = {}
+    seen_games: dict[tuple, int] = {}
+    for entry in found:
+        slate = entry["slate"]
+        for seen, key in ((seen_salary, slate["salaries_sha256"]),
+                          (seen_games, (slate["mode"], slate["season"], slate["week"], tuple(slate["games"])))):
+            if key in seen:
+                raise _input(f"pool_report:{entry['argument']}", f"REPEATED_SLATE:{seen[key]}")
+            seen[key] = entry["argument"]
+    found.sort(key=lambda entry: (entry["slate"]["season"], entry["slate"]["week"], entry["slate"]["salaries_sha256"]))
+    shared, independent = _independent_slates(found)
+    usable = [entry["slate"]["usable_people"] for entry in found]
+    weights = [1.0] * len(found)
+    groups = {section: sorted({group for entry in found for kind, group, _side in entry["cells"] if kind == section})
+              for section in ("by_position", "by_tier")}
+    play_rate = {}
+    for status in sorted({status for entry in found for status in entry["play"]}):
+        rows = [entry["play"].get(status) for entry in found]
+        present = [row for row in rows if row is not None]
+        play_rate[status] = {"class": present[0]["class"],
+                             "rate": _pooled([None if row is None else (row["rate"], row["people"]) for row in rows]),
+                             **{count: sum(row[count] for row in present) for count in ("people", "played", "unbound")}}
+    return {
+        "schema_version": POOL_SCHEMA_VERSION,
+        "report_schema_version": SCHEMA_VERSION,
+        "model_status": "PRIOR_ONLY",
+        "status": "DIAGNOSTIC_NOT_AN_UPLOAD_AUTHORIZATION",
+        "unit": "slate",
+        "slates": [entry["slate"] for entry in found],
+        "sample": {
+            "slates": len(found), "weights": "EQUAL_PER_SLATE",
+            "kish_ess": sum(weights) ** 2 / sum(weight * weight for weight in weights),
+            "independent_slates": independent, "usable_people_by_slate": usable, "usable_people": sum(usable),
+            "registered_minimum_sample": REGISTERED_MINIMUM_SAMPLE,
+            "meets_minimum_sample": sum(usable) >= REGISTERED_MINIMUM_SAMPLE,
+        },
+        "independence": {"shared_games": shared},
+        "sources": {"stats_packages": len({entry["slate"]["stats_source_sha256"] for entry in found}),
+                    "score_versions": sorted({entry["slate"]["score_version"] for entry in found})},
+        "overall": _pooled_cells(found, "overall", ""),
+        "by_position": {group: _pooled_cells(found, "by_position", group) for group in groups["by_position"]},
+        "by_tier": {group: _pooled_cells(found, "by_tier", group) for group in groups["by_tier"]},
+        "play_rate": play_rate,
+        "not_computed": dict(POOL_NOT_COMPUTED),
+        "does_not_establish": list(POOL_DOES_NOT_ESTABLISH),
+    }
+
+
+def write_pool(pool: Mapping[str, object], out: Path) -> tuple[Path, str]:
+    data = render(pool)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = out.open("xb")
+    except FileExistsError as exc:
+        raise PlayerGradingRefused("PLAYER_GRADING_OUTPUT_EXISTS", str(out)) from exc
+    try:
+        with handle:
+            handle.write(data)
+        digest = sha256_file(out)
+        if digest != sha256_bytes(data):
+            raise OSError(f"{out}: written bytes differ")
+    except OSError:
+        with contextlib.suppress(OSError):
+            out.unlink(missing_ok=True)  # this run made the file: leave nothing a rerun would be refused over
+        raise
+    return out, digest
+
+
+def run_pool(*, reports, out) -> tuple[int, dict]:
+    """`nfl grade-players --pool`: exit 0 and the summary, or exit 2 and the refusal. Never a release truth."""
+
+    try:
+        if Path(out).exists():
+            raise PlayerGradingRefused("PLAYER_GRADING_OUTPUT_EXISTS", str(out))
+        pool = pool_reports([Path(report) for report in reports])
+        target, digest = write_pool(pool, Path(out))
+    except PlayerGradingRefused as exc:
+        return 2, {"status": "REFUSED", "code": exc.code, "detail": exc.detail, "model_status": "PRIOR_ONLY"}
+    except OSError as exc:
+        return 2, {"status": "WRITE_FAILED", "detail": f"{type(exc).__name__}:{exc}", "model_status": "PRIOR_ONLY"}
+    except Exception as exc:  # never fall through to cli.main's handler, which prints lineup release truths
+        return 2, {"status": "FAILED", "detail": f"{type(exc).__name__}:{exc}", "model_status": "PRIOR_ONLY"}
+    sample = pool["sample"]
+    return 0, {
+        "status": "COMPLETE", "model_status": "PRIOR_ONLY", "pool": str(target), "pool_sha256": digest,
+        "slates": sample["slates"], "independent_slates": sample["independent_slates"],
+        "usable_people": sample["usable_people"], "meets_minimum_sample": sample["meets_minimum_sample"],
+        "player_points_mae": {side: pool["overall"][side]["player_points_mae"]["value"] for side in SIDES},
+        "spearman": {side: pool["overall"][side]["spearman"]["value"] for side in SIDES},
     }
