@@ -185,18 +185,24 @@ def test_det_buf_blank_entry_ids_are_locked_blank_no_record():
     rows = [_entry(entry.entry_id, entry.contest_id, "110.95" if index == 12 else "0", 5 if index == 12 else 400,
                    game_type=game_type, date="2026-09-17 20:15:00", entries=500)
             for index, entry in enumerate(entries)]
-    report, results = rj.build_join(_parse(*rows), rj.load_records(SLATES), source_sha256=ZERO_SHA)
+    records = rj.load_records(SLATES)
+    report, results = rj.build_join(_parse(*rows), records, source_sha256=ZERO_SHA)
     found = _by_entry(report)
     blanks = [found[entry.entry_id] for entry in entries[:12]]
     assert {item["class"] for item in blanks} == {"LOCKED_BLANK_NO_RECORD"}
+    # No record holds any of DET@BUF's six contests: its folder has the template and no delivered file.
     assert {(item["reason"], item["date"], item["game_type"], item["slate"]) for item in blanks} == {
-        ("NO_RECORD_ON_SLATE", "2026-09-17", game_type, None)}
+        ("CONTEST_IN_NO_RECORD", "2026-09-17", game_type, None)}
     scorer = found[entries[12].entry_id]
-    assert (scorer["class"], scorer["reason"]) == ("ENTERED_NO_RECORD", "NO_RECORD_ON_SLATE")
+    assert (scorer["class"], scorer["reason"], scorer["blank"]) == ("ENTERED_NO_RECORD", "CONTEST_IN_NO_RECORD", False)
     assert report["class_counts"]["LOCKED_BLANK_NO_RECORD"] == 12
-    # None of the 362 recorded Entry IDs is in this export, so no slate's results file is written.
-    # Default records only: 362 rows less MIN@NO's `final_v7` alternate (33).
-    assert results == {} and report["class_counts"]["RECORDED_NOT_IN_HISTORY"] == 329
+    assert [item["entry_id"] for item in rj.headline(report)["blanks"]] == [entry.entry_id for entry in entries[:12]]
+    # None of the recorded Entry IDs is in this export, so no slate's results file is written. Counted from the tree,
+    # never pinned, so the next slate's record does not move this test; the alternate (MIN@NO `final_v7`) never joins.
+    assert results == {}
+    assert report["class_counts"]["RECORDED_NOT_IN_HISTORY"] == sum(len(slate.rows) for slate in records.slates)
+    assert "min-no-sd-2026-10-11/construction/entry_build_record.DK_REVIEW_ENTRY_min-no-sd_final_v7.jsonl" in (
+        records.alternates)
 
 
 def test_the_join_is_deterministic(tmp_path):
@@ -242,7 +248,10 @@ def test_repo_state_reports_entry_graded_slates(tmp_path, monkeypatch):
     monkeypatch.setattr(repo_state, "SLATES_DIR", tmp_path)
     (tmp_path / "a-sd" / "construction").mkdir(parents=True)
     (tmp_path / "b-sd" / "construction").mkdir(parents=True)
-    assert repo_state.entry_grading()["slates_graded"] == 0
+    none = repo_state.entry_grading()
+    assert none["slates_graded"] == 0
+    assert "entry grading: 0 slates with results joined on Entry ID" in repo_state.digest(
+        _digest_state(entry_grading=none))  # the count shows at zero too
     (tmp_path / "a-sd" / "construction" / rj.RESULTS_NAME).write_bytes(b"{}\n")
     (tmp_path / "b-sd" / "construction" / "entry_build_record.jsonl").write_bytes(b"{}\n")
     graded = repo_state.entry_grading()
@@ -306,6 +315,8 @@ def test_every_class_and_reason_is_named(tmp_path):
         _record_row("910000007", "300000001", 80.0),  # a locked blank with a file
         _record_row("910000008", "300000001", 90.0),  # its contest disagrees
         _record_row("910000009", "300000098", 99.0),  # its game type disagrees (its own contest agrees)
+        _record_row("910000010", "300000096", 98.0),  # a Showdown game type that is not Captain Mode
+        _record_row("910000011", "300000001", 97.0),  # a blank whose contest disagrees
     ]
     unfilled = _record_row("960000001", "300000020", None, reason="UNFILLED", roster=None)
     slates = _slates(tmp_path, {"a-sd": record, "u-sd": [unfilled]})
@@ -313,28 +324,38 @@ def test_every_class_and_reason_is_named(tmp_path):
                _entry("910000007", "300000001", "0", 990),
                _entry("910000008", "300000099", "55", 500),
                _entry("910000009", "300000098", "56", 499, game_type=CLASSIC),
+               _entry("910000010", "300000096", "57", 498, game_type="Showdown Tiers"),
+               _entry("910000011", "300000095", "0", 497),
                _entry("960000001", "300000020", "0", 77, date="2026-10-06 20:20:00"),
-               _entry("910000077", "300000001", "61", 9),  # same slate as A, no record
-               _entry("990000001", "300000097", "0", 600, date="2026-09-17 20:15:00"),  # a blank on a slate with no record
+               _entry("910000077", "300000001", "61", 9),  # in A's own contest, no record row
+               _entry("910000088", "300000077", "44", 5),  # A's date and game type, a contest no record holds
+               _entry("990000001", "300000097", "0", 600, date="2026-09-17 20:15:00"),  # a blank, no record at all
                _entry("990000002", "300000097", "88", 3, date="2026-09-17 20:15:00")]
     report, results = rj.build_join(_parse(*history), rj.load_records(slates), source_sha256=ZERO_SHA)
     found = _by_entry(report)
-    assert {key: (found[key]["class"], found[key]["reason"]) for key in (
-        "910000006", "910000007", "910000008", "910000009", "960000001", "910000077", "990000001",
-        "990000002")} == {
-        "910000006": ("RECORDED_NOT_IN_HISTORY", "NOT_IN_EXPORT"),
-        "910000007": ("LOCKED_BLANK_WITH_FILE", "RECORD_ROW_FILLED"),
-        "910000008": ("ROW_DISAGREES", "CONTEST"),
-        "910000009": ("ROW_DISAGREES", "GAME_TYPE"),
-        "960000001": ("LOCKED_BLANK_WITH_FILE", "RECORD_ROW_UNFILLED"),
-        "910000077": ("ENTERED_NO_RECORD", "SLATE_RECORD_LACKS_ENTRY_ID"),
-        "990000001": ("LOCKED_BLANK_NO_RECORD", "NO_RECORD_ON_SLATE"),
-        "990000002": ("ENTERED_NO_RECORD", "NO_RECORD_ON_SLATE"),
+    assert {key: (found[key]["class"], found[key]["reason"], found[key]["slate"]) for key in (
+        "910000006", "910000007", "910000008", "910000009", "910000010", "910000011", "960000001", "910000077",
+        "910000088", "990000001", "990000002")} == {
+        "910000006": ("RECORDED_NOT_IN_HISTORY", "NOT_IN_EXPORT", "a-sd"),
+        "910000007": ("LOCKED_BLANK_WITH_FILE", "RECORD_ROW_FILLED", "a-sd"),
+        "910000008": ("ROW_DISAGREES", "CONTEST", "a-sd"),
+        "910000009": ("ROW_DISAGREES", "GAME_TYPE", "a-sd"),
+        "910000010": ("ROW_DISAGREES", "GAME_TYPE", "a-sd"),
+        "910000011": ("ROW_DISAGREES", "CONTEST", "a-sd"),
+        "960000001": ("LOCKED_BLANK_WITH_FILE", "RECORD_ROW_UNFILLED", "u-sd"),
+        "910000077": ("ENTERED_NO_RECORD", "RECORD_LACKS_ENTRY_ID", "a-sd"),
+        "910000088": ("ENTERED_NO_RECORD", "CONTEST_IN_NO_RECORD", None),
+        "990000001": ("LOCKED_BLANK_NO_RECORD", "CONTEST_IN_NO_RECORD", None),
+        "990000002": ("ENTERED_NO_RECORD", "CONTEST_IN_NO_RECORD", None),
     }
     assert found["910000001"]["class"] == "JOINED" and found["910000001"]["slate"] == "a-sd"
+    # The export's own zero stays visible whatever the class, so a blank on a disagreeing row is never hidden.
+    assert [item["entry_id"] for item in rj.headline(report)["blanks"]] == [
+        "910000007", "910000011", "960000001", "990000001"]
+    assert found["910000006"]["blank"] is None and found["910000008"]["blank"] is False
     a = _check(report, "a-sd")
     assert a["all"]["n"] == 5
-    assert a["excluded"] == {"LOCKED_BLANK_WITH_FILE": 1, "RECORDED_NOT_IN_HISTORY": 1, "ROW_DISAGREES": 2}
+    assert a["excluded"] == {"LOCKED_BLANK_WITH_FILE": 1, "RECORDED_NOT_IN_HISTORY": 1, "ROW_DISAGREES": 4}
     # The results file names every recorded Entry ID; only rows the export binds carry numbers.
     lines = {item["entry_id"]: item for item in results["a-sd"]["entries"]}
     assert lines["910000006"]["place"] is None and lines["910000008"]["points_hundredths"] is None
@@ -380,6 +401,7 @@ BAD_RECORDS = {
     "missing-key": lambda: _record_bytes([{key: value for key, value in _good()[0].items() if key != "contest_id"}]),
     "schema": lambda: _record_bytes([dict(_good()[0], schema_version="nfl_entry_build_record_v2")]),
     "nan-prior": lambda: _record_bytes(_good()).replace(b'"points":1.0', b'"points":NaN'),
+    "inf-prior": lambda: _record_bytes(_good()).replace(b'"points":1.0', b'"points":1e999'),  # json reads inf
     "bool-prior": lambda: _record_bytes([dict(_good()[0], prior=dict(_good()[0]["prior"], points=True))]),
     "entry-id": lambda: _record_bytes([dict(_good()[0], entry_id="0123")]),
     "unterminated": lambda: _record_bytes(_good())[:-1],
@@ -480,6 +502,43 @@ def test_a_later_export_confirms_or_names_a_difference_slate_by_slate(tmp_path):
     assert a_file.read_bytes() == a_bytes
 
 
+def test_a_new_record_gets_a_new_report_and_never_refuses_the_rerun(tmp_path):
+    slates = _slates(tmp_path, {"a-sd": A_RECORD})
+    root, sha = _intake(tmp_path, _history(*A_HISTORY, *B_HISTORY))
+    first = rj.run_results_join(sha, root, slates)
+    # A later slate's record is committed; the same export is joined again.
+    _slates(tmp_path, {"b-classic": B_RECORD})
+    second = rj.run_results_join(sha, root, slates)
+    assert second.status == "COMPLETE" and second.exit_code == 0 and second.problems == ()
+    assert second.files["report"]["state"] == "WRITTEN"
+    assert Path(first.files["report"]["path"]).is_file() and first.files["report"]["path"] != second.files["report"][
+        "path"]
+    assert second.files["slates"]["a-sd"]["state"] == "ALREADY_PRESENT"
+    assert second.files["slates"]["b-classic"]["state"] == "WRITTEN"
+    digest = json.loads(Path(second.files["report"]["path"]).read_bytes())["records_digest"]
+    assert digest == rj.records_digest(rj.load_records(slates))
+    assert Path(second.files["report"]["path"]).name == rj.report_name(digest) == f"results_join.records-{digest[:16]}.w1.json"
+
+
+def test_a_hand_edited_results_file_is_never_confirmed(tmp_path):
+    slates = _ab(tmp_path)
+    root, sha = _intake(tmp_path, _history(*A_HISTORY))
+    rj.run_results_join(sha, root, slates)
+    target = slates / "a-sd" / "construction" / rj.RESULTS_NAME
+    edited = dict(json.loads(target.read_bytes()), note="added by hand", source_sha256="f" * 64)
+    target.write_bytes(canonical_json_bytes(edited) + b"\n")
+    other_root, other = _intake(tmp_path, _history(*A_HISTORY, *B_HISTORY), tmp_path / "results2")
+    outcome = rj.run_results_join(other, other_root, slates)
+    assert outcome.files["slates"]["a-sd"]["state"] == "REFUSED"
+    assert outcome.problems == ("RESULTS_JOIN_ARTIFACT_CONFLICT:file=a-sd",)
+
+
+def test_each_record_mode_maps_to_a_registered_engine_game_type():
+    from nfl_dfs.results_report import load_results_metrics
+
+    assert set(rj.GAME_TYPES.values()) == set(load_results_metrics().engine_game_types)
+
+
 def test_another_file_at_a_results_name_is_never_overwritten(tmp_path):
     slates = _ab(tmp_path)
     target = slates / "a-sd" / "construction" / rj.RESULTS_NAME
@@ -567,5 +626,5 @@ def test_the_contract_names_every_class_reason_state_and_key():
     names = {*rj.CLASSES, *rj.CAUSES, *rj.STATES, *rj.JOIN_CODES, rj.CONTRACT_VERSION, rj.RESULTS_VERSION,
              rj.RESULTS_NAME, "source_sha256", "record_name", "entries", "contest_entries", "points_hundredths",
              "percentile", "alternate_records", "non_nfl_rows_ignored", "rank_check", "pooled", "excluded",
-             "class_counts", "mean_rho", *rj.DOES_NOT_ESTABLISH}
+             "class_counts", "mean_rho", "records_digest", "blank", *rj.DOES_NOT_ESTABLISH}
     assert not sorted(name for name in names if f"`{name}`" not in section)

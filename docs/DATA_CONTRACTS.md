@@ -5014,19 +5014,29 @@ named. None names a run: their folders were not kept.
   `prior.reason` is text or null;
 - the file ends in LF, and an Entry ID appears once in a record and in one folder's record only.
 
+A later record version (`nfl_entry_build_record_v2`) is refused until a new join version reads it.
+
 **Classes.** One `class` and `reason` per Entry ID; a gap is a class, never a refusal.
 - `JOINED`: a record row and an NFL export row agree (reason null).
 - `LOCKED_BLANK_WITH_FILE`: a record row whose export row scored exactly 0 (`results_report.is_blank`), so a delivered
   file existed. Reason `RECORD_ROW_FILLED`, or `RECORD_ROW_UNFILLED` when the record's row was blank.
 - `LOCKED_BLANK_NO_RECORD`: an export row that scored exactly 0 and that no record holds.
 - `ENTERED_NO_RECORD`: an export row that scored and that no record holds (DET@BUF's 13th Entry ID).
-- For both of the last two, the reason is `NO_RECORD_ON_SLATE` when no record row joins any entry of its slate (the
-  review's cluster, `results_report.slate_key`: sport, Eastern date, game type); otherwise `SLATE_RECORD_LACKS_ENTRY_ID`.
+- For both of the last two, the reason comes from the records' own contests, because a DraftKings contest belongs to one
+  slate:
+  - `RECORD_LACKS_ENTRY_ID` when a record holds other Entry IDs of its contest, with `slate` naming that folder;
+  - otherwise `CONTEST_IN_NO_RECORD`, with `slate` null. Either the slate has no record (DET@BUF), or the contest was
+    entered outside the template.
+  - A date-and-game-type cluster would merge same-day games, so it is never used for the reason.
 - `RECORDED_NOT_IN_HISTORY`: a record row with no NFL export row, reason `NOT_IN_EXPORT` (not entered, or later than the
   export; the two cannot be told apart).
-- `ROW_DISAGREES`: the export row's `Contest_Key` is not the record's `contest_id` (reason `CONTEST`), or its game type
-  does not start `Showdown` for a `SHOWDOWN` record or `Classic` for a `CLASSIC` one (reason `GAME_TYPE`).
+- `ROW_DISAGREES`: either the export row's `Contest_Key` is not the record's `contest_id` (reason `CONTEST`), or its game
+  type is not exactly `Showdown Captain Mode` for a `SHOWDOWN` record or `Classic` for a `CLASSIC` one (reason
+  `GAME_TYPE`).
+  - Those are the registered `engine_game_types` (`config/results_metrics_v1.json`), and a test binds the two.
 - Non-NFL export rows never join; `non_nfl_rows_ignored` counts them.
+- Each report item's `blank` is the export's own zero, whatever the class. A blank on a `ROW_DISAGREES` row therefore
+  stays in the printed `blanks`.
 
 **The rank check.** `rank_check` has `method` `SPEARMAN_TIED_RANKS_AVERAGED` and `unit` `SLATE`.
 - It runs for each slate with an exported Entry ID. It ranks the record's `prior.points` against the export's points over
@@ -5043,13 +5053,22 @@ named. None names a run: their folders were not kept.
   from scratch scripts that are not in the repository and did not name their population. Operator item O13 runs this
   command on that export, and its two populations show which one reproduces.
 
-**The report** is gitignored: `<root>/reports/<sha256>/results_join.w1.json`, canonical JSON. Its keys:
-- `schema_version` (`nfl_results_join_v1`), `writer`, `history_contract`, `source_sha256`;
-- `records` ({`slate`, `record_name`, `record_sha256`}, plus the row count `rows`), `alternate_records`, `not_in_export`
-  (record slates with no exported Entry ID), `non_nfl_rows_ignored`;
-- `entries`: the record rows in folder and record order, then the export's unrecorded NFL rows in file order, each
-  {`entry_id`, `contest_id`, `slate`, `class`, `reason`, `date`, `game_type`};
-- `class_counts` (every class, zero included), `rank_check` and `does_not_establish`.
+**The report** is gitignored, at `<root>/reports/<sha256>/results_join.records-<digest16>.w1.json`, in canonical JSON.
+- `records_digest` is the SHA-256 of each joined folder's record path and its SHA-256, one line each.
+- Its first 16 characters name the file. So a record committed or changed later gives the same export a new report
+  beside the old one; a rerun is never refused for it.
+- Its keys:
+  - `schema_version` (`nfl_results_join_v1`), `writer`, `history_contract`, `source_sha256`, `records_digest`;
+  - `records` ({`slate`, `record_name`, `record_sha256`}, plus the row count `rows`), `alternate_records`,
+    `not_in_export` (record slates with no exported Entry ID), `non_nfl_rows_ignored`;
+  - `entries`: the record rows in folder and record order, then the export's unrecorded NFL rows in file order, each
+    {`entry_id`, `contest_id`, `slate`, `class`, `reason`, `date`, `game_type`, `blank`};
+  - `class_counts` (every class, zero included), `rank_check` and `does_not_establish`.
+- The printed headline carries each slate's `all` and `paid` counts and rho, the pooled figures, the class counts, the
+  blanks, `not_in_export` and the alternates.
+  - A paid count is a count of entries, not an amount. The O13 check needs it to say which population reproduces the
+    review.
+  - No fee or winning is printed.
 
 **A slate's results** are tracked: `entry_results.w1.json`, in the slate's `construction/` folder beside the record,
 written only for a slate with an exported Entry ID.
@@ -5067,8 +5086,9 @@ written only for a slate with an exported Entry ID.
 **Write-once across exports.** Every file is attempted and reports a state:
 - `WRITTEN`;
 - `ALREADY_PRESENT` (the same bytes);
-- `CONFIRMED_BY_EXPORT` (a slate's file that another export wrote with the same `entries`; kept as it is, with that
-  export's hash);
+- `CONFIRMED_BY_EXPORT`: a slate's file that another export wrote, kept as it is with that export's hash. It must have
+  exactly this writer's keys, every one equal but `source_sha256` (64 lower-case hex) and `entries`, and the same
+  `entries`. A hand-edited file is `RESULTS_JOIN_ARTIFACT_CONFLICT`;
 - `NOT_IN_EXPORT` (nothing written);
 - `REFUSED` (with a `recovery` sentence), `WRITE_FAILED` or `NOT_ATTEMPTED`.
 
@@ -5079,11 +5099,16 @@ was written, else `ALREADY_PRESENT` (exit 0). A refused input writes nothing.
 - `RESULTS_JOIN_INPUT_INVALID` (`field=source_sha256` or `field=slates_root`).
 - `RESULTS_JOIN_SNAPSHOT_INVALID` (`reason=absent`, `symlink`, `unreadable` or `hash`; one changed byte withholds every
   file).
-- `RESULTS_JOIN_RECORD_INVALID` (`<slate>/construction/entry_build_record.jsonl:line=<n>:<field>`, `:empty`,
-  `:unterminated`, or `entry_id=<id>:slates=<a>,<b>`).
+- `RESULTS_JOIN_RECORD_INVALID`, with one of these details:
+  - `<slate>/construction/entry_build_record.jsonl:line=<n>:<what>`, where `<what>` is `unreadable` (not JSON, a
+    non-object or a missing key), `schema_version`, `entry_id`, `contest_id`, `mode`, `roster`, `prior` or
+    `entry_id_repeated`;
+  - the file's `:empty` or `:unterminated`;
+  - `entry_id=<id>:slates=<a>,<b>`.
 - Per file:
-  - `RESULTS_JOIN_RESULTS_DIFFER` (`file=<slate>`): an earlier export wrote other results, usually before every contest
-    settled. The file is never overwritten; delete it by hand in a pull request and rerun.
+  - `RESULTS_JOIN_RESULTS_DIFFER` (`file=<slate>`): the file holds other results for its record's Entry IDs. Either an
+    earlier export was taken before every contest settled, or the record changed since (a row added, removed or
+    reordered). The file is never overwritten: delete it by hand in a pull request if it is the stale one, and rerun.
   - `RESULTS_JOIN_ARTIFACT_CONFLICT`: another file holds a name.
   - `RESULTS_JOIN_WRITE_FAILED` (`file=<name>:exception=<class>`).
 - A snapshot the parser no longer takes refuses with Session 69's own codes.
@@ -5098,7 +5123,7 @@ was written, else `ALREADY_PRESENT` (exit 0). A refused input writes nothing.
   results are still written.
 - MIN@NO, BAL@ATL, both Week 5 slates and BUF@LAR are later, and wait for a later export.
 - DET@BUF's folder holds its template but no delivered file and no record. Its 13 Entry IDs are `LOCKED_BLANK_NO_RECORD`
-  or `ENTERED_NO_RECORD`, with `NO_RECORD_ON_SLATE`.
+  or `ENTERED_NO_RECORD`, with `CONTEST_IN_NO_RECORD`.
 - Week 5 Classic's free entry `5291960735` is a recorded row the engine never built, and joins like any other.
 - The export carries no rosters, so it cannot show which MIN@NO file was uploaded. Only MIN@NO's rho depends on that
   answer.

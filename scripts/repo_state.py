@@ -6,8 +6,9 @@ other. Hand-maintained status rots the moment two of them disagree; this script
 reads the state back out of the files that are already authoritative and writes
 one small machine-readable summary at ``state/repo-state.json``.
 
-It is a reader of the repository's own files. It edits no ledger and never
-touches ``data/``. The one network call it makes is a ``git fetch`` of
+It is a reader of the repository's own files. It edits no ledger and writes
+nothing under ``data/``; it reads ``data/inbox/slates/`` only to count the
+slates whose results are joined (Session 73). The one network call it makes is a ``git fetch`` of
 ``origin/main``, because the number this script exists to report is a distance
 from a remote-tracking ref, and such a ref only moves on fetch. Without it the
 single number meant to say "another instance changed things" is the one number

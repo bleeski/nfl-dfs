@@ -37,14 +37,13 @@ RESULTS_VERSION = "nfl_entry_results_v1"
 RECORD_VERSION = "nfl_entry_build_record_v1"
 # A fix that changes a written byte takes a new writer version, so a file already on disk is never contradicted.
 WRITER = "w1"
-REPORT_NAME = f"results_join.{WRITER}.json"
 RESULTS_NAME = f"entry_results.{WRITER}.json"
 RECORD_NAME = "entry_build_record.jsonl"
 DEFAULT_SLATES_DIR = Path(__file__).resolve().parents[2] / "data" / "inbox" / "slates"
 CLASSES = ("JOINED", "LOCKED_BLANK_WITH_FILE", "LOCKED_BLANK_NO_RECORD", "ENTERED_NO_RECORD",
            "RECORDED_NOT_IN_HISTORY", "ROW_DISAGREES")
 # Why each class was given: data, not gate codes (a holder-shaped name would make the registry scan read them as codes).
-CAUSES = ("RECORD_ROW_FILLED", "RECORD_ROW_UNFILLED", "NO_RECORD_ON_SLATE", "SLATE_RECORD_LACKS_ENTRY_ID",
+CAUSES = ("RECORD_ROW_FILLED", "RECORD_ROW_UNFILLED", "CONTEST_IN_NO_RECORD", "RECORD_LACKS_ENTRY_ID",
           "NOT_IN_EXPORT", "CONTEST", "GAME_TYPE")
 STATES = ("WRITTEN", "ALREADY_PRESENT", "CONFIRMED_BY_EXPORT", "NOT_IN_EXPORT", "REFUSED", "WRITE_FAILED",
           "NOT_ATTEMPTED")
@@ -66,15 +65,16 @@ DOES_NOT_ESTABLISH = (
     "UPLOAD_CLEARANCE",
 )
 ARTIFACT_RECOVERY = (
-    "Another file holds this name and is never overwritten: check it, delete it by hand if it is a damaged copy and rerun"
-    " the join. A fix that changes a written byte takes a new writer version instead."
+    "Another file holds this name, not one this join writes, and is never overwritten: check it, delete it by hand if it"
+    " is a damaged or hand-edited copy and rerun the join. A fix that changes a written byte takes a new writer version."
 )
 RESULTS_RECOVERY = (
-    "This slate's results file came from an earlier export whose results for these Entry IDs differ, usually one taken"
-    " before every contest settled. It is never overwritten: compare the two exports, delete the file by hand in a pull"
-    " request if the earlier one was not final, and rerun the join."
+    "This slate's results file holds other results for its record's Entry IDs: an earlier export taken before every"
+    " contest settled, or a record that changed since (a row added, removed or reordered). It is never overwritten:"
+    " compare the two, delete the file by hand in a pull request if it is the stale one, and rerun the join."
 )
-_GAME_TYPE_PREFIX = {"SHOWDOWN": "Showdown", "CLASSIC": "Classic"}
+# Each record mode's DraftKings game type, exactly: `populations.engine_game_types` in config/results_metrics_v1.json.
+GAME_TYPES = {"CLASSIC": "Classic", "SHOWDOWN": "Showdown Captain Mode"}
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _DIGITS = re.compile(r"[1-9][0-9]{0,17}")
 
@@ -128,7 +128,7 @@ def _record_rows(raw: bytes, label: str) -> tuple[dict, ...]:
         checks = (("schema_version", version == RECORD_VERSION),
                   ("entry_id", isinstance(entry_id, str) and bool(_DIGITS.fullmatch(entry_id))),
                   ("contest_id", isinstance(contest_id, str) and bool(_DIGITS.fullmatch(contest_id))),
-                  ("mode", mode in _GAME_TYPE_PREFIX), ("roster", roster is None or isinstance(roster, list)),
+                  ("mode", mode in GAME_TYPES), ("roster", roster is None or isinstance(roster, list)),
                   ("prior", number_ok and (why is None or isinstance(why, str))),
                   ("entry_id_repeated", entry_id not in seen))
         for field, ok in checks:
@@ -167,6 +167,17 @@ def load_records(slates_root: str | Path) -> Records:
     return Records(tuple(slates), tuple(alternates))
 
 
+def records_digest(records: Records) -> str:
+    """One hash of the records joined (each folder and its record's SHA-256), so new or changed records get a new report."""
+
+    return sha256_bytes("".join(f"{slate.slate}/construction/{RECORD_NAME}:{slate.sha256}\n"
+                                for slate in records.slates).encode("utf-8"))
+
+
+def report_name(digest: str) -> str:
+    return f"results_join.records-{digest[:16]}.{WRITER}.json"
+
+
 # --------------------------------------------------------------------------------------------- the join
 
 
@@ -175,7 +186,7 @@ def _record_class(row: dict, found: HistoryRow | None) -> tuple[str, str | None]
         return "RECORDED_NOT_IN_HISTORY", "NOT_IN_EXPORT"
     if found.contest_key != row["contest_id"]:
         return "ROW_DISAGREES", "CONTEST"
-    if not found.game_type.startswith(_GAME_TYPE_PREFIX[row["mode"]]):
+    if found.game_type != GAME_TYPES[row["mode"]]:
         return "ROW_DISAGREES", "GAME_TYPE"
     if is_blank(found.points_hundredths):
         return "LOCKED_BLANK_WITH_FILE", "RECORD_ROW_FILLED" if row["roster"] is not None else "RECORD_ROW_UNFILLED"
@@ -185,8 +196,10 @@ def _record_class(row: dict, found: HistoryRow | None) -> tuple[str, str | None]
 def _item(entry_id: str, contest_id: str, slate: str | None, kind: str, why: str | None,
           found: HistoryRow | None) -> dict:
     _sport, date, game_type = slate_key(found) if found is not None else (None, None, None)
+    # `blank` is the export's own zero, whatever the class: a blank whose row disagrees with its record stays visible.
     return {"entry_id": entry_id, "contest_id": contest_id, "slate": slate, "class": kind, "reason": why,
-            "date": date, "game_type": game_type}
+            "date": date, "game_type": game_type,
+            "blank": is_blank(found.points_hundredths) if found is not None else None}
 
 
 def _rho(pairs: list[tuple[float, int]]) -> dict:
@@ -208,7 +221,11 @@ def build_join(history: EntryHistory, records: Records, *, source_sha256: str) -
     entries: list[dict] = []
     checks: list[dict] = []
     results: dict[str, dict] = {}
-    covered: set[tuple[str, str, str]] = set()  # the history slates a record row joined
+    # A DraftKings contest belongs to one slate, so a record's own contests say which folder an unrecorded entry is on.
+    contests: dict[str, str] = {}
+    for slate in records.slates:
+        for row in slate.rows:
+            contests.setdefault(row["contest_id"], slate.slate)
     for slate in records.slates:
         pairs: dict[str, list[tuple[float, int]]] = {"all": [], "paid": []}
         excluded: Counter[str] = Counter()
@@ -225,8 +242,6 @@ def build_join(history: EntryHistory, records: Records, *, source_sha256: str) -
                 "points_hundredths": bound.points_hundredths if bound else None,
                 "percentile": _fixed(finishing_percentile(bound.place, bound.contest_entries) * 100) if bound else None,
             })
-            if found is not None:
-                covered.add(slate_key(found))
             points = row["prior"]["points"]
             if kind != "JOINED":
                 excluded[kind] += 1
@@ -248,12 +263,13 @@ def build_join(history: EntryHistory, records: Records, *, source_sha256: str) -
     for row in history.nfl_rows:
         if row.entry_key not in recorded:
             kind = "LOCKED_BLANK_NO_RECORD" if is_blank(row.points_hundredths) else "ENTERED_NO_RECORD"
-            why = "SLATE_RECORD_LACKS_ENTRY_ID" if slate_key(row) in covered else "NO_RECORD_ON_SLATE"
-            entries.append(_item(row.entry_key, row.contest_key, None, kind, why, row))
+            holder = contests.get(row.contest_key)
+            why = "RECORD_LACKS_ENTRY_ID" if holder is not None else "CONTEST_IN_NO_RECORD"
+            entries.append(_item(row.entry_key, row.contest_key, holder, kind, why, row))
     counts = Counter(item["class"] for item in entries)
     report = {
         "schema_version": CONTRACT_VERSION, "writer": WRITER, "history_contract": HISTORY_CONTRACT,
-        "source_sha256": source_sha256,
+        "source_sha256": source_sha256, "records_digest": records_digest(records),
         "records": [{"slate": slate.slate, "record_name": RECORD_NAME, "record_sha256": slate.sha256,
                      "rows": len(slate.rows)} for slate in records.slates],
         "alternate_records": list(records.alternates),
@@ -278,7 +294,7 @@ def headline(report: dict) -> dict:
         "pooled": report["rank_check"]["pooled"],
         "class_counts": report["class_counts"],
         "blanks": [{key: item[key] for key in ("entry_id", "class", "reason", "date")}
-                   for item in report["entries"] if item["class"].startswith("LOCKED_BLANK")],
+                   for item in report["entries"] if item["blank"]],
         "not_in_export": report["not_in_export"],
         "alternate_records": report["alternate_records"],
     }
@@ -334,9 +350,11 @@ def _write(path: Path, payload: dict, name: str, problems: list[str], *, confirm
         problems.append(_problem("RESULTS_JOIN_WRITE_FAILED", f"file={name}:exception={type(exc).__name__}"))
         return out
     raw, earlier = _earlier(path)
-    same_kind = confirm and isinstance(earlier, dict) and all(
-        earlier.get(key) == payload[key] for key in ("schema_version", "writer", "slate", "record_name"))
-    if same_kind and earlier.get("entries") == payload["entries"]:
+    # Exactly this writer's shape, from some export: the same keys, every one but the export's hash and the entries equal.
+    same_kind = (confirm and isinstance(earlier, dict) and set(earlier) == set(payload)
+                 and isinstance(earlier["source_sha256"], str) and bool(_SHA256.fullmatch(earlier["source_sha256"]))
+                 and all(earlier[key] == payload[key] for key in payload if key not in ("source_sha256", "entries")))
+    if same_kind and earlier["entries"] == payload["entries"]:
         out.update(state="CONFIRMED_BY_EXPORT", sha256=sha256_bytes(raw))
     elif same_kind:
         out.update(state="REFUSED", recovery=RESULTS_RECOVERY)
@@ -376,8 +394,8 @@ def run_results_join(source_sha256: str, results_root: str | Path,
         return JoinOutcome("REFUSED", (str(refusal),), files, source_sha256)
     report, results = build_join(history, records, source_sha256=source_sha256)
     problems: list[str] = []
-    files["report"] = _write(root / "reports" / source_sha256 / REPORT_NAME, report, "report", problems,
-                             confirm=False)
+    files["report"] = _write(root / "reports" / source_sha256 / report_name(report["records_digest"]), report,
+                             "report", problems, confirm=False)
     for slate in records.slates:
         if slate.slate in results:
             files["slates"][slate.slate] = _write(slates / slate.slate / "construction" / RESULTS_NAME,
@@ -391,12 +409,13 @@ def run_results_join(source_sha256: str, results_root: str | Path,
 
 
 __all__ = [
+    "CAUSES",
     "CLASSES",
     "CONTRACT_VERSION",
     "DEFAULT_SLATES_DIR",
+    "GAME_TYPES",
     "JOIN_CODES",
     "JoinOutcome",
-    "CAUSES",
     "RECORD_NAME",
     "RESULTS_NAME",
     "RESULTS_VERSION",
@@ -407,5 +426,7 @@ __all__ = [
     "build_join",
     "headline",
     "load_records",
+    "records_digest",
+    "report_name",
     "run_results_join",
 ]
