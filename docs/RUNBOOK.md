@@ -870,6 +870,25 @@ selects exact Entry-ID assignments, runs quantitative and REFEREE QA, and then
 attempts certification. One run supports exactly one Contest ID and one entry
 fee; split a multi-contest DraftKings export into separate immutable runs.
 
+**Keep the run's priors and record the delivered file (Session 72).** Every `run-slate` passes `--run-id <id>` and sets
+`NFL_DFS_DUMP_SCORES=data/runs/<id>/pool_scores.json` for that one command, so the run folder keeps its own per-person priors
+(`NFL_DFS_DUMP_SCORES=... sh ./nfl.sh run-slate ...` on Linux; on Windows set `$env:NFL_DFS_DUMP_SCORES` and
+`Remove-Item Env:NFL_DFS_DUMP_SCORES` after, since a value left set would overwrite that run's dump on the next run). Neither
+`data/runs/<id>` nor `outputs/<id>` may exist before the run; intake creates the folder before selection writes the dump.
+Copy the delivered run's dump to the slate's `construction/pool_scores_<id>.json`, a new name per run, never over an earlier
+copy. Once the slate's graded file is settled (the last one delivered before its last lock), an engine output or a
+hand-edited one, record it:
+
+```sh
+python scripts/record_entries.py --salaries <DKSalaries.csv> --entries <DKEntries.csv> --file <delivered.csv> \
+  --scores data/runs/<id>/pool_scores.json --out data/inbox/slates/<slug>/construction/entry_build_record.jsonl
+```
+
+Use `--portfolio <record.json>` instead of `--scores` when a Classic portfolio record carries each Entry ID's prior. One row
+per Entry ID (`nfl_entry_build_record_v1` in `docs/DATA_CONTRACTS.md`), written once; an earlier delivered file, if
+recorded, takes `entry_build_record.<file stem>.jsonl`. A DraftKings late-swap export whose cells read `Name (ID) (LOCKED)`
+is refused until Session 72b reads them. It certifies nothing.
+
 A lineup run ends at its handoff (Ben, 2026-10-08). A lineup run never starts the
 post-merge routine: no next prompt, sync check, branch cleanup or archive, and no
 `Session close:` line in a pull request it opens. See `.claude/rules/slate-operation.md`.
