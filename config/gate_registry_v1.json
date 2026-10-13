@@ -257,6 +257,11 @@
       "provenance": {"kind": "CONTRACT", "ref": "NFL results report, nfl_results_report_v1 (Session 71b)"},
       "covers": "The NFL results report was refused whole: a source hash or era that is not well formed, a snapshot that is absent, a symlink, unreadable or not the bytes its name promises, or another file holding the report's name (never overwritten); or the report could not be written. It stops a results record, never a lineup file."
     },
+    "results_join": {
+      "class": "P", "stops": "CERTIFICATION",
+      "provenance": {"kind": "CONTRACT", "ref": "NFL results join, nfl_results_join_v1 and nfl_entry_results_v1 (Session 73)"},
+      "covers": "The results join was refused, or one of its files: a source hash or slates folder that is not well formed, a snapshot that is absent, a symlink, unreadable or not the bytes its name promises, or a build record that is not v1 JSON lines or repeats an Entry ID within itself or across two slates; or a slate's results file that an earlier export wrote with other results, another file holding a file's name (never overwritten), or a file that could not be written. It stops a results record, never a lineup file."
+    },
     "stage_failure": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "C1 Classic intake and prior-review artifacts"},
@@ -1490,6 +1495,12 @@
     "RELEASE_TRUTHS_INCOMPLETE": "certification_prerequisite",
     "REPARSE_ASSIGNMENT_MISMATCH": "delivered_bytes",
     "REPLAY_REQUEST_BUNDLE_ID_MISMATCH": "settlement",
+    "RESULTS_JOIN_ARTIFACT_CONFLICT": "results_join",
+    "RESULTS_JOIN_INPUT_INVALID": "results_join",
+    "RESULTS_JOIN_RECORD_INVALID": "results_join",
+    "RESULTS_JOIN_RESULTS_DIFFER": "results_join",
+    "RESULTS_JOIN_SNAPSHOT_INVALID": "results_join",
+    "RESULTS_JOIN_WRITE_FAILED": "results_join",
     "RESULTS_REPORT_ARTIFACT_CONFLICT": "results_report",
     "RESULTS_REPORT_INPUT_INVALID": "results_report",
     "RESULTS_REPORT_SNAPSHOT_INVALID": "results_report",

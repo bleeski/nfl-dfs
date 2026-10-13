@@ -101,6 +101,7 @@ from .economics import evaluate_candidates_against_field
 from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
 from .entry_history import run_intake as run_results_intake
 from .results_report import run_results_report
+from .results_join import DEFAULT_SLATES_DIR, run_results_join
 from .player_grading import run as run_player_grading
 from .player_grading import run_pool as run_player_grading_pool
 from .evidence import (
@@ -2098,6 +2099,30 @@ def command_results_report(args: argparse.Namespace) -> int:
     """
 
     outcome = run_results_report(args.source_sha256, args.results_root, args.engine_era_start)
+    _print_json(outcome.as_dict())
+    return outcome.exit_code
+
+
+# Immutable snapshots (CLAUDE.md): a slate's results file never lands inside one.
+SNAPSHOT_ROOTS = ("data/runs", "data/standings", "tests/fixtures/supplied")
+
+
+def _slates_root(text: str) -> str:
+    resolved = Path(text).resolve()
+    for folder in SNAPSHOT_ROOTS:
+        if resolved.is_relative_to(PROJECT_ROOT / folder):
+            raise argparse.ArgumentTypeError(f"may not be inside {folder}/ (immutable snapshots)")
+    return text
+
+
+def command_results_join(args: argparse.Namespace) -> int:
+    """Session 73: the results join (`nfl_results_join_v1`): one kept snapshot joined to every slate's build record.
+
+    Exit 0 wrote every file or found it there (or confirmed by another export); 2 refused an input, a file or a write.
+    stdout is each file's path, state and SHA-256, the problems and a money-free headline.
+    """
+
+    outcome = run_results_join(args.source_sha256, args.results_root, args.slates_root)
     _print_json(outcome.as_dict())
     return outcome.exit_code
 
@@ -5276,6 +5301,20 @@ def build_parser() -> argparse.ArgumentParser:
     results_report.add_argument("--results-root", default=str(DEFAULT_RESULTS_DIR))
     results_report.add_argument("--engine-era-start", help="YYYY-MM-DD; default the registered era (2026-09-09)")
     results_report.set_defaults(func=command_results_report)
+    results_join = subparsers.add_parser(
+        "results-join",
+        help=(
+            "join one snapshot results-intake kept to every slate's build record on Entry ID: each Entry ID's class"
+            " (locked blanks among them) and the prior's rank check, descriptive; the report under reports/<sha256>/,"
+            " and each slate's place, field size, points and percentile once beside its record (no money)"
+        ),
+    )
+    results_join.add_argument("--source-sha256", required=True,
+                              help="the snapshot's SHA-256 (64 lower-case hex), as results-intake printed it")
+    results_join.add_argument("--results-root", default=str(DEFAULT_RESULTS_DIR))
+    results_join.add_argument("--slates-root", type=_slates_root, default=str(DEFAULT_SLATES_DIR),
+                              help="the slate folders holding construction/entry_build_record.jsonl")
+    results_join.set_defaults(func=command_results_join)
     grade_players = subparsers.add_parser(
         "grade-players",
         usage=("%(prog)s --salaries SALARIES --pool-scores POOL_SCORES --identity-review IDENTITY_REVIEW\n"

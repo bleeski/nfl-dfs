@@ -642,6 +642,36 @@ write the table.
 It is not EV, an ROI forecast, a win probability, a calibration or an edge, and
 it clears no upload.
 
+## Results join
+
+The same snapshot, joined to each slate's build record on Entry ID
+(`nfl_results_join_v1`; `docs/DATA_CONTRACTS.md` § NFL results join):
+
+```powershell
+.\nfl.ps1 results-join --source-sha256 <the 64-character sha256 results-intake printed>
+```
+
+It classes every Entry ID (a locked blank with a delivered file or with none,
+entered with no record, recorded but not in the export), ranks each slate's
+prior points against the export's points (every row, and paid rows alone), and
+writes:
+- the report once under `data\results\reports\<sha256>\results_join.w1.json`
+  (gitignored);
+- each slate's `construction\entry_results.w1.json` once, beside its record
+  (place, field size, points and percentile only; no money).
+
+The per-slate files are tracked. On Windows they appear as new files for the
+next Claude session to commit.
+
+Running it again is `ALREADY_PRESENT`. A later export that agrees with a
+slate's file is `CONFIRMED_BY_EXPORT`, and the file is left as it is. One that
+disagrees refuses that slate alone (`RESULTS_JOIN_RESULTS_DIFFER`) and never
+overwrites it.
+
+The printed result carries no money, so it is safe to paste back to Claude.
+The rank check is descriptive. It is not EV, a win probability, a calibration
+or an edge, and it clears no upload.
+
 ## Safe failure behavior
 
 - Excel open: readable stop message; no partial workbook.

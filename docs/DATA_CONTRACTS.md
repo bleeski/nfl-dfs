@@ -3556,7 +3556,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `96de304566501513940e8cb0556a9400c604c782c0e63a59926fad1f038a84cd`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `d0025e51b35e92832f91410a5949c632363834debd97d251c906ab5265b65006`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4995,6 +4995,113 @@ named. None names a run: their folders were not kept.
 - DET@BUF and Week 3 Classic have slate folders but no committed delivered file, and no record.
 - The engine-era slates whose files were never committed under `data/inbox/slates/` have no record either. These include
   NE@SEA, DAL@NYG, DEN@KC and Week 1; their copies at the repository root are gitignored duplicates.
+
+## NFL results join, nfl_results_join_v1 and nfl_entry_results_v1 (Session 73)
+
+`nfl results-join --source-sha256 <sha256> [--results-root data/results] [--slates-root data/inbox/slates]`
+(`results_join.run_results_join`; `.\nfl.ps1 results-join` on Windows). It reads one snapshot `results-intake` kept
+(`<root>/inbox/<sha256>.csv`, `nfl_dk_entry_history_v1`) and each slate folder's graded build record
+(`construction/entry_build_record.jsonl`, `nfl_entry_build_record_v1`), and joins them on exact Entry ID (the export's
+`Entry_Key`). The realized points are the export's own `Points`. It is descriptive: it reaches no `run-slate` stage,
+`prior_review` exit, selection or release truth. `--slates-root` refuses a folder inside `data/runs/`, `data/standings/` or
+`tests/fixtures/supplied/` (argparse, exit 2).
+
+**Records.** Folders in name order. An earlier delivered file's record (`entry_build_record.<stem>.jsonl`, MIN@NO's
+`final_v7`) is listed in `alternate_records` and never joined. The loader checks what the join reads:
+- each line is a JSON object with `schema_version` `nfl_entry_build_record_v1`, digit `entry_id` and `contest_id`, and
+  `mode` `CLASSIC` or `SHOWDOWN`;
+- `roster` is a list or null, `prior.points` is null or a finite number (never a boolean, `NaN` or `Infinity`), and
+  `prior.reason` is text or null;
+- the file ends in LF, and an Entry ID appears once in a record and in one folder's record only.
+
+**Classes.** One `class` and `reason` per Entry ID; a gap is a class, never a refusal.
+- `JOINED`: a record row and an NFL export row agree (reason null).
+- `LOCKED_BLANK_WITH_FILE`: a record row whose export row scored exactly 0 (`results_report.is_blank`), so a delivered
+  file existed. Reason `RECORD_ROW_FILLED`, or `RECORD_ROW_UNFILLED` when the record's row was blank.
+- `LOCKED_BLANK_NO_RECORD`: an export row that scored exactly 0 and that no record holds.
+- `ENTERED_NO_RECORD`: an export row that scored and that no record holds (DET@BUF's 13th Entry ID).
+- For both of the last two, the reason is `NO_RECORD_ON_SLATE` when no record row joins any entry of its slate (the
+  review's cluster, `results_report.slate_key`: sport, Eastern date, game type); otherwise `SLATE_RECORD_LACKS_ENTRY_ID`.
+- `RECORDED_NOT_IN_HISTORY`: a record row with no NFL export row, reason `NOT_IN_EXPORT` (not entered, or later than the
+  export; the two cannot be told apart).
+- `ROW_DISAGREES`: the export row's `Contest_Key` is not the record's `contest_id` (reason `CONTEST`), or its game type
+  does not start `Showdown` for a `SHOWDOWN` record or `Classic` for a `CLASSIC` one (reason `GAME_TYPE`).
+- Non-NFL export rows never join; `non_nfl_rows_ignored` counts them.
+
+**The rank check.** `rank_check` has `method` `SPEARMAN_TIED_RANKS_AVERAGED` and `unit` `SLATE`.
+- It runs for each slate with an exported Entry ID. It ranks the record's `prior.points` against the export's points over
+  the `JOINED` rows with a prior, using `player_grading.spearman` (tied ranks averaged, Pearson on the ranks, 6 places;
+  null, with `note` `FEWER_THAN_3` or `ZERO_VARIANCE`).
+- Two populations, each {`n`, `rho`, `note`}: `all` (free entries included) and `paid` (`Entry_Fee` above zero).
+- `excluded` counts every other record row by its class. A `JOINED` row with a null prior is counted by the record's own
+  reason (`NO_PRIOR_SOURCE`, `UNSCORED_DK_ID`, `UNFILLED`, or `PRIOR_NULL` when the record names none). Nothing is
+  imputed.
+- `pooled` {`all`, `paid`}: {`slates`, `rows`, `mean_rho`}, the unweighted mean of the slate figures that are defined.
+- It is descriptive: a slate's rows share most of their people, so there is no p-value (Session 74 builds a player-level
+  null).
+- The 2026-10-10 review's figures (-0.03 DET@CAR, +0.38 ATL@NO, +0.63 TB@DAL, +0.06 Week 4 Classic, mean +0.26) came
+  from scratch scripts that are not in the repository and did not name their population. Operator item O13 runs this
+  command on that export, and its two populations show which one reproduces.
+
+**The report** is gitignored: `<root>/reports/<sha256>/results_join.w1.json`, canonical JSON. Its keys:
+- `schema_version` (`nfl_results_join_v1`), `writer`, `history_contract`, `source_sha256`;
+- `records` ({`slate`, `record_name`, `record_sha256`}, plus the row count `rows`), `alternate_records`, `not_in_export`
+  (record slates with no exported Entry ID), `non_nfl_rows_ignored`;
+- `entries`: the record rows in folder and record order, then the export's unrecorded NFL rows in file order, each
+  {`entry_id`, `contest_id`, `slate`, `class`, `reason`, `date`, `game_type`};
+- `class_counts` (every class, zero included), `rank_check` and `does_not_establish`.
+
+**A slate's results** are tracked: `entry_results.w1.json`, in the slate's `construction/` folder beside the record,
+written only for a slate with an exported Entry ID.
+- Keys: `schema_version` (`nfl_entry_results_v1`), `writer`, `contract`, `source_sha256` (the export that first wrote
+  it), `slate`, `record_name`, `does_not_establish`.
+- `entries`: one per record row, in record order: {`entry_id`, `class`, `place`, `contest_entries`, `points_hundredths`,
+  `percentile`}.
+- `percentile` is `Place / Contest_Entries` as a percent to 4 places (`results_report.finishing_percentile`; DraftKings'
+  best-place tie rule flatters it). The numbers are null unless the class is `JOINED` or `LOCKED_BLANK_WITH_FILE`.
+- It carries no fee, winnings, prize pool, places paid, paid flag or contest name: the repository is public (Ben,
+  2026-10-10).
+- `scripts/repo_state.py` counts the slates holding one (`entry grading: N slates`), apart from P0's player-week
+  calibration line.
+
+**Write-once across exports.** Every file is attempted and reports a state:
+- `WRITTEN`;
+- `ALREADY_PRESENT` (the same bytes);
+- `CONFIRMED_BY_EXPORT` (a slate's file that another export wrote with the same `entries`; kept as it is, with that
+  export's hash);
+- `NOT_IN_EXPORT` (nothing written);
+- `REFUSED` (with a `recovery` sentence), `WRITE_FAILED` or `NOT_ATTEMPTED`.
+
+The status is `REFUSED` if any file was refused, else `WRITE_FAILED` if any failed (both exit 2), else `COMPLETE` if any
+was written, else `ALREADY_PRESENT` (exit 0). A refused input writes nothing.
+
+**Refusals** (registry family `results_join`, `P`, stops `CERTIFICATION`):
+- `RESULTS_JOIN_INPUT_INVALID` (`field=source_sha256` or `field=slates_root`).
+- `RESULTS_JOIN_SNAPSHOT_INVALID` (`reason=absent`, `symlink`, `unreadable` or `hash`; one changed byte withholds every
+  file).
+- `RESULTS_JOIN_RECORD_INVALID` (`<slate>/construction/entry_build_record.jsonl:line=<n>:<field>`, `:empty`,
+  `:unterminated`, or `entry_id=<id>:slates=<a>,<b>`).
+- Per file:
+  - `RESULTS_JOIN_RESULTS_DIFFER` (`file=<slate>`): an earlier export wrote other results, usually before every contest
+    settled. The file is never overwritten; delete it by hand in a pull request and rerun.
+  - `RESULTS_JOIN_ARTIFACT_CONFLICT`: another file holds a name.
+  - `RESULTS_JOIN_WRITE_FAILED` (`file=<name>:exception=<class>`).
+- A snapshot the parser no longer takes refuses with Session 69's own codes.
+
+**`does_not_establish`**: `EXPECTED_VALUE_OR_ROI`, `WIN_OR_CASH_PROBABILITY`, `AN_EDGE_OR_ITS_ABSENCE`, `CALIBRATION`,
+`WHICH_ENTRIES_THE_ENGINE_BUILT`, `UPLOAD_CLEARANCE`.
+
+**The committed slates.**
+- O13's export (2026-10-10, SHA-256 `5752c7f3...07a3`) can hold six record slates: DET@CAR, ATL@NO, TB@DAL, Week 4
+  Classic, PHI@CHI and Week 4 afternoon.
+- PHI@CHI's and Week 4 afternoon's priors are null (`NO_PRIOR_SOURCE`). The rank check excludes them by name, and their
+  results are still written.
+- MIN@NO, BAL@ATL, both Week 5 slates and BUF@LAR are later, and wait for a later export.
+- DET@BUF's folder holds its template but no delivered file and no record. Its 13 Entry IDs are `LOCKED_BLANK_NO_RECORD`
+  or `ENTERED_NO_RECORD`, with `NO_RECORD_ON_SLATE`.
+- Week 5 Classic's free entry `5291960735` is a recorded row the engine never built, and joins like any other.
+- The export carries no rosters, so it cannot show which MIN@NO file was uploaded. Only MIN@NO's rho depends on that
+  answer.
 
 ## Standings corpus transport (Session 17, X2)
 
