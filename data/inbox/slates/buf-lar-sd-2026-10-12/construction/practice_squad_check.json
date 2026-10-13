@@ -1,0 +1,483 @@
+{
+  "schema_version": "nfl_practice_squad_check_v1",
+  "salaries": "data/inbox/slates/buf-lar-sd-2026-10-12/input/DKSalaries.csv",
+  "rosters": "data/runs/20261012T235223Z-buf-lar-sd/prior_review/priors/proposal/raw/bd6b007dc905ef9bcd780158c52013068dd812d953d1e9067e8c29ee0cccabe7.csv",
+  "people": 47,
+  "not_active": [
+    {
+      "name": "Brock Lampe",
+      "team": "BUF",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446880",
+        "44446831"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Brock Lampe",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Frank Gore Jr.",
+      "team": "BUF",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446882",
+        "44446833"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Frank Gore Jr.",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Ja'Mori Maclin",
+      "team": "BUF",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446886",
+        "44446837"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Ja'Mori Maclin",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Shane Buechele",
+      "team": "BUF",
+      "position": "QB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446858",
+        "44446809"
+      ],
+      "max_salary": 9000,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Shane Buechele",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Stephen Gosnell",
+      "team": "BUF",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446887",
+        "44446838"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Stephen Gosnell",
+      "nflverse_week": 5,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Trent Sherfield Sr.",
+      "team": "BUF",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446884",
+        "44446835"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Trent Sherfield",
+      "nflverse_week": 5,
+      "match_method": "NAME_WITHOUT_SUFFIX_TEAM"
+    }
+  ],
+  "no_roster_row": [
+    {
+      "name": "Joshua Palmer",
+      "team": "BUF",
+      "position": "WR",
+      "dk_status": "OUT",
+      "dk_ids": [
+        "44446867",
+        "44446818"
+      ],
+      "max_salary": 4500,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Alex Bachman",
+      "team": "LAR",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446889",
+        "44446840"
+      ],
+      "max_salary": 300,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Blake Corum",
+      "team": "LAR",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446864",
+        "44446815"
+      ],
+      "max_salary": 5700,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Brennan Presley",
+      "team": "LAR",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446888",
+        "44446839"
+      ],
+      "max_salary": 300,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "CJ Daniels",
+      "team": "LAR",
+      "position": "WR",
+      "dk_status": "OUT",
+      "dk_ids": [
+        "44446883",
+        "44446834"
+      ],
+      "max_salary": 300,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Colby Parkinson",
+      "team": "LAR",
+      "position": "TE",
+      "dk_status": "",
+      "dk_ids": [
+        "44446869",
+        "44446820"
+      ],
+      "max_salary": 3600,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Dan Villari",
+      "team": "LAR",
+      "position": "TE",
+      "dk_status": "",
+      "dk_ids": [
+        "44446891",
+        "44446842"
+      ],
+      "max_salary": 300,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Davante Adams",
+      "team": "LAR",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446849",
+        "44446800"
+      ],
+      "max_salary": 14100,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Davis Allen",
+      "team": "LAR",
+      "position": "TE",
+      "dk_status": "",
+      "dk_ids": [
+        "44446872",
+        "44446823"
+      ],
+      "max_salary": 2400,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Dean Connors",
+      "team": "LAR",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446878",
+        "44446829"
+      ],
+      "max_salary": 600,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Harrison Mevis",
+      "team": "LAR",
+      "position": "K",
+      "dk_status": "",
+      "dk_ids": [
+        "44446860",
+        "44446811"
+      ],
+      "max_salary": 7500,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Jordan Waters",
+      "team": "LAR",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446881",
+        "44446832"
+      ],
+      "max_salary": 300,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Jordan Whittington",
+      "team": "LAR",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446871",
+        "44446822"
+      ],
+      "max_salary": 3000,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Konata Mumpfield",
+      "team": "LAR",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446870",
+        "44446821"
+      ],
+      "max_salary": 3300,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Kyren Williams",
+      "team": "LAR",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446848",
+        "44446799"
+      ],
+      "max_salary": 14700,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Matthew Caldwell",
+      "team": "LAR",
+      "position": "QB",
+      "dk_status": "IR",
+      "dk_ids": [
+        "44446854",
+        "44446805"
+      ],
+      "max_salary": 9000,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Matthew Stafford",
+      "team": "LAR",
+      "position": "QB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446850",
+        "44446801"
+      ],
+      "max_salary": 13500,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Max Klare",
+      "team": "LAR",
+      "position": "TE",
+      "dk_status": "OUT",
+      "dk_ids": [
+        "44446874",
+        "44446825"
+      ],
+      "max_salary": 1800,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Puka Nacua",
+      "team": "LAR",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446846",
+        "44446797"
+      ],
+      "max_salary": 17100,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Ronnie Rivers",
+      "team": "LAR",
+      "position": "RB",
+      "dk_status": "IR",
+      "dk_ids": [
+        "44446879",
+        "44446830"
+      ],
+      "max_salary": 300,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Stetson Bennett IV",
+      "team": "LAR",
+      "position": "QB",
+      "dk_status": "",
+      "dk_ids": [
+        "44446857",
+        "44446808"
+      ],
+      "max_salary": 9000,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Terrance Ferguson",
+      "team": "LAR",
+      "position": "TE",
+      "dk_status": "IR",
+      "dk_ids": [
+        "44446890",
+        "44446841"
+      ],
+      "max_salary": 300,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Tutu Atwell",
+      "team": "LAR",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44446875",
+        "44446826"
+      ],
+      "max_salary": 1500,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Ty Simpson",
+      "team": "LAR",
+      "position": "QB",
+      "dk_status": "OUT",
+      "dk_ids": [
+        "44446856",
+        "44446807"
+      ],
+      "max_salary": 9000,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    },
+    {
+      "name": "Tyler Higbee",
+      "team": "LAR",
+      "position": "TE",
+      "dk_status": "",
+      "dk_ids": [
+        "44446862",
+        "44446813"
+      ],
+      "max_salary": 6600,
+      "nflverse_status": null,
+      "nflverse_name": null,
+      "nflverse_week": null,
+      "match_method": "NO_ROSTER_ROW"
+    }
+  ],
+  "exclude_args": "--exclude 44446880 --exclude 44446831 --exclude 44446882 --exclude 44446833 --exclude 44446886 --exclude 44446837 --exclude 44446858 --exclude 44446809 --exclude 44446887 --exclude 44446838 --exclude 44446884 --exclude 44446835",
+  "does_not_establish": [
+    "OFFICIAL_ACTIVE_STATUS",
+    "GAME_DAY_ELEVATION",
+    "A_CURRENT_ROLE",
+    "UPLOAD_CLEARANCE"
+  ],
+  "next": "Check each team's elevation post for this game; exclude only the people it does not name."
+}

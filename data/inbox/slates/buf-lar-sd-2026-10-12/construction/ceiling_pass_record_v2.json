@@ -1,0 +1,345 @@
+{
+ "schema": "tb_dal_sd_ceiling_pass_record_v1",
+ "status": "PRIOR_ONLY / DO_NOT_UPLOAD",
+ "source_review": "data/inbox/slates/buf-lar-sd-2026-10-12/construction/DK_REVIEW_ENTRY_buf-lar-sd_r2.csv",
+ "scores": "data/inbox/slates/buf-lar-sd-2026-10-12/construction/pool_scores.json",
+ "rules": {
+  "person_max_rows": 24,
+  "overlap_max": 5,
+  "min_gain": 1.0,
+  "salary_cap": 50000
+ },
+ "before": {
+  "total_prior": 3047.27,
+  "min_row_prior": 73.34,
+  "max_person": [
+   "BUF|WR|Khalil Shakir",
+   19
+  ],
+  "people_over_half": [
+   [
+    "BUF|WR|Khalil Shakir",
+    19
+   ],
+   [
+    "LAR|WR|Puka Nacua",
+    19
+   ],
+   [
+    "BUF|QB|Josh Allen",
+    19
+   ],
+   [
+    "LAR|TE|Colby Parkinson",
+    19
+   ],
+   [
+    "LAR|QB|Matthew Stafford",
+    19
+   ]
+  ],
+  "top3_person_slots": 57,
+  "distinct_people": 20,
+  "captains": [
+   [
+    "BUF|QB|Josh Allen",
+    6
+   ],
+   [
+    "BUF|WR|Khalil Shakir",
+    6
+   ],
+   [
+    "LAR|QB|Matthew Stafford",
+    6
+   ],
+   [
+    "LAR|WR|Puka Nacua",
+    5
+   ],
+   [
+    "BUF|RB|James Cook III",
+    5
+   ],
+   [
+    "LAR|TE|Colby Parkinson",
+    2
+   ],
+   [
+    "BUF|WR|Greg Dortch",
+    1
+   ],
+   [
+    "LAR|RB|Kyren Williams",
+    1
+   ]
+  ],
+  "max_captain_share": 0.1875,
+  "max_pairwise_overlap": 4,
+  "mean_pairwise_overlap": 2.6976,
+  "rows_wr_te_captain_without_own_qb": 8,
+  "distinct_lineups": 32
+ },
+ "after": {
+  "total_prior": 3128.37,
+  "min_row_prior": 77.27,
+  "max_person": [
+   "LAR|QB|Matthew Stafford",
+   24
+  ],
+  "people_over_half": [
+   [
+    "LAR|QB|Matthew Stafford",
+    24
+   ],
+   [
+    "BUF|QB|Josh Allen",
+    23
+   ],
+   [
+    "BUF|WR|Khalil Shakir",
+    19
+   ],
+   [
+    "LAR|WR|Puka Nacua",
+    19
+   ],
+   [
+    "LAR|TE|Colby Parkinson",
+    19
+   ],
+   [
+    "BUF|WR|Keon Coleman",
+    18
+   ]
+  ],
+  "top3_person_slots": 66,
+  "distinct_people": 20,
+  "captains": [
+   [
+    "BUF|QB|Josh Allen",
+    6
+   ],
+   [
+    "BUF|WR|Khalil Shakir",
+    6
+   ],
+   [
+    "LAR|QB|Matthew Stafford",
+    6
+   ],
+   [
+    "LAR|WR|Puka Nacua",
+    5
+   ],
+   [
+    "BUF|RB|James Cook III",
+    5
+   ],
+   [
+    "LAR|TE|Colby Parkinson",
+    2
+   ],
+   [
+    "BUF|WR|Greg Dortch",
+    1
+   ],
+   [
+    "LAR|RB|Kyren Williams",
+    1
+   ]
+  ],
+  "max_captain_share": 0.1875,
+  "max_pairwise_overlap": 5,
+  "mean_pairwise_overlap": 2.9415,
+  "rows_wr_te_captain_without_own_qb": 0,
+  "distinct_lineups": 32
+ },
+ "log": [
+  {
+   "step": "own_qb",
+   "entry_id": "5294324332",
+   "swaps": [
+    [
+     "LAR|RB|Kyren Williams",
+     "LAR|QB|Matthew Stafford"
+    ]
+   ],
+   "row_prior_before": 99.56,
+   "row_prior_after": 106.31
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5294331132",
+   "swaps": [
+    [
+     "BUF|RB|James Cook III",
+     "BUF|QB|Josh Allen"
+    ]
+   ],
+   "row_prior_before": 87.62,
+   "row_prior_after": 95.6
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5294331134",
+   "swaps": [
+    [
+     "LAR|RB|Kyren Williams",
+     "LAR|QB|Matthew Stafford"
+    ]
+   ],
+   "row_prior_before": 89.15,
+   "row_prior_after": 95.9
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5294331137",
+   "swaps": [
+    [
+     "LAR|WR|Puka Nacua",
+     "BUF|QB|Josh Allen"
+    ]
+   ],
+   "row_prior_before": 100.9,
+   "row_prior_after": 104.36
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5294331140",
+   "swaps": [
+    [
+     "LAR|RB|Kyren Williams",
+     "BUF|QB|Josh Allen"
+    ],
+    [
+     "LAR|WR|Puka Nacua",
+     "LAR|QB|Matthew Stafford"
+    ]
+   ],
+   "row_prior_before": 90.59,
+   "row_prior_after": 100.81
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5294331144",
+   "swaps": [
+    [
+     "LAR|WR|Davante Adams",
+     "LAR|QB|Matthew Stafford"
+    ]
+   ],
+   "row_prior_before": 89.7,
+   "row_prior_after": 97.9
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5294326626",
+   "swaps": [
+    [
+     "LAR|WR|Davante Adams",
+     "LAR|QB|Matthew Stafford"
+    ]
+   ],
+   "row_prior_before": 89.67,
+   "row_prior_after": 97.87
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5294326848",
+   "swaps": [
+    [
+     "LAR|TE|Tyler Higbee",
+     "BUF|QB|Josh Allen"
+    ],
+    [
+     "LAR|WR|Davante Adams",
+     "BUF|WR|Greg Dortch"
+    ]
+   ],
+   "row_prior_before": 81.7,
+   "row_prior_after": 89.15
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5294326850",
+   "swaps": [
+    [
+     "LAR|RB|Kyren Williams",
+     "LAR|WR|Puka Nacua"
+    ]
+   ],
+   "gain": 5.08
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5294326846",
+   "swaps": [
+    [
+     "BUF|RB|James Cook III",
+     "LAR|WR|Puka Nacua"
+    ]
+   ],
+   "gain": 4.51
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5294331136",
+   "swaps": [
+    [
+     "BUF|TE|Dalton Kincaid",
+     "BUF|WR|Keon Coleman"
+    ]
+   ],
+   "gain": 3.94
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5294335210",
+   "swaps": [
+    [
+     "BUF|TE|Dalton Kincaid",
+     "BUF|WR|Keon Coleman"
+    ]
+   ],
+   "gain": 3.94
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5294326848",
+   "swaps": [
+    [
+     "LAR|K|Harrison Mevis",
+     "BUF|WR|Keon Coleman"
+    ]
+   ],
+   "gain": 3.56
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5294326847",
+   "swaps": [
+    [
+     "BUF|K|Tyler Bass",
+     "LAR|K|Harrison Mevis"
+    ]
+   ],
+   "gain": 1.1
+  }
+ ],
+ "changed_entry_ids": [
+  "5294324332",
+  "5294326626",
+  "5294326846",
+  "5294326847",
+  "5294326848",
+  "5294326850",
+  "5294331132",
+  "5294331134",
+  "5294331136",
+  "5294331137",
+  "5294331140",
+  "5294331144",
+  "5294335210"
+ ]
+}

@@ -1,0 +1,29 @@
+{
+  "lineups": 32,
+  "defects": 0,
+  "DEFECTS": [],
+  "limit_breaches": 0,
+  "LIMIT_BREACHES": [],
+  "unfilled_entry_ids": [],
+  "prefilled_entry_ids": [],
+  "observations": 5,
+  "OBSERVATIONS": [
+    "5294331136 ZERO_QB",
+    "5294331141 ZERO_QB",
+    "5294335210 ZERO_QB",
+    "5294326850 ZERO_QB",
+    "5294340287 ZERO_QB"
+  ],
+  "observation_note": "strategy observations never change the exit code; DraftKings accepts each of them",
+  "exit_codes": "1 validity failure; 3 blank authorized rows unfilled; 2 an operator limit only; 0 none of these, which does not clear an upload",
+  "max_pairwise_overlap": 5,
+  "salary_min": 48100,
+  "salary_max": 49900,
+  "distinct_captains": 8,
+  "qb_count_histogram": {
+    "2": 20,
+    "1": 7,
+    "0": 5
+  },
+  "VERDICT": "PASS"
+}

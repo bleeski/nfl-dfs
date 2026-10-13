@@ -33,6 +33,9 @@ from pathlib import Path
 
 ROSTER_HEADER_PREFIX = "season,team,position,depth_chart_position,jersey_number,status,full_name"
 DK_UNAVAILABLE = {"OUT", "IR", "D"}
+# DraftKings and nflverse disagree on one club code. Without this every Rams player read NO_ROSTER_ROW and the check
+# listed none of their practice squad (BUF@LAR, 2026-10-12: Presley, Connors and Waters found by hand).
+DK_TO_NFLVERSE_TEAM = {"LAR": "LA"}
 SUFFIX = re.compile(r"\s+(jr\.?|sr\.?|ii|iii|iv|v)$", re.IGNORECASE)
 DOES_NOT_ESTABLISH = [
     "OFFICIAL_ACTIVE_STATUS",
@@ -62,10 +65,12 @@ def find_roster_file(run_dir: Path) -> Path:
 def latest_rows(rosters: Path, teams: set[str]) -> dict[str, dict[str, dict[str, str]]]:
     """Team -> normalized full name -> that person's row from the team's latest week."""
     by_team: dict[str, list[dict[str, str]]] = {team: [] for team in teams}
+    dk_team_of = {DK_TO_NFLVERSE_TEAM.get(team, team): team for team in teams}
     with rosters.open("r", encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
-            if row.get("team") in by_team:
-                by_team[row["team"]].append(row)
+            team = dk_team_of.get(row.get("team") or "")
+            if team is not None:
+                by_team[team].append(row)
     out: dict[str, dict[str, dict[str, str]]] = {}
     for team, rows in by_team.items():
         def order(row: dict[str, str]) -> tuple[int, int]:
