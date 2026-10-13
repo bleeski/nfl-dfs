@@ -750,6 +750,13 @@
       "why": "To learn what works, each result has to be tied to how its lineup was built.",
       "matters": "The link between our decisions and our outcomes."
     },
+    "S72b": {
+      "goal": "measure",
+      "title": "Record how every entry was built: the run's side",
+      "what": "Adds, for runs that keep their folders, which run made each entry, whether the file was the engine's own or hand-edited, the game story it was built for, and its game's expected total and point spread. Also records the remaining past slates.",
+      "why": "The first part records each lineup and its projected points; the run's side needs the run's own files.",
+      "matters": "Lets us compare hand edits against the engine's own picks."
+    },
     "S73": {
       "goal": "measure",
       "title": "Join results to how lineups were built",
