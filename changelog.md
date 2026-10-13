@@ -4,6 +4,147 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-13: Session 72c -- the build record backfill
+
+Branch `claude/s72c-backfill`, pull request #146. It was claimed at `e994cc8` on `febc2a2` (PR #145's merge, now recorded in
+Session 72b's close-out row). Ben approved the plan before any change. A fresh-context fable agent checked the plan before
+it was presented, and another checked the work before close-out. Both ran the `advisor` skill's procedure. This is a
+record of committed bytes only: no `src/` or `scripts/` change, nothing reaches `run-slate`, `prior_review` or a release
+truth, and every path stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- Eight `nfl_entry_build_record_v1` files, 231 rows in all, one `scripts/record_entries.py` run each.
+  - No run folder was kept, so every run field is null with `RUN_FOLDER_NOT_SUPPLIED`.
+  - Each file is `construction/entry_build_record.jsonl` unless the table names it.
+  - PHI@CHI's record creates its `construction/` folder.
+
+  | Slate | Graded file (SHA-256) | Prior source | Rows | Prior sum | Record |
+  |---|---|---|---|---|---|
+  | BUF@LAR | `final_v2` (`675d5d30`) | `pool_scores.json` | 32 | 3,128.37 | `0d8b8360` |
+  | BAL@ATL | `final_v6` (`3b14e785`) | `pool_scores_r3.json` | 32 | 2,204.54 | `37672b31` |
+  | MIN@NO | `final_v10` (`e5a20eeb`) | `pool_scores_r3.json` | 33 | 2,116.36 | `0918aa5d` |
+  | MIN@NO | `final_v7` (`11ddfc46`), `entry_build_record.DK_REVIEW_ENTRY_min-no-sd_final_v7.jsonl` | `pool_scores_r3.json` | 33 | 2,113.62 | `6730231b` |
+  | PHI@CHI | `v4` (`967f0872`) | none: `NO_PRIOR_SOURCE` | 36 | null | `d73a4834` |
+  | Week 4 afternoon | `FINAL` (`0c0e9f6b`) | none: `NO_PRIOR_SOURCE` | 7 | null | `2641943d` |
+  | Week 5 afternoon | `v3` (`ec1fb926`) | `pool_scores.json` | 25 | 3,011.11 | `9b5383d5` |
+  | Week 5 Classic | `DK_LATESWAP_wk5_classic_v10` (`4ed31af6`) | `pool_scores.json` | 33 | 4,237.68 | `a6adf434` |
+
+- **Ben's free entry is recorded.** Week 5 Classic's Entry ID `5291960735` (contest 196636854) is in the live export that
+  the late-swap file edits (`live/DKEntries_current_1914Z.csv`, 33 Entry IDs). So the record holds its roster, prior
+  98.35 and rank 33 of 33, although the engine never built it. The 2026-10-11 entry calls it "the free entry untouched".
+- **`tests/test_entry_record_backfill.py`, 10 cases.**
+  - Each record is `record_bytes(build_records(...))` on the committed inputs, with Entry IDs in the template's order.
+  - Each roster is the file's own cells, read without the builder.
+  - Each prior equals the dump's slot-order sum, with the dump's `score_version` and hash, or is null with
+    `NO_PRIOR_SOURCE`. Each rank is recomputed.
+  - Each source reproduces the totals its hand-pass record states:
+    - `ceiling_pass_record_v2`: 3,047.27 to 3,128.37.
+    - `judgment_v1_record`: 2,286.27 to 2,214.92.
+    - `judgment_v6_record`: 2,113.62.
+    - `pareto_v8_record`, on `final_v7` itself: 2,113.62.
+    - Week 5 afternoon's `portfolio_v2_final` and `portfolio_v3_redeploy`: 3,003.32 and 3,011.11.
+    - Week 5 Classic's `portfolio_v5_redeploy`: 4,134.34.
+  - Two pins: BAL@ATL's r2 dump gives 2,420.31, and MIN@NO goes v7 → v9 → v10 on r3 (2,113.62, 2,116.14, 2,116.36,
+    the 2026-10-11 entry's +2.52 and +0.2).
+  - Week 5 Classic agrees with its own late-swap record (`portfolio_v10_lateswap.json`) in 32 of 32 rows, and the free
+    entry is the one row outside it.
+  - DET@BUF and Week 3 Classic hold their templates but no delivered file and no record.
+- `docs/DATA_CONTRACTS.md` § Per-Entry-ID build record, "The committed records": twelve files on eleven slates. It also names
+  the slates with none: DET@BUF, Week 3 Classic, and the engine-era slates never committed under `data/inbox/slates/`
+  (NE@SEA, DAL@NYG, DEN@KC, Week 1; 17 engine-era slates against 13 folders).
+- `docs/claude/working.md`: two Windows traps this session hit (below).
+
+**Decided, with the reason.**
+- **MIN@NO: the card's default.** `final_v10`, the last file built before lock, is `entry_build_record.jsonl`. `final_v7`,
+  the 16:25Z file the 2026-10-11 entry calls delivered, sits under its stem. Both are recorded, so Ben's answer is a rename
+  of two files. The card's flag and the tracker question `min-no-file` stay open.
+- **Missing, not recomputed.** PHI@CHI's `keenum_swap.py` read a `by_dk_id` dump on 2026-09-28 that was not kept.
+  `NO_PRIOR_SOURCE` therefore means lost, not never computed. `assignment_v*.json`'s `score` is the contest-assignment
+  objective, and Week 4 afternoon's `portfolio_final.json` has no `prior_points`, so neither figure is recomputed.
+- **The source is pinned by its hash, not its total.** The alternate dumps sum identically over the graded rosters, in
+  every row:
+  - Week 5 Classic: `scores_qbclean.json` and `scores_v3.json` (33 of 33).
+  - Week 5 afternoon: `scores_qbclean.json` and `scores_noladd.json` (25 of 25).
+
+  So `prior_source_sha256` is what names `pool_scores.json`, the run's own `NFL_DFS_DUMP_SCORES` dump. BAL@ATL's r2
+  differs in 31 of 32 rows.
+- **The graded files' own totals appear in no hand-pass record.** BAL@ATL `v6` 2,204.54, MIN@NO `v10` 2,116.36 and Week 5
+  Classic `v10` 4,237.68 are bound to their dumps through earlier passes: `judgment_v1`; `judgment_v6` and
+  `pareto_v8`; and `v5` with the row-by-row match.
+- **No forward-looking gate.** A check that every slate folder with a delivered file holds a record would turn working.md's
+  procedure into a CI gate on lineup-run pull requests, which commit inputs before the graded file is settled.
+
+**Consults and review.**
+- **Plan consult.** Six claims survived and two were weakened, both folded in:
+  - The literals were rounded copies of the builder's output, and Week 5 does have JSONs that state its totals. Each
+    literal is now checked against its JSON.
+  - MIN@NO's v10 default rests on the card, not on a delivery record. The v7 to v10 chain is now pinned.
+
+  It also caught a vacuous pass (a missing folder searched as empty) and the count (12 files on 11 slates).
+- **Reviewer.** Nothing blocking. Taken: a per-row rank check, and `pareto_v8_record.json` as evidence on `final_v7`.
+- **Close-out consult.** NOT READY only on pending steps (the suite, these ledgers). Taken: the exact late-swap file name,
+  the no-record line no longer read as exhaustive, per-slate alternate dumps, PHI@CHI's lost dump, and a line in Session
+  73's note.
+  - Tried and refuted: its suggested synthetic test to kill the reversed-sum mutant. The pinned Python 3.13.7's `sum()`
+    of floats is compensated (Neumaier, since 3.12), so `sum([0.1, 0.2, 0.3])` and `sum([0.3, 0.2, 0.1])` are both
+    `0.6`, while `0.1 + 0.2 + 0.3` is `0.6000000000000001`. The test failed on the unmutated builder and was removed.
+
+**Verification.**
+- **Real fixtures first** (scratch `s72c_summary.py` and `s72c_evidence.py`, counts and sums only):
+  - All eight builds succeed, and every SHA-256 prefix and Entry ID count matches the card.
+  - Every dump scores every rostered DK ID (0 unscored, 0 excluded), all `prior_points_of_expected_statline_v3`.
+- **Red first:** 9 failed, starting with `FileNotFoundError` on `buf-lar`'s record; the boundary case passed. Then 10
+  passed in 1.34s. After the review, the new file with `tests/test_entry_record_slates.py` and `tests/test_roadmap_queue.py`
+  gave 44 passed in 1.60s.
+- **Neighbors:** the eight record, roadmap, tracker, boundary and preservation files exited 0, with 329 cases and no
+  failure. A second `-q` hid the summary line (see the trap below).
+- **Clause two.** `record_entries.py` with `--out` at Session 72's four committed paths prints `ALREADY_PRESENT`:
+  `9558b99b`, `63056bcd`, `07870d8a`, `1fc3e41b`. `git diff origin/main` on them, `src/` and `scripts/` is empty.
+  `tests/test_entry_record_slates.py` and `tests/test_entry_record.py::test_the_committed_records_are_what_the_builder_writes`
+  pass unedited.
+- **Old against new.** With no code change, a second copy of the code is identical by construction. The empty diff above
+  shows every record was written by `origin/main`'s own code.
+- **Mutation, on a copy** (`nfl_dfs.__file__` resolved into it): 14 of 15 killed, each by a named test.
+  - The mutants:
+    - a prior digit;
+    - MIN@NO's two records swapped;
+    - BAL@ATL's record rebuilt on r2;
+    - PHI@CHI's record removed;
+    - a record placed in DET@BUF;
+    - a card prefix changed;
+    - two lines reordered;
+    - a stated hand-pass total changed;
+    - r2 replaced by r3;
+    - a late-swap record prior changed;
+    - `NO_PRIOR_SOURCE` renamed;
+    - `(LOCKED)` not stripped;
+    - `score_version` dropped;
+    - the rank off by one;
+    - the reversed-roster sum.
+  - The survivor is the reversed-roster sum, equivalent under the pinned interpreter as above: 0 of 188 prior-bearing rows
+    differ.
+  - The copy was deleted.
+- **Full suite:** `3816 passed, 1 skipped in 785.73s (0:13:05)` (CI's Linux suite job on d995675): 3,806 plus the 10 new cases.
+  - CI's `windows` job on the same commit is green; `gh` returns its log without the summary line.
+  - The local Windows run was stopped and is not counted. It started at 12:15 beside another repository's pytest and
+    reached 56% in 2 hours 40 minutes on about 22 minutes of CPU, the host idle or asleep.
+  - Recorded with `record_verify.py --source ci`.
+- **Final checks:** `doctor` `pass_status: true`; `git diff --check` clean; no protected path; 0 CR bytes in the ledgers.
+- **Size:** 415 changed lines before the ledgers: 231 record lines, a 153-line test (the card said 75, the plan about 100;
+  its two tables of sources and evidence run at the line width), 23 contract lines and 8 in working.md. That is under the
+  plan's 500.
+
+**Left open.**
+- Ben's MIN@NO answer.
+- Every committed record's run fields are null, since no run folder was kept.
+- Session 73's join.
+
+**Would have made it better.** Two Windows traps, now in `docs/claude/working.md`.
+- A mutation copy under the desktop scratchpad passes the 260-character path limit. It failed twice, on
+  `scripts/node_modules` and then on the slates' hash-named sources and MIN@NO's long record name. Copy only what the tests
+  read, into one-letter folders.
+- `nfl.ps1 test` already passes `-q`, so a second `-q` hides the summary line.
+
 ### 2026-10-13: Session 72b -- the build record reads a run folder (the backfill split to Session 72c)
 
 Branch `claude/s72b-run-folder-record`, pull request #145, claimed at `b8f9115` (PR #144's merge, now in Session 72's close-out

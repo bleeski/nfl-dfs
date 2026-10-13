@@ -15,8 +15,9 @@ consults and a review, an old-against-new comparison, and the full suite (`3806 
   own clock.
 - **Late-swap exports.** DraftKings' `Name (ID) (LOCKED)` cells read to their exact IDs.
 
-Not yet: the backfill of the seven other committed slates (Session 72c). The committed records name no run, because their
-folders were not kept. A record of what was built: not EV, an ROI, a probability, a calibration or an edge; nothing reaches
+Since Session 72c, eleven committed slates have records: twelve files, MIN@NO's `final_v10` and `final_v7` both until
+Ben names his upload, and PHI@CHI and Week 4 afternoon with `NO_PRIOR_SOURCE`. The committed records name no run,
+because their folders were not kept. A record of what was built: not EV, an ROI, a probability, a calibration or an edge; nothing reaches
 `run-slate` or a release truth.
 
 ## Capability added: 2026-10-13 (Session 72, the per-Entry-ID build record)

@@ -4976,10 +4976,25 @@ team in a game, or a market number that is not a number). The script prints `REF
 error); otherwise one JSON line (`rows`, `state`, `sha256`) and exit 0.
 
 **The committed records**, each slate's graded file with the source its priors read (a dump is the source only where it
-reproduces a hand-pass record's totals): DET@CAR `final_v5`, ATL@NO `qa_iter3`, TB@DAL `final_v3` (each
-`construction/pool_scores.json`) and Week 4 Classic `LATESWAP_v8` (its portfolio record), all Session 72's. None names a run:
-their folders were not kept. The other committed slates (BUF@LAR, BAL@ATL, MIN@NO, PHI@CHI, Week 4 afternoon, Week 5
-afternoon, Week 5 Classic) are Session 72c's backfill; DET@BUF and Week 3 Classic have no committed delivered file.
+reproduces a hand-pass record's totals), twelve files on eleven slates, each `construction/entry_build_record.jsonl` unless
+named. None names a run: their folders were not kept.
+
+- Session 72's four:
+  - DET@CAR `final_v5`, ATL@NO `qa_iter3` and TB@DAL `final_v3`, each from `construction/pool_scores.json`.
+  - Week 4 Classic `LATESWAP_v8`, from its portfolio record.
+- Session 72c's eight:
+  - BUF@LAR `final_v2` and Week 5 afternoon `v3`, each from `construction/pool_scores.json`.
+  - BAL@ATL `final_v6`, from `construction/pool_scores_r3.json`. The r2 dump does not reproduce its judgment pass.
+  - MIN@NO `final_v10`, and `final_v7` under `entry_build_record.DK_REVIEW_ENTRY_min-no-sd_final_v7.jsonl`. Both read
+    `construction/pool_scores_r3.json`. Both are recorded until Ben names the file he uploaded; the changelog calls only v7
+    delivered.
+  - Week 5 Classic `DK_LATESWAP_wk5_classic_v10`, against the late-swap export it edits (`live/DKEntries_current_1914Z.csv`, 33 Entry
+    IDs), from `construction/pool_scores.json`. Ben's free entry is among the 33 and is recorded with its prior and rank.
+  - PHI@CHI `v4` and Week 4 afternoon `FINAL`, both `NO_PRIOR_SOURCE`. No dump was kept, and their assignment and portfolio
+    records state no prior.
+- DET@BUF and Week 3 Classic have slate folders but no committed delivered file, and no record.
+- The engine-era slates whose files were never committed under `data/inbox/slates/` have no record either. These include
+  NE@SEA, DAL@NYG, DEN@KC and Week 1; their copies at the repository root are gitignored duplicates.
 
 ## Standings corpus transport (Session 17, X2)
 
