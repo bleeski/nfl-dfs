@@ -4,6 +4,101 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-13: Session 72b -- the build record reads a run folder (the backfill split to Session 72c)
+
+Branch `claude/s72b-run-folder-record`, pull request #145, claimed at `b8f9115` (PR #144's merge, now in Session 72's close-out
+row). Ben approved the plan before any code; the `advisor` hook fails in cloud sessions, so fresh-context fable agents ran
+the three consults. A record only: nothing reaches `run-slate`, `prior_review` or a release truth (the three-exit rule does
+not apply), and every path stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- `entry_record.build_records(..., run_dir=, run_data=)`, `record_entries.py --run-dir outputs/<id> --run-data
+  data/runs/<id>`. The folder binds through the run's `input_hashes` and its pointer (new `delivery.read_pointer`).
+  `method` is by bytes: `ENGINE_FILE` when the file equals an output the run recorded writing, else `OPERATOR_FILE`. For the
+  review selection's file only, the record also carries the rung, the policy hash and each thesis. The market numbers come
+  only through the run's ledger, validated at its own clock. Every recorded path is rebased under the supplied folder.
+  Contract: `docs/DATA_CONTRACTS.md` § Per-Entry-ID build record.
+- `(LOCKED)` cells read to their exact IDs in the record only (`_cell_id`); `prefilled_cell_id` and V13 are untouched.
+- Registry codes `ENTRY_RECORD_RUN_INPUTS_DIFFER`, `ENTRY_RECORD_RUN_FOLDER_INVALID`, `ENTRY_RECORD_SOURCE_LEDGER_INVALID`.
+- `tests/run_slate_helper.py` (Session 56's `_run`, lifted, with the real projection producer, a deadline window and a v4
+  thesis policy as options); `tests/test_entry_record_run.py` (50 cases on four real `run-slate` runs: real projection,
+  rung 4, baseline only, v4 theses); `tests/test_entry_record_slates.py` (10 cases on committed bytes).
+- Session 72c's row, card, tracker card, and the tracker question `min-no-file`.
+
+**Changed, existing tests edited visibly.**
+- `tests/test_entry_record.py::test_a_roster_cell_without_an_exact_dk_id_is_refused_by_name[locked]`. It used `"Jared Goff
+  (44358497) (LOCKED)"`, which now reads to `44358497` (shown before the edit), so its cell is `"Jared Goff (LOCKED)"`: a
+  locked cell with no ID, still refused.
+- `tests/test_gate_registry.py` re-pins `REGISTRY_SHA256`, `c1d56386...4b4e6` to `96de3045...84cd` (and in the contract).
+- `tests/test_concentration_run_slate.py` imports the lifted run under its old names and drops two imports only it used.
+  No assertion changed; 22 passed in 84.37s after the lift.
+- **v1's text, narrowed before any record carried a method.** `does_not_establish` keeps `WHICH_RUN_BUILT_THE_FILE`
+  "unless `run.method` is `ENGINE_FILE`" (was "while null"), because an operator's file binds to the run by hashes alone.
+  No committed byte moves.
+- RUNBOOK § Rerun and finish and `working.md`: pass the run folders while they exist; a late-swap record takes none.
+
+**Decided, with the reason.**
+- **Two flags.** Both roots are configurable, and tests use other roots than a real run, so one root plus a run ID would
+  assume a layout.
+- **`read_pointer`, not the card's `read_latest`.** `read_latest` revalidates the pointer's absolute input paths, which no
+  moved folder has. The record re-checks the run ID, the input hashes and the bytes.
+- **The thesis from `by_lineup` first, not the card's "by Entry ID, never by roster".** `entries` is a readable form
+  rebuilt through the run's own assignment, so the operator's contest pass makes it stale. `by_lineup` is the claim of
+  record, keyed by the exact roster, "so it never goes stale" (`prior_review.py`, Sessions 23c and 67). It is the run's
+  own label for that lineup, never a thesis inferred from a roster. An edited row keeps `entries`' thesis (Session 66)
+  unless lineups moved: then it is a named null, where Session 66's check refuses the whole file.
+- **Method bound to the outputs the run recorded,** so an in-place edit of the run's own file is the operator's; rung,
+  policy and thesis only for the review selection's file, so a baseline never carries the ladder's.
+- **The split.** Code and tests reached 1,127 changed lines before the records against the plan's 1,000 trigger (estimate
+  720). The backfill moved to 72c with its research done: its eight records were written and tested here first, and the
+  72c card holds each slate's graded file, template, source and evidence.
+
+**Consults and review.**
+- **Plan consult.** It refuted three claims: a withheld review would have put its policy on a baseline; any matching CSV
+  on disk would read as `ENGINE_FILE`; and "no pointer nulls everything" was false. It also caught a `review`-named run
+  ID breaking a bare anchor, and that MIN@NO's v10 was never called delivered. All taken before code.
+- **Split consult.** SPLIT: the trigger names its action. Session 72 honoured it at 1,033, and MIN@NO waits on Ben.
+- **Reviewer.**
+  - **Blocking:** after the contest pass, an operator's file took a moved lineup's thesis by Entry ID. Fixed red-first:
+    the earlier code read the swapped rows as `('SEA_WIN_BIG', 'NE_WIN_BIG')` against `('NE_WIN_BIG', 'SEA_WIN_BIG')`.
+  - **Also taken:** the rung follows the review selection; an operator file keeps `WHICH_RUN_BUILT_THE_FILE`; a
+    non-folder refuses; a colon in a tail is outside the folder; `sNaN` refuses; the contract and RUNBOOK gaps closed; the
+    Windows-path test normalizes backslashes; MIN@NO no longer holds up 72c.
+  - **Not taken:** a pointer delivery-state check. A pointer is only written after revalidation, so it could never fire.
+- **Close-out consult.** NOT READY on wording. The thesis rule was credited to Session 66, not the claim of record, so
+  the docstring, contract, card and this entry were corrected. Also taken: the row names its test files; the 72c card
+  states MIN@NO's default; the claim is released.
+
+**Verification.**
+- **Real fixtures first** (keys and counts only). The stub's CSVs sit outside the run folder and its ledger cannot
+  validate. The real producer drives the Showdown `run-slate` (exit 0, `PRIOR_ONLY_REVIEW_EXPORT`, rung `DEFAULT`), and
+  its ledger binds NE 46.5/3.5 and SEA 43.5/-3.5. Rung 4 has a null policy. The baseline-only run ends
+  `DEADLINE_IMPROVEMENT_SKIPPED`. The v4 claim gives 6 Entry IDs across 3 theses.
+- **Red first:** `TypeError: build_records() got an unexpected keyword argument 'run_dir'`.
+- **Focused:** 119 passed. **Neighbors:** 533 passed in 73.26s before the review fixes; the touched files after them, 445
+  passed.
+- **Old against new** (`origin/main`'s three files in a scratch tree, no run folder). Of 12 committed delivered files, 11
+  are byte-identical in exit, stdout and record. Week 5 Classic's late-swap file refuses on the old copy (`"D'Andre Swift
+  (44391912) (LOCKED)"`) and records on the new, as intended. One real `run-slate` on each copy delivers
+  `4438264a...b7aa` both times.
+- **Mutation, on copies** (`nfl_dfs.__file__` checked). 41 of 41 killed before the review fixes (stopped for them), then
+  57 of 57 after, each by a named test.
+- **Full suite (Linux):** `3806 passed, 1 skipped in 1043.17s (0:17:23)` on `edc7744`. The skip is
+  `tests/test_cowork.py:120`, the Windows junction test. The close-out changed only `_theses`'s docstring in `src/`, and the
+  touched files passed after it (282).
+- **Final checks:** `doctor` `pass_status: true`; `git diff --check` clean; no protected path; `py_compile` clean; 0 CR
+  bytes in the ledgers.
+- **Size:** 1,546 changed lines against `origin/main`, ledgers included.
+
+**Left open.**
+- Session 72c (the backfill), and Ben's MIN@NO answer.
+- A Classic run's thesis is a named null.
+- `validate_source_ledger` checks sources against today's `sources.py`, so a later allowlist or parser change would
+  refuse an old run folder whole. No such folder is kept yet.
+
+**Would have made it better.** Budget about 2.5 test lines per source line for a module whose every null and refusal is
+named. This plan assumed 1.2 and measured 2.4, so the size trigger fired after the code, not at the plan.
+
 ### 2026-10-13: Session 72 -- the per-Entry-ID build record
 
 Branch `claude/s72-entry-build-record`, pull request #144, claimed at `83c3b8b` (PR #143's merge); PR #141's merge, `aa3c03c`,

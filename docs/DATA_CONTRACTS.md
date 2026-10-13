@@ -4925,10 +4925,12 @@ audit read `prefilled_cell_id` itself (V13). Each ID must be in the salary file,
     else `FILE_NOT_FROM_THE_REVIEW_SELECTION`, so a baseline never carries the ladder's rung. `final_rung` is
     `relaxation.final_rung`; `policy_sha256` is `relaxation.final_policy.normalized_sha256`. `thesis` comes from a
     selection report whose bytes are `prior_review_hashes.selection_report` and whose `normalized_policy_sha256` is the
-    final policy's, under Session 66's rule and never from a roster's shape: a lineup exactly as the run built it carries
-    the thesis the claim gives that lineup (`theses.by_lineup`, by `lineups.roster_canonical_key`), wherever it sits; an
-    edited row carries its Entry ID's (`theses.entries`), unless a lineup the run built sits under another Entry ID than
-    the claim's (the contest pass moved lineups), when an edited row's thesis is null, `LINEUPS_MOVED_BETWEEN_ENTRY_IDS`.
+    final policy's, read from the claim and never inferred from what a roster holds. A lineup exactly as the run built it
+    carries the thesis of the claim of record, `theses.by_lineup` (keyed by the exact roster,
+    `lineups.roster_canonical_key`; Sessions 23c and 67), wherever the contest pass moved it. An edited row carries its
+    Entry ID's from the readable `theses.entries` (Session 66: the hand passes keep each row's thesis), unless a lineup the
+    run built sits under another Entry ID than `entries` gives it, when an edited row's thesis is null,
+    `LINEUPS_MOVED_BETWEEN_ENTRY_IDS`. Session 66's check refuses such a file outright; the record names each row instead.
   - **Paths.** Every path the report records is an absolute path on the run's machine. Each is found again under the
     supplied folder: the tail after the last pair of segments (run ID, `prior_review` or `prior_review_attempt_<N>`),
     separators normalized, never the path as it stands and never a guessed attempt folder.

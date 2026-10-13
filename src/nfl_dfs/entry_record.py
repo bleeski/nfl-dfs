@@ -240,11 +240,13 @@ def _claim(from_review: bool, artifacts, hashes, run_id: str, data: Path, policy
 
 
 def _theses(claim, rosters: dict[str, tuple[str, ...] | None], slate: SlateContract) -> dict[str, tuple[str | None, str | None]]:
-    """Each Entry ID's (thesis, reason) under Session 66's rule, read from the claim and never from a roster's shape.
+    """Each Entry ID's (thesis, reason), read from the run's claim and never inferred from what a roster holds.
 
-    A lineup exactly as the run built it carries the thesis the claim gives that lineup, wherever it now sits. An edited
-    row keeps its Entry ID's thesis (the hand passes keep each row's thesis), unless a lineup the run built sits under
-    another Entry ID than the claim's: then Entry IDs were reassigned (the contest pass) and an edited row's is unknown.
+    The claim of record is `by_lineup`, keyed by the exact roster (Sessions 23c and 67): a lineup exactly as the run built
+    it carries that thesis wherever the contest pass moved it. `entries` is its readable form by Entry ID, which an edited
+    row keeps (the hand passes keep each row's thesis, Session 66), unless a lineup the run built sits under another Entry
+    ID than `entries` gives it: then Entry IDs were reassigned and an edited row's thesis is unknown. Session 66's check
+    refuses such a file outright; the record names each row instead.
     """
 
     entries, by_lineup = claim
