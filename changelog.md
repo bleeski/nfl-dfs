@@ -4,6 +4,108 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-13: Session 72 -- the per-Entry-ID build record
+
+Branch `claude/s72-entry-build-record`, pull request #144, claimed at `83c3b8b` (PR #143's merge); PR #141's merge, `aa3c03c`,
+is now recorded in Session 71c's close-out row. Ben approved the plan before any code. The `advisor` skill's hook fails in
+cloud sessions, so fresh-context fable agents ran both consults. A record only: nothing reaches `run-slate`, `prior_review` or
+a release truth, so the three-exit rule does not apply, and every path stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- `src/nfl_dfs/entry_record.py`: `build_records(salaries, entries, delivered, *, scores=None, portfolio=None)`,
+  `record_bytes`, `write_record`. One `nfl_entry_build_record_v1` row per template Entry ID, in template order, joined by
+  exact DK ID only. The salary file binds through the template's embedded player table; every cell goes through
+  `lineups.prefilled_cell_id` and every filled row through `lineups.validate_lineup`. The prior comes from one named source,
+  bound by SHA-256: `POOL_SCORES_SUM` (an `nfl_prior_pool_scores_v1` dump, summed in slot order) or `PORTFOLIO_RECORD` (the
+  construction scripts' own shape, both views agreeing, the Entry ID's figure taken as stated). A rostered person the dump
+  does not score is a null prior (`UNSCORED_DK_ID`), never 0. Structure from `portfolio_policy.structure_counts` and
+  `classic_portfolio.stack_value`, plus `team_split` and `offense_facing_rostered_dst`, which no rule function counts.
+  DraftKings `Q` flags, the later-window count, the stack game. Written once through `entry_history._write_once`.
+- `scripts/record_entries.py` (`--salaries --entries --file [--scores | --portfolio] --out`): exit 0 with
+  `{"rows", "sha256", "state"}`, exit 2 with `REFUSED <code>: <detail>` on stderr; an `--out` inside `data/runs/`,
+  `data/standings/` or `tests/fixtures/supplied/` is refused.
+- Registry family `entry_record` (`P`, stops `CERTIFICATION`), 11 codes, required by the scan in
+  `tests/test_gate_registry.py` for codes raised under `src/nfl_dfs/`.
+- `docs/DATA_CONTRACTS.md` § Per-Entry-ID build record: every field the card lists, each null reason, and the shapes Session
+  72b fills (`run.method`, `run.reasons`, `stack_game.market`), so v1 does not change when it does.
+- The four acceptance slates' records, `construction/entry_build_record.jsonl`: DET@CAR 28 rows (`9558b99b...8362`), ATL@NO
+  36 (`63056bcd...aa3c`), TB@DAL 28 (`07870d8a...8d18`), Week 4 Classic 39 (`1fc3e41b...7809`).
+- `tests/test_entry_record.py`: 59 cases. Session 72b's board row, card and tracker card; a note on Session 73's
+  card that method, rung and thesis are null on every committed slate.
+
+**Changed.**
+- `portfolio_policy.structural_bound_violations` reads its counts from the new `structure_counts`, so the record reads the
+  same rule and not a second copy. A pure refactor: the vacuous zero-QB rule, the violation order and the `KeyError` on an
+  unknown DK ID are kept. The proof is a scratch run, not a suite test: old (`origin/main`) and new over all 131 real rows
+  times a 2,160-bound grid plus the Classic bounds, 283,272 calls, 223,343 with a violation, the same digest
+  (`de49b890...8f14`); one real Showdown `run-slate` on each copy, the same exit, stage, rung and delivered bytes
+  (`4438264a...b7aa`).
+- One existing test edited as its own visible change: `tests/test_gate_registry.py` re-pins `REGISTRY_SHA256` from
+  `cb6a85b7...694c` to `c1d56386...4b4e6` for the new family (also in `docs/DATA_CONTRACTS.md`).
+- The procedure (`docs/RUNBOOK.md` § Rerun and finish, `docs/claude/working.md`): every `run-slate` passes `--run-id <id>`
+  and sets `NFL_DFS_DUMP_SCORES=data/runs/<id>/pool_scores.json` for that one command; the delivered run's dump is copied to
+  `construction/pool_scores_<id>.json`, never over an earlier copy; the slate's graded file is recorded at
+  `entry_build_record.jsonl`, an earlier delivered file at `entry_build_record.<file stem>.jsonl`.
+
+**Decided, with the reason.**
+- **Priors are each slate's committed source, named by hash.** TB@DAL's dump is the delivered run's (changelog 2026-10-08).
+  DET@CAR's `pool_scores.json` is a third run's (Session 70): the delivered run's own `scores_r2.json` has no schema and lacks
+  Brycen Tremayne, the value-add in 3 of 28 rows, while `pool_scores.json` agrees on all 24 shared IDs and reproduces the
+  hand pass's own record of `final_v5` (`final_v4_record.json`: 2,754.79, minimum 85.88) and is the file the hand pass loaded.
+  ATL@NO's names no producing run. The record claims the hash and nothing more.
+- **Week 4 takes the portfolio record's own figure**, which differs from a per-person re-sum over `scores_qbclean.json` by up
+  to 0.0005; re-summing would recompute a prior.
+- **A scored person the run's gates excluded keeps the dump's number**, named in `prior.excluded_dk_ids_rostered`: the sum is
+  still the dump's arithmetic and the exclusion is a gate decision. Only a person with no number at all is a null.
+- **The seam moved** from the backfill to the run-folder half (method by bytes, exit stage and rung, policy hash, thesis,
+  ledger-bound market numbers): separable code, and null on every committed slate because `data/runs/` and `outputs/` are not
+  tracked. Code, tests and docs then measured 1,033 changed lines against the plan's 1,000 rule, so the backfill of the
+  seven other committed slates moved too; each also needs its graded file and prior source settled first. Session 72b.
+- **Both readings of "against its own DST" are kept**: the 23e field (`offense_against_own_dst`, same team) and the card's
+  "offense facing" (`offense_facing_rostered_dst`, opponent) are opposite correlations.
+- **Bring-backs and RB with his own DST need exactly one QB**: `stack_value` reads the roster's first QB, so a 0- or 2-QB
+  Showdown row writes null, `STACK_RULE_NEEDS_ONE_QB`.
+- **`Complete`.** The acceptance runs on committed bytes and needs nothing from Ben.
+- **Not taken:** renaming the acceptance test (Ben's brief named it; its docstring says what it asserts); a procedure that
+  reruns a request with a gated person made selectable to score him (it would weaken a gate); a test that pins the market
+  null against a ledger (no ledger is reachable without a run folder; Session 72b tests it).
+
+**Reviews and consults.**
+- **The plan consult** (six claims). Refuted my draft's DET@CAR choice of `scores_r2.json` (three priors would equal no
+  committed record); refuted the backfill as the seam; named the field `offense_against_own_dst`; the procedure needs both
+  run folders absent. All taken. It also said to refuse an excluded person; I chose a number then, and the close-out consult
+  refined it (above).
+- **The close-out consult** (six claims) and **the reviewer** (nine checks) both found v1 could not hold what Session 72b
+  writes (blocking): declared `run.reasons`, `run.method` and `stack_game.market` now, records regenerated. The reviewer also
+  found `--portfolio` read an unversioned file (blocking): the construction scripts' shape is now required, both views
+  agreeing. Also taken: the excluded split; the dump copied by run ID; the variable set per run; the `--out` guard; an
+  independent oracle for the structure counts; each mutation case asserts its own refusal code; the excluded IDs checked
+  against the salary file; the naming rule for a late-swap file; §1's claim command (the claim commit had left `take S72`
+  under Session 18).
+- The four records were deleted and rewritten by the corrected builder before merge; no version of them reached `main`.
+
+**Verification.**
+- Inputs, by the package's own parsers: 28 + 36 + 28 + 39 = 131 Entry IDs, every cell an exact DK ID in its salary file,
+  every template's player table equal to its salary file's IDs (100, 112, 104, 629).
+- Red first: `ModuleNotFoundError: No module named 'nfl_dfs.entry_record'`.
+- `sh ./nfl.sh test tests/test_entry_record.py -x --tb=short`: `59 passed in 4.76s`. Neighbors (every test file importing
+  `portfolio_policy`, `portfolio_enforcement` or `classic_portfolio_policy`, the QA, registry, boundary, queue and tracker
+  tests): `1362 passed in 649.95s (0:10:49)`, before the review fixes.
+- Mutation pass on a scratch copy (`PYTHONPATH` into the copy, `nfl_dfs.__file__` checked): first pass 37 of 43 killed, the
+  six survivors (the Contest ID and header checks, the schema check, a repeated portfolio Entry ID, non-finite and boolean
+  scores) each given a case and then killed; after the review fixes 51 of 51 killed. Not mutated: the salary file's re-hash
+  after parsing, which only a file changed mid-read can trip.
+- Full suite on Linux: `3746 passed, 1 skipped in 866.84s (0:14:26)`, on the tree of `175857e` (the next commit changed
+  only two placeholder words in two ledgers while it ran; the skip is the Windows junction test). `doctor`
+  `pass_status: true`; `git diff --check` clean; no protected path touched; `py_compile` of the script and both modules;
+  0 CR bytes in the ledgers and the records.
+
+**Left open.** The run-folder half and the rest of the backfill (Session 72b). A DraftKings late-swap export with
+`Name (ID) (LOCKED)` cells is refused under the V13 rule (Week 5 Classic's `DK_LATESWAP_wk5_classic_v10.csv`); 72b reads them.
+
+**Would have made it better.** The claim commit rewrote §1's session name but not its `take` command and branch, and
+`test_roadmap_queue.py` checks only the name; a test that the `take` argument matches the named session would catch it.
+
 ### 2026-10-12: BUF@LAR Showdown (Monday night, 32 entries; a lineup run, not a roadmap session)
 
 Salaries `348541c46998e337a3fcd1e336eb163610a678eee29f95e6b3131db51901f719`, entries
