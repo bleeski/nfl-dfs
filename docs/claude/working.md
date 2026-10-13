@@ -117,11 +117,11 @@ is `docs/tracker/tracker.html`.
 
 ## Every slate run: its own priors and its build record (Session 72)
 
-Every `run-slate` passes `--run-id <id>` and sets `NFL_DFS_DUMP_SCORES=data/runs/<id>/pool_scores.json`, so each run keeps its
-own per-person priors (neither `data/runs/<id>` nor `outputs/<id>` may exist first; intake makes the folder before selection
-writes). DET@CAR's committed dump came from a third run, not the delivered one; a folder per run stops that. Copy the delivered
-run's dump to `<construction>/pool_scores.json` for the hand passes and the commit. After delivery, record the file once with
-`scripts/record_entries.py` (`docs/RUNBOOK.md` § Rerun and finish).
+Every `run-slate` passes `--run-id <id>` and sets `NFL_DFS_DUMP_SCORES=data/runs/<id>/pool_scores.json` for that command alone
+(clear it after on Windows), so each run keeps its own per-person priors (neither `data/runs/<id>` nor `outputs/<id>` may exist
+first). DET@CAR's committed dump came from a third run, not the delivered one; a folder per run stops that. Copy the delivered
+run's dump to `<construction>/pool_scores_<id>.json` (never over an earlier copy) and point the hand passes at it. Once the
+graded file is settled, record it with `scripts/record_entries.py` (`docs/RUNBOOK.md` § Rerun and finish).
 
 ## Showdown judgment pass (Ben, 2026-10-01; second correction)
 
@@ -171,7 +171,7 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   Then search whole-lineup swaps between Entry IDs that worsen no contest measure. Record: DET@CAR,
   `data/inbox/slates/det-car-sd-2026-10-04/construction/` (`DK_REVIEW_ENTRY_det-car-sd_final_v4_record.json`).
   The fastest route (TB@DAL, 2026-10-08, about four minutes end to end): rerun with `--request`, `--run-id <id>` and
-  `NFL_DFS_DUMP_SCORES=data/runs/<id>/pool_scores.json`, copied to `<construction>/pool_scores.json` (the practice-squad
+  `NFL_DFS_DUMP_SCORES=data/runs/<id>/pool_scores.json`, copied to `<construction>/pool_scores_<id>.json` (the practice-squad
   `--exclude` list rides the same rerun), run
   `data/inbox/slates/tb-dal-sd-2026-10-08/construction/ceiling_pass.py` on the rerun's file (edit its `STARTING_QB` map), then
   `scripts/diversify_showdown_contests.py`, then QA. Every row keeps both teams: that pass's first version had no such check, one

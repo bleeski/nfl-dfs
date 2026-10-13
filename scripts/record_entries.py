@@ -18,11 +18,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from nfl_dfs.entry_record import EntryRecordRefused, build_records, record_bytes, write_record
 from nfl_dfs.hashing import sha256_bytes
 
 EXIT_OK, EXIT_REFUSED = 0, 2
+REPO_ROOT = Path(__file__).resolve().parent.parent
+# Immutable snapshots (CLAUDE.md): a record never lands inside one.
+SNAPSHOT_ROOTS = ("data/runs", "data/standings", "tests/fixtures/supplied")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,6 +39,10 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--portfolio", help="a portfolio record with each Entry ID's roster and prior_points")
     parser.add_argument("--out", required=True, help="where the record is written, once")
     args = parser.parse_args(argv)
+    out = Path(args.out).resolve()
+    for root in SNAPSHOT_ROOTS:
+        if out.is_relative_to(REPO_ROOT / root):
+            parser.error(f"--out may not be inside {root}/ (immutable snapshots); write beside the slate's construction records")
     try:
         rows = build_records(args.salaries, args.entries, args.file, scores=args.scores, portfolio=args.portfolio)
         data = record_bytes(rows)

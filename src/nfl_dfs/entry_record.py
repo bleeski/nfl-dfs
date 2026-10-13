@@ -88,35 +88,46 @@ def _scores(raw: bytes, salary_ids: set[str]) -> tuple[dict[str, float], set[str
             or not isinstance(excluded, list) or not isinstance(version, str)):
         raise EntryRecordRefused(
             "ENTRY_RECORD_PRIOR_SOURCE_INVALID", "the scores file needs by_dk_id (finite numbers), excluded_dk_ids and score_version")
-    outside = sorted(set(map(str, by_dk_id)) - salary_ids)
+    outside = sorted((set(map(str, by_dk_id)) | set(map(str, excluded))) - salary_ids)
     if outside:
         raise EntryRecordRefused(
-            "ENTRY_RECORD_SALARY_MISMATCH", f"{len(outside)} scored DK IDs are not in the salary file, first {outside[0]}")
+            "ENTRY_RECORD_SALARY_MISMATCH", f"{len(outside)} DK IDs the dump names are not in the salary file, first {outside[0]}")
     return {str(key): float(value) for key, value in by_dk_id.items()}, {str(value) for value in excluded}, version
 
 
 def _portfolio(raw: bytes, salary_ids: set[str], filled: dict[str, tuple[str, ...]]) -> dict[str, float]:
-    """Each filled Entry ID's own `prior_points` from a portfolio record whose rosters are the file's, as sets."""
+    """Each filled Entry ID's own `prior_points` from a portfolio record whose rosters are the file's, as sets.
+
+    The record declares no schema or score version, so only the construction scripts' own shape is read
+    (`scripts/build_thesis_portfolio.py`, `scripts/swap_inactives.py`): `lineups` with `entry_id`, `roster` and
+    `prior_points`, beside `assignments_by_entry_id`, the two views agreeing Entry ID by Entry ID.
+    """
 
     document = _json(raw)
     lineups = document.get("lineups") if isinstance(document, dict) else None
-    if not isinstance(lineups, list):
-        raise EntryRecordRefused("ENTRY_RECORD_PRIOR_SOURCE_INVALID", "the portfolio record has no lineups list")
+    assignments = document.get("assignments_by_entry_id") if isinstance(document, dict) else None
+    if not isinstance(lineups, list) or not isinstance(assignments, dict):
+        raise EntryRecordRefused(
+            "ENTRY_RECORD_PRIOR_SOURCE_INVALID", "the portfolio record needs lineups and assignments_by_entry_id")
     figures: dict[str, tuple[frozenset[str], float]] = {}
     for item in lineups:
         entry = item.get("entry_id") if isinstance(item, dict) else None
         roster = item.get("roster") if isinstance(item, dict) else None
         points = item.get("prior_points") if isinstance(item, dict) else None
         if (not isinstance(entry, str) or entry in figures or not isinstance(roster, list)
-                or not all(isinstance(dk_id, str) for dk_id in roster) or not _finite(points)):
+                or not all(isinstance(dk_id, str) for dk_id in roster) or len(set(roster)) != len(roster)
+                or not _finite(points)):
             raise EntryRecordRefused(
                 "ENTRY_RECORD_PRIOR_SOURCE_INVALID", f"a portfolio lineup is malformed or repeated: {entry!r}")
         outside = sorted(set(roster) - salary_ids)
         if outside:
             raise EntryRecordRefused(
                 "ENTRY_RECORD_SALARY_MISMATCH", f"Entry ID {entry} in the portfolio record holds {outside[0]}, not in the salary file")
+        if not isinstance(assignments.get(entry), list) or set(assignments[entry]) != set(roster):
+            raise EntryRecordRefused(
+                "ENTRY_RECORD_PRIOR_SOURCE_INVALID", f"Entry ID {entry}'s lineup and assignment disagree in the portfolio record")
         figures[entry] = (frozenset(roster), float(points))
-    if set(figures) != set(filled):
+    if set(figures) != set(filled) or set(assignments) != set(figures):
         raise EntryRecordRefused(
             "ENTRY_RECORD_PRIOR_SOURCE_INVALID", "the portfolio record's Entry IDs are not the file's filled Entry IDs")
     differs = sorted(entry for entry, roster in filled.items() if figures[entry][0] != frozenset(roster))
@@ -262,11 +273,14 @@ def build_records(
             "mode": slate.mode.value,
             "hashes": dict(hashes),
             "salary_binding": "ENTRIES_POOL_MATCH" if pool is not None else "ENTRIES_POOL_ABSENT",
-            "run": {"run_id": None, "method": None, "policy_sha256": None, "thesis": None, "reason": NO_RUN_FOLDER},
+            # Each run field null with its own reason; Session 72b fills the shapes the contract declares.
+            "run": {"run_id": None, "method": None, "policy_sha256": None, "thesis": None,
+                    "reasons": {field: NO_RUN_FOLDER for field in ("run_id", "method", "policy_sha256", "thesis")}},
             "rank": None,
             "does_not_establish": list(DOES_NOT_ESTABLISH),
         }
-        prior = {"points": None, "score_version": version, "source": kind, "unscored_dk_ids": [], "reason": None}
+        prior = {"points": None, "score_version": version, "source": kind, "unscored_dk_ids": [],
+                 "excluded_dk_ids_rostered": [], "reason": None}
         if roster is None:
             prior["reason"] = "UNFILLED"
             rows.append({**row, "roster": None, "captain_dk_id": None, "prior": prior, "salary_left": None,
@@ -275,7 +289,10 @@ def build_records(
             continue
         players = [by_id[dk_id] for dk_id in roster]
         if kind == "POOL_SCORES_SUM":
-            unscored = [dk_id for dk_id in roster if dk_id not in score_by_id or dk_id in excluded]
+            # No number for a person the dump does not score; one the run's gates excluded keeps the dump's own number,
+            # named, because the sum is still the dump's arithmetic and the exclusion is a gate decision.
+            unscored = [dk_id for dk_id in roster if dk_id not in score_by_id]
+            prior["excluded_dk_ids_rostered"] = [dk_id for dk_id in roster if dk_id in excluded]
             if unscored:
                 prior["unscored_dk_ids"] = unscored
                 prior["reason"] = "UNSCORED_DK_ID"
