@@ -292,8 +292,13 @@ def test_too_few_rows_and_zero_variance_are_named(tmp_path):
 
 
 def test_paid_rows_are_a_second_population_and_the_pooled_mean_skips_undefined_slates(tmp_path):
-    records = rj.load_records(_ab(tmp_path))
-    report, _ = rj.build_join(_parse(*A_HISTORY, *B_HISTORY), records, source_sha256=ZERO_SHA)
+    # A third slate with two joined rows has no rho (FEWER_THAN_3): it is left out of the mean, never counted as a slate.
+    two = [_record_row(f"93100000{i}", "300000012", float(i)) for i in range(1, 3)]
+    records = rj.load_records(_slates(tmp_path, {"a-sd": A_RECORD, "b-classic": B_RECORD, "c-sd": two}))
+    c_history = [_entry(row["entry_id"], "300000012", str(30 + i), 3 + i, date="2026-10-07 20:20:00")
+                 for i, row in enumerate(two)]
+    report, _ = rj.build_join(_parse(*A_HISTORY, *B_HISTORY, *c_history), records, source_sha256=ZERO_SHA)
+    assert _check(report, "c-sd")["all"] == {"n": 2, "rho": None, "note": "FEWER_THAN_3"}
     a = _check(report, "a-sd")
     expected_all = player_grading.spearman([10, 20, 30, 40, 50], [40, 30, 60, 50, 90])[0]
     expected_paid = player_grading.spearman([10, 20, 30, 40], [40, 30, 60, 50])[0]
@@ -563,6 +568,22 @@ def test_a_write_failure_is_named_by_its_exception_class(tmp_path, monkeypatch):
     assert outcome.status == "WRITE_FAILED" and outcome.exit_code == 2
     assert outcome.problems == ("RESULTS_JOIN_WRITE_FAILED:file=report:exception=PermissionError",
                                 "RESULTS_JOIN_WRITE_FAILED:file=a-sd:exception=PermissionError")
+
+
+def test_a_refused_file_outranks_a_failed_write_in_the_status(tmp_path, monkeypatch):
+    slates = _ab(tmp_path)
+    (slates / "a-sd" / "construction" / rj.RESULTS_NAME).write_bytes(b"not json\n")
+    root, sha = _intake(tmp_path, _history(*A_HISTORY))
+
+    def no_link(source, target):
+        raise PermissionError("held")
+
+    monkeypatch.setattr(entry_history.os, "link", no_link)
+    outcome = rj.run_results_join(sha, root, slates)
+    assert (outcome.files["report"]["state"], outcome.files["slates"]["a-sd"]["state"]) == ("WRITE_FAILED", "REFUSED")
+    assert outcome.status == "REFUSED" and outcome.exit_code == 2
+    assert outcome.problems == ("RESULTS_JOIN_WRITE_FAILED:file=report:exception=PermissionError",
+                                "RESULTS_JOIN_ARTIFACT_CONFLICT:file=a-sd")
 
 
 # ------------------------------------------------------------------------------------------ boundaries
