@@ -3556,7 +3556,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `cb6a85b7e34608912fb9981d79d54fa43f9fd14da1aec54e327a3ce668f7694c`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `c1d56386c95e4278685906a83cf164e3e9bbcc7d371fcf51d41bc35a0964b4e6`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4850,6 +4850,65 @@ rounded once), `method`, `interval` {`low`, `high`}, `standard_error`, `mde`, `r
   one machine write the same bytes. The interval and standard error use only correctly rounded operations; the MDE's
   quantile calls `atan`, `sin` and `cos`, which libm does not round correctly, so the MDE alone may differ in its last
   place across platforms.
+
+## Per-Entry-ID build record, nfl_entry_build_record_v1 (Session 72)
+
+`python scripts/record_entries.py --salaries <csv> --entries <DKEntries.csv> --file <delivered.csv> (--scores <dump> |
+--portfolio <record>) --out data/inbox/slates/<slug>/construction/entry_build_record.jsonl` (`entry_record.build_records`,
+`record_bytes`, `write_record`). One row per Entry ID of the template, in template order, for any delivered file, an engine
+output or a hand-edited one. It states what was built and what the priors said; it certifies nothing, reaches no `run-slate`
+stage, `prior_review` exit or release truth, and carries no contest name, entry fee or winnings. The salary file's
+average-points column is never read (`SalaryPlayer` has no field for it). Written once through the intake's write-once path
+(`entry_history._write_once`): the same bytes already there is `ALREADY_PRESENT`; another file at the name is never replaced.
+
+**Bytes.** One JSON object per line, `hashing.canonical_json_bytes` (sorted keys, no spaces, UTF-8) plus LF; floats as
+Python writes them. Two runs on the same bytes write the same record.
+
+**Joins.** Exact DraftKings IDs only. The salary file binds through the template's embedded player table
+(`dk.embedded_pool_ids`), whose IDs must equal the salary file's (`salary_binding: ENTRIES_POOL_MATCH`); a template with no
+table is `ENTRIES_POOL_ABSENT`, named, not refused. Each roster cell is read by `lineups.prefilled_cell_id` (a bare ID or text
+ending `(ID)`), must be in the salary file, and each filled row must pass `lineups.validate_lineup`.
+
+**Fields.** `schema_version`; `entry_id`, `contest_id` (the template's); `mode` (`CLASSIC` or `SHOWDOWN`); `hashes`
+{`salary_sha256`, `entries_sha256`, `file_sha256`, `prior_source_sha256` (null with no source)}; `salary_binding`; `run`
+{`run_id`, `method`, `policy_sha256`, `thesis`, `reason`}; `roster` (exact DK IDs in slot order, Captain first in Showdown);
+`captain_dk_id` (Showdown, else null); `prior` {`points`, `score_version`, `source`, `unscored_dk_ids`, `reason`}; `rank`;
+`salary_left`; `structure`; `dk_status` {`flags` (DK ID to the salary file's non-blank `Status`), `q_count`};
+`later_window_count`; `stack_game` {`game_id`, `market`, `market_reason`}; `does_not_establish`.
+- **Prior.** `POOL_SCORES_SUM` (`--scores`, an `nfl_prior_pool_scores_v1` dump such as `NFL_DFS_DUMP_SCORES` writes): the sum,
+  in slot order, of the dump's `by_dk_id` over the row's DK IDs, the engine's own lineup arithmetic; `score_version` from the
+  dump. A row holding a DK ID the dump does not score, or lists in `excluded_dk_ids`, has `points: null`,
+  `reason: UNSCORED_DK_ID` and those IDs in `unscored_dk_ids`: never 0. `PORTFOLIO_RECORD` (`--portfolio`, a record whose
+  `lineups` carry `entry_id`, `roster` and `prior_points`): that Entry ID's own figure, as stated, after its roster equals the
+  file's as a set; `score_version` null. No source: `NO_PRIOR_SOURCE`. An Entry ID whose cells are all blank: `UNFILLED`, with
+  `roster`, `captain_dk_id`, `salary_left`, `structure`, `dk_status`, `later_window_count` and `stack_game.game_id` null.
+- **Rank.** 1 + the number of the file's rows with a strictly higher prior (ties share a rank); null without a prior.
+- **Structure.** From the Session 23 rule (`portfolio_policy.structure_counts`, the counts its bound check reads):
+  `qb_count`, `pass_catchers_with_rostered_qb` (one count per rostered QB, in roster order), `kicker_count`, `dst_count`,
+  `offense_against_own_dst` (non-DST people on a rostered DST's own team), and `salary_left` (the cap minus the roster's
+  salary). From the Classic stack rule (`classic_portfolio.stack_value`), on a row with exactly one QB: `bring_backs`
+  (`QB_BRINGBACK`) and `rb_with_own_dst` (`RB_DST_PAIR`); on a Showdown row with none or two, both null and
+  `stack_rule_reason: STACK_RULE_NEEDS_ONE_QB` (the rule reads the roster's first QB). Defined here, because no rule
+  function counts them: `team_split` (people per team) and `offense_facing_rostered_dst` (non-DST people on a rostered DST's
+  opponent, the Classic QA's `dst_vs_own_skill`).
+- **Later window.** Rostered people whose game locks after the salary file's earliest lock (the `late_swap_watch` rule).
+- **Run folder (Session 72b).** `run` and `stack_game.market` are null with `RUN_FOLDER_NOT_SUPPLIED` in this version, which
+  reads no run folder; that is also the state of every committed slate (`data/runs/` and `outputs/` are not tracked).
+  Session 72b fills them from a run folder without changing a field: `method` (`ENGINE_FILE` with the exit stage, the final
+  rung and the producer when the file's bytes equal a CSV the run wrote, else `OPERATOR_FILE`), the final policy's hash, the
+  thesis the run's claim gives the Entry ID, and the stack game's market total and spread from the run's ledger-bound
+  `team_projections.csv`. `stack_game.game_id` is filled now: the QB's game (Classic) or the game (Showdown).
+
+**Refusals** (registry family `entry_record`, `P`, stops `CERTIFICATION`; a refusal writes nothing):
+`ENTRY_RECORD_INPUT_UNREADABLE` (an input missing, unreadable or not DraftKings' shape); `ENTRY_RECORD_MODE_MISMATCH`
+(template, salary file and file not all Classic or all Showdown); `ENTRY_RECORD_SALARY_MISMATCH` (the template's player table
+is not the salary file's IDs, or the prior source names an ID outside it); `ENTRY_RECORD_ENTRY_ID_NOT_IN_TEMPLATE`;
+`ENTRY_RECORD_FILE_GEOMETRY_DIFFERS` (another header, a template Entry ID missing from the file, a Contest ID that differs);
+`ENTRY_RECORD_CELL_NOT_AN_EXACT_DK_ID` (a name, a `(LOCKED)` suffix, a blank cell in a filled row);
+`ENTRY_RECORD_DK_ID_NOT_IN_SALARY`; `ENTRY_RECORD_LINEUP_INVALID` (the validator's errors);
+`ENTRY_RECORD_PRIOR_SOURCE_INVALID` (not JSON, another schema, both sources, a portfolio record whose Entry IDs or rosters
+are not the file's); `ENTRY_RECORD_ARTIFACT_CONFLICT`; `ENTRY_RECORD_WRITE_FAILED`. The script prints
+`REFUSED <code>: <detail>` on stderr and exits 2; otherwise one JSON line (`rows`, `state`, `sha256`) and exit 0.
 
 ## Standings corpus transport (Session 17, X2)
 

@@ -237,6 +237,11 @@
       "provenance": {"kind": "CONTRACT", "ref": "DraftKings entry history, nfl_dk_entry_history_v1 (Session 69)"},
       "covers": "The operator's DraftKings entry-history export was refused whole: a structural fault on any row, a value fault on an NFL row or in a contest with an NFL row, or no NFL row; or its intake could not read it, found another file holding the snapshot's or an artifact's name (never overwritten), or could not write. It stops a results record, never a lineup file."
     },
+    "entry_record": {
+      "class": "P", "stops": "CERTIFICATION",
+      "provenance": {"kind": "CONTRACT", "ref": "Per-Entry-ID build record, nfl_entry_build_record_v1 (Session 72)"},
+      "covers": "A per-Entry-ID build record was refused whole: an input unreadable or not in DraftKings' shape, a Classic/Showdown mismatch, a salary file the entries template or the prior source does not bind, an Entry ID outside the template or a template row missing from the file, a roster cell without an exact DraftKings ID of the salary file, an illegal lineup, a prior source that is unreadable, of another schema or disagrees with the file, or another file holding the record's name (never overwritten); or the record could not be written. It stops a build record, never a lineup file."
+    },
     "player_grading": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "Player grading, nfl_player_grading_v1 (Session 70)"},
@@ -848,6 +853,17 @@
     "ENTRY_INPUT_CHANGED_DURING_CERTIFICATION": "delivered_bytes",
     "ENTRY_PREFILLED_LINEUP_REPEATED": "distinct_lineups",
     "ENTRY_PREFILLED_ROSTER_UNRESOLVED": "entry_rows",
+    "ENTRY_RECORD_ARTIFACT_CONFLICT": "entry_record",
+    "ENTRY_RECORD_CELL_NOT_AN_EXACT_DK_ID": "entry_record",
+    "ENTRY_RECORD_DK_ID_NOT_IN_SALARY": "entry_record",
+    "ENTRY_RECORD_ENTRY_ID_NOT_IN_TEMPLATE": "entry_record",
+    "ENTRY_RECORD_FILE_GEOMETRY_DIFFERS": "entry_record",
+    "ENTRY_RECORD_INPUT_UNREADABLE": "entry_record",
+    "ENTRY_RECORD_LINEUP_INVALID": "entry_record",
+    "ENTRY_RECORD_MODE_MISMATCH": "entry_record",
+    "ENTRY_RECORD_PRIOR_SOURCE_INVALID": "entry_record",
+    "ENTRY_RECORD_SALARY_MISMATCH": "entry_record",
+    "ENTRY_RECORD_WRITE_FAILED": "entry_record",
     "ENTRY_ROW_NARROWER_THAN_ROSTER": "delivered_bytes",
     "ENTRY_ROW_PARTLY_PREFILLED": "entry_rows",
     "ENTRY_SOURCE_COVERAGE_INCOMPLETE": "entry_authority",

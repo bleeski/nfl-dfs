@@ -870,6 +870,21 @@ selects exact Entry-ID assignments, runs quantitative and REFEREE QA, and then
 attempts certification. One run supports exactly one Contest ID and one entry
 fee; split a multi-contest DraftKings export into separate immutable runs.
 
+**Keep the run's priors and record the delivered file (Session 72).** Every `run-slate` passes `--run-id <id>` and sets
+`NFL_DFS_DUMP_SCORES=data/runs/<id>/pool_scores.json`, so the run folder keeps its own per-person priors (neither
+`data/runs/<id>` nor `outputs/<id>` may exist before the run; intake creates the folder before selection writes the dump).
+Copy the delivered run's dump to the slate's `construction/pool_scores.json` when its files are committed. Once the file is
+delivered, an engine output or a hand-edited one, record it:
+
+```sh
+python scripts/record_entries.py --salaries <DKSalaries.csv> --entries <DKEntries.csv> --file <delivered.csv> \
+  --scores data/runs/<id>/pool_scores.json --out data/inbox/slates/<slug>/construction/entry_build_record.jsonl
+```
+
+Use `--portfolio <record.json>` instead of `--scores` when a Classic portfolio record carries each Entry ID's prior. One row
+per Entry ID (`nfl_entry_build_record_v1` in `docs/DATA_CONTRACTS.md`), written once; a late-swap file is a second delivered
+file and takes another name. It certifies nothing.
+
 A lineup run ends at its handoff (Ben, 2026-10-08). A lineup run never starts the
 post-merge routine: no next prompt, sync check, branch cleanup or archive, and no
 `Session close:` line in a pull request it opens. See `.claude/rules/slate-operation.md`.
