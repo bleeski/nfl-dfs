@@ -3556,7 +3556,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `c1d56386c95e4278685906a83cf164e3e9bbcc7d371fcf51d41bc35a0964b4e6`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `96de304566501513940e8cb0556a9400c604c782c0e63a59926fad1f038a84cd`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4854,8 +4854,8 @@ rounded once), `method`, `interval` {`low`, `high`}, `standard_error`, `mde`, `r
 ## Per-Entry-ID build record, nfl_entry_build_record_v1 (Session 72)
 
 `python scripts/record_entries.py --salaries <csv> --entries <DKEntries.csv> --file <delivered.csv> (--scores <dump> |
---portfolio <record>) --out data/inbox/slates/<slug>/construction/entry_build_record.jsonl` (`entry_record.build_records`,
-`record_bytes`, `write_record`). One row per Entry ID of the template, in template order, for any delivered file, an engine
+--portfolio <record>) [--run-dir outputs/<id> [--run-data data/runs/<id>]] --out
+data/inbox/slates/<slug>/construction/entry_build_record.jsonl` (`entry_record.build_records`, `record_bytes`, `write_record`). One row per Entry ID of the template, in template order, for any delivered file, an engine
 output or a hand-edited one. It states what was built and what the priors said; it certifies nothing, reaches no `run-slate`
 stage, `prior_review` exit or release truth, and carries no contest name, entry fee or winnings. The salary file's
 average-points column is never read (`SalaryPlayer` has no field for it). Written once through the intake's write-once path
@@ -4873,7 +4873,11 @@ Python writes them. Two runs on the same bytes write the same record.
 (`dk.embedded_pool_ids`), whose IDs must equal the salary file's (`salary_binding: ENTRIES_POOL_MATCH`); a template with no
 table is `ENTRIES_POOL_ABSENT`, named, not refused, and then another slate's salary file surfaces as
 `ENTRY_RECORD_DK_ID_NOT_IN_SALARY`. Each roster cell is read by `lineups.prefilled_cell_id` (a bare ID or text ending
-`(ID)`), must be in the salary file, and each filled row must pass `lineups.validate_lineup`.
+`(ID)`), after one trailing `(LOCKED)` is stripped (Session 72b: DraftKings' late-swap export writes a started player as
+`Name (ID) (LOCKED)`, and the ID before the suffix is exact). Only this record strips it; the governed late swap and the byte
+audit read `prefilled_cell_id` itself (V13). Each ID must be in the salary file, and each filled row must pass
+`lineups.validate_lineup`. A late-swap file edited in place is recorded against the DraftKings export it edits, its template
+(every Entry ID on it, an entry the engine never built included).
 
 **Fields.** `schema_version`; `entry_id`, `contest_id` (the template's); `mode` (`CLASSIC` or `SHOWDOWN`); `hashes`
 {`salary_sha256`, `entries_sha256`, `file_sha256`, `prior_source_sha256` (null with no source)}; `salary_binding`; `run`;
@@ -4904,14 +4908,44 @@ table is `ENTRIES_POOL_ABSENT`, named, not refused, and then another slate's sal
 - **Later window.** Rostered people whose game locks after the salary file's earliest lock (the `late_swap_watch` rule).
 - **Run** {`run_id`, `method`, `policy_sha256`, `thesis`, `reasons`}. `reasons` maps each null field to its reason; a filled
   field has no entry. `method` is null or {`kind` (`ENGINE_FILE` or `OPERATOR_FILE`), `stage`, `final_rung`, `producer`,
-  `run_file` (a POSIX path relative to the run's output folder)}, each of the last four a string or null. This version reads
-  no run folder, so all four fields are null with `RUN_FOLDER_NOT_SUPPLIED`, the state of every committed slate
-  (`data/runs/` and `outputs/` are not tracked). Session 72b fills them: `ENGINE_FILE` when the file's bytes equal a CSV the
-  run wrote, else `OPERATOR_FILE`; the final policy's hash; the thesis the run's claim gives the Entry ID.
+  `run_file` (a POSIX path relative to the run's output folder)}, each of the last four a string or null. Without a run
+  folder all four fields are null with `RUN_FOLDER_NOT_SUPPLIED`, the state of every committed slate (`data/runs/` and
+  `outputs/` are not tracked). With one (Session 72b; `--run-dir` the output folder, `--run-data` the run-data folder):
+  - **Binding.** The supplied salary and entries SHA-256 must be among the run report's `input_hashes`, and equal the
+    pointer's (`LATEST_DELIVERABLE.json`, read through `delivery.read_pointer`, which does not revalidate the absolute input
+    paths a moved folder no longer has), else `ENTRY_RECORD_RUN_INPUTS_DIFFER`. `run_id` is the report's own.
+  - **`method`.** `ENGINE_FILE` when the file's bytes equal a CSV in the output folder whose bytes are an output the run
+    recorded writing (the pointer's file, `bulk_entry_sha256`, the baseline's `sha256`); else `OPERATOR_FILE`, so an
+    in-place edit of the run's own file is the operator's. `stage` (the report's) and `final_rung` (`relaxation.final_rung`)
+    are the supplied run's own for either kind. `run_file` is the matching file (the pointer's when several match);
+    `producer` is the pointer's only when the match is the pointer's file. A baseline's bytes are the baseline, never the
+    improvement, whatever the pointer names.
+  - **`policy_sha256` and `thesis` describe the review's selection.** They fill only for the review's own CSV
+    (`bulk_entry_sha256`) or an operator file after a run whose pointer names it (the hand passes start from it); else
+    `FILE_NOT_FROM_THE_REVIEW_SELECTION`. `policy_sha256` is `relaxation.final_policy.normalized_sha256`. `thesis` is
+    `selection.portfolio_policy.theses.entries[<Entry ID>]` from a selection report whose bytes are
+    `prior_review_hashes.selection_report` and whose `normalized_policy_sha256` is the final policy's, read by Entry ID,
+    never by roster (Session 66).
+  - **Paths.** Every path the report records is an absolute path on the run's machine. Each is found again under the
+    supplied folder: the tail after the last pair of segments (run ID, `prior_review` or `prior_review_attempt_<N>`),
+    separators normalized, never the path as it stands and never a guessed attempt folder.
+  - **`reasons`** names every null run field, and the null members of `method` under dotted keys (`method.stage`,
+    `method.final_rung`, `method.producer`, `method.run_file`). The vocabulary: `RUN_FOLDER_NOT_SUPPLIED`,
+    `RUN_REPORT_NOT_FOUND` (no `cowork_run.json`; every field), `RUN_DATA_NOT_SUPPLIED`, `STAGE_NOT_RECORDED`,
+    `RELAXATION_NOT_RECORDED`, `DELIVERY_POINTER_NOT_FOUND`, `FILE_IS_NOT_THE_POINTER_FILE`, `NO_RUN_FILE_MATCHES`,
+    `FILE_NOT_FROM_THE_REVIEW_SELECTION`, `NO_POLICY_AT_FINAL_RUNG`, `POLICY_HASH_NOT_RECORDED`,
+    `SELECTION_REPORT_NOT_FOUND`, `ARTIFACT_OUTSIDE_RUN_FOLDER`, `NO_THESIS_CLAIM`, `ENTRY_ID_HAS_NO_THESIS`.
 - **Stack game** {`game_id`, `market`, `market_reason`}. `game_id`: the QB's game (Classic) or the game (Showdown). `market` is
   null or {`<team>`: {`total`, `spread`, `reasons`}} for both teams of that game, numbers or null, `reasons` naming each null;
-  `market_reason` names a null `market` and is null otherwise. Here `market` is null, `RUN_FOLDER_NOT_SUPPLIED`; Session 72b
-  reads the run's ledger-bound `team_projections.csv`.
+  `market_reason` names a null `market` and is null otherwise. Without a run folder `market` is null,
+  `RUN_FOLDER_NOT_SUPPLIED`. With one, the numbers are `MARKET_TOTAL` and `MARKET_SPREAD` of the run's own
+  `team_projections.csv` (matched on `TEAM` and `GAME_ID`, each the `float` of its decimal text), read only after the run's
+  `source_ledger.json` (`nfl_source_ledger_v2`, its bytes the run's `prior_review_hashes["projected:source_ledger"]`)
+  validates through `evidence.validate_source_ledger` at the run's own clock
+  (`prior_review_reports.projection.replay_clock`, never the live clock) with both derived CSVs bound by hash. A null
+  `market`: `RUN_DATA_NOT_SUPPLIED`, `SOURCE_LEDGER_NOT_FOUND`, `ARTIFACT_OUTSIDE_RUN_FOLDER` (the projection stub's CSVs),
+  `ARTIFACT_NOT_FOUND`, `RUN_CLOCK_NOT_RECORDED`, `RUN_REPORT_NOT_FOUND`, `UNFILLED`. A team's null number:
+  `TEAM_NOT_IN_TEAM_PROJECTIONS` or `MARKET_VALUE_BLANK` in its `reasons`. Never inferred, never from another source.
 - **`does_not_establish`.** `EXPECTED_VALUE_OR_ROI`, `WIN_OR_CASH_PROBABILITY`, `AN_EDGE_OR_ITS_ABSENCE`, `CALIBRATION`,
   `UPLOAD_CLEARANCE`, and `WHICH_RUN_BUILT_THE_FILE` while `run.method` is null.
 
@@ -4920,12 +4954,24 @@ table is `ENTRIES_POOL_ABSENT`, named, not refused, and then another slate's sal
 (template, salary file and file not all Classic or all Showdown); `ENTRY_RECORD_SALARY_MISMATCH` (the template's player table
 is not the salary file's IDs, or the prior source names an ID outside it); `ENTRY_RECORD_ENTRY_ID_NOT_IN_TEMPLATE`;
 `ENTRY_RECORD_FILE_GEOMETRY_DIFFERS` (another header, a template Entry ID missing from the file, a Contest ID that differs);
-`ENTRY_RECORD_CELL_NOT_AN_EXACT_DK_ID` (a name, a `(LOCKED)` suffix, a blank cell in a filled row);
+`ENTRY_RECORD_CELL_NOT_AN_EXACT_DK_ID` (a name, a `(LOCKED)` cell with no ID, a blank cell in a filled row);
 `ENTRY_RECORD_DK_ID_NOT_IN_SALARY`; `ENTRY_RECORD_LINEUP_INVALID` (the validator's errors);
 `ENTRY_RECORD_PRIOR_SOURCE_INVALID` (not JSON, another schema, a non-finite or boolean score, both sources, a portfolio record
 without both views, whose views disagree, or whose Entry IDs, rosters or figures are not the file's);
-`ENTRY_RECORD_ARTIFACT_CONFLICT`; `ENTRY_RECORD_WRITE_FAILED`. The script prints `REFUSED <code>: <detail>` on stderr and
-exits 2; otherwise one JSON line (`rows`, `state`, `sha256`) and exit 0.
+`ENTRY_RECORD_ARTIFACT_CONFLICT`; `ENTRY_RECORD_WRITE_FAILED`. Since Session 72b, with a run folder:
+`ENTRY_RECORD_RUN_INPUTS_DIFFER` (the run's intake or pointer read other salary or entries bytes);
+`ENTRY_RECORD_RUN_FOLDER_INVALID` (a run-data folder without its output folder; the report or pointer unreadable or naming
+another run; the selection report's bytes not the run's; the claim naming another policy or theses that are not names; the
+run recorded writing the file and its folder no longer holds it); `ENTRY_RECORD_SOURCE_LEDGER_INVALID` (the ledger's bytes not
+the run's, the ledger failing validation at the run's clock or not binding the CSVs read, or a market number that is not a
+number). The script prints `REFUSED <code>: <detail>` on stderr and exits 2 (`--run-data` without `--run-dir` is an argparse
+error); otherwise one JSON line (`rows`, `state`, `sha256`) and exit 0.
+
+**The committed records**, each slate's graded file with the source its priors read (a dump is the source only where it
+reproduces a hand-pass record's totals): DET@CAR `final_v5`, ATL@NO `qa_iter3`, TB@DAL `final_v3` (each
+`construction/pool_scores.json`) and Week 4 Classic `LATESWAP_v8` (its portfolio record), all Session 72's. None names a run:
+their folders were not kept. The other committed slates (BUF@LAR, BAL@ATL, MIN@NO, PHI@CHI, Week 4 afternoon, Week 5
+afternoon, Week 5 Classic) are Session 72c's backfill; DET@BUF and Week 3 Classic have no committed delivered file.
 
 ## Standings corpus transport (Session 17, X2)
 

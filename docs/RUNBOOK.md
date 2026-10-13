@@ -881,13 +881,18 @@ hand-edited one, record it:
 
 ```sh
 python scripts/record_entries.py --salaries <DKSalaries.csv> --entries <DKEntries.csv> --file <delivered.csv> \
-  --scores data/runs/<id>/pool_scores.json --out data/inbox/slates/<slug>/construction/entry_build_record.jsonl
+  --scores data/runs/<id>/pool_scores.json --run-dir outputs/<id> --run-data data/runs/<id> \
+  --out data/inbox/slates/<slug>/construction/entry_build_record.jsonl
 ```
 
 Use `--portfolio <record.json>` instead of `--scores` when a Classic portfolio record carries each Entry ID's prior. One row
 per Entry ID (`nfl_entry_build_record_v1` in `docs/DATA_CONTRACTS.md`), written once; an earlier delivered file, if
-recorded, takes `entry_build_record.<file stem>.jsonl`. A DraftKings late-swap export whose cells read `Name (ID) (LOCKED)`
-is refused until Session 72b reads them. It certifies nothing.
+recorded, takes `entry_build_record.<file stem>.jsonl`. Pass `--run-dir` and `--run-data` while the run's folders exist
+(Session 72b): the record then names the method by bytes (`ENGINE_FILE` when the file is one the run wrote, else
+`OPERATOR_FILE`), the run's stage and rung, the final policy's hash, each Entry ID's thesis and the stack game's market
+numbers from the run's source ledger. The folders are not tracked, so record before they are cleaned up; a folder copied
+from another machine reads the same. A DraftKings late-swap export edited in place records against that export as its
+template, its `Name (ID) (LOCKED)` cells read to their exact IDs. It certifies nothing.
 
 A lineup run ends at its handoff (Ben, 2026-10-08). A lineup run never starts the
 post-merge routine: no next prompt, sync check, branch cleanup or archive, and no

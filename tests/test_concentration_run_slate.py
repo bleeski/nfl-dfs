@@ -28,10 +28,11 @@ from nfl_dfs.portfolio_policy import portfolio_policy_template
 
 from .test_deadline_controller import FakeClock, _clocked, _truth_codes
 from .test_participation import _slate
-from .test_prior_review_profile import AS_OF, _attachments, _cowork_args, _prepared_run
+from .test_prior_review_profile import AS_OF, _prepared_run
 from .test_prior_selection import _entries_bytes
+# Session 72b lifted the run itself into a shared helper, so other tests need not import this module's.
+from .run_slate_helper import ENTRY_COUNT, entry_ids as _entry_ids, run_showdown_slate as _run
 
-ENTRY_COUNT = 20
 # Two small pools carved out of the shared synthetic pool by operator exclusions (which no rung ever relaxes).
 # Session 60: "Sea Third RB" stands where "Sea Backup RB" did. Seattle's lead back is DraftKings `OUT` in the shared pool,
 # so his backup now inherits the carries (7.1 became 19.2 prior points) and became the carve's one dominant score. In this
@@ -47,50 +48,12 @@ EVIDENCE_GAPS = {"OFFICIAL_STATUS_REQUIRED", "MODEL_INPUTS_REQUIRED", "SOURCE_LE
 BASELINE_GAPS = {"OFFICIAL_STATUS_REQUIRED", "WEATHER_CAPTURE_REQUIRED", "MODEL_NOT_PROSPECTIVELY_VALIDATED"}
 
 
-def _entry_ids(count: int) -> tuple[str, ...]:
-    return tuple(str(900000001 + index) for index in range(count))
-
-
 def _all_but(tmp_path: Path, keep) -> list[str]:
     """The DraftKings IDs of every row of every person outside `keep`, from the shared pool."""
 
     folder = tmp_path / "pool"
     folder.mkdir(parents=True, exist_ok=True)
     return [row.dk_id for row in _slate(folder).players if row.name not in keep]
-
-
-def _run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, run_id: str = "concentration", entries: int = ENTRY_COUNT,
-         policy=None, before_review=None, **overrides):
-    """A Showdown `run-slate` over `entries` template rows on the shared synthetic pre-lock sources.
-
-    `policy` is a callable `(slate, entry_ids, folder) -> Path` that writes a supplied policy; none supplies none.
-    `before_review` is called with the review's keyword arguments just before each attempt runs.
-    """
-
-    from nfl_dfs import prior_review as prior_review_module
-
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    salary_path, entry_path, package_dir, project = _prepared_run(
-        tmp_path, expires_at=datetime.now(timezone.utc) + timedelta(hours=6))
-    entry_path.write_bytes(_entries_bytes(_entry_ids(entries)))
-    attachments = _attachments(tmp_path, salary_path, entry_path)
-    slate = parse_salaries(salary_path)
-    if policy is not None:
-        overrides["portfolio_policy_json"] = str(policy(slate, _entry_ids(entries), tmp_path))
-    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path / "runs")
-    real = prior_review_module.run_prior_review
-
-    def review(**kwargs):
-        if before_review is not None:
-            before_review(kwargs)
-        return real(**kwargs, project=project)
-
-    monkeypatch.setattr(cli, "run_prior_review", review)
-    code = cli.command_cowork_run(_cowork_args(
-        tmp_path, attachments, run_id=run_id, prior_package_dir=str(package_dir), **overrides))
-    root = tmp_path / "outputs" / run_id
-    report = json.loads((root / "cowork_run.json").read_text(encoding="utf-8"))
-    return code, report, root, slate
 
 
 def _delivered_rosters(report) -> list[tuple[str, ...]]:
