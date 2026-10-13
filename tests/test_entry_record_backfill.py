@@ -60,6 +60,8 @@ HAND_PASS = [
      "after.total_prior"),
     ("min-no", "construction/DK_REVIEW_ENTRY_min-no-sd_judgment_v6.csv", 2113.62, "construction/judgment_v6_record.json",
      "after.total_prior"),
+    ("min-no", "construction/DK_REVIEW_ENTRY_min-no-sd_final_v7.csv", 2113.62, "construction/pareto_v8_record.json",
+     "before.prior"),
     ("wk5-pm", "DK_REVIEW_ENTRY_wk5_afternoon_v2.csv", 3003.32, "construction/portfolio_v2_final.json", PARETO),
     ("wk5-pm", "DK_REVIEW_ENTRY_wk5_afternoon_v3.csv", 3011.11, "construction/portfolio_v3_redeploy.json", PARETO),
     ("wk5", "DK_REVIEW_ENTRY_wk5_classic_v5.csv", 4134.34, "construction/portfolio_v5_redeploy.json", PARETO),
@@ -114,6 +116,7 @@ def test_every_other_committed_slate_record_equals_its_source(label):
         assert (prior["source"], prior["score_version"], prior["reason"]) == (
             "POOL_SCORES_SUM", dump["score_version"], None)
         assert prior["points"] == sum(float(dump["by_dk_id"][dk_id]) for dk_id in cells[row["entry_id"]])
+        assert row["rank"] == 1 + sum(other["prior"]["points"] > prior["points"] for other in rows)
         assert row["hashes"]["prior_source_sha256"] == _sha(base / source)
 
 
