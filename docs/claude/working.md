@@ -43,6 +43,14 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
 - One Windows-only trap (Session 71). **Give every parametrized case a short id** (`ids=[...]` or `pytest.param(..., id=...)`):
   pytest copies the node id into `PYTEST_CURRENT_TEST`, and Windows caps an environment variable at 32,767 characters. A
   200,000-byte deep-nesting case passed on Linux and errored only in the `windows` job.
+- Two more Windows-only traps (Session 72c).
+  - **A mutation copy under the desktop scratchpad (about 128 characters) passes Windows' 260-character path limit.**
+    `shutil.copytree` failed twice there: on `scripts/node_modules`, then on the slates' `roles/**/sources/<sha256>.csv`
+    and MIN@NO's `entry_build_record.DK_REVIEW_ENTRY_min-no-sd_final_v7.jsonl`.
+  - The fix: copy only what the tests read (`src`, `tests`, `scripts` without `node_modules`, `config`, `docs`, and the
+    slates without `roles` and `qb_depth*`), into one-letter folders (`<scratchpad>/m/t`).
+  - **`nfl.ps1 test` already passes `-q`.** A second `-q` suppresses pytest's summary line, so the log ends in dots
+    with no count to record.
 
 ## Session protocol: `docs/ROADMAP.md` §2.1, plus these
 

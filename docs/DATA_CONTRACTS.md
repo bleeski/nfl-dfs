@@ -4988,11 +4988,13 @@ named. None names a run: their folders were not kept.
   - MIN@NO `final_v10`, and `final_v7` under `entry_build_record.DK_REVIEW_ENTRY_min-no-sd_final_v7.jsonl`. Both read
     `construction/pool_scores_r3.json`. Both are recorded until Ben names the file he uploaded; the changelog calls only v7
     delivered.
-  - Week 5 Classic `DK_LATESWAP_v10`, against the late-swap export it edits (`live/DKEntries_current_1914Z.csv`, 33 Entry
+  - Week 5 Classic `DK_LATESWAP_wk5_classic_v10`, against the late-swap export it edits (`live/DKEntries_current_1914Z.csv`, 33 Entry
     IDs), from `construction/pool_scores.json`. Ben's free entry is among the 33 and is recorded with its prior and rank.
   - PHI@CHI `v4` and Week 4 afternoon `FINAL`, both `NO_PRIOR_SOURCE`. No dump was kept, and their assignment and portfolio
     records state no prior.
-- DET@BUF and Week 3 Classic have no committed delivered file and no record.
+- DET@BUF and Week 3 Classic have slate folders but no committed delivered file, and no record.
+- The engine-era slates whose files were never committed under `data/inbox/slates/` have no record either. These include
+  NE@SEA, DAL@NYG, DEN@KC and Week 1; their copies at the repository root are gitignored duplicates.
 
 ## Standings corpus transport (Session 17, X2)
 
