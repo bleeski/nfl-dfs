@@ -4,6 +4,45 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-12: BUF@LAR Showdown (Monday night, 32 entries; a lineup run, not a roadmap session)
+
+Salaries `348541c46998e337a3fcd1e336eb163610a678eee29f95e6b3131db51901f719`, entries
+`2533c47ff69226ef55da46a6c03fb6fc87cb6c352e0a4f7d29cbc6e81b22ee79` (32 Entry IDs across five contests). Request 23:51Z, lock
+00:15Z, delivery deadline 00:10Z; v1 delivered 23:57Z, v2 (the file to use) 23:58Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`. Branch `claude/buf-lar-sd-2026-10-12`.
+
+- **Runs.** `20261012T235223Z-buf-lar-sd` (`--build-priors`): baseline published, then `PRIOR_REVIEW_IDENTITY_BLOCKED` on
+  Joshua Palmer (`44446818`, DraftKings `OUT`), whom nflverse lists as "Josh Palmer" (`00-0036988`, BUF WR, 2026 week 5 `ACT`;
+  first name Josh, so no alternate key matched). Reviewed crosswalk `roles/identity_reviewed_buf_lar.csv`
+  (`b92dfa1f...9769`, the one row set to `REVIEWED_PROVIDER_PLAYER_ID`), `priors-freeze` to `data/runs/buf-lar-sd-1012-frozen`
+  (weather `INDOOR` from the schedule roof). `20261012T235454Z-buf-lar-sd-r2` (no policy, 18 `--exclude` IDs): 32 of 32 in 38 s,
+  concentration `AS_REQUESTED` (Shakir 19 of 32, Allen 6 Captains), no relaxation.
+- **Inactives** (buffalobills.com and therams.com posts): BUF DJ Moore, Josh Palmer (both DraftKings `OUT`);
+  LAR C.J. Daniels, Max Klare, Ty Simpson (all DraftKings `OUT`). Bills elevated Trent Sherfield (beat reporter's post); no Rams
+  elevation found.
+- **Practice squad.** Nine people excluded as not elevated: BUF Lampe, Gore Jr., Maclin, Buechele, Gosnell; LAR Presley, Villari,
+  Connors, Waters. Connors was a mistake: `practice_squad_check.py` listed no Rams player at all (below), the hand lookup read
+  file order rather than the latest week, and he is `ACT` since week 3. He is the Rams' third back at $400; the file was not
+  rebuilt 15 minutes before lock for him.
+- **Ceiling pass** (`construction/ceiling_pass.py`, copied from TB@DAL with the starting-QB map and N = 32). v1, the rule as
+  written (people to 24 of 32): all 8 WR/TE-Captain rows get their own quarterback, min row prior 73.3 to 82.9, but four people at
+  24 of 32 (Allen, Stafford, Shakir, Parkinson) and 17 distinct people. v2 (`ceiling_pass_v2.py`) holds every non-quarterback to
+  19 of 32: still 0 WR/TE-Captain rows without their quarterback, total prior 3,128 against v1's 3,180 (-1.6%), min row prior
+  77.3, 20 distinct people, mean pairwise overlap 2.94 against 3.33. Shipped v2: the quarterback step is what needs the 75%
+  headroom; the FLEX upgrades that used it only stacked mean prior on a $2,400 tight end. The records' `schema` field still says
+  `tb_dal_sd_ceiling_pass_record_v1` (copied script).
+- **Contest pass and QA.** `diversify_showdown_contests.py` moved 27 rows (score 80.35 to 64.08); the file after holds the same
+  32 lineups. `qa_showdown_portfolio.py --max-overlap 5 --backup-pairs` PASS, 0 defects, before and after. Final
+  `construction/DK_REVIEW_ENTRY_buf-lar-sd_final_v2.csv` (`675d5d30...679b`): Captains Stafford 6, Allen 6, Shakir 6, Nacua 5,
+  Cook 5, Parkinson 2, Williams 1, Dortch 1; Stafford 24, Allen 23, Nacua, Parkinson and Shakir 19 each; salary 48,100 to 49,900.
+- **Fixed.** `scripts/practice_squad_check.py` matched the roster on the DraftKings team code, and nflverse writes the Rams `LA`,
+  so every Rams player read `NO_ROSTER_ROW`. It maps `LAR` to `LA` now; on tonight's run it lists Presley, Villari and Waters and
+  leaves Connors out. Test: `tests/test_practice_squad_check.py::test_draftkings_lar_reads_the_nflverse_la_roster`.
+- **Would have made it better.** The identity gate has no nickname table, so "Joshua"/"Josh" costs a crosswalk and a freeze on
+  every slate he is on; worth a card if it recurs.
+- Verification: `tests/test_practice_squad_check.py` 4 passed; full suite on Linux
+  `3687 passed, 1 skipped in 1142.44s (0:19:02)` (the skip is the Windows junction test).
+
 ### 2026-10-12: Ben's plain-English roadmap tracker (procedure, not a roadmap session)
 
 Ben asked for an interactive page, maintained by Claude, that tracks what is done and what is left, with each chunk of work in

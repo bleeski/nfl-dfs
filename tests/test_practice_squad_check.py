@@ -99,3 +99,25 @@ def test_run_dir_finds_the_roster_file_by_header(tmp_path, capsys):
     report = json.loads(capsys.readouterr().out)
     assert report["rosters"].endswith("bbb.csv")
     assert [entry["name"] for entry in report["not_active"]] == ["Squad Guy"]
+
+
+def test_draftkings_lar_reads_the_nflverse_la_roster(tmp_path):
+    # BUF@LAR (2026-10-12): DraftKings writes the Rams LAR, nflverse writes LA, and every Rams player read NO_ROSTER_ROW.
+    module = _load()
+    salaries = _salaries(
+        tmp_path / "s.csv",
+        [("Rams Squad Guy", "LAR", "WR", ""), ("Rams Starter", "LAR", "WR", ""), ("Bills Squad Guy", "BUF", "WR", "")],
+    )
+    rosters = _rosters(
+        tmp_path / "r.csv",
+        [
+            ("Rams Squad Guy", "LA", "DEV", 5),
+            ("Rams Starter", "LA", "ACT", 5),
+            ("Bills Squad Guy", "BUF", "DEV", 5),
+        ],
+    )
+    report = module.check(salaries, rosters)
+    flagged = {entry["name"]: entry for entry in report["not_active"]}
+    assert set(flagged) == {"Rams Squad Guy", "Bills Squad Guy"}
+    assert flagged["Rams Squad Guy"]["team"] == "LAR"
+    assert report["no_roster_row"] == []
