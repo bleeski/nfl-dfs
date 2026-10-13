@@ -3,12 +3,15 @@
 
     python scripts/record_entries.py --salaries <DKSalaries.csv> --entries <DKEntries.csv> --file <delivered.csv> \
         (--scores <pool_scores.json> | --portfolio <portfolio record.json>) \
+        [--run-dir outputs/<run id> [--run-data data/runs/<run id>]] \
         --out data/inbox/slates/<slug>/construction/entry_build_record.jsonl
 
 One row per Entry ID of the template: the roster by exact DraftKings ID, the prior from the one named source, its rank in the
-file, the structure counts, DraftKings status flags and the later-window count. The run's fields (method, rung, policy, thesis,
-market numbers) are null until Session 72b reads a run folder. The record is written once: the same bytes again are
-`ALREADY_PRESENT`, and anything else holding the name is refused, never replaced.
+file, the structure counts, DraftKings status flags and the later-window count. With `--run-dir` (the run's output folder)
+and `--run-data` (its run-data folder) the record also names the run (Session 72b): the method by bytes (`ENGINE_FILE` or
+`OPERATOR_FILE`), the run's stage and rung, the final policy's hash, each Entry ID's thesis, and the stack game's market
+numbers through the run's source ledger. Without them those fields are null, `RUN_FOLDER_NOT_SUPPLIED`. The record is
+written once: the same bytes again are `ALREADY_PRESENT`, and anything else holding the name is refused, never replaced.
 
 Exit 0 with a one-line JSON summary on stdout (rows, state, the record's SHA-256); exit 2 with `REFUSED <code>: <detail>` on
 stderr and nothing written. It certifies nothing: MODEL_STATUS=PRIOR_ONLY, RELEASE_DECISION=DO_NOT_UPLOAD.
@@ -37,14 +40,19 @@ def main(argv: list[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--scores", help="the run's pool-score dump (nfl_prior_pool_scores_v1)")
     source.add_argument("--portfolio", help="a portfolio record with each Entry ID's roster and prior_points")
+    parser.add_argument("--run-dir", help="the run's output folder (outputs/<run id>): its report, pointer and CSVs")
+    parser.add_argument("--run-data", help="the run's run-data folder (data/runs/<run id>): its claim and source ledger")
     parser.add_argument("--out", required=True, help="where the record is written, once")
     args = parser.parse_args(argv)
+    if args.run_data and not args.run_dir:
+        parser.error("--run-data needs --run-dir")
     out = Path(args.out).resolve()
     for root in SNAPSHOT_ROOTS:
         if out.is_relative_to(REPO_ROOT / root):
             parser.error(f"--out may not be inside {root}/ (immutable snapshots); write beside the slate's construction records")
     try:
-        rows = build_records(args.salaries, args.entries, args.file, scores=args.scores, portfolio=args.portfolio)
+        rows = build_records(args.salaries, args.entries, args.file, scores=args.scores, portfolio=args.portfolio,
+                             run_dir=args.run_dir, run_data=args.run_data)
         data = record_bytes(rows)
         state = write_record(args.out, data)
     except EntryRecordRefused as refusal:

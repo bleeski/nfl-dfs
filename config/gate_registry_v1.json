@@ -240,7 +240,7 @@
     "entry_record": {
       "class": "P", "stops": "CERTIFICATION",
       "provenance": {"kind": "CONTRACT", "ref": "Per-Entry-ID build record, nfl_entry_build_record_v1 (Session 72)"},
-      "covers": "A per-Entry-ID build record was refused whole: an input unreadable or not in DraftKings' shape, a Classic/Showdown mismatch, a salary file the entries template or the prior source does not bind, an Entry ID outside the template or a template row missing from the file, a roster cell without an exact DraftKings ID of the salary file, an illegal lineup, a prior source that is unreadable, of another schema or disagrees with the file, or another file holding the record's name (never overwritten); or the record could not be written. It stops a build record, never a lineup file."
+      "covers": "A per-Entry-ID build record was refused whole: an input unreadable or not in DraftKings' shape, a Classic/Showdown mismatch, a salary file the entries template or the prior source does not bind, an Entry ID outside the template or a template row missing from the file, a roster cell without an exact DraftKings ID of the salary file, an illegal lineup, a prior source that is unreadable, of another schema or disagrees with the file, or another file holding the record's name (never overwritten); or the record could not be written. Since Session 72b also a supplied run folder that does not bind the record: its intake or pointer read other salary or entries bytes, its own report, pointer or claim is unreadable or contradicts itself, or its source ledger does not validate at the run's clock or does not bind the projection CSV the record reads. It stops a build record, never a lineup file."
     },
     "player_grading": {
       "class": "P", "stops": "CERTIFICATION",
@@ -862,7 +862,10 @@
     "ENTRY_RECORD_LINEUP_INVALID": "entry_record",
     "ENTRY_RECORD_MODE_MISMATCH": "entry_record",
     "ENTRY_RECORD_PRIOR_SOURCE_INVALID": "entry_record",
+    "ENTRY_RECORD_RUN_FOLDER_INVALID": "entry_record",
+    "ENTRY_RECORD_RUN_INPUTS_DIFFER": "entry_record",
     "ENTRY_RECORD_SALARY_MISMATCH": "entry_record",
+    "ENTRY_RECORD_SOURCE_LEDGER_INVALID": "entry_record",
     "ENTRY_RECORD_WRITE_FAILED": "entry_record",
     "ENTRY_ROW_NARROWER_THAN_ROSTER": "delivered_bytes",
     "ENTRY_ROW_PARTLY_PREFILLED": "entry_rows",

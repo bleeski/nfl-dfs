@@ -753,9 +753,16 @@
     "S72b": {
       "goal": "measure",
       "title": "Record how every entry was built: the run's side",
-      "what": "Adds, for runs that keep their folders, which run made each entry, whether the file was the engine's own or hand-edited, the game story it was built for, and its game's expected total and point spread. Also records the remaining past slates.",
+      "what": "Adds, for runs that keep their folders, which run made each entry, whether the file was the engine's own or hand-edited, the game story it was built for, and its game's expected total and point spread. It also reads the files DraftKings hands back after games start.",
       "why": "The first part records each lineup and its projected points; the run's side needs the run's own files.",
       "matters": "Lets us compare hand edits against the engine's own picks."
+    },
+    "S72c": {
+      "goal": "measure",
+      "title": "Record how every past entry was built",
+      "what": "Writes the same per-entry record for the seven past slates that do not have one yet.",
+      "why": "The work was ready, but it was split off to keep the previous change a reviewable size.",
+      "matters": "Results can then be compared across every slate we have played, not just four."
     },
     "S73": {
       "goal": "measure",
@@ -905,6 +912,13 @@
       "title": "Two sample DraftKings files",
       "question": "Drop one entries download with some lineups already entered, and one salary export taken after a game kicked off, into the inbox.",
       "recommendation": "Whenever convenient; they confirm how DraftKings writes those cells. Blocks nothing.",
+      "holds_up": []
+    },
+    {
+      "key": "min-no-file",
+      "title": "Which MIN@NO file did you upload?",
+      "question": "On Oct 11 the first file went out at 12:25 PM ET and two more were built at your request before 1:00. Which one did you upload: the first (v7) or the last (v10)?",
+      "recommendation": "Record both and mark the last one (v10) as the graded file, unless you uploaded the first. Nothing waits on this: both files get a record either way.",
       "holds_up": []
     }
   ]

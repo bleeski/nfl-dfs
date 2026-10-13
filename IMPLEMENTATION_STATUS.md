@@ -1,5 +1,24 @@
 # Implementation Status
 
+## Capability added: 2026-10-13 (Session 72b, the build record reads a run folder)
+
+Working and verified on four real Showdown `run-slate` runs, using the real projection producer, rung 4, a baseline-only
+run and a v4 portfolio of theses (`tests/test_entry_record_run.py`, 50 cases), and on committed DraftKings bytes
+(`tests/test_entry_record_slates.py`, 10 cases). Also verified by a mutation pass (57 of 57 killed), two fresh-context
+consults and a review, an old-against-new comparison, and the full suite (`3806 passed, 1 skipped in 1043.17s (0:17:23)`, Linux).
+- **The run.** `record_entries.py --run-dir outputs/<id> --run-data data/runs/<id>` names the run that built a delivered
+  file: `ENGINE_FILE` (with its stage, producer and run file) when the bytes are an output the run recorded writing, else
+  `OPERATOR_FILE`. A folder copied from another machine reads the same.
+- **The review selection.** For the review selection's file, or an operator's file after it: the final rung, the policy
+  hash and each Entry ID's thesis from the run's claim of record, a lineup moved by the contest pass keeping its own.
+- **The market.** The stack game's market total and spread, only through the run's source ledger validated at the run's
+  own clock.
+- **Late-swap exports.** DraftKings' `Name (ID) (LOCKED)` cells read to their exact IDs.
+
+Not yet: the backfill of the seven other committed slates (Session 72c). The committed records name no run, because their
+folders were not kept. A record of what was built: not EV, an ROI, a probability, a calibration or an edge; nothing reaches
+`run-slate` or a release truth.
+
 ## Capability added: 2026-10-13 (Session 72, the per-Entry-ID build record)
 
 Working and verified through 59 cases on the committed DET@CAR, ATL@NO, TB@DAL and Week 4 Classic files and copies of their bytes (`tests/test_entry_record.py`, one real Showdown `run-slate` among them), a mutation pass (51 of 51 killed), two fresh-context consults and a review, a before/after of the `structure_counts` extraction (283,272 bound checks and one `run-slate`, identical) and the full suite (`3746 passed, 1 skipped in 866.84s (0:14:26)`, Linux): `scripts/record_entries.py` writes `nfl_entry_build_record_v1` once, one row per template Entry ID of a delivered file (engine or hand-edited), joined by exact DK ID, with the prior from one named, hash-bound source (a pool-score dump's slot-order sum or a portfolio record's own figure), the Session 23 structure counts and the Classic stack counts, DraftKings `Q` flags, the later-window count and the stack game, and refuses by name an Entry ID outside the template, a cell without an exact DK ID and a salary file the template does not bind. The four acceptance slates' records are committed (131 Entry IDs). Not yet: the run folder's method, rung, policy hash, thesis and market numbers (null, `RUN_FOLDER_NOT_SUPPLIED`; Session 72b) and the other committed slates. A record of what was built and what the priors said: not EV, an ROI, a probability, a calibration or an edge; nothing reaches `run-slate` or a release truth.

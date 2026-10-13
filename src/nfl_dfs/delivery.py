@@ -372,6 +372,20 @@ def _load(root: Path) -> tuple[Path, bytes, dict[str, object], Deliverable] | No
     return pointer, raw, record, item
 
 
+def read_pointer(root: str | Path) -> tuple[dict[str, object], Deliverable] | None:
+    """The pointer as written, checked for shape only, or `None` when there is none.
+
+    It does not revalidate: the pointer's input paths are absolute paths on the machine that wrote it, so a run folder
+    read anywhere else fails `read_latest`. Its caller (the build record, Session 72b) re-checks every binding it uses.
+    """
+
+    loaded = _load(Path(root).resolve())
+    if loaded is None:
+        return None
+    _pointer, _raw, record, item = loaded
+    return record, item
+
+
 def read_latest(root: str | Path, *, run_id: str | None = None) -> LatestDeliverable | None:
     """The run's pointer, after the file it names revalidates; `None` when there is none.
 

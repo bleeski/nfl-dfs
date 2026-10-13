@@ -121,7 +121,9 @@ Every `run-slate` passes `--run-id <id>` and sets `NFL_DFS_DUMP_SCORES=data/runs
 (clear it after on Windows), so each run keeps its own per-person priors (neither `data/runs/<id>` nor `outputs/<id>` may exist
 first). DET@CAR's committed dump came from a third run, not the delivered one; a folder per run stops that. Copy the delivered
 run's dump to `<construction>/pool_scores_<id>.json` (never over an earlier copy) and point the hand passes at it. Once the
-graded file is settled, record it with `scripts/record_entries.py` (`docs/RUNBOOK.md` § Rerun and finish).
+graded file is settled, record it with `scripts/record_entries.py` (`docs/RUNBOOK.md` § Rerun and finish), passing `--run-dir
+outputs/<id> --run-data data/runs/<id>` while those folders exist (Session 72b): only then does the record name the method,
+rung, policy, thesis and market numbers.
 
 ## Showdown judgment pass (Ben, 2026-10-01; second correction)
 

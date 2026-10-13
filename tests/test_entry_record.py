@@ -186,7 +186,7 @@ def test_a_file_whose_geometry_differs_from_the_template_is_refused(tmp_path, ca
     assert entry in detail if case != "header" else "header" in detail
 
 
-@pytest.mark.parametrize("cell", ["Jared Goff", "Jared Goff (44358497) (LOCKED)", ""], ids=["name", "locked", "blank"])
+@pytest.mark.parametrize("cell", ["Jared Goff", "Jared Goff (LOCKED)", ""], ids=["name", "locked", "blank"])
 def test_a_roster_cell_without_an_exact_dk_id_is_refused_by_name(tmp_path, cell):
     paths = _copy(tmp_path, "det-car")
     entry = _first_entry(paths["file"])[0]

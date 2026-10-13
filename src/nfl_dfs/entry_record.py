@@ -6,10 +6,14 @@ entries template by exact DraftKings ID only, and reads each row's prior from on
 own per-Entry-ID figure, taken as stated. It never recomputes a person's prior and never writes a number a source lacks.
 
 Missing evidence is a named null: no prior source, a person the dump does not score, an entries file with no player table,
-and, in this version, everything a run folder would supply (run ID, method, policy, thesis, market numbers; Session 72b).
-Bad bytes are refused whole by name (`EntryRecordRefused`, registry family `entry_record`). The structure counts come from the
-Session 23 rule (`portfolio_policy.structure_counts`) and the Classic stack rule (`classic_portfolio.stack_value`). The salary
-file's average-points column is never read: `SalaryPlayer` has no field for it.
+and, without a run folder, everything one supplies (run ID, method, policy, thesis, market numbers). Since Session 72b a run's
+output folder (`run_dir`) and run-data folder (`run_data`) supply them: the method by bytes, the run's own stage and rung, the
+final policy's hash and each Entry ID's thesis when the file comes from the review selection, and the stack game's market
+numbers only through the run's source ledger, validated at the run's own clock. Paths the run recorded are absolute paths on
+its own machine, so each is found again under the supplied folder, never read as it stands. Bad bytes are refused whole by
+name (`EntryRecordRefused`, registry family `entry_record`). The structure counts come from the Session 23 rule
+(`portfolio_policy.structure_counts`) and the Classic stack rule (`classic_portfolio.stack_value`). The salary file's
+average-points column is never read: `SalaryPlayer` has no field for it.
 
 The record states what was built and what the priors said. It certifies nothing and changes no release truth;
 `MODEL_STATUS=PRIOR_ONLY` and `RELEASE_DECISION=DO_NOT_UPLOAD` stand.
@@ -17,27 +21,40 @@ The record states what was built and what the priors said. It certifies nothing 
 
 from __future__ import annotations
 
+import copy
+import csv
+import io
 import json
 import math
+import re
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from . import entry_history
+from . import delivery, entry_history
 from .classic_portfolio import stack_value
 from .contracts import EngineMode, SlateContract
 from .dk import DraftKingsParseError, EntryTemplate, embedded_pool_ids, parse_entry_bytes, parse_salaries, reconcile_template
+from .evidence import EvidenceError, validate_source_ledger
 from .hashing import canonical_json_bytes, sha256_bytes
-from .lineups import prefilled_cell_id, validate_lineup
+from .lineups import prefilled_cell_id, roster_canonical_key, validate_lineup
 from .portfolio_policy import structure_counts
 from .selection import POOL_SCORES_SCHEMA
 
 SCHEMA_VERSION = "nfl_entry_build_record_v1"
 NO_RUN_FOLDER = "RUN_FOLDER_NOT_SUPPLIED"
+RUN_REPORT_NAME = "cowork_run.json"
+WHICH_RUN = "WHICH_RUN_BUILT_THE_FILE"
+_RUN_FIELDS = ("run_id", "method", "policy_sha256", "thesis")
+_ATTEMPT_FOLDER = re.compile(r"prior_review(?:_attempt_[0-9]+)?")
+_LOCKED = "(LOCKED)"
+_MARKET_COLUMNS = (("total", "MARKET_TOTAL"), ("spread", "MARKET_SPREAD"))
 DOES_NOT_ESTABLISH = (
     "EXPECTED_VALUE_OR_ROI",
     "WIN_OR_CASH_PROBABILITY",
     "AN_EDGE_OR_ITS_ABSENCE",
     "CALIBRATION",
-    "WHICH_RUN_BUILT_THE_FILE",
+    WHICH_RUN,
     "UPLOAD_CLEARANCE",
 )
 
@@ -137,6 +154,292 @@ def _portfolio(raw: bytes, salary_ids: set[str], filled: dict[str, tuple[str, ..
     return {entry: figure for entry, (_roster, figure) in figures.items()}
 
 
+def _cell_id(cell: str) -> str | None:
+    """A roster cell's exact DK ID: `prefilled_cell_id`'s forms, and DraftKings' late-swap `Name (ID) (LOCKED)` (Session 72b).
+
+    One trailing `(LOCKED)` is stripped here only. The governed late swap and the byte audit read `prefilled_cell_id` (V13)
+    and keep refusing the suffix.
+    """
+
+    value = cell.strip()
+    if value.endswith(_LOCKED):
+        value = value[: -len(_LOCKED)]
+    return prefilled_cell_id(value)
+
+
+def _folder_json(raw: bytes, label: str) -> dict[str, object]:
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", f"{label}: {type(exc).__name__}: {exc}") from None
+    if not isinstance(document, dict):
+        raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", f"{label} is not a JSON object")
+    return document
+
+
+def _block(document: dict[str, object], key: str) -> dict[str, object]:
+    value = document.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _rebase(recorded: object, run_id: str, root: Path) -> tuple[Path | None, str | None]:
+    """A path the run recorded on its own machine, found again under `root`, or None and why.
+
+    The tail after the last pair of segments (run ID, `prior_review` or `prior_review_attempt_<N>`) is joined to `root`:
+    the absolute path is never read as it stands, and no attempt folder is guessed (the run's report names its last one).
+    """
+
+    if not isinstance(recorded, str):
+        return None, "ARTIFACT_NOT_FOUND"
+    parts = [part for part in recorded.replace("\\", "/").split("/") if part]
+    anchors = [index for index in range(len(parts) - 1)
+               if parts[index] == run_id and _ATTEMPT_FOLDER.fullmatch(parts[index + 1])]
+    if not anchors or any(part == ".." or ":" in part for part in parts[anchors[-1] + 1:]):
+        return None, "ARTIFACT_OUTSIDE_RUN_FOLDER"
+    path = Path(root).joinpath(*parts[anchors[-1] + 1:])
+    return (path, None) if path.is_file() else (None, "ARTIFACT_NOT_FOUND")
+
+
+def _market_number(text: str | None, label: str) -> float | None:
+    value = (text or "").strip()
+    if not value:
+        return None
+    try:
+        number = float(Decimal(value))
+    except (InvalidOperation, ValueError):
+        number = math.nan
+    if not math.isfinite(number):
+        raise EntryRecordRefused("ENTRY_RECORD_SOURCE_LEDGER_INVALID", f"team_projections.csv {label} is {value!r}, not a number")
+    return number
+
+
+def _claim(from_review: bool, artifacts, hashes, run_id: str, data: Path, policy: str | None):
+    """The run's own claim: (thesis by Entry ID, thesis by lineup key), or None and why."""
+
+    if not from_review:
+        return None, "FILE_NOT_FROM_THE_REVIEW_SELECTION"
+    path, why = _rebase(artifacts.get("selection_report"), run_id, data)
+    if path is None:
+        return None, "SELECTION_REPORT_NOT_FOUND" if why == "ARTIFACT_NOT_FOUND" else why
+    raw = path.read_bytes()
+    if sha256_bytes(raw) != hashes.get("selection_report"):
+        raise EntryRecordRefused(
+            "ENTRY_RECORD_RUN_FOLDER_INVALID", f"selection_report.json's bytes are not the ones run {run_id} recorded")
+    block = _block(_block(_folder_json(raw, "selection_report.json"), "selection"), "portfolio_policy")
+    named = block.get("normalized_policy_sha256")
+    if isinstance(named, str) and isinstance(policy, str) and named != policy:
+        raise EntryRecordRefused(
+            "ENTRY_RECORD_RUN_FOLDER_INVALID", f"the claim names policy {named}; run {run_id}'s final policy is {policy}")
+    theses = _block(block, "theses")
+    entries, by_lineup = theses.get("entries"), _block(theses, "by_lineup")
+    if not isinstance(entries, dict):
+        return None, "NO_THESIS_CLAIM"
+    if not all(name is None or isinstance(name, str) for name in [*entries.values(), *by_lineup.values()]):
+        raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", "the claim's theses are not names")
+    return (entries, by_lineup), None
+
+
+def _theses(claim, rosters: dict[str, tuple[str, ...] | None], slate: SlateContract) -> dict[str, tuple[str | None, str | None]]:
+    """Each Entry ID's (thesis, reason), read from the run's claim and never inferred from what a roster holds.
+
+    The claim of record is `by_lineup`, keyed by the exact roster (Sessions 23c and 67): a lineup exactly as the run built
+    it carries that thesis wherever the contest pass moved it. `entries` is its readable form by Entry ID, which an edited
+    row keeps (the hand passes keep each row's thesis, Session 66), unless a lineup the run built sits under another Entry
+    ID than `entries` gives it: then Entry IDs were reassigned and an edited row's thesis is unknown. Session 66's check
+    refuses such a file outright; the record names each row instead.
+    """
+
+    entries, by_lineup = claim
+    keys = {entry: roster_canonical_key(slate, roster) for entry, roster in rosters.items() if roster is not None}
+    moved = any(key in by_lineup and by_lineup[key] != entries.get(entry) for entry, key in keys.items())
+    result: dict[str, tuple[str | None, str | None]] = {}
+    for entry in rosters:
+        key = keys.get(entry)
+        if key is not None and key in by_lineup:
+            name = by_lineup[key]
+        elif key is not None and moved:
+            result[entry] = (None, "LINEUPS_MOVED_BETWEEN_ENTRY_IDS")
+            continue
+        else:
+            name = entries.get(entry)
+        result[entry] = (name, None) if name is not None else (None, "ENTRY_ID_HAS_NO_THESIS")
+    return result
+
+
+def _markets(artifacts, hashes, reports, run_id: str, data: Path, slate: SlateContract):
+    """Each game's market numbers from the run's ledger-bound `team_projections.csv`, or None and why."""
+
+    ledger, why = _rebase(artifacts.get("source_ledger"), run_id, data)
+    if ledger is None:
+        return None, "SOURCE_LEDGER_NOT_FOUND" if why == "ARTIFACT_NOT_FOUND" else why
+    derived: dict[str, bytes] = {}
+    for name in ("team_projections", "player_opportunities"):
+        path, why = _rebase(artifacts.get(name), run_id, data)
+        if path is None:
+            return None, why
+        derived[name] = path.read_bytes()
+    try:
+        clock = datetime.fromisoformat(str(_block(reports, "projection").get("replay_clock")))
+    except ValueError:
+        clock = None
+    if clock is None or clock.tzinfo is None:
+        return None, "RUN_CLOCK_NOT_RECORDED"
+    if sha256_bytes(ledger.read_bytes()) != hashes.get("projected:source_ledger"):
+        raise EntryRecordRefused(
+            "ENTRY_RECORD_SOURCE_LEDGER_INVALID", f"source_ledger.json's bytes are not the ones run {run_id} recorded")
+    try:
+        validate_source_ledger(ledger, expected_outputs={name: sha256_bytes(raw) for name, raw in derived.items()},
+                               now=clock)
+    except EvidenceError as exc:
+        raise EntryRecordRefused("ENTRY_RECORD_SOURCE_LEDGER_INVALID", f"at the run's clock {clock.isoformat()}: {exc}") from None
+    reader = csv.DictReader(io.StringIO(derived["team_projections"].decode("utf-8-sig"), newline=""))
+    if not {"TEAM", "GAME_ID", "MARKET_TOTAL", "MARKET_SPREAD"} <= set(reader.fieldnames or ()):
+        raise EntryRecordRefused("ENTRY_RECORD_SOURCE_LEDGER_INVALID", "team_projections.csv has no TEAM, GAME_ID and market columns")
+    rows: dict[tuple[str, str], dict[str, str]] = {}
+    for row in reader:
+        key = (row["TEAM"], row["GAME_ID"])
+        if key in rows:
+            raise EntryRecordRefused("ENTRY_RECORD_SOURCE_LEDGER_INVALID", f"team_projections.csv repeats {key[0]} in {key[1]}")
+        rows[key] = row
+    markets: dict[str, dict[str, object]] = {}
+    for game in slate.games:
+        market: dict[str, object] = {}
+        for team in (game.away_team, game.home_team):
+            row = rows.get((team, game.game_id))
+            if row is None:
+                market[team] = {"total": None, "spread": None,
+                                "reasons": dict.fromkeys(("total", "spread"), "TEAM_NOT_IN_TEAM_PROJECTIONS")}
+                continue
+            numbers = {field: _market_number(row[column], f"{team} {column}") for field, column in _MARKET_COLUMNS}
+            market[team] = {**numbers, "reasons": {field: "MARKET_VALUE_BLANK" for field, value in numbers.items() if value is None}}
+        markets[game.game_id] = market
+    return markets, None
+
+
+def _run_folder(run_dir, run_data, *, salary_sha256: str, entries_sha256: str, file_sha256: str,
+                slate: SlateContract, rosters: dict[str, tuple[str, ...] | None]) -> dict[str, object] | None:
+    """What the supplied run folders say about the delivered file, read once per record; None without a run folder."""
+
+    if run_dir is None:
+        if run_data is not None:
+            raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", "a run-data folder needs its output folder (run_dir)")
+        return None
+    for label, folder in (("run_dir", run_dir), ("run_data", run_data)):
+        if folder is not None and not Path(folder).is_dir():
+            raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", f"{label} {folder} is not a folder")
+    out = Path(run_dir)
+    if not (out / RUN_REPORT_NAME).is_file():
+        return {"missing": "RUN_REPORT_NOT_FOUND"}
+    report = _folder_json((out / RUN_REPORT_NAME).read_bytes(), RUN_REPORT_NAME)
+    run_id = report.get("run_id")
+    if not isinstance(run_id, str) or not run_id:
+        raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", f"{RUN_REPORT_NAME} names no run ID")
+    read = {digest for digest in _block(report, "input_hashes").values() if isinstance(digest, str)}
+    for label, digest in (("salaries", salary_sha256), ("entries", entries_sha256)):
+        if digest not in read:
+            raise EntryRecordRefused("ENTRY_RECORD_RUN_INPUTS_DIFFER", f"run {run_id}'s intake never read these {label} ({digest})")
+    try:
+        loaded = delivery.read_pointer(out)
+    except (delivery.DeliveryPointerError, OSError) as exc:
+        raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", f"{delivery.POINTER_NAME}: {exc}") from None
+    pointer, pointer_file = None, None
+    if loaded is not None:
+        record, pointer = loaded
+        if pointer.run_id != run_id:
+            raise EntryRecordRefused(
+                "ENTRY_RECORD_RUN_FOLDER_INVALID", f"the pointer names run {pointer.run_id}, the report run {run_id}")
+        for label, digest, named in (("salaries", salary_sha256, pointer.salary_sha256),
+                                     ("entries", entries_sha256, pointer.entry_sha256)):
+            if named != digest:
+                raise EntryRecordRefused(
+                    "ENTRY_RECORD_RUN_INPUTS_DIFFER", f"the pointer's {label} SHA-256 is {named}, the supplied file's {digest}")
+        pointer_file = str(_block(record, "file").get("path"))
+
+    # The method, by bytes: a CSV in the output folder counts only when its bytes are an output the run recorded writing,
+    # so an in-place edit of the run's own file reads as the operator's.
+    review = report.get("bulk_entry_sha256") if isinstance(report.get("bulk_entry_sha256"), str) else None
+    written = {digest for digest in (pointer.sha256 if pointer is not None else None, review,
+                                     _block(report, "baseline").get("sha256")) if isinstance(digest, str)}
+    matches: list[str] = []
+    if file_sha256 in written:
+        matches = sorted(path.relative_to(out).as_posix() for path in out.rglob("*.csv")
+                         if path.is_file() and sha256_bytes(path.read_bytes()) == file_sha256)
+        if not matches:
+            raise EntryRecordRefused(
+                "ENTRY_RECORD_RUN_FOLDER_INVALID", f"run {run_id} recorded writing this file and its folder no longer holds it")
+    # The rung, the policy and the theses describe the review's selection: they fill for its own file, or for an
+    # operator's file after a run whose pointer names it (the hand passes start from it), never for the baseline.
+    from_review = review is not None and (file_sha256 == review if matches else pointer is not None and pointer.sha256 == review)
+    relaxation = report.get("relaxation") if isinstance(report.get("relaxation"), dict) else None
+    stage = report.get("stage") if isinstance(report.get("stage"), str) else None
+    rung = relaxation.get("final_rung") if relaxation is not None and isinstance(relaxation.get("final_rung"), str) else None
+    reasons: dict[str, str] = {}
+    if stage is None:
+        reasons["method.stage"] = "STAGE_NOT_RECORDED"
+    if not from_review:
+        rung = None
+        reasons["method.final_rung"] = "FILE_NOT_FROM_THE_REVIEW_SELECTION"
+    elif rung is None:
+        reasons["method.final_rung"] = "RELAXATION_NOT_RECORDED"
+    if matches:
+        run_file = pointer_file if pointer_file in matches else matches[0]
+        producer = pointer.producer if pointer is not None and run_file == pointer_file else None
+        if producer is None:
+            reasons["method.producer"] = "DELIVERY_POINTER_NOT_FOUND" if pointer is None else "FILE_IS_NOT_THE_POINTER_FILE"
+        method = {"kind": "ENGINE_FILE", "stage": stage, "final_rung": rung, "producer": producer, "run_file": run_file}
+    else:
+        method = {"kind": "OPERATOR_FILE", "stage": stage, "final_rung": rung, "producer": None, "run_file": None}
+        reasons["method.producer"] = reasons["method.run_file"] = "NO_RUN_FILE_MATCHES"
+
+    final = relaxation.get("final_policy") if relaxation is not None else None
+    policy, why = None, None
+    if not from_review:
+        why = "FILE_NOT_FROM_THE_REVIEW_SELECTION"
+    elif relaxation is None:
+        why = "RELAXATION_NOT_RECORDED"
+    elif final is None:
+        why = "NO_POLICY_AT_FINAL_RUNG"
+    elif not isinstance(final, dict) or not isinstance(final.get("normalized_sha256"), str):
+        why = "POLICY_HASH_NOT_RECORDED"
+    else:
+        policy = final["normalized_sha256"]
+    if why is not None:
+        reasons["policy_sha256"] = why
+    state: dict[str, object] = {"run_id": run_id, "method": method, "policy_sha256": policy, "reasons": reasons}
+    if run_data is None:
+        return {**state, "theses": None, "thesis_reason": "RUN_DATA_NOT_SUPPLIED", "markets": None,
+                "market_reason": "RUN_DATA_NOT_SUPPLIED"}
+    data = Path(run_data)
+    artifacts, hashes = _block(report, "prior_review_artifacts"), _block(report, "prior_review_hashes")
+    claim, thesis_reason = _claim(from_review, artifacts, hashes, run_id, data, policy)
+    theses = _theses(claim, rosters, slate) if claim is not None else None
+    markets, market_reason = _markets(artifacts, hashes, _block(report, "prior_review_reports"), run_id, data, slate)
+    return {**state, "theses": theses, "thesis_reason": thesis_reason, "markets": markets, "market_reason": market_reason}
+
+
+def _run_row(state: dict[str, object] | None, entry_id: str) -> dict[str, object]:
+    if state is None or "missing" in state:
+        reason = NO_RUN_FOLDER if state is None else state["missing"]
+        return {"run_id": None, "method": None, "policy_sha256": None, "thesis": None,
+                "reasons": dict.fromkeys(_RUN_FIELDS, reason)}
+    reasons = dict(state["reasons"])
+    thesis, why = state["theses"][entry_id] if state["theses"] is not None else (None, state["thesis_reason"])
+    if thesis is None:
+        reasons["thesis"] = why
+    return {"run_id": state["run_id"], "method": dict(state["method"]), "policy_sha256": state["policy_sha256"],
+            "thesis": thesis, "reasons": reasons}
+
+
+def _stack_game(state: dict[str, object] | None, game_id: str | None) -> dict[str, object]:
+    if state is None or "missing" in state:
+        return {"game_id": game_id, "market": None, "market_reason": NO_RUN_FOLDER if state is None else state["missing"]}
+    if state["markets"] is None:
+        return {"game_id": game_id, "market": None, "market_reason": state["market_reason"]}
+    if game_id is None:
+        return {"game_id": None, "market": None, "market_reason": "UNFILLED"}
+    return {"game_id": game_id, "market": copy.deepcopy(state["markets"][game_id]), "market_reason": None}
+
+
 def _rosters(slate: SlateContract, template: EntryTemplate, filled_file: EntryTemplate) -> dict[str, tuple[str, ...] | None]:
     """Each template Entry ID's roster as exact DK IDs in slot order, None when every cell is blank; anything else refuses."""
 
@@ -150,7 +453,7 @@ def _rosters(slate: SlateContract, template: EntryTemplate, filled_file: EntryTe
             continue
         roster: list[str] = []
         for slot, cell in enumerate(cells, start=1):
-            dk_id = prefilled_cell_id(cell)
+            dk_id = _cell_id(cell)
             if dk_id is None:
                 raise EntryRecordRefused(
                     "ENTRY_RECORD_CELL_NOT_AN_EXACT_DK_ID",
@@ -194,8 +497,14 @@ def build_records(
     *,
     scores: str | Path | None = None,
     portfolio: str | Path | None = None,
+    run_dir: str | Path | None = None,
+    run_data: str | Path | None = None,
 ) -> list[dict[str, object]]:
-    """One `nfl_entry_build_record_v1` row per Entry ID of the template, in template order, or a refusal by name."""
+    """One `nfl_entry_build_record_v1` row per Entry ID of the template, in template order, or a refusal by name.
+
+    `run_dir` is a run's output folder (`outputs/<id>`) and `run_data` its run-data folder (`data/runs/<id>`); without
+    them every run field and market number is null, `RUN_FOLDER_NOT_SUPPLIED`.
+    """
 
     if scores is not None and portfolio is not None:
         raise EntryRecordRefused("ENTRY_RECORD_PRIOR_SOURCE_INVALID", "one prior source, scores or a portfolio record, not both")
@@ -262,6 +571,10 @@ def build_records(
     }
     by_id = {player.dk_id: player for player in slate.players}
     earliest = min(player.lock_at for player in slate.players)
+    state = _run_folder(run_dir, run_data, salary_sha256=hashes["salary_sha256"], entries_sha256=hashes["entries_sha256"],
+                        file_sha256=hashes["file_sha256"], slate=slate, rosters=rosters)
+    # Only the run's own file establishes which run built it; an operator's file binds to the supplied run by hashes alone.
+    named = state is not None and "missing" not in state and state["method"]["kind"] == "ENGINE_FILE"
 
     rows: list[dict[str, object]] = []
     for entry in template.authorizations:
@@ -273,11 +586,9 @@ def build_records(
             "mode": slate.mode.value,
             "hashes": dict(hashes),
             "salary_binding": "ENTRIES_POOL_MATCH" if pool is not None else "ENTRIES_POOL_ABSENT",
-            # Each run field null with its own reason; Session 72b fills the shapes the contract declares.
-            "run": {"run_id": None, "method": None, "policy_sha256": None, "thesis": None,
-                    "reasons": {field: NO_RUN_FOLDER for field in ("run_id", "method", "policy_sha256", "thesis")}},
+            "run": _run_row(state, entry.entry_id),
             "rank": None,
-            "does_not_establish": list(DOES_NOT_ESTABLISH),
+            "does_not_establish": [item for item in DOES_NOT_ESTABLISH if not (named and item == WHICH_RUN)],
         }
         prior = {"points": None, "score_version": version, "source": kind, "unscored_dk_ids": [],
                  "excluded_dk_ids_rostered": [], "reason": None}
@@ -285,7 +596,7 @@ def build_records(
             prior["reason"] = "UNFILLED"
             rows.append({**row, "roster": None, "captain_dk_id": None, "prior": prior, "salary_left": None,
                          "structure": None, "dk_status": None, "later_window_count": None,
-                         "stack_game": {"game_id": None, "market": None, "market_reason": NO_RUN_FOLDER}})
+                         "stack_game": _stack_game(state, None)})
             continue
         players = [by_id[dk_id] for dk_id in roster]
         if kind == "POOL_SCORES_SUM":
@@ -315,7 +626,7 @@ def build_records(
             "structure": _structure(slate, roster, players, counts),
             "dk_status": {"flags": flags, "q_count": sum(1 for value in flags.values() if value.upper() == "Q")},
             "later_window_count": sum(1 for player in players if player.lock_at > earliest),
-            "stack_game": {"game_id": game, "market": None, "market_reason": NO_RUN_FOLDER},
+            "stack_game": _stack_game(state, game),
         })
     ranked = [row["prior"]["points"] for row in rows if row["prior"]["points"] is not None]
     for row in rows:
