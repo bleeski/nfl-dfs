@@ -4916,16 +4916,19 @@ audit read `prefilled_cell_id` itself (V13). Each ID must be in the salary file,
     paths a moved folder no longer has), else `ENTRY_RECORD_RUN_INPUTS_DIFFER`. `run_id` is the report's own.
   - **`method`.** `ENGINE_FILE` when the file's bytes equal a CSV in the output folder whose bytes are an output the run
     recorded writing (the pointer's file, `bulk_entry_sha256`, the baseline's `sha256`); else `OPERATOR_FILE`, so an
-    in-place edit of the run's own file is the operator's. `stage` (the report's) and `final_rung` (`relaxation.final_rung`)
-    are the supplied run's own for either kind. `run_file` is the matching file (the pointer's when several match);
-    `producer` is the pointer's only when the match is the pointer's file. A baseline's bytes are the baseline, never the
-    improvement, whatever the pointer names.
-  - **`policy_sha256` and `thesis` describe the review's selection.** They fill only for the review's own CSV
-    (`bulk_entry_sha256`) or an operator file after a run whose pointer names it (the hand passes start from it); else
-    `FILE_NOT_FROM_THE_REVIEW_SELECTION`. `policy_sha256` is `relaxation.final_policy.normalized_sha256`. `thesis` is
-    `selection.portfolio_policy.theses.entries[<Entry ID>]` from a selection report whose bytes are
-    `prior_review_hashes.selection_report` and whose `normalized_policy_sha256` is the final policy's, read by Entry ID,
-    never by roster (Session 66).
+    in-place edit of the run's own file is the operator's. `stage` is the report's own, for either kind. `run_file` is the
+    matching file (the pointer's when several match); `producer` is the pointer's only when the match is the pointer's
+    file. A baseline's bytes are the baseline, never the improvement, whatever the pointer names. An operator's file binds
+    to the supplied run by its salary and entries hashes alone, so its run fields describe that run, not a proven origin.
+  - **`method.final_rung`, `policy_sha256` and `thesis` describe the review's selection.** They fill only for the review's
+    own CSV (`bulk_entry_sha256`) or an operator file after a run whose pointer names it (the hand passes start from it);
+    else `FILE_NOT_FROM_THE_REVIEW_SELECTION`, so a baseline never carries the ladder's rung. `final_rung` is
+    `relaxation.final_rung`; `policy_sha256` is `relaxation.final_policy.normalized_sha256`. `thesis` comes from a
+    selection report whose bytes are `prior_review_hashes.selection_report` and whose `normalized_policy_sha256` is the
+    final policy's, under Session 66's rule and never from a roster's shape: a lineup exactly as the run built it carries
+    the thesis the claim gives that lineup (`theses.by_lineup`, by `lineups.roster_canonical_key`), wherever it sits; an
+    edited row carries its Entry ID's (`theses.entries`), unless a lineup the run built sits under another Entry ID than
+    the claim's (the contest pass moved lineups), when an edited row's thesis is null, `LINEUPS_MOVED_BETWEEN_ENTRY_IDS`.
   - **Paths.** Every path the report records is an absolute path on the run's machine. Each is found again under the
     supplied folder: the tail after the last pair of segments (run ID, `prior_review` or `prior_review_attempt_<N>`),
     separators normalized, never the path as it stands and never a guessed attempt folder.
@@ -4934,7 +4937,8 @@ audit read `prefilled_cell_id` itself (V13). Each ID must be in the salary file,
     `RUN_REPORT_NOT_FOUND` (no `cowork_run.json`; every field), `RUN_DATA_NOT_SUPPLIED`, `STAGE_NOT_RECORDED`,
     `RELAXATION_NOT_RECORDED`, `DELIVERY_POINTER_NOT_FOUND`, `FILE_IS_NOT_THE_POINTER_FILE`, `NO_RUN_FILE_MATCHES`,
     `FILE_NOT_FROM_THE_REVIEW_SELECTION`, `NO_POLICY_AT_FINAL_RUNG`, `POLICY_HASH_NOT_RECORDED`,
-    `SELECTION_REPORT_NOT_FOUND`, `ARTIFACT_OUTSIDE_RUN_FOLDER`, `NO_THESIS_CLAIM`, `ENTRY_ID_HAS_NO_THESIS`.
+    `SELECTION_REPORT_NOT_FOUND`, `ARTIFACT_OUTSIDE_RUN_FOLDER`, `NO_THESIS_CLAIM`, `ENTRY_ID_HAS_NO_THESIS`,
+    `LINEUPS_MOVED_BETWEEN_ENTRY_IDS`.
 - **Stack game** {`game_id`, `market`, `market_reason`}. `game_id`: the QB's game (Classic) or the game (Showdown). `market` is
   null or {`<team>`: {`total`, `spread`, `reasons`}} for both teams of that game, numbers or null, `reasons` naming each null;
   `market_reason` names a null `market` and is null otherwise. Without a run folder `market` is null,
@@ -4947,7 +4951,8 @@ audit read `prefilled_cell_id` itself (V13). Each ID must be in the salary file,
   `ARTIFACT_NOT_FOUND`, `RUN_CLOCK_NOT_RECORDED`, `RUN_REPORT_NOT_FOUND`, `UNFILLED`. A team's null number:
   `TEAM_NOT_IN_TEAM_PROJECTIONS` or `MARKET_VALUE_BLANK` in its `reasons`. Never inferred, never from another source.
 - **`does_not_establish`.** `EXPECTED_VALUE_OR_ROI`, `WIN_OR_CASH_PROBABILITY`, `AN_EDGE_OR_ITS_ABSENCE`, `CALIBRATION`,
-  `UPLOAD_CLEARANCE`, and `WHICH_RUN_BUILT_THE_FILE` while `run.method` is null.
+  `UPLOAD_CLEARANCE`, and `WHICH_RUN_BUILT_THE_FILE` unless `run.method` is `ENGINE_FILE` (Session 72b narrowed "while
+  `run.method` is null" before any record carried a method: an operator's file binds to the run by hashes alone).
 
 **Refusals** (registry family `entry_record`, `P`, stops `CERTIFICATION`; a refusal writes nothing):
 `ENTRY_RECORD_INPUT_UNREADABLE` (an input missing, unreadable or not DraftKings' shape); `ENTRY_RECORD_MODE_MISMATCH`
@@ -4960,11 +4965,12 @@ is not the salary file's IDs, or the prior source names an ID outside it); `ENTR
 without both views, whose views disagree, or whose Entry IDs, rosters or figures are not the file's);
 `ENTRY_RECORD_ARTIFACT_CONFLICT`; `ENTRY_RECORD_WRITE_FAILED`. Since Session 72b, with a run folder:
 `ENTRY_RECORD_RUN_INPUTS_DIFFER` (the run's intake or pointer read other salary or entries bytes);
-`ENTRY_RECORD_RUN_FOLDER_INVALID` (a run-data folder without its output folder; the report or pointer unreadable or naming
-another run; the selection report's bytes not the run's; the claim naming another policy or theses that are not names; the
-run recorded writing the file and its folder no longer holds it); `ENTRY_RECORD_SOURCE_LEDGER_INVALID` (the ledger's bytes not
-the run's, the ledger failing validation at the run's clock or not binding the CSVs read, or a market number that is not a
-number). The script prints `REFUSED <code>: <detail>` on stderr and exits 2 (`--run-data` without `--run-dir` is an argparse
+`ENTRY_RECORD_RUN_FOLDER_INVALID` (a supplied folder that is not a folder, or a run-data folder without its output folder;
+the report or pointer unreadable, the report naming no run ID or the pointer another run; the selection report's bytes not
+the run's; the claim naming another policy or theses that are not names; the run recorded writing the file and its folder no
+longer holds it); `ENTRY_RECORD_SOURCE_LEDGER_INVALID` (the ledger's bytes not the run's, the ledger failing validation at
+the run's clock or not binding the CSVs read, `team_projections.csv` without its team and market columns or repeating a
+team in a game, or a market number that is not a number). The script prints `REFUSED <code>: <detail>` on stderr and exits 2 (`--run-data` without `--run-dir` is an argparse
 error); otherwise one JSON line (`rows`, `state`, `sha256`) and exit 0.
 
 **The committed records**, each slate's graded file with the source its priors read (a dump is the source only where it

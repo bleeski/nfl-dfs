@@ -189,6 +189,7 @@ def test_one_changed_cell_records_operator_file(real, tmp_path):
                                              "method.run_file": "NO_RUN_FILE_MATCHES"}
             # The hand pass started from the review the pointer names, so its policy still describes the rows.
             assert row["run"]["policy_sha256"] == _sha256(normalized)
+            assert row["does_not_establish"] == KEPT[:4] + ["WHICH_RUN_BUILT_THE_FILE", "UPLOAD_CLEARANCE"]
 
 
 def test_the_market_numbers_equal_the_ledger_bound_csv(real):
@@ -244,10 +245,11 @@ def test_a_run_that_shipped_the_baseline_names_it_and_claims_no_selection(baseli
     assert baseline.code == 2 and baseline.delivered.name == Path(BASELINE_FILE).name
     for row in _record(baseline):
         assert row["run"]["method"] == {"kind": "ENGINE_FILE", "stage": "DEADLINE_IMPROVEMENT_SKIPPED",
-                                        "final_rung": "DEFAULT", "producer": "run-slate:baseline",
+                                        "final_rung": None, "producer": "run-slate:baseline",
                                         "run_file": BASELINE_FILE}
-        assert row["run"]["reasons"] == {"policy_sha256": "FILE_NOT_FROM_THE_REVIEW_SELECTION",
-                                         "thesis": "FILE_NOT_FROM_THE_REVIEW_SELECTION"}
+        assert row["run"]["reasons"] == dict.fromkeys(("method.final_rung", "policy_sha256", "thesis"),
+                                                      "FILE_NOT_FROM_THE_REVIEW_SELECTION")
+        assert row["does_not_establish"] == KEPT
         assert row["stack_game"]["market_reason"] == "SOURCE_LEDGER_NOT_FOUND"
 
 
@@ -258,10 +260,10 @@ def test_the_baseline_of_a_run_that_improved_is_never_called_the_improvement(rea
     rows = _record(real, real.paths["run_dir"] / BASELINE_FILE)
     for row in rows:
         assert row["run"]["method"] == {"kind": "ENGINE_FILE", "stage": "PRIOR_ONLY_REVIEW_EXPORT",
-                                        "final_rung": "DEFAULT", "producer": None, "run_file": BASELINE_FILE}
+                                        "final_rung": None, "producer": None, "run_file": BASELINE_FILE}
         assert row["run"]["reasons"] == {"method.producer": "FILE_IS_NOT_THE_POINTER_FILE",
-                                         "policy_sha256": "FILE_NOT_FROM_THE_REVIEW_SELECTION",
-                                         "thesis": "FILE_NOT_FROM_THE_REVIEW_SELECTION"}
+                                         **dict.fromkeys(("method.final_rung", "policy_sha256", "thesis"),
+                                                         "FILE_NOT_FROM_THE_REVIEW_SELECTION")}
 
 
 def test_each_thesis_is_read_by_entry_id_from_the_runs_claim(theses):
@@ -282,6 +284,7 @@ def test_a_folder_moved_to_another_machine_writes_the_same_record(real, tmp_path
 
     def windows(doc):
         for key, value in doc["prior_review_artifacts"].items():
+            value = value.replace("\\", "/") if isinstance(value, str) else value  # a Windows run records backslashes
             if isinstance(value, str) and "/runs/s72b-real/" in value:
                 tail = value.split("/runs/s72b-real/", 1)[1].replace("/", "\\")
                 doc["prior_review_artifacts"][key] = (
@@ -306,15 +309,17 @@ def test_a_market_number_the_csv_lacks_is_a_named_null(real, tmp_path, case):
         assert row["stack_game"]["market"] == {away: {"total": 46.5, "spread": 3.5, "reasons": {}}, home: expected}
 
 
-@pytest.mark.parametrize("case", ["csv-byte", "not-a-number", "overflow", "ledger-byte", "stale-at-run-clock"])
+@pytest.mark.parametrize("case", ["csv-byte", "not-a-number", "overflow", "signalling", "ledger-byte",
+                                  "stale-at-run-clock"])
 def test_a_ledger_that_does_not_bind_its_csv_is_refused(real, tmp_path, case):
     copies = _copy(real, tmp_path)
     home = real.slate.games[0].home_team
     if case == "csv-byte":  # the CSV changed and nothing re-bound it
         path = _projected(copies["run_data"]) / "team_projections.csv"
         path.write_bytes(path.read_bytes().replace(b"43.5", b"43.6", 1))
-    elif case in ("not-a-number", "overflow"):  # a decimal too large for a float is no number either
-        _edit_team_csv(copies, _set_team_cell(home, "MARKET_TOTAL", "forty" if case == "not-a-number" else "1e999"))
+    elif case in ("not-a-number", "overflow", "signalling"):  # a decimal no float can hold is no number either
+        text = {"not-a-number": "forty", "overflow": "1e999", "signalling": "sNaN"}[case]
+        _edit_team_csv(copies, _set_team_cell(home, "MARKET_TOTAL", text))
     elif case == "ledger-byte":  # the ledger itself is not the one the run recorded writing
         ledger = _projected(copies["run_data"]) / "source_ledger.json"
         ledger.write_bytes(ledger.read_bytes() + b"\n")
@@ -480,6 +485,9 @@ def test_a_run_id_that_names_a_child_folder_still_finds_its_artifact(tmp_path):
     assert _rebase("/x/runs/selection/prior_review/missing.json", "selection", tmp_path) == (None, "ARTIFACT_NOT_FOUND")
     assert _rebase(None, "selection", tmp_path) == (None, "ARTIFACT_NOT_FOUND")
     assert _rebase(5, "selection", tmp_path) == (None, "ARTIFACT_NOT_FOUND")
+    # A drive in the tail would leave the folder on Windows; no artifact the run writes has a colon in its path.
+    assert _rebase("/x/runs/selection/prior_review/C:/secret.json", "selection", tmp_path) == (
+        None, "ARTIFACT_OUTSIDE_RUN_FOLDER")
 
 
 def test_a_second_copy_of_the_run_file_never_displaces_the_pointers_own(real, tmp_path):
@@ -496,7 +504,13 @@ def test_an_entry_id_the_claim_leaves_without_a_thesis_is_named(theses, tmp_path
     copies = _copy(theses, tmp_path)
     claim = copies["run_data"] / "prior_review" / "selection" / "selection_report.json"
     first = parse_entries_ids(theses)[0]
-    _rewrite_json(claim, lambda doc: doc["selection"]["portfolio_policy"]["theses"]["entries"].__setitem__(first, None))
+    lineup = _lineup_key(theses, first)
+
+    def forget(doc):
+        doc["selection"]["portfolio_policy"]["theses"]["entries"][first] = None
+        doc["selection"]["portfolio_policy"]["theses"]["by_lineup"].pop(lineup)
+
+    _rewrite_json(claim, forget)
     _rewrite_json(copies["run_dir"] / "cowork_run.json",
                   lambda doc: doc["prior_review_hashes"].__setitem__("selection_report", _sha256(claim)))
     rows = {row["entry_id"]: row for row in _record(theses, **copies)}
@@ -508,3 +522,71 @@ def parse_entries_ids(run) -> list[str]:
     from nfl_dfs.dk import parse_entries
 
     return [entry.entry_id for entry in parse_entries(run.paths["entries"]).authorizations]
+
+
+def _lineup_key(run, entry_id: str) -> str:
+    from nfl_dfs.lineups import roster_canonical_key
+
+    rows = _csv_rows_of(run.delivered)
+    start = rows[0].index("Entry Fee") + 1
+    roster = next(row[start:start + 6] for row in rows[1:] if row and row[0] == entry_id)
+    return roster_canonical_key(parse_salaries(run.paths["salaries"]), roster)
+
+
+def _csv_rows_of(path: Path) -> list[list[str]]:
+    return list(csv.reader(io.StringIO(path.read_bytes().decode("utf-8-sig"), newline="")))
+
+
+def _rewritten(run, target: Path, *, swap: tuple[str, str] | None = None, edit: str | None = None) -> None:
+    """The run's own file with two Entry IDs' lineups exchanged whole, or one row's cell changed to a legal player."""
+
+    slate = parse_salaries(run.paths["salaries"])
+    rows = _csv_rows_of(run.delivered)
+    start = rows[0].index("Entry Fee") + 1
+    by_entry = {row[0]: row for row in rows[1:] if row and row[0].strip().isdigit()}
+    if swap is not None:
+        first, second = (by_entry[entry] for entry in swap)
+        first[start:start + 6], second[start:start + 6] = second[start:start + 6], first[start:start + 6]
+    if edit is not None:
+        row = by_entry[edit]
+        roster = row[start:start + 6]
+        rostered = {player.underlying_id for player in slate.players if player.dk_id in roster}
+        trial = next(roster[:5] + [player.dk_id] for player in slate.players
+                     if player.role == "FLEX" and player.underlying_id not in rostered
+                     and validate_lineup(slate, roster[:5] + [player.dk_id]).valid)
+        row[start:start + 6] = trial
+    buffer = io.StringIO(newline="")
+    csv.writer(buffer, lineterminator="\r\n").writerows(rows)
+    target.write_bytes(buffer.getvalue().encode("utf-8"))
+
+
+@pytest.mark.parametrize("case", ["moved", "moved-and-edited", "edited"])
+def test_a_thesis_follows_its_lineup_when_the_contest_pass_moves_it(theses, tmp_path, case):
+    """Session 66's rule on an operator's file: a lineup the run built carries its own thesis wherever it sits; an edited
+    row keeps its Entry ID's thesis, unless lineups moved between Entry IDs, when its thesis is a named null."""
+
+    claim = json.loads(Path(theses.report["prior_review_artifacts"]["selection_report"]).read_bytes())
+    entries = claim["selection"]["portfolio_policy"]["theses"]["entries"]
+    order = parse_entries_ids(theses)
+    first = order[0]
+    second = next(entry for entry in order if entries[entry] != entries[first])
+    third = next(entry for entry in order if entry not in (first, second))
+    target = tmp_path / "hand.csv"
+    _rewritten(theses, target, swap=None if case == "edited" else (first, second),
+               edit=None if case == "moved" else third)
+    rows = {row["entry_id"]: row["run"] for row in _record(theses, target)}
+    assert {run["method"]["kind"] for run in rows.values()} == {"OPERATOR_FILE"}
+    if case != "edited":
+        assert (rows[first]["thesis"], rows[second]["thesis"]) == (entries[second], entries[first])
+    if case == "moved-and-edited":
+        assert rows[third]["thesis"] is None and rows[third]["reasons"]["thesis"] == "LINEUPS_MOVED_BETWEEN_ENTRY_IDS"
+    untouched = [entry for entry in order if entry not in ((first, second, third) if case != "edited" else (third,))]
+    for entry in untouched + ([third] if case != "moved-and-edited" else []):
+        assert rows[entry]["thesis"] == entries[entry]
+
+
+@pytest.mark.parametrize("which", ["run_dir", "run_data"])
+def test_a_mistyped_folder_is_refused_never_recorded_as_missing(real, tmp_path, which):
+    folders = {"run_dir": real.paths["run_dir"], "run_data": real.paths["run_data"], which: tmp_path / "no-such-folder"}
+    refusal = _refused("ENTRY_RECORD_RUN_FOLDER_INVALID", real, **folders)
+    assert which in refusal.detail

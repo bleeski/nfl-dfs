@@ -918,10 +918,8 @@
       "key": "min-no-file",
       "title": "Which MIN@NO file did you upload?",
       "question": "On Oct 11 the first file went out at 12:25 PM ET and two more were built at your request before 1:00. Which one did you upload: the first (v7) or the last (v10)?",
-      "recommendation": "Record both and mark the last one (v10) as the graded file, unless you uploaded the first.",
-      "holds_up": [
-        "S72c"
-      ]
+      "recommendation": "Record both and mark the last one (v10) as the graded file, unless you uploaded the first. Nothing waits on this: both files get a record either way.",
+      "holds_up": []
     }
   ]
 }

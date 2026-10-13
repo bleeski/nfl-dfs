@@ -37,7 +37,7 @@ from .contracts import EngineMode, SlateContract
 from .dk import DraftKingsParseError, EntryTemplate, embedded_pool_ids, parse_entry_bytes, parse_salaries, reconcile_template
 from .evidence import EvidenceError, validate_source_ledger
 from .hashing import canonical_json_bytes, sha256_bytes
-from .lineups import prefilled_cell_id, validate_lineup
+from .lineups import prefilled_cell_id, roster_canonical_key, validate_lineup
 from .portfolio_policy import structure_counts
 from .selection import POOL_SCORES_SCHEMA
 
@@ -194,7 +194,7 @@ def _rebase(recorded: object, run_id: str, root: Path) -> tuple[Path | None, str
     parts = [part for part in recorded.replace("\\", "/").split("/") if part]
     anchors = [index for index in range(len(parts) - 1)
                if parts[index] == run_id and _ATTEMPT_FOLDER.fullmatch(parts[index + 1])]
-    if not anchors or ".." in parts[anchors[-1] + 1:]:
+    if not anchors or any(part == ".." or ":" in part for part in parts[anchors[-1] + 1:]):
         return None, "ARTIFACT_OUTSIDE_RUN_FOLDER"
     path = Path(root).joinpath(*parts[anchors[-1] + 1:])
     return (path, None) if path.is_file() else (None, "ARTIFACT_NOT_FOUND")
@@ -206,7 +206,7 @@ def _market_number(text: str | None, label: str) -> float | None:
         return None
     try:
         number = float(Decimal(value))
-    except InvalidOperation:
+    except (InvalidOperation, ValueError):
         number = math.nan
     if not math.isfinite(number):
         raise EntryRecordRefused("ENTRY_RECORD_SOURCE_LEDGER_INVALID", f"team_projections.csv {label} is {value!r}, not a number")
@@ -214,7 +214,7 @@ def _market_number(text: str | None, label: str) -> float | None:
 
 
 def _claim(from_review: bool, artifacts, hashes, run_id: str, data: Path, policy: str | None):
-    """Each Entry ID's thesis from the run's own claim, by Entry ID only (Session 66's rule), or None and why."""
+    """The run's own claim: (thesis by Entry ID, thesis by lineup key), or None and why."""
 
     if not from_review:
         return None, "FILE_NOT_FROM_THE_REVIEW_SELECTION"
@@ -230,12 +230,38 @@ def _claim(from_review: bool, artifacts, hashes, run_id: str, data: Path, policy
     if isinstance(named, str) and isinstance(policy, str) and named != policy:
         raise EntryRecordRefused(
             "ENTRY_RECORD_RUN_FOLDER_INVALID", f"the claim names policy {named}; run {run_id}'s final policy is {policy}")
-    entries = _block(block, "theses").get("entries")
+    theses = _block(block, "theses")
+    entries, by_lineup = theses.get("entries"), _block(theses, "by_lineup")
     if not isinstance(entries, dict):
         return None, "NO_THESIS_CLAIM"
-    if not all(name is None or isinstance(name, str) for name in entries.values()):
+    if not all(name is None or isinstance(name, str) for name in [*entries.values(), *by_lineup.values()]):
         raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", "the claim's theses are not names")
-    return {str(entry): name for entry, name in entries.items() if name is not None}, None
+    return (entries, by_lineup), None
+
+
+def _theses(claim, rosters: dict[str, tuple[str, ...] | None], slate: SlateContract) -> dict[str, tuple[str | None, str | None]]:
+    """Each Entry ID's (thesis, reason) under Session 66's rule, read from the claim and never from a roster's shape.
+
+    A lineup exactly as the run built it carries the thesis the claim gives that lineup, wherever it now sits. An edited
+    row keeps its Entry ID's thesis (the hand passes keep each row's thesis), unless a lineup the run built sits under
+    another Entry ID than the claim's: then Entry IDs were reassigned (the contest pass) and an edited row's is unknown.
+    """
+
+    entries, by_lineup = claim
+    keys = {entry: roster_canonical_key(slate, roster) for entry, roster in rosters.items() if roster is not None}
+    moved = any(key in by_lineup and by_lineup[key] != entries.get(entry) for entry, key in keys.items())
+    result: dict[str, tuple[str | None, str | None]] = {}
+    for entry in rosters:
+        key = keys.get(entry)
+        if key is not None and key in by_lineup:
+            name = by_lineup[key]
+        elif key is not None and moved:
+            result[entry] = (None, "LINEUPS_MOVED_BETWEEN_ENTRY_IDS")
+            continue
+        else:
+            name = entries.get(entry)
+        result[entry] = (name, None) if name is not None else (None, "ENTRY_ID_HAS_NO_THESIS")
+    return result
 
 
 def _markets(artifacts, hashes, reports, run_id: str, data: Path, slate: SlateContract):
@@ -289,13 +315,16 @@ def _markets(artifacts, hashes, reports, run_id: str, data: Path, slate: SlateCo
 
 
 def _run_folder(run_dir, run_data, *, salary_sha256: str, entries_sha256: str, file_sha256: str,
-                slate: SlateContract) -> dict[str, object] | None:
+                slate: SlateContract, rosters: dict[str, tuple[str, ...] | None]) -> dict[str, object] | None:
     """What the supplied run folders say about the delivered file, read once per record; None without a run folder."""
 
     if run_dir is None:
         if run_data is not None:
             raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", "a run-data folder needs its output folder (run_dir)")
         return None
+    for label, folder in (("run_dir", run_dir), ("run_data", run_data)):
+        if folder is not None and not Path(folder).is_dir():
+            raise EntryRecordRefused("ENTRY_RECORD_RUN_FOLDER_INVALID", f"{label} {folder} is not a folder")
     out = Path(run_dir)
     if not (out / RUN_REPORT_NAME).is_file():
         return {"missing": "RUN_REPORT_NOT_FOUND"}
@@ -336,13 +365,19 @@ def _run_folder(run_dir, run_data, *, salary_sha256: str, entries_sha256: str, f
         if not matches:
             raise EntryRecordRefused(
                 "ENTRY_RECORD_RUN_FOLDER_INVALID", f"run {run_id} recorded writing this file and its folder no longer holds it")
+    # The rung, the policy and the theses describe the review's selection: they fill for its own file, or for an
+    # operator's file after a run whose pointer names it (the hand passes start from it), never for the baseline.
+    from_review = review is not None and (file_sha256 == review if matches else pointer is not None and pointer.sha256 == review)
     relaxation = report.get("relaxation") if isinstance(report.get("relaxation"), dict) else None
     stage = report.get("stage") if isinstance(report.get("stage"), str) else None
     rung = relaxation.get("final_rung") if relaxation is not None and isinstance(relaxation.get("final_rung"), str) else None
     reasons: dict[str, str] = {}
     if stage is None:
         reasons["method.stage"] = "STAGE_NOT_RECORDED"
-    if rung is None:
+    if not from_review:
+        rung = None
+        reasons["method.final_rung"] = "FILE_NOT_FROM_THE_REVIEW_SELECTION"
+    elif rung is None:
         reasons["method.final_rung"] = "RELAXATION_NOT_RECORDED"
     if matches:
         run_file = pointer_file if pointer_file in matches else matches[0]
@@ -354,9 +389,6 @@ def _run_folder(run_dir, run_data, *, salary_sha256: str, entries_sha256: str, f
         method = {"kind": "OPERATOR_FILE", "stage": stage, "final_rung": rung, "producer": None, "run_file": None}
         reasons["method.producer"] = reasons["method.run_file"] = "NO_RUN_FILE_MATCHES"
 
-    # The policy and the theses describe the review's selection: they fill for its own file, or for an operator's file
-    # after a run whose pointer names it (the hand passes start from it), never for the baseline.
-    from_review = review is not None and (file_sha256 == review if matches else pointer is not None and pointer.sha256 == review)
     final = relaxation.get("final_policy") if relaxation is not None else None
     policy, why = None, None
     if not from_review:
@@ -377,7 +409,8 @@ def _run_folder(run_dir, run_data, *, salary_sha256: str, entries_sha256: str, f
                 "market_reason": "RUN_DATA_NOT_SUPPLIED"}
     data = Path(run_data)
     artifacts, hashes = _block(report, "prior_review_artifacts"), _block(report, "prior_review_hashes")
-    theses, thesis_reason = _claim(from_review, artifacts, hashes, run_id, data, policy)
+    claim, thesis_reason = _claim(from_review, artifacts, hashes, run_id, data, policy)
+    theses = _theses(claim, rosters, slate) if claim is not None else None
     markets, market_reason = _markets(artifacts, hashes, _block(report, "prior_review_reports"), run_id, data, slate)
     return {**state, "theses": theses, "thesis_reason": thesis_reason, "markets": markets, "market_reason": market_reason}
 
@@ -388,9 +421,9 @@ def _run_row(state: dict[str, object] | None, entry_id: str) -> dict[str, object
         return {"run_id": None, "method": None, "policy_sha256": None, "thesis": None,
                 "reasons": dict.fromkeys(_RUN_FIELDS, reason)}
     reasons = dict(state["reasons"])
-    thesis = state["theses"].get(entry_id) if state["theses"] is not None else None
+    thesis, why = state["theses"][entry_id] if state["theses"] is not None else (None, state["thesis_reason"])
     if thesis is None:
-        reasons["thesis"] = state["thesis_reason"] or "ENTRY_ID_HAS_NO_THESIS"
+        reasons["thesis"] = why
     return {"run_id": state["run_id"], "method": dict(state["method"]), "policy_sha256": state["policy_sha256"],
             "thesis": thesis, "reasons": reasons}
 
@@ -537,8 +570,9 @@ def build_records(
     by_id = {player.dk_id: player for player in slate.players}
     earliest = min(player.lock_at for player in slate.players)
     state = _run_folder(run_dir, run_data, salary_sha256=hashes["salary_sha256"], entries_sha256=hashes["entries_sha256"],
-                        file_sha256=hashes["file_sha256"], slate=slate)
-    named = state is not None and "missing" not in state  # a method is named, so which run built the file is established
+                        file_sha256=hashes["file_sha256"], slate=slate, rosters=rosters)
+    # Only the run's own file establishes which run built it; an operator's file binds to the supplied run by hashes alone.
+    named = state is not None and "missing" not in state and state["method"]["kind"] == "ENGINE_FILE"
 
     rows: list[dict[str, object]] = []
     for entry in template.authorizations:

@@ -891,8 +891,10 @@ recorded, takes `entry_build_record.<file stem>.jsonl`. Pass `--run-dir` and `--
 (Session 72b): the record then names the method by bytes (`ENGINE_FILE` when the file is one the run wrote, else
 `OPERATOR_FILE`), the run's stage and rung, the final policy's hash, each Entry ID's thesis and the stack game's market
 numbers from the run's source ledger. The folders are not tracked, so record before they are cleaned up; a folder copied
-from another machine reads the same. A DraftKings late-swap export edited in place records against that export as its
-template, its `Name (ID) (LOCKED)` cells read to their exact IDs. It certifies nothing.
+from another machine reads the same; a folder path that does not exist is refused, never recorded as missing. A
+DraftKings late-swap export edited in place records against that export as its template, its `Name (ID) (LOCKED)` cells read
+to their exact IDs, and with no run folder: the export is not the template the run read
+(`ENTRY_RECORD_RUN_INPUTS_DIFFER`). It certifies nothing.
 
 A lineup run ends at its handoff (Ben, 2026-10-08). A lineup run never starts the
 post-merge routine: no next prompt, sync check, branch cleanup or archive, and no
