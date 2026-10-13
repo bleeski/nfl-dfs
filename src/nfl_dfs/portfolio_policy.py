@@ -108,6 +108,32 @@ class StructuralBounds:
 OPEN_STRUCTURAL_BOUNDS = StructuralBounds()
 
 
+def structure_counts(slate: SlateContract, roster_ids: Sequence[str]) -> dict[str, object]:
+    """The counts the structural bounds are checked on, recomputed from `slate.players`.
+
+    One copy for every reader (Session 72): the bound check below and the per-Entry-ID build record.
+    `pass_catchers_with_rostered_qb` holds one count per rostered QB, in roster order: the WR/TE on his
+    team; it is empty with no QB. `offense_against_own_dst` counts every non-DST person, any position,
+    on a rostered DST's team (so it also counts a QB whose own DST is rostered).
+    """
+
+    by_id = {row.dk_id: row for row in slate.players}
+    rows = [by_id[str(dk_id).strip()] for dk_id in roster_ids]
+    qb_rows = [row for row in rows if row.position == "QB"]
+    dst_teams = {row.team for row in rows if row.position == "DST"}
+    return {
+        "qb_count": len(qb_rows),
+        "pass_catchers_with_rostered_qb": [
+            sum(1 for row in rows if row.team == qb.team and row.position in {"WR", "TE"})
+            for qb in qb_rows
+        ],
+        "salary_left": slate.salary_cap - sum(row.salary for row in rows),
+        "kicker_count": sum(1 for row in rows if row.position == "K"),
+        "dst_count": sum(1 for row in rows if row.position == "DST"),
+        "offense_against_own_dst": sum(1 for row in rows if row.team in dst_teams and row.position != "DST"),
+    }
+
+
 def structural_bound_violations(
     slate: SlateContract, roster_ids: Sequence[str], bounds: StructuralBounds
 ) -> tuple[str, ...]:
@@ -117,34 +143,24 @@ def structural_bound_violations(
     his team. With zero QBs rostered it is vacuously satisfied.
     `offense_against_own_dst` forbids any non-DST person, any position, sharing
     a rostered DST's team (so it also covers a DST on the rostered QB's team).
+    The counts come from `structure_counts`.
     """
 
-    by_id = {row.dk_id: row for row in slate.players}
-    rows = [by_id[str(dk_id).strip()] for dk_id in roster_ids]
+    counts = structure_counts(slate, roster_ids)
     violations: list[str] = []
-    qb_rows = [row for row in rows if row.position == "QB"]
-    if not bounds.qb_count.satisfied_by(len(qb_rows)):
+    if not bounds.qb_count.satisfied_by(counts["qb_count"]):
         violations.append("qb_count")
-    if qb_rows:
-        counts = [
-            sum(1 for row in rows if row.team == qb.team and row.position in {"WR", "TE"})
-            for qb in qb_rows
-        ]
-        if any(not bounds.pass_catchers_with_rostered_qb.satisfied_by(count) for count in counts):
-            violations.append("pass_catchers_with_rostered_qb")
-    salary_left = slate.salary_cap - sum(row.salary for row in rows)
-    if not bounds.salary_left.satisfied_by(salary_left):
+    if any(not bounds.pass_catchers_with_rostered_qb.satisfied_by(count)
+           for count in counts["pass_catchers_with_rostered_qb"]):
+        violations.append("pass_catchers_with_rostered_qb")
+    if not bounds.salary_left.satisfied_by(counts["salary_left"]):
         violations.append("salary_left")
-    kicker_count = sum(1 for row in rows if row.position == "K")
-    if bounds.kicker_count_maximum is not None and kicker_count > bounds.kicker_count_maximum:
+    if bounds.kicker_count_maximum is not None and counts["kicker_count"] > bounds.kicker_count_maximum:
         violations.append("kicker_count")
-    dst_count = sum(1 for row in rows if row.position == "DST")
-    if bounds.dst_count_maximum is not None and dst_count > bounds.dst_count_maximum:
+    if bounds.dst_count_maximum is not None and counts["dst_count"] > bounds.dst_count_maximum:
         violations.append("dst_count")
-    if bounds.offense_against_own_dst:
-        dst_teams = {row.team for row in rows if row.position == "DST"}
-        if any(row.team in dst_teams and row.position != "DST" for row in rows):
-            violations.append("offense_against_own_dst")
+    if bounds.offense_against_own_dst and counts["offense_against_own_dst"]:
+        violations.append("offense_against_own_dst")
     return tuple(violations)
 
 
