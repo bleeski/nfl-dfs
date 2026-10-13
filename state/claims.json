@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "f830282c-f08e-4c68-be8e-14d60864080f",
-      "branch": "claude/s73-results-join",
-      "chunk": "S73",
-      "claimed_at": "2026-10-13T20:59:14Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

@@ -4,6 +4,133 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-13: Session 73 -- the results join (blanks, the ranking check)
+
+Branch `claude/s73-results-join`, pull request #147. Claimed at `89a47a2` on `8ed434b` (PR #146's merge, now recorded in
+Session 72c's close-out row). Ben approved the plan before any change. Fresh-context agents checked the plan before it was
+presented, reviewed the diff, and checked the close-out. Session 73 goes back to `Pending` on O13: its code landed, and
+its four review figures need Ben's export. Nothing reaches `run-slate`, `prior_review` or a release truth, and every
+path stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- **`nfl results-join --source-sha256 <sha>`** (`src/nfl_dfs/results_join.py`; `nfl_results_join_v1` and
+  `nfl_entry_results_v1`; `nfl.ps1`; `docs/OPERATOR_GUIDE.md` § Results join). It reads one snapshot `results-intake`
+  kept, plus each slate folder's default build record, and joins them on exact Entry ID. The realized points are the
+  export's own `Points`, not Session 70's player grading: the 2026-10-10 entry joined "its DraftKings points".
+- **Classes.** Every Entry ID gets one, with its cause:
+  - `JOINED`;
+  - `LOCKED_BLANK_WITH_FILE` (`RECORD_ROW_FILLED` or `RECORD_ROW_UNFILLED`);
+  - `LOCKED_BLANK_NO_RECORD` and `ENTERED_NO_RECORD` (`RECORD_LACKS_ENTRY_ID` with the folder named, or
+    `CONTEST_IN_NO_RECORD`; both read from the records' own contests);
+  - `RECORDED_NOT_IN_HISTORY` (`NOT_IN_EXPORT`);
+  - `ROW_DISAGREES` (`CONTEST`, or `GAME_TYPE` against the registered engine game types).
+  A gap is a class, never a refusal.
+- **The rank check.** For each slate, the record's prior points are ranked against the export's points with
+  `player_grading.spearman` (tied ranks averaged). It runs over every joined row with a prior and over paid rows alone,
+  because the review's scripts did not name their population. A null prior is excluded under the record's own reason.
+  Pooled is the unweighted slate mean. Descriptive, with no p-value.
+- **The files.**
+  - The report is written once under the gitignored results root. It is named by a digest of the records joined, so a
+    later record gives the same export a new report and never a refusal.
+  - Each slate's `construction/entry_results.w1.json` is written once beside its record: place, field size, points and
+    percentile, with the export's hash and no money. It is written only for a slate with an exported Entry ID.
+  - A later export with the same results gives `CONFIRMED_BY_EXPORT` (the file is kept). Other results give
+    `RESULTS_JOIN_RESULTS_DIFFER` for that slate alone, never an overwrite. Every file is attempted.
+- **Refusals.** The `results_join` registry family (`P`, six codes). `REGISTRY_SHA256` was re-pinned visibly, `96de3045`
+  to `d0025e51`, in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md`. That is the one edit to an existing test.
+- **The count.** `scripts/repo_state.py` prints `entry grading: N slates with results joined on Entry ID (descriptive;
+  not calibration)` on its own line, apart from P0's calibration line. It is `0` today.
+- **`tests/test_results_join.py`, 42 cases.**
+  - The four review slates use the real records. Synthetic realized points swap adjacent pairs of the prior order, so
+    rho is exactly `1 - 6*sum(d^2)/(n(n^2-1))`, computed in the test.
+  - DET@BUF uses its real template's 13 Entry IDs, 12 of them at zero.
+  - Determinism: two roots, byte-identical files.
+  - The `repo_state` count.
+  - Every class and cause; the record parser's ten bad shapes and an Entry ID in two folders; write-once across three
+    exports; no money in a tracked file; the CLI; the contract's every key.
+
+**The acceptance, clause by clause.**
+- **The four figures (-0.03, +0.38, +0.63, +0.06, mean +0.26)** are not reproduced. Ben's export is not on this machine
+  (O11 and O13 are open), and it never enters the repository. O13 now ends with one `results-join` run, and its stdout (no
+  money) gives every slate's `all` and `paid` rho.
+  - The export holds six record slates: the four, PHI@CHI and Week 4 afternoon. Its pooled mean is therefore the four's.
+  - The 10-10 scripts are not in the repository and may have read another file or prior source than the records. A figure
+    that does not reproduce at two places will be reported with the difference named.
+- **DET@BUF.** The test runs on the real records, with synthetic rows on the 13 real Entry IDs and contests of
+  `53fe7f5a-DKEntries_74.csv`. Twelve are `LOCKED_BLANK_NO_RECORD` and one is `ENTERED_NO_RECORD`, all
+  `CONTEST_IN_NO_RECORD`: no record holds any of its six contests, because the folder has the template and no delivered
+  file. Which Entry ID scored is synthetic; O13's output names the real one.
+- **Determinism** and **`repo_state.py --stdout`**: both pass. The digest prints `entry grading: 0 slates`.
+
+**Decided, with the reason.**
+- **MIN@NO.** The default record (`final_v10`) is joined, and `final_v7` is listed under `alternate_records`. The export
+  has no roster columns, so the join cannot show which file was uploaded: the 72c flag's "would show a mismatch" does
+  not hold. The per-slate results are the same either way; only MIN@NO's rho depends on the answer, and its contests
+  are not in O13's export.
+- **Week 5 Classic's free entry `5291960735`** joins like any recorded row. No Entry ID is hardcoded.
+- **The split.** The descriptor comparison is Session 73b, planned before any code: the first half alone was estimated
+  past the 1,000-line trigger. It measured 1,330 changed lines before the ledgers (source 508, tests 653, contract
+  and guide 169), under the 1,500 breakpoint.
+
+**Consults and review.**
+- **Plan consult** (the `advisor` skill's procedure: a fresh `fable` agent briefed to refute five claims). Nine claims
+  failed or weakened, and all were folded in before the plan was presented:
+  - O13's export can hold only six record slates;
+  - the export hash belongs in the per-slate file;
+  - write-once needed a per-slate confirm path;
+  - the population was unnamed, hence two;
+  - the "reproduce" tests were circular, hence a closed-form permutation;
+  - no tree scan;
+  - a contest mismatch is a class;
+  - `nfl.ps1` and the operator guide;
+  - the size.
+- **Review** (fresh-context `reviewer`). It found 2 blocking and 6 smaller issues, all fixed in `c387292` with tests:
+  - the report is now named by the records' digest, because a rerun after a new record was refused;
+  - a test pinned the live tree's 329 record rows;
+  - same-day games merged in the no-record cause;
+  - a blank on a disagreeing row was hidden;
+  - a hand-edited file was confirmed;
+  - a prefix game-type match;
+  - two undocumented details;
+  - a stale docstring.
+- **Close-out consult** (a fresh `fable` agent briefed to refute seven claims about the ledgers). It reran 242 tests
+  green and found nine weak points. Eight were taken:
+  - the §4 row now names `89fe205`;
+  - the parser has ten bad shapes, not nine;
+  - a dated note beside the 72c MIN@NO flag says the join cannot show the mismatch;
+  - the card's Depends on names O13;
+  - this paragraph;
+  - 73b's entry point and targets;
+  - the tracker's S73 "what" no longer claims the moved half;
+  - O13's command carries its `.\nfl.ps1` prefix and names the two rhos.
+  The ninth, the pull request number written before the PR existed, was checked after `gh pr create`.
+
+**Verification.**
+- **Red first.** `ImportError: cannot import name 'results_join' from 'nfl_dfs'`.
+- **Focused, then the neighbours.** 42 passed. The neighbour set (entry history, intake, player grading, results report,
+  entry record, gate registry, CLI help, orientation, roadmap, boundaries, tracker) was green, apart from the claim
+  commit's expected quick-start red.
+- **Old against new.** `origin/main`'s `cli.py` and registry against these, on one synthetic export:
+  - `results-intake`, `results-report` (twice) and both `--help` pages give identical exit codes, stdout and written
+    bytes;
+  - `doctor` differs only in free memory and the tree's own path;
+  - `repo_state.py --stdout` differs by the one new line.
+  - A Windows trap: under the scratchpad, `reports/<sha256>/` plus `.tmp` reaches 261 characters, so the comparison used
+    one-letter roots. The real per-slate path is 131 characters.
+- **Mutation pass on a copy:** 25 of 25 killed, on the second run.
+  - The first run was void: its copy's `qb_depth*` ignore, meant for the slates, also dropped
+    `src/nfl_dfs/qb_depth_capture.py`, so every mutant failed at collection. The driver now needs a passing baseline
+    and a named failing test.
+  - 23 were killed by the original tests. The two survivors, the pooled mean's denominator and the status precedence,
+    were real gaps; two added tests (`89fe205`) kill them.
+- **Full suite** (Windows, on `c387292`; `89fe205` adds two tests and changes no source):
+  `3857 passed, 2 skipped in 1543.63s (0:25:43)`. The two skips are this host's symlink-permission cases,
+  `tests/test_cowork.py:112` and `tests/test_standings_transport.py:523`, as in every Windows run. A first run on
+  `bc58367` was stopped at 50% when the review changed the source.
+
+**Left open.** O13: the four figures and which population reproduces them. Session 73b: the descriptor comparison. Ben's
+MIN@NO answer.
+
 ### 2026-10-13: Session 72c -- the build record backfill
 
 Branch `claude/s72c-backfill`, pull request #146. It was claimed at `e994cc8` on `febc2a2` (PR #145's merge, now recorded in

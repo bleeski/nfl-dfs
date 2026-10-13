@@ -1,5 +1,14 @@
 # Implementation Status
 
+## Capability added: 2026-10-13 (Session 73, the results join)
+
+Working and verified through 42 synthetic-history cases on the real committed records and copies (`tests/test_results_join.py`), a mutation pass (25 of 25 killed, two by tests the pass added), two fresh-context consults and a review, an old-against-new comparison and the full suite (`3857 passed, 2 skipped in 1543.63s (0:25:43)`, Windows; the two skips are this host's symlink-permission cases, `tests/test_cowork.py:112` and `tests/test_standings_transport.py:523`, as in every Windows run).
+- **The join.** `nfl results-join --source-sha256 <sha>` joins one snapshot `results-intake` kept to each slate's default build record on exact Entry ID. It classes every Entry ID: joined, a locked blank with a delivered file or with none, entered with no record, recorded but not in the export, or a row whose contest or game type disagrees.
+- **The rank check.** Each slate's prior points ranked against the export's own points, over all rows and paid rows, pooled as the unweighted slate mean. It is descriptive.
+- **The files.** The report is written once under the gitignored results root. Each slate's place, field size, points and percentile are written once beside its record, with no money, and confirmed or refused by name by a later export. `repo_state.py` counts those slates.
+
+Not yet: any run on Ben's export (O13), so the four review figures are unreproduced here; the descriptor comparison (Session 73b). Realized results only: not EV, an ROI, a probability, a calibration or an edge; nothing reaches `run-slate` or a release truth.
+
 ## Capability added: 2026-10-13 (Session 72b, the build record reads a run folder)
 
 Working and verified on four real Showdown `run-slate` runs, using the real projection producer, rung 4, a baseline-only
