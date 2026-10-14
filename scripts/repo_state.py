@@ -6,8 +6,9 @@ other. Hand-maintained status rots the moment two of them disagree; this script
 reads the state back out of the files that are already authoritative and writes
 one small machine-readable summary at ``state/repo-state.json``.
 
-It is a reader of the repository's own files. It edits no ledger and never
-touches ``data/``. The one network call it makes is a ``git fetch`` of
+It is a reader of the repository's own files. It edits no ledger and writes
+nothing under ``data/``; it reads ``data/inbox/slates/`` only to count the
+slates whose results are joined (Session 73). The one network call it makes is a ``git fetch`` of
 ``origin/main``, because the number this script exists to report is a distance
 from a remote-tracking ref, and such a ref only moves on fetch. Without it the
 single number meant to say "another instance changed things" is the one number
@@ -43,6 +44,9 @@ ROADMAP = PROJECT_ROOT / "docs" / "ROADMAP.md"
 CHANGELOG = PROJECT_ROOT / "changelog.md"
 CHUNKS_DIR = PROJECT_ROOT / "docs" / "chunks"
 RECORDS_DIR = PROJECT_ROOT / "records" / "slates"
+SLATES_DIR = PROJECT_ROOT / "data" / "inbox" / "slates"
+# `results_join.RESULTS_NAME` (Session 73); this script reads only the standard library, so the name is repeated here.
+ENTRY_RESULTS_NAME = "entry_results.w1.json"
 
 SCHEMA_VERSION = "nfl_repo_state_v1"
 # `docs/ROADMAP.md` §2.1. "Startable" is derived, not declared: a `Pending`
@@ -536,6 +540,15 @@ def calibration() -> dict:
     }
 
 
+def entry_grading() -> dict:
+    """Slates whose entries have realized results joined on Entry ID beside their build record (Session 73).
+
+    Descriptive, and its own count: P0's player-week calibration above is a different thing and stays where it is.
+    """
+    graded = sorted(path.parent.parent.name for path in SLATES_DIR.glob(f"*/construction/{ENTRY_RESULTS_NAME}"))
+    return {"results_file": ENTRY_RESULTS_NAME, "slates_graded": len(graded), "slates": graded}
+
+
 def build_state(now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     queue = session_queue()
@@ -557,6 +570,7 @@ def build_state(now: datetime | None = None) -> dict:
         "ben_flags": ben_flags(),
         "verification": verification(),
         "calibration": calibration(),
+        "entry_grading": entry_grading(),
     }
 
 
@@ -642,6 +656,12 @@ def digest(state: dict) -> str:
         f"calibration: {cal['slates_graded']}/{cal['slates_recorded']} slates graded; "
         f"{cal['model_status']} / {cal['release_decision']}"
     )
+    graded = state.get("entry_grading")  # absent from a state built before Session 73
+    if graded:
+        lines.append(
+            f"entry grading: {graded['slates_graded']} slates with results joined on Entry ID "
+            "(descriptive; not calibration)"
+        )
 
     flags = state["ben_flags"]
     if flags:

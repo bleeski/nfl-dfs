@@ -767,9 +767,17 @@
     "S73": {
       "goal": "measure",
       "title": "Join results to how lineups were built",
-      "what": "Connects your results to the build records, compares the best and worst entries on how they were built, and checks whether higher-projected lineups finished higher.",
+      "what": "Connects your results to the build records and checks whether higher-projected lineups finished higher.",
       "why": "Shows which construction choices go with good and bad finishes.",
-      "matters": "The first answer to 'what should we do more of?'."
+      "matters": "The first answer to 'what should we do more of?'.",
+      "note": "Built on 2026-10-13. What's left is checking the four ranking figures on your real history file (to-do O13); the comparison of best and worst entries moved to Session 73b."
+    },
+    "S73b": {
+      "goal": "measure",
+      "title": "Compare best and worst entries on how they were built",
+      "what": "Compares your top-10% and bottom-10% finishes on how each lineup was built: stacking, captain, salary left, questionable players and late games.",
+      "why": "It was split off Session 73 to keep each change a reviewable size.",
+      "matters": "Shows which construction choices go with busts and which with top finishes."
     },
     "S74": {
       "goal": "measure",
@@ -844,9 +852,9 @@
       "why": "The real-data check for projection grading (Session 70)."
     },
     "O13": {
-      "title": "Run the results report on your history file",
-      "what": "Attach the entry-history export to a cloud session, or run the results report twice on Windows after the intake, and paste the output back.",
-      "why": "The real-data check for the results report (Session 71b)."
+      "title": "Run the results report and the results join on your history file",
+      "what": "Attach the entry-history export to a cloud session, or run the results report twice on Windows after the intake, then run the results join once, and paste the output back. Neither output contains money figures.",
+      "why": "The real-data check for the results report (Session 71b) and for the four ranking figures the results join must reproduce (Session 73)."
     }
   },
   "decisions": [
