@@ -10,9 +10,9 @@
     },
     {
       "key": "portfolio",
-      "title": "Build lineups that can win big",
-      "tagline": "Spread entries across different game stories so a few can reach the top, without all failing together.",
-      "why": "Tournament prizes are weighted heavily to the top. Twenty near-copies of one lineup is one bet placed twenty times: they all hit or all miss. Your two goals are winning large prizes and avoiding washouts, and when they conflict, large prizes win. This work spreads entries across believable game scripts, caps how often any one player appears, and keeps every lineup distinct."
+      "title": "Give every contest a real shot at first place",
+      "tagline": "Aim each contest's entries at its first place, without all your entries failing together.",
+      "why": "Tournament prizes are weighted heavily to first place. Your two goals are a real shot at first place in each contest you enter, and avoiding a washout across all your entries; when they conflict, first place wins. Two near-copies in the same contest are one shot, not two: they hit or miss together. This work spreads each contest's entries across believable game scripts, caps how often any one player appears across everything, and keeps every lineup distinct."
     },
     {
       "key": "players",
@@ -779,6 +779,27 @@
       "why": "It was split off Session 73 to keep each change a reviewable size.",
       "matters": "Shows which construction choices go with busts and which with top finishes."
     },
+    "S75": {
+      "goal": "portfolio",
+      "title": "Show each contest's shot at first place",
+      "what": "Adds a contest-by-contest table to the lineup checks and the review: how many entries each contest holds, how different they are (captains, quarterback stacks, game stories, shared players), and the contest's size and payout spread.",
+      "why": "You changed the first goal to first place in each contest. The engine already measures how different each contest's entries are, but nothing you or I read on slate day shows it.",
+      "matters": "Two near-copies in one contest are one shot at first place, not two; this makes that visible before the file goes out."
+    },
+    "S76": {
+      "goal": "portfolio",
+      "title": "Place lineups so each contest gets different winners",
+      "what": "Changes how lineups are dealt out to contests so that no contest gets the same captain or quarterback stack twice when another arrangement avoids it.",
+      "why": "Dealing lineups out to contests is the one step that can help each contest's first-place shot without changing how often any player appears overall.",
+      "matters": "More distinct ways to win in every contest, at no cost to the no-washout goal."
+    },
+    "S77": {
+      "goal": "measure",
+      "title": "Track first-place finishes and washout slates",
+      "what": "Adds to the results report each contest's best finish, how often an entry won or reached the top 1%, and how many slates had no entry win anything.",
+      "why": "Each of your two goals needs its own scorecard from real results, and the current report doesn't show either.",
+      "matters": "First-place wins will be rare, so each contest's best finish is the number to watch; washout slates show whether the no-washout goal is working."
+    },
     "S74": {
       "goal": "measure",
       "title": "Did our extra steps add points?",
@@ -858,6 +879,13 @@
     }
   },
   "decisions": [
+    {
+      "key": "flat-contests",
+      "title": "Do double-ups and 50/50s count toward first place?",
+      "question": "In a double-up or a 50/50 every paid spot pays the same, so first place is no bigger prize there. If you enter them, should those entries count only toward the no-washout goal?",
+      "recommendation": "Yes. Until the engine can tell those contests from tournaments (it needs each contest's payout table), it treats every contest as a tournament. Blocks nothing.",
+      "holds_up": []
+    },
     {
       "key": "salary-band",
       "title": "Should Classic stop forcing near-full salary spend?",

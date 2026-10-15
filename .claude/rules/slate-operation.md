@@ -110,28 +110,37 @@ is DraftKings-`OUT` — then the backup is the starter.
 State what the portfolio does not have. With no ownership input there is no
 leverage model, and mean-max in a large field is chalk.
 
-## Build for both goals: large prizes and no washouts
+## Build for both goals: first place in each contest, no washout overall
 
-Ben's two goals (R34, 2026-09-24) are winning large prizes and minimizing
-washouts, and both come from leverage and diversification. On 2026-09-24 an
+Ben's two goals (R34, 2026-09-24; restated by R38, 2026-10-14) are first place
+within each individual contest and minimizing washouts across the whole
+portfolio, and both come from leverage and diversification. On 2026-09-24 an
 ATL@GB Showdown file passed every gate and QA with 0 defects, and Ben rejected
 it: five captains at 25% each, four people in 13 of 20 lineups. QA PASS says
 the file is legal, not that the portfolio is any good.
 
-When the two goals conflict, large prizes win (Ben, 2026-10-04: "Err on side
-of trying to win large prizes if at odds with minimizing the washout
-factor"). The ceiling pass that applies it is in `docs/claude/working.md`
-§ Showdown judgment pass.
+When the two goals conflict, a contest's first-place shot wins (Ben,
+2026-10-04: "Err on side of trying to win large prizes if at odds with
+minimizing the washout factor"; carried over to R38's first goal). The ceiling
+pass that applies it is in `docs/claude/working.md` § Showdown judgment pass.
+Ben's phrase is "first place equity"; never print equity, EV or a probability
+of winning for any number the engine or a hand pass produces (R38).
 
 Before a handoff, read the portfolio against both goals and put what you find
 in the handoff:
 
-- **Washouts.** Name the players whose bad night sinks the most lineups: each
-  captain's count, and every person in more than half the rows. That is the
-  portfolio's shared failure point.
-- **Large prizes.** Every lineup needs a game script where all six players hit
-  together (R33's theses: a team wins big or close, a shootout, a defensive
-  battle). The same core with a rotating captain is one bet placed many times.
+- **Washouts, across the portfolio.** Name the players whose bad night sinks
+  the most lineups: each captain's count, and every person in more than half
+  the rows. That is the portfolio's shared failure point.
+- **First place, contest by contest.** Read each Contest ID's entries as one
+  shot at its first place. Every lineup needs a game script where all its
+  players hit together (R33's theses: a team wins big or close, a shootout, a
+  defensive battle), and the entries in one contest should win in different
+  scripts: two near-copies there are one shot, not two, so distinct Captains or
+  QB stacks come before any repeat. The run's `contest_assignment.json`
+  (`contests_after`) has each contest's spread until Session 75 puts it in QA.
+  A one-entry contest is its lineup alone. The same core with a rotating
+  captain is one bet placed many times.
 - **Captains carry Showdown leverage.** Spread them across theses, and let a
   kicker or DST captain where the script supports it (a low-scoring win).
 - **Leverage needs ownership.** With no ownership input, say leverage is

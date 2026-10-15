@@ -17,7 +17,7 @@ full code review and a sweep of every plan, brief, archive and ledger.
 
 Paste this into a fresh Claude Code session:
 
-> Read `docs/ROADMAP.md` and execute Session 73b exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S73b`, on the branch your session was assigned or a new `claude/s73b-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
+> Read `docs/ROADMAP.md` and execute Session 75 exactly as its card in §2.3 specifies, after `python3 scripts/claim.py take S75`, on the branch your session was assigned or a new `claude/s75-<slug>`. Run the card's verification command and then the full suite (`sh ./nfl.sh test` on Linux, `.\nfl.ps1 test` on Windows), and when both pass, update the status board, the progress ledger and `changelog.md` and open the pull request under `.claude/rules/git-authority.md`.
 
 On 2026-09-25 a full code review (`docs/critiques/Code_Review_2026-09-25.md`)
 and a sweep of every plan, brief, retrospective, archive and ledger were
@@ -48,7 +48,7 @@ review's thesis section) closed on 2026-10-07, and Session 67 (the R33 thesis ex
 screening checklist) closed on 2026-10-08 with its workbook rows split off as Session 68. Session 58 (observed-zero history for a declared starter) closed on 2026-10-09. Session 12 (the late-swap bridge and C5) closed on
 2026-10-10 at its V12 and V13 seam and added Session 12b (the bridge, multi-contest and C5), which waits on a BEN ruling. The
 first startable row by order is Session 69: Sessions 69 to 74, added on 2026-10-10 from the first review of real DraftKings
-results (§2.8), lead the queue, and Session 41 follows them. Session 69 (the entry-history contract and parser) closed on 2026-10-11 at its seam; its CLI, snapshot and artifacts are Session 69b, directly below it, which closed on 2026-10-11 with its real-export run left to Ben as operator item O11. Session 70 (realized player points and player-level grading) landed its code on 2026-10-11 and went back to `Pending` on operator item O12 (Ben's export and two identity files), which its real-data acceptance needs; its report tables, play rate and the pooled report are Session 70b, directly below it, which closed on 2026-10-12. Session 71 (the registered results metrics, the entry-level definitions and the report payload) closed on 2026-10-12 at a re-planned seam; its command, writer, bootstrap, readable table and RUNBOOK pointer, and the card's real-export acceptance, are Session 71b, directly below it. Session 71b landed the command, the write-once report and the bootstrap on 2026-10-12 and went back to `Pending` on operator item O13 (Ben's export), which its acceptance needs; its readable table and RUNBOOK pointer are Session 71c, directly below it, which closed on 2026-10-12. Session 72 (the per-Entry-ID build record) closed on 2026-10-13 at a re-planned seam; its run-folder half and the rest of the backfill are Session 72b, directly below it. Session 72b (the run folder) closed on 2026-10-13 with its backfill split to Session 72c, which closed the same day. Session 73 (the results join: each Entry ID's class, the blanks among them, and the prior's rank check) landed its code on 2026-10-13 and went back to `Pending` on operator item O13 (Ben's export), which its four review figures need; its descriptor comparison is Session 73b, directly below it, split at the card's seam before any code. Session 23b (Ben's game
+results (§2.8), lead the queue, and Session 41 follows them. Session 69 (the entry-history contract and parser) closed on 2026-10-11 at its seam; its CLI, snapshot and artifacts are Session 69b, directly below it, which closed on 2026-10-11 with its real-export run left to Ben as operator item O11. Session 70 (realized player points and player-level grading) landed its code on 2026-10-11 and went back to `Pending` on operator item O12 (Ben's export and two identity files), which its real-data acceptance needs; its report tables, play rate and the pooled report are Session 70b, directly below it, which closed on 2026-10-12. Session 71 (the registered results metrics, the entry-level definitions and the report payload) closed on 2026-10-12 at a re-planned seam; its command, writer, bootstrap, readable table and RUNBOOK pointer, and the card's real-export acceptance, are Session 71b, directly below it. Session 71b landed the command, the write-once report and the bootstrap on 2026-10-12 and went back to `Pending` on operator item O13 (Ben's export), which its acceptance needs; its readable table and RUNBOOK pointer are Session 71c, directly below it, which closed on 2026-10-12. Session 72 (the per-Entry-ID build record) closed on 2026-10-13 at a re-planned seam; its run-folder half and the rest of the backfill are Session 72b, directly below it. Session 72b (the run folder) closed on 2026-10-13 with its backfill split to Session 72c, which closed the same day. Session 73 (the results join: each Entry ID's class, the blanks among them, and the prior's rank check) landed its code on 2026-10-13 and went back to `Pending` on operator item O13 (Ben's export), which its four review figures need; its descriptor comparison is Session 73b, directly below it, split at the card's seam before any code. On 2026-10-14 Ben restated the first of his two goals as first place within each individual contest, the second staying the portfolio-level washout (R38, §2.5); Sessions 75 to 77 carry it out and lead the queue, directly above Session 69 (§2.8). Session 23b (Ben's game
 theses) shares `relaxation.py` and `docs/DATA_CONTRACTS.md` with Sessions 39 and
 39b; run them one at a time, or in separate worktrees, and merge `origin/main`
 before the final suite. Session 23c built on 23b's v3 thesis contract (its v4 adds several theses; v3 is not mutated).
@@ -66,7 +66,8 @@ from the table, so if the two ever disagree, the table wins.
   a number is a session's stable name (the rulings, the changelog and the
   chunk briefs cite it), and a new session takes the next free number wherever
   its row sits. Since 2026-09-25 the rank is expected winnings under R34
-  (large prizes, fewer washouts), with the two integrity sessions the code
+  (large prizes, fewer washouts; since 2026-10-14 R38: first place in each
+  contest, no washout across the portfolio), with the two integrity sessions the code
   review produced (37, 38) first because a wrong file loses the entry fee
   outright; §2.8 states the rule and what it reversed. Before that, per Ben's
   2026-09-22 instruction, every delivery session came before construction.
@@ -149,6 +150,9 @@ Every session follows this protocol, and the cards only add to it:
 | Session 23e | Standalone | P2 part 1b, Classic structural bounds and the share cap: `salary_left` and `offense_against_own_dst` in a new `nfl_classic_portfolio_policy_c2_v2` (v1 unchanged); a new `max_person_share` default-fraction control for Classic (C2 has no existing default-fraction mechanism, unlike Showdown); generator defaults; the new bounds folded into the existing Classic rung table | Chunk P2; standings findings §5.4; Session 23 breakpoint | `src/nfl_dfs/classic_portfolio_policy.py`, `src/nfl_dfs/relaxation.py`, `scripts/make_classic_policy.py`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md` | S | Session 23 | `sh ./nfl.sh test tests/test_classic_policy_generator.py tests/test_relaxation_controller.py -x --tb=short`; acceptance on the supplied Classic fixture unless the DAL@NYG/DEN@KC bytes have arrived | Complete |
 | Session 21 | Batched | Prior-model triage: the season-sum share against per-game capacity mismatch, confirmed by the 2026-09-25 review at `priors.py:1541-1565` and `:1661-1680`, becomes per-game rates under a new transformation version; the transfer pseudo-count scales by the team's expected pool, not the incumbents'; F8 alternate-name identity proposals for review with auto-accept unchanged; `tests/test_priors_adapter.py:44`'s hardcoded `AS_OF` pins `now` | Showdown retro §9 #2; archive § F8; code review S1, S2 | `src/nfl_dfs/priors.py`, `src/nfl_dfs/prior_score.py`, `src/nfl_dfs/opportunity.py`, `docs/DATA_CONTRACTS.md`, `tests/test_priors_adapter.py` | P | none | `sh ./nfl.sh test tests/test_priors_adapter.py tests/test_offensive_roles.py tests/test_prior_selection.py -x --tb=short`; a fixture player who missed games projects at his per-game rate | Complete |
 | Session 48 | Standalone | Depth-chart QB transfer bug: a starter who arrived at his current team from elsewhere this offseason or in-season (2026-09-27 examples: Malik Willis, Geno Smith) gets zero attempt share under the current-role depth-chart rule, because the rule reads only this team's own prior-season depth history and a transferred starter has none there; he should get his new team's starter share the same as any other named starter, not zero | changelog 2026-09-27 (Week 3 slate run) | `src/nfl_dfs/qb_depth_roles.py`, `docs/DATA_CONTRACTS.md` | P | none | `sh ./nfl.sh test tests/test_qb_depth_roles.py -x --tb=short`; a fixture starter with no prior-season history at his current team gets the starter's share, not zero | Complete |
+| Session 75 | Standalone | The per-contest first-place reading (R38): `first_place_coverage_v1`, registered with `does_not_establish` text, joins each Contest ID's spread as `contest_assignment.contest_statistics` already computes it (entries, worst and mean shared people, distinct Captains or QBs, stack teams and theses, people in every lineup) to the run's contest facts (field size, places paid, the paid fraction, the `FIRST_PLACE_OBJECTIVE` label; `NO_CONTEST_FACTS` when none were supplied); a one-entry contest reads its lineup's shape instead (QB stack depth and bring-back, or the Captain and his salary; salary left) beside the line that no tail statistic exists before Session 24b; `qa_classic_portfolio.py`, `qa_showdown_portfolio.py` and the readable review print the table per Contest ID beside the portfolio's washout proxies, which are unchanged; a reading, never a gate | R38 (Ben, 2026-10-14); the 2026-10-14 advisor consult (§2.8) | `scripts/qa_classic_portfolio.py`, `scripts/qa_showdown_portfolio.py`, `src/nfl_dfs/contest_assignment.py`, `src/nfl_dfs/readable_review.py`, `docs/DATA_CONTRACTS.md`, new `tests/test_first_place_coverage.py` | P | none | `sh ./nfl.sh test tests/test_first_place_coverage.py tests/test_contest_assignment.py -x --tb=short`; the QA table equals `contest_assignment.json`'s `contests_after` on the same file; a repeated Captain inside one contest is named; a one-entry contest prints its shape and the no-tail line; QA exit codes and the washout lines unchanged; seam: the readable review's section | Pending |
+| Session 76 | Standalone | Contest placement for first place (R38): `within_contest_diversity_v2` (v1 unchanged and still selectable) makes a repeated Captain or QB stack inside one contest the last resort, taken only when no permutation avoids it, ahead of a repeated thesis and then shared people; every contest still counts once (R38's "each individual contest"); the step moves lineups between Entry IDs only, so exposure, the lineup set (R29) and the washout proxies cannot move; `diversify_showdown_contests.py` and the hand-pass order (the ceiling pass, value-add swaps and hand placements first, the contest pass last) take v2, and the handoff shows Session 75's table before and after | R38; the 2026-10-14 advisor consult (the Pareto redeploy runs inside the thesis build, before any contest exists, so goal 1's construction step is the assignment) | `src/nfl_dfs/contest_assignment.py`, `src/nfl_dfs/prior_review.py`, `scripts/diversify_showdown_contests.py`, `docs/DATA_CONTRACTS.md`, `docs/claude/working.md`, `tests/test_contest_assignment.py` | S | Session 75 | `sh ./nfl.sh test tests/test_contest_assignment.py -x --tb=short`; on PHI@CHI v4 and MIN@NO no contest repeats a Captain or QB stack when a permutation avoids it; exposure and the lineup set identical before and after; v1 and v2 readings side by side; replay byte-identical | Pending |
+| Session 77 | Standalone | First place and washouts in the results report (R38): `nfl_results_metrics_v2` (v1 never mutated) adds goal 1's realized reading, per contest our best entry's place and percentile and the count of first-place and top-1% finishes beside their per-entry random expectation (1 over the field size, and 1%), and goal 2's, per slate whether every entry won nothing (a washout) and the washout rate across slates; split by v1's payout bands; points behind first need each contest's winning score, which the export does not carry (Session 18's thresholds), so they are named, never estimated; descriptive, never calibration | R38; Session 71's metrics (changelog 2026-10-12) | `src/nfl_dfs/results_report.py`, new `config/results_metrics_v2.json`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md`, `tests/test_results_report.py` | P | none | `sh ./nfl.sh test tests/test_results_report.py -x --tb=short`; synthetic exports give each contest's best entry, a slate with no prize counted a washout and the random expectations exactly; a v1 report byte-identical; on Ben's 2026-10-10 export, outside git, the counts recorded with its hash | Pending |
 | Session 69 | Standalone | DraftKings entry-history intake: `nfl_dk_entry_history_v1`, the account export's 14 columns (one row per entry; `Entry_Key` and `Contest_Key` are the DKEntries Entry ID and Contest ID), classified by schema, SHA-256 bound, copied once into a gitignored immutable snapshot (`data/results/inbox/`, the `data/standings/inbox/` rule); a strict parser that names every bad row (missing column, duplicate `Entry_Key`, `Place` outside 1 to `Contest_Entries`, unparseable money, number or date, an empty NFL subset) and keeps and names a `Places_Paid` above `Contest_Entries` rather than refusing it; a gate-registry family; `nfl results-intake`; the contest name carried opaque and never parsed; an operator download only, never fetched; split to Session 69b at its seam on 2026-10-11: this session landed the contract, the parser, the summary function and the registry family, and Session 69b holds `nfl results-intake`, the snapshot and the normalized artifact | DraftKings results review 2026-10-10 (R1); no code under `src/`, `scripts/` or `tests/` references `Entry_Key` or `Contest_Key` | new `src/nfl_dfs/entry_history.py`, `docs/DATA_CONTRACTS.md`, `config/gate_registry_v1.json`, `tests/test_gate_registry.py` (the registry pin), new `tests/test_entry_history.py` | P | none | `sh ./nfl.sh test tests/test_entry_history.py tests/test_gate_registry.py -x --tb=short`; synthetic fixtures for every refusal; on Ben's 2026-10-10 export (outside git) 10,095 rows, 476 NFL rows and 396 paid NFL rows outside Best Ball, with its two `Places_Paid` rows above the field named | Complete |
 | Session 69b | Standalone | Entry-history intake, part 2, split from Session 69 at its seam (Session 69 landed the contract `nfl_dk_entry_history_v1`, the parser, the summary function and the registry family): `nfl results-intake --history <csv>`; the write-once snapshot `data/results/inbox/<sha256>.csv` (temporary file, fsync, re-hash, replace only when absent; `ENTRY_HISTORY_SNAPSHOT_CORRUPT`); the normalized NFL artifact and the intake summary under `data/results/normalized/<sha256>/` with a writer version in each name (`ENTRY_HISTORY_ARTIFACT_CONFLICT`); `.gitignore` ignores `data/results/*` in the first commit; `nfl.ps1`'s ValidateSet; three registry codes and the re-pin | Session 69 card, plan and review (changelog 2026-10-11) | `src/nfl_dfs/entry_history.py`, `src/nfl_dfs/cli.py`, `nfl.ps1`, `.gitignore`, `config/gate_registry_v1.json`, `docs/DATA_CONTRACTS.md`, new `tests/test_entry_history_intake.py` | P | Session 69 | `sh ./nfl.sh test tests/test_entry_history.py tests/test_entry_history_intake.py tests/test_gate_registry.py tests/test_repo_boundaries.py -x --tb=short`; on Ben's 2026-10-10 export outside git, `nfl results-intake` twice (the second `ALREADY_PRESENT`) and `git status --short` clean; no inner seam, past 1,000 lines stop and re-plan | Complete |
 | Session 70 | Standalone | Realized player points and player-level grading of the prior (the direct test of the review's "projections that match consensus" diagnosis): realized stat lines from the nflverse weekly player file (`priors.py:240` already declares it, on a host `sources.py` allowlists) scored with the engine's own `scoring.py`; joined to each run's frozen per-person priors through the run's own identity, exact DraftKings IDs only; `player_points_mae` (registered in `config/metric_registry_q1_v1.json`, computed nowhere today), the Spearman correlation of prior against realized points and the same two for DraftKings salary rank as the consensus-price baseline, by position and salary tier; realized play rate by DraftKings status (`Q` against blank) as the participation evidence; realized lineup totals reconciled against DraftKings' own lineup points from Session 69's history; a grading input only, never a prior, candidate, selection or gate input; split to Session 70b at its seam on 2026-10-11: this session landed `nfl grade-players` (the stats package, realized points, the identity join, the game binding, the reconciliation and the per-slate overall grade), its real-data acceptance waits on O12, and the tables by position and tier, play rate and the pooled report are Session 70b | DraftKings results review 2026-10-10 (R1, R4, R6); this planning session's recomputation; registered but uncomputed Q1 metrics | new `src/nfl_dfs/player_grading.py`, `src/nfl_dfs/cli.py`, `docs/DATA_CONTRACTS.md`, new `tests/test_player_grading.py` | P | Session 69, O12 | `sh ./nfl.sh test tests/test_player_grading.py -x --tb=short`; on the committed DET@CAR, ATL@NO, TB@DAL and Week 4 Classic inputs every fully covered delivered lineup reconciles to DraftKings' lineup points within 0.01, except differences traced to a stat the source does not carry, each named by player and stat; none traces to `scoring.py` | Pending |
@@ -1205,6 +1209,92 @@ Every session follows this protocol, and the cards only add to it:
      instead of a hardcoded `AS_OF` (C4 retro #17 was recorded done; it is not).
 - **Size.** Three source files, about 500 changed lines; read `priors.py`
   `:1300-1900` and `prior_score.py`. One session.
+
+#### Session 75: the per-contest first-place reading
+
+- **Depends on.** none. Added 2026-10-14 from R38 (§2.5). It reads Session 50's `contest_assignment.contest_statistics` and
+  Session 23d's contest facts, both `Complete`.
+- **Why.** R38 makes each contest its own target: the entries in one Contest ID are judged together on their shot at that
+  contest's first place, and the washout goal stays at the portfolio level. The engine already measures each contest's spread
+  (`contest_statistics`: entries, worst and mean shared people, distinct key people, stack teams and theses, people in every
+  lineup; `contests_before` and `contests_after` in `contest_assignment.json`), but nothing the operator reads shows it: neither
+  QA script mentions a contest, and the handoff reads the portfolio as one pool. Goal 1 has no reading where the decisions are
+  made. Two near-copies in one contest win in the same game scripts, so they are one shot at its first place, not two.
+- **Scope.**
+  - `first_place_coverage_v1` in `docs/DATA_CONTRACTS.md`, with `does_not_establish` text (not a probability of finishing
+    first, not a share of any prize, not a tail statistic): per Contest ID, `contest_statistics` as computed today, joined to
+    the run's contest facts when supplied (field size, places paid, the paid fraction, the `FIRST_PLACE_OBJECTIVE` label) and
+    `NO_CONTEST_FACTS` when not. A contest with no facts is read as a tournament and named.
+  - A one-entry contest has no pairs, so its row reads the lineup's own shape: QB stack depth and bring-back (Classic), the
+    Captain and his salary (Showdown), salary left. Shape facts only, printed beside the line that no tail statistic exists
+    before Session 24b. No number ranks lineups by tail.
+  - `qa_classic_portfolio.py` and `qa_showdown_portfolio.py` print the table from the entries file's own Contest ID column
+    (contest facts optional), below the portfolio's washout proxies, which print as they do now. The readable review gets the
+    same table as an additive section.
+  - No name, key or label says equity, EV, probability or edge (R38).
+- **Acceptance.** Synthetic files: a seven-entry contest with a repeated Captain names the repeat; a one-entry contest prints
+  its shape and the no-tail line; a run with no facts names `NO_CONTEST_FACTS` for each contest; the QA table equals
+  `contest_assignment.json`'s `contests_after` on the same file; the washout lines and every QA exit code are unchanged (a
+  reading, not a gate). On the committed MIN@NO and Week 5 Classic files the table prints for every Contest ID.
+- **Boundaries.** A reading, never a gate, a selection input or a release truth; `PRIOR_ONLY` / `DO_NOT_UPLOAD` unchanged.
+- **Size and breakpoint.** About 800 to 1,000 lines with tests (two scripts, one review section, the contract). Seam: the
+  readable review's section, after both QA scripts and the contract.
+- **Known conflicts.** `contest_assignment.py` with Session 76, which follows it; `docs/DATA_CONTRACTS.md` with Sessions 73b
+  and 77: run them one at a time, or merge `origin/main` before the final suite.
+
+#### Session 76: contest placement for first place
+
+- **Depends on.** Session 75 (its table is how the change is read before and after).
+- **Why.** Goal 1 lives in each contest, and the engine's only contest-level step is Session 50's assignment, which changes who
+  holds which lineup and never exposure (`contest_assignment.py`, module docstring), so it can serve goal 1 without moving goal
+  2. Its v1 cost (shared people squared, plus 12 for the same Captain or QB, 6 for the same Classic primary stack, 3 for the
+  same thesis) was tuned on PHI@CHI before R38, and a large overlap saving can still buy a repeated Captain inside one contest.
+  The Pareto redeploy is not the place for a contest rule: it runs inside the thesis build (`classic_theses.py`), before any
+  contest exists. It keeps its mean-prior axis, a stand-in: it protects the QB, his stack and the bring-back, so a swap raises
+  the mean at a fixed correlation core, until Session 25's tail statistic replaces it.
+- **Scope.**
+  - `within_contest_diversity_v2` (v1 unchanged and still selectable): inside one contest a repeated Captain or QB stack is
+    the last resort, taken only when no permutation avoids it, ahead of a repeated thesis and then shared people. The session
+    chooses between a lexicographic order and re-weighted costs on the PHI@CHI and MIN@NO files and records why.
+  - Every contest still counts once, whatever its size (R38: "each individual contest").
+  - Session 67's open flag on the same-thesis weight (3 a pair) asks the same question under R34's framing, where a contest's
+    shared people counted as a washout cost. Under R38 both terms measure goal 1, because the step cannot move any portfolio
+    washout measure. The session answers the flag's question with v2's order and its measurements, as a recommendation beside
+    the flag; the flag stays until Ben answers it.
+  - `prior_review` and `diversify_showdown_contests.py` take v2. The hand-pass order in `docs/claude/working.md` becomes: the
+    ceiling pass, value-add swaps and hand placements first, the contest pass last, then Session 75's table before and after
+    in the handoff.
+- **Acceptance.** On PHI@CHI v4 and MIN@NO no contest repeats a Captain or QB stack when a permutation avoids it; exposure,
+  the lineup set (R29) and the washout proxies are identical before and after; the v1 and v2 readings print side by side;
+  replay byte-identical; `contest_assignment_version` recorded in the run.
+- **Boundaries.** Moves lineups between Entry IDs only: never a lineup, a cell, a locked cell or a release truth.
+- **Size and breakpoint.** About 600 to 800 lines with tests. Seam: the script and the procedure text, after the engine step.
+- **Known conflicts.** `contest_assignment.py` with Session 75; `prior_review.py` with Sessions 44 and 44b.
+
+#### Session 77: first place and washouts in the results report
+
+- **Depends on.** none (Session 71's `nfl_results_metrics_v1` is `Complete`).
+- **Why.** Each R38 goal needs a realized reading the results report does not print. v1 prints each entry's finishing
+  percentile and top-10%, bottom-10% and blank rates; it never asks how close a contest's best entry came to first, how often
+  an entry won one, or whether a whole slate washed out.
+- **Scope.** `nfl_results_metrics_v2` and `config/results_metrics_v2.json` (v1 never mutated; a v1 report stays
+  byte-identical):
+  - goal 1, per contest: our best entry's place and percentile; per slice: first-place and top-1% finishes beside their
+    per-entry random expectation (1 over the field size, and 1%), split by v1's payout bands;
+  - goal 2, per slate: whether every entry won nothing (`Winnings_Non_Ticket` and `Winnings_Ticket` both zero, a ticket
+    counted at face value as in v1), and the washout rate across slates;
+  - points behind first need each contest's winning score, which the export does not carry: named as Session 18's per-contest
+    thresholds, never estimated.
+  - At Ben's volume first-place finishes are rare: in fields above 2,000 the engine era's entries had 0.18 top-0.1% finishes
+    expected at random (changelog, the 2026-10-10 results review), and first place is rarer still. So the per-contest best
+    percentile is the reading with data, and the report says so beside the counts.
+- **Acceptance.** Synthetic exports give each contest's best entry, a slate with no prize counted a washout, and the random
+  expectations as exact fractions; a v1 report is byte-identical; on Ben's 2026-10-10 export, outside git, the counts are
+  recorded with the file's hash.
+- **Boundaries.** Descriptive, never calibration; no figure is called a probability of winning; the export stays gitignored.
+- **Size and breakpoint.** About 500 to 700 lines with tests. Seam: the readable table, after the metrics and the JSON.
+- **Known conflicts.** `cli.py` and `docs/DATA_CONTRACTS.md` with Session 73b, which also reads `results_report.py`'s
+  definitions: run them one at a time, or merge `origin/main` before the final suite.
 
 #### Session 69: DraftKings entry-history intake
 
@@ -2396,6 +2486,9 @@ Every session follows this protocol, and the cards only add to it:
 - **Size.** Four files, about 800 changed lines. One session.
 - **Acceptance.** A synthetic contest with a known tail optimum is recovered;
   replay byte-identical; `MODEL_STATUS` stays `PRIOR_ONLY`; suite green.
+- **Re-aimed by R38 (2026-10-14).** The tail statistic this session registers is goal 1's first per-lineup measure, and the
+  first thing that can replace the mean prior as the Pareto redeploy's and the ceiling pass's first axis (Session 76's card).
+  Name it as a bank-scoped quantile, never equity or a probability of finishing first.
 
 #### Session 25b: P3b part 2, the sleeve, captains on a ceiling, darts
 
@@ -2414,6 +2507,10 @@ Every session follows this protocol, and the cards only add to it:
 - **Acceptance.** On the DEN@KC fixture a k=6 sleeve holds at least one DST
   lineup and at least one 5-1 on each side (a mechanism check, not a hindsight
   claim); the sleeve entries land on `FIRST_PLACE_OBJECTIVE` rows first.
+- **Re-aimed by R38 (2026-10-14); re-plan at claim.** A sleeve of k with the rest on the expectation objective does not fit a
+  goal set contest by contest: every entry in a tournament contest is built for that contest's first place, so the objective
+  follows the contest, and the expectation-only portfolio stays as the control (Session 25) rather than as most of the file. The
+  captain strata, the darts and the REFEREE re-score are unchanged.
 
 #### Session 28: P6 survival controls
 
@@ -2423,6 +2520,9 @@ Every session follows this protocol, and the cards only add to it:
   coverage by script, and the frontier against the sleeve's P(at least one
   top-1% proxy) for sleeve sizes 0 to k, printed so Ben picks the size.
 - **Size.** Three files, about 500 lines. One session.
+- **Re-aimed by R38 (2026-10-14).** Bank-estimated P(zero paid) across the whole portfolio is goal 2's model measure, as R34
+  had it. The frontier's other axis becomes per contest (each contest's best-entry tail, Session 75's grouping) instead of one
+  sleeve's, printed so Ben reads the trade between the two goals.
 
 #### Session 18: P0 part 1, the grading command
 
@@ -2483,6 +2583,9 @@ Every session follows this protocol, and the cards only add to it:
 
 - **Depends on.** Session 25b, Session 27, and O4 ladders.
 - **Spec.** `docs/chunks/P5-dilution-economics.md`. One session.
+- **Re-aimed by R38 (2026-10-14).** This is goal 1's model term: per contest, first place net of predicted copies on that
+  contest's own ladder, for every tournament entry rather than a sleeve's. Its output is a bank-scoped diagnostic: no name,
+  key or report says equity, EV or a probability of winning.
 
 #### Session 13: preflight report and scored player pool
 
@@ -3311,6 +3414,8 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
     captains at 25% each and four people in 13 of 20 lineups.
   - The no-EV rule is unchanged: these are goals, never reported as EV or a
     probability of winning.
+  - Restated by R38 (2026-10-14): the large-prize half is now first place within
+    each individual contest; the washout half stands.
 - **R35, a judgment layer that can add, and a prior that reads this season** (Ben, 2026-10-01, after PIT@CLE, the
   second slate on which a starting quarterback with no prior-season row was left out: Keenum, then Watson). "The way
   this engine is supposed to work is it makes deterministic points projections, but then the LLM uses a reasoning and
@@ -3352,6 +3457,27 @@ Session 01 writes them into `CLAUDE.md`, which outranks this file.
     optimization goals." Unused salary is never a defect; a redeploy swap must not worsen either goal (R34).
   - "Not having an active list for a late slate is totally fine. We can do late swap." Late-window people with no posted
     inactive list go on the late-swap watch list, not the blocker list; certification is unchanged.
+- **R38, first place in each contest** (Ben, 2026-10-14). "Rather than have one focus on 'large prizes' I want it to
+  specifically target first place equity within each individual contest, while the other goal remains to minimize the
+  portfolio level washout." Sessions 75 to 77.
+  - Goal 1 is set contest by contest: the entries in one Contest ID are judged together on their shot at that contest's first
+    place, which turns on each lineup's ceiling and on how differently the contest's entries can win, not on mean points. Two
+    near-copies in one contest are one shot, not two. Goal 2 is unchanged and portfolio-wide: no shared failure point that sinks
+    every contest at once.
+  - It supersedes R34's large-prize half. R34's washout half, its leverage and diversification, and its no-EV line stand. The
+    2026-10-04 tie-break carries over, as Claude's reading: when the two goals conflict, a contest's first-place shot wins.
+    The ceiling pass's bounds are unchanged (a person to 75% of lineups, overlap to 5; the Captain cap and R29 never move).
+  - Vocabulary. "First-place equity" is Ben's phrase for the goal. Equity is a share of an expected prize, an EV term, so no
+    registered name, key, label or report prints it. The engine's names are `first_place_*` structural readings and, from
+    Session 25, bank-scoped tail statistics, each with `does_not_establish` text.
+  - Scope, Claude's reading. Every contest Ben enters counts for goal 1, a contest with no supplied facts included (named). A
+    flat contest, where every paid place pays the same (a double-up, a 50/50), has no first-place prize of its own, so its
+    entries would count toward goal 2 alone. But the contest facts (field size, places paid, fee) cannot tell one from a
+    tournament paying a similar fraction, so until a payout ladder (O4) or Ben says otherwise, every contest is read as a
+    tournament (§2.8, questions for Ben).
+  - Until Session 25's tail statistic exists, the mean prior stays the Pareto redeploy's and the ceiling pass's first axis, as
+    a stand-in. `plan.md` §1's "washout becomes a safety tiebreak, not a co-primary GPP objective" is superseded by R34 and
+    R38.
 
 Still in force from earlier, with full text in the backlog archive:
 
@@ -3422,7 +3548,9 @@ backlog and fragment into this board, cut the work into chunks one session
 finishes before a compaction, and rank each chunk by what wins large amounts
 of money, respecting dependencies. This section is the ranking rule and the
 audit trail; the rows above are the result. R34 is the yardstick: win large
-prizes and avoid washouts, both through leverage and diversification.
+prizes and avoid washouts, both through leverage and diversification. Since
+2026-10-14 R38 restates its first half: first place within each individual
+contest, with washouts still avoided across the whole portfolio.
 
 **The rule, in tiers.** A row ranks by the first tier it belongs to, then by
 the evidence for its lift, then by cost.
@@ -3603,7 +3731,37 @@ board's `none`. Session 41 (the weather boundary) now sits behind seven rows; it
 worktree. Session 22's per-entry half moved to Session 72, and
 Session 18 shares Session 71's metric definitions (both noted on their cards).
 
-**Questions for Ben that block nothing.** Sleeve size and risk tolerance
+**Sessions 75 to 77 (added 2026-10-14, R38).** Ben restated his first goal as first place within each individual contest and
+asked for the change as a priority item, so the three rows sit at the top of the queue, directly above Session 69, above which
+every row is `Complete`; no existing row moved or changed status. What the restatement changes, in order of what can be done
+without a model:
+- **A reading.** The engine already measures each contest's spread (Session 50's `contest_statistics`), but neither QA script
+  mentions a contest and the handoff reads the portfolio as one pool. Session 75 puts the per-contest table where decisions are
+  made, beside the washout proxies, which stay portfolio-wide.
+- **A construction step.** Session 76 makes the contest assignment serve goal 1 first: the assignment moves lineups between
+  Entry IDs and never exposure, so it cannot cost goal 2.
+- **A realized measure.** Session 77 adds per-contest best finishes, first-place and top-1% counts, and slate washouts to the
+  results report.
+- **The words.** The goal statements in `.claude/rules/slate-operation.md`, `.claude/rules/selection-and-objective.md`,
+  `docs/claude/working.md`, `plan.md` and the tracker changed in the same commit as these rows, because the next slate's
+  operator reads them. The ceiling pass's mechanics did not change.
+- **The model chain is re-aimed, not moved.** Goal 1 can be optimized, not only read, only against a per-lineup tail statistic,
+  and the live path has one mean per person. Sessions 25, 25b, 28 and 29 carry an R38 note on their cards. Session 25b's
+  sleeve-of-k framing is the one real conflict and is re-planned at its claim. After Sessions 75 to 77, 73b, 18 and 41, the
+  chain's first rows (44, 44b, 24, 24b) are already the next startable work, so a move would pass only Session 41.
+
+A fresh-context advisor checked the plan before any edit, briefed to argue against it. It found that the Pareto redeploy runs
+inside the thesis build, before any contest exists, so the draft's "no contest's coverage gets worse" rule there could not
+bind; goal 1's construction change moved to the assignment (Session 76). It found that Session 50's statistics already
+measure most of what the draft would have built, so Session 75 became a join. It added the one-entry contest, the vocabulary
+rule, the `plan.md` supersession and the realized measure (Session 77). Not taken: its proposal to apply goal 1 only to
+contests labelled `FIRST_PLACE_OBJECTIVE`. That label marks contests paying under 5% of the field, and none of Ben's 186
+entries in fields above 2,000 was in one (changelog, the 2026-10-10 results review), so it would leave out every large-field
+tournament. R38's scope note reads every contest as a tournament instead. Also not taken: moving
+Sessions 24 and 24b up. Session 24b depends on Session 44b, and a row may depend only on an earlier row.
+
+**Questions for Ben that block nothing.** Do you enter flat contests (double-ups, 50/50s)? Under R38 they would count toward
+the washout goal only, and the engine cannot yet tell one from a tournament (R38's scope note). Sleeve size and risk tolerance
 (findings §7); a paid ownership-capture source (Showdown retro §7d, a
 spending decision); Week-by-week stake sizing (retro §8 Q3); an odds-API
 credit budget (`docs/SHOWDOWN_FIRST_PRODUCTION_PLAN.md` §7); whether Q1's
@@ -3810,4 +3968,7 @@ session, because a commit cannot contain its own merge.
 | 2026-10-13 | Session 72c | In Progress to Complete | `e994cc8` (the claim), `76b029e` (the eight records, the test, the contract), `2b69ddb` (the review's checks), `d995675` (the consult's wording, two Windows traps) and the close-out commit, PR #146, merged as `8ed434b` (recorded by Session 73) | The backfill: eight records (231 rows) on the seven other committed slates, MIN@NO's `final_v10` and `final_v7` both, PHI@CHI and Week 4 afternoon `NO_PRIOR_SOURCE`, Week 5 Classic against its live late-swap export with Ben's free entry recorded; each record the builder's bytes, its priors the source's slot-order sum, each source reproducing its hand-pass record's stated totals (BAL@ATL's r2 pinned apart). Session 72's four records print `ALREADY_PRESENT`. The plan consult, the reviewer and the close-out consult each a fresh-context agent. Mutation pass 14 of 15 killed; the survivor (a reversed-roster sum) is equivalent under the pinned Python 3.13.7, whose `sum()` of floats is compensated. Suite `3816 passed, 1 skipped in 785.73s (0:13:05)`. Section 1 names Session 73 (changelog) |
 | 2026-10-13 | Session 73 | Pending to In Progress | claim commit | The results join (blanks, the ranking check); claimed on `claude/s73-results-join` at `8ed434b` (PR #146's merge, now recorded in Session 72c's close-out row). The plan was checked by a fresh-context fable agent briefed to refute five claims (the `advisor` skill's procedure), then approved by Ben before any change; the descriptor comparison is planned as Session 73b. Section 1 still names Session 73 until the close-out, so this commit accepts the one red quick-start test and is never merged |
 | 2026-10-13 | Session 73b | Added as Pending | Session 73 close-out | Split from Session 73 at the card's named seam (the descriptor comparison), planned before any code because the plan's first half alone passed the 1,000-line trigger: bottom-10% against top-10% entries and percentile on the build record's descriptors with slate-clustered intervals, synthetic until O13's per-slate files are committed. Directly below Session 73 with no board dependency (the code is on `main` at merge), so it is the first startable row |
-| 2026-10-13 | Session 73 | In Progress to Pending | `89a47a2` (the claim), `bc58367` (the join, command, registry, count and contract), `c387292` (the review's fixes), `89fe205` (the two mutation-pass tests) and the close-out commit, PR #147; the merge is recorded by the next session | `nfl results-join`: every Entry ID classed (locked blanks with or without a record among them), each slate's rank check over all and paid rows, the report named by the records' digest, each slate's results written once beside its record with no money; DET@BUF's 13 template Entry IDs class as 12 `LOCKED_BLANK_NO_RECORD` and one `ENTERED_NO_RECORD`. Back to `Pending` on O13, which the four review figures need. The plan consult, the review (2 blocking, 6 smaller, all fixed with tests) and the close-out consult each a fresh-context agent. Mutation pass 25 of 25 killed (two by tests the pass added; a first run was void). Suite `3857 passed, 2 skipped in 1543.63s (0:25:43)` (Windows; two symlink-permission skips). Section 1 names Session 73b (changelog) |
+| 2026-10-13 | Session 73 | In Progress to Pending | `89a47a2` (the claim), `bc58367` (the join, command, registry, count and contract), `c387292` (the review's fixes), `89fe205` (the two mutation-pass tests) and the close-out commit, PR #147, merged as `82d77b2` (recorded by the R38 commit) | `nfl results-join`: every Entry ID classed (locked blanks with or without a record among them), each slate's rank check over all and paid rows, the report named by the records' digest, each slate's results written once beside its record with no money; DET@BUF's 13 template Entry IDs class as 12 `LOCKED_BLANK_NO_RECORD` and one `ENTERED_NO_RECORD`. Back to `Pending` on O13, which the four review figures need. The plan consult, the review (2 blocking, 6 smaller, all fixed with tests) and the close-out consult each a fresh-context agent. Mutation pass 25 of 25 killed (two by tests the pass added; a first run was void). Suite `3857 passed, 2 skipped in 1543.63s (0:25:43)` (Windows; two symlink-permission skips). Section 1 names Session 73b (changelog) |
+| 2026-10-14 | Session 75 | Added as Pending | R38 commit | R38 (Ben, 2026-10-14: goal 1 is first place within each individual contest; goal 2 stays the portfolio-level washout). The per-contest first-place reading: Session 50's `contest_statistics` joined to the contest facts as `first_place_coverage_v1`, printed per Contest ID by both QA scripts and the readable review beside the unchanged washout proxies, a one-entry contest read by its lineup's shape. Directly above Session 69 at Ben's request for a priority item, with no board dependency, so it is the first startable row (section 2.8) |
+| 2026-10-14 | Session 76 | Added as Pending | R38 commit | `within_contest_diversity_v2`: a repeated Captain or QB stack inside one contest only when no permutation avoids it; every contest counts once; exposure and the lineup set cannot move. Depends on Session 75; the Pareto redeploy keeps its mean-prior axis because it runs before any contest exists (section 2.8) |
+| 2026-10-14 | Session 77 | Added as Pending | R38 commit | `nfl_results_metrics_v2`: per-contest best finish, first-place and top-1% counts beside their random expectation, and slate washouts; v1 byte-identical; no board dependency (section 2.8) |
