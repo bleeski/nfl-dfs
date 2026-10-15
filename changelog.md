@@ -4,6 +4,59 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-14: R38 -- first place in each contest; Sessions 75 to 77 added (planning, not a roadmap session)
+
+Branch `claude/r38-first-place-goal`. Ben restated the first of his two goals: "Rather than have one focus on 'large prizes'
+I want it to specifically target first place equity within each individual contest, while the other goal remains to
+minimize the portfolio level washout," and asked for it as a priority item. No code changed, and every path stays
+`PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- **R38** in `docs/ROADMAP.md` §2.5. Goal 1 is set contest by contest; goal 2 stays portfolio-wide.
+  - It supersedes R34's large-prize half. The 2026-10-04 tie-break carries over as Claude's reading.
+  - No registered name, key, label or report prints "equity": it is a share of an expected prize, an EV term.
+  - Every contest is read as a tournament until a payout ladder or Ben says a contest is flat.
+  - The mean prior stays the Pareto redeploy's and the ceiling pass's first axis, as a stand-in, until Session 25's tail
+    statistic exists.
+- **Sessions 75 to 77**, directly above Session 69, so Session 75 is the first startable row (§1 rewritten):
+  - 75: the per-contest first-place reading. Session 50's `contest_statistics` joined to the contest facts and printed per
+    Contest ID by both QA scripts and the readable review; a one-entry contest is read by its lineup's shape.
+  - 76: `within_contest_diversity_v2`. A repeated Captain or QB stack inside one contest only when no permutation avoids it.
+  - 77: `nfl_results_metrics_v2`. Per-contest best finishes, first-place and top-1% counts beside their random expectation,
+    and slate washouts.
+- R38 notes on the cards of Sessions 25, 25b, 28 and 29. Session 25b's sleeve of k, with the rest on expectation, is re-planned
+  at its claim. Tracker cards for 75 to 77, and a decision card on flat contests, in `docs/tracker/plain.json`.
+
+**Changed.**
+- The goal statements in `.claude/rules/slate-operation.md`, `.claude/rules/selection-and-objective.md`, `docs/claude/working.md`
+  (the Showdown tie-break), `plan.md` (§1's "washout becomes a safety tiebreak", marked superseded), the board's ranking lines
+  (§2.1, §2.8) and the tracker's portfolio goal. The ceiling pass's mechanics are unchanged.
+- Session 73's close-out ledger row records PR #147's merge, `82d77b2`.
+
+**Advisor.** A fresh-context agent was briefed to argue against the plan before any edit.
+- Taken:
+  - The Pareto redeploy runs inside the thesis build, before any contest exists, so a per-contest rule there could not bind.
+    Goal 1's construction step moved to the contest assignment (Session 76).
+  - Session 50's statistics already hold most of the reading, so Session 75 is a join.
+  - Also taken: the one-entry contest, the vocabulary rule, the `plan.md` supersession and Session 77.
+- Not taken:
+  - Applying goal 1 only to contests labelled `FIRST_PLACE_OBJECTIVE`: none of the 186 entries in fields above 2,000 was in
+    one (2026-10-10 results review).
+  - Moving Sessions 24 and 24b up: 24b depends on 44b, and a row may depend only on an earlier row.
+
+**Second review.** A fresh-context review of the finished diff added three things:
+- the "Claude's reading" label on the carried-over tie-break, in `slate-operation.md` and `working.md`;
+- a question for Ben, and a tracker decision card, on whether the ceiling pass keeps its room past the defaults under R38;
+- an independent feasibility check in Session 76's acceptance.
+
+**Verification.**
+- Full suite on the first commit: `3858 passed, 2 skipped in 1358.93s (0:22:38)` (local, Windows; recorded with
+  `scripts/record_verify.py`). The last recorded line was 3857 passed, 2 skipped.
+- `nfl doctor`, `git diff --check` and `check_protected_paths.py` (no protected path) are clean.
+- The follow-up commit changes only documents. After it: `tests/test_roadmap_queue.py`, `tests/test_tracker_plain.py`,
+  `tests/test_repo_boundaries.py` and `tests/test_post_merge_procedure.py` (`177 passed in 3.07s`), and
+  `scripts/tracker_payload.py --check`.
+
 ### 2026-10-13: Session 73 -- the results join (blanks, the ranking check)
 
 Branch `claude/s73-results-join`, pull request #147. Claimed at `89a47a2` on `8ed434b` (PR #146's merge, now recorded in

@@ -174,8 +174,12 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   files do not bind (a salary, policy or Entry ID mismatch, a v2 or v3 policy, lineups moved between Entry IDs by hand); a refusal
   is never a PASS. `backup_quarterback: NOT_EVALUATED` in their output means the run had no depth evidence, so that one rule did
   not run. Without the flags neither script checks a thesis, so pass them on every v4 run.
-- **Tie-break: large prizes win (Ben, 2026-10-04).** "Err on side of trying to win large prizes if at odds with minimizing the
-  washout factor." After the engine's file, run a ceiling pass: every WR or TE Captain gets his own team's starting quarterback,
+- **Tie-break: a contest's first-place shot wins (Ben, 2026-10-04, for the old goal; carried over to R38 as Claude's
+  reading).** "Err on side of trying to win large prizes if at odds with minimizing the washout factor." R38 (2026-10-14) makes
+  the first goal first place within each individual contest, and the washout goal stays portfolio-wide (`docs/ROADMAP.md`
+  §2.5). Whether the pass keeps its room past the defaults under R38 is open to Ben (§2.8). The ceiling pass below is goal 1's hand tool until
+  Sessions 75 and 76 land. Its FLEX criterion raises a mean, not a ceiling, so it is a stand-in. Read the result contest by
+  contest: a Captain or QB stack repeated inside one contest is one shot spent twice. After the engine's file, run a ceiling pass: every WR or TE Captain gets his own team's starting quarterback,
   then take FLEX swaps that raise a row's prior by a point or more, Captains untouched. That pass may exceed the person default up
   to 75% of lineups and the overlap default up to 5; the Captain cap and R29 never move. Report every measure before and after.
   Then search whole-lineup swaps between Entry IDs that worsen no contest measure. Record: DET@CAR,

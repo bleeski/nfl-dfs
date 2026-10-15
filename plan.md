@@ -9,7 +9,7 @@ This document is the governing implementation plan for the local NFL DFS engine.
 
 | Critique recommendation | Decision | Revision |
 |---|---|---|
-| Replace Top-1%/break-even GPP frontier | **Accept diagnosis; modify remedy** | GPP frontier becomes robust scenario net payout versus elite-finish probability. Top-1% and washout remain reported; washout becomes a safety tiebreak, not a co-primary GPP objective. |
+| Replace Top-1%/break-even GPP frontier | **Accept diagnosis; modify remedy** | GPP frontier becomes robust scenario net payout versus elite-finish probability. Top-1% and washout remain reported; washout becomes a safety tiebreak, not a co-primary GPP objective. *Superseded by R34 (2026-09-24) and R38 (2026-10-14), `docs/ROADMAP.md` §2.5: avoiding a washout across the portfolio is a co-primary goal, beside first place within each individual contest.* |
 | Optimize one pure simulated-ROI score | **Reject** | A scalar built on an uncalibrated field would create false precision. Preserve a transparent Pareto frontier and uncertainty intervals. |
 | Stress cold-start ownership | **Accept** | Use operator ownership brackets, multiple news/field states, and worst-state selection until calibration matures. |
 | Start with a complex partial-pooling ownership model | **Modify** | Begin with an interpretable heuristic constrained to roster totals; introduce partial pooling only after standings evidence accumulates. |
