@@ -3,7 +3,8 @@
 A thesis is a choice, not a forecast: the check recomputes each row's rules from the exported bytes and reports which
 rule a row breaks, never a number. A break is an operator limit (exit 2, verdict DEFECT: DraftKings accepts the file);
 a thesis input that cannot be used is a validity failure (exit 1, verdict FAIL), never a PASS. Without the two flags the
-script behaves as `c997395`'s did, byte for byte (pinned below from that script before it was edited).
+script behaves as `c997395`'s did, byte for byte outside Session 75's `first_place_coverage` key (pinned below, and the
+key's removal proven against the `c997395` values in `tests/test_first_place_coverage.py`).
 """
 
 from __future__ import annotations
@@ -37,11 +38,14 @@ from .test_showdown_thesis_check import (
 from .test_showdown_theses import _policy, _thesis
 
 # Exit code and SHA-256 of stdout of the unflagged script on the synthetic fixtures, captured from `c997395`'s
-# `scripts/qa_showdown_portfolio.py` before this session edited it.
+# `scripts/qa_showdown_portfolio.py` before this session edited it. Re-pinned by Session 75 (2026-10-15), whose card
+# adds the `first_place_coverage` key to every run's output: the exit codes are unchanged, and
+# `tests/test_first_place_coverage.py` proves the output with that key's lines removed still hashes to the `c997395`
+# values (8c891b47..., a6a4785a..., 85c16261...).
 GOLDEN = {
-    "clean": (0, "8c891b47e00ca31a96297eadd092a4ac4ef68d3a91e8c8ab7f6213a24b902afd"),
-    "overlap_limit": (2, "a6a4785a99449d1d502c00c6add8506d819390c3040d943854a128cde34ef78e"),
-    "unfilled": (3, "85c1626136bfe356f16cbf41039a81f817b6e45b35c8f35ef18f6f5d30d8bbeb"),
+    "clean": (0, "6be79f4065ab576bee37284ea97cddde9fb02759c74834bddb2d5ce73a370e37"),
+    "overlap_limit": (2, "a08cf39af09911b2f8d371704a911b74520d87b17c773264f23a04ba9c853251"),
+    "unfilled": (3, "50f362906820950edd80f2e2e3564913e8f5947e4fcc9bda94b4415fa55e5c8f"),
 }
 
 

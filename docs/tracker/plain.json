@@ -784,7 +784,15 @@
       "title": "Show each contest's shot at first place",
       "what": "Adds a contest-by-contest table to the lineup checks and the review: how many entries each contest holds, how different they are (captains, quarterback stacks, game stories, shared players), and the contest's size and payout spread.",
       "why": "You changed the first goal to first place in each contest. The engine already measures how different each contest's entries are, but nothing you or I read on slate day shows it.",
-      "matters": "Two near-copies in one contest are one shot at first place, not two; this makes that visible before the file goes out."
+      "matters": "Two near-copies in one contest are one shot at first place, not two; this makes that visible before the file goes out.",
+      "note": "Built on 2026-10-15 in both lineup checks: every contest is listed, repeated captains or quarterbacks are named, and a contest with one entry shows its lineup's shape. Putting the same table in the review moved to Session 75b."
+    },
+    "S75b": {
+      "goal": "portfolio",
+      "title": "Put the first-place table in the review",
+      "what": "Adds the contest-by-contest table to the readable review and to every run's own record, so it is there without running the lineup checks by hand.",
+      "why": "It was split off Session 75 to keep each change a reviewable size.",
+      "matters": "The review is what you read on slate day, so the first-place table belongs in it, not only in the checks."
     },
     "S76": {
       "goal": "portfolio",
