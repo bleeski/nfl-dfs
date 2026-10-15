@@ -887,6 +887,13 @@
       "holds_up": []
     },
     {
+      "key": "ceiling-pass-room",
+      "title": "Keep the Showdown ceiling pass's extra room under the new goal?",
+      "question": "The ceiling pass may put one player in up to 75% of lineups and let two lineups share 5 players, past the usual limits. You allowed that for the old large-prizes goal. Keep it now that the goal is first place in each contest?",
+      "recommendation": "Keep it. The contest step that runs after it keeps close lineups out of the same contest where it can, and Session 76 makes that its first rule. Blocks nothing.",
+      "holds_up": []
+    },
+    {
       "key": "salary-band",
       "title": "Should Classic stop forcing near-full salary spend?",
       "question": "The first Classic build attempt pushes every lineup to spend $49,000 or more. Remove that rule?",

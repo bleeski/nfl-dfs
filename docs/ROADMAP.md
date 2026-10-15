@@ -1264,7 +1264,9 @@ Every session follows this protocol, and the cards only add to it:
   - `prior_review` and `diversify_showdown_contests.py` take v2. The hand-pass order in `docs/claude/working.md` becomes: the
     ceiling pass, value-add swaps and hand placements first, the contest pass last, then Session 75's table before and after
     in the handoff.
-- **Acceptance.** On PHI@CHI v4 and MIN@NO no contest repeats a Captain or QB stack when a permutation avoids it; exposure,
+- **Acceptance.** On PHI@CHI v4 and MIN@NO no contest repeats a Captain or QB stack when a permutation avoids it, where
+  "avoids it" is decided by an independent exact feasibility check on the file (a small search per contest's key people,
+  separate from the time-limited assignment search), never by the search's own output; exposure,
   the lineup set (R29) and the washout proxies are identical before and after; the v1 and v2 readings print side by side;
   replay byte-identical; `contest_assignment_version` recorded in the run.
 - **Boundaries.** Moves lineups between Entry IDs only: never a lineup, a cell, a locked cell or a release truth.
@@ -3761,7 +3763,11 @@ tournament. R38's scope note reads every contest as a tournament instead. Also n
 Sessions 24 and 24b up. Session 24b depends on Session 44b, and a row may depend only on an earlier row.
 
 **Questions for Ben that block nothing.** Do you enter flat contests (double-ups, 50/50s)? Under R38 they would count toward
-the washout goal only, and the engine cannot yet tell one from a tournament (R38's scope note). Sleeve size and risk tolerance
+the washout goal only, and the engine cannot yet tell one from a tournament (R38's scope note). Should the Showdown ceiling
+pass keep its room past the defaults (a person to 75% of lineups, overlap to 5) under R38? It was granted for the large-prize
+goal, and near-copies landing in one contest are what goal 1 now counts against; Claude's recommendation is to keep it,
+because the contest pass that runs after it keeps close lineups apart within each contest where it can, and Session 76 makes
+that its first rule. Sleeve size and risk tolerance
 (findings §7); a paid ownership-capture source (Showdown retro §7d, a
 spending decision); Week-by-week stake sizing (retro §8 Q3); an odds-API
 credit budget (`docs/SHOWDOWN_FIRST_PRODUCTION_PLAN.md` §7); whether Q1's

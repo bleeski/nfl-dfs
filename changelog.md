@@ -44,7 +44,18 @@ minimize the portfolio level washout," and asked for it as a priority item. No c
     one (2026-10-10 results review).
   - Moving Sessions 24 and 24b up: 24b depends on 44b, and a row may depend only on an earlier row.
 
-**Verification.** See the pull request: the focused queue, tracker and boundary tests and the full suite line.
+**Second review.** A fresh-context review of the finished diff added three things:
+- the "Claude's reading" label on the carried-over tie-break, in `slate-operation.md` and `working.md`;
+- a question for Ben, and a tracker decision card, on whether the ceiling pass keeps its room past the defaults under R38;
+- an independent feasibility check in Session 76's acceptance.
+
+**Verification.**
+- Full suite on the first commit: `3858 passed, 2 skipped in 1358.93s (0:22:38)` (local, Windows; recorded with
+  `scripts/record_verify.py`). The last recorded line was 3857 passed, 2 skipped.
+- `nfl doctor`, `git diff --check` and `check_protected_paths.py` (no protected path) are clean.
+- The follow-up commit changes only documents. After it: `tests/test_roadmap_queue.py`, `tests/test_tracker_plain.py`,
+  `tests/test_repo_boundaries.py` and `tests/test_post_merge_procedure.py` (`177 passed in 3.07s`), and
+  `scripts/tracker_payload.py --check`.
 
 ### 2026-10-13: Session 73 -- the results join (blanks, the ranking check)
 

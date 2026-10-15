@@ -119,10 +119,11 @@ ATL@GB Showdown file passed every gate and QA with 0 defects, and Ben rejected
 it: five captains at 25% each, four people in 13 of 20 lineups. QA PASS says
 the file is legal, not that the portfolio is any good.
 
-When the two goals conflict, a contest's first-place shot wins (Ben,
-2026-10-04: "Err on side of trying to win large prizes if at odds with
-minimizing the washout factor"; carried over to R38's first goal). The ceiling
-pass that applies it is in `docs/claude/working.md` § Showdown judgment pass.
+When the two goals conflict, a contest's first-place shot wins. Ben ruled the
+tie-break for the old goal (2026-10-04: "Err on side of trying to win large
+prizes if at odds with minimizing the washout factor"); carrying it over to
+R38's first goal is Claude's reading, which Ben can overturn. The ceiling pass
+that applies it is in `docs/claude/working.md` § Showdown judgment pass.
 Ben's phrase is "first place equity"; never print equity, EV or a probability
 of winning for any number the engine or a hand pass produces (R38).
 
