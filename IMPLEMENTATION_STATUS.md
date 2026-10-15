@@ -1,5 +1,32 @@
 # Implementation Status
 
+## Capability added: 2026-10-15 (Session 75b, the first-place reading on the run path and in both readable reviews)
+
+Working and verified. The evidence:
+- 31 new tests (`tests/test_first_place_coverage_run_slate.py`, `tests/test_first_place_coverage_review.py`) on real
+  `run-slate` runs of every exit and on the real `apply_step` and facts builder;
+- an old-against-new comparison on the same inputs, a reviewer, a mutation pass on a copy (16 of 16 killed, 3 by tests
+  the pass added), and the full suite
+  (`3931 passed, 2 skipped in 1477.80s (0:24:37)`, Windows, on the final source; the two skips are this host's
+  symlink-permission cases; two tests added after it pass in their files).
+
+What works:
+- **The run carries the reading.** `prior_review_reports.first_place_coverage` is on every exit after the contest step:
+  Showdown policy and sequential, Classic C1 and C2, and C3. It equals the step's `contests_after` on all four tested
+  exits, thesis labels included, and reads the run's contest facts when supplied. A failed step or a raising reading is
+  named `NOT_COMPUTED` and delivery goes on.
+- **Both readable reviews show it.** Showdown and C3 hold an always-present `first_place_coverage` key and a "First place,
+  contest by contest" section: the facts join, each repeated Captain or QB, a one-entry contest's shape. Hostile names are
+  escaped, and the section renders whatever block it is given.
+- **The Classic QA's section cannot move its exit code.**
+- **Nothing else moves.** Delivered CSVs, release truths, blockers and the Classic QA's output match `origin/main`'s.
+
+Not yet:
+- Contest placement for first place (Session 76); the workbook's contest rows (Session 68); any tail statistic (Sessions
+  24b and 25); ownership.
+
+A reading only: not a chance of finishing first, a share of any prize, a gate or a release truth.
+
 ## Capability added: 2026-10-15 (Session 75, the per-contest first-place reading in both QA scripts)
 
 Working and verified. The evidence:
