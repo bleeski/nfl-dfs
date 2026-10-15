@@ -1,5 +1,31 @@
 # Implementation Status
 
+## Capability added: 2026-10-15 (Session 75, the per-contest first-place reading in both QA scripts)
+
+Working and verified. The evidence:
+- 44 new tests (`tests/test_first_place_coverage.py`, `tests/test_first_place_coverage_run_slate.py`): synthetic files,
+  the committed MIN@NO v10 and Week 5 v10 files, and real `run-slate` runs;
+- an old-against-new comparison of both scripts on four real files;
+- a mutation pass on a copy (26 of 26 killed); the full suite (`3902 passed, 2 skipped in 1257.68s (0:20:57)`, Windows;
+  the two skips are this host's symlink-permission cases).
+
+What works:
+- **The reading.** `first_place_coverage_v1` (`src/nfl_dfs/first_place_coverage.py`) reads each Contest ID's entries
+  together.
+  - Two or more entries: the contest step's own statistics, with each repeated Captain or QB named. On the same rosters
+    and thesis labels they equal the run's `contests_after`, a real C3 `selection/contest_assignment.json` included.
+  - One entry: the lineup's shape and salary left.
+  - Each contest is joined to a run's contest facts when given, else `NO_CONTEST_FACTS`.
+- **Both QA scripts print it.** Classic gets a section after Tier 2 and a `--json` key; Showdown a key before `VERDICT`.
+  Classic reads `--export` or `--entries`; both take `--contest-facts`, and Showdown takes labels from `--claim`.
+- **Nothing else moves.** Every other line, verdict and exit code is byte-identical outside the new block.
+
+Not yet:
+- The run's own record and the readable review do not carry the reading. That is Session 75b.
+- No tail statistic (Sessions 24b and 25) and no ownership.
+
+A reading only: not a chance of finishing first, a share of any prize, a gate or a release truth.
+
 ## Capability added: 2026-10-13 (Session 73, the results join)
 
 Working and verified through 42 synthetic-history cases on the real committed records and copies (`tests/test_results_join.py`), a mutation pass (25 of 25 killed, two by tests the pass added), two fresh-context consults and a review, an old-against-new comparison and the full suite (`3857 passed, 2 skipped in 1543.63s (0:25:43)`, Windows; the two skips are this host's symlink-permission cases, `tests/test_cowork.py:112` and `tests/test_standings_transport.py:523`, as in every Windows run).

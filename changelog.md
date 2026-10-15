@@ -4,6 +4,117 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-15: Session 75 -- the per-contest first-place reading in both QA scripts (the run path split to 75b)
+
+Branch `claude/s75-first-place-reading`, claimed at `95f20fe` on `9432d53` (PR #148, the R38 planning merge). Before the plan
+was presented, a fresh-context agent was briefed to refute it. Ben approved it before any change. A reviewer then read the
+diff and a mutation pass ran on a copy of the tree.
+
+The session stopped at its named seam. When the seam was measured, the module, both QA scripts, their tests and the
+contract came to 1,181 inserted lines against the plan's 1,000-line trigger: the module 355 against its 230 estimate, the
+tests 665. The run path (the `prior_review` block and both readable reviews) is therefore Session 75b, directly below.
+The implementation commit, `890413f`, holds 1,346 insertions after the review's fixes and the run-slate test file: the
+module 356, the tests 700 and 105.
+
+Nothing reaches `run-slate`, `prior_review`, a selection or a release truth, and every path stays
+`PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- **`first_place_coverage_v1`.** `src/nfl_dfs/first_place_coverage.py`; `docs/DATA_CONTRACTS.md` § First place, contest
+  by contest. It reads each Contest ID's entries together, as one set of shots at that contest's first place (R38).
+  - Two or more entries: `statistics`, exactly `contest_assignment.contest_statistics`, plus each repeated Captain or QB
+    named with its count.
+  - One entry: the lineup's shape (the Captain and his salary; or the QB, the primary stack team and its depth, and the
+    bring-back), salary left, and the line that no tail statistic exists before Session 24b.
+  - The contest facts join: `SUPPLIED`, `NO_FACTS_ROW` or `FEE_DISAGREES` from a bound block, else `NO_CONTEST_FACTS`.
+  - Reading states only, never registry codes: `NO_CONTEST_IDS`, `NO_CONTEST_ID_COLUMN`, `NO_ROSTER_COLUMNS`,
+    `NOT_COMPUTED`, and the facts bindings `NO_ROWS` and `NOT_BOUND`.
+- **The Classic QA** (`scripts/qa_classic_portfolio.py`) prints a "FIRST PLACE, CONTEST BY CONTEST" section after Tier 2
+  and adds `first_place_coverage` to its `--json` record. `--entries` reads Contest IDs before the writer. `--contest-facts`
+  takes a run's `selection/contest_facts.json`.
+- **The Showdown QA** (`scripts/qa_showdown_portfolio.py`) adds the same reading as the key before `VERDICT` in its one JSON
+  object. It takes `--contest-facts`, and reads thesis labels from `--claim` when that check ran.
+- **New tests.** `tests/test_first_place_coverage.py` (41) and `tests/test_first_place_coverage_run_slate.py` (3: both QA
+  scripts run on real `run-slate` runs' delivered files equal those runs' `contests_after`, including a v4 portfolio of
+  theses read with `--claim`, and C3's `selection/contest_assignment.json`, the artifact the card names).
+- **Session 75b**: a row, a card and a tracker card.
+
+**Changed.**
+- **`tests/test_qa_showdown_thesis.py`'s `GOLDEN` was re-pinned.** It is named here before the fix, as
+  `.claude/rules/tests.md` asks.
+  - Why: Session 66 pinned the SHA-256 of the unflagged Showdown QA's whole stdout. The card adds a key to every run's
+    output, so the three hashes had to move. The exit codes did not (0, 2, 3).
+  - What keeps the old guarantee: `tests/test_first_place_coverage.py` deletes the new key's lines and gets the `c997395`
+    hashes back byte for byte. It also pins the Classic stdout and the parsed `--json` record the same way, plus the
+    committed MIN@NO and Week 5 runs.
+  - Ben approved this exception to the brief's "existing tests stay unedited" with the plan (decision D0).
+- **Docs.**
+  - `docs/OPERATOR_GUIDE.md` § First place, contest by contest.
+  - `.claude/rules/slate-operation.md`'s goal-1 line points at the QA table.
+  - `docs/claude/working.md`: a Windows trap (below).
+
+**Found.**
+- **The committed files under the new reading (no facts, no labels).**
+  - Week 5 Classic v10 holds 33 entries in 10 contests, 5 of them single-entry. Contest 196605098's two entries share one
+    QB (Bo Nix twice), and the 20-entry contest repeats Drake Maye 4 times and Brock Purdy 3 times.
+  - MIN@NO v10's 7-entry contest has 7 distinct Captains, and its 20-entry contest repeats Will Reichard 4 times. That is
+    Session 76's question, not this one's.
+- **The brief's premises, corrected in the plan.**
+  - The run keys people `team|position|name` (`dk.py:408`), as the Showdown QA does. Only
+    `diversify_showdown_contests.py` keys `TEAM|Name`.
+  - `DATA_CONTRACTS.md:3412` is `nfl_baseline_report_v4`, which is not to be mutated.
+  - Week 5 v10 has 187 `(LOCKED)` roster cells, not 204.
+  - `--template` without `--export` is already a Tier 1 failure, hence `--entries`.
+- **Windows trap.** The mutation pass's first copy failed its baseline. With pytest's temp folder under the scratchpad, a
+  C3 run's projected-source path passed 260 characters. A short temp root fixed it. It is recorded in `working.md` beside
+  Session 72c's copy trap.
+
+**Advisor.** A fresh-context agent was briefed to refute seven claims before the plan went to Ben.
+- It weakened the equality claim (it holds only with the same thesis labels) and the planned exit test (it compared the
+  block to itself; the real-run equality test replaced it).
+- It refuted the size estimate: 1,075 lines, against Sessions 23d at 2,079 and 50c at 1,339. That is why this session
+  expected the 75b split.
+- Also taken: the review already shows two per-contest tables; `--template` alone fails, hence `--entries`; the gate scan's
+  full naming rules; a word-bounded vocabulary test.
+- Not taken: dropping the QA's facts input.
+
+**Review.** A fresh-context reviewer extracted `9432d53`'s two scripts and confirmed all ten pins against their raw output,
+so the strip tests are not circular. That covers the four Classic stdout cases, the Classic `--json` case, the three
+Showdown cases and the two committed files. The Classic and real-file pins have no earlier copy in git, so this recapture
+is their independent check. The Showdown pins are the old `GOLDEN` lines. A Showdown exit 1 has no new pinned case: it
+rests on `tests/test_qa_showdown_portfolio.py` and on the exit logic reading only the defect lists. Every finding was fixed before the commit:
+- The contract claimed the reading skips the rows the run skips. It does not: the run's prefilled reader drops a roster
+  its validator refuses, and a `(LOCKED)` cell. The contract now says equality holds on legal, unlocked prefilled rows, and
+  a test pins the reading's side.
+- Duplicate Entry IDs are scored once per copy, and the contract now says so.
+- Four doc overclaims are corrected: `NOT_BOUND` for "another run", the Classic `NO_LINEUPS` exit, "his stack team", and
+  `--entries` filling "blank" rows.
+- `facts_from_file` now catches `RecursionError` from deeply nested JSON, with a test.
+- The S75 row's Files column names what landed.
+
+**Verification.**
+- New tests: `tests/test_first_place_coverage.py` red first (`ImportError: cannot import name 'first_place_coverage'`),
+  then green. With both QA scripts' own tests, the QA callers, the gate registry and the boundary tests: `610 passed in
+  25.84s`.
+- Neighbors (the brief's sixteen files, the new file, the gate registry, boundaries, queue and tracker):
+  `893 passed in 245.87s (0:04:05)`.
+- Before and after. `origin/main`'s two scripts and this branch's ran on MIN@NO v10 and v7, Week 5 v8 and v10 and the
+  synthetic fixtures, with and without `--max-overlap`, `--max-exposure`, `--backup-pairs` and `--json`. Exits 0, 1 and 2
+  appeared. Stdout outside the new block, the exit codes and the parsed `--json` records were identical in all 8 real
+  cases.
+- Mutation pass on a copy (`nfl_dfs` resolved into the copy; pytest's temp folder kept short):
+  - 26 mutants across the module and both scripts. 25 were killed at first; the killing test is recorded per mutant.
+  - The survivor reversed the order of the repeated Captains or QBs. The added
+    `test_repeated_quarterbacks_are_listed_most_held_first` kills it, so 26 of 26.
+- Full suite: `3902 passed, 2 skipped in 1257.68s (0:20:57)` (local, Windows; recorded with `scripts/record_verify.py`).
+  The last recorded line was 3858 passed, plus the 44 new tests. The two skips are this host's symlink-permission cases,
+  `tests/test_cowork.py:112` and `tests/test_standings_transport.py:523`, as in every Windows run.
+- After the suite, two docstrings changed, in `src/nfl_dfs/first_place_coverage.py` and
+  `tests/test_qa_showdown_thesis.py`, and nothing else in code. The new tests, the gate registry and the boundary tests
+  were rerun on them, and CI's suite runs on the final commit.
+- `nfl doctor` exits 0. `git diff --check` and `check_protected_paths.py` (no protected path) are clean. Every edited
+  script compiles, and the four LF ledgers hold zero CR bytes.
+
 ### 2026-10-14: R38 -- first place in each contest; Sessions 75 to 77 added (planning, not a roadmap session)
 
 Branch `claude/r38-first-place-goal`. Ben restated the first of his two goals: "Rather than have one focus on 'large prizes'

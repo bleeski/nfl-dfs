@@ -3,7 +3,8 @@
 A thesis is a choice, not a forecast: the check recomputes each row's rules from the exported bytes and reports which
 rule a row breaks, never a number. A break is an operator limit (exit 2, verdict DEFECT: DraftKings accepts the file);
 a thesis input that cannot be used is a validity failure (exit 1, verdict FAIL), never a PASS. Without the two flags the
-script behaves as `c997395`'s did, byte for byte (pinned below from that script before it was edited).
+script behaves as `c997395`'s did, byte for byte outside Session 75's `first_place_coverage` key (pinned below, and the
+key's removal proven against the `c997395` values in `tests/test_first_place_coverage.py`).
 """
 
 from __future__ import annotations

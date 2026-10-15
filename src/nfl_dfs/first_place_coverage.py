@@ -2,8 +2,8 @@
 
 `first_place_coverage_v1`. R38 (Ben, 2026-10-14) sets goal 1 contest by contest: the entries in one Contest ID are one
 set of shots at its first place, so two near-copies there are one shot, not two. Session 50's contest step already
-measures each contest's spread; this module reads it back per Contest ID wherever the operator decides (both QA scripts
-and the readable review) and joins each contest to the run's contest facts. It is a reading. It never gates, never
+measures each contest's spread; this module reads it back per Contest ID where the operator decides (both QA scripts;
+the readable review and the run's own record are Session 75b's) and joins each contest to the run's contest facts. It is a reading. It never gates, never
 selects and never moves a lineup or a release truth.
 
 Per Contest ID:
