@@ -1,0 +1,301 @@
+{
+  "lineups": 28,
+  "defects": 0,
+  "DEFECTS": [],
+  "limit_breaches": 0,
+  "LIMIT_BREACHES": [],
+  "unfilled_entry_ids": [],
+  "prefilled_entry_ids": [],
+  "observations": 4,
+  "OBSERVATIONS": [
+    "5296938659 DST_WITH_OWN_OFFENSE DEN:['DEN|QB|Bo Nix', 'DEN|RB|J.K. Dobbins', 'DEN|RB|RJ Harvey', 'DEN|WR|Jaylen Waddle']",
+    "5296938661 MULTIPLE_KICKERS 2",
+    "5296939571 DST_WITH_OWN_OFFENSE SEA:['SEA|QB|Sam Darnold', 'SEA|K|Jason Myers', 'SEA|RB|Emanuel Wilson', 'SEA|WR|Jaxon Smith-Njigba']",
+    "5296951177 MULTIPLE_KICKERS 2"
+  ],
+  "observation_note": "strategy observations never change the exit code; DraftKings accepts each of them",
+  "exit_codes": "1 validity failure; 3 blank authorized rows unfilled; 2 an operator limit only; 0 none of these, which does not clear an upload",
+  "max_pairwise_overlap": 5,
+  "salary_min": 43800,
+  "salary_max": 50000,
+  "distinct_captains": 8,
+  "qb_count_histogram": {
+    "2": 14,
+    "1": 14
+  },
+  "first_place_coverage": {
+    "first_place_coverage_version": "first_place_coverage_v1",
+    "does_not_establish": [
+      "NOT_A_CHANCE_OF_FINISHING_FIRST",
+      "NOT_A_SHARE_OF_ANY_PRIZE",
+      "NOT_A_TAIL_STATISTIC",
+      "NOT_OWNERSHIP_OR_DUPLICATION",
+      "NOT_UPLOAD_CLEARANCE"
+    ],
+    "status": "READ",
+    "detail": null,
+    "mode": "SHOWDOWN",
+    "key_person": "CAPTAIN",
+    "source": "EXPORT",
+    "read_as": "every contest is read as a tournament (R38) until a payout ladder or Ben says it is flat",
+    "thesis_labels": "NONE",
+    "facts": {
+      "binding": "NOT_SUPPLIED",
+      "detail": null,
+      "facts_status": null
+    },
+    "duplicate_entry_ids": [],
+    "contest_count": 8,
+    "one_entry_contest_count": 3,
+    "contests": [
+      {
+        "contest_id": "196689722",
+        "entry_ids": [
+          "5296937778"
+        ],
+        "entries": 1,
+        "rows_without_roster": [],
+        "rows_unscored": [],
+        "facts_state": "NO_CONTEST_FACTS",
+        "field_size": null,
+        "places_paid": null,
+        "paid_fraction": null,
+        "paid_fraction_decimal": null,
+        "label": null,
+        "shape": {
+          "captain": "SEA|RB|Emanuel Wilson",
+          "captain_salary": 14100,
+          "salary_left": 900
+        },
+        "no_tail_statistic": "no tail statistic exists before Session 24b: shape facts only, never a ranking"
+      },
+      {
+        "contest_id": "196689744",
+        "entry_ids": [
+          "5296930241"
+        ],
+        "entries": 1,
+        "rows_without_roster": [],
+        "rows_unscored": [],
+        "facts_state": "NO_CONTEST_FACTS",
+        "field_size": null,
+        "places_paid": null,
+        "paid_fraction": null,
+        "paid_fraction_decimal": null,
+        "label": null,
+        "shape": {
+          "captain": "SEA|QB|Sam Darnold",
+          "captain_salary": 14700,
+          "salary_left": 2300
+        },
+        "no_tail_statistic": "no tail statistic exists before Session 24b: shape facts only, never a ranking"
+      },
+      {
+        "contest_id": "196774475",
+        "entry_ids": [
+          "5296938174",
+          "5296938657",
+          "5296938658",
+          "5296938659",
+          "5296938660",
+          "5296938661",
+          "5296938662"
+        ],
+        "entries": 7,
+        "rows_without_roster": [],
+        "rows_unscored": [],
+        "facts_state": "NO_CONTEST_FACTS",
+        "field_size": null,
+        "places_paid": null,
+        "paid_fraction": null,
+        "paid_fraction_decimal": null,
+        "label": null,
+        "statistics": {
+          "entries": 7,
+          "pairs": 21,
+          "worst_pair_shared_people": 4,
+          "mean_shared_people": 2.619,
+          "distinct_key_people": 6,
+          "distinct_stack_teams": 0,
+          "distinct_theses": 0,
+          "people_in_every_lineup": [],
+          "worst_pair_cost": 21,
+          "score": "29.619048"
+        },
+        "repeated_key_people": [
+          {
+            "person": "SEA|WR|Jaxon Smith-Njigba",
+            "entries": 2
+          }
+        ]
+      },
+      {
+        "contest_id": "196778650",
+        "entry_ids": [
+          "5296939569",
+          "5296939570",
+          "5296939571",
+          "5296939572",
+          "5296939573",
+          "5296939574",
+          "5296952314"
+        ],
+        "entries": 7,
+        "rows_without_roster": [],
+        "rows_unscored": [],
+        "facts_state": "NO_CONTEST_FACTS",
+        "field_size": null,
+        "places_paid": null,
+        "paid_fraction": null,
+        "paid_fraction_decimal": null,
+        "label": null,
+        "statistics": {
+          "entries": 7,
+          "pairs": 21,
+          "worst_pair_shared_people": 4,
+          "mean_shared_people": 2.619,
+          "distinct_key_people": 6,
+          "distinct_stack_teams": 0,
+          "distinct_theses": 0,
+          "people_in_every_lineup": [],
+          "worst_pair_cost": 28,
+          "score": "36.238095"
+        },
+        "repeated_key_people": [
+          {
+            "person": "DEN|RB|RJ Harvey",
+            "entries": 2
+          }
+        ]
+      },
+      {
+        "contest_id": "196779266",
+        "entry_ids": [
+          "5296936512",
+          "5296936610"
+        ],
+        "entries": 2,
+        "rows_without_roster": [],
+        "rows_unscored": [],
+        "facts_state": "NO_CONTEST_FACTS",
+        "field_size": null,
+        "places_paid": null,
+        "paid_fraction": null,
+        "paid_fraction_decimal": null,
+        "label": null,
+        "statistics": {
+          "entries": 2,
+          "pairs": 1,
+          "worst_pair_shared_people": 1,
+          "mean_shared_people": 1.0,
+          "distinct_key_people": 2,
+          "distinct_stack_teams": 0,
+          "distinct_theses": 0,
+          "people_in_every_lineup": [
+            "SEA|QB|Sam Darnold"
+          ],
+          "worst_pair_cost": 1,
+          "score": "2.000000"
+        },
+        "repeated_key_people": []
+      },
+      {
+        "contest_id": "196779822",
+        "entry_ids": [
+          "5296937089",
+          "5296941776"
+        ],
+        "entries": 2,
+        "rows_without_roster": [],
+        "rows_unscored": [],
+        "facts_state": "NO_CONTEST_FACTS",
+        "field_size": null,
+        "places_paid": null,
+        "paid_fraction": null,
+        "paid_fraction_decimal": null,
+        "label": null,
+        "statistics": {
+          "entries": 2,
+          "pairs": 1,
+          "worst_pair_shared_people": 2,
+          "mean_shared_people": 2.0,
+          "distinct_key_people": 2,
+          "distinct_stack_teams": 0,
+          "distinct_theses": 0,
+          "people_in_every_lineup": [
+            "SEA|RB|Emanuel Wilson",
+            "SEA|WR|Jaxon Smith-Njigba"
+          ],
+          "worst_pair_cost": 4,
+          "score": "8.000000"
+        },
+        "repeated_key_people": []
+      },
+      {
+        "contest_id": "196781162",
+        "entry_ids": [
+          "5296937591"
+        ],
+        "entries": 1,
+        "rows_without_roster": [],
+        "rows_unscored": [],
+        "facts_state": "NO_CONTEST_FACTS",
+        "field_size": null,
+        "places_paid": null,
+        "paid_fraction": null,
+        "paid_fraction_decimal": null,
+        "label": null,
+        "shape": {
+          "captain": "SEA|QB|Sam Darnold",
+          "captain_salary": 14700,
+          "salary_left": 1100
+        },
+        "no_tail_statistic": "no tail statistic exists before Session 24b: shape facts only, never a ranking"
+      },
+      {
+        "contest_id": "196781421",
+        "entry_ids": [
+          "5296942152",
+          "5296951174",
+          "5296951175",
+          "5296951176",
+          "5296951177",
+          "5296951178",
+          "5296951179"
+        ],
+        "entries": 7,
+        "rows_without_roster": [],
+        "rows_unscored": [],
+        "facts_state": "NO_CONTEST_FACTS",
+        "field_size": null,
+        "places_paid": null,
+        "paid_fraction": null,
+        "paid_fraction_decimal": null,
+        "label": null,
+        "statistics": {
+          "entries": 7,
+          "pairs": 21,
+          "worst_pair_shared_people": 4,
+          "mean_shared_people": 3.524,
+          "distinct_key_people": 5,
+          "distinct_stack_teams": 0,
+          "distinct_theses": 0,
+          "people_in_every_lineup": [],
+          "worst_pair_cost": 21,
+          "score": "34.809524"
+        },
+        "repeated_key_people": [
+          {
+            "person": "DEN|QB|Bo Nix",
+            "entries": 2
+          },
+          {
+            "person": "SEA|RB|Emanuel Wilson",
+            "entries": 2
+          }
+        ]
+      }
+    ]
+  },
+  "VERDICT": "PASS"
+}

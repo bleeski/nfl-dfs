@@ -1,0 +1,182 @@
+{
+  "schema_version": "nfl_practice_squad_check_v1",
+  "salaries": "data/inbox/slates/sea-den-sd-2026-10-15/input/DKSalaries.csv",
+  "rosters": "data/runs/sea-den-sd-1015-r1/prior_review/priors/proposal/raw/b7b55bf8140d205c3d6ca51b5305bf041fac805f8dd902d2d035ecec9c30c3a0.csv",
+  "people": 54,
+  "not_active": [
+    {
+      "name": "Cameron Ross",
+      "team": "DEN",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44484726",
+        "44484670"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Cameron Ross",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Cody Schrader",
+      "team": "DEN",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44484721",
+        "44484665"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Cody Schrader",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Dane Key",
+      "team": "DEN",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44484730",
+        "44484674"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Dane Key",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Kolbe Katsis",
+      "team": "DEN",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44484727",
+        "44484671"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Kolbe Katsis",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Lucas Krull",
+      "team": "DEN",
+      "position": "TE",
+      "dk_status": "",
+      "dk_ids": [
+        "44484739",
+        "44484683"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Lucas Krull",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Michael Bandy",
+      "team": "DEN",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44484734",
+        "44484678"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Michael Bandy",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Dontae McMillan",
+      "team": "SEA",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44484722",
+        "44484666"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Dontae McMillan",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Emmanuel Henderson Jr.",
+      "team": "SEA",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44484729",
+        "44484673"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Emmanuel Henderson Jr.",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Malick Meiga",
+      "team": "SEA",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44484728",
+        "44484672"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Malick Meiga",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Ricky White III",
+      "team": "SEA",
+      "position": "WR",
+      "dk_status": "",
+      "dk_ids": [
+        "44484733",
+        "44484677"
+      ],
+      "max_salary": 300,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Ricky White III",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    },
+    {
+      "name": "Velus Jones Jr.",
+      "team": "SEA",
+      "position": "RB",
+      "dk_status": "",
+      "dk_ids": [
+        "44484716",
+        "44484660"
+      ],
+      "max_salary": 600,
+      "nflverse_status": "DEV",
+      "nflverse_name": "Velus Jones Jr.",
+      "nflverse_week": 6,
+      "match_method": "EXACT_NAME_TEAM"
+    }
+  ],
+  "no_roster_row": [],
+  "exclude_args": "--exclude 44484726 --exclude 44484670 --exclude 44484721 --exclude 44484665 --exclude 44484730 --exclude 44484674 --exclude 44484727 --exclude 44484671 --exclude 44484739 --exclude 44484683 --exclude 44484734 --exclude 44484678 --exclude 44484722 --exclude 44484666 --exclude 44484729 --exclude 44484673 --exclude 44484728 --exclude 44484672 --exclude 44484733 --exclude 44484677 --exclude 44484716 --exclude 44484660",
+  "does_not_establish": [
+    "OFFICIAL_ACTIVE_STATUS",
+    "GAME_DAY_ELEVATION",
+    "A_CURRENT_ROLE",
+    "UPLOAD_CLEARANCE"
+  ],
+  "next": "Check each team's elevation post for this game; exclude only the people it does not name."
+}

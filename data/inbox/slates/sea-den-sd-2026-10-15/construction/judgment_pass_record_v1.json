@@ -1,0 +1,428 @@
+{
+ "schema": "sea_den_sd_judgment_pass_record_v1",
+ "status": "PRIOR_ONLY / DO_NOT_UPLOAD",
+ "source_review": "data/inbox/slates/sea-den-sd-2026-10-15/construction/DK_REVIEW_ENTRY_sea-den-sd_r2.csv",
+ "scores": "data/inbox/slates/sea-den-sd-2026-10-15/construction/pool_scores_sea-den-sd-1015-r2.json",
+ "rules": {
+  "qb_max_rows": 21,
+  "non_qb_max_rows": 16,
+  "captain_max_rows": 5,
+  "overlap_max": 5,
+  "min_gain": 1.0,
+  "salary_cap": 50000,
+  "dst_captain_rows": {
+   "5296951179": "DEN|DST|Broncos",
+   "5296941776": "SEA|DST|Seahawks"
+  }
+ },
+ "before": {
+  "total_prior": 2286.95,
+  "min_row_prior": 56.39,
+  "max_person": [
+   "DEN|QB|Bo Nix",
+   16
+  ],
+  "people_over_half": [
+   [
+    "DEN|QB|Bo Nix",
+    16
+   ],
+   [
+    "SEA|RB|Emanuel Wilson",
+    16
+   ],
+   [
+    "DEN|RB|RJ Harvey",
+    16
+   ],
+   [
+    "SEA|K|Jason Myers",
+    16
+   ],
+   [
+    "SEA|WR|Jaxon Smith-Njigba",
+    16
+   ],
+   [
+    "SEA|QB|Sam Darnold",
+    16
+   ]
+  ],
+  "top3_person_slots": 48,
+  "distinct_people": 18,
+  "captains": [
+   [
+    "SEA|RB|Emanuel Wilson",
+    5
+   ],
+   [
+    "SEA|WR|Jaxon Smith-Njigba",
+    5
+   ],
+   [
+    "SEA|QB|Sam Darnold",
+    5
+   ],
+   [
+    "DEN|QB|Bo Nix",
+    5
+   ],
+   [
+    "DEN|RB|RJ Harvey",
+    5
+   ],
+   [
+    "SEA|K|Jason Myers",
+    3
+   ]
+  ],
+  "max_captain_share": 0.1786,
+  "max_pairwise_overlap": 4,
+  "mean_pairwise_overlap": 2.6693,
+  "rows_without_required_people": 3,
+  "rows_dst_with_opposing_qb": 0,
+  "rows_without_a_quarterback": 4,
+  "distinct_lineups": 28
+ },
+ "after": {
+  "total_prior": 2391.31,
+  "min_row_prior": 58.81,
+  "max_person": [
+   "DEN|QB|Bo Nix",
+   21
+  ],
+  "people_over_half": [
+   [
+    "DEN|QB|Bo Nix",
+    21
+   ],
+   [
+    "SEA|QB|Sam Darnold",
+    21
+   ],
+   [
+    "SEA|RB|Emanuel Wilson",
+    17
+   ],
+   [
+    "SEA|K|Jason Myers",
+    17
+   ],
+   [
+    "SEA|WR|Jaxon Smith-Njigba",
+    17
+   ],
+   [
+    "DEN|RB|RJ Harvey",
+    16
+   ],
+   [
+    "DEN|WR|Troy Franklin",
+    16
+   ],
+   [
+    "DEN|WR|Courtland Sutton",
+    15
+   ]
+  ],
+  "top3_person_slots": 59,
+  "distinct_people": 19,
+  "captains": [
+   [
+    "SEA|RB|Emanuel Wilson",
+    5
+   ],
+   [
+    "SEA|WR|Jaxon Smith-Njigba",
+    5
+   ],
+   [
+    "SEA|QB|Sam Darnold",
+    5
+   ],
+   [
+    "DEN|QB|Bo Nix",
+    5
+   ],
+   [
+    "DEN|RB|RJ Harvey",
+    3
+   ],
+   [
+    "SEA|K|Jason Myers",
+    3
+   ],
+   [
+    "SEA|DST|Seahawks",
+    1
+   ],
+   [
+    "DEN|DST|Broncos",
+    1
+   ]
+  ],
+  "max_captain_share": 0.1786,
+  "max_pairwise_overlap": 5,
+  "mean_pairwise_overlap": 3.2143,
+  "rows_without_required_people": 0,
+  "rows_dst_with_opposing_qb": 0,
+  "rows_without_a_quarterback": 0,
+  "distinct_lineups": 28
+ },
+ "log": [
+  {
+   "step": "dst_captain",
+   "entry_id": "5296951179",
+   "captain": "DEN|DST|Broncos",
+   "from": [
+    "DEN|RB|RJ Harvey",
+    "DEN|K|Wil Lutz",
+    "SEA|TE|AJ Barner",
+    "SEA|WR|Cooper Kupp",
+    "DEN|WR|Courtland Sutton",
+    "DEN|WR|Jaylen Waddle"
+   ],
+   "to": [
+    "DEN|DST|Broncos",
+    "DEN|QB|Bo Nix",
+    "DEN|RB|J.K. Dobbins",
+    "DEN|RB|RJ Harvey",
+    "DEN|WR|Courtland Sutton",
+    "SEA|RB|George Holani"
+   ],
+   "row_prior_before": 56.39,
+   "row_prior_after": 58.81
+  },
+  {
+   "step": "dst_captain",
+   "entry_id": "5296941776",
+   "captain": "SEA|DST|Seahawks",
+   "from": [
+    "DEN|RB|RJ Harvey",
+    "DEN|K|Wil Lutz",
+    "DEN|RB|J.K. Dobbins",
+    "DEN|WR|Courtland Sutton",
+    "DEN|WR|Jaylen Waddle",
+    "SEA|WR|Tory Horton"
+   ],
+   "to": [
+    "SEA|DST|Seahawks",
+    "SEA|QB|Sam Darnold",
+    "DEN|RB|RJ Harvey",
+    "SEA|K|Jason Myers",
+    "SEA|RB|Emanuel Wilson",
+    "SEA|WR|Jaxon Smith-Njigba"
+   ],
+   "row_prior_before": 57.81,
+   "row_prior_after": 82.03
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5296930241",
+   "swaps": [
+    [
+     "DEN|QB|Bo Nix",
+     "SEA|QB|Sam Darnold"
+    ]
+   ],
+   "row_prior_before": 92.9,
+   "row_prior_after": 90.45
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5296938661",
+   "swaps": [
+    [
+     "DEN|QB|Bo Nix",
+     "SEA|QB|Sam Darnold"
+    ]
+   ],
+   "row_prior_before": 86.56,
+   "row_prior_after": 84.11
+  },
+  {
+   "step": "own_qb",
+   "entry_id": "5296951178",
+   "swaps": [
+    [
+     "DEN|QB|Bo Nix",
+     "SEA|QB|Sam Darnold"
+    ]
+   ],
+   "row_prior_before": 89.75,
+   "row_prior_after": 87.3
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296939573",
+   "swaps": [
+    [
+     "DEN|WR|Jaylen Waddle",
+     "DEN|QB|Bo Nix"
+    ]
+   ],
+   "gain": 9.82
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296937591",
+   "swaps": [
+    [
+     "DEN|WR|Jaylen Waddle",
+     "DEN|QB|Bo Nix"
+    ]
+   ],
+   "gain": 9.82
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296936512",
+   "swaps": [
+    [
+     "DEN|WR|Jaylen Waddle",
+     "DEN|QB|Bo Nix"
+    ]
+   ],
+   "gain": 9.82
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296938660",
+   "swaps": [
+    [
+     "DEN|WR|Jaylen Waddle",
+     "DEN|QB|Bo Nix"
+    ]
+   ],
+   "gain": 9.82
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296939572",
+   "swaps": [
+    [
+     "DEN|K|Wil Lutz",
+     "DEN|QB|Bo Nix"
+    ]
+   ],
+   "gain": 9.22
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296938657",
+   "swaps": [
+    [
+     "DEN|K|Wil Lutz",
+     "DEN|QB|Bo Nix"
+    ]
+   ],
+   "gain": 9.22
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296936512",
+   "swaps": [
+    [
+     "SEA|WR|Cooper Kupp",
+     "SEA|QB|Sam Darnold"
+    ]
+   ],
+   "gain": 8.37
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296951174",
+   "swaps": [
+    [
+     "DEN|RB|J.K. Dobbins",
+     "DEN|QB|Bo Nix"
+    ]
+   ],
+   "gain": 8.03
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296938662",
+   "swaps": [
+    [
+     "DEN|WR|Marvin Mims Jr.",
+     "DEN|WR|Troy Franklin"
+    ]
+   ],
+   "gain": 3.63
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296939571",
+   "swaps": [
+    [
+     "SEA|WR|Tory Horton",
+     "DEN|WR|Troy Franklin"
+    ]
+   ],
+   "gain": 2.34
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296938174",
+   "swaps": [
+    [
+     "DEN|RB|J.K. Dobbins",
+     "DEN|WR|Courtland Sutton"
+    ]
+   ],
+   "gain": 1.24
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296951177",
+   "swaps": [
+    [
+     "DEN|RB|J.K. Dobbins",
+     "DEN|WR|Courtland Sutton"
+    ]
+   ],
+   "gain": 1.24
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296939571",
+   "swaps": [
+    [
+     "DEN|RB|J.K. Dobbins",
+     "DEN|WR|Courtland Sutton"
+    ]
+   ],
+   "gain": 1.24
+  },
+  {
+   "step": "flex_upgrade",
+   "entry_id": "5296939573",
+   "swaps": [
+    [
+     "DEN|RB|J.K. Dobbins",
+     "DEN|WR|Courtland Sutton"
+    ]
+   ],
+   "gain": 1.24
+  }
+ ],
+ "changed_entry_ids": [
+  "5296930241",
+  "5296936512",
+  "5296937591",
+  "5296938174",
+  "5296938657",
+  "5296938660",
+  "5296938661",
+  "5296938662",
+  "5296939571",
+  "5296939572",
+  "5296939573",
+  "5296941776",
+  "5296951174",
+  "5296951177",
+  "5296951178",
+  "5296951179"
+ ]
+}

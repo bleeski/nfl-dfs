@@ -201,6 +201,14 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   with CRLF line endings, as DraftKings does, or `diversify_showdown_contests.py` refuses it (`ENTRIES_GEOMETRY_DIFFERS_FROM_TEMPLATE`).
   The contest pass moves lineups between Entry IDs, so run the `--policy --claim` QA on the file before it and prove the file
   after it holds the same lineup set.
+  **After the ceiling pass, list each team's lead receivers and backs at 0 rows (SEA@DEN, 2026-10-15).** Its FLEX upgrades
+  rank by a prior built from history, so a receiver whose role grew since (a trade, a promotion) is the first one swapped out:
+  Jaylen Waddle, Denver's lead receiver by that night's route and air-yards shares, went from 6 rows to 0. Place such a person
+  in a few rows that fit his team's script (his own quarterback present, salary room), report each row's prior change, or
+  write why not. A DST Captain row is built whole: own quarterback and offense, at most one opposing RB or kicker
+  (`data/inbox/slates/sea-den-sd-2026-10-15/construction/judgment_pass.py`); built from whoever is left under the 60% cap it
+  came out with four opposing skill players. In a cold cloud container start `sh ./nfl.sh setup` in the background as the
+  first command (4m19s that night).
 - **Practice-squad punts (DET@CAR, 2026-10-04).** A practice-squad player who was not elevated cannot play, and no inactive list
   names him, so a blank DraftKings status and an old-team prior keep him selectable. Check every rostered player under about $1,000
   against the team's elevations for the game (the club's Saturday transaction post); exclude any who was not elevated with

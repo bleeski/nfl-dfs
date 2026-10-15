@@ -4,6 +4,46 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-15: SEA@DEN Showdown (Thursday night, 28 entries; a lineup run, not a roadmap session)
+
+Salaries `ae4bdec3d698b23901b2b27d582105248c2940c30c1f4a227eecb4fec5692c38`, entries
+`ce30beb62ce7832aabb6225d19c59267de6681d58671a97c55f140e9533e7d0e` (28 Entry IDs across eight contests). Request 23:32Z, lock
+00:15Z, delivery deadline 00:10Z; `final_v2` delivered 23:46Z. Every path ends `MODEL_STATUS=PRIOR_ONLY`,
+`RELEASE_DECISION=DO_NOT_UPLOAD`. Branch `claude/sea-den-sd-2026-10-15`. Cloud session; `nfl.sh setup` took 4m19s first.
+
+- **Runs.** `sea-den-sd-1015-r1` (`--build-priors`, 32 s): 28 of 28, concentration `AS_REQUESTED`. `sea-den-sd-1015-r2`
+  (`--request` from r1, 22 `--exclude` IDs): 28 of 28, concentration `AS_REQUESTED`, rung `DEFAULT`, no relaxation, no
+  theses (policy from the concentration defaults). Limitations: `OFFICIAL_STATUS_REQUIRED`, `OFFENSIVE_CURRENT_ROLE_UNRESOLVED`,
+  `WEATHER_CAPTURE_REQUIRED` (outdoor game, no api.weather.gov capture), `MODEL_NOT_PROSPECTIVELY_VALIDATED`.
+- **Inactives** (seahawks.com and denverbroncos.com posts, stamped 3:46 PM and 4:45 PM with no zone; read as local, about 22:45Z): SEA Milroe, Robert Henry Jr., Montorie Foster Jr.
+  (offense on the slate; all DraftKings `OUT`); DEN Ehlinger, Dallen Bentley (both `OUT`). Charbonnet `OUT` (PUP), Price, Ouzts,
+  Bobo, Coleman, Bryant, Lohner `IR`. Lock (forearm, limited) active as QB2; the backup rule kept him and Stidham out.
+- **Practice squad.** `practice_squad_check.py` listed 11 `DEV` players; the elevation posts name SEA Irv Charles and LB Jimmy
+  Ciarlo, DEN S Taylor Rapp and DB Sean Fresch Jr., so all 11 were excluded (`construction/exclude_args.txt`).
+- **Judgment pass** (`construction/judgment_pass.py`). Market total 40.5 (down from 41.5), SEA -2.5. Two of the engine's five
+  RJ Harvey Captain rows became DST Captain rows built whole (own quarterback, own offense, at most one opposing RB or kicker,
+  own-team people allowed the 75% headroom); every WR/TE Captain got his own quarterback (3 swaps); 14 FLEX upgrades of 1.0
+  or more. Total prior 2,286.95 to 2,391.31, min row 56.39 to 58.81, rows without a quarterback 4 to 0, mean pairwise
+  overlap 2.67 to 3.21, distinct people 18 to 19. The first version built the Seahawks DST row with four Broncos skill
+  players (the 60% cap had closed the Seattle core); the shape rule fixed it before delivery.
+- **Contest pass** (`diversify_showdown_contests.py`): 24 rows moved, score 126.71 to 88.81.
+- **Micro Booster** (Contest 196781421, 7 entries). Ben: it pays the top 5, so build for one of seven finishing top 5.
+  `construction/booster_assign.py` moved the seven highest-prior rows (at most two per Captain, a second sharing no more
+  than three people with the first) into its Entry IDs: Captains Wilson 2, Nix 2, Myers, Smith-Njigba, Darnold; row priors
+  87.96 to 94.28. Six swaps; the file holds the same 28 lineups.
+- **Waddle** (`construction/waddle_swap.py`). The FLEX upgrades had left Jaylen Waddle in 0 of 28 rows on priors from his
+  old role; RotoGrinders' preview names him Denver's lead receiver (76% routes, 18% targets, 34% air yards; Sutton 14%).
+  Waddle for Sutton in five rows holding Nix with salary room; each row's prior fell 3.03 to 3.04 (total 2,376.2).
+- **QA.** `qa_showdown_portfolio.py --max-overlap 5 --backup-pairs` with the inactive and practice-squad IDs: PASS, 0 defects,
+  on `final_v1` and `final_v2`. Final `construction/DK_REVIEW_ENTRY_sea-den-sd_final_v2.csv`
+  (`495976db6f40e2a4b5ca484bda6d0b88e9f6a7bf717498266074cbe8005512c1`): Captains Wilson 5, Darnold 5, Smith-Njigba 5, Nix 5,
+  Harvey 3, Myers 3, Broncos DST 1, Seahawks DST 1; Nix and Darnold 21 of 28, Wilson, Myers and Smith-Njigba 17, Harvey and
+  Franklin 16; salary 43,800 to 50,000. Build record `construction/entry_build_record.jsonl` (28 rows).
+- **Would have made it better.** (1) The ceiling pass's FLEX upgrades pull out a receiver whose role grew after the history
+  the prior reads; a 0-row check on each team's lead receivers now follows the pass (`docs/claude/working.md`). (2) A cold
+  cloud container spends four minutes on setup; start it in the background as the first command. (3) The engine has no
+  objective for a top-N contest such as the Micro Booster; it was done by hand.
+
 ### 2026-10-15: Session 75b -- the first-place reading on the run path and in both readable reviews
 
 Branch `claude/s75b-first-place-run-path`, claimed at `c703a37` on `0049769` (PR #149, Session 75's merge). A fresh-context
