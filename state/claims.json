@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "6004507b-76da-41c2-a469-2b5e43d79a4b",
+      "branch": "claude/s75-first-place-reading",
+      "chunk": "S75",
+      "claimed_at": "2026-10-15T05:43:53Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
