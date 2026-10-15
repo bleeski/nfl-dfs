@@ -4,6 +4,120 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-15: Session 75b -- the first-place reading on the run path and in both readable reviews
+
+Branch `claude/s75b-first-place-run-path`, claimed at `c703a37` on `0049769` (PR #149, Session 75's merge). A fresh-context
+agent was briefed to refute the plan before Ben saw it. Ben approved it, with decisions D0 and D2, before any change. A
+reviewer then read the diff, and a mutation pass ran on a copy of the tree. No split: the diff measured 654 changed lines at
+the seam (the C3 review), with the C3 tests already written, and 937 at close-out (907 inserted, 30 deleted), against
+the 1,000 trigger.
+
+The reading moves no lineup, selection input, delivered byte or release truth. Every path stays `PRIOR_ONLY` /
+`DO_NOT_UPLOAD`.
+
+**Added.**
+- **The run's own block.** `prior_review` sets `reports["first_place_coverage"]` (`first_place_coverage_v1`, unchanged)
+  right after the contest-facts block. Every exit after the contest step carries it in `prior_review_reports`: Showdown
+  policy and sequential, Classic C1 and C2, and C3. C1 and C2 have no readable review, so the run result is their record.
+  - Its rows are the contest step's claim, a movable row's roster read from the final assignment, as the step's own audit
+    reads them. Thesis labels go from roster to Entry ID at the call site, so `statistics` equals `contests_after` on
+    every exit, the v4 portfolio of theses included.
+  - A run with no facts file reads `NOT_SUPPLIED`, as the QA scripts do. A failed step reads `NOT_COMPUTED` with the
+    step's own failure, and an exception inside the reading reads `NOT_COMPUTED` with its class. Neither is a limitation,
+    and neither stops delivery.
+- **Both readable reviews.** Showdown and C3 hold an always-present `first_place_coverage` key and a "First place, contest
+  by contest" section after the contest-facts section.
+  - Each review recomputes the reading from its own delivered rows and its reconciled facts. Every other template row is
+    read with no roster (D2), so the facts bind to the template's Contest IDs as the block's do. On every test run the
+    review's reading equals the block's, `source` aside.
+  - One renderer serves both reviews and never raises: `cli.py` catches only three exception types around the Showdown
+    review, so a fault there would otherwise fail the run.
+  - The section adds what the existing tables lack: the facts join, each repeated Captain or QB, a one-entry contest's
+    shape, and `NO_CONTEST_FACTS`. A review with no facts prints neither "Contest facts" nor `FIRST_PLACE_OBJECTIVE`.
+  - `classic_review` extracts `_contest_review_rows` from `_contest_block`, and both readers use it.
+- **New tests.**
+  - `tests/test_first_place_coverage_run_slate.py` gains 19 cases on real `run-slate` runs. Each of the four exits has
+    its block equal to `contests_after`, with `moved_rows > 0` so the equality cannot pass on the solver's order. Facts
+    read `SUPPLIED` or `NO_CONTEST_FACTS`. They also cover: C1 writes no review; the review key and section; the
+    pre-session key set; hostile names escaped in both renderers; a section that renders any block; a failed step; a
+    raising reading, which moves no CSV byte or truth; no path or clock in the block; and a `(LOCKED)` prefilled row
+    beside a one-entry contest.
+  - New `tests/test_first_place_coverage_review.py` (12): every facts state against the QA reading, a contest with no
+    resolved row, one contest, the labels, the failure states, the section's fallback, and the Classic QA's guard
+    against a raising section and a console that cannot print a line.
+
+**Changed.**
+- **`scripts/qa_classic_portfolio.py`** prints the section inside the reading's own guard. A test that makes
+  `text_lines` raise showed a `TypeError` escaping `main` before the fix; after it, the exit code and every line outside
+  the section are unchanged.
+- **`docs/DATA_CONTRACTS.md`.**
+  - § First place, contest by contest gains an Exits paragraph, with `source` documented for the first time
+    (`EXPORT`, `ENTRIES`, `CONTEST_STEP`, `DELIVERED_ROSTERS`) and the block-against-QA difference on a refused or
+    `(LOCKED)` prefilled row.
+  - The two review schemas gain a no-new-version note for the key, which arrives the way Session 50's
+    `contest_assignment` key did.
+- **`tests/test_readable_review_theses.py`'s `EXISTING_KEYS` gains `first_place_coverage`.** It is named here before the
+  edit, as `.claude/rules/tests.md` asks. Why: the card makes the review's `first_place_coverage` key always present, so
+  the pin on the Showdown review's key set (asserted at its lines 443 and 541) had to move. What keeps the old guarantee:
+  `tests/test_first_place_coverage_run_slate.py::test_the_review_key_set_is_the_old_one_plus_the_reading` writes the
+  pre-session set out in full and asserts each review's keys are exactly that set plus the new key (plus `theses` or
+  `contest_facts` where those apply), on Showdown and C3. Ben approved this exception with the plan (decision D0).
+
+**Verification.**
+- **Real runs first.** Before any assertion, a scratch script summarized the runs the tests use. Every exit moves rows
+  (Showdown 2, sequential 2, C1 4, C3 6, theses 2). The theses run scores 3 distinct theses in each contest. The good
+  facts files cover every Contest ID. A C1 run with a `(LOCKED)` prefilled row delivers (`DELIVERABLE_PARTIAL`) with that
+  row fixed and unscored, beside a one-entry contest.
+- **Red first.** `ImportError: cannot import name '_first_place_reading'`, and `KeyError: 'first_place_coverage'` at the
+  block read. The Classic QA's `TypeError` escaped `main` before its fix.
+- **Green.** Both new files, 34 passed. Fifteen neighbor files: `446 passed in 372.61s`.
+- **Full suite**, once the source was final: `3931 passed, 2 skipped in 1477.80s (0:24:37)` (Windows; another
+  repository's pytest ran on the host meanwhile). The two skips are this host's symlink-permission cases. That is
+  Session 75's 3,902 plus the 29 new tests that existed at launch.
+- **After the suite.** No source file changed after it. Two tests were added later (the section's fallback, and a
+  console that cannot print a section line), one was strengthened, and a whitespace slip in the Classic QA was restored.
+  The files that changed after launch, plus every test that reads `docs/DATA_CONTRACTS.md`: `908 passed in 101.77s`.
+  After the mutation pass's tests: both new files and the theses file, `62 passed in 60.71s`. CI runs the final tree.
+- **Gate registry.** `scanned_codes()` printed before and after: identical, 4,245 lines.
+- **Before and after.** The same inputs ran through `origin/main`'s code (a copy) and the branch's: Showdown with and
+  without facts, sequential, C1, C3, and the Classic QA on the committed Week 5 v10 file. Identical: every delivered CSV's
+  SHA-256, the five truths, `release_truths`, the blockers, the C3 HTML outside the new section, and the QA's stdout and
+  `--json` bytes. A second run of the branch's own code shows what varies between runs anyway (97 fields: Showdown
+  prior-package hashes stamped from the wall clock, pointer hashes, timings). Beyond those, only the review key and
+  section differ, plus `solver_seconds` timings and a 350-byte difference in one `peak_traced_python_bytes` reading taken
+  during the candidate bank, which runs before the new code (a measurement, not an output).
+  - That noise set held the Showdown review HTML's hash. A second comparison masked every SHA-256 and the wall clock,
+    then removed the new section: every review's HTML is byte-identical to `origin/main`'s, Showdown and sequential
+    with and without facts, and C3.
+  - The Classic QA ran on Week 5 v10 only. MIN@NO is a Showdown file, and the Showdown QA did not change.
+- **Mutation pass on a copy.** 16 of 16 mutants killed, 3 of them by tests the pass added:
+  - the repeated Captain's cell and the no-tail line, which the hostile-name test now pins cell by cell;
+  - the QA print moved back outside the guard, killed by a console that cannot print the section's title.
+- `.\nfl.ps1 doctor` passes. `git diff --check` is clean. No protected path is touched. The edited ledgers hold no CR
+  byte.
+
+**Found.**
+- **The card's "contests: [] when no row resolves", read literally, breaks the facts join.** A review that reads only its
+  resolved rows drops a contest whose rows all failed to resolve (all unfilled under R29, or all unresolved prefilled).
+  `_facts_rows` then sees a different contest set, and every contest's facts read `NOT_BOUND (CONTEST_SET)`. Ben approved
+  reading every template row instead (D2). A unit test shows both behaviors.
+- **A fault in the section would have failed a Showdown run.** `cli.py` catches only `KeyError`, `OSError` and
+  `ValueError` around the review. The renderer is total and has its own fallback (D11).
+- **The Edit tool dropped a trailing space.** `verdict = (` became `verdict =(` when the print loop was removed; the
+  reviewer caught it.
+
+**Advisor and review.**
+- **Before the plan:** a fresh-context agent, briefed to refute eight claims.
+  - Six stood.
+  - Two weakened: `source` is documented in full, and the size estimate went from 585 to 800 to 900 lines.
+  - Missed, now taken: D11, a `moved_rows > 0` guard on the equality test, the `NO_CONTEST_FACTS` token in the no-facts
+    HTML, and "no path" scoped to the step's own failure text.
+- **The diff:** a fresh-context reviewer found no blocker.
+  - One item refuted with code. A facts mismatch joins `problems` and the Showdown review raises before any data, so no
+    section shows "facts NOT_SUPPLIED".
+  - Taken: a no-new-version note in both review schemas, two contract rewordings, a non-empty guard on a loop, and the
+    restored space.
+
 ### 2026-10-15: Session 75 -- the per-contest first-place reading in both QA scripts (the run path split to 75b)
 
 Branch `claude/s75-first-place-reading`, claimed at `95f20fe` on `9432d53` (PR #148, the R38 planning merge). Before the plan

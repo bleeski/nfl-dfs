@@ -235,8 +235,22 @@ HEADER_DETAIL = {
 
 
 def first_place_reading(a, assigned):
-    """Session 75's per-contest reading. Whatever happens here, no line above it and no exit code moves."""
+    """Session 75's per-contest reading, printed. Whatever happens here, no line above it and no exit code moves.
+
+    Session 75b moved the print inside this guard: a section that cannot be rendered or printed leaves the reading
+    `NOT_COMPUTED` with the exception's class, and QA goes on to its verdict.
+    """
     mode = contest_assignment.MODE_CLASSIC
+    try:
+        coverage = _first_place_coverage(a, assigned, mode)
+        for line in fpc.text_lines(coverage):
+            print(line)
+        return coverage
+    except Exception as exc:  # noqa: BLE001 - a reading, never a gate: it is named and QA goes on
+        return fpc.unread(mode, fpc.NOT_COMPUTED, type(exc).__name__)
+
+
+def _first_place_coverage(a, assigned, mode):
     try:
         if not (a.export or a.entries):
             return fpc.unread(mode, fpc.NO_CONTEST_IDS,
@@ -510,8 +524,6 @@ def main(argv=None):
               f"${S(i)}{tag}")
 
     coverage = first_place_reading(a, assigned)
-    for line in fpc.text_lines(coverage):
-        print(line)
 
     verdict = ("FAIL" if fail else "PARTIAL" if unfilled
                else "DEFECT" if defects else "PASS")

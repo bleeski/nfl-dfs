@@ -64,7 +64,7 @@ from .dk import (
     parse_salaries,
     reconcile_template,
 )
-from . import contest_assignment, contest_facts
+from . import contest_assignment, contest_facts, first_place_coverage
 from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
 from .evidence import parse_official_inactive_snapshot
 from .hashing import sha256_bytes, sha256_file
@@ -958,6 +958,49 @@ def _thesis_by_roster(
         return None
     return contest_assignment.thesis_labels(
         by_lineup, [(roster, roster_canonical_key(slate, roster)) for roster in assignments.values()])
+
+
+FIRST_PLACE_SOURCE = "CONTEST_STEP"
+
+
+def _first_place_reading(
+    step: contest_assignment.StepOutcome,
+    assignments: Mapping[str, Sequence[str]],
+    slate: SlateContract,
+    facts_block: Mapping[str, object],
+) -> dict[str, object]:
+    """Session 75b (R38): `first_place_coverage_v1` over the contest step's own rows, never raising.
+
+    Every template row in the claim's order, a movable row's roster read from the final (permuted) assignment and a fixed
+    row's from the claim, as `contest_assignment.audit_contest_assignment` reads them. The claim keys its thesis labels by
+    roster, and the lineup carries its label wherever it lands, so each Entry ID takes its final roster's label. A run with
+    no facts file reads its facts as absent (`NOT_SUPPLIED`), as the QA scripts and the readable review do. A step that
+    failed has no claim and reads `NOT_COMPUTED` with the step's own failure; an exception here reads it with its class.
+    """
+
+    mode = (
+        contest_assignment.MODE_SHOWDOWN if slate.mode is EngineMode.SHOWDOWN else contest_assignment.MODE_CLASSIC
+    )
+    if step.claim is None:
+        return first_place_coverage.unread(
+            mode, first_place_coverage.NOT_COMPUTED, step.failure, source=FIRST_PLACE_SOURCE)
+    try:
+        rows = [
+            (row.entry_id, row.contest_id, tuple(assignments[row.entry_id]) if row.pool is not None else row.roster)
+            for row in step.claim.rows
+        ]
+        labels = step.claim.thesis_by_roster or {}
+        thesis_by_entry = {
+            entry_id: labels[roster] for entry_id, _contest, roster in rows if roster is not None and roster in labels
+        }
+        supplied = facts_block.get("status") != contest_facts.STATUS_NOT_SUPPLIED
+        return first_place_coverage.reading(
+            rows, mode=step.claim.mode, players=first_place_coverage.players_from_slate(slate.players),
+            thesis_by_entry=thesis_by_entry or None, facts=facts_block if supplied else None,
+            source=FIRST_PLACE_SOURCE)
+    except Exception as exc:  # noqa: BLE001 - a reading, never a gate: named, and the run goes on
+        return first_place_coverage.unread(
+            mode, first_place_coverage.NOT_COMPUTED, type(exc).__name__, source=FIRST_PLACE_SOURCE)
 
 
 def row_sources(
@@ -2705,6 +2748,10 @@ def run_prior_review(
         facts_artifact = selection_dir / contest_facts.ARTIFACT_NAME
         hashes["contest_facts"] = _write_canonical_json(facts_artifact, facts_block)
         artifacts["contest_facts"] = str(facts_artifact)
+    # Session 75b (R38): each contest's entries read together, from the step's claim against the final assignment and
+    # the facts block above. A reading, never a gate or a selection input: it moves no lineup, holds no path field and
+    # no clock, never raises, and every exit below carries it in `reports`. The baseline does not.
+    reports["first_place_coverage"] = _first_place_reading(contest_step, assignments, slate, facts_block)
     role_resolution = scores.kicker_role_resolution
     offensive_resolution = scores.offensive_role_resolution
     selected_ids = {
