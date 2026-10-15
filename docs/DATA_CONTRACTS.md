@@ -4387,6 +4387,74 @@ Does not establish: expected value or ROI, win or cash probability, payout shape
 or duplication, that a contest is worth entering, that any lineup suits a contest, or upload clearance. The numbers are the
 operator's, not DraftKings's, and are never inferred from a contest name.
 
+## First place, contest by contest: first_place_coverage_v1 (Session 75)
+
+Registered 2026-10-15. `src/nfl_dfs/first_place_coverage.py`. R38 (Ben, 2026-10-14) sets goal 1 contest by contest, so this
+reading takes each Contest ID's entries together, as one set of shots at that contest's first place. It is a reading, never a
+gate, a selection input or a release truth, and it moves no line, verdict or exit code of the tool that prints it.
+
+**Rows.** Each entry is `(entry_id, contest_id, roster or None)`, read from a DraftKings entries file (header `Entry ID`,
+`Contest ID` and the mode's roster columns, from `CPT` or `QB`). A roster cell is a bare ID, `Name (ID)` or late swap's
+`Name (ID) (LOCKED)`, the forms `entry_record._cell_id` reads (Session 72b). People are keyed `team|position|name`, the
+run's `SalaryPlayer.underlying_id`, so a Captain row and his FLEX row are one person. A row with an incomplete roster is
+listed in `rows_without_roster`, and a row naming an ID the salary file lacks in `rows_unscored`; neither is scored. Every
+other complete roster is scored, legal or not: an illegal row is the QA script's own validity failure, and the reading
+does not run a validator. An Entry ID read twice is named in `duplicate_entry_ids`, and each copy is scored as its own
+lineup (the run refuses a duplicate Entry ID outright, so it has nothing to compare).
+
+**Per Contest ID**, in sorted order: `entry_ids` and `entries` (the scored rows), the facts columns and either:
+- two or more entries: `statistics`, exactly `contest_assignment.contest_statistics` over the contest's lineups.
+  `repeated_key_people` names each Captain (Showdown) or QB (Classic) held by more than one entry, with the count.
+- one entry: `shape`. Showdown: `captain` and `captain_salary`. Classic: `quarterback`, `stack_team`
+  (`primary_stack_team`), `stack_depth` (its QB, RB, WR and TE in the lineup), and `bring_back` (offense from that
+  team's opponent, else the QB team's opponent). Both: `salary_left`, which is 50,000 minus the roster's salary.
+  `no_tail_statistic` carries the line that no tail statistic exists before Session 24b. Nothing here ranks lineups.
+
+**Equality.** For every contest of two or more entries, `statistics` equals the contest step's `contests_after` (the
+Classic artifact `selection/contest_assignment.json`, or `prior_review_reports.contest_assignment`) on the same rosters
+and the same thesis labels.
+- Labels change `distinct_theses`, `worst_pair_cost` and `score`. The Showdown QA reads them from `--claim` when its
+  thesis check ran. The Classic QA has none (`thesis_labels: NONE`), and neither has the Classic run.
+- A one-entry contest is never in `contests_after`, which keeps contests of two or more only.
+- The run scores a prefilled row only when the shared validator passes it (`entry_groups.read_prefilled`) and its cells
+  carry no `(LOCKED)` suffix. The reading scores every complete roster of known IDs. Equality therefore holds on files
+  whose prefilled rows are legal and unlocked, which a pre-lock DraftKings template's always are.
+- `scripts/diversify_showdown_contests.py`'s own record renames these fields and keys people `TEAM|Name`, so it is not
+  the comparison.
+
+**Facts.** A bound `nfl_contest_facts_labels_v1` block (§ Contest facts) gives each contest its row's `facts_state`
+(`SUPPLIED`, `NO_FACTS_ROW`, `FEE_DISAGREES`) and its `field_size`, `places_paid`, `paid_fraction`,
+`paid_fraction_decimal` and `label`.
+- With no facts every contest reads `NO_CONTEST_FACTS`, and every contest is read as a tournament until a payout ladder
+  or Ben says it is flat (R38).
+- `facts.binding` is one of:
+  - `NOT_SUPPLIED`;
+  - `BOUND`: the schema matches and, for an `APPLIED` or `PARTIAL` block, its contest set is the file's;
+  - `NO_ROWS`: a block whose status is anything but `APPLIED` or `PARTIAL` (a `REFUSED` or `NOT_SUPPLIED` one);
+  - `NOT_BOUND` with `UNREADABLE`, `NOT_AN_OBJECT`, `SCHEMA_VERSION` or `CONTEST_SET`. Every contest then reads
+    `NO_CONTEST_FACTS`.
+- Unlike Session 66's thesis flags, a facts file that does not bind is no validity failure. It can only leave this
+  reading blank, never make a check read PASS.
+
+**States, never codes.** `status` is `READ`, `NO_CONTEST_IDS` (no entries file), `NO_CONTEST_ID_COLUMN`,
+`NO_ROSTER_COLUMNS` or `NOT_COMPUTED` (with the exception's class in `detail`). Like `NO_FACTS_ROW`, none is a blocker, a
+limitation or a registry entry.
+
+**Where it prints.**
+- `scripts/qa_classic_portfolio.py` prints a section after Tier 2 and puts the reading in its `--json` record as
+  `first_place_coverage`, except on its `NO_LINEUPS` exit, which has nothing to read. Its Contest IDs come from
+  `--export`, else `--entries`, where a row with no complete roster takes the portfolio's `assignments_by_entry_id`
+  roster for its Entry ID.
+- `scripts/qa_showdown_portfolio.py` reads its `--export` and adds `first_place_coverage`, the key before `VERDICT`, to
+  its one JSON object.
+- Both take `--contest-facts` (a run's `selection/contest_facts.json`).
+- The washout lines and every exit code are unchanged.
+- The run path, `prior_review_reports.first_place_coverage` and the readable review's section, is
+  `docs/ROADMAP.md`'s Session 75b.
+
+Does not establish (`does_not_establish`): `NOT_A_CHANCE_OF_FINISHING_FIRST`, `NOT_A_SHARE_OF_ANY_PRIZE`,
+`NOT_A_TAIL_STATISTIC`, `NOT_OWNERSHIP_OR_DUPLICATION`, `NOT_UPLOAD_CLEARANCE`.
+
 ## DraftKings entry history, nfl_dk_entry_history_v1 (Session 69)
 
 Registered 2026-10-11. `src/nfl_dfs/entry_history.py`. The operator downloads the account's contest entry history from

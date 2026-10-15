@@ -138,8 +138,9 @@ in the handoff:
   players hit together (R33's theses: a team wins big or close, a shootout, a
   defensive battle), and the entries in one contest should win in different
   scripts: two near-copies there are one shot, not two, so distinct Captains or
-  QB stacks come before any repeat. The run's `contest_assignment.json`
-  (`contests_after`) has each contest's spread until Session 75 puts it in QA.
+  QB stacks come before any repeat. Both QA scripts print each contest's
+  spread, its repeated Captains or QBs named, and a one-entry contest's shape
+  (Session 75, `docs/OPERATOR_GUIDE.md` § First place, contest by contest).
   A one-entry contest is its lineup alone. The same core with a rotating
   captain is one bet placed many times.
 - **Captains carry Showdown leverage.** Spread them across theses, and let a

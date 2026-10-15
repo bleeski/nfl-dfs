@@ -44,10 +44,19 @@ exit 1: a check that was asked for and could not run never reads PASS. The rules
 recomputed from the exported bytes with the one function every layer uses
 (`scripts/showdown_thesis_check.py`); the claim only names which bet each Entry ID is.
 Without the two flags nothing here runs and the output is what it was.
+
+2026-10-15 (Session 75, R38): `first_place_coverage`, the key before `VERDICT`, reads each
+Contest ID's entries in the export together, as one set of shots at that contest's first place
+(`first_place_coverage_v1`, `src/nfl_dfs/first_place_coverage.py`): for two or more entries,
+Session 50's per-contest spread with each repeated Captain named; for one entry, the Captain and
+his salary. Thesis labels come from `--claim` when its check ran; `--contest-facts` takes a run's
+`selection/contest_facts.json`, and a file that does not bind reads `NOT_BOUND`. It is a reading:
+no other key, no verdict and no exit code moves with it.
 """
 from __future__ import annotations
 import argparse, csv, collections, json, re, sys
 
+from nfl_dfs import contest_assignment, first_place_coverage as fpc
 from nfl_dfs.byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 
 SLOTS = ["CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX"]
@@ -212,6 +221,24 @@ def thesis_pass(a, sal, filled, D, L):
     }
 
 
+def first_place_reading(a, thesis_block):
+    """Session 75's per-contest reading of the export. Whatever happens here, no other key and no exit code moves."""
+    mode = contest_assignment.MODE_SHOWDOWN
+    try:
+        rows, state = fpc.read_entries_file(a.export, mode=mode)
+        if state != fpc.READ:
+            return fpc.unread(mode, state, "the export's header has no Contest ID or no Showdown roster columns",
+                              source="EXPORT")
+        labels = None
+        if isinstance(thesis_block, dict) and thesis_block.get("status") == "CHECKED":
+            labels = {eid: item["thesis"] for eid, item in thesis_block["entries"].items()}
+        facts = fpc.facts_from_file(a.contest_facts) if a.contest_facts else None
+        return fpc.reading(rows, mode=mode, players=fpc.players_from_salary_csv(a.salaries),
+                           thesis_by_entry=labels, facts=facts, source="EXPORT")
+    except Exception as exc:  # noqa: BLE001 - a reading, never a gate: it is named and QA goes on
+        return fpc.unread(mode, fpc.NOT_COMPUTED, type(exc).__name__)
+
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument('--salaries', required=True)
@@ -226,6 +253,8 @@ def main(argv=None):
                    help="the run's normalized v4 policy; with --claim, holds each row to the thesis its Entry ID fills")
     a.add_argument('--claim', default=None,
                    help="the same run's selection_report.json, whose theses.entries names each Entry ID's thesis")
+    a.add_argument('--contest-facts', default=None,
+                   help="a run's selection/contest_facts.json, for the per-contest reading")
     a = a.parse_args(argv)
 
     sal = load_salary(a.salaries)
@@ -319,6 +348,7 @@ def main(argv=None):
         'distinct_captains': len({l[1] for l in lus}),
         'qb_count_histogram': dict(collections.Counter(l[4] for l in lus)),
         **({'theses': thesis_block} if thesis_block is not None else {}),
+        'first_place_coverage': first_place_reading(a, thesis_block),
         'VERDICT': verdict,
     }, indent=2))
     if D:

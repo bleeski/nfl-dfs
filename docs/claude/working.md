@@ -51,6 +51,10 @@ authority and merges on green; the boundaries stay in CLAUDE.md. -->
     slates without `roles` and `qb_depth*`), into one-letter folders (`<scratchpad>/m/t`).
   - **`nfl.ps1 test` already passes `-q`.** A second `-q` suppresses pytest's summary line, so the log ends in dots
     with no count to record.
+  - **Keep pytest's `--basetemp` out of the scratchpad too (Session 75).** A `run-slate` harness test run in the copy
+    with its temp folder under `<scratchpad>/m/` wrote `runs/<id>/prior_review/.projected.tmp-*/sources/<sha256>.json`
+    past 260 characters and ended `PROJECTION_FAILED: FileNotFoundError`, which read as a red baseline. Point it at
+    `%TEMP%\nfl-dfs-pytest\<short name>`, the root `nfl.ps1` already uses.
 
 ## Session protocol: `docs/ROADMAP.md` §2.1, plus these
 

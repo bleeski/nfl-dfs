@@ -507,6 +507,28 @@ from the run, and both flags or neither:
   it names but not to the run itself, and the template only by its Entry IDs.
 - Without the two flags neither script checks a thesis, so pass them on every v4 run.
 
+## First place, contest by contest (both QA scripts)
+
+Since Session 75 (R38), both QA scripts read each Contest ID's entries together, as one set of shots at that contest's first
+place (`first_place_coverage_v1`, `docs/DATA_CONTRACTS.md`). The reading is in every run of either script (except Classic's
+`NO_LINEUPS` exit, which has nothing to read), it prints below the washout lines, and it moves no other line, no verdict and
+no exit code. Put it in the handoff, contest by contest.
+
+- **Two or more entries:** the contest's spread as the contest step measures it (the worst pair's shared people, the mean,
+  distinct Captains or QBs, stack teams and theses, the people in every lineup), with each repeated Captain or QB named.
+  Two near-copies in one contest are one shot, not two.
+- **One entry:** the lineup's shape (the Captain and his salary; or the QB, the lineup's main stack team, not always the
+  QB's, with its depth and the bring-back) and salary left, beside the line that no tail statistic exists before Session 24b.
+- **Contest IDs.** Showdown reads `--export`. Classic reads `--export`, or before the writer
+  `--entries 'C:\full\path\DKEntries.csv'`, where a row with no complete roster takes the portfolio's
+  `assignments_by_entry_id` roster for its Entry ID. With neither it prints `NO_CONTEST_IDS`.
+- **Facts.** Add `--contest-facts 'C:\full\path\runs\<run_id>\prior_review\selection\contest_facts.json'` (in the run's
+  `cowork_run.json` as `prior_review_artifacts.contest_facts`) for each contest's field size, places paid and label.
+  Without it every contest reads `NO_CONTEST_FACTS` and is read as a tournament. A file whose Contest IDs differ from the
+  entries file's reads `NOT_BOUND (CONTEST_SET)`; it binds on its schema and Contest IDs only.
+- **Theses.** On a v4 Showdown run, pass `--policy` and `--claim` too: the reading's thesis counts come from the claim.
+  Classic QA takes no labels and says so.
+
 ## Settlement capture and replay
 
 After the contest is final, prepare the strict `nfl_settlement_request_v1`

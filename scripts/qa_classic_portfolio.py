@@ -52,6 +52,8 @@ Usage:
         [--max-overlap 4] [--max-exposure 6] \\
         [--implied-totals team_totals.csv]   # TEAM,IMPLIED_TOTAL
         [--ownership ownership.csv]          # NAME,OWNERSHIP_PCT
+        [--entries <DKEntries.csv>]          # Contest IDs before the writer (Session 75)
+        [--contest-facts <run>/selection/contest_facts.json]
         [--json out.json]
 
 ## 2026-09-23 (Session 02): the final CSV is what gets checked
@@ -84,11 +86,27 @@ A backup pair moved from 1 to 2: it is the operator's assertion about who
 starts, with no evidence bound to it. Tier 2 never changes the exit code; it
 prints a scorecard and names what a human has to accept. Without `--export` the
 verdict covers the portfolio JSON only, and says so.
+
+## 2026-10-15 (Session 75, R38): first place, contest by contest
+
+After Tier 2 a section reads each Contest ID's entries together, as one set of
+shots at that contest's first place (`first_place_coverage_v1`,
+`src/nfl_dfs/first_place_coverage.py`): for two or more entries, Session 50's
+per-contest spread with each repeated QB named; for one entry, the lineup's
+shape. Contest IDs come from `--export`, else `--entries` (any DraftKings
+entries file, read only for this section; a row with no complete roster takes
+the portfolio's `assignments_by_entry_id` roster for its Entry ID); with
+neither it says `NO_CONTEST_IDS`.
+`--contest-facts` takes a run's `selection/contest_facts.json`; a file that
+does not bind to the entries reads `NOT_BOUND`. The section is a reading: it
+moves no line above it, no verdict and no exit code, and the `--json` record
+carries it as `first_place_coverage`.
 """
 from __future__ import annotations
 import argparse, csv, itertools, json, re, statistics, sys
 from collections import Counter
 
+from nfl_dfs import contest_assignment, first_place_coverage as fpc
 from nfl_dfs.byte_lines import csv_field_spans, split_byte_lines, split_line_ending
 
 SLOTS = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST"]
@@ -210,6 +228,32 @@ def export_audit(template, export, assigned):
     return fail, exported, unfilled
 
 
+HEADER_DETAIL = {
+    fpc.NO_CONTEST_ID_COLUMN: "the {} file's header has no Entry ID or Contest ID column",
+    fpc.NO_ROSTER_COLUMNS: "the {} file's header has no Classic roster columns",
+}
+
+
+def first_place_reading(a, assigned):
+    """Session 75's per-contest reading. Whatever happens here, no line above it and no exit code moves."""
+    mode = contest_assignment.MODE_CLASSIC
+    try:
+        if not (a.export or a.entries):
+            return fpc.unread(mode, fpc.NO_CONTEST_IDS,
+                              "no DraftKings entries file was given (--export or --entries)")
+        source = "EXPORT" if a.export else "ENTRIES"
+        rows, state = fpc.read_entries_file(a.export or a.entries, mode=mode)
+        if state != fpc.READ:
+            return fpc.unread(mode, state, HEADER_DETAIL[state].format(source.lower()), source=source)
+        if not a.export and assigned:
+            rows = [(e, c, tuple(assigned[e]) if r is None and e in assigned else r) for e, c, r in rows]
+        facts = fpc.facts_from_file(a.contest_facts) if a.contest_facts else None
+        return fpc.reading(rows, mode=mode, players=fpc.players_from_salary_csv(a.salaries),
+                           facts=facts, source=source)
+    except Exception as exc:  # noqa: BLE001 - a reading, never a gate: it is named and QA goes on
+        return fpc.unread(mode, fpc.NOT_COMPUTED, type(exc).__name__)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -228,6 +272,8 @@ def main(argv=None):
                     help="informational only: a lineup under it is a Tier 2 note, never a defect (R37)")
     ap.add_argument("--max-overlap", type=int, help="enforced when given")
     ap.add_argument("--max-exposure", type=int, help="enforced when given")
+    ap.add_argument("--entries", help="a DraftKings entries file read only for its Contest IDs, when no --export")
+    ap.add_argument("--contest-facts", help="a run's selection/contest_facts.json, for the per-contest reading")
     a = ap.parse_args(argv)
 
     sal = load_rows(a.salaries, "ID")
@@ -463,6 +509,10 @@ def main(argv=None):
         print(f"    {c:2d}/{n_l} {c*100//n_l:3d}%  {NM(i):<22s} {P(i):4s} {T(i):4s} "
               f"${S(i)}{tag}")
 
+    coverage = first_place_reading(a, assigned)
+    for line in fpc.text_lines(coverage):
+        print(line)
+
     verdict = ("FAIL" if fail else "PARTIAL" if unfilled
                else "DEFECT" if defects else "PASS")
     print()
@@ -480,6 +530,7 @@ def main(argv=None):
                    "distinct_players": len(exp),
                    "max_overlap": max(overlaps) if overlaps else 0,
                    "stacked": stacked, "bringback": bringback,
+                   "first_place_coverage": coverage,
                    "anti_correlation": anti},
                   open(a.json, "w"), indent=1)
     if fail:
