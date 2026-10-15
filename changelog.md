@@ -38,7 +38,17 @@ Salaries `ae4bdec3d698b23901b2b27d582105248c2940c30c1f4a227eecb4fec5692c38`, ent
   on `final_v1` and `final_v2`. Final `construction/DK_REVIEW_ENTRY_sea-den-sd_final_v2.csv`
   (`495976db6f40e2a4b5ca484bda6d0b88e9f6a7bf717498266074cbe8005512c1`): Captains Wilson 5, Darnold 5, Smith-Njigba 5, Nix 5,
   Harvey 3, Myers 3, Broncos DST 1, Seahawks DST 1; Nix and Darnold 21 of 28, Wilson, Myers and Smith-Njigba 17, Harvey and
-  Franklin 16; salary 43,800 to 50,000. Build record `construction/entry_build_record.jsonl` (28 rows).
+  Franklin 16; salary 43,800 to 50,000. Superseded by v3 below.
+- **Adversarial review** (Ben's request at 23:49Z; a fresh-context agent, three iterations, Pareto only: no washout measure
+  worse, no contest's distinct-Captain count lower; scripts and candidates in `construction/adversarial_review/`). Three
+  changes: Sutton in for Franklin in 5296939573 (+2.14); the two Nix-Captain lineups of 5296942152 (Booster) and 5296938658
+  exchanged, Booster row 88.0 to 89.6; Waddle and Wilson exchanged between 5296930241 (Daily Dollar, 78.1 to 90.2) and
+  5296937089 (Quarter Jukebox, 89.2 to 77.1, so Nix's Captain row holds his lead receiver and the Jukebox pair shares 1 person,
+  not 2). Total prior 2,376.15 to 2,378.30, mean pairwise overlap 3.0820 to 3.0688, every other measure unchanged.
+  Checked independently (`adversarial_review/verify_independent.py`: 0 defects, Entry and Contest IDs and non-roster lines
+  unchanged) and by `qa_showdown_portfolio.py`: PASS, 0 defects. Final `construction/DK_REVIEW_ENTRY_sea-den-sd_final_v3.csv`
+  (`07cdf8e2d4493601842beea83d0c187a1001b6ef3d494e3a2f8bc0e497973e27`), delivered 23:54Z; its build record is
+  `entry_build_record.jsonl`, and v2's moved to `entry_build_record.DK_REVIEW_ENTRY_sea-den-sd_final_v2.jsonl`.
 - **Would have made it better.** (1) The ceiling pass's FLEX upgrades pull out a receiver whose role grew after the history
   the prior reads; a 0-row check on each team's lead receivers now follows the pass (`docs/claude/working.md`). (2) A cold
   cloud container spends four minutes on setup; start it in the background as the first command. (3) The engine has no
