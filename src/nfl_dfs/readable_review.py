@@ -19,7 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from . import contest_assignment, contest_facts
+from . import contest_assignment, contest_facts, first_place_coverage
 from .contracts import EngineMode, SlateContract
 from .dk import EntryTemplate, parse_entries, parse_entry_bytes, parse_salaries
 from .entry_groups import plan_entries, subset_binding_problems, unbound_rows
@@ -373,6 +373,114 @@ def _contest_facts_html(block: Mapping[str, object]) -> list[str]:
     if unused:
         sections.append(f'<p>Rows for contests with no reserved entry were ignored: {_escape(", ".join(unused))}.</p>')
     return sections
+
+
+FIRST_PLACE_REVIEW_SOURCE = "DELIVERED_ROSTERS"
+_FIRST_PLACE_HEADING = "<h2>First place, contest by contest</h2>"
+
+
+def first_place_review(
+    contest_rows: Sequence[tuple[str, str, tuple[str, ...], str | None]],
+    authorizations: Sequence[object],
+    *,
+    mode: str,
+    players: Sequence[object],
+    labels_by_roster: Mapping[tuple[str, ...], str] | None,
+    facts: object,
+) -> dict[str, object]:
+    """Session 75b (R38): a review's `first_place_coverage_v1` reading, from its own delivered rows; never raising.
+
+    `contest_rows` are the rows the review's contest-assignment block reads (each resolved Entry ID's delivered roster);
+    every other template row is read with no roster, so the reconciled facts payload binds to the template's Contest IDs
+    exactly as the run's own block does. Each Entry ID takes its roster's thesis label. Nothing compares this reading with
+    the run's: both are recomputed, and the contest-assignment reconciliation already ties the rows.
+    """
+
+    try:
+        resolved = {row[0]: tuple(row[2]) for row in contest_rows}
+        rows = [(item.entry_id, item.contest_id, resolved.get(item.entry_id)) for item in authorizations]
+        labels = labels_by_roster or {}
+        thesis_by_entry = {
+            entry_id: labels[roster] for entry_id, _contest, roster in rows if roster is not None and roster in labels
+        }
+        return first_place_coverage.reading(
+            rows, mode=mode, players=first_place_coverage.players_from_slate(players),
+            thesis_by_entry=thesis_by_entry or None, facts=facts, source=FIRST_PLACE_REVIEW_SOURCE)
+    except Exception as exc:  # noqa: BLE001 - a reading, never a gate: named, and the review goes on
+        return first_place_coverage.unread(
+            mode, first_place_coverage.NOT_COMPUTED, type(exc).__name__, source=FIRST_PLACE_REVIEW_SOURCE)
+
+
+def _first_place_cells(row: Mapping[str, object], captain: bool) -> tuple[object, ...]:
+    state = str(row.get("facts_state"))
+    if row.get("field_size") is not None:
+        numbers = [f'field {row.get("field_size")}', f'paid {row.get("places_paid")}']
+        numbers += [str(row.get(column)) for column in ("paid_fraction", "label") if row.get(column)]
+        state += f' ({", ".join(numbers)})'
+    repeated = ""
+    if isinstance(row.get("statistics"), Mapping):
+        repeated = ", ".join(
+            f'{item.get("person")} x{item.get("entries")}'
+            for item in _sequence(row.get("repeated_key_people"), "first_place.repeated", []) if isinstance(item, Mapping)
+        ) or "none"
+    shape, text = row.get("shape"), ""
+    if isinstance(shape, Mapping) and captain:
+        text = f'Captain {shape.get("captain")} at {shape.get("captain_salary")}, salary left {shape.get("salary_left")}'
+    elif isinstance(shape, Mapping):
+        stack = f'stack {shape.get("stack_team")} x{shape.get("stack_depth")}' if shape.get("stack_team") else "stack none"
+        text = (f'QB {shape.get("quarterback")}, {stack}, bring-back {shape.get("bring_back")}, '
+                f'salary left {shape.get("salary_left")}')
+    return (row.get("contest_id"), row.get("entries"), state, repeated, text)
+
+
+def _first_place_sections(reading: Mapping[str, object]) -> list[str]:
+    captain = reading.get("key_person") == "CAPTAIN"
+    one, many = ("Captain", "Captains") if captain else ("QB", "QBs")
+    version = reading.get("first_place_coverage_version")
+    tokens = ", ".join(str(x) for x in _sequence(reading.get("does_not_establish"), "first_place.tokens", []))
+    closing = f"It does not establish {_escape(tokens)}."
+    if reading.get("status") != first_place_coverage.READ:
+        return [f'<p>{_escape(version)}: {_escape(reading.get("status"))}: {_escape(reading.get("detail"))}; '
+                f"a reading, never a gate. {closing}</p>"]
+    facts = _mapping(reading.get("facts"), "first_place.facts", [])
+    binding = str(facts.get("binding"))
+    if facts.get("detail") or facts.get("facts_status"):
+        binding += f' ({facts.get("detail") or facts.get("facts_status")})'
+    contests = [row for row in _sequence(reading.get("contests"), "first_place.contests", []) if isinstance(row, Mapping)]
+    sections = [
+        f"<p>{_escape(version)}: a reading, never a gate. Each Contest ID's entries are read together, as one set of "
+        "shots at that contest's first place, so two near-copies in one contest are one shot, not two. "
+        f'{_escape(reading.get("contest_count"))} contests, {_escape(reading.get("one_entry_contest_count"))} with one '
+        f'entry; facts {_escape(binding)}; thesis labels {_escape(reading.get("thesis_labels"))}. Each contest\'s spread is '
+        f"the contest-assignment table's; this one adds the facts, each repeated {one} and a one-entry contest's shape. "
+        f"{_escape(first_place_coverage.READ_AS)}. {closing}</p>",
+        _html_table(("Contest ID", "Entries", "Facts", f"Repeated {many}", "One entry: shape"),
+                    [_first_place_cells(row, captain) for row in contests]),
+    ]
+    if any(row.get("no_tail_statistic") for row in contests):
+        sections.append(f"<p>A contest of one entry has no pair to compare: {_escape(first_place_coverage.NO_TAIL_LINE)}.</p>")
+    for label, field in (("Rows without a complete roster", "rows_without_roster"),
+                         ("Rows naming an ID the salary file lacks", "rows_unscored")):
+        held = [f'contest {row.get("contest_id")}: '
+                + ", ".join(str(x) for x in _sequence(row.get(field), "first_place.rows", []))
+                for row in contests if row.get(field)]
+        if held:
+            sections.append(f'<p>{label}, not read: {_escape("; ".join(held))}.</p>')
+    return sections
+
+
+def _first_place_coverage_html(reading: Mapping[str, object]) -> list[str]:
+    """The first-place section (Session 75b), one renderer for both reviews; it never raises.
+
+    The Showdown review step catches only named errors, so a fault in this section would otherwise fail the run; any
+    exception here renders the heading and `NOT_COMPUTED` with the exception's class instead.
+    """
+
+    try:
+        return [_FIRST_PLACE_HEADING, *_first_place_sections(reading)]
+    except Exception as exc:  # noqa: BLE001 - a reading, never a gate: named, and the page renders
+        return [_FIRST_PLACE_HEADING, f"<p>{_escape(first_place_coverage.FIRST_PLACE_COVERAGE_VERSION)}: "
+                f"{_escape(first_place_coverage.NOT_COMPUTED)} ({_escape(type(exc).__name__)}).</p>"]
 
 
 def _safe_detail(value: object) -> str:
@@ -1302,6 +1410,9 @@ def _render_classic_html(data: Mapping[str, object], *, data_sha256: str) -> byt
     facts_block = data.get("contest_facts")
     if isinstance(facts_block, Mapping):
         sections.extend(_contest_facts_html(facts_block))
+    first_place = data.get("first_place_coverage")
+    if isinstance(first_place, Mapping):
+        sections.extend(_first_place_coverage_html(first_place))
 
     coverage = data.get("pool_coverage")
     if isinstance(coverage, Mapping):
@@ -1473,6 +1584,9 @@ def _render_html(data: Mapping[str, object], *, data_sha256: str) -> bytes:
     facts_block = data.get("contest_facts")
     if isinstance(facts_block, Mapping):
         sections.extend(_contest_facts_html(facts_block))
+    first_place = data.get("first_place_coverage")
+    if isinstance(first_place, Mapping):
+        sections.extend(_first_place_coverage_html(first_place))
     theses_block = data.get("theses")
     if isinstance(theses_block, Mapping):
         sections.extend(_theses_html(theses_block))
@@ -2047,6 +2161,11 @@ def create_readable_review(
             tuple((row.entry_id, row.contest_id, row.entry_fee) for row in reparsed_template.authorizations),
         )
         problems.extend([*facts_unread, *facts_mismatch])
+    # Session 75b (R38): each contest's entries read together, from the rows and labels above and the reconciled facts.
+    # An always-present key; a reading that never raises and is never reconciled.
+    first_place = first_place_review(
+        contest_rows, reparsed_template.authorizations, mode=contest_assignment.MODE_SHOWDOWN,
+        players=reparsed_slate.players, labels_by_roster=contest_labels, facts=facts_payload)
 
     theses_block: dict[str, object] | None = None
     if policy_view is not None:
@@ -2194,6 +2313,7 @@ def create_readable_review(
         },
         "unbound_rows": unbound_payload,
         "contest_assignment": contest_payload,
+        "first_place_coverage": first_place,
         "pool_coverage": (
             {key: value for key, value in pool_coverage.items() if key != "reason_by_person"}
             if pool_coverage is not None

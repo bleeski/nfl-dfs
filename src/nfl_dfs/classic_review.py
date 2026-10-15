@@ -37,7 +37,7 @@ from .hashing import sha256_bytes, sha256_file
 from .lineups import validate_lineup, write_upload_bytes
 from .portfolio_policy import canonical_decimal_json_bytes
 from .relaxation import own_exclusion_dk_ids
-from .readable_review import _render_html
+from .readable_review import _render_html, first_place_review
 
 
 # v3 and v2 (Session 11c): each row's source, and the rows a subset policy
@@ -575,7 +575,7 @@ def _plain_numbers(value: object) -> object:
     return value
 
 
-def _contest_block(
+def _contest_review_rows(
     *,
     slate: SlateContract,
     template,
@@ -583,15 +583,11 @@ def _contest_block(
     fillable: Sequence[str],
     bound_set: set[str],
     assignments: Mapping[str, tuple[str, ...]],
-    selection_order: Sequence[tuple[str, ...]],
-    reported: Mapping[str, object] | None,
-) -> tuple[dict[str, object] | None, list[str]]:
-    """Session 50c: the per-contest block, recomputed from the delivered rosters.
+) -> list[tuple[str, str, tuple[str, ...], str | None]]:
+    """Every template row that resolves to a roster, as C3 exports it: `(entry_id, contest_id, roster, pool)`.
 
-    Every template row that resolves to a roster is read from what C3 exports (a
-    filled row from `assignments`, a row the template filled from its own bytes),
-    and the before-reading from the selection's lineup order. The step's report is
-    only reconciled with both. `(None, [])` for a run from before Session 50c.
+    A filled row's roster comes from `assignments` and a row the template filled from its own bytes. Session 50c's
+    contest block and Session 75b's first-place reading both read these rows.
     """
 
     by_id = {row.dk_id: row for row in slate.players}
@@ -608,6 +604,22 @@ def _contest_block(
             roster = tuple(prefilled.roster) if prefilled is not None and prefilled.resolved else ()
         if roster and all(dk_id in by_id for dk_id in roster):
             rows.append((entry_id, authorization.contest_id, roster, pool))
+    return rows
+
+
+def _contest_block(
+    *,
+    slate: SlateContract,
+    rows: Sequence[tuple[str, str, tuple[str, ...], str | None]],
+    selection_order: Sequence[tuple[str, ...]],
+    reported: Mapping[str, object] | None,
+) -> tuple[dict[str, object] | None, list[str]]:
+    """Session 50c: the per-contest block, recomputed from the delivered rosters (`_contest_review_rows`).
+
+    The before-reading comes from the selection's lineup order. The step's report is only reconciled with both.
+    `(None, [])` for a run from before Session 50c.
+    """
+
     return contest_assignment.review_block(
         mode=contest_assignment.MODE_CLASSIC,
         people=contest_assignment.people_from_slate(slate.players),
@@ -1548,10 +1560,11 @@ def create_classic_review_package(
             None if step_path is None else _plain_numbers(
                 dict(_strict_json(step_path.read_bytes(), label="CONTEST_ASSIGNMENT", canonical=True)))
         )
-        contest_payload, contest_problems = _contest_block(
+        contest_rows = _contest_review_rows(
             slate=slate, template=template, entry_plan=entry_plan, fillable=entry_ids,
-            bound_set=bound_set, assignments=assignments,
-            selection_order=list(selection_lineups), reported=step_report)
+            bound_set=bound_set, assignments=assignments)
+        contest_payload, contest_problems = _contest_block(
+            slate=slate, rows=contest_rows, selection_order=list(selection_lineups), reported=step_report)
         if contest_problems:
             raise ClassicReviewError(";".join(contest_problems))
         # Session 23d: the paid fraction and `FIRST_PLACE_OBJECTIVE` label of every entry, from the run's own
@@ -1566,6 +1579,11 @@ def create_classic_review_package(
             )
             if facts_unread or facts_mismatch:
                 raise ClassicReviewError(";".join([*facts_unread, *facts_mismatch]))
+        # Session 75b (R38): each contest's entries read together, from the same rows and the reconciled facts. The
+        # Classic run carries no thesis labels. An always-present key; a reading that never raises.
+        first_place = first_place_review(
+            contest_rows, template.authorizations, mode=contest_assignment.MODE_CLASSIC, players=slate.players,
+            labels_by_roster=None, facts=facts_payload)
         # The policy's rows are its exposure denominator; every filled row is reconciled.
         denominator = len(bound_ids)
         display_by_person = {row.underlying_id: row for row in slate.players}
@@ -1615,6 +1633,7 @@ def create_classic_review_package(
             "entries": entries_payload,
             "unbound_rows": unbound_payload,
             "contest_assignment": contest_payload,
+            "first_place_coverage": first_place,
             "exposure": {
                 "entry_count_denominator": denominator,
                 "people": player_rows,

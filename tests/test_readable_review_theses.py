@@ -534,6 +534,7 @@ def test_an_unreadable_normalized_policy_is_a_presentation_mismatch_with_no_semi
 EXISTING_KEYS = {
     "schema_version", "status", "truths", "warning", "next_action", "blockers", "reconciliation", "entries",
     "exposure", "unbound_rows", "contest_assignment", "pool_coverage", "evidence_observations", "artifacts", "hashes",
+    "first_place_coverage",
 }
 
 

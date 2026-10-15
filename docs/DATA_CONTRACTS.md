@@ -928,7 +928,7 @@ Successful C3 publication is atomic and adds:
 |---|---|
 | `classic_review_export_audit.json` | Canonical `prior_only_classic_export_audit_c3_v3` since Session 11c (v2 and v1 stay as written). v3 adds `bound_entry_ids`, `unbound_entry_ids`, `row_sources` (each filled row, `POLICY` or `C1`) and the `checks_run` item `POLICY_AND_C1_ROW_PARTITION_AND_THE_RUN_S_EXCLUSIONS_OVER_EVERY_ROW`; `entry_ids` and `output.entries` are every filled row, `recomputed`'s counts and `pairwise_person_overlap` the policy's rows, and `recomputed.canonical_lineups` every filled row. v2 since Session 09: every boundary hash, recomputed fact, exact output hash, status, limitations, truths, and one next action. v2 reports `recomputed.selected_activity` as `PASS` or `INCOMPLETE` (v1 always wrote `PASS`), adds `recomputed.selected_activity_without_row`, lists `SELECTED_CURRENT_ACTIVITY_AND_ROLE_EVIDENCE` in `checks_run` only when every selected person has an `ACTIVE` row (otherwise `SELECTED_CURRENT_ROLE_EVIDENCE_AND_NO_SELECTED_NON_ACTIVE_ROW`), and names the gap in `limitations` as `OFFICIAL_STATUS_INCOMPLETE_FOR_SELECTED:NO_EXACT_ID_ROW_IN_SUPPLIED_FILE:<n>_of_<m>_selected_people` or `OFFICIAL_STATUS_REQUIRED:NO_OFFICIAL_STATUS_FILE_SUPPLIED:<n>_of_<m>_selected_people` |
 | `DK_REVIEW_ENTRY_<label>.csv` | Exact reserved-entry template bytes with only nine previously blank authorized roster cells rewritten for each exact Entry ID in template order |
-| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v4` display data independently reconstructed from the accepted artifacts. v4 (Session 61) adds the Classic judgment pass and the construction judgment's decision (display-only; Classic judgment pass and construction judgment, below). v1 stays as written and was never produced for a subset policy; v2 and v3 stay readable as written. v3 (Session 60) adds `pool_coverage.workload_redistribution` and, when it applied, the section Injury-room redistribution (Injury-room workload redistribution, Session 60). v2 adds each entry's `source` (`POLICY` or `C1`) and `unbound_rows`: `null` when the policy binds every fillable row, otherwise the C1 rows' `entry_ids`, `source`, `basis`, `checks`, `person_exposure` and `maximum_person_overlap_with_any_filled_row` (C1 cuts only exact rosters, so no overlap cap covers them). `exposure.entry_count_denominator` is the policy's rows; `reconciliation.entry_count` is every filled row |
+| `prior_only_readable_review.json` | Canonical `prior_only_readable_review_classic_c3_v4` display data independently reconstructed from the accepted artifacts. v4 (Session 61) adds the Classic judgment pass and the construction judgment's decision (display-only; Classic judgment pass and construction judgment, below). Since Session 75b v4 also carries the always-present `first_place_coverage` key and its section, with no new version (First place, contest by contest, under the Showdown review's versions). v1 stays as written and was never produced for a subset policy; v2 and v3 stay readable as written. v3 (Session 60) adds `pool_coverage.workload_redistribution` and, when it applied, the section Injury-room redistribution (Injury-room workload redistribution, Session 60). v2 adds each entry's `source` (`POLICY` or `C1`) and `unbound_rows`: `null` when the policy binds every fillable row, otherwise the C1 rows' `entry_ids`, `source`, `basis`, `checks`, `person_exposure` and `maximum_person_overlap_with_any_filled_row` (C1 cuts only exact rosters, so no overlap cap covers them). `exposure.entry_count_denominator` is the policy's rows; `reconciliation.entry_count` is every filled row |
 | `prior_only_readable_review.html` | Self-contained escaped rendering of the canonical readable JSON |
 | `NFL_DFS_Cowork_Review_<run-id>.xlsx` | Eight sheets: Run Control, Evidence Paste, Portfolio, QA, Upload, Exposure, Review Evidence, and Artifacts |
 
@@ -2158,6 +2158,13 @@ does-not-establish text. The unallocated-volume heading then reads "Volume left 
 the injury-room redistribution", and the `unallocated_volume` observation and the workbook header
 stop saying a vacated share is not reassigned. A reader of v1 or v2 sees none of it; every other
 field means what it meant, and v2 files stay readable as written.
+
+**First place, contest by contest (Session 75b; an always-present key of `prior_only_readable_review_sd5_v3` and
+`prior_only_readable_review_classic_c3_v4`, no new version).** Both reviews carry `first_place_coverage`, a
+`first_place_coverage_v1` reading (§ First place, contest by contest), and an HTML section of the same name after the
+contest-facts section. Unlike `theses` the key is always present, as Session 50's `contest_assignment` key is, so a review
+written since Session 75b differs from an earlier one on the same inputs by that key and that section only (checked
+against the earlier code). Every other field means what it meant, and earlier files stay readable as written.
 
 **Game theses (Session 23f; an optional key of `prior_only_readable_review_sd5_v3`, no new version).** A
 policy bound as `nfl_showdown_portfolio_policy_normalized_v4` with at least one ACTIVE thesis adds a top-level
@@ -4437,8 +4444,9 @@ and the same thesis labels.
   reading blank, never make a check read PASS.
 
 **States, never codes.** `status` is `READ`, `NO_CONTEST_IDS` (no entries file), `NO_CONTEST_ID_COLUMN`,
-`NO_ROSTER_COLUMNS` or `NOT_COMPUTED` (with the exception's class in `detail`). Like `NO_FACTS_ROW`, none is a blocker, a
-limitation or a registry entry.
+`NO_ROSTER_COLUMNS` or `NOT_COMPUTED` (with the exception's class in `detail`, or, for the run's block when the contest
+step failed, the step's own failure text; see Exits). Like `NO_FACTS_ROW`, none is a blocker, a limitation or a registry
+entry.
 
 **Where it prints.**
 - `scripts/qa_classic_portfolio.py` prints a section after Tier 2 and puts the reading in its `--json` record as
@@ -4448,9 +4456,42 @@ limitation or a registry entry.
 - `scripts/qa_showdown_portfolio.py` reads its `--export` and adds `first_place_coverage`, the key before `VERDICT`, to
   its one JSON object.
 - Both take `--contest-facts` (a run's `selection/contest_facts.json`).
-- The washout lines and every exit code are unchanged.
-- The run path, `prior_review_reports.first_place_coverage` and the readable review's section, is
-  `docs/ROADMAP.md`'s Session 75b.
+- The washout lines and every exit code are unchanged. Since Session 75b the Classic QA prints the section inside the
+  reading's own guard, so a section that cannot be rendered or printed reads `NOT_COMPUTED` and moves no exit code.
+- `run-slate` and both readable reviews carry it too (Session 75b, below).
+
+**Exits (Session 75b).** The run follows Session 23d's contest-facts pattern: one block, built once, carried by every exit
+the run reaches after the contest step.
+- `prior_review` sets `reports["first_place_coverage"]` right after the contest-facts block, so the Showdown (policy and
+  sequential), Classic C1 and C2, and C3 exits all carry it as `prior_review_reports.first_place_coverage` in the run
+  result. C1 and C2 write no readable review, so the run result is their record. An exit that stops before the contest
+  step (a blocked evidence, projection or selection stage) carries neither this block nor `contest_facts`. The baseline
+  (`nfl_baseline_report_v4`) does not carry the reading.
+- Its rows are the contest step's claim: every template row in order, a movable row's roster read from the final
+  (permuted) assignment and a fixed row's from the claim, as `contest_assignment.audit_contest_assignment` reads them. Each
+  Entry ID takes its final roster's thesis label, so `statistics` equals `contests_after` on every exit, a portfolio of
+  theses included. The facts are the run's block; a run with no facts file reads `NOT_SUPPLIED`, as the QA scripts do.
+- A step that failed has no claim: the block reads `NOT_COMPUTED` with the step's own failure text (the one in
+  `reports["contest_assignment"]["error"]`, which the run already carries as the `P` limitation
+  `CONTEST_ASSIGNMENT_STEP_FAILED`). An exception inside the reading reads `NOT_COMPUTED` with its class. The reading adds
+  no limitation, registry code or release truth of its own, and neither case stops delivery.
+- The block holds no path field and no clock. A failed step's detail is the step's own exception text, which the
+  step's report already carries.
+- The Showdown and C3 readable reviews hold `first_place_coverage` as an always-present key and print a "First place,
+  contest by contest" section after the contest-facts section. Each recomputes the reading from its own delivered rosters
+  (the rows its contest-assignment block reads) and its reconciled facts payload. Every other template row is read with
+  no roster, so the facts bind to the template's Contest IDs as the block's do, and on a file whose rows all resolve the
+  review's reading equals the block's. Neither is compared with the other, and no reconciliation code exists for it. The
+  section adds what the contest-assignment and facts tables lack: the facts join, each repeated Captain or QB, a one-entry
+  contest's shape, and the `NO_CONTEST_FACTS` state. A review with no facts prints neither "Contest facts" nor the
+  `FIRST_PLACE_OBJECTIVE` label.
+- `source` names the rows read: `EXPORT` (both QA scripts) or `ENTRIES` (the Classic QA's `--entries`), `CONTEST_STEP`
+  (the run's block) or `DELIVERED_ROSTERS` (both reviews). A QA reading with no entries file, or one that failed
+  (`NOT_COMPUTED`), carries none.
+- **The block and the QA differ on a prefilled row the run refuses.** The block reads the claim, which leaves unscored a
+  prefilled row the shared validator refuses or whose cells carry `(LOCKED)`; such a row is listed in its contest's
+  `rows_without_roster`. The QA reading scores every complete roster of known IDs. On a file with such a row the two
+  differ in that contest only, which a pre-lock DraftKings template never holds.
 
 Does not establish (`does_not_establish`): `NOT_A_CHANCE_OF_FINISHING_FIRST`, `NOT_A_SHARE_OF_ANY_PRIZE`,
 `NOT_A_TAIL_STATISTIC`, `NOT_OWNERSHIP_OR_DUPLICATION`, `NOT_UPLOAD_CLEARANCE`.
