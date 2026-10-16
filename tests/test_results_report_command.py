@@ -53,7 +53,8 @@ def _run(root: Path, sha: str, era: str | None = None, metrics: rr.ResultsMetric
 
 
 def _command(capsys, *argv: str) -> tuple[int, dict]:
-    code = cli.main(["results-report", *argv])
+    # Session 77 moved the command's default to v2; these tests pin the v1 report, so they name it.
+    code = cli.main(["results-report", "--metrics-version", "nfl_results_metrics_v1", *argv])
     return code, json.loads(capsys.readouterr().out)
 
 
@@ -85,8 +86,8 @@ def test_two_runs_in_two_processes_give_byte_identical_artifacts(tmp_path):
         root, sha = _intake(tmp_path / seed, FIVE_SLATES)
         environment = {**os.environ, "PYTHONHASHSEED": seed}
         done = subprocess.run((sys.executable, "-m", "nfl_dfs.cli", "results-report", "--source-sha256", sha,
-                               "--results-root", str(root)), capture_output=True, timeout=300, env=environment,
-                              check=False)
+                               "--results-root", str(root), "--metrics-version", "nfl_results_metrics_v1"),
+                              capture_output=True, timeout=300, env=environment, check=False)
         assert done.returncode == 0, done.stdout[-400:] + done.stderr[-400:]
         files.append(_target(root, sha).read_bytes())
     assert files[0] == files[1]

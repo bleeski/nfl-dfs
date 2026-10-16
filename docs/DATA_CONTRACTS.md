@@ -4996,7 +4996,7 @@ Registered 2026-10-12. `config/results_metrics_v1.json`, SHA-256
 `56c471710421f5f4fca579a82409610f9c2b73d3dd7d8e0d80170538fa1f736c` (pinned by `tests/test_results_report.py`). It
 defines the measures of realized results that every later grader imports from `src/nfl_dfs/results_report.py` (Session
 18's `standings_metrics.py` among them), read from the `nfl_dk_entry_history_v1` export. v1 is never mutated: a
-definition the real export proves wrong is `nfl_results_metrics_v2`. Three choices wait on that export (Session 71b's
+definition the real export proves wrong is the next version (`nfl_results_metrics_v3`: v2 is Session 77's). Three choices wait on that export (Session 71b's
 acceptance): the strict bottom-10% boundary (the review's 13.6% all-sport bottom rate decides it), the exact `Best Ball`
 text (9,960 all-sport entries) and tickets inside winnings (-$640.20).
 
@@ -5050,8 +5050,10 @@ a proven edge (the file's `does_not_establish` travels with every report).
 ## NFL results report, nfl_results_report_v1 (Session 71b)
 
 `nfl results-report --source-sha256 <64 hex> [--results-root <dir>] [--engine-era-start YYYY-MM-DD]` (default root
-`data/results`; `results_report.run_results_report`). It reads the snapshot `results-intake` kept,
-`<root>/inbox/<sha256>.csv`, builds the report with `build_report(..., bootstrap=True)` and writes
+`data/results`; `results_report.run_results_report`). Since Session 77 this is what `--metrics-version
+nfl_results_metrics_v1` writes; the default is v2 (`nfl_results_report_v2`, two sections below). It reads the
+snapshot `results-intake` kept, `<root>/inbox/<sha256>.csv`, builds the report with `build_report(..., bootstrap=True)`
+and writes
 `<root>/reports/<sha256>/results_report.era-<date>.w1.json` once, through the intake's write-once path
 (`entry_history._write_once`: a temporary file, fsync, a re-read and a hard link; the same bytes already there is
 `ALREADY_PRESENT`; another file at the name is never replaced). The era names the file, so a report for another era is
@@ -5152,7 +5154,7 @@ rounded once), `method`, `interval` {`low`, `high`}, `standard_error`, `mde`, `r
   `[theta - q_hi SE, theta - q_lo SE]` at the registered level, with `q` the order statistics `s[ceil(B a) - 1]` and
   `s[ceil(B (1 - a)) - 1]`, `a = (1 - level) / 2` (10,000 draws: `s[499]`, `s[9499]`). The registered section names only
   the wild method; studentizing the pairs draw too is this v1's reading, so only the resampling changes at 30 slates,
-  and a change is `nfl_results_metrics_v2`. Scaling the drawn residuals by sqrt(G/(G-1)) cancels in t*; the CR1 factor
+  and a change is a new metrics version. Scaling the drawn residuals by sqrt(G/(G-1)) cancels in t*; the CR1 factor
   inside SE and SE* moves t*, the standard error and the MDE, and leaves the interval unchanged algebraically, not
   bitwise. At 5 slates the six weights give 7,776 distinct vectors, fewer than the draws, so t* repeats.
 - No resample is dropped. One whose SE* is zero (possible while SE is not: Y = 2,2,2,2,0 over X = 1,1,1,1,4) has t* at
@@ -5174,6 +5176,92 @@ rounded once), `method`, `interval` {`low`, `high`}, `standard_error`, `mde`, `r
   one machine write the same bytes. The interval and standard error use only correctly rounded operations; the MDE's
   quantile calls `atan`, `sin` and `cos`, which libm does not round correctly, so the MDE alone may differ in its last
   place across platforms.
+
+## NFL results metrics, nfl_results_metrics_v2 (Session 77)
+
+Registered 2026-10-16. `config/results_metrics_v2.json`, SHA-256
+`31b47fd054ef5f5df66b07466ebfe644608f6e0411e10ef210d8388e039ac7f1` (pinned by `tests/test_results_report_v2.py`). It adds
+R38's two realized readings (Ben, 2026-10-14: first place within each individual contest; the portfolio-level washout) to
+every v1 section, which it copies with v1's values: the populations, rates, slates, bands, within-slate test and
+bootstrap read exactly as in `nfl_results_metrics_v1`, and so do v1's three choices still waiting on the real export. A
+definition that export proves wrong is the next version, `nfl_results_metrics_v3`; neither registered file is mutated,
+and the v1 file still loads and still gives the v1 report.
+
+**Loading.** As v1, with the version read first: `schema_version` picks the key set, so a v2 file holds v1's sections
+plus exactly `first_place` and `washout`; a v1 name on those sections, a v2 name without them, or any other version is
+refused. Each of the two sections must hold exactly the declared texts below. `registered_metrics_path` names each
+version's file, read at call time.
+
+**First place** (`first_place`; one public function each, exact `Fraction`). Per entry: first place is `Place` 1
+(`PLACE_EQUALS_ONE`; DraftKings' tie rule makes every entry in a tie for first a first, read as given), random `1/n`
+(`ONE_OVER_N`). A top-1% finish is `Place * 100 <= n` (`PLACE_TIMES_100_AT_MOST_N`), random `floor(n/100)/n`
+(`FLOOR_N_OVER_100_OVER_N`): v1's top-10% rule at 1%, impossible below 100 entries, with a flat 1% as its large-field
+limit. Per contest (`MIN_PLACE_PER_CONTEST_KEY`): the best place among the scope's k paid entries in that Contest ID, its
+percentile `best / n` beside the mean best of k distinct uniform places, `(n+1)/((k+1)n)`
+(`N_PLUS_1_OVER_K_PLUS_1_TIMES_N`; v1's `(n+1)/2n` at k = 1). Points behind first need each contest's winning score,
+which the export does not carry: named (`NOT_IN_EXPORT_SESSION_18_THRESHOLDS`, Session 18's per-contest thresholds),
+never estimated.
+
+**Washouts** (`washout`). A portfolio is the scope's paid entries sharing a contest start time and game type
+(`SPORT_CONTEST_START_GAME_TYPE`, v1's fine slate), the closest unit the export allows to one build: v1's date slate
+merges same-day builds, and Showdowns of different games that start at the same minute still merge, because the export
+names no game and the contest name is never read. A washout is a portfolio where every entry's `Winnings_Non_Ticket` and
+`Winnings_Ticket` are both zero (`EVERY_PAID_ENTRY_NON_TICKET_AND_TICKET_ZERO`; a ticket is a prize at face value, as in
+v1). Its random expectation (`HYPERGEOMETRIC_NO_ENTRY_IN_PLACES_PAID`) is the product over the portfolio's contests of
+`C(n-p, k)/C(n, k)`, with `p` the `Places_Paid` capped at `n` and `k` our entries there: each contest's places drawn
+independently and uniformly with no ties, a contest paying no place contributing 1, and one where k > n - p contributing
+0. Lineups shared across contests are part of what the realized rate is read against. Both random expectations cap `k`
+at `n`: a real export never holds more of our entries than the field, and a file the parser takes that does still
+reports, as it does under v1.
+
+Does not establish: realized results of past entries, never a model's figure; first-place finishes are rare at this
+volume, so each contest's best percentile is the reading with data (the file's four added lines travel with every v2
+report).
+
+## NFL results report, nfl_results_report_v2 (Session 77)
+
+`nfl results-report --source-sha256 <64 hex> [--results-root <dir>] [--engine-era-start YYYY-MM-DD]
+[--metrics-version nfl_results_metrics_v1|nfl_results_metrics_v2]`. Since Session 77 the default is v2:
+`run_results_report(..., metrics_version=...)` loads `config/results_metrics_v2.json` at call time and writes
+`<root>/reports/<sha256>/results_report.era-<date>.v2.w1.json` and its table `results_report.era-<date>.v2.w1.md`
+through v1's write-once path, order, refusals and codes (previous section). `--metrics-version nfl_results_metrics_v1`
+writes the v1 report and table, byte for byte as before, at their own names, so both sit in one folder. stdout's
+`contract` names the version written.
+
+**The file.** The v1 payload with `schema_version` `nfl_results_report_v2` and `metrics` naming v2, and:
+- `definitions` adds the two sections' texts: `first_place`, `random_first_place`, `top_1`, `random_top_1`,
+  `best_entry`, `random_best_percentile`, `points_behind_first`, `washout`, `portfolio` and `random_washout`.
+- Each scope adds `first_place` and `washouts`.
+  - `first_place`: `overall`, `by_payout_shape` (each v1 band that holds a contest, with `band` and
+    `first_place_label`) and `contests`. A slice holds `contests`, `entries`, `best_percentile` {`realized`, `random`}
+    (means over its contests, percent, 4 places), and `first_place` and `top_1`, each {`entries` (the count of entries),
+    `random` (the sum of those entries' random shares, rounded once to 6 places)}. An empty slice has counts 0 and every
+    figure null.
+  - Each `contests` row, by start time, game type and key: `contest_key`, `date`, `game_type`, `contest_entries`,
+    `entries`, `band`, `best_place`, `best_percentile` and `random_best_percentile` (percent), `first_place_entries` and
+    `top_1_entries`, and `first_place_random` and `top_1_random`, the exact expectations as fraction text (`3/1000`, or
+    `0`).
+  - `washouts`: `portfolios`, `washouts` (the count), `rate` {`realized`, `random`} (percent: washouts over portfolios,
+    and the mean of each portfolio's random washout) and `by_portfolio`, by start time: `sport`, `contest_start` (the
+    parsed time, timezone-aware Eastern), `game_type`, `entries`, `contests`, `washout` (true or false), `random`
+    (percent) and `random_exact` (fraction text).
+- `points_behind_first` {`state` `NOT_IN_EXPORT`, `named_source` `SESSION_18_PER_CONTEST_THRESHOLDS`} and
+  `first_place_reading`, the sentence that says the best percentile is the reading with data. Nothing estimates either.
+
+**stdout.** As v1, with `contract` `nfl_results_report_v2`; each `headline` scope adds `first_place` (its overall slice)
+and `washouts` (`portfolios`, `washouts`, `rate`). The washout count is the one stdout figure read from `Winnings_*`: a
+yes or no per portfolio, never an amount. Neither list reaches stdout, so no Contest ID does.
+
+**The table.** v1's sections, unchanged but for the line naming the contract and metrics, then, before `Not
+established`: `First place by contest, NFL` and `First place by contest, engine era` (`FIRST_PLACE_HEADING`), each with
+an `All shapes` row from the scope's overall slice and a row per band (contests, entries, the best percentile beside
+random, and first place and top 1% each beside its random sum), or `No entries in this scope.`; one line with
+`first_place_reading` and points behind first; and `Washouts` (`WASHOUT_HEADING`), NFL and engine-era columns of
+portfolios, washouts and the rate beside random (`n/a` with no portfolio). The closing line names the v2 JSON and adds
+the per-contest and per-portfolio lists to what only it holds.
+
+Does not establish: every count and rate is realized history beside a random draw's; none is a probability of winning a
+contest, an EV, a calibration or an edge.
 
 ## Per-Entry-ID build record, nfl_entry_build_record_v1 (Session 72)
 
