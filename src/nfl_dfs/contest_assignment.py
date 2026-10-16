@@ -54,6 +54,37 @@ total, and with `no_regression` (the default) no contest scores worse than it
 did in the solver's order. It never blocks: a caller that sees an exception
 keeps the solver's order.
 
+`within_contest_diversity_v2` (Session 76, R38: first place in each contest).
+The entries in one contest are one set of shots at its first place, so two
+lineups with the same Captain (Classic: QB) there are one shot spent twice. v2
+compares placements lexicographically on a sum over contests of two or more
+entries, in this order:
+
+    (a) whether the contest holds a repeated key person (0 or 1: every contest counts once)
+    (b) lost key people: the entries that repeat a key person the contest already holds
+    (b') same-key-person pairs, so a forced repeat is spread evenly
+    (c) same-thesis pairs (zero without labels)
+    (d) the spread: worst plus mean of shared_people ** 2, plus 6 for the same Classic stack team
+
+So a repeat ranks as the costliest difference, a repeated thesis next, and
+shared people last. The search is v1's (seeded swaps and restarts inside a time
+allowance): it avoids a repeat wherever it finds an arrangement without one and
+does not prove that none exists; on the committed PHI@CHI and MIN@NO files it
+reaches the exact floor. The four counts compare exactly (the search folds them
+into one integer); EPSILON reaches only (d). Its score costs about 2.5 times
+v1's on those files, at the same entry-sized restarts. Two choices differ from
+v1 and are why it is a new version: a
+one-entry contest's row may move (its own reading never changes, and the lineup
+it takes can relieve a forced repeat elsewhere: MIN@NO's 20-entry contest went
+from 15 same-Captain pairs to the floor's 14), and no contest is held to its
+solver-order score, because that guard forbids exactly the trade v2 exists for
+(on PHI@CHI v4 it moved nothing). v2 guarantees only that its total never rises
+above the solver's order, which is always a candidate. The per-contest readings
+(`contests_before`, `contests_after`) and `total_score_*` keep v1's definition
+and weights under both versions, so every audit and reading recomputes them
+unchanged; a v2 report carries its own objective beside them. The module default
+stays v1 (the baseline's step); `prior_review` passes v2.
+
 `does_not_establish`: this is a within-contest spread of the selected lineups by
 shared people, Captain or QB, stack team and thesis. It is not expected value,
 win probability, cash probability, ownership, duplication, a payout claim or a
@@ -62,17 +93,36 @@ statement about which contest is worth more.
 
 from __future__ import annotations
 
+import functools
 import itertools
 import random
 import time
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Callable, Mapping, Sequence
 
-CONTEST_ASSIGNMENT_VERSION = "within_contest_diversity_v1"
+CONTEST_ASSIGNMENT_VERSION_V1 = "within_contest_diversity_v1"
+CONTEST_ASSIGNMENT_VERSION_V2 = "within_contest_diversity_v2"
+CONTEST_ASSIGNMENT_VERSIONS = (CONTEST_ASSIGNMENT_VERSION_V1, CONTEST_ASSIGNMENT_VERSION_V2)
+# The module default, the baseline's step; `prior_review` passes v2 (Session 76).
+CONTEST_ASSIGNMENT_VERSION = CONTEST_ASSIGNMENT_VERSION_V1
 # The step's own record beside the Classic `assignments.csv` (Session 50c), without `seconds`.
 CONTEST_ASSIGNMENT_ARTIFACT_VERSION = "nfl_contest_assignment_step_v1"
+CONTEST_ASSIGNMENT_ARTIFACT_VERSION_V2 = "nfl_contest_assignment_step_v2"
+ARTIFACT_VERSION_FOR = {
+    CONTEST_ASSIGNMENT_VERSION_V1: CONTEST_ASSIGNMENT_ARTIFACT_VERSION,
+    CONTEST_ASSIGNMENT_VERSION_V2: CONTEST_ASSIGNMENT_ARTIFACT_VERSION_V2,
+}
+CONTEST_OBJECTIVE_DEFINITION = "LEXICOGRAPHIC_SUM_OVER_CONTESTS_EVERY_CONTEST_COUNTS_ONCE"
+OBJECTIVE_ORDER = (
+    "contests_with_a_repeated_key_person",
+    "lost_key_people",
+    "same_key_person_pairs",
+    "same_thesis_pairs",
+    "spread",
+)
+READING_DEFINITION = "CONTESTS_AND_TOTAL_SCORE_ARE_WITHIN_CONTEST_DIVERSITY_V1_READINGS_NOT_THE_V2_OBJECTIVE"
 DOES_NOT_ESTABLISH = (
     "EXPECTED_POINTS_OR_VALUE",
     "WIN_OR_CASH_LIKELIHOOD",
@@ -229,6 +279,52 @@ def contest_statistics(placed: Sequence[LineupFacts], weights: Weights = REGISTE
     }
 
 
+def spread_cost(a: LineupFacts, b: LineupFacts, weights: Weights = REGISTERED_WEIGHTS) -> int:
+    """v2's pair cost for (d): v1's without the key-person and thesis terms, which v2 ranks above it."""
+
+    cost = len(a.people & b.people) ** 2
+    if a.stack_team is not None and a.stack_team == b.stack_team:
+        cost += weights.stack_team
+    return cost
+
+
+def contest_objective(placed: Sequence[LineupFacts], weights: Weights = REGISTERED_WEIGHTS) -> dict[str, object]:
+    """One contest's v2 objective over the lineups it holds, recomputed from scratch."""
+
+    pairs = list(itertools.combinations(placed, 2))
+    same_key = sum(1 for a, b in pairs if a.key_person is not None and a.key_person == b.key_person)
+    keys = Counter(facts.key_person for facts in placed if facts.key_person is not None)
+    return {
+        "repeated_key_person": same_key > 0,
+        "lost_key_people": sum(count - 1 for count in keys.values()),
+        "same_key_person_pairs": same_key,
+        "same_thesis_pairs": sum(1 for a, b in pairs if a.thesis is not None and a.thesis == b.thesis),
+        "spread": _score_text(contest_score([spread_cost(a, b, weights) for a, b in pairs])),
+    }
+
+
+def objective_total(readings: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
+    """v2's total over the contests' recomputed objectives, the spread summed from their texts as v1's total is."""
+
+    return {
+        "contests_with_a_repeated_key_person": sum(1 for r in readings.values() if r["repeated_key_person"]),
+        "lost_key_people": sum(int(r["lost_key_people"]) for r in readings.values()),
+        "same_key_person_pairs": sum(int(r["same_key_person_pairs"]) for r in readings.values()),
+        "same_thesis_pairs": sum(int(r["same_thesis_pairs"]) for r in readings.values()),
+        "spread": f"{sum(float(r['spread']) for r in readings.values()):.6f}",
+    }
+
+
+def objective_improves(new: Sequence[float], old: Sequence[float]) -> bool:
+    """v2's comparison on `OBJECTIVE_ORDER` tuples: the four counts exactly, in order, then the spread lower by more
+    than EPSILON. The search compares the same order with the counts folded into one integer."""
+
+    for level in range(4):
+        if new[level] != old[level]:
+            return new[level] < old[level]
+    return new[4] < old[4] - EPSILON
+
+
 def _exact_total_text(readings: Mapping[str, Mapping[str, object]]) -> str:
     """The total of the contests' exact scores, from the recomputed readings."""
 
@@ -281,8 +377,37 @@ class AssignmentResult:
     seed: int
     moved_slots: int
     weights: Weights = REGISTERED_WEIGHTS
+    version: str = CONTEST_ASSIGNMENT_VERSION_V1
+    # v2 only: each contest's objective (contests of two or more entries), and whether one-entry rows could move.
+    objective_before: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
+    objective_after: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
+    single_entry_rows_move: bool = False
 
     def as_report(self) -> dict[str, object]:
+        if self.version == CONTEST_ASSIGNMENT_VERSION_V2:
+            return {
+                "contest_assignment_version": self.version,
+                "does_not_establish": list(DOES_NOT_ESTABLISH),
+                "score_definition": CONTEST_OBJECTIVE_DEFINITION,
+                "objective_order": list(OBJECTIVE_ORDER),
+                "reading_definition": READING_DEFINITION,
+                "weights": {
+                    "shared_people_exponent": 2,
+                    "same_stack_team": self.weights.stack_team,
+                    "registered": self.weights.stack_team == STACK_TEAM_WEIGHT,
+                },
+                "status": self.status,
+                "objective_before": objective_total(self.objective_before),
+                "objective_after": objective_total(self.objective_after),
+                "total_score_before": self.total_before,
+                "total_score_after": self.total_after,
+                "moved_rows": self.moved_slots,
+                "single_entry_rows_move": self.single_entry_rows_move,
+                "restarts_run": self.restarts_run,
+                "timed_out": self.timed_out,
+                "seed": self.seed,
+                "seconds": round(self.seconds, 3),
+            }
         return {
             "contest_assignment_version": CONTEST_ASSIGNMENT_VERSION,
             "does_not_establish": list(DOES_NOT_ESTABLISH),
@@ -315,21 +440,40 @@ def assign_contests(
     no_regression: bool = True,
     weights: Weights = REGISTERED_WEIGHTS,
     clock: Callable[[], float] = time.monotonic,
+    version: str = CONTEST_ASSIGNMENT_VERSION,
+    move_single_entry_rows: bool | None = None,
 ) -> AssignmentResult:
     """Permute the movable lineups over the movable slots to lower every contest's score.
 
     `lineups[k]` is the lineup at slot `k` in the solver's order (a fixed slot's
-    own lineup). Slots and lineups are the same length.
+    own lineup). Slots and lineups are the same length. `no_regression` is v1's
+    per-contest guard; v2 has none. `move_single_entry_rows` None takes the
+    version's own rule (v1 holds a one-entry contest's row, v2 moves it).
     """
 
+    if version not in CONTEST_ASSIGNMENT_VERSIONS:
+        raise ContestAssignmentError(f"CONTEST_ASSIGNMENT_UNKNOWN_VERSION:{version}")
     if len(slots) != len(lineups):
         raise ContestAssignmentError("CONTEST_ASSIGNMENT_SLOT_AND_LINEUP_COUNTS_DIFFER")
+    v2 = version == CONTEST_ASSIGNMENT_VERSION_V2
+    move_single = v2 if move_single_entry_rows is None else bool(move_single_entry_rows)
     started = clock()
     deadline = None if time_limit_seconds is None else started + max(0.0, time_limit_seconds)
     count = len(slots)
+    # v2's counts, folded into one exact integer in their order: no count, summed over every contest, reaches `base`,
+    # so the fold of a sum is the sum of the folds and one integer compare is the lexicographic compare.
+    base = count * count + 1
     cost = [[0] * count for _ in range(count)]
+    same = [[0] * count for _ in range(count)]   # v2: a same key person counts `base`, a same thesis 1
     for a, b in itertools.combinations(range(count), 2):
-        cost[a][b] = cost[b][a] = pair_cost(lineups[a], lineups[b], weights)
+        cost[a][b] = cost[b][a] = (spread_cost if v2 else pair_cost)(lineups[a], lineups[b], weights)
+        if v2:
+            key_a, thesis_a = lineups[a].key_person, lineups[a].thesis
+            same[a][b] = same[b][a] = (base * (key_a is not None and key_a == lineups[b].key_person)
+                                       + (thesis_a is not None and thesis_a == lineups[b].thesis))
+    # A lineup with no key person repeats no one: it gets its own placeholder, so a set of keys counts it once.
+    key_of = [facts.key_person if facts.key_person is not None else ("NO_KEY", index)
+              for index, facts in enumerate(lineups)]
     by_contest = _contest_slots(slots)
     contest_of = [slot.contest_id for slot in slots]
 
@@ -337,18 +481,56 @@ def assign_contests(
         contest: tuple(itertools.combinations(members, 2)) for contest, members in by_contest.items()
     }
 
-    def score(contest: str, placed: Sequence[int]) -> float:
+    def score_v1(contest: str, placed: Sequence[int]) -> float:
         # Worst pair plus mean pair. Integers in, one float division out: the search
         # compares with EPSILON; the reported scores are recomputed exactly.
         costs = [cost[placed[i]][placed[j]] for i, j in pair_index[contest]]
         return (max(costs) + sum(costs) / len(costs)) if costs else 0.0
 
+    zero_v2 = (0, 0.0)
+
+    def score_v2(contest: str, placed: Sequence[int]) -> tuple:
+        # (the folded counts, the spread). Only the spread is a float, compared with EPSILON.
+        pairs = pair_index[contest]
+        if not pairs:
+            return zero_v2
+        members = by_contest[contest]
+        key_pairs, thesis_pairs = divmod(sum([same[placed[i]][placed[j]] for i, j in pairs]), base)
+        lost = len(members) - len({key_of[placed[i]] for i in members})
+        costs = [cost[placed[i]][placed[j]] for i, j in pairs]
+        counts = ((((1 if key_pairs else 0) * base + lost) * base + key_pairs) * base) + thesis_pairs
+        return (counts, max(costs) + sum(costs) / len(costs))
+
+    if v2:
+        score, zero = score_v2, zero_v2
+
+        def improves(new, old):
+            return new[0] < old[0] or (new[0] == old[0] and new[1] < old[1] - EPSILON)
+
+        def worsens(new, old):
+            return new[0] > old[0] or (new[0] == old[0] and new[1] > old[1] + EPSILON)
+
+        def plus(left, right):
+            return (left[0] + right[0], left[1] + right[1])
+    else:
+        score, zero = score_v1, 0
+
+        def improves(new, old):
+            return new < old - EPSILON
+
+        def worsens(new, old):
+            return new > old + EPSILON
+
+        def plus(left, right):
+            return left + right
+
     start = list(range(count))
     start_scores = {contest: score(contest, start) for contest in by_contest}
     pools: dict[str, list[int]] = {}
     for index, slot in enumerate(slots):
-        # A one-entry contest has no pair to spread: its row stays where the solver put it.
-        if slot.pool is not None and len(by_contest[slot.contest_id]) > 1:
+        # v1: a one-entry contest has no pair to spread, so its row stays where the solver put it.
+        # v2: it moves, because the lineup it holds can relieve a repeat elsewhere.
+        if slot.pool is not None and (move_single or len(by_contest[slot.contest_id]) > 1):
             pools.setdefault(slot.pool, []).append(index)
     swap_pairs = [
         (i, j)
@@ -365,7 +547,10 @@ def assign_contests(
             state["timed_out"] = True
         return state["timed_out"]
 
-    def climb(placed: list[int], scores: dict[str, float], *, pareto: bool) -> None:
+    # v1's per-contest guard; v2 has none (its total is still never worse than the solver's order).
+    guard = no_regression and not v2
+
+    def climb(placed: list[int], scores: dict, *, pareto: bool) -> None:
         improved = True
         while improved and not out_of_time():
             improved = False
@@ -373,11 +558,11 @@ def assign_contests(
                 if out_of_time():
                     return
                 ci, cj = contest_of[i], contest_of[j]
-                before = scores[ci] + scores[cj]
+                before = plus(scores[ci], scores[cj])
                 placed[i], placed[j] = placed[j], placed[i]
                 new_i, new_j = score(ci, placed), score(cj, placed)
-                better = new_i + new_j < before - EPSILON
-                if better and pareto and (new_i > scores[ci] + EPSILON or new_j > scores[cj] + EPSILON):
+                better = improves(plus(new_i, new_j), before)
+                if better and pareto and (worsens(new_i, scores[ci]) or worsens(new_j, scores[cj])):
                     better = False
                 if better:
                     scores[ci], scores[cj] = new_i, new_j
@@ -385,22 +570,22 @@ def assign_contests(
                 else:
                     placed[i], placed[j] = placed[j], placed[i]
 
-    def total(scores: Mapping[str, float]) -> float:
-        return sum(scores[contest] for contest in sorted(scores))
+    def total(scores: Mapping[str, object]):
+        return functools.reduce(plus, (scores[contest] for contest in sorted(scores)), zero)
 
-    def admissible(scores: Mapping[str, float]) -> bool:
-        if total(scores) > total(start_scores) + EPSILON:
+    def admissible(scores: Mapping[str, object]) -> bool:
+        if worsens(total(scores), total(start_scores)):
             return False
-        return not no_regression or all(scores[c] <= start_scores[c] + EPSILON for c in scores)
+        return not guard or not any(worsens(scores[c], start_scores[c]) for c in scores)
 
     best, best_scores = list(start), dict(start_scores)
     restarts_run = 0
     if swap_pairs:
-        # A climb from the solver's order that never worsens either contest of a swap:
-        # always admissible, so the result can only improve on the input.
+        # v1: a climb from the solver's order that never worsens either contest of a swap,
+        # always admissible, so the result can only improve on the input. v2: a plain climb.
         placed, scores = list(start), dict(start_scores)
-        climb(placed, scores, pareto=no_regression)
-        if total(scores) < total(best_scores) - EPSILON:
+        climb(placed, scores, pareto=guard)
+        if improves(total(scores), total(best_scores)):
             best, best_scores = placed, scores
         rng = random.Random(seed)
         movable_pools = list(pools.values())
@@ -416,21 +601,30 @@ def assign_contests(
             scores = {contest: score(contest, placed) for contest in by_contest}
             climb(placed, scores, pareto=False)
             restarts_run += 1
-            if admissible(scores) and total(scores) < total(best_scores) - EPSILON:
+            if admissible(scores) and improves(total(scores), total(best_scores)):
                 best, best_scores = placed, scores
 
     moved = sum(1 for slot, lineup in enumerate(best) if lineup != slot)
+    # The readings are v1's under both versions: v2 keeps v1's registered weights for them.
+    reading_weights = REGISTERED_WEIGHTS if v2 else weights
     before = {
-        contest: contest_statistics([lineups[k] for k in members], weights)
+        contest: contest_statistics([lineups[k] for k in members], reading_weights)
         for contest, members in by_contest.items() if len(members) > 1
     }
     after = {
-        contest: contest_statistics([lineups[best[k]] for k in members], weights)
+        contest: contest_statistics([lineups[best[k]] for k in members], reading_weights)
         for contest, members in by_contest.items() if len(members) > 1
     }
+    def objectives(order: Sequence[int]) -> dict[str, dict[str, object]]:
+        return {
+            contest: contest_objective([lineups[order[k]] for k in members], weights)
+            for contest, members in by_contest.items() if len(members) > 1
+        }
+
+    objective_before, objective_after = (objectives(start), objectives(best)) if v2 else ({}, {})
     status = (
         STATUS_NOT_APPLICABLE if not swap_pairs
-        else STATUS_IMPROVED if total(best_scores) < total(start_scores) - EPSILON
+        else STATUS_IMPROVED if improves(total(best_scores), total(start_scores))
         else STATUS_UNCHANGED
     )
     return AssignmentResult(
@@ -446,6 +640,10 @@ def assign_contests(
         seed=seed,
         moved_slots=moved,
         weights=weights,
+        version=version,
+        objective_before=objective_before,
+        objective_after=objective_after,
+        single_entry_rows_move=move_single,
     )
 
 
@@ -509,8 +707,13 @@ def diversify(
     no_regression: bool = True,
     weights: Weights = REGISTERED_WEIGHTS,
     clock: Callable[[], float] = time.monotonic,
+    version: str = CONTEST_ASSIGNMENT_VERSION,
+    move_single_entry_rows: bool | None = None,
 ) -> Diversification:
-    """The permuted assignment of every movable row, with the step's own report."""
+    """The permuted assignment of every movable row, with the step's own report.
+
+    A v2 report adds each contest's objective before and after and the one-entry contests whose lineup changed.
+    """
 
     entry_ids = [row.entry_id for row in rows]
     if len(set(entry_ids)) != len(entry_ids):
@@ -526,7 +729,7 @@ def diversify(
     result = assign_contests(
         slots, facts, seed=seed, restarts=restarts_for(slots) if restarts is None else restarts,
         time_limit_seconds=time_limit_seconds, no_regression=no_regression, weights=weights,
-        clock=clock)
+        clock=clock, version=version, move_single_entry_rows=move_single_entry_rows)
     assignments = {
         row.entry_id: scored[result.order[index]].roster
         for index, row in enumerate(scored) if row.pool is not None
@@ -542,6 +745,15 @@ def diversify(
         "contests_before": dict(sorted(result.before.items())),
         "contests_after": dict(sorted(result.after.items())),
     })
+    if version == CONTEST_ASSIGNMENT_VERSION_V2:
+        sizes = Counter(slot.contest_id for slot in slots)
+        report.update({
+            "contest_objective_before": dict(sorted(result.objective_before.items())),
+            "contest_objective_after": dict(sorted(result.objective_after.items())),
+            "single_entry_contests_moved": sorted(
+                slot.contest_id for index, slot in enumerate(slots)
+                if sizes[slot.contest_id] == 1 and result.order[index] != index),
+        })
     return Diversification(assignments, result, report)
 
 
@@ -564,6 +776,25 @@ def statistics_from_rosters(
     }
 
 
+def objectives_from_rosters(
+    entries: Sequence[tuple[str, str, tuple[str, ...]]],
+    *,
+    mode: str,
+    people: Mapping[str, Person],
+    thesis_by_roster: Mapping[tuple[str, ...], str] | None = None,
+) -> dict[str, dict[str, object]]:
+    """Per-contest v2 objectives from `(entry_id, contest_id, roster)` triples, for contests of 2+."""
+
+    by_contest: dict[str, list[LineupFacts]] = {}
+    for _entry_id, contest_id, roster in entries:
+        by_contest.setdefault(contest_id, []).append(
+            lineup_facts(roster, mode=mode, people=people, thesis=_thesis(thesis_by_roster, roster)))
+    return {
+        contest: contest_objective(placed)
+        for contest, placed in sorted(by_contest.items()) if len(placed) > 1
+    }
+
+
 def audit_contest_assignment(
     final: Mapping[str, tuple[str, ...]],
     *,
@@ -573,6 +804,8 @@ def audit_contest_assignment(
     people: Mapping[str, Person],
     thesis_by_roster: Mapping[tuple[str, ...], str] | None = None,
     reported_after: Mapping[str, Mapping[str, object]] | None = None,
+    version: str = CONTEST_ASSIGNMENT_VERSION,
+    reported_objective_after: Mapping[str, Mapping[str, object]] | None = None,
 ) -> tuple[list[str], dict[str, dict[str, object]]]:
     """Recompute the step's claims from the final assignment bytes.
 
@@ -581,7 +814,8 @@ def audit_contest_assignment(
     `rows` gives every entry's contest and pool, and each fixed row's roster as the
     template holds it. `selected_by_pool` is what selection produced. Returns the
     problems and the recomputed per-contest readings; the optimizer's own numbers
-    are compared, never trusted.
+    are compared, never trusted. A v2 step's per-contest objective is recomputed
+    and compared too.
 
     Problem codes: CONTEST_ASSIGNMENT_MULTISET_CHANGED (V),
     CONTEST_ASSIGNMENT_FIXED_ROW_MOVED (V), CONTEST_ASSIGNMENT_STATS_MISMATCH (P).
@@ -610,9 +844,15 @@ def audit_contest_assignment(
     try:
         recomputed = statistics_from_rosters(
             placed, mode=mode, people=people, thesis_by_roster=thesis_by_roster)
+        objectives = objectives_from_rosters(
+            placed, mode=mode, people=people, thesis_by_roster=thesis_by_roster
+        ) if version == CONTEST_ASSIGNMENT_VERSION_V2 and reported_objective_after is not None else None
     except ContestAssignmentError as exc:
         return problems + [str(exc)], {}
-    if reported_after is not None and {k: dict(v) for k, v in reported_after.items()} != recomputed:
+    if (
+        (reported_after is not None and {k: dict(v) for k, v in reported_after.items()} != recomputed)
+        or (objectives is not None and {k: dict(v) for k, v in reported_objective_after.items()} != objectives)
+    ):
         problems.append("CONTEST_ASSIGNMENT_STATS_MISMATCH")
     return problems, recomputed
 
@@ -666,11 +906,14 @@ class Claim:
     people: Mapping[str, Person]
     thesis_by_roster: Mapping[tuple[str, ...], str] | None = None
     reported_after: Mapping[str, Mapping[str, object]] | None = None
+    version: str = CONTEST_ASSIGNMENT_VERSION
+    reported_objective_after: Mapping[str, Mapping[str, object]] | None = None
 
     def audit(self, final: Mapping[str, tuple[str, ...]]) -> tuple[list[str], dict[str, dict[str, object]]]:
         return audit_contest_assignment(
             final, rows=self.rows, selected_by_pool=self.selected_by_pool, mode=self.mode,
-            people=self.people, thesis_by_roster=self.thesis_by_roster, reported_after=self.reported_after)
+            people=self.people, thesis_by_roster=self.thesis_by_roster, reported_after=self.reported_after,
+            version=self.version, reported_objective_after=self.reported_objective_after)
 
 
 @dataclass(frozen=True)
@@ -693,6 +936,7 @@ def apply_step(
     seed: int = DEFAULT_SEED,
     restarts: int | None = None,
     clock: Callable[[], float] = time.monotonic,
+    version: str = CONTEST_ASSIGNMENT_VERSION,
 ) -> StepOutcome:
     """Diversify `assignments` (fillable entry -> roster, solver order), never raising.
 
@@ -700,6 +944,8 @@ def apply_step(
     baseline passes 0, the single climb from its own order. `thesis_by_roster`
     (Session 67) labels each roster with its thesis; the claim carries the same
     labels so the audit recomputes with them. None (or empty) is no label.
+    `version` (Session 76) is v1 by default, the baseline's; `prior_review`
+    passes v2, and the claim carries it so the audit recomputes v2's objective.
 
     Any failure leaves the solver's order standing and names it, so the file still
     ships (R28): the caller carries `failure` as a P-class limitation.
@@ -715,19 +961,21 @@ def apply_step(
             selected.setdefault(pool_of[entry_id], []).append(roster)
         labels = {tuple(roster): thesis for roster, thesis in thesis_by_roster.items()} if thesis_by_roster else None
         outcome = diversify(rows, mode=mode, people=people, thesis_by_roster=labels,
-                            time_limit_seconds=time_limit_seconds, seed=seed, restarts=restarts, clock=clock)
+                            time_limit_seconds=time_limit_seconds, seed=seed, restarts=restarts, clock=clock,
+                            version=version)
         # Key order is the template's, exactly as it came in: only the values move.
         permuted = {entry_id: outcome.assignments[entry_id] for entry_id in original}
         claim = Claim(
             rows=tuple(rows),
             selected_by_pool={pool: tuple(rosters) for pool, rosters in selected.items()},
-            mode=mode, people=people, thesis_by_roster=labels, reported_after=outcome.report["contests_after"])
+            mode=mode, people=people, thesis_by_roster=labels, reported_after=outcome.report["contests_after"],
+            version=version, reported_objective_after=outcome.report.get("contest_objective_after"))
         return StepOutcome(permuted, dict(outcome.report), claim, None)
     except Exception as exc:  # noqa: BLE001 - named, never swallowed: the solver's order stands
         problems: list[str] = []
         problems.append(f"CONTEST_ASSIGNMENT_STEP_FAILED:{type(exc).__name__}:{exc}")
         return StepOutcome(dict(original), {
-            "contest_assignment_version": CONTEST_ASSIGNMENT_VERSION,
+            "contest_assignment_version": version,
             "does_not_establish": list(DOES_NOT_ESTABLISH),
             "status": STATUS_FAILED,
             "error": problems[0],
@@ -772,17 +1020,21 @@ def review_block(
     readings are recomputed here; `reported` (the step's own report) is only
     compared to them. `thesis_by_roster` is the caller's own reading of the
     labels (Session 67), keyed by roster, so both readings carry them. Returns
-    `(None, [])` for a record from before Session 50.
+    `(None, [])` for a record from before Session 50. A v2 record (Session 76)
+    also has its objective recomputed before and after, and reconciled.
     """
 
     if not isinstance(reported, Mapping):
         return None, []
+    version = reported.get("contest_assignment_version")
+    v2 = version == CONTEST_ASSIGNMENT_VERSION_V2
     problems: list[str] = []
     movable = [row for row in rows if row[3] is not None]
     ordered = [row for pool in (POOL_BOUND, POOL_FILL, POOL_ALL) for row in movable if row[3] == pool]
-    after = statistics_from_rosters(
-        [(e, c, r) for e, c, r, _pool in rows], mode=mode, people=people, thesis_by_roster=thesis_by_roster)
+    delivered = [(e, c, r) for e, c, r, _pool in rows]
+    after = statistics_from_rosters(delivered, mode=mode, people=people, thesis_by_roster=thesis_by_roster)
     before = after
+    in_solver_order = delivered
     # Sequential Showdown may select more lineups than there are entries; the
     # entries take the first N, exactly as the assignment does.
     selected = list(selected_in_solver_order)[: len(ordered)]
@@ -792,13 +1044,27 @@ def review_block(
         if Counter(row[2] for row in movable) != Counter(tuple(r) for r in selected):
             problems.append("CONTEST_ASSIGNMENT_MULTISET_CHANGED:delivered_rosters")
         solver_order = {row[0]: tuple(roster) for row, roster in zip(ordered, selected)}
-        before = statistics_from_rosters(
-            [(e, c, solver_order.get(e, r)) for e, c, r, _pool in rows], mode=mode, people=people,
-            thesis_by_roster=thesis_by_roster)
+        in_solver_order = [(e, c, solver_order.get(e, r)) for e, c, r, _pool in rows]
+        before = statistics_from_rosters(in_solver_order, mode=mode, people=people, thesis_by_roster=thesis_by_roster)
+    objective_after = objective_before = {}
+    single_moved: list[str] = []
+    if v2:
+        objective_after = objectives_from_rosters(
+            delivered, mode=mode, people=people, thesis_by_roster=thesis_by_roster)
+        objective_before = objectives_from_rosters(
+            in_solver_order, mode=mode, people=people, thesis_by_roster=thesis_by_roster)
+        sizes = Counter(contest for _e, contest, _r in delivered)
+        solver_roster = {entry_id: tuple(roster) for entry_id, _c, roster in in_solver_order}
+        single_moved = sorted(contest for entry_id, contest, roster in delivered
+                              if sizes[contest] == 1 and tuple(roster) != solver_roster[entry_id])
     failed = reported.get("status") == STATUS_FAILED
     if not failed and (
         {k: dict(v) for k, v in (reported.get("contests_after") or {}).items()} != after
         or {k: dict(v) for k, v in (reported.get("contests_before") or {}).items()} != before
+        or (v2 and (
+            {k: dict(v) for k, v in (reported.get("contest_objective_after") or {}).items()} != objective_after
+            or {k: dict(v) for k, v in (reported.get("contest_objective_before") or {}).items()} != objective_before
+            or list(reported.get("single_entry_contests_moved") or []) != single_moved))
     ):
         problems.append("CONTEST_ASSIGNMENT_STATS_MISMATCH")
     contests = []
@@ -819,9 +1085,16 @@ def review_block(
             "score_before": was["score"],
             "score_after": now["score"],
         })
+        if v2:
+            goal, held = objective_after[contest], objective_before.get(contest, objective_after[contest])
+            contests[-1].update({
+                f"{name}{suffix}": reading[name]
+                for name in ("lost_key_people", "same_key_person_pairs", "same_thesis_pairs", "spread")
+                for suffix, reading in (("", goal), ("_before", held))
+            })
     contest_ids = {row[1] for row in rows}
-    return {
-        "contest_assignment_version": CONTEST_ASSIGNMENT_VERSION,
+    block = {
+        "contest_assignment_version": CONTEST_ASSIGNMENT_VERSION if not v2 else version,
         "does_not_establish": list(DOES_NOT_ESTABLISH),
         "score_definition": CONTEST_SCORE_DEFINITION,
         "basis": REVIEW_BASIS,
@@ -837,4 +1110,15 @@ def review_block(
         "single_entry_contest_count": len(contest_ids) - len(after),
         "reported_statistics_match": "CONTEST_ASSIGNMENT_STATS_MISMATCH" not in problems,
         "contests": contests,
-    }, problems
+    }
+    if v2:
+        block.update({
+            "score_definition": CONTEST_OBJECTIVE_DEFINITION,
+            "objective_order": list(OBJECTIVE_ORDER),
+            "reading_definition": READING_DEFINITION,
+            "objective_before": objective_total(objective_before),
+            "objective_after": objective_total(objective_after),
+            "single_entry_rows_move": reported.get("single_entry_rows_move"),
+            "single_entry_contests_moved": single_moved,
+        })
+    return block, problems

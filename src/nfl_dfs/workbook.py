@@ -112,6 +112,8 @@ def _add_contest_assignment_rows(sheet, review: Mapping[str, object], start_row:
     block = review.get("contest_assignment")
     if not isinstance(block, Mapping):
         return start_row
+    if "objective_order" in block:
+        return _add_contest_assignment_v2_rows(sheet, block, start_row)
     key = "Captains" if block.get("key_person") == "CAPTAIN" else "QBs"
     _section_header(
         sheet, start_row, 1, 12,
@@ -151,6 +153,71 @@ def _add_contest_assignment_rows(sheet, review: Mapping[str, object], start_row:
             raw.get("mean_shared_people_before"), raw.get("mean_shared_people"),
             raw.get("distinct_key_people_before"), raw.get("distinct_key_people"),
             raw.get("distinct_theses"),
+            ", ".join(str(item) for item in raw.get("people_in_every_lineup", [])) or "none",
+            raw.get("score_before"), raw.get("score_after"),
+        )
+        for column, value in enumerate(values, start=1):
+            _set_display(sheet.cell(row, column), value)
+    return row
+
+
+def _add_contest_assignment_v2_rows(sheet, block: Mapping[str, object], start_row: int) -> int:
+    """Session 76: a `within_contest_diversity_v2` block, its objective first, v1's score kept as a reading."""
+
+    one, key = ("Captain", "Captains") if block.get("key_person") == "CAPTAIN" else ("QB", "QBs")
+    _section_header(
+        sheet, start_row, 1, 15,
+        f"Contest assignment ({block.get('contest_assignment_version')}): which entry holds which lineup. Inside each "
+        f"contest a repeated {one} ranks as the costliest difference, then a repeated thesis, then shared people; the "
+        "search avoids a repeat wherever it finds an arrangement without one. Recomputed from the delivered rosters and "
+        "the selection order; the lineups never changed. Not EV, win likelihood or a payout claim.",
+    )
+    before = block.get("objective_before") if isinstance(block.get("objective_before"), Mapping) else {}
+    after = block.get("objective_after") if isinstance(block.get("objective_after"), Mapping) else {}
+    moved = block.get("single_entry_contests_moved")
+    summary = (
+        ("Status", block.get("status")),
+        ("Rows moved from the solver order", block.get("moved_rows")),
+        *((f"{label} before, after", f"{before.get(name)}, {after.get(name)}") for label, name in (
+            (f"Contests holding a repeated {one}", "contests_with_a_repeated_key_person"),
+            (f"{key} repeated inside a contest", "lost_key_people"),
+            (f"Same-{one} pairs", "same_key_person_pairs"),
+            ("Same-thesis pairs", "same_thesis_pairs"),
+            ("Spread (worst plus mean of shared people squared)", "spread"),
+        )),
+        ("v1 score reading before, after", f"{block.get('total_score_before')}, {block.get('total_score_after')}"),
+        ("Reported statistics match the recomputation", block.get("reported_statistics_match")),
+        ("Contests holding one entry (their rows may move)", block.get("single_entry_contest_count")),
+        ("One-entry contests whose lineup changed", ", ".join(str(c) for c in moved) if isinstance(moved, list) and moved
+         else "none"),
+    )
+    row = start_row
+    for label, value in summary:
+        row += 1
+        _set_display(sheet.cell(row, 1), label)
+        _set_display(sheet.cell(row, 2), value)
+        sheet.cell(row, 1).font = Font(bold=True)
+    row += 1
+    headers = (
+        "Contest ID", "Entries", f"{key} repeated before", f"{key} repeated after", f"Same-{one} pairs before",
+        f"Same-{one} pairs after", "Same-thesis pairs before", "Same-thesis pairs after", "Worst pair before",
+        "Worst pair after", f"Distinct {key} before", f"Distinct {key} after", "People in every lineup",
+        "v1 score reading before", "v1 score reading after",
+    )
+    for column, value in enumerate(headers, start=1):
+        _set_display(sheet.cell(row, column), value)
+        sheet.cell(row, column).font = Font(bold=True)
+    for raw in block.get("contests", []):
+        if not isinstance(raw, Mapping):
+            continue
+        row += 1
+        values = (
+            raw.get("contest_id"), raw.get("entries"),
+            raw.get("lost_key_people_before"), raw.get("lost_key_people"),
+            raw.get("same_key_person_pairs_before"), raw.get("same_key_person_pairs"),
+            raw.get("same_thesis_pairs_before"), raw.get("same_thesis_pairs"),
+            raw.get("worst_pair_shared_people_before"), raw.get("worst_pair_shared_people"),
+            raw.get("distinct_key_people_before"), raw.get("distinct_key_people"),
             ", ".join(str(item) for item in raw.get("people_in_every_lineup", [])) or "none",
             raw.get("score_before"), raw.get("score_after"),
         )

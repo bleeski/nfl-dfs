@@ -112,6 +112,7 @@ _C2_AUDIT_HASH_ARTIFACTS = {
 }
 _CANONICAL_NEWLINE_SCHEMAS = {
     contest_assignment.CONTEST_ASSIGNMENT_ARTIFACT_VERSION,
+    contest_assignment.CONTEST_ASSIGNMENT_ARTIFACT_VERSION_V2,
     "prior_only_classic_portfolio_audit_c2_v1",
     "nfl_classic_prior_review_selection_c2_v1",
     "nfl_classic_slate_coverage_c2_v1",

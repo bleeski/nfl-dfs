@@ -1,5 +1,31 @@
 # Implementation Status
 
+## Capability added: 2026-10-16 (Session 76, contest placement for first place on the run path)
+
+Working and verified. The evidence:
+- 31 new cases in `tests/test_contest_assignment.py`, and the new `tests/test_contest_assignment_v2_files.py` (57). The
+  second runs an independent exact floor, itself checked against brute force, on the committed PHI@CHI v1 and v4 and
+  MIN@NO v10 files.
+- `tests/test_contest_assignment_v2_run_slate.py` (3), on a real policy run, and the run-path files on every exit.
+- A scratch check: v1 is byte-identical to the previous module on 480 random instances.
+- A reviewer, and the full suite (`1 failed, 4024 passed, 2 skipped in 2684.10s (0:44:44)`, the one failure a clock-dependent replay test in untouched code that passes 3 of 3 alone).
+
+What works:
+- **`within_contest_diversity_v2` on every `prior_review` exit** (Showdown policy and sequential, Classic C1, C2 and C3).
+  Inside a contest a repeated Captain or QB is taken only when no arrangement avoids it. Then the fewest repeats, spread
+  evenly, then a repeated thesis, then shared people. On the committed files it reaches the exact floor:
+  - PHI@CHI: no contest repeats a Captain.
+  - MIN@NO: only the 20-entry contest repeats, as it must. It holds all nine Captains, none more than three times.
+- **What stays put.** The lineup set, every exposure and the washout proxies, and the per-contest readings (v1's
+  definitions). The report, the audit, both reviews, the workbook and C3's artifact (`nfl_contest_assignment_step_v2`)
+  carry v2's objective.
+
+Not yet:
+- The baseline's step runs v1.
+- `scripts/diversify_showdown_contests.py` runs v1, and the hand-pass order in `docs/claude/working.md` still runs the
+  contest pass before the hand passes end. Both are Session 76b.
+- The objective reads no contest's size or payout, and no lineup's prior points.
+
 ## Capability added: 2026-10-15 (Session 75b, the first-place reading on the run path and in both readable reviews)
 
 Working and verified. The evidence:

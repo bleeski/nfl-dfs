@@ -287,7 +287,68 @@ def _parse_normalized_policy(
     }
 
 
+def _contest_assignment_v2_html(block: Mapping[str, object]) -> list[str]:
+    """Session 76: a `within_contest_diversity_v2` block, which is read by its objective first."""
+
+    one, key = ("Captain", "Captains") if block.get("key_person") == "CAPTAIN" else ("QB", "QBs")
+    before = block.get("objective_before") if isinstance(block.get("objective_before"), Mapping) else {}
+    after = block.get("objective_after") if isinstance(block.get("objective_after"), Mapping) else {}
+
+    def pair(name: str) -> str:
+        return f"{_escape(before.get(name))} before and {_escape(after.get(name))} after"
+
+    sections = [
+        "<h2>Within each contest: which entry holds which lineup</h2>",
+        (
+            f'<p>{_escape(block.get("contest_assignment_version"))}: status {_escape(block.get("status"))}, '
+            f'{_escape(block.get("moved_rows"))} rows moved from the solver order. Inside each contest v2 ranks a '
+            f"repeated {one} as the costliest difference, then a repeated thesis, then shared people; its search "
+            "(seeded swaps and restarts inside a time allowance) avoids a repeat wherever it finds an arrangement "
+            f"without one, and does not prove that none exists. Contests holding a repeated {one}: "
+            f"{pair('contests_with_a_repeated_key_person')}; {key} "
+            f"repeated inside a contest: {pair('lost_key_people')}; same-{one} pairs: "
+            f"{pair('same_key_person_pairs')}; same-thesis pairs: {pair('same_thesis_pairs')}; spread (worst plus "
+            f"mean of shared people squared): {pair('spread')}. Only which entry holds which lineup changed; the "
+            "lineups, their exposures and their captain counts are the selection's. The score columns are v1's "
+            f'reading of the same placement, total {_escape(block.get("total_score_before"))} before and '
+            f'{_escape(block.get("total_score_after"))} after, and can rise. '
+            f'It does not establish {_escape(", ".join(str(x) for x in _sequence(block.get("does_not_establish"), "does_not_establish", [])))}.'
+            "</p>"
+        ),
+        _html_table(
+            ("Contest ID", "Entries", f"{key} repeated (before, after)", f"Same-{one} pairs (before, after)",
+             "Same-thesis pairs (before, after)", "Worst pair (before, after)", "Mean shared (before, after)",
+             f"Distinct {key} (before, after)", "Distinct theses", "People in every lineup",
+             "v1 score reading (before, after)"),
+            [
+                (
+                    row.get("contest_id"), row.get("entries"),
+                    f'{row.get("lost_key_people_before")}, {row.get("lost_key_people")}',
+                    f'{row.get("same_key_person_pairs_before")}, {row.get("same_key_person_pairs")}',
+                    f'{row.get("same_thesis_pairs_before")}, {row.get("same_thesis_pairs")}',
+                    f'{row.get("worst_pair_shared_people_before")}, {row.get("worst_pair_shared_people")}',
+                    f'{row.get("mean_shared_people_before")}, {row.get("mean_shared_people")}',
+                    f'{row.get("distinct_key_people_before")}, {row.get("distinct_key_people")}',
+                    row.get("distinct_theses"),
+                    ", ".join(str(p) for p in _sequence(row.get("people_in_every_lineup"), "in_every", [])) or "none",
+                    f'{row.get("score_before")}, {row.get("score_after")}',
+                )
+                for row in _sequence(block.get("contests"), "contest_assignment.contests", [])
+                if isinstance(row, Mapping)
+            ],
+        ),
+    ]
+    if block.get("single_entry_contest_count"):
+        moved = [str(item) for item in _sequence(block.get("single_entry_contests_moved"), "single_moved", [])]
+        sections.append(
+            f'<p>{_escape(block.get("single_entry_contest_count"))} contests hold one entry; v2 may move their rows '
+            f'to relieve a repeat elsewhere. Changed: {_escape(", ".join(moved) or "none")}.</p>')
+    return sections
+
+
 def _contest_assignment_html(block: Mapping[str, object]) -> list[str]:
+    if "objective_order" in block:
+        return _contest_assignment_v2_html(block)
     key = "Captains" if block.get("key_person") == "CAPTAIN" else "QBs"
     sections = [
         "<h2>Within each contest: which entry holds which lineup</h2>",

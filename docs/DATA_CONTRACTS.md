@@ -3563,7 +3563,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `d0025e51b35e92832f91410a5949c632363834debd97d251c906ab5265b65006`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `1b95a19e32b1f7087f7006e1c0e49e2dc1c51a5e13849ac9cd8d02abe5b2fb0f`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -4320,6 +4320,110 @@ override the weights for an offline experiment and the record says so
 Does not establish: expected points or value, win or cash likelihood, ownership or
 duplication, a payout or contest worth, upload clearance, or that a different
 assignment would score better than the search found.
+
+## Contest assignment, within_contest_diversity_v2 (Session 76, R38)
+
+Registered 2026-10-16. Same module, `contest_assignment_version =
+within_contest_diversity_v2`. R38 makes goal 1 first place inside each
+individual contest: the entries in one Contest ID are one set of shots, so two
+lineups with the same Captain (Classic: QB) there are one shot spent twice. v1's
+text above is unchanged and v1 stays selectable (`version=` on `assign_contests`,
+`diversify` and `apply_step`); the module default is v1, which the baseline
+(`nfl_baseline_report_v4`) keeps. `prior_review` applies v2 on every exit:
+Showdown policy and sequential, Classic C1, C2 and C3. The step still decides only
+which Entry ID holds which selected lineup: the lineup multiset, every exposure,
+every captain count and R29 are the selection's, so no portfolio washout measure
+can move.
+
+**Objective.** Per contest of two or more entries, grouped by Contest ID only,
+summed over contests and compared lexicographically in `objective_order`:
+`contests_with_a_repeated_key_person` (a contest counts 1 when any two of its
+lineups share the key person: every contest counts once),
+`lost_key_people` (the contest's entries minus its distinct key people),
+`same_key_person_pairs` (so a forced repeat is spread evenly),
+`same_thesis_pairs` (zero without labels; labels as in v1 since Session 67), and
+`spread` (worst plus mean pair cost, a pair costing `shared_people ** 2` plus 6
+for the same Classic primary stack team: v1's cost without the two terms v2 ranks
+above it). A repeated Captain or QB therefore ranks as the costliest difference, a
+repeated thesis next, and shared people last. That is the objective's order, not a
+proof about the search: the search avoids a repeat wherever it finds an arrangement
+without one, and on the committed files it reaches the exact floor (below), but a
+time-limited climb can stop short of it (the review's own check on 300 random
+instances missed level (a) once at the entry-sized restarts). The key person is
+the Showdown Captain or the Classic QB, as in v1 and Session 75's table. The four
+counts compare exactly (the search folds them into one integer); `EPSILON` reaches
+only the spread. Lexicographic order,
+not v1's costs re-weighted: it needs no tuning constant, and on equal terms
+(one-entry rows movable, no per-contest guard) it tied a 1000/100 re-weighting on
+the key-person levels without labels and beat it with them (MIN@NO v10, 14
+same-Captain pairs against 15; PHI@CHI v4, spread 74.86 against 100.95).
+
+**Movement.** As v1, except that a one-entry contest's row may move
+(`move_single_entry_rows`, true for v2): its own reading never changes, and the
+lineup it takes can relieve a forced repeat elsewhere (MIN@NO v10's 20-entry
+contest: 15 same-Captain pairs with those rows held, the exact floor's 14 with
+them free). The report names each one-entry contest whose lineup changed.
+
+**Search.** v1's machinery: cross-contest swaps in a fixed order from the
+solver's order, seeded restarts (the same seed and entry-sized count), the same
+time allowance, deterministic. v2 has no per-contest guard: v1's `no_regression`
+keeps every contest at or below its solver-order score, which forbids the trade v2
+exists for (on PHI@CHI v4 it moved nothing). The solver's order is always a
+candidate, so v2's total never rises above it. `no_regression` is v1's parameter.
+v2's score costs about 2.5 times v1's on the committed files at the same restarts
+(PHI@CHI's 300 took 3.8 s against 1.5 s on the development host under load), so
+where little of the improvement window is left it reaches `timed_out` sooner; a
+step that times out keeps the best found and says so, and only a step that
+finishes inside its allowance replays byte for byte, as for v1.
+
+**Readings.** `contests_before`, `contests_after`, `total_score_before` and
+`total_score_after` keep v1's definitions and registered weights under v2
+(`reading_definition`), so the audits, Session 75's first-place table and its run
+block recompute them unchanged; v1's score of a v2 placement can rise.
+
+**Report** (v2): v1's keys, with `score_definition`
+`LEXICOGRAPHIC_SUM_OVER_CONTESTS_EVERY_CONTEST_COUNTS_ONCE`, `weights`
+(`shared_people_exponent`, `same_stack_team`, `registered`) in place of v1's, and
+`objective_order`, `reading_definition`, `objective_before`, `objective_after`
+(the totals, the spread summed from the per-contest texts), `single_entry_rows_move`,
+`contest_objective_before`, `contest_objective_after` (per contest:
+`repeated_key_person`, `lost_key_people`, `same_key_person_pairs`,
+`same_thesis_pairs`, `spread`) and `single_entry_contests_moved`. `status` is
+`IMPROVED` when the objective fell. A failed step reports v2's version, `FAILED` and
+`error`, exactly as v1's does.
+
+**Audit and review.** The step's claim carries its version and per-contest
+objective; the audit recomputes the objective from the assignment bytes with the
+claim's labels, and a disagreement is `CONTEST_ASSIGNMENT_STATS_MISMATCH` (`P`), as
+for the readings. The review block reads the version from the step's record. For
+v2 it recomputes the objective before (the selection's order) and after (the
+delivered rosters), reconciles both, and adds `objective_order`,
+`reading_definition`, `objective_before`, `objective_after`,
+`single_entry_rows_move`, `single_entry_contests_moved` (recomputed: each
+one-entry contest whose delivered lineup is not the selection order's, reconciled
+with the step's list) and, per contest, `lost_key_people`,
+`same_key_person_pairs`, `same_thesis_pairs` and `spread` with their `_before`
+values. The HTML and the `Exposure` sheet show the objective's totals and, per
+contest, the three counts before and after (the spread only in total), and call the
+score columns v1's reading. A v1 block renders as before.
+
+**Artifact.** C3's `selection/contest_assignment.json` for a v2 step is
+`nfl_contest_assignment_step_v2`: `schema_version`, then the v2 report as listed
+above, without `seconds`; canonical JSON (sorted keys, compact separators, one
+trailing newline), hashed, bound and read by C3 only. `nfl_contest_assignment_step_v1`
+is unchanged and stays readable.
+
+**Acceptance** (`tests/test_contest_assignment_v2_files.py`). On PHI@CHI v1 and v4
+and MIN@NO v10, v2 reaches an independent exact floor on the first three levels,
+computed from the file alone (every set of multi-entry contests, largest first,
+checked for whether all can be clean at once, then a min-cost flow for the fewest
+lost and paired key people), itself checked against brute force over every
+arrangement. PHI@CHI: no contest repeats a Captain. MIN@NO: only the 20-entry
+contest does (20 entries, 9 Captains), all 9 Captains in it and none more than
+three times, where the committed file held 8 and Reichard four times.
+
+Does not establish: v1's list, and that a placement with fewer repeated Captains
+wins more often; it is a within-contest spread, not a probability.
 
 ## Contest facts, nfl_contest_facts_v1 (Session 23d)
 

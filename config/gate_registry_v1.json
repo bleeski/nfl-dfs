@@ -701,6 +701,7 @@
     "CONTEST_ASSIGNMENT_STEP_FAILED": "contest_assignment",
     "CONTEST_ASSIGNMENT_UNKNOWN_DK_ID": "contest_assignment",
     "CONTEST_ASSIGNMENT_UNKNOWN_MODE": "contest_assignment",
+    "CONTEST_ASSIGNMENT_UNKNOWN_VERSION": "contest_assignment",
     "CONTEST_FACTS_CONTEST_ID_DUPLICATE": "contest_facts",
     "CONTEST_FACTS_CONTEST_ID_INVALID": "contest_facts",
     "CONTEST_FACTS_ENTRY_FEE_INVALID": "contest_facts",
