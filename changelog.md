@@ -4,6 +4,171 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-16: Session 76 -- contest placement for first place (`within_contest_diversity_v2`; the script split to 76b)
+
+Branch `claude/s76-contest-placement`, claimed at `75cac8e` on `83f0d64` (PR #151, the SEA@DEN record's merge). Before Ben
+saw the plan, a fresh-context fable agent was briefed to refute eleven claims. Ben then approved it before any change,
+including its test-edit exception (D0). A reviewer read the diff.
+
+The plan split the card at its seam before any code: the advisor sized the whole card at 1,300 to 1,600 lines. This session
+lands the engine, its readers, an exact floor and the acceptance through the module. The offline script and the hand-pass
+procedure are Session 76b. The implementation commit, `801bb78`, came to 1,454 changed lines (1,396 inserted, 58
+deleted): source 509, tests 824, docs and config 121. That is above the plan's 1,100 estimate and under its 1,500 stop.
+
+The step still moves only which Entry ID holds which selected lineup. Every path stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- **`within_contest_diversity_v2`** (`src/nfl_dfs/contest_assignment.py`; `docs/DATA_CONTRACTS.md` § Contest assignment,
+  within_contest_diversity_v2). Placements are compared on a sum over contests of two or more entries, in this order:
+  - whether the contest holds a repeated Captain (Classic: QB), 0 or 1, so every contest counts once;
+  - the Captains or QBs repeated inside it (its entries minus its distinct key people);
+  - its same-Captain pairs;
+  - its same-thesis pairs;
+  - its spread: worst plus mean of shared people squared, +6 for the same Classic stack team.
+
+  The four counts compare exactly; `EPSILON` reaches only the spread.
+- **What v2 does differently from v1.** A one-entry contest's row may move. No contest is held to its solver-order score:
+  v2 guarantees only that its total never rises above the solver's order. The readings (`contests_*`, `total_score_*`)
+  keep v1's definitions, so every audit and Session 75's table read a v2 run unchanged; v1's score of a v2 placement can
+  rise.
+- **Where v2 runs, and what reports it.** `prior_review` applies v2 on every exit (Showdown policy and sequential, Classic
+  C1, C2 and C3). The baseline and the module default stay v1. v2's objective reaches:
+  - the step report: `objective_order`, `objective_before`, `objective_after`, `contest_objective_*`,
+    `single_entry_contests_moved`;
+  - the claim and the policy audit, which recomputes the objective from the assignment bytes;
+  - both readable reviews and the `Exposure` sheet, which show its columns and call v1's score a reading;
+  - C3's step artifact, `nfl_contest_assignment_step_v2`. The v1 artifact stays readable.
+- **`CONTEST_ASSIGNMENT_UNKNOWN_VERSION`** is in the gate registry (`contest_assignment` family) and the registry hash is
+  re-pinned, as for every new code.
+- **New tests.**
+  - `tests/test_contest_assignment.py` has 31 v2 cases (45 before, 76 now). Each level is pinned on a fixture built on a
+    tie, and the report and review key sets are pinned for both versions.
+  - New `tests/test_contest_assignment_v2_files.py` (57). Its independent exact floor is every largest set of contests that
+    can all be clean, then a min-cost flow for the fewest repeats; it is checked against brute force over every
+    arrangement on 40 instances. The file runs it on the committed PHI@CHI v1 and v4 and MIN@NO v10.
+  - New `tests/test_contest_assignment_v2_run_slate.py` (4): a real policy run whose bytes bear the objective out, the
+    audit naming v2, and both versions' HTML and workbook rows.
+
+**The choice the card asked for: lexicographic, not re-weighted.** It is the card's "last resort" literally and needs no
+tuning constant. The planning session's first comparison mixed three decisions; the advisor caught it, and the runs were
+repeated on equal terms (one-entry rows movable, no per-contest guard, the same restarts). Each cell gives contests with a
+repeat, Captains repeated, same-Captain pairs, same-thesis pairs, spread:
+
+| File | Before | Re-weighted v1 (1000/100) | v2 | Exact floor |
+|---|---|---|---|---|
+| PHI@CHI v4, no labels | 0, 0, 0, 0, 109.57 | 0, 0, 0, 0, 68.48 | 0, 0, 0, 0, 69.29 | 0, 0, 0 |
+| PHI@CHI v4, labels | 0, 0, 0, 5, 109.57 | 0, 0, 0, 5, 100.95 | 0, 0, 0, 5, 74.86 | 0, 0, 0 |
+| MIN@NO v10, no labels | 1, 12, 18, 0, 36.91 | 1, 11, 14, 0, 34.71 | 1, 11, 14, 0, 34.95 | 1, 11, 14 |
+| MIN@NO v10, labels | 1, 12, 18, 18, 36.91 | 1, 11, 15, 16, 44.48 | 1, 11, 14, 16, 44.02 | 1, 11, 14 |
+
+The registered v1, with the same labels, moves nothing on either file: its per-contest guard holds every contest at its
+committed score.
+
+**Acceptance.**
+- **The exact floor.** On PHI@CHI v1 and v4 and MIN@NO v10, v2 equals the floor on the three key-person levels, at the
+  entry-sized restarts (57 on MIN@NO) and at 300.
+  - PHI@CHI: no contest repeats a Captain. v1's file repeated one in all three seven-entry contests.
+  - MIN@NO: only the 20-entry contest repeats, and it must (20 entries, 9 Captains). It now holds all nine, none more than
+    three times; the committed file held eight, Reichard four times.
+- **The lineup set, exposure and the washout proxies** (max exposure, the top three's union, mean pairwise overlap,
+  distinct people) are identical before and after.
+- **Replay** is byte-identical, and the version is recorded in the step report, the claim, the audit, both reviews and the
+  C3 artifact.
+- **The v1 and v2 readings print side by side** in the test's output (`-s`), both read with the record's labels. On
+  MIN@NO's 20-entry contest: v1 8 Captains, repeated 4+3+3+3+2+2+2, worst pair 4, mean 2.247; v2 9 Captains, repeated
+  3+3+3+2+2+2+2+2, worst pair 5, mean 2.247.
+- **Labels.** They come through the records that last moved lineups between Entry IDs. MIN@NO's `theses_by_entry.json`
+  labels the file the v7 contest pass read: through its mapping, all 33 Captains fall in their thesis's Captain set; by
+  Entry ID alone, 15 do not. PHI@CHI's `theses_v3.json` follows `assignment_v4.json`'s mapping; 9 of its rows were changed
+  by the Keenum swap afterwards, and their labels assume the swap kept the thesis.
+
+**Session 67's flag.** The recommendation now sits beside it, and the flag stays for Ben. v2 answers by order, not weight:
+a same-thesis pair ranks above any shared-people cost and below only a repeated Captain. With labels on MIN@NO, same-thesis
+pairs fell from 22 to 16 for a spread of 34.95 to 44.02. Recommendation: keep v2's order.
+
+**Changed (D0, named before each edit, as `.claude/rules/tests.md` asks).** These six assertion lines pinned v1 on the run
+path, which the card moves to v2. Why: the card says `prior_review` takes v2. Each now asserts v2, and the old guarantee is
+kept elsewhere, as listed.
+- `tests/test_contest_assignment_run_slate.py:144` (the step's version) and `:424` (the workbook's version). The baseline
+  still runs v1, asserted by `tests/test_contest_assignment_baseline.py:93`. A scratch comparison showed v1 placements and
+  reports byte-identical to `origin/main`'s module on 480 random instances (pools, fixed rows, one-entry contests, custom
+  weights, the guard off).
+- `tests/test_contest_assignment_classic.py:141` (C1's version), `:222` (the workbook's version) and `:275` (the C3
+  artifact schema, now `nfl_contest_assignment_step_v2`; the v1 schema stays in `classic_review`'s canonical set).
+- `tests/test_contest_assignment_classic.py:212` held each contest's v1 score at or below the solver order's, and it
+  compared those scores as text. v2 has no per-contest guard, so the line now holds the review's recomputed v2 objective
+  to the solver order's and to the step's. v1's rule stays pinned in `tests/test_contest_assignment.py` and runs on the
+  baseline.
+- `tests/test_contest_assignment_run_slate.py:156` and `:165` (v1's total and per-contest score) still hold under v2 on
+  their fixture and are unedited.
+- `docs/RUNBOOK.md`: the paragraph that named v1 on every exit.
+
+**Found.**
+- **A replay test that depends on the clock.** `test_candidate_bank_and_assignment_replay_are_byte_deterministic`
+  builds the Classic candidate bank twice under the policy's wall-clock search limits and compares the bytes. On a
+  loaded host one build stops at a different point, so the test fails without any change to its code. It is a finding,
+  not fixed here: the code is outside this card.
+- **Not done here.** The baseline's step stays v1: it is not on the card, and R28's first file runs one climb with no
+  restarts. A row can move it if Ben wants v2 there. The offline script still runs v1 until Session 76b.
+- **The card's file list missed four readers.** `portfolio_enforcement.py` printed the v1 constant. `classic_review.py`
+  would have refused a v2 artifact as not canonical. `readable_review.py` and `workbook.py` described v1's score as the
+  step's. All four are in this diff.
+
+**Advisor.** A fresh-context fable agent was briefed to refute eleven claims.
+- **Taken.**
+  - The first comparison was confounded; it was redone on equal terms.
+  - (b) counts lost Captains, readable from Session 75's table, with pairs as a tiebreak.
+  - One-entry rows move by a named parameter, and the report lists the contests whose lineup changed.
+  - The reader list; EPSILON on the spread alone; restarts pinned in the acceptance.
+  - The floor takes the minimum over every largest clean set.
+  - The labels go through the mappings.
+  - The split.
+- **Not taken.** A weaker per-contest guard (a contest clean in the solver's order stays clean). That order is a
+  prior-sorted zip onto template rows, so which contest starts clean is an accident of row order.
+
+**Review.** A fresh-context reviewer read the diff and found no blocker. It traced every v1 branch against the old code,
+and found no run-path label that calls a v2 run v1.
+- **Fixed: the wording overclaimed.** The review, the workbook, the contract, the runbook and the docstring said a
+  repeated Captain is "taken only when no arrangement avoids it". That is the objective's order, not a property of a
+  time-limited climb. The reviewer's check on 300 random instances, using this session's own floor, found one level-(a)
+  miss at the entry-sized restarts (and 29 at 0 restarts). Each now says v2 ranks a repeat as the costliest difference
+  and that the search avoids one wherever it finds an arrangement without it.
+- **Fixed: v2 was slow.** It ran 4x to 7x slower than v1 at the same restarts, which brings `timed_out` (and a
+  clock-dependent placement) closer on a short window. Its score now counts keys and theses from one pair matrix and a
+  set, and folds the four counts into one exact integer. Measured with a suite running on the host, v2 runs about 2.5x
+  v1: PHI@CHI 3.8 s against 1.5 s; MIN@NO 1.7 s against 0.6 s. Every file result is unchanged, and v1 stays identical on
+  the 480 instances. The contract states the ratio.
+- **Fixed: the one-entry list was copied.** The review now recomputes `single_entry_contests_moved` from the rosters
+  and reconciles it, where it had copied it from the record; a lying list is `CONTEST_ASSIGNMENT_STATS_MISMATCH` (test
+  added).
+- **Fixed: tests and the contract.** The brute-force generator now places up to two filled rows in a contest (16 of the
+  40 instances repeat a key person there). The v1 workbook rows have a test. The contract no longer claims a per-contest
+  spread column.
+- **Left to Session 76b's card.** Two combinations only the script can reach: v1 with one-entry movement, and a v2
+  stack-weight override that the audit would recompute with the registered weight.
+- **Left as findings.** The committed files do not separate v2 from v1 at level (a): PHI@CHI v1 reaches 0 under both,
+  and v4 is clean already. The synthetic overlap-saving test is what pins it; MIN@NO separates them at the levels below.
+  `tests/test_contest_assignment_run_slate.py:157` and `:166`, and `tests/test_contest_assignment_theses.py:338`, still
+  assert v1's total and per-contest score on what is now a v2 run. v2 does not promise those, so they hold only while
+  their fixtures allow; they were not edited.
+
+**Verification.**
+- **Red first.** `AttributeError: module 'nfl_dfs.contest_assignment' has no attribute 'CONTEST_ASSIGNMENT_VERSION_V1'`.
+- **Focused.** `tests/test_contest_assignment.py` 76 passed in 2.68s before the review's fixes. After them, the three
+  changed or new contest-assignment test files together: `137 passed in 49.14s`.
+- **The run-path neighbors.** First under v2: `8 failed, 132 passed in 413.12s`, every failure a v1 pin listed above.
+  After the six edits, the two files: `38 passed in 188.71s`.
+- **Full suite:** `1 failed, 4024 passed, 2 skipped in 2684.10s (0:44:44)` (Windows, on the final source, with two other repositories' suites running on the host). The one
+  failure is `tests/test_classic_portfolio_c2.py::test_candidate_bank_and_assignment_replay_are_byte_deterministic`.
+  Both of its candidate banks ended `LIMIT_REACHED` and differed at byte 26,285: the bank's wall-clock budget ran out
+  at different points under load. That code is not in this diff (`classic_portfolio.py` is untouched, and the bank
+  build never calls the contest step), the test passed in the first full run of this branch, and it passes 3 of 3 alone
+  (`1 passed in 5.24s`, `5.56s`, `4.97s`). The run before the registry entry and the review's fixes:
+  `1 failed, 4023 passed, 2 skipped in 2372.72s (0:39:32)`, the one failure the then-unregistered code. CI's clean
+  runners are the gate.
+- **Gate registry.** The scan of `src/nfl_dfs` before and after differs by one code, `CONTEST_ASSIGNMENT_UNKNOWN_VERSION`,
+  which is now registered.
+
 ### 2026-10-15: SEA@DEN Showdown (Thursday night, 28 entries; a lineup run, not a roadmap session)
 
 Salaries `ae4bdec3d698b23901b2b27d582105248c2940c30c1f4a227eecb4fec5692c38`, entries

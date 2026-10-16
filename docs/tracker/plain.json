@@ -799,7 +799,15 @@
       "title": "Place lineups so each contest gets different winners",
       "what": "Changes how lineups are dealt out to contests so that no contest gets the same captain or quarterback stack twice when another arrangement avoids it.",
       "why": "Dealing lineups out to contests is the one step that can help each contest's first-place shot without changing how often any player appears overall.",
-      "matters": "More distinct ways to win in every contest, at no cost to the no-washout goal."
+      "matters": "More distinct ways to win in every contest, at no cost to the no-washout goal.",
+      "note": "Built on 2026-10-16 for every run: inside a contest the engine now treats a repeated captain or quarterback as the worst thing to allow, then a repeated game story, then shared players. On the Saints and Vikings night it would have put all nine captains in the 20-entry contest, none more than three times, where the file had eight and one kicker four times. The hand-run version of the same step moved to Session 76b."
+    },
+    "S76b": {
+      "goal": "portfolio",
+      "title": "Use the new contest placement on hand-built files too",
+      "what": "Brings the hand-run placement tool up to the new rule, so a file finished by hand gets the same treatment as one the engine builds, and puts the placement step last in the hand checklist.",
+      "why": "It was split off Session 76 to keep each change a reviewable size. Most slate-night files are finished by hand, so the old rule still decides their contests until this lands.",
+      "matters": "The contest-by-contest table you read before a file goes out then shows the final placement, with each lineup's game story still attached."
     },
     "S77": {
       "goal": "measure",
