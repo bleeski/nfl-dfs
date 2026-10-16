@@ -139,6 +139,10 @@ NOT_BOUND = [
                  id="foreign"),
     pytest.param({"entries": {E0: {"thesis": "T1", "roster": sd.ids(LEGAL)},
                               E1: {"thesis": "T2", "roster": sd.ids(LEGAL)}}}, "THESES_MAP_REPEATED_LINEUP", id="repeat"),
+    # The right salary file and Entry IDs, but written for other lineups (the Session 76b review): every row would have
+    # fallen back to its Entry ID's label.
+    pytest.param({"lineups": {0: (LEGAL_EDITED, "T1"), 1: (OTHER_EDITED, "T2")}}, "THESES_MAP_MATCHES_NO_LINEUP",
+                 id="no_match"),
 ]
 
 

@@ -1,11 +1,4 @@
 {
-  "claims": [
-    {
-      "agent": "4c290866-d761-451a-9cb1-1edd122b2bdb",
-      "branch": "claude/s76b-offline-contest-pass",
-      "chunk": "S76b",
-      "claimed_at": "2026-10-16T17:55:41Z"
-    }
-  ],
+  "claims": [],
   "schema_version": "nfl_chunk_claims_v1"
 }

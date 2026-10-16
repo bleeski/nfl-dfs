@@ -4452,6 +4452,9 @@ records (PHI@CHI `assignment_v2` to `v4`) are never replayed.
 - `--restarts`: under v1 300 by default (the committed records' count); under v2
   the run path's entry-sized count (`restarts_for`), so the script places a file as
   `prior_review` would. An explicit value wins.
+- Outputs (`--out`, `--record`, `--theses-out`) are new, distinct paths in folders
+  that exist (`OUTPUT_EXISTS`, `OUTPUT_PATHS_NOT_DISTINCT`, `OUTPUT_DIR_MISSING`),
+  checked before anything is written.
 
 **Audit.** The module's audit recomputes the step's claims from the bytes about to
 be written. Under v2 it always compares the readings (v2's readings use the
@@ -4469,7 +4472,7 @@ v1 report keeps exactly its keys, and no `run-slate` path passes either.
 
 **The record, `nfl_contest_diversification_v3`** (v2 only; written as UTF-8 bytes with
 LF endings, sorted keys, one-space indent and one trailing newline, so every host
-writes the same bytes):
+writes the same bytes but for `contest_assignment.seconds`, the search's clock):
 - `schema_version`, `mode`, and `does_not_establish` (the module's list plus
   `LINEUP_LEGALITY`);
 - `contest_assignment`: the module's v2 report (§ Contest assignment,
@@ -4512,9 +4515,11 @@ before `first_place_coverage` and present only with the flag, holds `map_version
 `THESES_MAP_UNREADABLE`, `THESES_MAP_SCHEMA`, `THESES_MAP_NOT_SHOWDOWN`,
 `THESES_MAP_SALARY_MISMATCH` (its `salary_sha256` is not the `--salaries` file's),
 `THESES_MAP_ENTRY_MALFORMED`, `THESES_MAP_ENTRY_IDS_NOT_IN_TEMPLATE`,
-`THESES_MAP_REPEATED_LINEUP`, `THESES_MAP_TEMPLATE_UNREADABLE`,
+`THESES_MAP_REPEATED_LINEUP`, `THESES_MAP_MATCHES_NO_LINEUP` (no export row holds a
+lineup the map names: it was written for another file), `THESES_MAP_TEMPLATE_UNREADABLE`,
 `THESES_MAP_EXPORT_UNREADABLE` or `THESES_MAP_NOT_COMPUTED`. The reading then takes
-the claim's labels when the thesis check ran, else none. As with `--contest-facts`,
+the claim's labels when the thesis check ran, else none; those are read by Entry ID,
+so they are right only on a file whose lineups did not move. As with `--contest-facts`,
 the map feeds a reading only: no other key, no verdict and no exit code moves with
 it. Thesis adherence after the pass needs no map, because the pass moves whole
 lineups; `docs/claude/working.md` runs every roster edit before it.

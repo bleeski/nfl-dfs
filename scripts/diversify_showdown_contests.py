@@ -292,6 +292,8 @@ def main(argv=None) -> int:
         for target in targets:
             if target.exists():
                 raise DiversifyError(f"OUTPUT_EXISTS:{target}")
+            if not target.parent.is_dir():
+                raise DiversifyError(f"OUTPUT_DIR_MISSING:{target}")
         if len({target.resolve() for target in targets}) != len(targets):
             raise DiversifyError("OUTPUT_PATHS_NOT_DISTINCT")
         if args.out.resolve() in {args.template.resolve(), args.entries.resolve(), args.salaries.resolve()}:

@@ -539,10 +539,11 @@ only a contest-targeted placement that moves whole lineups comes after (`docs/cl
 - **`--version within_contest_diversity_v1`** runs the old score at 300 restarts and writes the old record; every committed v1
   record replays under it. `--captain-penalty` and `--thesis-penalty` are v1's: under v2 they are refused by name
   (`V1_PENALTY_FLAG_UNDER_V2`). `--stack-penalty` applies to both, and the record marks the weights unregistered.
-- Then QA the output, with `--theses <the map>` for the first-place table after the pass (below). Not `--policy --claim`: the
-  claim names the thesis of the Entry IDs the run filled, so after the pass it refuses a lineup moved to an Entry ID of another
-  thesis (`THESIS_CLAIM_DISAGREES_WITH_ROWS`, exit 1). Run the claim's adherence check on the file before the pass; the pass
-  moves whole lineups, so adherence cannot change.
+- Then QA the output, with `--theses <the map>` for the first-place table after the pass (below). Never `--policy --claim`
+  after the pass: the claim names each Entry ID's thesis, so it refuses an unedited lineup moved to an Entry ID of another
+  thesis (`THESIS_CLAIM_DISAGREES_WITH_ROWS`, exit 1), and it holds an edited lineup that moved to its new Entry ID's thesis,
+  a false `THESIS_BROKEN` or `follows`. Run the claim's adherence check on the file before the pass; the pass moves whole
+  lineups, so adherence cannot change.
 
 ## First place, contest by contest (both QA scripts)
 

@@ -468,6 +468,21 @@ def test_a_theses_input_that_is_not_an_entry_map_is_refused_by_name(tmp_path, ca
     assert not out.exists() and not record.exists()
 
 
+@pytest.mark.parametrize("target", ["record", "theses_out"], ids=["record", "map"])
+def test_an_output_folder_that_does_not_exist_is_refused_before_anything_is_written(tmp_path, capsys, target):
+    # Found by the Session 76b review: a missing folder for the second or third file used to leave the first written.
+    theses = tmp_path / "theses.json"
+    theses.write_text(json.dumps({entry_id: "A" for entry_id in LINEUPS}), encoding="utf-8")
+    extra = {"theses": theses, "theses_out": tmp_path / "map.json", target: tmp_path / "no_such_folder" / "x.json"}
+    module = _load()
+    argv = ["--salaries", str(_salaries(tmp_path)), "--template", str(_template(tmp_path, filled=False)),
+            "--entries", str(_template(tmp_path, filled=True)), "--out", str(tmp_path / "out.csv"), "--restarts", "1"]
+    for key, value in {"record": tmp_path / "record.json", **extra}.items():
+        argv += [f"--{key.replace('_', '-')}", str(value)]
+    assert module.main(argv) == 1 and "OUTPUT_DIR_MISSING" in capsys.readouterr().err
+    assert not any((tmp_path / name).exists() for name in ("out.csv", "record.json", "map.json"))
+
+
 def test_a_changed_prefilled_row_writes_no_file_record_or_map(tmp_path, capsys):
     module = _load()
     salaries = _salaries(tmp_path)
@@ -511,6 +526,11 @@ CARD_FILES = {
     "min-no-v10": (MIN / "input" / "DKSalaries_169.csv", MIN / "input" / "DKEntries_141.csv",
                    MIN / "construction" / "DK_REVIEW_ENTRY_min-no-sd_final_v10.csv",
                    MIN / "construction" / "contest_diversify_record_v7.json", MIN / "construction" / "theses_by_entry.json"),
+}
+# The relabelled thesis map each card file's v2 pass writes, measured 2026-10-16 on Windows.
+MAP_SHA256 = {
+    "phi-chi-v4": "d55b73179889e932af601e3784e0377fc008282cd3a66581434e25670b10a3fd",
+    "min-no-v10": "d78aa166293bba1a9597416de00ebbbe9322334d57cf16f543a0321c2f12066d",
 }
 # Every committed record written by the module's v1 (`nfl_contest_diversification_v2`): slate, template, salaries, the
 # pass's input, its thesis map or None, the record, the pass's output. PHI@CHI's `assignment_v2..v4.json` came from the
@@ -618,9 +638,11 @@ def test_v2_writes_the_module_s_assignment_byte_for_byte_and_the_qa_reads_the_re
     held = {r.entry_id: r.roster for r in rows}
     assert all(held[source] == tuple(expected.assignments.get(entry, held[entry]))
                for entry, source in record["mapping_entry_to_source_entry"].items())
-    # Replay: the same inputs give the same file, the same map and the same record but for its clock.
+    # Replay: the same inputs give the same file, the same map and the same record but for its clock. The map's hash is
+    # pinned, so the Linux and Windows CI jobs prove it is the same bytes on both hosts (it is written as LF bytes).
     assert (second / "out.csv").read_bytes() == (first / "out.csv").read_bytes()
     assert (second / "map.json").read_bytes() == (first / "map.json").read_bytes()
+    assert _sha((first / "map.json").read_bytes()) == MAP_SHA256[name]
     assert _without_seconds(_record(second / "record.json")) == _without_seconds(record)
     # The after-table: the QA reads the relabelled theses, every row labelled, and the reading is the module's own
     # placement read with each lineup's label.

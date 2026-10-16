@@ -60,9 +60,9 @@ lineup (Captain and sorted FLEX), so a lineup moved whole after the pass keeps i
 roster changed takes its own Entry ID's label, unless that lineup now sits in another row, and is
 named under `roster_changed`. `first_place_thesis_map`, before `first_place_coverage` and only with
 the flag, says how the labels bound. A map that does not bind (another schema or salary file, an
-Entry ID outside the template, a repeated lineup, a malformed entry) is `NOT_BOUND` with its code,
-and the reading takes the claim's labels if the thesis check ran, else none. A reading: no other key,
-no verdict and no exit code moves with it.
+Entry ID outside the template, a repeated lineup, a malformed entry, no export lineup it was written
+for) is `NOT_BOUND` with its code, and the reading takes the claim's labels if the thesis check ran,
+else none. A reading: no other key, no verdict and no exit code moves with it.
 """
 from __future__ import annotations
 import argparse, csv, collections, json, re, sys
@@ -305,6 +305,8 @@ def _bind_thesis_map(a):
             changed.append(eid)
         else:
             unlabelled.append(eid)
+    if held and not held & set(by_lineup):
+        raise _MapNotBound("THESES_MAP_MATCHES_NO_LINEUP", "no export row holds a lineup the map was written for")
     with open(a.export, "rb") as fh:
         same_file = hashlib.sha256(fh.read()).hexdigest() == doc.get("entries_sha256")
     return labels, {"same_file_as_written": same_file, "labelled_rows": len(labels), "roster_changed": changed,
