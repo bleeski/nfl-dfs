@@ -20,7 +20,7 @@ from typing import Callable, Mapping, Sequence
 import highspy
 import numpy as np
 
-from .contest_assignment import CONTEST_ASSIGNMENT_VERSION, Claim as ContestAssignmentClaim
+from .contest_assignment import Claim as ContestAssignmentClaim
 from .contracts import EngineMode, SlateContract
 from .dk import parse_entry_bytes
 from .entry_groups import prefilled_cell_id
@@ -1889,7 +1889,7 @@ def contest_assignment_reading(
     problems.extend(_audit_problem(item.split(":", 1)[0], item.split(":", 1)[1] if ":" in item else "")
                     for item in blocking)
     return {
-        "contest_assignment_version": CONTEST_ASSIGNMENT_VERSION,
+        "contest_assignment_version": claim.version,
         "status": "FAIL" if blocking else ("STATS_MISMATCH" if found else "PASS"),
         "findings": list(found),
         "contests": recomputed,

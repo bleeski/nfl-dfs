@@ -2695,9 +2695,10 @@ def run_prior_review(
     # audit and review below sees this assignment. Classic pools are the policy's
     # rows (`bound`), the rows C1 fills beside it (`fill`), or every row (`all`).
     # It never raises: a failure leaves the solver's order and names it (R28).
-    # Session 67: a portfolio of theses labels each roster with the thesis it fills, so the registered same-thesis
-    # term (3 a pair) counts against two lineups of one thesis sharing a contest; every other run has no label and is
-    # placed as before.
+    # Session 67: a portfolio of theses labels each roster with the thesis it fills, so the same-thesis term counts
+    # against two lineups of one thesis sharing a contest; every other run has no label.
+    # Session 76 (R38): `within_contest_diversity_v2` on every exit. Inside a contest a repeated Captain or QB ranks
+    # as the costliest difference, then a repeated thesis, then shared people. The baseline keeps v1.
     contest_step = contest_assignment.apply_step(
         mode=(
             contest_assignment.MODE_SHOWDOWN
@@ -2710,6 +2711,7 @@ def run_prior_review(
         bound_ids=bound_ids,
         thesis_by_roster=_thesis_by_roster(selection, slate, portfolio_policy, assignments),
         time_limit_seconds=_contest_assignment_allowance(budget),
+        version=contest_assignment.CONTEST_ASSIGNMENT_VERSION_V2,
     )
     assignments = contest_step.assignments
     contest_claim = contest_step.claim
@@ -2990,7 +2992,7 @@ def run_prior_review(
         # its version, and `seconds` is wall-clock, so it stays out of the bytes).
         step_path = selection_dir / CONTEST_ASSIGNMENT_ARTIFACT
         hashes["contest_assignment"] = _write_canonical_json(step_path, {
-            "schema_version": contest_assignment.CONTEST_ASSIGNMENT_ARTIFACT_VERSION,
+            "schema_version": contest_assignment.ARTIFACT_VERSION_FOR[contest_step.report["contest_assignment_version"]],
             **{key: value for key, value in contest_step.report.items() if key != "seconds"},
         })
         artifacts["contest_assignment"] = str(step_path)

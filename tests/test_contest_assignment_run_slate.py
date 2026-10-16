@@ -141,7 +141,8 @@ def test_the_diversified_assignment_reaches_the_file_the_audit_and_the_review(tm
     delivered = Path(report["latest_deliverable"]["path"])
 
     step = report["prior_review_reports"]["contest_assignment"]
-    assert step["contest_assignment_version"] == "within_contest_diversity_v1"
+    # Session 76: the run path takes v2 (v1's pin moved here; the baseline keeps v1, test_contest_assignment_baseline).
+    assert step["contest_assignment_version"] == "within_contest_diversity_v2"
     assert step["status"] == "IMPROVED" and step["moved_rows"] > 0
     assert "PAYOUT_OR_CONTEST_WORTH" in step["does_not_establish"]
 
@@ -421,7 +422,8 @@ def test_the_contest_block_is_on_the_workbooks_exposure_sheet(tmp_path, monkeypa
     assert code == 0, report["blockers"]
     sheet = load_workbook(report["review_workbook"])["Exposure"]
     cells = [str(cell.value) for row in sheet.iter_rows() for cell in row if cell.value is not None]
-    assert any("within_contest_diversity_v1" in value for value in cells)
+    # Session 76: the run path takes v2 (v1's pin moved here).
+    assert any("within_contest_diversity_v2" in value for value in cells)
     assert "Reported statistics match the recomputation" in cells
     assert {"111", "222"} <= set(cells)
 

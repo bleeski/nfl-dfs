@@ -537,15 +537,23 @@ only candidates carried capped stars. Do not run them again; a slate that seems 
 need them is a defect to name in the handoff.
 
 When several rows share a contest, `run-slate` now diversifies inside each
-contest itself (Sessions 50 and 50c, `within_contest_diversity_v1`, every exit:
-Showdown, Classic C1, C2 and C3, and the baseline): it
+contest itself (Sessions 50 and 50c): it
 keeps every lineup, reassigns them to Entry IDs (never moving a row the
 template already filled) and reports the per-contest block in the readable
 review (C1 has none: its block is in the selection report and the run result).
+Since Session 76 every `prior_review` exit (Showdown, Classic C1, C2 and C3)
+runs `within_contest_diversity_v2` (R38: first place in each contest): inside a
+contest a repeated Captain (Classic: QB) ranks as the costliest difference, then
+a repeated thesis, then shared people, and a one-entry contest's row may move to
+make room. Its search avoids a repeat wherever it finds an arrangement without
+one; it does not prove that none exists. On MIN@NO v10 it put all nine Captains in
+the 20-entry contest with none more than three times (the committed file held
+eight, Reichard four times). The baseline keeps `within_contest_diversity_v1`.
 A multi-contest baseline is therefore no longer in salary order row by row, only
 as a set. A file built outside `run-slate` still needs
 `scripts/diversify_showdown_contests.py` on the finished file before the handoff
-(Showdown or Classic; it is a thin wrapper over the same module). Within each contest a pair costs shared people
+(Showdown or Classic; it is a thin wrapper over the same module, still on v1
+until Session 76b). Under v1, within each contest a pair costs shared people
 squared plus a penalty for the same Captain (Classic: QB), the same Classic
 stack team and the same thesis, and a contest scores its worst pair plus its
 mean pair. Then run `qa_showdown_portfolio.py` on its output. On PHI@CHI the

@@ -138,7 +138,8 @@ def test_c1_sequential_diversifies_and_the_block_lives_in_the_selection_report(t
     assert delivered.name.startswith("DK_REVIEW_ENTRY_C1_")
 
     step = report["prior_review_reports"]["contest_assignment"]
-    assert step["contest_assignment_version"] == "within_contest_diversity_v1"
+    # Session 76: the run path takes v2 (v1's pin moved here; the baseline keeps v1, test_contest_assignment_baseline).
+    assert step["contest_assignment_version"] == "within_contest_diversity_v2"
     assert step["status"] == "IMPROVED" and step["moved_rows"] > 0 and step["pools"] == {"all": 6}
     assert "PAYOUT_OR_CONTEST_WORTH" in step["does_not_establish"]
 
@@ -209,7 +210,12 @@ def test_c2_policy_and_c3_diversify_and_the_review_reconciles(tmp_path, monkeypa
     assert block["reported_statistics_match"] is True and block["status"] == "IMPROVED"
     assert block["basis"] == ca.REVIEW_BASIS and block["key_person"] == "QUARTERBACK"
     assert {row["contest_id"] for row in block["contests"]} == {"111", "222", "333"}
-    assert all(row["score_after"] <= row["score_before"] for row in block["contests"])
+    # Session 76: v1 held every contest's score at or below the solver order's (this line compared those scores, as
+    # text); v2 has no per-contest guard, so the review's own recomputed objective is held to the solver order's instead.
+    # v1's rule is pinned in tests/test_contest_assignment.py and stays on the baseline.
+    objective = lambda total: (*(total[name] for name in ca.OBJECTIVE_ORDER[:4]), float(total["spread"]))  # noqa: E731
+    assert not ca.objective_improves(objective(block["objective_before"]), objective(block["objective_after"]))
+    assert block["objective_after"] == step["objective_after"] and block["objective_before"] == step["objective_before"]
     assert block["total_score_after"] == step["total_score_after"]
     assert readable["reconciliation"]["status"] == "PASS"
     html = Path(report["prior_review_artifacts"]["readable_review_html"]).read_text("utf-8")
@@ -219,7 +225,8 @@ def test_c2_policy_and_c3_diversify_and_the_review_reconciles(tmp_path, monkeypa
 
     sheet = load_workbook(report["review_workbook"])["Exposure"]
     values = [str(cell.value) for row in sheet.iter_rows() for cell in row if cell.value is not None]
-    assert any("within_contest_diversity_v1" in value for value in values)
+    # Session 76: the run path takes v2 (v1's pin moved here).
+    assert any("within_contest_diversity_v2" in value for value in values)
     assert {"111", "222", "333"} <= set(values)
 
 
@@ -272,7 +279,8 @@ def test_the_same_inputs_give_the_same_delivered_bytes(tmp_path, monkeypatch, po
     assert Path(first["latest_deliverable"]["path"]).read_bytes() == Path(
         second["latest_deliverable"]["path"]).read_bytes()
     record = json.loads(Path(first["prior_review_artifacts"]["contest_assignment"]).read_text("utf-8"))
-    assert record["schema_version"] == "nfl_contest_assignment_step_v1" and "seconds" not in record
+    # Session 76: a v2 step writes the v2 artifact (v1's pin moved here; v1 stays readable, classic_review).
+    assert record["schema_version"] == "nfl_contest_assignment_step_v2" and "seconds" not in record
 
 
 FIVE_ROWS = {ENTRIES[0]: "111", ENTRIES[1]: "111", ENTRIES[2]: "222", ENTRIES[3]: "222", ENTRIES[4]: "222"}
