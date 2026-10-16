@@ -382,6 +382,7 @@ class AssignmentResult:
     objective_before: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
     objective_after: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
     single_entry_rows_move: bool = False
+    no_regression: bool = True
 
     def as_report(self) -> dict[str, object]:
         if self.version == CONTEST_ASSIGNMENT_VERSION_V2:
@@ -408,7 +409,7 @@ class AssignmentResult:
                 "seed": self.seed,
                 "seconds": round(self.seconds, 3),
             }
-        return {
+        report = {
             "contest_assignment_version": CONTEST_ASSIGNMENT_VERSION,
             "does_not_establish": list(DOES_NOT_ESTABLISH),
             "score_definition": CONTEST_SCORE_DEFINITION,
@@ -428,6 +429,13 @@ class AssignmentResult:
             "seed": self.seed,
             "seconds": round(self.seconds, 3),
         }
+        # A caller that breaks one of v1's own rules (Session 76b) gets a report that names it; a registered v1 report
+        # keeps exactly the keys above.
+        if self.single_entry_rows_move:
+            report["single_entry_rows_move"] = True
+        if not self.no_regression:
+            report["no_regression"] = False
+        return report
 
 
 def assign_contests(
@@ -644,6 +652,7 @@ def assign_contests(
         objective_before=objective_before,
         objective_after=objective_after,
         single_entry_rows_move=move_single,
+        no_regression=no_regression or v2,   # v2 has no per-contest guard, so the argument changes nothing there
     )
 
 
@@ -782,15 +791,19 @@ def objectives_from_rosters(
     mode: str,
     people: Mapping[str, Person],
     thesis_by_roster: Mapping[tuple[str, ...], str] | None = None,
+    weights: Weights = REGISTERED_WEIGHTS,
 ) -> dict[str, dict[str, object]]:
-    """Per-contest v2 objectives from `(entry_id, contest_id, roster)` triples, for contests of 2+."""
+    """Per-contest v2 objectives from `(entry_id, contest_id, roster)` triples, for contests of 2+.
+
+    `weights` reaches only the spread's stack-team term; the offline wrapper's `--stack-penalty` is the one caller that
+    passes anything but the registered weights (Session 76b)."""
 
     by_contest: dict[str, list[LineupFacts]] = {}
     for _entry_id, contest_id, roster in entries:
         by_contest.setdefault(contest_id, []).append(
             lineup_facts(roster, mode=mode, people=people, thesis=_thesis(thesis_by_roster, roster)))
     return {
-        contest: contest_objective(placed)
+        contest: contest_objective(placed, weights)
         for contest, placed in sorted(by_contest.items()) if len(placed) > 1
     }
 
@@ -806,6 +819,7 @@ def audit_contest_assignment(
     reported_after: Mapping[str, Mapping[str, object]] | None = None,
     version: str = CONTEST_ASSIGNMENT_VERSION,
     reported_objective_after: Mapping[str, Mapping[str, object]] | None = None,
+    objective_weights: Weights = REGISTERED_WEIGHTS,
 ) -> tuple[list[str], dict[str, dict[str, object]]]:
     """Recompute the step's claims from the final assignment bytes.
 
@@ -815,7 +829,8 @@ def audit_contest_assignment(
     template holds it. `selected_by_pool` is what selection produced. Returns the
     problems and the recomputed per-contest readings; the optimizer's own numbers
     are compared, never trusted. A v2 step's per-contest objective is recomputed
-    and compared too.
+    and compared too, with `objective_weights` (the weights the step used: the
+    registered ones on every `run-slate` path).
 
     Problem codes: CONTEST_ASSIGNMENT_MULTISET_CHANGED (V),
     CONTEST_ASSIGNMENT_FIXED_ROW_MOVED (V), CONTEST_ASSIGNMENT_STATS_MISMATCH (P).
@@ -845,7 +860,7 @@ def audit_contest_assignment(
         recomputed = statistics_from_rosters(
             placed, mode=mode, people=people, thesis_by_roster=thesis_by_roster)
         objectives = objectives_from_rosters(
-            placed, mode=mode, people=people, thesis_by_roster=thesis_by_roster
+            placed, mode=mode, people=people, thesis_by_roster=thesis_by_roster, weights=objective_weights
         ) if version == CONTEST_ASSIGNMENT_VERSION_V2 and reported_objective_after is not None else None
     except ContestAssignmentError as exc:
         return problems + [str(exc)], {}

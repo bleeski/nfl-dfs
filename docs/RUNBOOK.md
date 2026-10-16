@@ -552,14 +552,19 @@ eight, Reichard four times). The baseline keeps `within_contest_diversity_v1`.
 A multi-contest baseline is therefore no longer in salary order row by row, only
 as a set. A file built outside `run-slate` still needs
 `scripts/diversify_showdown_contests.py` on the finished file before the handoff
-(Showdown or Classic; it is a thin wrapper over the same module, still on v1
-until Session 76b). Under v1, within each contest a pair costs shared people
+(Showdown or Classic; it is a thin wrapper over the same module and, since
+Session 76b, runs v2 by default, with `--version within_contest_diversity_v1`
+for the old score). Every roster edit comes before it; only a contest-targeted
+placement that moves whole lineups comes after (`docs/claude/working.md`
+§ Showdown judgment pass). On a thesis run pass `--theses` (the claim's Entry ID map) and
+`--theses-out`, then run `qa_showdown_portfolio.py --theses <map>` on its output
+for the first-place table after the pass (`docs/OPERATOR_GUIDE.md` § The
+contest pass). Under v1, within each contest a pair costs shared people
 squared plus a penalty for the same Captain (Classic: QB), the same Classic
 stack team and the same thesis, and a contest scores its worst pair plus its
-mean pair. Then run `qa_showdown_portfolio.py` on its output. On PHI@CHI the
-module took the three seven-entry contests from 5 to 7 distinct captains out
-of 7 and their worst pair from five shared people to four, and every
-two-entry pair to at most one.
+mean pair. On PHI@CHI v1 took the three seven-entry contests from 5 to 7
+distinct captains out of 7 and their worst pair from five shared people to
+four, and every two-entry pair to at most one.
 
 Kicker roles are resolved after those exclusions. When one eligible kicker is
 listed for a team and no role artifact is supplied, the review may continue only

@@ -507,6 +507,43 @@ from the run, and both flags or neither:
   it names but not to the run itself, and the template only by its Entry IDs.
 - Without the two flags neither script checks a thesis, so pass them on every v4 run.
 
+## The contest pass
+
+`scripts/diversify_showdown_contests.py` reassigns a finished file's lineups between Entry IDs so each contest's entries
+differ (only the rows the template left blank; never a roster cell's content, never a lineup's exposure). Since Session 76b it
+runs `within_contest_diversity_v2` by default, as `run-slate` does: a repeated Captain (Classic: QB) inside a contest ranks
+as the costliest difference, then a repeated thesis, then shared people. Run it last: every roster edit comes before it, and
+only a contest-targeted placement that moves whole lineups comes after (`docs/claude/working.md` § Showdown judgment pass).
+
+```powershell
+.\.venv\Scripts\python.exe scripts\diversify_showdown_contests.py `
+  --salaries 'C:\full\path\DKSalaries.csv' --template 'C:\full\path\DKEntries.csv' `
+  --entries 'C:\full\path\DK_REVIEW_ENTRY_judgment_v1.csv' --theses 'C:\full\path\theses_by_entry.json' `
+  --out 'C:\full\path\DK_REVIEW_ENTRY_contest_v1.csv' --record 'C:\full\path\contest_record_v1.json' `
+  --theses-out 'C:\full\path\theses_map_contest_v1.json'
+```
+
+- **`--theses`** is a JSON object of Entry ID to thesis label (or null). On a v4 thesis run, take it from the claim:
+
+  ```powershell
+  .\.venv\Scripts\python.exe -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); json.dump(d['selection']['portfolio_policy']['theses']['entries'], open(sys.argv[2],'x',encoding='utf-8'))" 'C:\full\path\runs\<run_id>\prior_review\selection\selection_report.json' 'C:\full\path\theses_by_entry.json'
+  ```
+
+  Any other shape is refused by name (`THESES_NOT_AN_ENTRY_MAP`, `THESES_ENTRY_IDS_NOT_IN_TEMPLATE`).
+- **`--theses-out`** (Showdown) writes `nfl_entry_thesis_map_v1`: each output Entry ID's thesis through this pass's own
+  mapping, with the roster it now holds and the hashes of the salary file and the file it labels. It is the QA's input only;
+  `showdown_value_add.py --theses` reads a plain Entry ID map and would read this one as no labels.
+- **The record** (`--record`) is `nfl_contest_diversification_v3` under v2: the objective in total and per contest, v1's score
+  as a `reading`, the search's restarts and seed, and the SHA-256 of every input and of the written file. Restarts default to the
+  run path's entry-sized count.
+- **`--version within_contest_diversity_v1`** runs the old score at 300 restarts and writes the old record; every committed v1
+  record replays under it. `--captain-penalty` and `--thesis-penalty` are v1's: under v2 they are refused by name
+  (`V1_PENALTY_FLAG_UNDER_V2`). `--stack-penalty` applies to both, and the record marks the weights unregistered.
+- Then QA the output, with `--theses <the map>` for the first-place table after the pass (below). Not `--policy --claim`: the
+  claim names the thesis of the Entry IDs the run filled, so after the pass it refuses a lineup moved to an Entry ID of another
+  thesis (`THESIS_CLAIM_DISAGREES_WITH_ROWS`, exit 1). Run the claim's adherence check on the file before the pass; the pass
+  moves whole lineups, so adherence cannot change.
+
 ## First place, contest by contest (both QA scripts)
 
 Since Session 75 (R38), both QA scripts read each Contest ID's entries together, as one set of shots at that contest's first
@@ -528,6 +565,13 @@ no exit code. Put it in the handoff, contest by contest.
   entries file's reads `NOT_BOUND (CONTEST_SET)`; it binds on its schema and Contest IDs only.
 - **Theses.** On a v4 Showdown run, pass `--policy` and `--claim` too: the reading's thesis counts come from the claim.
   Classic QA takes no labels and says so.
+- **After the contest pass** (Session 76b), pass `--theses 'C:\full\path\theses_map_contest_v1.json'` instead: the claim cannot
+  bind once lineups moved. Each row takes the label of the map entry holding its exact lineup, so a lineup moved whole after
+  the pass keeps it. `first_place_thesis_map` says how they bound: `labelled_rows`, `moved_since_written`, `roster_changed` (an
+  edited row, labelled from its own Entry ID) and `unlabelled_entry_ids`. A map that does not bind reads `NOT_BOUND` with its
+  code (another salary file, an Entry ID outside the template, a repeated lineup), and then the reading takes the claim's labels
+  if the claim's check ran, else none; no verdict or exit code moves. Put the table before the pass (QA with `--policy --claim`)
+  and after it (QA with `--theses`) in the handoff.
 
 ## Settlement capture and replay
 

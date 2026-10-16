@@ -4315,7 +4315,10 @@ from the template header), and writes `nfl_contest_diversification_v2` (the
 first record, `nfl_showdown_contest_diversification_v1`, scored a raw sum and is
 never mutated). `--captain-penalty`, `--stack-penalty` and `--thesis-penalty`
 override the weights for an offline experiment and the record says so
-(`contest_assignment.weights.registered`).
+(`contest_assignment.weights.registered`). Since Session 76b the wrapper runs
+`within_contest_diversity_v2` by default (§ The offline contest pass below);
+`--version within_contest_diversity_v1` runs this version and writes this record
+unchanged.
 
 Does not establish: expected points or value, win or cash likelihood, ownership or
 duplication, a payout or contest worth, upload clearance, or that a different
@@ -4424,6 +4427,109 @@ three times, where the committed file held 8 and Reichard four times.
 
 Does not establish: v1's list, and that a placement with fewer repeated Captains
 wins more often; it is a within-contest spread, not a probability.
+
+## The offline contest pass: nfl_contest_diversification_v3 and nfl_entry_thesis_map_v1 (Session 76b)
+
+Registered 2026-10-16. `scripts/diversify_showdown_contests.py`, the wrapper for a
+file built outside `run-slate`, runs `within_contest_diversity_v2` by default, as
+every `prior_review` exit does. `--version within_contest_diversity_v1` runs v1,
+writes `nfl_contest_diversification_v2` exactly as before, and replays every
+committed module-era v1 record (seven: BAL@ATL v4, BUF@LAR v1 and v2, MIN@NO v7,
+SEA@DEN v1, TB@DAL v2 and v3) byte for byte in the output file and field for field
+in the record but for `seconds`. The pre-module `nfl_showdown_contest_diversification_v1`
+records (PHI@CHI `assignment_v2` to `v4`) are never replayed.
+
+**Inputs.**
+- `--theses`: a JSON object of Entry ID to a thesis label or null (a run's
+  `selection.portfolio_policy.theses.entries` has this shape). Any other shape is
+  `THESES_NOT_AN_ENTRY_MAP`, `nfl_entry_thesis_map_v1` included; bytes that are not
+  JSON are `THESES_UNREADABLE`; an Entry ID the template does not hold is
+  `THESES_ENTRY_IDS_NOT_IN_TEMPLATE`.
+- Under v2, `--captain-penalty` and `--thesis-penalty` are refused by name,
+  `V1_PENALTY_FLAG_UNDER_V2:<flag>`, even at the registered value: v2 ranks those
+  terms and has no weight for them. `--stack-penalty` applies, and the report's
+  `weights.registered` is false when it is not 6.
+- `--restarts`: under v1 300 by default (the committed records' count); under v2
+  the run path's entry-sized count (`restarts_for`), so the script places a file as
+  `prior_review` would. An explicit value wins.
+
+**Audit.** The module's audit recomputes the step's claims from the bytes about to
+be written. Under v2 it always compares the readings (v2's readings use the
+registered weights whatever the step's) and compares the per-contest objective,
+recomputed with the weights the step used (`audit_contest_assignment`'s
+`objective_weights`, which `objectives_from_rosters` takes as `weights`; both
+default to the registered weights, so every `run-slate` path is unchanged). A
+mismatch refuses the file (`AUDIT_FAILED:...`).
+
+**v1 knobs off v1's own rule.** v1 holds one-entry rows and keeps its per-contest
+guard. A caller that passes `move_single_entry_rows=True` or `no_regression=False`
+with v1 gets a v1 report with `single_entry_rows_move: true` or
+`no_regression: false`, so a departure is never reported as plain v1. A registered
+v1 report keeps exactly its keys, and no `run-slate` path passes either.
+
+**The record, `nfl_contest_diversification_v3`** (v2 only; written as UTF-8 bytes with
+LF endings, sorted keys, one-space indent and one trailing newline, so every host
+writes the same bytes):
+- `schema_version`, `mode`, and `does_not_establish` (the module's list plus
+  `LINEUP_LEGALITY`);
+- `contest_assignment`: the module's v2 report (§ Contest assignment,
+  within_contest_diversity_v2) without `contests_before` and `contests_after`, so it
+  carries the objective in total (`objective_before`, `objective_after`) and per
+  contest (`contest_objective_before`, `contest_objective_after`);
+- `reading`: `definition` (`READING_DEFINITION`), `score_before` and `score_after`
+  (v1's total score of each placement, as numbers), and `contests_before` and
+  `contests_after` (v1's per-contest readings under the names the first record used).
+  There is no top-level `score`, so no v1 number reads as v2's;
+- `search`: the resolved `restarts`, `seed` and `time_limit_seconds`;
+- `inputs`: `salaries_sha256`, `template_sha256`, `entries_sha256` and
+  `theses_sha256` (null without `--theses`);
+- `out_sha256` (the written file) and `mapping_entry_to_source_entry`.
+
+**The map, `nfl_entry_thesis_map_v1`** (`--theses-out`: needs `--theses`, a new
+path, and a Showdown file, `THESES_OUT_NEEDS_THESES` and `THESES_OUT_SHOWDOWN_ONLY`
+otherwise; the same byte form as the record, and no clock):
+- `schema_version`, `written_by` (`scripts/diversify_showdown_contests.py`), `mode`,
+  and `contest_assignment_version`;
+- `salary_sha256`, `entries_sha256` (the file it labels, the pass's output) and
+  `source_theses_sha256`;
+- `entries`: for each output Entry ID whose lineup carried a label in the input,
+  `{thesis, roster}`, the roster as the six DraftKings IDs in slot order;
+- `does_not_establish`: the module's list plus `THESIS_ADHERENCE` and
+  `LINEUP_LEGALITY`.
+
+**Read by `qa_showdown_portfolio.py --theses`.** The first-place reading takes each
+export row's label from the map entry holding its exact lineup (Captain and sorted
+FLEX), so a lineup moved whole after the pass keeps it (`moved_since_written`). A
+row with no matching lineup takes its own Entry ID's label (Session 66's rule: a
+thesis is read by Entry ID, never looked up from an edited roster), unless that
+Entry ID's lineup now sits in another row; it is named under `roster_changed`, or
+under `unlabelled_entry_ids` when it takes none. `first_place_thesis_map`, the key
+before `first_place_coverage` and present only with the flag, holds `map_version`,
+`binding`, `refusal`, `labels_from` (`THESES_MAP`, `CLAIM` or `NONE`),
+`same_file_as_written` (the export's SHA-256 equals `entries_sha256`),
+`labelled_rows`, `roster_changed`, `moved_since_written`, `unlabelled_entry_ids` and
+`does_not_establish`. A map that does not bind is `NOT_BOUND` with one code:
+`THESES_MAP_UNREADABLE`, `THESES_MAP_SCHEMA`, `THESES_MAP_NOT_SHOWDOWN`,
+`THESES_MAP_SALARY_MISMATCH` (its `salary_sha256` is not the `--salaries` file's),
+`THESES_MAP_ENTRY_MALFORMED`, `THESES_MAP_ENTRY_IDS_NOT_IN_TEMPLATE`,
+`THESES_MAP_REPEATED_LINEUP`, `THESES_MAP_TEMPLATE_UNREADABLE`,
+`THESES_MAP_EXPORT_UNREADABLE` or `THESES_MAP_NOT_COMPUTED`. The reading then takes
+the claim's labels when the thesis check ran, else none. As with `--contest-facts`,
+the map feeds a reading only: no other key, no verdict and no exit code moves with
+it. Thesis adherence after the pass needs no map, because the pass moves whole
+lineups; `docs/claude/working.md` runs every roster edit before it.
+
+**Acceptance** (`tests/test_diversify_showdown_contests.py`). On PHI@CHI v4 (300
+restarts, its entry-sized count) and MIN@NO v10 (57), with the labels the slate
+records bind, the script's file equals the input with each moved row's cells
+replaced by the module's v2 assignment, and its record carries the module's
+objective; a second run writes the same file, map and record but for `seconds`.
+The QA's after-table on that file reads every row's label from the map and equals
+the module's placement read with each lineup's label. `--version` v1 reproduces the
+seven committed records and the module's v1 placement of both card files.
+
+Does not establish: the module's lists; which thesis a row should hold, or that a
+row follows its thesis; a projection, ownership or upload clearance.
 
 ## Contest facts, nfl_contest_facts_v1 (Session 23d)
 
