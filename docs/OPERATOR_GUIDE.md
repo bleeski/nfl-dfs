@@ -684,21 +684,28 @@ finished, using the SHA-256 the intake printed:
 ```
 
 It reads `data\results\inbox\<sha256>.csv`, checks the bytes still hash to
-that name, and writes `data\results\reports\<sha256>\results_report.era-2026-09-09.w1.json`
-once (`nfl_results_report_v1`). The file holds realized results only: each
+that name, and writes `data\results\reports\<sha256>\results_report.era-2026-09-09.v2.w1.json`
+once (`nfl_results_report_v2`, since Session 77). The file holds realized results only: each
 rate beside what a random finish would give, rollups by format, payout shape,
 field size, fee, month and slate, fee concentration, the within-slate test of
-top-heavy against flatter contests, and an interval and minimum detectable
-effect for every slice of at least 5 slates. Beside it, `results_report.era-2026-09-09.w1.md`
+top-heavy against flatter contests, an interval and minimum detectable
+effect for every slice of at least 5 slates, and the two goals' readings: each
+contest's best entry beside the best of that many random places, first-place
+and top-1% finishes beside a random finish's count, and each portfolio (the
+entries sharing a start time and game type) that won nothing, beside a random
+draw's washout. Beside it, `results_report.era-2026-09-09.v2.w1.md`
 is the short table to read first: the Overall figures in its first 20 lines,
-then each payout band's rates beside random with their intervals, then the
-within-slate test. It takes under a minute (16
+then each payout band's rates beside random with their intervals, the
+within-slate test, then First place by contest and Washouts. It takes under a minute (16
 seconds for 40 slates on Linux; Windows is slower). Running it again is `ALREADY_PRESENT`, exit 0, and writes nothing;
 beside a report an earlier version wrote, it writes the table alone (`COMPLETE`).
 `--engine-era-start YYYY-MM-DD` reports another era into its own files; the
 within-slate trigger always reads the registered era.
+`--metrics-version nfl_results_metrics_v1` writes the Session 71b report instead
+(`results_report.era-2026-09-09.w1.json` and `.w1.md`), beside the v2 files.
 
-The printed result carries no money (counts, place-based rates and the test),
+The printed result carries no money (counts, place-based rates, the test and
+how many portfolios won nothing),
 so it is safe to paste back to Claude; the two files carry fees and
 winnings and stay under the gitignored `data\results\`. Exit 2 names the
 problem: a malformed hash or date, a snapshot that is missing, a link,

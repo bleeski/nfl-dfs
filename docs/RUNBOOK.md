@@ -705,11 +705,14 @@ A path that does not exist stops at command start like any other input path. The
 `CONTEST_PAYOUT_REQUIRED` or `FIELD_SIZE_REQUIRED`: a facts row is not a payout table.
 
 **Your own results by payout shape.** Before choosing contests, read the `Payout shape` sections of the results table,
-`data/results/reports/<sha256>/results_report.era-<date>.w1.md`, which `results-report` writes beside its JSON
+`data/results/reports/<sha256>/results_report.era-<date>.v2.w1.md`, which `results-report` writes beside its JSON
 (`docs/OPERATOR_GUIDE.md`, Results report). Each band of places paid over entries shows your realized percentile,
 top-10% and bottom-10% rates beside a random finish, and each excess with its interval and minimum detectable effect;
-the within-slate test of top-heavy against flatter contests follows. It is realized history: the engine reads none of
-it, it is never a forecast or a model number, and an interval that spans 0 means the band has not shown a difference.
+the within-slate test of top-heavy against flatter contests follows. Then `First place by contest` shows, band by band,
+how close each contest's best entry came to first beside the best of that many random places, with first-place and
+top-1% counts beside a random finish's, and `Washouts` how many portfolios won nothing beside a random draw. It is
+realized history: the engine reads none of it, it is never a forecast or a model number, and an interval that spans 0
+means the band has not shown a difference.
 
 ## Complete the run request
 

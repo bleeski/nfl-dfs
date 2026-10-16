@@ -100,7 +100,7 @@ from .delivery import (
 from .economics import evaluate_candidates_against_field
 from .entry_groups import EntryPlan, blank_entry_ids, group_report, plan_entries
 from .entry_history import run_intake as run_results_intake
-from .results_report import run_results_report
+from .results_report import CURRENT_METRICS_VERSION, METRICS_VERSIONS, run_results_report
 from .results_join import DEFAULT_SLATES_DIR, run_results_join
 from .player_grading import run as run_player_grading
 from .player_grading import run_pool as run_player_grading_pool
@@ -2091,14 +2091,16 @@ def command_results_intake(args: argparse.Namespace) -> int:
 
 
 def command_results_report(args: argparse.Namespace) -> int:
-    """Session 71b: the NFL results report from one kept snapshot (`nfl_results_report_v1`), written once.
+    """Session 71b: the NFL results report from one kept snapshot, written once; since Session 77
+    `nfl_results_report_v2` (R38's first place and washouts) unless `--metrics-version` names v1.
 
     Exit 0 wrote the report or found it already there; 2 refused an input or could not write. stdout is each file's
     path, state and SHA-256, the problems and a money-free headline. A metrics file that will not load raises
     `ResultsMetricsError`, which `main`'s handler prints as `CLI_FAILED`.
     """
 
-    outcome = run_results_report(args.source_sha256, args.results_root, args.engine_era_start)
+    outcome = run_results_report(args.source_sha256, args.results_root, args.engine_era_start,
+                                 metrics_version=args.metrics_version)
     _print_json(outcome.as_dict())
     return outcome.exit_code
 
@@ -5292,14 +5294,17 @@ def build_parser() -> argparse.ArgumentParser:
         "results-report",
         help=(
             "the NFL results report from one snapshot results-intake kept: rollups beside each rate's random"
-            " expectation, slate-cluster intervals and the within-slate test, written once under reports/<sha256>/;"
-            " realized results only, never EV or an ROI forecast"
+            " expectation, slate-cluster intervals and the within-slate test, and under v2 each contest's best entry"
+            " and each portfolio's washout, written once under reports/<sha256>/; realized results only, never EV or"
+            " an ROI forecast"
         ),
     )
     results_report.add_argument("--source-sha256", required=True,
                                 help="the snapshot's SHA-256 (64 lower-case hex), as results-intake printed it")
     results_report.add_argument("--results-root", default=str(DEFAULT_RESULTS_DIR))
     results_report.add_argument("--engine-era-start", help="YYYY-MM-DD; default the registered era (2026-09-09)")
+    results_report.add_argument("--metrics-version", choices=METRICS_VERSIONS, default=CURRENT_METRICS_VERSION,
+                                help="the registered metrics to report under; v1 keeps the Session 71b report")
     results_report.set_defaults(func=command_results_report)
     results_join = subparsers.add_parser(
         "results-join",

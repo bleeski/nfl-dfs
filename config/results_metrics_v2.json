@@ -1,0 +1,79 @@
+{
+  "schema_version": "nfl_results_metrics_v2",
+  "registered_at": "2026-10-16",
+  "authority": [
+    "docs/ROADMAP.md Session 77 card (R38, Ben 2026-10-14: first place within each individual contest; the portfolio-level washout)",
+    "changelog.md 2026-10-10: the review's definitions, recomputed for NFL, and the per-entry random expectation each rate needs",
+    "config/results_metrics_v1.json: every v1 section, copied unchanged"
+  ],
+  "populations": {
+    "paid": "ENTRY_FEE_ABOVE_ZERO",
+    "winnings": "NON_TICKET_PLUS_TICKET_AT_FACE_VALUE",
+    "excluded_game_types": ["Best Ball"],
+    "engine_game_types": ["Classic", "Showdown Captain Mode"],
+    "engine_era_start": "2026-09-09"
+  },
+  "rates": {
+    "percentile": "PLACE_OVER_CONTEST_ENTRIES",
+    "random_percentile": "N_PLUS_1_OVER_2N",
+    "top_10": "PLACE_TIMES_10_AT_MOST_N",
+    "bottom_10": "PLACE_TIMES_10_ABOVE_9N",
+    "blank": "POINTS_EXACTLY_ZERO",
+    "tie_rule": "TIE_GROUP_TAKES_BEST_PLACE"
+  },
+  "slates": {
+    "slate": "SPORT_EASTERN_DATE_GAME_TYPE",
+    "fine_slate": "SPORT_CONTEST_START_GAME_TYPE"
+  },
+  "bands": {
+    "paid_fraction_edges": ["1/20", "1/5", "1/2"],
+    "field_size_upper": [20, 100, 500, 2000],
+    "entry_fee_upper_cents": [100, 500, 2000]
+  },
+  "fee_concentration_top": 10,
+  "within_slate_test": {
+    "registered_on": "2026-10-10",
+    "split": "FIRST_PLACE_OBJECTIVE_AGAINST_UNLABELLED",
+    "statistic": "MEAN_PERCENTILE_DIFFERENCE_WITH_BLANKS",
+    "test": "EXACT_SIGN_TEST_ONE_SIDED_TOP_HEAVY_WORSE_TIES_DROPPED",
+    "trigger_scope": "engine_era",
+    "trigger_alpha": "1/20",
+    "trigger_min_slates": 20
+  },
+  "bootstrap": {
+    "cluster": "SLATE",
+    "seed": 20261010,
+    "resamples": 10000,
+    "level": "9/10",
+    "pairs_min_slates": 30,
+    "wild": "WEBB_SIX_POINT_STUDENTIZED_CR1",
+    "interval_min_slates": 5,
+    "mde_alpha_two_sided": "1/20",
+    "mde_power": "4/5"
+  },
+  "first_place": {
+    "first_place": "PLACE_EQUALS_ONE",
+    "random_first_place": "ONE_OVER_N",
+    "top_1": "PLACE_TIMES_100_AT_MOST_N",
+    "random_top_1": "FLOOR_N_OVER_100_OVER_N",
+    "best_entry": "MIN_PLACE_PER_CONTEST_KEY",
+    "random_best_percentile": "N_PLUS_1_OVER_K_PLUS_1_TIMES_N",
+    "points_behind_first": "NOT_IN_EXPORT_SESSION_18_THRESHOLDS"
+  },
+  "washout": {
+    "washout": "EVERY_PAID_ENTRY_NON_TICKET_AND_TICKET_ZERO",
+    "portfolio": "SPORT_CONTEST_START_GAME_TYPE",
+    "random_washout": "HYPERGEOMETRIC_NO_ENTRY_IN_PLACES_PAID"
+  },
+  "does_not_establish": [
+    "Realized results of past entries; not EV, an ROI forecast, a win probability, a calibration or a proven edge.",
+    "DraftKings gives a tie group its best place, so place / n flatters where ties are common; the random expectation assumes no ties.",
+    "Realized return on fees is a fact about past entries, never a model's ROI, an EV or a probability.",
+    "Payout shape and field size come from the numeric columns only; the contest name is never read.",
+    "The within-slate test was registered after its first 12 slates chose its direction; only later slates test it fresh.",
+    "First-place and top-1% finishes are rare at this volume; each count sits beside the sum of its entries' random shares, and each contest's best percentile is the reading with data.",
+    "Points behind first need each contest's winning score, which the export does not carry; Session 18's per-contest thresholds would supply it, and nothing here estimates it.",
+    "The random washout draws each contest's places independently and uniformly, with no ties and Places_Paid as given (a contest paying no place contributes 1); lineups shared across contests are part of what the realized rate is read against.",
+    "A portfolio is the paid entries sharing a contest start time and game type; Showdowns of different games that start at the same minute merge, because the export names no game and the contest name is never read."
+  ]
+}

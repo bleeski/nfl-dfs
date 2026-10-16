@@ -13,6 +13,12 @@ file's bootstrap section for each slice's interval and minimum detectable effect
 order, rounded once) and writes the report once through `nfl results-report`.
 Payout shape and field size come from the numeric columns only, never from a contest name, and nothing here reaches a
 run, a frozen package, a selection or a release truth.
+
+Session 77 registers `nfl_results_metrics_v2` (`config/results_metrics_v2.json`) and its report, `nfl_results_report_v2`:
+every v1 block unchanged, plus R38's two realized readings. Goal 1, per contest: our best entry's place and percentile
+beside the best of that many random places, and first-place and top-1% finishes beside each entry's random share. Goal
+2, per portfolio (the paid entries sharing a contest start time and game type): whether every entry won nothing, beside a
+random draw's washout. A v1 metrics file still gives the v1 payload, file and table, byte for byte.
 """
 
 from __future__ import annotations
@@ -29,7 +35,7 @@ from datetime import date
 from fractions import Fraction
 from functools import partial
 from pathlib import Path
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
 from . import entry_history
 from .contest_facts import LABEL, THRESHOLD, canonical_bytes, first_place_label
@@ -41,6 +47,12 @@ METRICS_VERSION = "nfl_results_metrics_v1"
 REPORT_VERSION = "nfl_results_report_v1"
 WRITER = "w1"
 DEFAULT_METRICS_PATH = Path(__file__).resolve().parents[2] / "config" / "results_metrics_v1.json"
+METRICS_V2 = "nfl_results_metrics_v2"
+REPORT_V2 = "nfl_results_report_v2"
+METRICS_V2_PATH = DEFAULT_METRICS_PATH.parent / "results_metrics_v2.json"
+METRICS_VERSIONS = (METRICS_VERSION, METRICS_V2)
+# What `nfl results-report` reads unless told otherwise; `DEFAULT_METRICS_PATH` stays v1's file, as its tests pin.
+CURRENT_METRICS_VERSION = METRICS_V2
 
 TOP_FRACTION = Fraction(1, 10)
 BOTTOM_FRACTION = Fraction(9, 10)
@@ -68,6 +80,26 @@ DECLARED = {
     },
     "bootstrap": {"cluster": "SLATE", "wild": "WEBB_SIX_POINT_STUDENTIZED_CR1"},
 }
+# The two sections only a v2 file carries (Session 77, R38), checked the same way.
+DECLARED_V2 = {
+    "first_place": {
+        "first_place": "PLACE_EQUALS_ONE",
+        "random_first_place": "ONE_OVER_N",
+        "top_1": "PLACE_TIMES_100_AT_MOST_N",
+        "random_top_1": "FLOOR_N_OVER_100_OVER_N",
+        "best_entry": "MIN_PLACE_PER_CONTEST_KEY",
+        "random_best_percentile": "N_PLUS_1_OVER_K_PLUS_1_TIMES_N",
+        "points_behind_first": "NOT_IN_EXPORT_SESSION_18_THRESHOLDS",
+    },
+    "washout": {
+        "washout": "EVERY_PAID_ENTRY_NON_TICKET_AND_TICKET_ZERO",
+        "portfolio": "SPORT_CONTEST_START_GAME_TYPE",
+        "random_washout": "HYPERGEOMETRIC_NO_ENTRY_IN_PLACES_PAID",
+    },
+}
+_RULES = {**DECLARED, **DECLARED_V2}
+_V1_KEYS = frozenset({"schema_version", "registered_at", "authority", "populations", "rates", "slates", "bands",
+                      "fee_concentration_top", "within_slate_test", "bootstrap", "does_not_establish"})
 
 _FRACTION = re.compile(r"[1-9][0-9]{0,5}/[1-9][0-9]{0,5}")
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
@@ -157,8 +189,8 @@ def _uppers(value: object, where: str, high: int) -> tuple[int, ...]:
 
 
 def _declared(document: Mapping[str, object], section: str, extra: frozenset[str]) -> dict:
-    block = _object(document[section], frozenset(DECLARED.get(section, {})) | extra, section)
-    for key, text in DECLARED.get(section, {}).items():
+    block = _object(document[section], frozenset(_RULES.get(section, {})) | extra, section)
+    for key, text in _RULES.get(section, {}).items():
         if block[key] != text:
             raise _invalid(f"{section}.{key}", f"must be {text!r}, the rule this module implements")
     return block
@@ -179,11 +211,12 @@ def parse_results_metrics(raw: bytes) -> ResultsMetrics:
         raise
     except (ValueError, RecursionError) as exc:  # UnicodeDecodeError and JSONDecodeError are ValueErrors
         raise ResultsMetricsError(f"results metrics unreadable: {type(exc).__name__}") from None
-    _object(document, frozenset({"schema_version", "registered_at", "authority", "populations", "rates", "slates",
-                                 "bands", "fee_concentration_top", "within_slate_test", "bootstrap",
-                                 "does_not_establish"}), "file")
-    if document["schema_version"] != METRICS_VERSION:
-        raise _invalid("schema_version", f"must be {METRICS_VERSION}")
+    # The version picks the key set first: a v2 file adds exactly the `DECLARED_V2` sections, and a v1 or v2 name on
+    # the other's sections is refused here.
+    version = document.get("schema_version") if isinstance(document, dict) else None
+    _object(document, _V1_KEYS | (frozenset(DECLARED_V2) if version == METRICS_V2 else frozenset()), "file")
+    if version not in METRICS_VERSIONS:
+        raise _invalid("schema_version", f"must be one of {list(METRICS_VERSIONS)}")
     _date(document["registered_at"], "registered_at")
     _texts(document["authority"], "authority")
     populations = _declared(document, "populations",
@@ -212,6 +245,9 @@ def parse_results_metrics(raw: bytes) -> ResultsMetrics:
     _integer(bootstrap["interval_min_slates"], "bootstrap.interval_min_slates", 2, 10_000)
     for name in ("level", "mde_alpha_two_sided", "mde_power"):
         _fraction(bootstrap[name], f"bootstrap.{name}")
+    if version == METRICS_V2:
+        for section in DECLARED_V2:
+            _declared(document, section, frozenset())
     return ResultsMetrics(
         excluded_game_types=_texts(populations["excluded_game_types"], "populations.excluded_game_types"),
         engine_game_types=_texts(populations["engine_game_types"], "populations.engine_game_types"),
@@ -227,6 +263,7 @@ def parse_results_metrics(raw: bytes) -> ResultsMetrics:
         bootstrap=dict(bootstrap),
         does_not_establish=_texts(document["does_not_establish"], "does_not_establish"),
         sha256=sha256_bytes(raw),
+        version=version,
     )
 
 
@@ -236,6 +273,20 @@ def load_results_metrics(path: str | Path = DEFAULT_METRICS_PATH) -> ResultsMetr
     except OSError as exc:
         raise ResultsMetricsError(f"results metrics unreadable: {type(exc).__name__}") from None
     return parse_results_metrics(raw)
+
+
+def registered_metrics_path(version: str) -> Path:
+    """Each registered version's file, looked up at call time so a test that moves one moves what the command reads."""
+
+    if version == METRICS_VERSION:
+        return DEFAULT_METRICS_PATH
+    if version == METRICS_V2:
+        return METRICS_V2_PATH
+    raise ValueError(f"unknown results metrics version {version!r}")
+
+
+def report_contract(metrics: ResultsMetrics) -> str:
+    return REPORT_V2 if metrics.version == METRICS_V2 else REPORT_VERSION
 
 
 # ------------------------------------------------------------------------------ per-entry definitions
@@ -286,6 +337,52 @@ def paid_fraction(places_paid: int, entries: int) -> Fraction:
     """`Places_Paid / Contest_Entries`, capped at 1 (a contest that ran under its guarantee can pay more places)."""
 
     return min(Fraction(1), Fraction(places_paid, entries))
+
+
+# ------------------------------------------------------------- first place and washouts (Session 77, R38)
+
+TOP_1_FRACTION = Fraction(1, 100)
+
+
+def in_first(place: int) -> bool:
+    """First place as DraftKings gives it: every entry in a tie for first is first, read as given."""
+
+    return place == 1
+
+
+def random_first(entries: int) -> Fraction:
+    return Fraction(1, entries)
+
+
+def in_top_1(place: int, entries: int) -> bool:
+    return place * TOP_1_FRACTION.denominator <= TOP_1_FRACTION.numerator * entries
+
+
+def random_top_1(entries: int) -> Fraction:
+    """`floor(n/100)/n`, v1's top-10% rule at 1%: a top-1% finish is impossible below 100 entries."""
+
+    return Fraction(entries * TOP_1_FRACTION.numerator // TOP_1_FRACTION.denominator, entries)
+
+
+def random_best_percentile(entries: int, ours: int) -> Fraction:
+    """The mean of the best of `ours` distinct uniform places in 1..n, over n: `(n+1)/((k+1)n)`; v1's at k = 1. k is
+    capped at n: a real export never holds more of our entries than the field, and a file that does still reports."""
+
+    return Fraction(entries + 1, (min(ours, entries) + 1) * entries)
+
+
+def random_no_paid_place(entries: int, places_paid: int, ours: int) -> Fraction:
+    """`C(n-p, k)/C(n, k)`: none of `ours` distinct uniform places is paid, `Places_Paid` capped at n as v1 caps it,
+    and k at n as `random_best_percentile` caps it."""
+
+    paid, ours = min(places_paid, entries), min(ours, entries)
+    return Fraction(math.comb(entries - paid, ours), math.comb(entries, ours))
+
+
+def random_washout(contests: Iterable[tuple[int, int, int]]) -> Fraction:
+    """A portfolio's random washout: each contest, `(entries, places paid, ours)`, drawn independently."""
+
+    return math.prod((random_no_paid_place(*contest) for contest in contests), start=Fraction(1))
 
 
 # ------------------------------------------------------------------------------------- aggregation
@@ -553,6 +650,112 @@ def _era_rows(nfl: Sequence[HistoryRow], metrics: ResultsMetrics, start: str) ->
     return [row for row in nfl if row.game_type in metrics.engine_game_types and str(row.contest_start)[:10] >= start]
 
 
+# --------------------------------------------------------------------- the v2 readings (Session 77, R38)
+
+FIRST_PLACE_READING = (
+    "First-place and top-1% finishes are rare at this volume, so each count sits beside the sum of its entries' random "
+    "shares; each contest's best percentile, beside the best of that many random places, is the reading with data.")
+POINTS_BEHIND_FIRST = {"state": "NOT_IN_EXPORT", "named_source": "SESSION_18_PER_CONTEST_THRESHOLDS"}
+
+
+def _by_contest(rows: Sequence[HistoryRow]) -> list[list[HistoryRow]]:
+    """Each Contest ID's entries, by start time, game type and key. The parser makes a contest's numeric cells agree."""
+
+    groups: dict[str, list[HistoryRow]] = {}
+    for row in rows:
+        groups.setdefault(row.contest_key, []).append(row)
+    return sorted(groups.values(), key=lambda group: (str(group[0].contest_start), group[0].game_type,
+                                                      group[0].contest_key))
+
+
+def _counted(entries: Sequence[HistoryRow], realized: Callable[[HistoryRow], bool],
+             random: Callable[[int], Fraction]) -> dict[str, object]:
+    expected = sum((random(row.contest_entries) for row in entries), Fraction(0))
+    return {"entries": sum(realized(row) for row in entries), "random": _fixed(expected, 6) if entries else None}
+
+
+def _first_place_slice(contests: Sequence[list[HistoryRow]]) -> dict[str, object]:
+    entries = [row for group in contests for row in group]
+    best = [finishing_percentile(min(row.place for row in group), group[0].contest_entries) for group in contests]
+    return {
+        "contests": len(contests),
+        "entries": len(entries),
+        "best_percentile": {
+            "realized": _mean_percent(best),
+            "random": _mean_percent([random_best_percentile(group[0].contest_entries, len(group))
+                                     for group in contests]),
+        },
+        "first_place": _counted(entries, lambda row: in_first(row.place), random_first),
+        "top_1": _counted(entries, lambda row: in_top_1(row.place, row.contest_entries), random_top_1),
+    }
+
+
+def _contest_row(group: Sequence[HistoryRow], band: str) -> dict[str, object]:
+    first, ours = group[0], len(group)
+    entries, best = first.contest_entries, min(row.place for row in group)
+    return {
+        "contest_key": first.contest_key,
+        "date": str(first.contest_start)[:10],
+        "game_type": first.game_type,
+        "contest_entries": entries,
+        "entries": ours,
+        "band": band,
+        "best_place": best,
+        "best_percentile": _fixed(finishing_percentile(best, entries) * 100),
+        "random_best_percentile": _fixed(random_best_percentile(entries, ours) * 100),
+        "first_place_entries": sum(in_first(row.place) for row in group),
+        "first_place_random": str(ours * random_first(entries)),
+        "top_1_entries": sum(in_top_1(row.place, entries) for row in group),
+        "top_1_random": str(ours * random_top_1(entries)),
+    }
+
+
+def _first_place(rows: Sequence[HistoryRow], metrics: ResultsMetrics) -> dict[str, object]:
+    """Goal 1, per contest: the scope's overall reading, v1's payout bands, and every contest's own row."""
+
+    edges = metrics.paid_fraction_edges
+    shapes = _shape_labels(edges)
+    contests = _by_contest(rows)
+    bands: dict[int, list[list[HistoryRow]]] = {}
+    for group in contests:
+        bands.setdefault(_shape_band(group[0], edges), []).append(group)
+    return {
+        "overall": _first_place_slice(contests),
+        "by_payout_shape": [{"band": shapes[band], "first_place_label": LABEL if band == 0 else None,
+                             **_first_place_slice(bands[band])} for band in sorted(bands)],
+        "contests": [_contest_row(group, shapes[_shape_band(group[0], edges)]) for group in contests],
+    }
+
+
+def _won_nothing(row: HistoryRow) -> bool:
+    return row.winnings_non_ticket_cents == 0 and row.winnings_ticket_cents == 0
+
+
+def _washouts(rows: Sequence[HistoryRow]) -> dict[str, object]:
+    """Goal 2, per portfolio (v1's fine slate): a washout is every paid entry winning nothing, tickets included."""
+
+    portfolios: dict[tuple[str, str, str], list[HistoryRow]] = {}
+    for row in rows:
+        portfolios.setdefault(fine_slate_key(row), []).append(row)
+    listed, shares = [], []
+    for key in sorted(portfolios, key=lambda found: (found[1], found[2], found[0])):
+        group = portfolios[key]
+        contests = _by_contest(group)
+        share = random_washout((contest[0].contest_entries, contest[0].places_paid, len(contest))
+                               for contest in contests)
+        shares.append(share)
+        listed.append({"sport": key[0], "contest_start": key[1], "game_type": key[2], "entries": len(group),
+                       "contests": len(contests), "washout": all(_won_nothing(row) for row in group),
+                       "random": _fixed(share * 100), "random_exact": str(share)})
+    washouts = sum(item["washout"] for item in listed)
+    return {
+        "portfolios": len(listed),
+        "washouts": washouts,
+        "rate": {"realized": _ratio_percent(washouts, len(listed)), "random": _mean_percent(shares)},
+        "by_portfolio": listed,
+    }
+
+
 # ------------------------------------------------------------------------------ the bootstrap (Session 71b)
 #
 # Each statistic is a ratio of slate sums, sum(Y_g) / sum(X_g), over the slice's slates holding at least one of its
@@ -792,9 +995,12 @@ def _uncertainty(settings: BootstrapSettings, scope: str, rollup: str, described
 
 def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha256: str, source_bytes: int,
                  engine_era_start: str | None = None, bootstrap: bool = False) -> dict[str, object]:
-    """The report payload (`nfl_results_report_v1`); `engine_era_start` overrides the registered default.
+    """The report payload (`nfl_results_report_v1`, or `_v2` from a v2 metrics file); `engine_era_start` overrides the
+    registered default.
 
     `bootstrap=True` (what the writer passes) adds the `bootstrap` method block and every scope slice's `uncertainty`.
+    A v2 payload is the v1 payload with its version and metrics named, plus `first_place` and `washouts` in each scope,
+    the v2 definitions, `points_behind_first` and `first_place_reading`.
     """
 
     if engine_era_start is not None and not is_calendar_date(engine_era_start):
@@ -807,13 +1013,13 @@ def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha25
     def measure(scope: str) -> Callable[[str, dict, Sequence[HistoryRow]], dict] | None:
         return None if settings is None else partial(_uncertainty, settings, scope)
 
-    scopes = {"nfl": _scope(nfl, metrics, measure("nfl")),
-              "engine_era": _scope(_era_rows(nfl, metrics, era), metrics, measure("engine_era"))}
+    scope_rows = {"nfl": nfl, "engine_era": _era_rows(nfl, metrics, era)}
+    scopes = {name: _scope(rows, metrics, measure(name)) for name, rows in scope_rows.items()}
     registered = nfl if metrics.trigger_scope == "nfl" else _era_rows(nfl, metrics, metrics.engine_era_start)
     extra = {} if settings is None else {"bootstrap": _method_block(metrics)}
-    return {
+    payload = {
         **extra,
-        "schema_version": REPORT_VERSION,
+        "schema_version": report_contract(metrics),
         "writer": WRITER,
         "metrics": {"version": metrics.version, "sha256": metrics.sha256},
         "source": {"sha256": source_sha256, "bytes": source_bytes, "contract": HISTORY_CONTRACT},
@@ -836,6 +1042,14 @@ def build_report(history: EntryHistory, *, metrics: ResultsMetrics, source_sha25
         "parser_note_counts": dict(sorted(Counter(note["kind"] for note in history.notes).items())),
         "does_not_establish": list(metrics.does_not_establish),
     }
+    if payload["schema_version"] == REPORT_V2:
+        payload["definitions"].update({**DECLARED_V2["first_place"], **DECLARED_V2["washout"]})
+        for name, rows in scope_rows.items():
+            scopes[name]["first_place"] = _first_place(rows, metrics)
+            scopes[name]["washouts"] = _washouts(rows)
+        payload["points_behind_first"] = dict(POINTS_BEHIND_FIRST)
+        payload["first_place_reading"] = FIRST_PLACE_READING
+    return payload
 
 
 # ------------------------------------------------------------------------------------ the command (Session 71b)
@@ -854,10 +1068,14 @@ REPORT_RECOVERY = (
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
-def report_name(era: str) -> str:
-    """The era names the file, so a report for another era is another file and never a conflict."""
+_CONTRACT_INFIX = {REPORT_VERSION: "", REPORT_V2: ".v2"}
 
-    return f"results_report.era-{era}.{WRITER}.json"
+
+def report_name(era: str, contract: str = REPORT_VERSION) -> str:
+    """The era and the contract name the file, so another era's or version's report is another file, never a
+    conflict; v1 keeps its Session 71b name."""
+
+    return f"results_report.era-{era}{_CONTRACT_INFIX[contract]}.{WRITER}.json"
 
 
 # ------------------------------------------------------------------------------------- the table (Session 71c)
@@ -873,8 +1091,8 @@ _SHAPE_HEADER = ("Band", "Label", "Entries", "Slates", "Rate", "Realized % (rand
                  "MDE")
 
 
-def table_name(era: str) -> str:
-    return f"results_report.era-{era}.{WRITER}.md"
+def table_name(era: str, contract: str = REPORT_VERSION) -> str:
+    return f"results_report.era-{era}{_CONTRACT_INFIX[contract]}.{WRITER}.md"
 
 
 def _dollars(cents: int) -> str:
@@ -966,13 +1184,67 @@ def _within_section(payload: Mapping[str, object]) -> list[str]:
     ]
 
 
+FIRST_PLACE_HEADING = "First place by contest"
+WASHOUT_HEADING = "Washouts"
+_FIRST_PLACE_HEADER = ("Band", "Label", "Contests", "Entries", "Best percentile % (random), lower is better",
+                       "First place (random)", "Top 1% (random)")
+
+
+def _first_place_cells(block: Mapping[str, object]) -> list[str]:
+    return [str(block["contests"]), str(block["entries"]), _beside(block, "best_percentile"),
+            *(f"{block[name]['entries']} ({_shown(block[name]['random'])})" for name in ("first_place", "top_1"))]
+
+
+def _first_place_section(title: str, scope: Mapping[str, object]) -> list[str]:
+    lines = [f"## {FIRST_PLACE_HEADING}, {title}", ""]
+    block = scope["first_place"]
+    if not block["overall"]["contests"]:
+        return [*lines, "No entries in this scope.", ""]
+    note = ("Each contest's best entry: its finishing percentile beside the mean best of that many random places, "
+            "averaged over contests. First place and top 1% count entries, each beside the sum of its entries' random "
+            "shares (1/n, and floor(n/100)/n). Bands are places paid over entries, as above.")
+    rows = [["All shapes", "", *_first_place_cells(block["overall"])]]
+    rows += [[band["band"], _shown(band["first_place_label"]), *_first_place_cells(band)]
+             for band in block["by_payout_shape"]]
+    return [*lines, note, "", *_grid(_FIRST_PLACE_HEADER, rows), ""]
+
+
+def _goal_sections(payload: Mapping[str, object]) -> list[str]:
+    """v2 only: first place by contest in each scope, the reading and points behind first, then washouts."""
+
+    scopes, behind = payload["scopes"], payload["points_behind_first"]
+    blocks = [scopes[scope]["washouts"] for scope in SCOPES]
+    rows = [
+        ["Portfolios", *(str(block["portfolios"]) for block in blocks)],
+        ["Washouts", *(str(block["washouts"]) for block in blocks)],
+        ["Washout rate % (random), lower is better", *(_beside(block, "rate") for block in blocks)],
+    ]
+    return [
+        *_first_place_section("NFL", scopes["nfl"]),
+        *_first_place_section("engine era", scopes["engine_era"]),
+        f"{payload['first_place_reading']} Points behind first: {behind['state']} ({behind['named_source']}).", "",
+        f"## {WASHOUT_HEADING}", "",
+        ("A portfolio is the paid entries sharing a contest start time and game type; a washout is one where every "
+         "entry won nothing, cash and tickets. Random: each contest's places drawn independently and uniformly, "
+         "Places_Paid as given."), "",
+        *_grid(("", "NFL", "Engine era"), rows), "",
+    ]
+
+
 def render_table(payload: Mapping[str, object]) -> bytes:
-    """The short readable table of one report payload (`results_report.era-<date>.w1.md`): Overall first (NFL, engine
-    era, all sports), then each scope's payout-shape rows with each rate's excess, interval and MDE, then the
-    within-slate test and its trigger. A null prints `n/a`, never a zero. ASCII, LF, one trailing LF."""
+    """The short readable table of one report payload (`results_report.era-<date>.w1.md`, or `.v2.w1.md`): Overall
+    first (NFL, engine era, all sports), then each scope's payout-shape rows with each rate's excess, interval and MDE,
+    then the within-slate test and its trigger; a v2 payload adds first place by contest and washouts after it. A null
+    prints `n/a`, never a zero. ASCII, LF, one trailing LF."""
 
     era, source, scopes = payload["engine_era_start"], payload["source"], payload["scopes"]
+    v2 = payload["schema_version"] == REPORT_V2
     columns = (scopes["nfl"]["overall"], scopes["engine_era"]["overall"], payload["all_sport_check"]["overall"])
+    only = (f"Only in `{report_name(era['date'], REPORT_V2)}` beside this file: the format, field-size, fee, month "
+            "and slate rollups, fee concentration, the blanks-removed rates, the return's interval, each contest's "
+            "best entry and each portfolio's washout." if v2 else
+            f"Only in `{report_name(era['date'])}` beside this file: the format, field-size, fee, month and slate "
+            "rollups, fee concentration, the blanks-removed rates and the return's interval.")
     lines = [
         "# NFL results report", "",
         (f"`{payload['schema_version']}`, writer `{payload['writer']}`, metrics `{payload['metrics']['version']}`; "
@@ -984,10 +1256,10 @@ def render_table(payload: Mapping[str, object]) -> bytes:
         *_shape_section("NFL", scopes["nfl"], payload["bootstrap"]),
         *_shape_section("engine era", scopes["engine_era"], payload["bootstrap"]),
         *_within_section(payload),
+        *(_goal_sections(payload) if v2 else ()),
         "## Not established", "",
         *(f"- {line}" for line in payload["does_not_establish"]), "",
-        (f"Only in `{report_name(era['date'])}` beside this file: the format, field-size, fee, month and slate "
-         "rollups, fee concentration, the blanks-removed rates and the return's interval."),
+        only,
     ]
     return ("\n".join(lines) + "\n").encode("utf-8")
 
@@ -1003,6 +1275,7 @@ class ReportOutcome:
     source_sha256: str | None = None
     engine_era_start: Mapping[str, object] | None = None
     headline: Mapping[str, object] | None = None
+    contract: str = REPORT_VERSION
 
     @property
     def exit_code(self) -> int:
@@ -1013,7 +1286,7 @@ class ReportOutcome:
             "status": self.status,
             "exit_code": self.exit_code,
             "problems": list(self.problems),
-            "contract": REPORT_VERSION,
+            "contract": self.contract,
             "source_sha256": self.source_sha256,
             "engine_era_start": self.engine_era_start,
             "files": self.files,
@@ -1023,13 +1296,21 @@ class ReportOutcome:
 
 
 def headline(payload: Mapping[str, object]) -> dict[str, object]:
-    """What stdout carries: counts, place-based rates, the within-slate test and the trigger; no fee or winnings."""
+    """What stdout carries: counts, place-based rates, the within-slate test and the trigger; no fee or winnings. A v2
+    payload adds each scope's overall first-place reading and its washout counts (a yes or no per portfolio, never an
+    amount); neither the per-contest nor the per-portfolio list."""
+
+    v2 = payload["schema_version"] == REPORT_V2
 
     def scope(block: Mapping[str, object]) -> dict[str, object]:
         blanks: Counter[str] = Counter()
         for row in block["by_slate"]:
             blanks[row["date"]] += row["blanks"]
         test = block["within_slate_test"]
+        goals = {} if not v2 else {
+            "first_place": block["first_place"]["overall"],
+            "washouts": {key: block["washouts"][key] for key in ("portfolios", "washouts", "rate")},
+        }
         return {
             "entries": block["overall"]["entries"],
             "slates": block["slates"],
@@ -1040,6 +1321,7 @@ def headline(payload: Mapping[str, object]) -> dict[str, object]:
             "rates": block["overall"]["with_blanks"],
             "within_slate_test": {key: test[key] for key in ("slates_with_both", "worse", "better", "tied",
                                                              "p_one_sided")},
+            **goals,
         }
 
     check = payload["all_sport_check"]
@@ -1083,20 +1365,24 @@ def _snapshot(path: Path, sha256: str) -> tuple[bytes | None, str | None]:
 
 
 def run_results_report(source_sha256: str, results_root: str | Path, engine_era_start: str | None = None, *,
-                       metrics: ResultsMetrics | None = None) -> ReportOutcome:
-    """Read one snapshot, build the report and write it once: `<root>/reports/<sha256>/results_report.era-<date>.w1.json`,
-    then the table beside it (`.w1.md`).
+                       metrics: ResultsMetrics | None = None,
+                       metrics_version: str = CURRENT_METRICS_VERSION) -> ReportOutcome:
+    """Read one snapshot, build the report and write it once: `<root>/reports/<sha256>/results_report.era-<date>.w1.json`
+    (v1) or `.v2.w1.json` (v2), then the table beside it (`.w1.md`, `.v2.w1.md`).
 
-    The registered metrics load first, from the module's path at call time: a defect there is `ResultsMetricsError`, a
-    fault in a tracked file and never a refusal. A refused input writes nothing. The table is rendered before either
-    write and written after the JSON, so a table that conflicts or fails leaves the JSON, and a rerun writes the table
-    alone. The trigger reads the registered era whatever `engine_era_start` names.
+    The registered metrics for `metrics_version` (v2 unless named) load first, from the module's path at call time: a
+    defect there is `ResultsMetricsError`, a fault in a tracked file and never a refusal. A refused input writes
+    nothing. The table is rendered before either write and written after the JSON, so a table that conflicts or fails
+    leaves the JSON, and a rerun writes the table alone. The trigger reads the registered era whatever
+    `engine_era_start` names.
     """
 
-    metrics = load_results_metrics(DEFAULT_METRICS_PATH) if metrics is None else metrics
+    metrics = load_results_metrics(registered_metrics_path(metrics_version)) if metrics is None else metrics
+    contract = report_contract(metrics)
     files: dict[str, dict[str, str | None]] = {
         name: {"path": None, "state": "NOT_ATTEMPTED", "sha256": None} for name in ("report", "table")}
-    refused = partial(ReportOutcome, "REFUSED", files=files, does_not_establish=metrics.does_not_establish)
+    refused = partial(ReportOutcome, "REFUSED", files=files, does_not_establish=metrics.does_not_establish,
+                      contract=contract)
     if not isinstance(source_sha256, str) or not _SHA256.fullmatch(source_sha256):
         return refused((_problem("RESULTS_REPORT_INPUT_INVALID", "field=source_sha256"),))
     if engine_era_start is not None and not is_calendar_date(engine_era_start):
@@ -1113,10 +1399,10 @@ def run_results_report(source_sha256: str, results_root: str | Path, engine_era_
                            engine_era_start=engine_era_start, bootstrap=True)
     era = payload["engine_era_start"]
     done = partial(ReportOutcome, files=files, does_not_establish=metrics.does_not_establish,
-                   source_sha256=source_sha256, engine_era_start=era, headline=headline(payload))
+                   source_sha256=source_sha256, engine_era_start=era, headline=headline(payload), contract=contract)
     folder = root / "reports" / source_sha256
-    writes = (("report", folder / report_name(era["date"]), canonical_bytes(payload)),
-              ("table", folder / table_name(era["date"]), render_table(payload)))
+    writes = (("report", folder / report_name(era["date"], contract), canonical_bytes(payload)),
+              ("table", folder / table_name(era["date"], contract), render_table(payload)))
     for name, path, _ in writes:
         files[name]["path"] = str(path)
     for name, path, data in writes:
@@ -1137,11 +1423,29 @@ def run_results_report(source_sha256: str, results_root: str | Path, engine_era_
 
 __all__ = [
     "BOTTOM_STRICT",
+    "CURRENT_METRICS_VERSION",
+    "DECLARED_V2",
     "DEFAULT_METRICS_PATH",
+    "FIRST_PLACE_HEADING",
+    "FIRST_PLACE_READING",
+    "METRICS_V2",
+    "METRICS_V2_PATH",
     "METRICS_VERSION",
+    "METRICS_VERSIONS",
     "PAYOUT_SHAPE_HEADING",
     "REPORT_CODES",
+    "REPORT_V2",
     "REPORT_VERSION",
+    "WASHOUT_HEADING",
+    "in_first",
+    "in_top_1",
+    "random_best_percentile",
+    "random_first",
+    "random_no_paid_place",
+    "random_top_1",
+    "random_washout",
+    "registered_metrics_path",
+    "report_contract",
     "ReportOutcome",
     "ResultsMetrics",
     "ResultsMetricsError",
