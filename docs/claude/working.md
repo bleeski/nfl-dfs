@@ -199,8 +199,17 @@ pass is for whoever is still left out: a true cold start or a same-day promotion
   them, which QA names `THESIS_BROKEN ... rule=structural_bounds.*`. Its `construction/judgment_pass.py` checks both, and a DST
   beside the opposing quarterback first flips to the other DST, then takes its own team's quarterback. Write a hand-edited file
   with CRLF line endings, as DraftKings does, or `diversify_showdown_contests.py` refuses it (`ENTRIES_GEOMETRY_DIFFERS_FROM_TEMPLATE`).
-  The contest pass moves lineups between Entry IDs, so run the `--policy --claim` QA on the file before it and prove the file
-  after it holds the same lineup set.
+  **The contest pass runs last (Session 76b).** It moves lineups between Entry IDs, and after it the claim cannot bind, so
+  nothing after it may edit a roster. SEA@DEN made a FLEX swap and an adversarial review after it; that order is retired:
+  1. Every roster edit: the ceiling pass, value-add swaps, hand placements, the lead-receiver check below and any adversarial
+     review.
+  2. QA with `--policy --claim` on that file: adherence, and Session 75's first-place table before the pass.
+  3. `scripts/diversify_showdown_contests.py` (v2 by default) with `--theses` (the claim's Entry ID map) and `--theses-out`
+     (`docs/OPERATOR_GUIDE.md` § The contest pass). Prove the output holds the same lineup set.
+  4. A contest-targeted placement (SEA@DEN's Micro Booster) by whole-lineup moves only, after the pass, which would undo it.
+  5. QA with `--theses <the map>`, not `--claim`: the first-place table after the pass, every row labelled by its lineup.
+
+  Both tables go in the handoff, contest by contest.
   **After the ceiling pass, list each team's lead receivers and backs at 0 rows (SEA@DEN, 2026-10-15).** Its FLEX upgrades
   rank by a prior built from history, so a receiver whose role grew since (a trade, a promotion) is the first one swapped out:
   Jaylen Waddle, Denver's lead receiver by that night's route and air-yards shares, went from 6 rows to 0. Place such a person

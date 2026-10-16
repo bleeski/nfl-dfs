@@ -4,6 +4,117 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-16: Session 76b -- the offline contest pass on v2, the relabelled thesis map, the hand-pass order
+
+Branch `claude/s76b-offline-contest-pass`, claimed at `8d551f1` on `9722cbd` (PR #152, Session 76's merge). Before Ben saw
+the plan, a fresh-context fable agent was briefed to refute ten claims. Ben approved it before any change, with its
+test-edit exception (D0). A reviewer read the diff and its fixes landed. The pass still moves only which Entry ID holds which
+lineup; every file stays `PRIOR_ONLY` / `DO_NOT_UPLOAD`.
+
+**Added.**
+- **`scripts/diversify_showdown_contests.py` on `within_contest_diversity_v2` by default**, as every `prior_review` exit since
+  Session 76.
+  - Restarts default to the run path's entry-sized count (MIN@NO v10: 57, about 6 s; 300 took 33.4 s on this host against
+    the script's 60 s allowance).
+  - `--captain-penalty` and `--thesis-penalty` are refused by name under v2, even at the registered value
+    (`V1_PENALTY_FLAG_UNDER_V2`). `--stack-penalty` applies, and the audit now recomputes v2's objective with that weight.
+  - The record is `nfl_contest_diversification_v3`: the objective in total and per contest, v1's score as a `reading` with
+    `READING_DEFINITION` (no top-level `score`), the resolved search, the SHA-256 of the salaries, template, entries and
+    theses and of the written file. It is written as LF bytes.
+  - `--version within_contest_diversity_v1` runs the old score at 300 restarts and writes `nfl_contest_diversification_v2`
+    exactly as before.
+- **`--theses` is checked**: a JSON object of Entry ID to a label or null, else `THESES_NOT_AN_ENTRY_MAP`,
+  `THESES_UNREADABLE` or `THESES_ENTRY_IDS_NOT_IN_TEMPLATE`. Before, a nested value raised a `TypeError` in the search.
+- **`--theses-out` writes `nfl_entry_thesis_map_v1`** (Showdown): each output Entry ID's thesis through the pass's own
+  mapping, with its roster and the hashes of the salary file and the file it labels.
+- **`qa_showdown_portfolio.py --theses`** reads that map for Session 75's first-place table after the pass, when the claim
+  cannot bind. Each row takes the label of the map entry holding its exact lineup, so a lineup moved whole after the pass
+  keeps it; a row whose roster changed takes its own Entry ID's label, unless that lineup sits in another row, and is
+  named. `first_place_thesis_map` (before `first_place_coverage`, only with the flag) says how the labels bound. A map that
+  does not bind is `NOT_BOUND` with one of eleven codes and moves no verdict and no exit code, as `--contest-facts` does.
+- **In the module**, a v1 report names `single_entry_rows_move` or `no_regression` when a caller departs from v1's own rule,
+  and `audit_contest_assignment` takes `objective_weights`. Both are absent on every `run-slate` path, so its bytes do not
+  move (the reviewer traced each caller).
+- **Docs.** `docs/DATA_CONTRACTS.md` § The offline contest pass (both contracts), and one sentence in v1's wrapper
+  paragraph; `docs/OPERATOR_GUIDE.md` § The contest pass and the QA's `--theses`; the `docs/RUNBOOK.md` sentence that said
+  v1; `docs/claude/working.md`'s order: every roster edit (the ceiling pass, value-add swaps, hand placements, the
+  lead-receiver check, any adversarial review), QA with `--policy --claim`, the contest pass, a contest-targeted placement
+  by whole-lineup moves, QA with `--theses`. SEA@DEN's swap and review after the pass is the order this retires.
+
+**Changed: six test edits (D0, approved with the plan).** The card moves the script's default from v1 to v2.
+- Five tests in `tests/test_diversify_showdown_contests.py` read v1-only record fields or passed v1-only flags through the
+  default, so each gains `--version within_contest_diversity_v1` and nothing else, and keeps its v1 guarantee. A new v2 test
+  mirrors each one.
+  - `test_reassignment_lowers_the_score_and_keeps_every_lineup`
+  - `test_theses_are_optional_and_only_add_a_term`
+  - `test_classic_files_are_supported_and_no_two_entry_contest_repeats_a_qb`
+  - `test_a_weight_override_is_recorded_as_not_the_registered_weights`
+  - `test_the_record_carries_the_registered_version_and_what_it_does_not_establish`
+- `tests/test_contest_assignment_v2_files.py:244`: the parametrize id `script` became `300`. It named the script's old
+  default, which this session retires; the case is unchanged.
+- The plan said these would be named here before the edits. They were named in the plan Ben approved and land here in the
+  same pull request; the reviewer caught the order.
+
+**Acceptance.**
+- **v2, byte for byte.** On PHI@CHI v4 (300 restarts) and MIN@NO v10 (57), with the labels the slate records bind through
+  their mappings, the script's file equals the input with each moved row's cells replaced by the module's assignment, read
+  through `first_place_coverage`'s reader rather than the script's. The record carries the module's objective, and nothing
+  timed out. The objective totals:
+  - PHI@CHI: 0, 0, 0, 5, spread 109.57 to 74.86;
+  - MIN@NO: 1, 12, 18, 18, 36.91 to 1, 11, 14, 16, 44.02.
+- **Replay.** A second run writes the same file, the same map and the same record but for `seconds`. The map's SHA-256 is
+  pinned so CI's Linux and Windows jobs prove the bytes: PHI@CHI `d55b7317...`, MIN@NO `d78aa166...`.
+- **The after-table.** QA `--theses` on that file labels all 36 and all 33 rows, and the reading equals the module's
+  placement read with each lineup's label. Without the flag the output is unchanged: the pinned QA stdout hashes in
+  `tests/test_first_place_coverage.py` hold.
+- **v1.** `--version` v1 reproduces every committed module-era record: BAL@ATL v4, BUF@LAR v1 and v2, MIN@NO v7, SEA@DEN v1,
+  TB@DAL v2 and v3. Each gives the output file byte for byte and the record field for field but for `seconds`. It also gives
+  the module's v1 placement of both card files. PHI@CHI's `assignment_v2` to `v4` predate the module and cannot replay.
+
+**Advisor.** A fresh-context fable agent was briefed to refute ten claims.
+- **Taken.**
+  - Edits after the pass lose adherence: the order now puts every roster edit before the pass, and the binder falls back to
+    the Entry ID for an edited row.
+  - The script's `--theses` swallowed bad input.
+  - The record bound no bytes.
+  - Restarts are resolved and recorded.
+  - Off-registered v1 knobs are recorded, not refused, so the registry is not re-pinned and Session 76's equal-terms
+    comparison stays possible.
+  - The claim fallback and `labels_from`.
+  - The after-table uses `--theses`, not `--claim`.
+  - Stale prose; LF bytes; v1 on both card files; Showdown-only maps; a value-add note.
+- **Not taken.**
+  - The map's binding inside the `first_place_coverage` block, a versioned block that the run path and both reviews share.
+  - Accepting the map as the script's input: no second pass follows the contest pass.
+
+**Review.** A fresh-context reviewer found nothing blocking in the code. It traced every `run-slate` caller unchanged, and
+ran the claim commit's script against this one on BAL@ATL and SEA@DEN under v1: the CSV identical, the record identical
+but for `seconds`, stdout identical but for the path.
+- **Fixed.**
+  - A missing output folder left the first file written: now `OUTPUT_DIR_MISSING`, checked before any write, with a test.
+  - A map with the right salary file but none of the export's lineups read `BOUND`: now `THESES_MAP_MATCHES_NO_LINEUP`,
+    with a test.
+  - Two doc overstatements: what `--claim` does after the pass, and the record's byte identity apart from `seconds`.
+  - The map's hash pin above.
+  - The changelog order of the test edits, above.
+
+**Verification.**
+- `tests/test_diversify_showdown_contests.py` (the card's command), `tests/test_qa_showdown_thesis_map.py`,
+  `tests/test_contest_assignment.py`, `tests/test_contest_assignment_v2_files.py`, `tests/test_qa_showdown_portfolio.py`,
+  `tests/test_qa_showdown_thesis.py`, `tests/test_first_place_coverage.py`: 260 passed before the review. After its fixes,
+  the touched files: `206 passed in 47.95s`.
+- Full suite on `6e36ce2`: `4070 passed, 2 skipped in 1971.51s (0:32:51)` (Windows, with another repository's suite on the host). Session 76's
+  clock-dependent replay failure did not recur.
+- `doctor` passes; `git diff --check` is clean; no protected path is touched.
+
+**Found.**
+- The Classic QA takes no thesis labels and the script writes no Classic map (not on the card).
+- The claim's labels, the reading's fallback, are read by Entry ID, so they are right only on a file whose lineups did
+  not move; the contract says so.
+- The reviewer's scratch copies were left outside the repository (`<scratchpad>\o` and `%TEMP%\nfl-dfs-pytest\rv76b-*`):
+  its `rm -r` was denied by the auto-mode check, and this session did not retry it.
+- Next: Session 77 (first place and washouts in the results report).
+
 ### 2026-10-16: Session 76 -- contest placement for first place (`within_contest_diversity_v2`; the script split to 76b)
 
 Branch `claude/s76-contest-placement`, claimed at `75cac8e` on `83f0d64` (PR #151, the SEA@DEN record's merge). Before Ben

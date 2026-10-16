@@ -807,7 +807,8 @@
       "title": "Use the new contest placement on hand-built files too",
       "what": "Brings the hand-run placement tool up to the new rule, so a file finished by hand gets the same treatment as one the engine builds, and puts the placement step last in the hand checklist.",
       "why": "It was split off Session 76 to keep each change a reviewable size. Most slate-night files are finished by hand, so the old rule still decides their contests until this lands.",
-      "matters": "The contest-by-contest table you read before a file goes out then shows the final placement, with each lineup's game story still attached."
+      "matters": "The contest-by-contest table you read before a file goes out then shows the final placement, with each lineup's game story still attached.",
+      "note": "Built on 2026-10-16: the hand-run placement tool now uses the same rule as the engine, and it writes a small file naming each lineup's game story, so the contest-by-contest table after placement still shows them. The hand checklist now makes every lineup edit first and the placement last."
     },
     "S77": {
       "goal": "measure",

@@ -1,5 +1,29 @@
 # Implementation Status
 
+## Capability added: 2026-10-16 (Session 76b, the offline contest pass on v2 and the thesis map after it)
+
+Working and verified. The evidence:
+- `tests/test_diversify_showdown_contests.py` (41, from 11), the new `tests/test_qa_showdown_thesis_map.py` (16) and two
+  module cases. On the committed PHI@CHI v4 and MIN@NO v10 the script equals the module's v2 placement byte for byte and
+  the QA's after-table equals the module's placement read with each lineup's label; `--version` v1 reproduces the seven
+  committed module-era records.
+- A reviewer, and the full suite (`4070 passed, 2 skipped in 1971.51s (0:32:51)`).
+
+What works:
+- **`scripts/diversify_showdown_contests.py` on `within_contest_diversity_v2`**, as every `prior_review` exit, at the run
+  path's entry-sized restarts. `--version within_contest_diversity_v1` keeps the old score and record. Its v3 record binds
+  every input and the output by SHA-256.
+- **The first-place table after the pass reads each lineup's thesis.** `--theses-out` writes `nfl_entry_thesis_map_v1`, and
+  `qa_showdown_portfolio.py --theses` labels each row by its exact lineup, so a contest-targeted move after the pass keeps
+  its label.
+- **The hand-pass order**: every roster edit first, the contest pass last, a whole-lineup placement after it, and the table
+  before and after in the handoff.
+
+Not yet:
+- The Classic QA takes no thesis labels, and the script writes no Classic map.
+- The script does not read a run's claim directly; the operator guide gives a one-line extraction.
+- The baseline's step runs v1.
+
 ## Capability added: 2026-10-16 (Session 76, contest placement for first place on the run path)
 
 Working and verified. The evidence:
@@ -23,7 +47,7 @@ What works:
 Not yet:
 - The baseline's step runs v1.
 - `scripts/diversify_showdown_contests.py` runs v1, and the hand-pass order in `docs/claude/working.md` still runs the
-  contest pass before the hand passes end. Both are Session 76b.
+  contest pass before the hand passes end. Both are Session 76b (closed by Session 76b, above).
 - The objective reads no contest's size or payout, and no lineup's prior points.
 
 ## Capability added: 2026-10-15 (Session 75b, the first-place reading on the run path and in both readable reviews)

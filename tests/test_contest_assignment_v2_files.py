@@ -241,7 +241,7 @@ def _washout(players, rosters):
 
 
 @pytest.mark.parametrize("name", sorted(FILES))
-@pytest.mark.parametrize("restarts", [None, ca.DEFAULT_RESTARTS], ids=["sized", "script"])
+@pytest.mark.parametrize("restarts", [None, ca.DEFAULT_RESTARTS], ids=["sized", "300"])
 def test_v2_reaches_the_exact_floor_on_the_committed_files(runs, name, restarts):
     players, rows, out = runs(name, restarts=restarts)
     reached = _measured(_placed_keys(players, rows, out.assignments))

@@ -52,6 +52,17 @@ Session 50's per-contest spread with each repeated Captain named; for one entry,
 his salary. Thesis labels come from `--claim` when its check ran; `--contest-facts` takes a run's
 `selection/contest_facts.json`, and a file that does not bind reads `NOT_BOUND`. It is a reading:
 no other key, no verdict and no exit code moves with it.
+
+2026-10-16 (Session 76b): `--theses` takes the contest pass's `nfl_entry_thesis_map_v1`
+(`diversify_showdown_contests.py --theses-out`), because once the pass moves lineups between Entry
+IDs the claim cannot bind. Each export row takes the label of the map entry holding its exact
+lineup (Captain and sorted FLEX), so a lineup moved whole after the pass keeps it; a row whose
+roster changed takes its own Entry ID's label, unless that lineup now sits in another row, and is
+named under `roster_changed`. `first_place_thesis_map`, before `first_place_coverage` and only with
+the flag, says how the labels bound. A map that does not bind (another schema or salary file, an
+Entry ID outside the template, a repeated lineup, a malformed entry, no export lineup it was written
+for) is `NOT_BOUND` with its code, and the reading takes the claim's labels if the thesis check ran,
+else none. A reading: no other key, no verdict and no exit code moves with it.
 """
 from __future__ import annotations
 import argparse, csv, collections, json, re, sys
@@ -221,7 +232,109 @@ def thesis_pass(a, sal, filled, D, L):
     }
 
 
-def first_place_reading(a, thesis_block):
+THESIS_MAP_VERSION = "nfl_entry_thesis_map_v1"
+THESIS_MAP_DOES_NOT_ESTABLISH = (
+    "which thesis each lineup was labelled with when the contest pass wrote the map, carried to the export by lineup; "
+    "not that a row follows its thesis, a projection, ownership or upload clearance")
+
+
+class _MapNotBound(Exception):
+    def __init__(self, code, detail):
+        super().__init__(code)
+        self.code, self.detail = code, detail
+
+
+def _claim_labels(thesis_block):
+    if isinstance(thesis_block, dict) and thesis_block.get("status") == "CHECKED":
+        return {eid: item["thesis"] for eid, item in thesis_block["entries"].items()}
+    return None
+
+
+def _bind_thesis_map(a):
+    """The map's labels for each export row: by exact lineup, else (an edited roster) by the row's own Entry ID."""
+    import hashlib
+    try:
+        with open(a.theses, "rb") as fh:
+            doc = json.loads(fh.read().decode("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise _MapNotBound("THESES_MAP_UNREADABLE", f"{a.theses}: {type(exc).__name__}")
+    if not isinstance(doc, dict) or doc.get("schema_version") != THESIS_MAP_VERSION:
+        raise _MapNotBound("THESES_MAP_SCHEMA", f"not {THESIS_MAP_VERSION}")
+    if doc.get("mode") != contest_assignment.MODE_SHOWDOWN:
+        raise _MapNotBound("THESES_MAP_NOT_SHOWDOWN", f"mode {doc.get('mode')!r}")
+    with open(a.salaries, "rb") as fh:
+        salary_sha = hashlib.sha256(fh.read()).hexdigest()
+    if doc.get("salary_sha256") != salary_sha:
+        raise _MapNotBound("THESES_MAP_SALARY_MISMATCH", "the map was written for another salary file")
+    entries = doc.get("entries")
+    if not isinstance(entries, dict):
+        raise _MapNotBound("THESES_MAP_ENTRY_MALFORMED", "entries is not an object")
+    written = {}
+    for eid, item in entries.items():
+        roster = item.get("roster") if isinstance(item, dict) else None
+        if (not isinstance(item, dict) or not isinstance(item.get("thesis"), str) or not isinstance(roster, list)
+                or len(roster) != WIDTH or not all(isinstance(i, str) for i in roster)):
+            raise _MapNotBound("THESES_MAP_ENTRY_MALFORMED", str(eid))
+        written[eid] = (item["thesis"], lineup_key(roster))
+    template_rows, state = fpc.read_entries_file(a.template, mode=contest_assignment.MODE_SHOWDOWN)
+    if state != fpc.READ:
+        raise _MapNotBound("THESES_MAP_TEMPLATE_UNREADABLE", state)
+    foreign = sorted(set(written) - {eid for eid, _contest, _roster in template_rows})
+    if foreign:
+        raise _MapNotBound("THESES_MAP_ENTRY_IDS_NOT_IN_TEMPLATE", ",".join(foreign[:5]))
+    by_lineup = {}
+    for eid, (thesis, key) in written.items():
+        if key in by_lineup:
+            raise _MapNotBound("THESES_MAP_REPEATED_LINEUP", f"{by_lineup[key][0]},{eid}")
+        by_lineup[key] = (eid, thesis)
+    rows, state = fpc.read_entries_file(a.export, mode=contest_assignment.MODE_SHOWDOWN)
+    if state != fpc.READ:
+        raise _MapNotBound("THESES_MAP_EXPORT_UNREADABLE", state)
+    held = {lineup_key(list(roster)) for _eid, _contest, roster in rows if roster is not None}
+    labels, moved, changed, unlabelled = {}, [], [], []
+    for eid, _contest, roster in rows:
+        if roster is None:
+            continue
+        key = lineup_key(list(roster))
+        if key in by_lineup:
+            source, labels[eid] = by_lineup[key]
+            if source != eid:
+                moved.append(eid)
+        elif eid in written and written[eid][1] not in held:
+            labels[eid] = written[eid][0]
+            changed.append(eid)
+        else:
+            unlabelled.append(eid)
+    if held and not held & set(by_lineup):
+        raise _MapNotBound("THESES_MAP_MATCHES_NO_LINEUP", "no export row holds a lineup the map was written for")
+    with open(a.export, "rb") as fh:
+        same_file = hashlib.sha256(fh.read()).hexdigest() == doc.get("entries_sha256")
+    return labels, {"same_file_as_written": same_file, "labelled_rows": len(labels), "roster_changed": changed,
+                    "moved_since_written": moved, "unlabelled_entry_ids": unlabelled}
+
+
+def thesis_map_pass(a, thesis_block):
+    """`--theses` (Session 76b): the block the first-place reading's labels came from, and those labels.
+
+    A map that binds labels the reading. One that does not is named, and the reading takes the claim's labels when the
+    thesis check ran, else none. A reading, never a gate: no other key, no verdict and no exit code moves with it."""
+    block = {"map_version": THESIS_MAP_VERSION, "binding": "BOUND", "refusal": None, "labels_from": "THESES_MAP",
+             "same_file_as_written": None, "labelled_rows": 0, "roster_changed": [], "moved_since_written": [],
+             "unlabelled_entry_ids": [], "does_not_establish": THESIS_MAP_DOES_NOT_ESTABLISH}
+    try:
+        labels, found = _bind_thesis_map(a)
+        block.update(found)
+        return block, labels
+    except Exception as exc:  # noqa: BLE001 - a reading, never a gate: it is named and QA goes on
+        code, detail = (exc.code, exc.detail) if isinstance(exc, _MapNotBound) else ("THESES_MAP_NOT_COMPUTED",
+                                                                                     type(exc).__name__)
+        labels = _claim_labels(thesis_block)
+        block.update(binding="NOT_BOUND", refusal={"code": code, "detail": detail},
+                     labels_from="CLAIM" if labels else "NONE")
+        return block, labels
+
+
+def first_place_reading(a, thesis_block, map_labels=None):
     """Session 75's per-contest reading of the export. Whatever happens here, no other key and no exit code moves."""
     mode = contest_assignment.MODE_SHOWDOWN
     try:
@@ -229,9 +342,7 @@ def first_place_reading(a, thesis_block):
         if state != fpc.READ:
             return fpc.unread(mode, state, "the export's header has no Contest ID or no Showdown roster columns",
                               source="EXPORT")
-        labels = None
-        if isinstance(thesis_block, dict) and thesis_block.get("status") == "CHECKED":
-            labels = {eid: item["thesis"] for eid, item in thesis_block["entries"].items()}
+        labels = map_labels if map_labels is not None else _claim_labels(thesis_block)
         facts = fpc.facts_from_file(a.contest_facts) if a.contest_facts else None
         return fpc.reading(rows, mode=mode, players=fpc.players_from_salary_csv(a.salaries),
                            thesis_by_entry=labels, facts=facts, source="EXPORT")
@@ -255,6 +366,9 @@ def main(argv=None):
                    help="the same run's selection_report.json, whose theses.entries names each Entry ID's thesis")
     a.add_argument('--contest-facts', default=None,
                    help="a run's selection/contest_facts.json, for the per-contest reading")
+    a.add_argument('--theses', default=None,
+                   help="the contest pass's nfl_entry_thesis_map_v1 (diversify_showdown_contests.py --theses-out), "
+                        "whose labels the per-contest reading shows after the pass")
     a = a.parse_args(argv)
 
     sal = load_salary(a.salaries)
@@ -330,8 +444,9 @@ def main(argv=None):
             if o > a.max_overlap:
                 L.append(f"OVERLAP_{o}_EXCEEDS_{a.max_overlap} {lus[i][0]}/{lus[j][0]}")
     thesis_block = thesis_pass(a, sal, filled, D, L) if (a.policy is not None or a.claim is not None) else None
+    map_block, map_labels = thesis_map_pass(a, thesis_block) if a.theses is not None else (None, None)
 
-    verdict = "FAIL" if D else "PARTIAL" if unfilled else "DEFECT" if L else "PASS"
+    verdict ="FAIL" if D else "PARTIAL" if unfilled else "DEFECT" if L else "PASS"
     print(json.dumps({
         'lineups': len(lus), 'defects': len(D), 'DEFECTS': D,
         'limit_breaches': len(L), 'LIMIT_BREACHES': L,
@@ -348,7 +463,8 @@ def main(argv=None):
         'distinct_captains': len({l[1] for l in lus}),
         'qb_count_histogram': dict(collections.Counter(l[4] for l in lus)),
         **({'theses': thesis_block} if thesis_block is not None else {}),
-        'first_place_coverage': first_place_reading(a, thesis_block),
+        **({'first_place_thesis_map': map_block} if map_block is not None else {}),
+        'first_place_coverage': first_place_reading(a, thesis_block, map_labels),
         'VERDICT': verdict,
     }, indent=2))
     if D:

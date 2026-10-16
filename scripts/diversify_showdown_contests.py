@@ -4,10 +4,10 @@
 Written 2026-09-28 on the PHI@CHI slate, where three satellite contests held
 seven of the portfolio's 36 lineups each and one held the same Captain three
 times out of seven. Since Session 50 the search lives in
-`src/nfl_dfs/contest_assignment.py` (`within_contest_diversity_v1`), which
-`run-slate` applies on its own; this script is the thin wrapper for a file
-built outside `run-slate`. It works on Showdown and, since Session 50, Classic
-files (the mode is read from the template's header: a `CPT` column is Showdown).
+`src/nfl_dfs/contest_assignment.py`, which `run-slate` applies on its own; this
+script is the thin wrapper for a file built outside `run-slate`. It works on
+Showdown and, since Session 50, Classic files (the mode is read from the
+template's header: a `CPT` column is Showdown).
 
 What it changes. Only which Entry ID holds which lineup, and only among the
 rows the untouched DraftKings template left blank. A row already filled in the
@@ -16,19 +16,34 @@ still counts in its contest's score. Every lineup in the input file is in the
 output exactly once, so the portfolio, its exposures and its captain counts are
 unchanged.
 
-The score, per contest, over every pair of its lineups: shared people squared,
-plus a penalty for the same Captain (Classic: the same QB), the same Classic
-primary stack team and the same thesis, and a contest's score is its worst pair
-plus its mean pair (`contest_assignment.py` states why). Theses come from an
-optional JSON map of Entry ID to a label (the sleeve plan); without one that
-term is zero. The penalty flags override the registered weights for an offline
-experiment and the record says so.
+The version (Session 76b). `within_contest_diversity_v2` by default, as every
+`prior_review` exit since Session 76 (R38: first place in each contest): inside
+a contest a repeated Captain (Classic: QB) ranks as the costliest difference,
+then a repeated thesis, then shared people (worst plus mean of shared people
+squared, plus the same Classic primary stack team). Its restarts default to the
+run path's entry-sized count. `--version within_contest_diversity_v1` keeps the
+Session 50 score (shared people squared plus a penalty for the same Captain or
+QB, the same stack team and the same thesis, worst pair plus mean pair) at 300
+restarts, and writes the record it always wrote, so every committed v1 record
+replays. Under v2, `--captain-penalty` and `--thesis-penalty` are refused by
+name: v2 ranks those terms and has no weight for them. `--stack-penalty` applies
+under both, and the record says when a weight is not the registered one.
+
+Theses. `--theses` is a JSON map of Entry ID to a thesis label or null (a run's
+claim names them in `selection.portfolio_policy.theses.entries`); anything else
+is refused by name. `--theses-out` (Showdown) writes `nfl_entry_thesis_map_v1`:
+each output Entry ID's label through this pass's own mapping, with its roster
+and the hashes of the file it labels, which `qa_showdown_portfolio.py --theses`
+reads for the first-place table after the pass, when the run's claim can no
+longer bind.
 
 What it checks before writing. The output differs from the template only in
 the roster cells of rows the template left blank; the multiset of movable
 lineups is unchanged; a line whose cells cannot be split on commas and joined
-back to the same bytes (a quoted field) is refused, never guessed. It writes a
-new path only. It does not validate lineups against DraftKings rules: run
+back to the same bytes (a quoted field) is refused, never guessed; the module's
+own audit recomputes the step's readings (and under v2 its objective, with the
+weights the step used) from the bytes about to be written. It writes new paths
+only. It does not validate lineups against DraftKings rules: run
 `qa_showdown_portfolio.py` (or the Classic QA) on the output, as for any file.
 
 It establishes nothing about EV, ownership or probability; the file stays
@@ -38,14 +53,16 @@ Example:
 
     python3 scripts/diversify_showdown_contests.py \\
         --salaries DKSalaries.csv --template DKEntries.csv \\
-        --entries DK_REVIEW_ENTRY_v1.csv --theses sleeve_plan.json \\
-        --out DK_REVIEW_ENTRY_v2.csv --record assignment_v2.json
+        --entries DK_REVIEW_ENTRY_v1.csv --theses theses_by_entry.json \\
+        --out DK_REVIEW_ENTRY_v2.csv --record contest_record_v2.json \\
+        --theses-out theses_map_v2.json
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import io
 import json
 import sys
@@ -70,6 +87,12 @@ ca = _load_module()
 
 SHOWDOWN_ROSTER = slice(4, 10)
 CLASSIC_ROSTER = slice(4, 13)
+POOL = "template"
+V2 = ca.CONTEST_ASSIGNMENT_VERSION_V2
+RECORD_V2 = "nfl_contest_diversification_v2"   # what v1 writes, as it always has
+RECORD_V3 = "nfl_contest_diversification_v3"   # what v2 writes (Session 76b)
+THESIS_MAP_VERSION = "nfl_entry_thesis_map_v1"
+WRITTEN_BY = "scripts/diversify_showdown_contests.py"
 
 
 class DiversifyError(ValueError):
@@ -119,6 +142,24 @@ def _mode(template_lines: list[bytes]) -> tuple[str, slice]:
     raise DiversifyError("TEMPLATE_MODE_UNRECOGNIZED")
 
 
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _load_theses(path: Path) -> tuple[dict[str, str | None], bytes]:
+    """`--theses`: a JSON map of Entry ID to a thesis label or null. Anything else, the QA's `nfl_entry_thesis_map_v1`
+    included, is refused by name (before Session 76b a nested value raised a TypeError in the search)."""
+
+    try:
+        raw = path.read_bytes()
+        doc = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise DiversifyError(f"THESES_UNREADABLE:{path}:{type(exc).__name__}") from exc
+    if not isinstance(doc, dict) or not all(value is None or isinstance(value, str) for value in doc.values()):
+        raise DiversifyError(f"THESES_NOT_AN_ENTRY_MAP:{path}")
+    return doc, raw
+
+
 def plan(template: Path, entries: Path, salaries: Path, theses: dict[str, str] | None):
     people = _people_by_id(salaries)
     t_lines, t_end = _lines(template)
@@ -154,6 +195,10 @@ def plan(template: Path, entries: Path, salaries: Path, theses: dict[str, str] |
             "line": index, "entry_id": entry_id, "contest_id": e_fields[2].decode("utf-8-sig").strip(),
             "movable": blank, "cells": cells, "roster": ids, "thesis": (theses or {}).get(entry_id),
         })
+    if theses is not None:
+        foreign = sorted(set(theses) - {row["entry_id"] for row in rows})
+        if foreign:
+            raise DiversifyError(f"THESES_ENTRY_IDS_NOT_IN_TEMPLATE:{foreign[:5]}")
     return rows, e_lines, e_end, mode, roster_slice, people
 
 
@@ -177,18 +222,45 @@ def _stat_row(mode: str, stats: dict[str, object]) -> dict[str, object]:
     return row
 
 
-def diversify(rows, people, mode, *, weights: ca.Weights, restarts: int, seed: int, time_limit: float):
-    thesis_by_roster = {row["roster"]: row["thesis"] for row in rows if row["thesis"] is not None}
-    entry_rows = [
-        ca.EntryRow(row["entry_id"], row["contest_id"], row["roster"], "template" if row["movable"] else None)
+def _entry_rows(rows) -> list:
+    return [
+        ca.EntryRow(row["entry_id"], row["contest_id"], row["roster"], POOL if row["movable"] else None)
         for row in rows
     ]
+
+
+def diversify(rows, people, mode, *, weights: ca.Weights, restarts: int, seed: int, time_limit: float,
+              version: str = ca.CONTEST_ASSIGNMENT_VERSION_V1):
+    thesis_by_roster = {row["roster"]: row["thesis"] for row in rows if row["thesis"] is not None}
     try:
         return ca.diversify(
-            entry_rows, mode=mode, people=people, thesis_by_roster=thesis_by_roster,
-            seed=seed, restarts=restarts, time_limit_seconds=time_limit, weights=weights)
+            _entry_rows(rows), mode=mode, people=people, thesis_by_roster=thesis_by_roster,
+            seed=seed, restarts=restarts, time_limit_seconds=time_limit, weights=weights, version=version)
     except ca.ContestAssignmentError as exc:
         raise DiversifyError(str(exc)) from exc
+
+
+def _weights(args, v2: bool) -> ca.Weights:
+    if v2:
+        for flag, value in (("--captain-penalty", args.captain_penalty), ("--thesis-penalty", args.thesis_penalty)):
+            if value is not None:
+                raise DiversifyError(f"V1_PENALTY_FLAG_UNDER_V2:{flag}")
+    return ca.Weights(
+        ca.KEY_PERSON_WEIGHT if args.captain_penalty is None else args.captain_penalty,
+        ca.STACK_TEAM_WEIGHT if args.stack_penalty is None else args.stack_penalty,
+        ca.THESIS_WEIGHT if args.thesis_penalty is None else args.thesis_penalty,
+    )
+
+
+def _restarts(args, rows, v2: bool) -> int:
+    """An explicit `--restarts`; else v1's 300, the committed records' count, or under v2 the run path's entry-sized
+    count, so the script places a file as `prior_review` would."""
+
+    if args.restarts is not None:
+        return args.restarts
+    if not v2:
+        return ca.DEFAULT_RESTARTS
+    return ca.restarts_for([ca.Slot(row.entry_id, row.contest_id, row.pool) for row in _entry_rows(rows)])
 
 
 def main(argv=None) -> int:
@@ -197,30 +269,45 @@ def main(argv=None) -> int:
     parser.add_argument("--template", required=True, type=Path, help="the untouched DKEntries download")
     parser.add_argument("--entries", required=True, type=Path, help="the filled file to reassign")
     parser.add_argument("--out", required=True, type=Path, help="a new path; never an existing file")
-    parser.add_argument("--theses", type=Path, help="JSON map of Entry ID to thesis label")
+    parser.add_argument("--theses", type=Path, help="JSON map of Entry ID to thesis label (or null)")
+    parser.add_argument("--theses-out", type=Path,
+                        help="write the relabelled thesis map (nfl_entry_thesis_map_v1) here: Showdown, needs --theses")
     parser.add_argument("--record", type=Path, help="write the mapping and both reports here (new path)")
-    parser.add_argument("--captain-penalty", type=int, default=ca.KEY_PERSON_WEIGHT,
-                        help="the same-Captain (Classic: same-QB) weight; the registered value is 12")
-    parser.add_argument("--stack-penalty", type=int, default=ca.STACK_TEAM_WEIGHT,
+    parser.add_argument("--version", choices=ca.CONTEST_ASSIGNMENT_VERSIONS, default=V2,
+                        help="the contest assignment version; within_contest_diversity_v2 by default")
+    parser.add_argument("--captain-penalty", type=int, default=None,
+                        help="v1 only: the same-Captain (Classic: same-QB) weight; the registered value is 12")
+    parser.add_argument("--stack-penalty", type=int, default=None,
                         help="the same Classic primary stack team weight; the registered value is 6")
-    parser.add_argument("--thesis-penalty", type=int, default=ca.THESIS_WEIGHT,
-                        help="the same-thesis weight; the registered value is 3")
-    parser.add_argument("--restarts", type=int, default=ca.DEFAULT_RESTARTS)
+    parser.add_argument("--thesis-penalty", type=int, default=None,
+                        help="v1 only: the same-thesis weight; the registered value is 3")
+    parser.add_argument("--restarts", type=int, default=None,
+                        help="v1: 300 by default; v2: the run path's entry-sized count by default")
     parser.add_argument("--seed", type=int, default=ca.DEFAULT_SEED)
     parser.add_argument("--time-limit-seconds", type=float, default=60.0)
     args = parser.parse_args(argv)
+    v2 = args.version == V2
     try:
-        for target in (args.out, args.record):
-            if target is not None and target.exists():
+        targets = [target for target in (args.out, args.record, args.theses_out) if target is not None]
+        for target in targets:
+            if target.exists():
                 raise DiversifyError(f"OUTPUT_EXISTS:{target}")
+            if not target.parent.is_dir():
+                raise DiversifyError(f"OUTPUT_DIR_MISSING:{target}")
+        if len({target.resolve() for target in targets}) != len(targets):
+            raise DiversifyError("OUTPUT_PATHS_NOT_DISTINCT")
         if args.out.resolve() in {args.template.resolve(), args.entries.resolve(), args.salaries.resolve()}:
             raise DiversifyError("OUTPUT_IS_AN_INPUT")
-        theses = json.loads(args.theses.read_text(encoding="utf-8")) if args.theses else None
+        weights = _weights(args, v2)
+        if args.theses_out is not None and args.theses is None:
+            raise DiversifyError("THESES_OUT_NEEDS_THESES")
+        theses, theses_raw = _load_theses(args.theses) if args.theses else (None, None)
         rows, lines, ending, mode, roster_slice, people = plan(args.template, args.entries, args.salaries, theses)
-        weights = ca.Weights(args.captain_penalty, args.stack_penalty, args.thesis_penalty)
-        outcome = diversify(rows, people, mode, weights=weights, restarts=args.restarts, seed=args.seed,
-                            time_limit=args.time_limit_seconds)
-        by_entry = {row["entry_id"]: row for row in rows}
+        if args.theses_out is not None and mode != ca.MODE_SHOWDOWN:
+            raise DiversifyError("THESES_OUT_SHOWDOWN_ONLY")
+        restarts = _restarts(args, rows, v2)
+        outcome = diversify(rows, people, mode, weights=weights, restarts=restarts, seed=args.seed,
+                            time_limit=args.time_limit_seconds, version=args.version)
         placed = {entry_id: by_entry_cells(rows, roster) for entry_id, roster in outcome.assignments.items()}
         out_lines = list(lines)
         for row in rows:
@@ -234,7 +321,8 @@ def main(argv=None) -> int:
             raise DiversifyError("LINEUP_MULTISET_CHANGED")
         payload = ending.join(out_lines)
         _check_against_template(args.template, payload, ending, roster_slice)
-        _audit_payload(payload, ending, roster_slice, rows, people, mode, theses, outcome)
+        _audit_payload(payload, ending, roster_slice, rows, people, mode, theses, outcome,
+                       version=args.version, weights=weights)
         source_entry = {}
         for row in rows:
             if row["movable"]:
@@ -244,52 +332,124 @@ def main(argv=None) -> int:
             else:
                 source_entry[row["entry_id"]] = row["entry_id"]
         report = outcome.report
-        record = {
-            "schema_version": "nfl_contest_diversification_v2",
-            "mode": mode,
-            "does_not_establish": list(ca.DOES_NOT_ESTABLISH) + ["LINEUP_LEGALITY"],
-            "contest_assignment": {k: v for k, v in report.items()
-                                   if k not in ("contests_before", "contests_after")},
-            "score": {"captain_penalty": weights.key_person, "stack_penalty": weights.stack_team,
-                      "thesis_penalty": weights.thesis, "restarts": args.restarts, "seed": args.seed,
-                      "before": float(report["total_score_before"]), "after": float(report["total_score_after"])},
-            "mapping_entry_to_source_entry": source_entry,
-            "contests_before": {c: _stat_row(mode, s) for c, s in report["contests_before"].items()},
-            "contests_after": {c: _stat_row(mode, s) for c, s in report["contests_after"].items()},
-        }
+        if v2:
+            record = {
+                "schema_version": RECORD_V3,
+                "mode": mode,
+                "does_not_establish": list(ca.DOES_NOT_ESTABLISH) + ["LINEUP_LEGALITY"],
+                "contest_assignment": {k: v for k, v in report.items()
+                                       if k not in ("contests_before", "contests_after")},
+                "reading": {
+                    "definition": ca.READING_DEFINITION,
+                    "score_before": float(report["total_score_before"]),
+                    "score_after": float(report["total_score_after"]),
+                    "contests_before": {c: _stat_row(mode, s) for c, s in report["contests_before"].items()},
+                    "contests_after": {c: _stat_row(mode, s) for c, s in report["contests_after"].items()},
+                },
+                "search": {"restarts": restarts, "seed": args.seed, "time_limit_seconds": args.time_limit_seconds},
+                "inputs": {
+                    "salaries_sha256": _sha256(args.salaries.read_bytes()),
+                    "template_sha256": _sha256(args.template.read_bytes()),
+                    "entries_sha256": _sha256(args.entries.read_bytes()),
+                    "theses_sha256": None if theses_raw is None else _sha256(theses_raw),
+                },
+                "out_sha256": _sha256(payload),
+                "mapping_entry_to_source_entry": source_entry,
+            }
+        else:
+            record = {
+                "schema_version": RECORD_V2,
+                "mode": mode,
+                "does_not_establish": list(ca.DOES_NOT_ESTABLISH) + ["LINEUP_LEGALITY"],
+                "contest_assignment": {k: v for k, v in report.items()
+                                       if k not in ("contests_before", "contests_after")},
+                "score": {"captain_penalty": weights.key_person, "stack_penalty": weights.stack_team,
+                          "thesis_penalty": weights.thesis, "restarts": restarts, "seed": args.seed,
+                          "before": float(report["total_score_before"]), "after": float(report["total_score_after"])},
+                "mapping_entry_to_source_entry": source_entry,
+                "contests_before": {c: _stat_row(mode, s) for c, s in report["contests_before"].items()},
+                "contests_after": {c: _stat_row(mode, s) for c, s in report["contests_after"].items()},
+            }
+        thesis_map = None if args.theses_out is None else _thesis_map(
+            rows, outcome, mode=mode, version=args.version, salaries=args.salaries, payload=payload,
+            theses_raw=theses_raw)
         with args.out.open("xb") as handle:
             handle.write(payload)
         if args.record is not None:
-            with args.record.open("x", encoding="utf-8") as handle:
-                json.dump(record, handle, indent=1, sort_keys=True)
-                handle.write("\n")
+            if v2:
+                with args.record.open("xb") as handle:
+                    handle.write((json.dumps(record, indent=1, sort_keys=True) + "\n").encode("utf-8"))
+            else:
+                with args.record.open("x", encoding="utf-8") as handle:
+                    json.dump(record, handle, indent=1, sort_keys=True)
+                    handle.write("\n")
+        if thesis_map is not None:
+            with args.theses_out.open("xb") as handle:
+                handle.write(thesis_map)
     except DiversifyError as exc:
         print(json.dumps({"status": "REFUSED", "error": str(exc)}), file=sys.stderr)
         return 1
-    print(json.dumps({"status": "WRITTEN", "out": str(args.out), "score_before": record["score"]["before"],
-                      "score_after": record["score"]["after"], "moved_rows": report["moved_rows"],
-                      "timed_out": report["timed_out"], "contests_after": record["contests_after"]},
-                     indent=1, sort_keys=True))
+    if v2:
+        printed = {"status": "WRITTEN", "out": str(args.out), "contest_assignment_version": args.version,
+                   "objective_before": report["objective_before"], "objective_after": report["objective_after"],
+                   "reading_score_before": record["reading"]["score_before"],
+                   "reading_score_after": record["reading"]["score_after"], "moved_rows": report["moved_rows"],
+                   "timed_out": report["timed_out"], "contest_objective_after": report["contest_objective_after"],
+                   "theses_out": None if args.theses_out is None else str(args.theses_out)}
+    else:
+        printed = {"status": "WRITTEN", "out": str(args.out), "score_before": record["score"]["before"],
+                   "score_after": record["score"]["after"], "moved_rows": report["moved_rows"],
+                   "timed_out": report["timed_out"], "contests_after": record["contests_after"]}
+    print(json.dumps(printed, indent=1, sort_keys=True))
     return 0
 
 
-def _audit_payload(payload, ending, roster_slice, rows, people, mode, theses, outcome) -> None:
-    """The module's independent audit, run on the bytes about to be written."""
+def _thesis_map(rows, outcome, *, mode, version, salaries: Path, payload: bytes, theses_raw: bytes) -> bytes:
+    """`nfl_entry_thesis_map_v1`: each output Entry ID's thesis, the label its lineup carried in the input, with the roster
+    it now holds; canonical JSON with LF endings and no clock, so the same inputs write the same bytes on any host."""
 
+    thesis_by_roster = {row["roster"]: row["thesis"] for row in rows if row["thesis"] is not None}
+    entries = {}
+    for row in rows:
+        roster = tuple(outcome.assignments[row["entry_id"]]) if row["movable"] else row["roster"]
+        thesis = thesis_by_roster.get(roster)
+        if thesis is not None:
+            entries[row["entry_id"]] = {"thesis": thesis, "roster": list(roster)}
+    doc = {
+        "schema_version": THESIS_MAP_VERSION,
+        "written_by": WRITTEN_BY,
+        "mode": mode,
+        "contest_assignment_version": version,
+        "salary_sha256": _sha256(salaries.read_bytes()),
+        "entries_sha256": _sha256(payload),
+        "source_theses_sha256": _sha256(theses_raw),
+        "entries": entries,
+        "does_not_establish": list(ca.DOES_NOT_ESTABLISH) + ["THESIS_ADHERENCE", "LINEUP_LEGALITY"],
+    }
+    return (json.dumps(doc, indent=1, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _audit_payload(payload, ending, roster_slice, rows, people, mode, theses, outcome, *,
+                   version: str = ca.CONTEST_ASSIGNMENT_VERSION_V1, weights: ca.Weights = ca.REGISTERED_WEIGHTS) -> None:
+    """The module's independent audit, run on the bytes about to be written.
+
+    v1's readings use the step's weights, so an override skips their comparison. v2's readings always use the
+    registered weights, so they are always compared, and its objective is recomputed with the weights the step used."""
+
+    v2 = version == V2
     final: dict[str, tuple[str, ...]] = {}
     for line in payload.split(ending):
         fields = _fields(line) if line else []
         if len(fields) > roster_slice.stop and _entry_id(fields).isdigit():
             final[_entry_id(fields)] = tuple(cell.decode("utf-8-sig").strip() for cell in fields[roster_slice])
-    entry_rows = [
-        ca.EntryRow(row["entry_id"], row["contest_id"], row["roster"], "template" if row["movable"] else None)
-        for row in rows
-    ]
     problems, _ = ca.audit_contest_assignment(
-        final, rows=entry_rows, mode=mode, people=people,
-        selected_by_pool={"template": [row["roster"] for row in rows if row["movable"]]},
+        final, rows=_entry_rows(rows), mode=mode, people=people,
+        selected_by_pool={POOL: [row["roster"] for row in rows if row["movable"]]},
         thesis_by_roster={row["roster"]: row["thesis"] for row in rows if row["thesis"] is not None},
-        reported_after=outcome.report["contests_after"] if outcome.result.weights.registered else None)
+        reported_after=outcome.report["contests_after"] if v2 or outcome.result.weights.registered else None,
+        version=version,
+        reported_objective_after=outcome.report["contest_objective_after"] if v2 else None,
+        objective_weights=weights)
     if problems:
         raise DiversifyError("AUDIT_FAILED:" + ",".join(problems))
 

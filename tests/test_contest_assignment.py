@@ -689,3 +689,65 @@ def test_a_v1_review_block_keeps_exactly_its_keys():
         "contest_id", "entries", "worst_pair_shared_people", "worst_pair_shared_people_before", "mean_shared_people",
         "mean_shared_people_before", "distinct_key_people", "distinct_key_people_before", "distinct_stack_teams",
         "distinct_theses", "people_in_every_lineup", "score_before", "score_after"}
+
+
+# --- Session 76b: the combinations only the offline wrapper reaches -------------------
+
+
+def _solo_instance():
+    keys = ["A", "A", "A", "B", "B", "B"]
+    lineups = [_facts({f"p{i}"}, key=key) for i, key in enumerate(keys)]
+    slots = [ca.Slot(f"e{i}", "big", "p") for i in range(4)] + [ca.Slot("s1", "solo1", "p"), ca.Slot("s2", "solo2", "p")]
+    return slots, lineups
+
+
+def test_a_v1_report_names_a_rule_it_was_asked_to_break_and_only_then():
+    """v1 holds one-entry rows and keeps its per-contest guard. Session 76's reviewer found a caller could move those rows
+    and still get a plain v1 report; dropping the guard was the same hole. Each departure is now named in the report, and
+    the registered v1 report keeps exactly its keys."""
+
+    slots, lineups = _solo_instance()
+    run = lambda **kw: ca.assign_contests(slots, lineups, restarts=10, time_limit_seconds=None, **kw).as_report()  # noqa: E731
+    assert set(run()) == V1_REPORT_KEYS
+    assert set(run(move_single_entry_rows=False)) == set(run(no_regression=True)) == V1_REPORT_KEYS
+    moved = run(move_single_entry_rows=True)
+    assert set(moved) == V1_REPORT_KEYS | {"single_entry_rows_move"} and moved["single_entry_rows_move"] is True
+    assert moved["contest_assignment_version"] == V1
+    unguarded = run(no_regression=False)
+    assert set(unguarded) == V1_REPORT_KEYS | {"no_regression"} and unguarded["no_regression"] is False
+    both = run(move_single_entry_rows=True, no_regression=False)
+    assert both["single_entry_rows_move"] is True and both["no_regression"] is False
+    # v2 has no per-contest guard, so the argument changes nothing there and its report is unchanged.
+    v2 = ca.assign_contests(slots, lineups, restarts=10, time_limit_seconds=None, version=V2, no_regression=False)
+    assert "no_regression" not in v2.as_report()
+    rows = [ca.EntryRow(s.entry_id, s.contest_id, (f"d{i}",), "p") for i, s in enumerate(slots)]
+    people = {f"d{i}": ca.Person(key=f"k{i // 3}") for i in range(6)}
+    out = ca.diversify(rows, mode=ca.MODE_SHOWDOWN, people=people, restarts=5, time_limit_seconds=None,
+                       move_single_entry_rows=True)
+    assert out.report["single_entry_rows_move"] is True
+
+
+def test_the_audit_recomputes_v2_s_objective_with_the_stack_weight_the_step_used():
+    """The offline wrapper's `--stack-penalty` under v2 changes the spread's stack term. Three of four Classic lineups stack
+    team AAA in two two-entry contests, so one contest must pair two of them and the weight reaches the spread."""
+
+    rows = [
+        ca.EntryRow("1", "K1", ("d0", "d1", "d2"), "p"),    # QB AAA, stack AAA
+        ca.EntryRow("2", "K1", ("d2", "d3", "d4"), "p"),    # no QB, stack AAA
+        ca.EntryRow("3", "K2", ("d1", "d3", "d4"), "p"),    # no QB, stack AAA
+        ca.EntryRow("4", "K2", ("d6", "d7", "d8"), "p"),    # QB BBB, stack BBB
+    ]
+    override = ca.Weights(stack_team=50)
+    out = ca.diversify(rows, mode=ca.MODE_CLASSIC, people=PEOPLE, restarts=5, time_limit_seconds=None,
+                       version=V2, weights=override)
+    assert out.report["weights"] == {"shared_people_exponent": 2, "same_stack_team": 50, "registered": False}
+    triples = [(r.entry_id, r.contest_id, out.assignments[r.entry_id]) for r in rows]
+    recomputed = ca.objectives_from_rosters(triples, mode=ca.MODE_CLASSIC, people=PEOPLE, weights=override)
+    assert recomputed == dict(out.report["contest_objective_after"])
+    assert recomputed != ca.objectives_from_rosters(triples, mode=ca.MODE_CLASSIC, people=PEOPLE)
+    audit = dict(rows=rows, selected_by_pool={"p": [r.roster for r in rows]}, mode=ca.MODE_CLASSIC, people=PEOPLE,
+                 reported_after=out.report["contests_after"], version=V2,
+                 reported_objective_after=out.report["contest_objective_after"])
+    assert ca.audit_contest_assignment(dict(out.assignments), objective_weights=override, **audit)[0] == []
+    # Recomputed with the registered weight, the override's own numbers do not bear out.
+    assert ca.audit_contest_assignment(dict(out.assignments), **audit)[0] == ["CONTEST_ASSIGNMENT_STATS_MISMATCH"]
