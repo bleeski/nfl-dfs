@@ -4,6 +4,104 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-16: Session 77 -- first place and washouts in the results report (`nfl_results_metrics_v2`)
+
+Branch `claude/s77-results-first-place`, claimed at `458446c` on `0c4ac28` (PR #153, Session 76b's merge). Before Ben saw
+the plan, a fresh-context fable agent was briefed to refute twelve claims. Ben approved it before any change, with its
+test-edit exception (D0). A reviewer read the diff, and its three findings were taken (**Review**, below). Everything
+here is realized history: descriptive, never calibration, and nothing in a run, a selection or a release truth reads it.
+
+**Added.**
+- **`config/results_metrics_v2.json`** (`nfl_results_metrics_v2`, SHA-256 `31b47fd0...c7f1`): v1's sections with v1's
+  values, plus `first_place` and `washout`, whose declared texts the loader checks; the version picks the key set first.
+  Four `does_not_establish` lines join v1's five.
+- **Goal 1, per contest** (`first_place` in each scope). The best place among our k paid entries in a Contest ID, its
+  percentile beside `(n+1)/((k+1)n)`, the mean best of k random places. First-place (`1/n`) and top-1% (`floor(n/100)/n`)
+  finishes counted per entry, each beside the sum of its entries' random shares, overall and by v1's payout bands. Every
+  contest's row carries its exact fractions as text.
+- **Goal 2, per portfolio** (`washouts`). A washout is a portfolio where every paid entry has both winnings columns zero.
+  Beside it, the product over the portfolio's contests of `C(n-p, k)/C(n, k)`, `Places_Paid` capped at n.
+- `points_behind_first` names Session 18's per-contest thresholds and estimates nothing; `first_place_reading` says the
+  best percentile is the reading with data.
+- **`nfl results-report --metrics-version`**, default v2: `results_report.era-<date>.v2.w1.json` and `.v2.w1.md`.
+  `--metrics-version nfl_results_metrics_v1` writes the v1 report and table at their old names, byte for byte. The
+  headline adds each scope's first-place slice and washout counts: no amount and neither list.
+- **The table** adds `First place by contest` for both scopes, the reading line and `Washouts`.
+- **Docs.** `docs/DATA_CONTRACTS.md` (the v2 metrics and report sections; v1's "a definition the export proves wrong is
+  v2" sentences now say the next version, as do Session 71b's row and card), `docs/OPERATOR_GUIDE.md` and
+  `docs/RUNBOOK.md` (the v2 table), and O13 (its Session 71b check now passes `--metrics-version nfl_results_metrics_v1`).
+
+**Judgment calls.**
+- **The washout unit is the fine slate** (one start time and game type), not v1's date slate, which merges same-day
+  builds. The engine era has 20 portfolios and 17 date slates on the real export. Same-minute Showdowns of different
+  games still merge, because the export names no game; the file says so.
+- **Each washout rate sits beside its random expectation**, as every v1 rate does. The card did not name it; without it a
+  20-entry Showdown and a one-entry Classic read alike.
+- **Top-1% random is `floor(n/100)/n`**, v1's top-10% rule at 1%. The card's "1%" is its large-field limit.
+- **Counts split by payout band only**, as the card says; each contest's row carries its field size.
+
+**Changed: two test edits (D0, approved with the plan).** The command's default moved to v2, and these reach it:
+- the `_command` helper in `tests/test_results_report_command.py` (six tests run through it);
+- the argv of `test_two_runs_in_two_processes_give_byte_identical_artifacts`.
+Each gained `--metrics-version nfl_results_metrics_v1` and nothing else, so each keeps its v1 guarantee; each has a v2
+mirror in the new `tests/test_results_report_v2.py`.
+
+**Acceptance.**
+- **Synthetic.** Each contest's best entry (three entries, best place 12 of 1,000), a tie for first, the random
+  expectations as exact fractions (`1/10 + 2/1000` prints `0.102000`), a portfolio with no prize counted a washout
+  beside `112/225`, a ticket-only prize not one, the payout-band split, nulls for an empty scope, the closed forms
+  against a full enumeration, the contest name never read, no written word claiming a probability or equity.
+- **v1 byte-identical.** `PIN` and `TABLE_PIN` (Session 71c) hold, and a v1 payload of the new fixture hashed before the
+  first edit (`1dac30d7...8a06`); a v2 payload stripped of its additions equals the v1 payload.
+- **Ben's export, outside git.** The 2026-10-10 file (`5752c7f3...07a3`) is not on this machine. His 2026-10-09
+  download, `draftkings-contest-entry-history.csv` (SHA-256 `f4167f8fa920a00d141ddc75095db224847a65b633a98549a3425b10ce615741`,
+  10,048 rows), has the same 476 NFL and 396 paid NFL rows outside Best Ball. It was taken in under a temporary root,
+  removed after. v1 reproduces the review's NFL figures: 396 entries over 55 slates at percentile 55.1137; engine era 348
+  over 17 slates at 55.1925, top 10% 8.9080 and bottom 10% 15.2299 with blanks, 11 blanks on 2026-09-17. v2 ran
+  `COMPLETE` in 13 s, then `ALREADY_PRESENT` with the same hashes (report `3545c1a2...`, table `979c5303...`).
+  - Engine era: 128 contests and 348 entries; best percentile 46.5318 against 37.7527 at random; first place 0 against
+    1.214219; top 1% 1 against 2.663782, and 1 against 1.8854 in fields above 2,000 (69 contests, 189 entries), the
+    review's 1.89. Washouts 7 of 20 portfolios (35.0000%) against 22.9052% at random: Classic 1 of 7, Showdown 6 of 13.
+  - By band, engine era: `[0, 1/20)` 48 contests at 48.7624 against 31.3230; `[1/20, 1/5)` 6 at 57.2931 against 50.7308;
+    `[1/5, 1/2)` 74 at 44.2123 against 40.8710.
+  - NFL: 172 contests and 396 entries; best percentile 48.1948 against 40.5755; first place 0 against 1.314378; top 1% 1
+    against 3.101474; washouts 40 of 60 (66.6667%) against 58.9507%.
+  - Reading (descriptive, 128 contests and 20 portfolios, no interval): the best entry in each contest finished about 9
+    points behind the best of as many random places, most in top-heavy contests, and portfolios washed out more often than
+    random draws would.
+
+**Found.**
+- On this export v1's within-slate test reads 12 worse of 13 engine-era slates (p 0.001709), not the 11 of 12 that
+  Session 71b's acceptance names. This file holds the 2026-10-10 export's NFL rows by count, so O13 will likely meet the
+  same figure; Session 71b owns it.
+- The all-sport check differs from the review (9,913 entries at 52.4901 against 9,960 at 52.5): this file is a day older.
+
+**Review.** A fresh-context reviewer built v1 from `origin/main`'s module and this one on the same fixtures: the
+payload, the table, the headline, a non-default era, and the written files' names and hashes were identical. It found:
+- O13 still ran the command with no version, so Session 71b's check would have closed on a v2 file. O13 now names v1.
+- A status line quoted 1.89 without its group. It now names the engine era's 69 contests and 189 entries, at 1.8854.
+- One contest holding more of our rows than its `Contest_Entries` divided by zero in v2, where v1 reported. A real
+  export cannot hold that, but the parser takes it, so both random expectations cap k at n, with a test.
+
+**Advisor.** A fresh-context fable agent was briefed to refute twelve claims.
+- **Taken.** The loader reads the version first and v1's path is looked up at call time; O13, the operator guide and the
+  "proves wrong is v2" sentences moved with the default; the RUNBOOK test names the exact v2 table; the merged
+  same-minute Showdowns and the null's independence are named; exact fractions ride in the lists; stdout leaves both
+  lists out; the table stayed in the session; a vocabulary test.
+- **Checked and moot.** `Places_Paid` 0: no paid NFL row has it.
+- **Not taken.** A field-size split (the card says payout bands). Its claim that the review's 1.89 is unreachable under
+  `floor(n/100)/n` read the NFL scope; the engine era reaches it (1.8854).
+
+**Verification.**
+- The seven results and queue test files (`.\nfl.ps1 test tests/test_results_report_v2.py tests/test_results_report.py
+  tests/test_results_report_command.py tests/test_results_report_table.py tests/test_results_report_bootstrap.py
+  tests/test_results_join.py tests/test_roadmap_queue.py`): `233 passed in 21.43s`.
+- 22 of 22 mutants killed, on a copy outside the repository: each formula, the washout rule, the portfolio key, the
+  declared-text check, stdout, the v2 file name, and v2 leaking into a v1 payload or table.
+- Full suite on `0f50bff` plus these ledgers: `4113 passed, 2 skipped in 1550.64s (0:25:50)` (Windows; the two skips are the ones the session started with). `doctor`: `pass_status` true. `git diff --check` clean; no protected path touched.
+- Size: 1,138 changed lines in source, tests, config and contract (1,088 in, 50 out), against the card's 500 to 700. The
+  table landed in the session, so no 77b row.
+
 ### 2026-10-16: Session 76b -- the offline contest pass on v2, the relabelled thesis map, the hand-pass order
 
 Branch `claude/s76b-offline-contest-pass`, claimed at `8d551f1` on `9722cbd` (PR #152, Session 76's merge). Before Ben saw

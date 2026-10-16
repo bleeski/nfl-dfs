@@ -1,5 +1,32 @@
 # Implementation Status
 
+## Capability added: 2026-10-16 (Session 77, first place and washouts in the results report)
+
+Working and verified. The evidence:
+- The new `tests/test_results_report_v2.py` (40 cases): the closed forms against a full enumeration, synthetic exports for
+  each contest's best entry, a washout, a ticket-only prize and exact fractions, and the command, contract and table.
+  v1's pins hold (`PIN`, `TABLE_PIN`, and a v1 payload hashed before the first edit).
+- On Ben's 2026-10-09 export (SHA-256 `f4167f8f...5741`, outside git; the 2026-10-10 file is not on this machine, and this
+  one has the same 476 NFL and 396 paid NFL rows): v1 reproduces the review's NFL figures, and in the engine era's
+  fields above 2,000 (69 contests, 189 entries) the v2 rows give one top-1% finish against 1.8854 at random, the
+  review's 1.89.
+- A reviewer, and the full suite (`4113 passed, 2 skipped in 1550.64s (0:25:50)`).
+
+What works:
+- **`nfl_results_metrics_v2`** (`config/results_metrics_v2.json`): every v1 section unchanged, plus goal 1's and goal 2's
+  realized readings (R38). `nfl results-report` writes `nfl_results_report_v2` by default
+  (`results_report.era-<date>.v2.w1.json` and `.md`); `--metrics-version nfl_results_metrics_v1` writes the v1 report,
+  byte for byte as before, beside it.
+- **Goal 1, per contest**: our best entry's place and percentile beside the best of that many random places, and
+  first-place and top-1% finishes beside each entry's random share, overall and by payout band, with every contest's row.
+- **Goal 2, per portfolio** (the entries sharing a start time and game type): whether every entry won nothing, beside a
+  random draw's washout.
+
+Not yet:
+- Points behind first need each contest's winning score: Session 18's per-contest thresholds.
+- No interval on the new counts or rates, and no field-size split (the per-contest rows carry the field size).
+- Showdowns of different games that start at the same minute merge into one portfolio; the export names no game.
+
 ## Capability added: 2026-10-16 (Session 76b, the offline contest pass on v2 and the thesis map after it)
 
 Working and verified. The evidence:
