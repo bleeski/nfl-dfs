@@ -1,0 +1,189 @@
+{
+ "schema": "sea_den_sd_booster_assign_record_v1",
+ "status": "PRIOR_ONLY / DO_NOT_UPLOAD",
+ "source": "data/inbox/slates/sea-den-sd-2026-10-15/construction/DK_REVIEW_ENTRY_sea-den-sd_contest_v1.csv",
+ "booster_contest": "196781421",
+ "booster_rows": [
+  {
+   "entry_id": "5296942152",
+   "captain": "DEN|Bo Nix",
+   "row_prior": 87.96
+  },
+  {
+   "entry_id": "5296951174",
+   "captain": "DEN|Bo Nix",
+   "row_prior": 90.81
+  },
+  {
+   "entry_id": "5296951175",
+   "captain": "SEA|Emanuel Wilson",
+   "row_prior": 92.25
+  },
+  {
+   "entry_id": "5296951176",
+   "captain": "SEA|Jason Myers",
+   "row_prior": 91.93
+  },
+  {
+   "entry_id": "5296951177",
+   "captain": "SEA|Jaxon Smith-Njigba",
+   "row_prior": 90.45
+  },
+  {
+   "entry_id": "5296951178",
+   "captain": "SEA|Sam Darnold",
+   "row_prior": 88.79
+  },
+  {
+   "entry_id": "5296951179",
+   "captain": "SEA|Emanuel Wilson",
+   "row_prior": 94.28
+  }
+ ],
+ "swaps": [
+  {
+   "booster_entry": "5296951179",
+   "other_entry": "5296937778",
+   "other_contest": "196689722"
+  },
+  {
+   "booster_entry": "5296951175",
+   "other_entry": "5296941776",
+   "other_contest": "196779822"
+  },
+  {
+   "booster_entry": "5296951176",
+   "other_entry": "5296938658",
+   "other_contest": "196774475"
+  },
+  {
+   "booster_entry": "5296951174",
+   "other_entry": "5296938174",
+   "other_contest": "196774475"
+  },
+  {
+   "booster_entry": "5296951177",
+   "other_entry": "5296930241",
+   "other_contest": "196689744"
+  },
+  {
+   "booster_entry": "5296951178",
+   "other_entry": "5296939573",
+   "other_contest": "196778650"
+  }
+ ],
+ "captains_by_contest": {
+  "196689722": [
+   [
+    "SEA|Emanuel Wilson",
+    1
+   ]
+  ],
+  "196689744": [
+   [
+    "SEA|Sam Darnold",
+    1
+   ]
+  ],
+  "196774475": [
+   [
+    "SEA|Jaxon Smith-Njigba",
+    2
+   ],
+   [
+    "DEN|RJ Harvey",
+    1
+   ],
+   [
+    "DEN|Bo Nix",
+    1
+   ],
+   [
+    "DEN|Broncos",
+    1
+   ],
+   [
+    "SEA|Sam Darnold",
+    1
+   ],
+   [
+    "SEA|Emanuel Wilson",
+    1
+   ]
+  ],
+  "196778650": [
+   [
+    "DEN|RJ Harvey",
+    2
+   ],
+   [
+    "SEA|Jason Myers",
+    1
+   ],
+   [
+    "SEA|Seahawks",
+    1
+   ],
+   [
+    "SEA|Emanuel Wilson",
+    1
+   ],
+   [
+    "DEN|Bo Nix",
+    1
+   ],
+   [
+    "SEA|Jaxon Smith-Njigba",
+    1
+   ]
+  ],
+  "196779266": [
+   [
+    "SEA|Jaxon Smith-Njigba",
+    1
+   ],
+   [
+    "SEA|Sam Darnold",
+    1
+   ]
+  ],
+  "196779822": [
+   [
+    "DEN|Bo Nix",
+    1
+   ],
+   [
+    "SEA|Jason Myers",
+    1
+   ]
+  ],
+  "196781162": [
+   [
+    "SEA|Sam Darnold",
+    1
+   ]
+  ],
+  "196781421": [
+   [
+    "DEN|Bo Nix",
+    2
+   ],
+   [
+    "SEA|Emanuel Wilson",
+    2
+   ],
+   [
+    "SEA|Jason Myers",
+    1
+   ],
+   [
+    "SEA|Jaxon Smith-Njigba",
+    1
+   ],
+   [
+    "SEA|Sam Darnold",
+    1
+   ]
+  ]
+ }
+}

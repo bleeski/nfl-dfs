@@ -1,0 +1,37 @@
+{
+ "schema": "sea_den_sd_waddle_swap_record_v1",
+ "status": "PRIOR_ONLY / DO_NOT_UPLOAD",
+ "source": "data/inbox/slates/sea-den-sd-2026-10-15/construction/DK_REVIEW_ENTRY_sea-den-sd_final_v1.csv",
+ "swaps": [
+  {
+   "entry_id": "5296930241",
+   "salary_after": 47700,
+   "row_prior_before": 81.12,
+   "row_prior_after": 78.08
+  },
+  {
+   "entry_id": "5296938659",
+   "salary_after": 45000,
+   "row_prior_before": 58.81,
+   "row_prior_after": 55.78
+  },
+  {
+   "entry_id": "5296939570",
+   "salary_after": 46400,
+   "row_prior_before": 75.56,
+   "row_prior_after": 72.53
+  },
+  {
+   "entry_id": "5296939573",
+   "salary_after": 43800,
+   "row_prior_before": 69.29,
+   "row_prior_after": 66.25
+  },
+  {
+   "entry_id": "5296937591",
+   "salary_after": 48900,
+   "row_prior_before": 80.13,
+   "row_prior_after": 77.1
+  }
+ ]
+}
