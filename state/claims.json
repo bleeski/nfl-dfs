@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "ec0b81dd-53d5-4ff6-8af7-d4e57671d640",
+      "branch": "claude/s76-contest-placement",
+      "chunk": "S76",
+      "claimed_at": "2026-10-16T14:31:03Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
