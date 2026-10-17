@@ -5551,8 +5551,9 @@ top-10% entries on what the record says the engine chose, and writes one report.
 
 **What it answers, and what it cannot.** Which structural choices went with the worst and best finishes in the contests
 Ben entered. It does not say why an entry finished where it did (`CAUSE_OF_A_BUST`), and a lineup's descriptors are the
-engine's choices only where the record says so: a hand pass moves them, and `thesis`, `method` and `final_rung` are null
-on every committed record.
+engine's choices only where the record says so: a hand pass moves them. `thesis` is null on every committed record, and
+`method` and `final_rung` are filled on SEA@DEN's 28 rows alone (`OPERATOR_FILE`, `DEFAULT`; Session 72b, checked on the
+357 committed rows when this session closed).
 
 **Rows.** `population` is `ALL_JOINED`: the results file's `JOINED` entries. A `LOCKED_BLANK_WITH_FILE` entry is a lineup
 DraftKings scored 0, one that never played, so it is counted by class in `sample.excluded` and never compared
@@ -5597,8 +5598,10 @@ unit is `COUNT` except `salary_left`, in hundreds of dollars (`USD_100`), so a p
 - On the committed slates most of the secondary ones have no spread (`later_window_count` is 0 on every Showdown
   slate, `q_count` is 0 on all but one Classic slate). A primary figure that cannot be formed says why
   (`FEWER_THAN_5_SLATES` under the registered minimum, `ZERO_STANDARD_ERROR`) instead of giving a number.
-- `family` states how many descriptors are shown and how many intervals (twice the primary count). None is adjusted for the
-  others (`adjustment` is `NONE`): read an interval as one descriptive figure, not as one of a tested family.
+- `family` states `descriptors`, `intervals_registered` (twice the primary count: the most the report can show) and
+  `intervals_shown` (the figures that actually carry one; fewer than five slates, or no spread, shows none). None is
+  adjusted for the others (`adjustment` is `NONE`): read an interval as one descriptive figure, not as one of a tested
+  family.
 - `limits` repeats the registered resamples and minimum, and names `few_clusters` when the minimum is so small that the
   Webb weights (six to the number of slates distinct vectors) are fewer than the resamples (7,776 at five slates).
 
@@ -5610,8 +5613,10 @@ and how many were `top`, `bottom` and `neither`, and their mean finish percentil
 `SALARY_FILE_UNREADABLE`, `CAPTAIN_NOT_IN_SALARY_FILE`, `NO_CAPTAIN_IN_RECORD`. A slate with such a gap still gets every
 other descriptor.
 
-**Run fields** (`run_fields`): for `thesis`, `method` and `final_rung`, the record rows and the rows holding a value. They are
-counted, not compared; on every committed record the count is 0. A later session compares them once a run folder is kept.
+**Run fields** (`run_fields`): for `thesis`, `method` and `final_rung`, the record rows and the rows holding a value. The
+count is over every row of every slate's record, whether or not the slate has results, a blank or a gap: it describes the
+records, not the sample. They are counted, not compared. On the committed records `thesis` has 0 rows with a value and
+`method` and `final_rung` 28 (SEA@DEN's). A later session compares them once enough slates carry them.
 
 **Slates.** Each record slate is listed with its `record_sha256`, `results_sha256`, `joined` count and `excluded` classes. A
 slate with no results file is `NO_RESULTS_FILE`, one whose results file does not list the record's Entry IDs in order is
@@ -5641,8 +5646,12 @@ path or time, so two runs on the same bytes, in any folder order, write the same
   detail.
 - `RESULTS_DESCRIPTORS_RESULTS_INVALID`, with `<slate>:<what>`: `unreadable`, `symlink`, `keys`, any of `schema_version`,
   `writer`, `contract`, `record_name`, `slate`, `source_sha256`, `does_not_establish`, `entries`, or
-  `entries[<i>]:keys` and `entry_id=<id>:<field>` for an entry (`class`, `place`, `contest_entries`, `points_hundredths`,
-  `entry_id_repeated`).
+  `entries[<i>]:keys` or `entries[<i>]:entry_id`, and `entry_id=<id>:<field>` for an entry (`class`, `place`,
+  `contest_entries`, `points_hundredths`, `entry_id_repeated`).
+  - `place` and `contest_entries` must be whole numbers from 1 (a place past the field is refused); `points_hundredths`
+    must be a whole number and may be negative, because the DraftKings export admits a negative score and a scored lineup
+    is not a blank. A gap class carries all three as null.
+  - A slate folder renamed after the join is refused by `slate`.
 - `RESULTS_DESCRIPTORS_ARTIFACT_CONFLICT` (`file=report`): another file holds the name. Never overwritten.
 - `RESULTS_DESCRIPTORS_WRITE_FAILED` (`file=report:exception=<class>`).
 - A metrics file that will not load raises `ResultsMetricsError`, which `main`'s handler prints, as `results-report` does.
@@ -5652,8 +5661,16 @@ path or time, so two runs on the same bytes, in any folder order, write the same
 
 **The committed slates.** No slate's `entry_results.w1.json` is committed yet, so the report on the repository as it stands
 names every slate `NO_RESULTS_FILE`. The figures wait on operator item O13: Ben's export, then `results-join`, whose per-slate
-files are committed, then this command. The first export holds six record slates (four Showdown, two Classic), so most
-descriptors will report `FEWER_THAN_5_SLATES` rather than an interval.
+files are committed, then this command. The first export holds six record slates (four Showdown, two Classic). A slate is a
+cluster for a figure only when a contest of ten or more entries holds both a top and a bottom entry of ours (or the
+descriptor has spread), so whether five slates qualify is not known until the real files exist; the report says so
+figure by figure.
+
+**A limit of the input, not fixed here.** The results file names the export that first wrote it but not the record it was
+joined to. A record edited in place with its Entry IDs in the same order would pair old finishes with new descriptors, and
+this command would read the pair, and nothing refuses it. The report carries each slate's `record_sha256` and
+`results_sha256` so a reader can check them against git history; binding the two files would be a new writer version of
+the join (`w2`).
 
 ## Standings corpus transport (Session 17, X2)
 

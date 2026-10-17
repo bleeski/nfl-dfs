@@ -282,8 +282,9 @@ def _results_entries(slate: str, raw: bytes) -> list[dict]:
             raise _invalid_results(slate, f"{where}:class")
         bound = entry["class"] in _BOUND
         place, field, points = entry["place"], entry["contest_entries"], entry["points_hundredths"]
-        for name, value, low in (("place", place, 1), ("contest_entries", field, 1), ("points_hundredths", points, 0)):
-            number = isinstance(value, int) and not isinstance(value, bool) and value >= low
+        # Points are not read here, and the export admits a negative score, so only place and field have a bound.
+        for name, value, low in (("place", place, 1), ("contest_entries", field, 1), ("points_hundredths", points, None)):
+            number = isinstance(value, int) and not isinstance(value, bool) and (low is None or value >= low)
             if (not number) if bound else (value is not None):
                 raise _invalid_results(slate, f"{where}:{name}")
         if bound and place > field:
@@ -522,7 +523,10 @@ def build_report(inputs: Inputs, metrics: rr.ResultsMetrics, *,
 
     settings = settings or rr.bootstrap_settings(metrics)
     slates = inputs.slates
-    primary = [item for item in DESCRIPTORS if item.primary]
+    descriptors = [{"name": item.name, "unit": item.unit, "primary": item.primary,
+                    **{statistic: _figures(slates, item, statistic, settings) for statistic in STATISTICS}}
+                   for item in DESCRIPTORS]
+    primary = [item for item in descriptors if item["primary"]]
     return {
         "schema_version": CONTRACT_VERSION, "writer": WRITER, "population": POPULATION,
         "metrics_version": metrics.version, "metrics_sha256": metrics.sha256, "inputs_digest": inputs.digest,
@@ -539,16 +543,17 @@ def build_report(inputs: Inputs, metrics: rr.ResultsMetrics, *,
             "webb_distinct_weight_vectors_at_the_minimum": 6 ** settings.interval_min_slates,
             "few_clusters": ("WEBB_DRAWS_FEWER_THAN_RESAMPLES_AT_THE_MINIMUM"
                              if 6 ** settings.interval_min_slates < settings.resamples else None)},
-        "family": {"descriptors": len(DESCRIPTORS), "intervals": 2 * len(primary), "adjustment": "NONE"},
+        "family": {"descriptors": len(DESCRIPTORS), "intervals_registered": 2 * len(primary),
+                   "intervals_shown": sum(item[statistic]["interval"] is not None
+                                          for item in primary for statistic in STATISTICS),
+                   "adjustment": "NONE"},
         "slates": [{"slate": slate.slate, "mode": slate.mode, "record_sha256": slate.record_sha256,
                     "results_sha256": slate.results_sha256, "gap": slate.gap, "joined": len(slate.rows),
                     "excluded": dict(slate.excluded)} for slate in slates],
         "sample": _sample(slates),
         "run_fields": {name: {"rows": rows, "rows_with_value": with_value}
                        for name, (rows, with_value) in sorted(inputs.run_fields.items())},
-        "descriptors": [{"name": item.name, "unit": item.unit, "primary": item.primary,
-                         **{statistic: _figures(slates, item, statistic, settings) for statistic in STATISTICS}}
-                        for item in DESCRIPTORS],
+        "descriptors": descriptors,
         "captain_table": _captain_table(slates),
         "does_not_establish": list(DOES_NOT_ESTABLISH),
     }

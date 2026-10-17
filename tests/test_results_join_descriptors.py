@@ -295,7 +295,8 @@ def test_the_secondary_descriptors_carry_an_estimate_and_a_standard_error_and_ne
         assert figures["estimate"] is not None and figures["standard_error"] is not None and figures["slates"] == 6
     primary = {item["name"] for item in report["descriptors"] if item["primary"]}
     assert primary == {"salary_left", "max_pass_catchers_with_qb", "max_team_count", "kicker_count"}
-    assert report["family"]["intervals"] == 8 and report["family"]["adjustment"] == "NONE"
+    assert report["family"] == {"descriptors": len(rd.DESCRIPTORS), "intervals_registered": 8, "intervals_shown": 8,
+                                "adjustment": "NONE"}
 
 
 def test_a_secondary_descriptor_with_no_spread_has_an_estimate_and_no_standard_error(tmp_path):
@@ -442,8 +443,8 @@ RESULTS_FAULTS = {
                       "a-sd:entry_id=910000001:place"),
     "field_boolean": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(contest_entries=True)),
                       "a-sd:entry_id=910000001:contest_entries"),
-    "points_negative": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(points_hundredths=-1)),
-                        "a-sd:entry_id=910000001:points_hundredths"),
+    "points_not_an_integer": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(points_hundredths="5")),
+                              "a-sd:entry_id=910000001:points_hundredths"),
     "entry_repeated": (lambda path: _rewrite(path, lambda p: p["entries"][1].update(entry_id="910000001")),
                        "a-sd:entry_id=910000001:entry_id_repeated"),
     "entries_not_a_list": (lambda path: _rewrite(path, lambda p: p.update(entries={})), "a-sd:entries"),
@@ -650,7 +651,9 @@ def test_the_report_states_its_limits_and_cannot_be_read_as_a_claim(tmp_path):
     assert set(report["does_not_establish"]) == {*rj.DOES_NOT_ESTABLISH, "CAUSE_OF_A_BUST"}
     assert report["reading"]["top_minus_bottom"] == "POSITIVE_MEANS_TOP_ENTRIES_CARRY_MORE"
     assert report["reading"]["percentile_slope"] == "NEGATIVE_MEANS_MORE_GOES_WITH_A_BETTER_FINISH"
-    assert report["family"] == {"descriptors": len(rd.DESCRIPTORS), "intervals": 8, "adjustment": "NONE"}
+    # One slate is under the registered minimum: eight intervals are registered and none is shown.
+    assert report["family"] == {"descriptors": len(rd.DESCRIPTORS), "intervals_registered": 8, "intervals_shown": 0,
+                                "adjustment": "NONE"}
     text = json.dumps(report).encode("utf-8")
     assert b"$" not in text
 
@@ -717,6 +720,36 @@ def test_a_changed_metrics_file_gets_a_new_name(tmp_path, monkeypatch):
     assert json.loads(Path(second.file["path"]).read_bytes())["metrics_sha256"] == sha256_bytes(copy.read_bytes())
 
 
+def test_the_salary_file_is_bound_into_the_report_name(tmp_path):
+    root, rows = _real_slate(tmp_path)
+    _write_results(root, TB_DAL, rows, _finishes_for(rows))
+    first = rd.run_results_descriptors(tmp_path / "results", root)
+    salary = root / TB_DAL / "input" / "DKSalaries.csv"
+    salary.write_bytes(salary.read_bytes() + b"\n")  # no CSV hashes to the record's salary SHA-256 now
+    second = rd.run_results_descriptors(tmp_path / "results", root)
+    assert first.status == second.status == "COMPLETE" and first.file["path"] != second.file["path"]
+    assert json.loads(Path(second.file["path"]).read_bytes())["captain_table"]["unresolved"] == {
+        "SALARY_FILE_NOT_FOUND": len(rows)}
+
+
+def test_a_results_file_written_by_the_joins_own_writer_is_read_including_a_negative_score(tmp_path):
+    """The hand-built payloads above could drift from Session 73's writer; this round trip cannot. DraftKings' export
+    admits a negative `Points`, which is a scored lineup and not a blank."""
+
+    from tests import test_results_join as trj
+
+    slates = trj._ab(tmp_path)
+    history = [trj._entry("910000001", "300000001", "-3.50", 60), *trj.A_HISTORY[1:], *trj.B_HISTORY]
+    export_root, sha = trj._intake(tmp_path, trj._history(*history))
+    assert rj.run_results_join(sha, export_root, slates).status == "COMPLETE"
+    outcome = rd.run_results_descriptors(tmp_path / "descriptors", slates)
+    assert outcome.status == "COMPLETE" and not outcome.problems
+    report = json.loads(Path(outcome.file["path"]).read_bytes())
+    assert [(item["slate"], item["gap"], item["joined"]) for item in report["slates"]] == [
+        ("a-sd", None, 5), ("b-classic", None, 3)]
+    assert report["sample"]["joined_entries"] == 8 and report["sample"]["excluded"] == {}
+
+
 def test_a_hand_edited_report_is_never_overwritten(tmp_path):
     folders = _folders(_spec(6))
     first = _run(tmp_path, folders)
@@ -762,7 +795,8 @@ def test_the_command_prints_the_outcome_and_exits_by_status(tmp_path, capsys):
     assert code == 0 and printed["status"] == "COMPLETE" and printed["contract"] == rd.CONTRACT_VERSION
     assert printed["headline"]["sample"]["slates"] == 6
     assert printed["headline"]["primary"]["salary_left"]["top_minus_bottom"]["estimate"] is not None
-    assert printed["headline"]["family"] == {"descriptors": len(rd.DESCRIPTORS), "intervals": 8, "adjustment": "NONE"}
+    assert printed["headline"]["family"] == {"descriptors": len(rd.DESCRIPTORS), "intervals_registered": 8,
+                                             "intervals_shown": 8, "adjustment": "NONE"}
     assert printed["headline"]["captain_unresolved"] == {"SALARY_FILE_NOT_FOUND": 60}
     code, printed = _command(capsys, "--results-root", str(tmp_path / "results"), "--slates-root", str(tmp_path / "nope"))
     assert code == 2 and printed["problems"] == ["RESULTS_DESCRIPTORS_INPUT_INVALID:field=slates_root"]

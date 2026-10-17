@@ -775,8 +775,11 @@ name binds every input byte and the metrics file).
   largest stack, the largest team count, kickers); the rest get an estimate and a
   standard error. None is adjusted for the others.
 - With under five slates a figure says `FEWER_THAN_5_SLATES` and gives no
-  interval. The first export holds six record slates, so expect that on most
-  rows.
+  interval. The first export holds six record slates, and a slate counts for a
+  figure only when a contest of ten or more entries holds both a top and a
+  bottom entry of ours, so how many figures get an interval is unknown until the
+  real files exist. `family` says how many intervals were registered and how
+  many were shown.
 - A slate with no results file is named `NO_RESULTS_FILE` and left out, never
   filled in. A locked blank is counted and never compared.
 - The Captain table needs the slate's salary file in its folder (found by its
