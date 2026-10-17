@@ -911,14 +911,15 @@ def order_statistics(level: Fraction, resamples: int) -> tuple[int, int]:
     return math.ceil(resamples * tail) - 1, math.ceil(resamples * (1 - tail)) - 1
 
 
-def _percent(value: float) -> str:
-    return _fixed(Fraction(value) * 100)
+def _percent(value: float, scale: int = 100) -> str:
+    return _fixed(Fraction(value) * scale)
 
 
 def interval_figures(theta: float, standard_error: float, t_values: Sequence[float],
-                     settings: BootstrapSettings) -> dict[str, object]:
+                     settings: BootstrapSettings, scale: int = 100) -> dict[str, object]:
     """The bootstrap-t interval `[theta - q_hi SE, theta - q_lo SE]`, null when an infinite t* is an endpoint or a t*
-    has no sign at all."""
+    has no sign at all. `scale` is the unit of the printed figures: 100 for percent, 1 for a count or a rate (Session
+    73b's descriptors)."""
 
     undefined = sum(math.isnan(value) for value in t_values)
     degenerate = undefined + sum(math.isinf(value) for value in t_values)
@@ -928,8 +929,8 @@ def interval_figures(theta: float, standard_error: float, t_values: Sequence[flo
     low, high = order_statistics(settings.level, settings.resamples)
     if math.isinf(ordered[low]) or math.isinf(ordered[high]):
         return {"interval": None, "reason": "DEGENERATE_RESAMPLES", "degenerate_resamples": degenerate}
-    return {"interval": {"low": _percent(theta - ordered[high] * standard_error),
-                         "high": _percent(theta - ordered[low] * standard_error)},
+    return {"interval": {"low": _percent(theta - ordered[high] * standard_error, scale),
+                         "high": _percent(theta - ordered[low] * standard_error, scale)},
             "reason": None, "degenerate_resamples": degenerate}
 
 
@@ -958,13 +959,13 @@ def _clusters(rows: Sequence[HistoryRow], statistic: str) -> list[tuple[Fraction
 
 
 def _statistic(clusters: Sequence[tuple[Fraction, Fraction]], settings: BootstrapSettings,
-               draw: Callable[[], float]) -> dict[str, object]:
+               draw: Callable[[], float], scale: int = 100) -> dict[str, object]:
     count = len(clusters)
     figures: dict[str, object] = {"slates": count, "estimate": None, "method": None, "interval": None,
                                   "standard_error": None, "mde": None, "reason": None, "degenerate_resamples": 0}
     if count:
         exact = sum(y for y, _ in clusters) / sum(x for _, x in clusters)
-        figures["estimate"] = _fixed(exact * 100)
+        figures["estimate"] = _fixed(exact * scale)
     if count < settings.interval_min_slates:
         return {**figures, "reason": f"FEWER_THAN_{settings.interval_min_slates}_SLATES"}
     residuals = [y - exact * x for y, x in clusters]  # exact, so a slice with no spread is caught exactly
@@ -974,11 +975,11 @@ def _statistic(clusters: Sequence[tuple[Fraction, Fraction]], settings: Bootstra
     standard_error = cr1_standard_error([float(value) for value in residuals], x)
     method, t_values, zero = resample([float(value) for value, _ in clusters], x, float(exact), settings, draw,
                                       pairs=count >= settings.pairs_min_slates)
-    figures.update(method=method, standard_error=_percent(standard_error), mde=_percent(minimum_detectable_effect(
-        standard_error, count, settings.alpha, settings.power)))
+    figures.update(method=method, standard_error=_percent(standard_error, scale), mde=_percent(
+        minimum_detectable_effect(standard_error, count, settings.alpha, settings.power), scale))
     if zero:
         return {**figures, "reason": "ZERO_DENOMINATOR_RESAMPLES", "degenerate_resamples": zero}
-    return {**figures, **interval_figures(float(exact), standard_error, t_values, settings)}
+    return {**figures, **interval_figures(float(exact), standard_error, t_values, settings, scale)}
 
 
 def _uncertainty(settings: BootstrapSettings, scope: str, rollup: str, described: Mapping[str, object],

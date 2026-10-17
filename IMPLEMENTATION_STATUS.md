@@ -130,6 +130,14 @@ Not yet:
 
 A reading only: not a chance of finishing first, a share of any prize, a gate or a release truth.
 
+## Capability added: 2026-10-17 (Session 73b, the descriptor comparison)
+
+Working and verified through 70 synthetic and hand-checked cases (`tests/test_results_join_descriptors.py`), a mutation pass (34 of 34 killed; eight of the first 30 by cases the pass added), a fresh-context consult before the plan, a fresh-context review whose findings were taken (a negative score the loader refused, prose that said a field was null where SEA@DEN's rows fill it, a family count that showed the maximum), and the full suite (`4184 passed, 2 skipped in 1487.30s (0:24:47)`, Windows; the two skips are this host's symlink-permission cases, `tests/test_cowork.py:112` and `tests/test_standings_transport.py:523`). No `entry_results.w1.json` is committed, so nothing has run on real results.
+- **The comparison.** `nfl results-descriptors` sets each slate's bottom-10% entries against its top-10% on salary left, stack size, team split, kickers and the structure counts, and reads the finish percentile against each. The fixed effect is the contest (Ben's entries sit in 4 to 12 contests a slate and a lineup's contest follows its Captain and stack) and the cluster is the slate; `results_report`'s CR1 error and bootstrap-t read exact ratios of slate sums.
+- **What it shows.** Four registered primary descriptors with intervals, nine with an estimate and a standard error, the family size and that none is adjusted, a Captain-position table from the salary file the record binds, and every slate it could not use by name.
+
+Not yet: any real figure (O13, then the per-slate files committed); a `paid` population; a comparison of thesis, method or rung (the report counts them: no committed record carries a thesis, and only SEA@DEN's 28 rows carry a method and rung); binding the join's results files to their records (a `w2` writer). Descriptive only: not EV, a probability, a calibration or an edge; it does not say why an entry finished where it did, and nothing reaches `run-slate` or a release truth.
+
 ## Capability added: 2026-10-13 (Session 73, the results join)
 
 Working and verified through 42 synthetic-history cases on the real committed records and copies (`tests/test_results_join.py`), a mutation pass (25 of 25 killed, two by tests the pass added), two fresh-context consults and a review, an old-against-new comparison and the full suite (`3857 passed, 2 skipped in 1543.63s (0:25:43)`, Windows; the two skips are this host's symlink-permission cases, `tests/test_cowork.py:112` and `tests/test_standings_transport.py:523`, as in every Windows run).
