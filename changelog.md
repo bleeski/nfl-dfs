@@ -4,6 +4,105 @@ This file records completed implementation work and verification evidence for th
 
 ## Unreleased
 
+### 2026-10-17: Session 73b -- the descriptor comparison, bust attribution (`nfl_results_descriptors_v1`)
+
+Branch `claude/s73b-descriptors`, claimed at `f00ccb9` on `575c723` (PR #154, Session 77's merge). Before Ben saw the plan,
+a fresh-context fable agent was briefed to refute six claims, and its first finding changed the design (**Judgment
+calls**). Ben approved the plan before any change. Everything here is descriptive: never calibration, and nothing in a
+run, a selection, a policy or a release truth reads it. No `entry_results.w1.json` is committed (operator item O13), so
+every figure below is synthetic or hand-checked; the real slates follow O13.
+
+**Added.**
+- **`nfl results-descriptors`** (`src/nfl_dfs/results_descriptors.py`, `.\nfl.ps1 results-descriptors`). It reads each slate's
+  record and `entry_results.w1.json` and writes one report, once, at
+  `data/results/reports/descriptors/results_descriptors.<digest16>.w1.json`. The digest binds every slate's record, results
+  file and salary file (or its gap), the metrics file and the writer, and the report holds no path or time, so two runs on
+  the same bytes in any folder order write the same file.
+- **Two statistics**, each an exact ratio of slate sums over `Fraction`s, so `results_report._statistic` (CR1 standard
+  error, Webb wild bootstrap-t under 30 slates, pairs from 30) runs unchanged: `top_minus_bottom` (within each contest, the
+  group means weighted by `n_t n_b / (n_t + n_b)`) and `percentile_slope` (within each contest, the slope of
+  `100 x place / contest_entries` on the descriptor).
+- **Descriptors.** Four registered primary ones with full intervals: `salary_left` in hundreds of dollars,
+  `max_pass_catchers_with_qb` (null, never 0, with no quarterback), `max_team_count`, `kicker_count`. Nine secondary with an
+  estimate and a standard error only. The report states `family` (13 descriptors, 8 intervals registered and how many are
+  shown, no adjustment) and `limits` (at five slates the Webb weights give 7,776 distinct draws against 10,000 resamples).
+- **Captain table** (Showdown, no test): position by exact DraftKings ID from the salary file whose SHA-256 the record binds,
+  found by hashing the slate folder's `*.csv` files; a missing, unreadable or non-matching one is named per entry.
+- **Named gaps, never imputed.** A slate with no results file (`NO_RESULTS_FILE`), or whose file does not list the record's
+  Entry IDs in order (`RESULTS_DO_NOT_MATCH_RECORD`), is left out of every figure and listed. A locked blank is counted by
+  class and never compared. `thesis`, `method` and `final_rung` are counted over every record row, not compared (on the 357
+  committed rows `thesis` is filled on 0 and `method` and `final_rung` on SEA@DEN's 28).
+- **`results_report`**: `_statistic`, `interval_figures` and `_percent` take a `scale` (default 100). v1 and v2 report bytes are
+  unchanged.
+- **Registry.** Family `results_descriptors` (class `P`, five codes) in `config/gate_registry_v1.json`, `REGISTRY_SHA256`
+  re-pinned in `tests/test_gate_registry.py` and `docs/DATA_CONTRACTS.md` (`1b95a19e...fb0f` to `a1a818ad...9a09`).
+- **Docs.** `docs/DATA_CONTRACTS.md` § NFL results descriptors, `docs/OPERATOR_GUIDE.md` § Descriptor comparison, and O13
+  (it now ends with this command).
+
+**Judgment calls.**
+- **The fixed effect is the contest, not the slate.** The plan's first draft demeaned within the slate. Ben's entries sit in 4
+  to 12 contests per slate, of 1, 2, 7 or 20 of his entries (all 12 committed records, e.g. ATL@NO `[1,1,1,2,2,2,7,20]`);
+  `in_top` cannot fire in a field under ten and `in_bottom` makes a head-to-head loser a bust; and Sessions 67 and 76 put a
+  lineup in a contest by its Captain, QB stack and thesis. A slate-level contrast would compare where lineups were placed,
+  so the contest has to be the fixed effect. The structural half is checked on the records; that placement follows Captain,
+  stack and thesis rests on Sessions 67 and 76, not on results data. The cluster stays the slate.
+- **No `paid` population.** The results file carries no fee. The only free entry on record is Week 5 Classic's
+  `5291960735`, and Week 5 is not in O13's first export, so `paid` equals `all` on every row it can produce. It would be a
+  later writer version if the real export shows a difference. The card said "the population O13 settles"; this settles it
+  by construction.
+- **Primary descriptors are fixed before any export is read**, so no estimate picks them. Captain position is a table, not six
+  dummies (`X_g` is 0 almost everywhere).
+- **A new module and a new gate family**, where the card named `results_join.py`: `tests/test_results_join.py` pins that
+  family's code set to its module, so the registry edit was forced either way.
+- **The defaulted `scale` over a copy** of the degenerate-interval logic: one caller of `_statistic`, four positional test
+  calls of `interval_figures`, three `_percent` sites, and a copy would drift.
+
+**Verification.**
+- `tests/test_results_join_descriptors.py`: 70 cases, with oracles written independently of the module (explicit
+  inequalities and `Fraction`s): a hand-checked slate where the contest and slate answers differ (12 against 13), a
+  two-contest slate with different weights (108/7, where equal weights give 16), each primary figure against the oracle with
+  its standard error, and the interval against `results_report._statistic` on the oracle clusters with the documented seed.
+- Neighbouring suites (this file, `test_results_join`, the four `test_results_report*` files, `test_gate_registry`,
+  `test_roadmap_queue`): 466 passed in 34.92s.
+- **Mutation pass**: 34 of 34 mutants killed on the final module (`results_descriptors.py`, each mutant run against this
+  test file). Of the first 30, twenty-one were killed by the first 58 cases and eight survived, each naming a gap that ten
+  added cases now cover (contest weights, a secondary figure with no spread, place and field of 0, a boolean place, a
+  symlinked results file, the pooled Captain table, the printed family); one more was a pattern miss in the script. The
+  review's fixes added four mutants (the points bound, the shown-interval count, the salary file in the report name, the
+  run-field row count), and the whole pass was rerun on the final code.
+- **Review**: a fresh-context `reviewer` read the diff against the card and the plan. Its oracle check (2,000 random contests
+  with null-descriptor patterns against an independent exact-fraction fixed-effects computation) found 0 mismatches on either
+  statistic. Findings taken:
+  - The prose said `thesis`, `method` and `final_rung` were null on every committed record. SEA@DEN's 28 rows carry `method`
+    and `final_rung` (357 rows checked). Corrected in the contract, this entry, the status file and the card's landed bullet.
+  - The loader refused a negative `Points`, which DraftKings' export admits and Session 73 writes. The lower bound is gone,
+    and a round trip through the join's own writer with a -3.50 row now tests it. Before the fix, a legal real file would
+    have refused the whole run.
+  - `family.intervals` was the registered maximum, not the number shown: now `intervals_registered` and `intervals_shown`.
+  - The forecast that most descriptors would report `FEWER_THAN_5_SLATES` was unobserved, and its reason did not follow
+    (six is not under five). Removed; the contract says what makes a slate a cluster.
+  - The refusal list omitted `entries[<i>]:entry_id`, the contract said gap slates are left out of every figure while
+    `run_fields` counts every record row (now stated), and no test pinned the salary file into the report name (now one does).
+  - Not taken: binding the results file to its record, above.
+- Full suite: `4184 passed, 2 skipped in 1487.30s (0:24:47)` (Windows; the two skips are this host's symlink-permission cases, `tests/test_cowork.py:112`
+  and `tests/test_standings_transport.py:523`, as in the 2026-10-16 baseline of `4113 passed, 2 skipped`; the new file adds
+  none). `doctor` passes, `git diff --check` is clean, and `scripts/check_protected_paths.py` reports no protected path
+  touched (11 changed files).
+
+**Left open.**
+- The real figures: `results-join` on O13's export, the per-slate files committed, then `results-descriptors`. A slate is a
+  cluster for a figure only when a contest of ten or more entries holds both a top and a bottom entry of ours (or the
+  descriptor has spread), so how many of the six record slates qualify, and so which figures get an interval, is unobserved.
+- **The results file is not bound to the record it was joined to** (Session 73's writer): a record edited in place with the
+  same Entry ID order would pair old finishes with new descriptors, and nothing refuses it. Named in the contract; a fix is
+  a `w2` writer for the join, not part of this card.
+- **The diff passed the 1,500-line breakpoint** (module 650, tests 814, contract and guide about 150, ledgers). Every piece the
+  card names landed and was tested, so there was no seam left to split at (the intervals ride on the same shared function
+  as the estimates). The card's estimate of about 500 lines counted neither the captain table, the registry nor the contest
+  fixed effect.
+- `dev-session` is reserved to Ben's own invocation (it cannot be invoked by the model), so the session followed the
+  written protocol in `docs/ROADMAP.md` § 2.1 directly.
+
 ### 2026-10-16: Session 77 -- first place and washouts in the results report (`nfl_results_metrics_v2`)
 
 Branch `claude/s77-results-first-place`, claimed at `458446c` on `0c4ac28` (PR #153, Session 76b's merge). Before Ben saw
