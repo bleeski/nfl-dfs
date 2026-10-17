@@ -1,4 +1,11 @@
 {
-  "claims": [],
+  "claims": [
+    {
+      "agent": "a453f900-0135-4c2b-92bc-3717002662fa",
+      "branch": "claude/s18-grade-standings",
+      "chunk": "S18",
+      "claimed_at": "2026-10-17T20:43:45Z"
+    }
+  ],
   "schema_version": "nfl_chunk_claims_v1"
 }
