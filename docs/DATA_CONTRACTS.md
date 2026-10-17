@@ -3563,7 +3563,7 @@ itself, and a test holds them equal to their registry entries.
 ## Gate registry
 
 Registered 2026-09-23 by Session 03b (R28). `config/gate_registry_v1.json`,
-schema `nfl_gate_registry_v1`, SHA-256 `1b95a19e32b1f7087f7006e1c0e49e2dc1c51a5e13849ac9cd8d02abe5b2fb0f`, loaded and validated by
+schema `nfl_gate_registry_v1`, SHA-256 `a1a818ad4f00492886e9e8eadb4490ed8884c4b09e96b9a5c8394a0c75719a09`, loaded and validated by
 `gate_registry.load_gate_registry`, which hashes the bytes and refuses any other
 bytes when given `expected_sha256`. The hash is pinned in
 `tests/test_gate_registry.py` and here, so a reclassification moves both.
@@ -5539,6 +5539,121 @@ was written, else `ALREADY_PRESENT` (exit 0). A refused input writes nothing.
 - Week 5 Classic's free entry `5291960735` is a recorded row the engine never built, and joins like any other.
 - The export carries no rosters, so it cannot show which MIN@NO file was uploaded. Only MIN@NO's rho depends on that
   answer.
+
+## NFL results descriptors, nfl_results_descriptors_v1 (Session 73b)
+
+`nfl results-descriptors [--results-root data/results] [--slates-root data/inbox/slates]`
+(`results_descriptors.run_results_descriptors`; `.\nfl.ps1 results-descriptors` on Windows). It reads each slate folder's
+graded record (`construction/entry_build_record.jsonl`, `nfl_entry_build_record_v1`) and its results file
+(`construction/entry_results.w1.json`, `nfl_entry_results_v1`, written by Session 73's join), compares the bottom-10% and
+top-10% entries on what the record says the engine chose, and writes one report. It is descriptive: it reaches no
+`run-slate` stage, selection, policy or release truth, and it takes no fee or winning (neither is in any input).
+
+**What it answers, and what it cannot.** Which structural choices went with the worst and best finishes in the contests
+Ben entered. It does not say why an entry finished where it did (`CAUSE_OF_A_BUST`), and a lineup's descriptors are the
+engine's choices only where the record says so: a hand pass moves them, and `thesis`, `method` and `final_rung` are null
+on every committed record.
+
+**Rows.** `population` is `ALL_JOINED`: the results file's `JOINED` entries. A `LOCKED_BLANK_WITH_FILE` entry is a lineup
+DraftKings scored 0, one that never played, so it is counted by class in `sample.excluded` and never compared
+(`BLANKS_REMOVED_BY_CONSTRUCTION`). There is no `paid` population: the results file carries no fee, and the only free entry
+on record is Week 5 Classic's `5291960735`. A `paid` reading would be a later writer version, if the real export shows it
+differs.
+
+**Groups.** An entry is `top` when `results_report.in_top(place, contest_entries)` (place x 10 at most the field), `bottom`
+when `in_bottom` (place x 10 above 9 x the field), else `neither`. A field under ten entries holds no top finish, so a
+head-to-head contest supplies bottoms only. Place and field come from the results file's integers, never its `percentile`
+text.
+
+**The fixed effect is the contest; the cluster is the slate.** Ben's entries sit in four to twelve contests per slate, of
+one, two, seven or twenty of his entries, and the contest a lineup went to follows its Captain, QB stack and thesis
+(Sessions 67 and 76). A slate-level contrast would therefore compare lineups placed in small contests with lineups that
+topped the large one. Each statistic is an exact ratio of slate sums over `Fraction`s, `sum(Y_g) / sum(X_g)`, over the
+slates with `X_g > 0`, so `results_report._statistic` reads it unchanged (CR1 standard error, Webb wild bootstrap-t under
+`pairs_min_slates` slates, pairs from there, `interval_min_slates` the registered minimum). Entries inside a slate share
+most of their people; the slate cluster absorbs that.
+
+- `top_minus_bottom`: within a contest, `n_t` top and `n_b` bottom entries holding the descriptor weigh
+  `w = n_t n_b / (n_t + n_b)`. `Y_g` sums `w` times the difference of the group means over the slate's contests, and
+  `X_g` sums `w`. A contest missing a group weighs nothing. The ratio is the fixed-effects coefficient of the descriptor on
+  the top-or-bottom dummy. Positive means the top entries carry more of it.
+- `percentile_slope`: the within-contest slope of the finish percentile (`100 x place / contest_entries`, lower is better,
+  from the integers) on the descriptor, over every `JOINED` entry holding it: `Y_g` sums the cross-products of the
+  deviations from the contest means, `X_g` sums the squared deviations of the descriptor. Negative means more of the
+  descriptor goes with a better finish. A contest of one entry, or a descriptor with no spread, adds nothing.
+
+**Descriptors.** Exact numbers from the record; an entry whose record value is null drops out of that descriptor only. The
+unit is `COUNT` except `salary_left`, in hundreds of dollars (`USD_100`), so a per-unit figure is not a row of zeros.
+
+- Primary, registered here before any export is read, each with `top_minus_bottom` and `percentile_slope` and a full
+  interval: `salary_left`, `max_pass_catchers_with_qb`, `max_team_count`, `kicker_count`.
+  - `max_pass_catchers_with_qb` is the largest of `structure.pass_catchers_with_rostered_qb`, null (never 0) when the row
+    has no quarterback.
+  - `max_team_count` is the largest value of `structure.team_split`.
+- Secondary: an estimate and a CR1 standard error, no interval, no bootstrap, `reason` always `SECONDARY_DESCRIPTOR`:
+  `q_count`, `later_window_count`, `qb_count`, `dst_count`, `offense_against_own_dst`, `offense_facing_rostered_dst`,
+  `bring_backs`, `rb_with_own_dst`, and `team_count` (Classic only; a Showdown lineup always holds two teams). The standard
+  error is null with fewer than two slates or no spread.
+- On the committed slates most of the secondary ones have no spread (`later_window_count` is 0 on every Showdown
+  slate, `q_count` is 0 on all but one Classic slate). A primary figure that cannot be formed says why
+  (`FEWER_THAN_5_SLATES` under the registered minimum, `ZERO_STANDARD_ERROR`) instead of giving a number.
+- `family` states how many descriptors are shown and how many intervals (twice the primary count). None is adjusted for the
+  others (`adjustment` is `NONE`): read an interval as one descriptive figure, not as one of a tested family.
+- `limits` repeats the registered resamples and minimum, and names `few_clusters` when the minimum is so small that the
+  Webb weights (six to the number of slates distinct vectors) are fewer than the resamples (7,776 at five slates).
+
+**Captain table** (`captain_table`, Showdown only, no test). Per slate and pooled: for each Captain position, the entries
+and how many were `top`, `bottom` and `neither`, and their mean finish percentile. The position is the exact DraftKings ID's
+`Position` in the salary file whose SHA-256 equals the record's `hashes.salary_sha256`, found by hashing the slate folder's
+`*.csv` files in sorted order (equal hashes mean equal bytes). The reader is `dk.parse_salaries`, which has no
+`AvgPointsPerGame` field. `unresolved` counts, by gap, the entries whose Captain it could not place: `SALARY_FILE_NOT_FOUND`,
+`SALARY_FILE_UNREADABLE`, `CAPTAIN_NOT_IN_SALARY_FILE`, `NO_CAPTAIN_IN_RECORD`. A slate with such a gap still gets every
+other descriptor.
+
+**Run fields** (`run_fields`): for `thesis`, `method` and `final_rung`, the record rows and the rows holding a value. They are
+counted, not compared; on every committed record the count is 0. A later session compares them once a run folder is kept.
+
+**Slates.** Each record slate is listed with its `record_sha256`, `results_sha256`, `joined` count and `excluded` classes. A
+slate with no results file is `NO_RESULTS_FILE`, one whose results file does not list the record's Entry IDs in order is
+`RESULTS_DO_NOT_MATCH_RECORD`; both are named, left out of every figure and never imputed (`sample.slates_not_compared`).
+
+**The report** is gitignored, at `<root>/reports/descriptors/results_descriptors.<digest16>.w1.json`, canonical JSON, written
+once through the intake's write-once path. The digest binds each slate's record, results file and salary file (or its gap),
+the registered metrics file and the writer, so a changed byte anywhere is a new report beside the old one. It holds no
+path or time, so two runs on the same bytes, in any folder order, write the same file.
+- `schema_version` (`nfl_results_descriptors_v1`), `writer`, `population`, `metrics_version`, `metrics_sha256`, `inputs_digest`,
+  `bootstrap` (the registered seed, resamples, level and minimums), `reading`, `limits`, `family`, `slates`, `sample`,
+  `run_fields`, `descriptors`, `captain_table`, `does_not_establish`.
+- `sample`: `slates`, `joined_entries`, `contests`, `contests_with_both_groups`, `top`, `bottom`, `neither`, `excluded` (by
+  class), `by_mode`, `slates_not_compared`. The sample is declared here and never inferred from a figure.
+- A figure is {`slates`, `estimate`, `method`, `interval`, `standard_error`, `mde`, `reason`, `degenerate_resamples`}
+  (`results_report._statistic`'s shape, in the descriptor's own unit). Each primary figure draws from a generator seeded by
+  SHA-256 of the registered seed, `RESULTS_DESCRIPTORS`, the population, the descriptor and the statistic.
+- The printed headline carries the sample, each slate's gap and `joined`, the primary figures, the family and the unresolved
+  Captains.
+
+**Refusals** (registry family `results_descriptors`, `P`, stops `CERTIFICATION`; a refusal writes nothing):
+- `RESULTS_DESCRIPTORS_INPUT_INVALID` (`field=slates_root`).
+- `RESULTS_DESCRIPTORS_RECORD_INVALID`, with `<slate>/construction/entry_build_record.jsonl:line=<n>:<field>` where `<field>` is
+  one of the join loader's (`entry_id`, `contest_id`, `mode`, `roster`, `prior`, `schema_version`, `entry_id_repeated`) or a field
+  this comparison reads (`hashes.salary_sha256`, `run`, `salary_left`, `later_window_count`, `captain_dk_id`, `dk_status.q_count`,
+  `structure.<count>`, `structure.pass_catchers_with_rostered_qb`, `structure.team_split`), or the join loader's file-level
+  detail.
+- `RESULTS_DESCRIPTORS_RESULTS_INVALID`, with `<slate>:<what>`: `unreadable`, `symlink`, `keys`, any of `schema_version`,
+  `writer`, `contract`, `record_name`, `slate`, `source_sha256`, `does_not_establish`, `entries`, or
+  `entries[<i>]:keys` and `entry_id=<id>:<field>` for an entry (`class`, `place`, `contest_entries`, `points_hundredths`,
+  `entry_id_repeated`).
+- `RESULTS_DESCRIPTORS_ARTIFACT_CONFLICT` (`file=report`): another file holds the name. Never overwritten.
+- `RESULTS_DESCRIPTORS_WRITE_FAILED` (`file=report:exception=<class>`).
+- A metrics file that will not load raises `ResultsMetricsError`, which `main`'s handler prints, as `results-report` does.
+
+**`does_not_establish`**: `EXPECTED_VALUE_OR_ROI`, `WIN_OR_CASH_PROBABILITY`, `AN_EDGE_OR_ITS_ABSENCE`, `CALIBRATION`,
+`WHICH_ENTRIES_THE_ENGINE_BUILT`, `UPLOAD_CLEARANCE`, `CAUSE_OF_A_BUST`.
+
+**The committed slates.** No slate's `entry_results.w1.json` is committed yet, so the report on the repository as it stands
+names every slate `NO_RESULTS_FILE`. The figures wait on operator item O13: Ben's export, then `results-join`, whose per-slate
+files are committed, then this command. The first export holds six record slates (four Showdown, two Classic), so most
+descriptors will report `FEWER_THAN_5_SLATES` rather than an interval.
 
 ## Standings corpus transport (Session 17, X2)
 

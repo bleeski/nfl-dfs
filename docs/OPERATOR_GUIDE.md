@@ -751,6 +751,41 @@ The printed result carries no money, so it is safe to paste back to Claude.
 The rank check is descriptive. It is not EV, a win probability, a calibration
 or an edge, and it clears no upload.
 
+## Descriptor comparison
+
+After `results-join` has written the per-slate results files, the bottom-10% and
+top-10% entries compared on what the build record says the engine chose
+(`nfl_results_descriptors_v1`; `docs/DATA_CONTRACTS.md` § NFL results
+descriptors):
+
+```powershell
+.\nfl.ps1 results-descriptors
+```
+
+It takes no export hash: it reads each slate's `construction\entry_results.w1.json`
+and record, so it runs from the repository alone once those files are committed.
+It writes one report under `data\results\reports\descriptors\` (gitignored; the
+name binds every input byte and the metrics file).
+
+- The comparison is inside each contest and clustered by slate. Ben's entries sit
+  in several contests of 1, 2, 7 or 20 entries, and the contest a lineup went to
+  follows its Captain and stack, so comparing across contests would compare
+  where lineups were placed.
+- Four descriptors get an interval (salary left in hundreds of dollars, the
+  largest stack, the largest team count, kickers); the rest get an estimate and a
+  standard error. None is adjusted for the others.
+- With under five slates a figure says `FEWER_THAN_5_SLATES` and gives no
+  interval. The first export holds six record slates, so expect that on most
+  rows.
+- A slate with no results file is named `NO_RESULTS_FILE` and left out, never
+  filled in. A locked blank is counted and never compared.
+- The Captain table needs the slate's salary file in its folder (found by its
+  hash); one that is missing is named, and the rest of the report still runs.
+
+The printed result carries no money. The comparison is descriptive. It does not
+say why an entry finished where it did, and it is not EV, a win probability, a
+calibration or an edge.
+
 ## Safe failure behavior
 
 - Excel open: readable stop message; no partial workbook.
