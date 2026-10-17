@@ -180,6 +180,20 @@ def test_the_slope_is_the_contest_fixed_effect_with_hand_checked_sums(tmp_path):
     assert figures["slates"] == 1
 
 
+def test_two_contests_in_one_slate_weigh_by_group_sizes_not_equally(tmp_path):
+    """4001 has two tops (10, 20) and a bottom (3): diff 12, weight 2/3. 4002 has a top (40) and a bottom (20): diff 20,
+    weight 1/2. The slate is (8 + 10) / (7/6) = 108/7 = 15.4286; equal weights give 16, and pooling the rows gives 11.83."""
+
+    rows = [_record_row("930000001", "4001", salary_left=1000), _record_row("930000002", "4001", salary_left=2000),
+            _record_row("930000003", "4001", salary_left=300), _record_row("930000004", "4002", salary_left=4000),
+            _record_row("930000005", "4002", salary_left=2000)]
+    finishes = {"930000001": _fin(5, 100), "930000002": _fin(8, 100), "930000003": _fin(95, 100),
+                "930000004": _fin(3, 100), "930000005": _fin(97, 100)}
+    root = _slates(tmp_path, {"b-sd": (rows, finishes)})
+    figures = _by_name(_report(root))["salary_left"]["top_minus_bottom"]
+    assert Fraction(figures["estimate"]) == round(Fraction(108, 7), 4) == Fraction("15.4286")
+
+
 def _spec(count: int, seed: int = 7) -> dict[str, list[dict]]:
     """Per slate, 8 entries in a 200-entry contest (two top, two bottom, four between) and 2 in a 3-entry one."""
 
@@ -282,6 +296,13 @@ def test_the_secondary_descriptors_carry_an_estimate_and_a_standard_error_and_ne
     primary = {item["name"] for item in report["descriptors"] if item["primary"]}
     assert primary == {"salary_left", "max_pass_catchers_with_qb", "max_team_count", "kicker_count"}
     assert report["family"]["intervals"] == 8 and report["family"]["adjustment"] == "NONE"
+
+
+def test_a_secondary_descriptor_with_no_spread_has_an_estimate_and_no_standard_error(tmp_path):
+    report = _report(_slates(tmp_path, _folders(_spec(6))))
+    figures = _by_name(report)["qb_count"]["top_minus_bottom"]  # the fixture gives every row one quarterback
+    assert figures["estimate"] == "0.0000" and figures["slates"] == 6
+    assert figures["standard_error"] is None and figures["interval"] is None
 
 
 def test_a_descriptor_with_no_spread_names_it_and_a_contest_with_no_top_weighs_nothing(tmp_path):
@@ -413,6 +434,18 @@ RESULTS_FAULTS = {
                               "a-sd:entry_id=910000001:place"),
     "unknown_class": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(**{"class": "WON"})),
                       "a-sd:entry_id=910000001:class"),
+    "place_zero": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(place=0)),
+                   "a-sd:entry_id=910000001:place"),
+    "field_zero": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(contest_entries=0)),
+                   "a-sd:entry_id=910000001:contest_entries"),
+    "place_boolean": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(place=True)),
+                      "a-sd:entry_id=910000001:place"),
+    "field_boolean": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(contest_entries=True)),
+                      "a-sd:entry_id=910000001:contest_entries"),
+    "points_negative": (lambda path: _rewrite(path, lambda p: p["entries"][0].update(points_hundredths=-1)),
+                        "a-sd:entry_id=910000001:points_hundredths"),
+    "entry_repeated": (lambda path: _rewrite(path, lambda p: p["entries"][1].update(entry_id="910000001")),
+                       "a-sd:entry_id=910000001:entry_id_repeated"),
     "entries_not_a_list": (lambda path: _rewrite(path, lambda p: p.update(entries={})), "a-sd:entries"),
 }
 
@@ -446,6 +479,15 @@ def test_a_record_with_a_bad_descriptor_field_is_refused_by_name(tmp_path, fault
     refusal = _refusal(root)
     assert refusal.code == "RESULTS_DESCRIPTORS_RECORD_INVALID"
     assert refusal.detail == f"a-sd/construction/{rj.RECORD_NAME}:{detail}"
+
+
+def test_a_symlinked_results_file_is_refused_never_followed(tmp_path, monkeypatch):
+    """A real symlink needs a privilege this host may lack (and a skip would be a finding), so the check is simulated."""
+
+    root = _slates(tmp_path, {"a-sd": (A_ROWS, A_FIN)})
+    monkeypatch.setattr(Path, "is_symlink", lambda self: self.name == rj.RESULTS_NAME)
+    refusal = _refusal(root)
+    assert (refusal.code, refusal.detail) == ("RESULTS_DESCRIPTORS_RESULTS_INVALID", "a-sd:symlink")
 
 
 def test_the_join_fields_are_still_checked_by_the_joins_own_loader(tmp_path):
@@ -525,6 +567,25 @@ def test_the_captain_table_reads_positions_from_the_salary_file_the_record_binds
                    if positions[row["captain_dk_id"]] == pos) / expected[pos]["entries"]
         assert Fraction(found["mean_percentile"]) == round(mean, 4)
     assert table["unresolved"] == {} and table["slates"][TB_DAL]["gap"] is None
+
+
+def test_the_pooled_captain_table_is_the_sum_of_every_slate(tmp_path):
+    first, rows_a = _real_slate(tmp_path, TB_DAL)
+    _, rows_b = _real_slate(tmp_path, "det-car-sd-2026-10-04")
+    finishes = {TB_DAL: _finishes_for(rows_a), "det-car-sd-2026-10-04": _finishes_for(rows_b)}
+    _write_results(first, TB_DAL, rows_a, finishes[TB_DAL])
+    _write_results(first, "det-car-sd-2026-10-04", rows_b, finishes["det-car-sd-2026-10-04"])
+    table = _report(first)["captain_table"]
+    assert set(table["slates"]) == {TB_DAL, "det-car-sd-2026-10-04"}
+    pooled = table["pooled"]["positions"]
+    for position, found in pooled.items():
+        parts = [table["slates"][name]["positions"].get(position) for name in table["slates"]]
+        parts = [part for part in parts if part is not None]
+        for key in ("entries", "top", "bottom", "neither"):
+            assert found[key] == sum(part[key] for part in parts)
+        mean = sum(Fraction(part["mean_percentile"]) * part["entries"] for part in parts) / found["entries"]
+        assert abs(Fraction(found["mean_percentile"]) - mean) <= Fraction(1, 10000)
+    assert sum(found["entries"] for found in pooled.values()) == len(rows_a) + len(rows_b)
 
 
 def test_a_classic_slate_has_no_captain_rows(tmp_path):
@@ -701,6 +762,8 @@ def test_the_command_prints_the_outcome_and_exits_by_status(tmp_path, capsys):
     assert code == 0 and printed["status"] == "COMPLETE" and printed["contract"] == rd.CONTRACT_VERSION
     assert printed["headline"]["sample"]["slates"] == 6
     assert printed["headline"]["primary"]["salary_left"]["top_minus_bottom"]["estimate"] is not None
+    assert printed["headline"]["family"] == {"descriptors": len(rd.DESCRIPTORS), "intervals": 8, "adjustment": "NONE"}
+    assert printed["headline"]["captain_unresolved"] == {"SALARY_FILE_NOT_FOUND": 60}
     code, printed = _command(capsys, "--results-root", str(tmp_path / "results"), "--slates-root", str(tmp_path / "nope"))
     assert code == 2 and printed["problems"] == ["RESULTS_DESCRIPTORS_INPUT_INVALID:field=slates_root"]
 
